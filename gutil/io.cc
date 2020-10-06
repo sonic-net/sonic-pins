@@ -56,6 +56,25 @@ absl::StatusOr<std::string> ReadFile(const std::string &path) {
   return result;
 }
 
+absl::StatusOr<std::vector<std::string>> ReadFileLines(
+    const std::string &path) {
+  std::ifstream f;
+  f.open(path.c_str());
+  if (f.fail()) {
+    return ErrorNoToAbsl("open", path);
+  }
+  std::vector<std::string> results;
+  std::string line;
+  while (std::getline(f, line)) {
+    results.push_back(line);
+  }
+  if (f.bad()) {
+    return ErrorNoToAbsl("read", path);
+  }
+  f.close();
+  return results;
+}
+
 absl::Status WriteFile(const std::string &content, const std::string &path) {
   std::ofstream f;
   f.open(path.c_str());

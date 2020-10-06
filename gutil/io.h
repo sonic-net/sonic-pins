@@ -26,6 +26,10 @@ namespace gutil {
 // Reads the entire content of the file and returns it (or an error status).
 absl::StatusOr<std::string> ReadFile(const std::string &path);
 
+// Reads the entire content of the file and returns as a vector of individual
+// lines (or an error status).
+absl::StatusOr<std::vector<std::string>> ReadFileLines(const std::string &path);
+
 // Writes the content of the string to the file.
 absl::Status WriteFile(const std::string &content, const std::string &path);
 

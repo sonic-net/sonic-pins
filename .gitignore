@@ -1,2 +1,2 @@
 # Bazel Build System.
-/bazel-*
+bazel*
