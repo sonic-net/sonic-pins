@@ -27,6 +27,7 @@
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/config/v1/p4types.pb.h"
@@ -186,6 +187,31 @@ absl::Status SetUnionFirstRepeatedFieldIntoSecond(const T& fields,
   return absl::OkStatus();
 }
 
+// Unions `PkgInfo`s by combining their names, asserting all other fields
+// are equal and returning InvalidArgumentError if that is not the case.
+absl::Status UnionFirstPkgInfoIntoSecond(
+    const p4::config::v1::PkgInfo& info,
+    p4::config::v1::PkgInfo& unioned_info) {
+  // Base case.
+  if (gutil::IsEmptyProto(unioned_info)) {
+    unioned_info = info;
+    unioned_info.set_name(absl::StrCat("Union of ", info.name()));
+    return absl::OkStatus();
+  }
+
+  // Take union of `name` fields.
+  absl::StrAppend(unioned_info.mutable_name(), ", ", info.name());
+
+  // Ensure all other fields are equal.
+  if (auto diff = DiffMessages(info, unioned_info, /*ignored_fields=*/{"name"});
+      diff.has_value()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "PkgInfos are incompatible. Relevant differences: ", *diff));
+  }
+
+  return absl::OkStatus();
+}
+
 // Unions the annotations as though they were sets. Ignores the
 // annotation_locations (since we don't currently need them) and asserts that
 // there are no structured_annotations (returning an UnimplementedError
@@ -277,6 +303,30 @@ absl::Status UnionFirstFieldIntoSecondAssertingIdenticalId(
   return absl::OkStatus();
 }
 
+// Specializes UnionFirstFieldIntoSecondAssertingIdenticalId for actions.
+// Instead of requiring equality for all fields, it unions the preamble. This is
+// done to allow differing annotations for the same action.
+// Requires: GetId(action) == GetId(unioned_action)
+absl::Status UnionFirstFieldIntoSecondAssertingIdenticalId(
+    const p4::config::v1::Action& action,
+    p4::config::v1::Action& unioned_action) {
+  RETURN_IF_ERROR(AssertIdsAreEqualForUnioning(action, unioned_action));
+
+  RETURN_IF_ERROR(UnionFirstPreambleIntoSecondAssertingIdenticalId(
+      action.preamble(), *unioned_action.mutable_preamble()));
+
+  if (auto diff_result =
+          DiffMessages(action, unioned_action, /*ignored_fields=*/{"preamble"});
+      diff_result.has_value()) {
+    return absl::InvalidArgumentError(
+        absl::Substitute("actions with identical id '$0' were incompatible. "
+                         "Relevant differences: $1",
+                         action.preamble().id(), *diff_result));
+  }
+
+  return absl::OkStatus();
+}
+
 // Unions `fields` of type T into `unioned_fields` using their ids (as returned
 // by GetId) as keys to a map of the rest of their contents.
 template <class T>
@@ -300,25 +350,6 @@ absl::Status MapUnionFirstRepeatedFieldIntoSecondById(
     if (!field_with_same_id_exists) {
       *unioned_fields.Add() = field;
     }
-  }
-  return absl::OkStatus();
-}
-
-// Unions pkg_info field of`info` into `unioned_info`.
-// If pkg_info of `info` differs from other pkg_info, return
-// InvalidArgumentError.
-absl::Status UnionFirstPkgInfoIntoSecond(const p4::config::v1::P4Info& info,
-                                         p4::config::v1::P4Info& unioned_info) {
-  if (!unioned_info.has_pkg_info()) {
-    *unioned_info.mutable_pkg_info() = info.pkg_info();
-    return absl::OkStatus();
-  }
-
-  if (auto diff_result = DiffMessages(info.pkg_info(), unioned_info.pkg_info());
-      diff_result.has_value()) {
-    return absl::InvalidArgumentError(
-        absl::Substitute("$0 failed since pkg infos were different: $1",
-                         __func__, *diff_result));
   }
   return absl::OkStatus();
 }
@@ -363,9 +394,11 @@ absl::Status UnionFirstTypeInfoIntoSecond(
 absl::StatusOr<p4::config::v1::P4Info> UnionP4info(
     const std::vector<p4::config::v1::P4Info>& infos) {
   RETURN_IF_ERROR(ContainsUnsupportedField(infos));
+
   p4::config::v1::P4Info unioned_info;
   for (const auto& info : infos) {
-    RETURN_IF_ERROR(UnionFirstPkgInfoIntoSecond(info, unioned_info));
+    RETURN_IF_ERROR(UnionFirstPkgInfoIntoSecond(
+        info.pkg_info(), *unioned_info.mutable_pkg_info()));
     RETURN_IF_ERROR(MapUnionFirstRepeatedFieldIntoSecondById(
         info.tables(), *unioned_info.mutable_tables()));
     RETURN_IF_ERROR(MapUnionFirstRepeatedFieldIntoSecondById(

@@ -68,6 +68,7 @@ cc_test(
         "//gutil:status",
         "//gutil:status_matchers",
         "//p4_pdpi/string_encodings:safe",
+        "@com_google_absl//absl/numeric:int128",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],

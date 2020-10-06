@@ -20,7 +20,6 @@
 #include "absl/strings/str_cat.h"
 #include "gutil/status.h"
 #include "p4_pdpi/netaddr/mac_address.h"
-#include "p4_pdpi/string_encodings/hex_string.h"
 
 namespace pdpi {
 
@@ -36,6 +35,19 @@ absl::Status BitString::Consume(int num_bits) {
   }
   start_index_ += num_bits;
   return absl::OkStatus();
+}
+
+absl::StatusOr<std::string> BitString::PeekHexString(int num_bits) {
+  if (num_bits < 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Cannot peek " << num_bits << " bits.";
+  }
+  if (size() < num_bits) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "Only " << size() << " bits left, but attempted to peek "
+           << num_bits << " bits.";
+  }
+  return ToHexString(start_index_, num_bits);
 }
 
 absl::StatusOr<std::string> BitString::ConsumeHexString(int num_bits) {

@@ -152,5 +152,13 @@ std::string ParamName(absl::string_view param_name);
 // Returns a "Metadata <packet_name>" string.
 std::string MetadataName(absl::string_view metadata_name);
 
+// Checks for an "@unused" annotation in the argument.
+bool IsElementUnused(
+    const google::protobuf::RepeatedPtrField<std::string> &annotations);
+
+// Checks for an "@deprecated" annotation in the argument.
+bool IsElementDeprecated(
+    const google::protobuf::RepeatedPtrField<std::string> &annotations);
+
 }  // namespace pdpi
 #endif  // P4_PDPI_UTILS_IR_H

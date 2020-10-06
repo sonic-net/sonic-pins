@@ -23,37 +23,102 @@
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
 #include "gutil/status.h"
-#include "re2/re2.h"
 
 namespace pdpi {
-namespace annotation {
+namespace {
+inline bool IsWhitespace(char c) { return c == ' ' || c == '\t'; }
+}  // namespace
 
-namespace internal {
-absl::StatusOr<AnnotationComponents> ParseAnnotation(
+// Use a custom parser for improved speed and error reporting compared to a
+// regex-based parser.
+absl::StatusOr<annotation::AnnotationComponents> ParseAnnotation(
     const std::string& annotation) {
-  // Regex: @<label>
-  static constexpr LazyRE2 kLabelOnlyParser = {R"([ \t]*@([^ \t()]*)[ \t]*)"};
-  // Regex: @<label> *(<&body>)
-  static constexpr LazyRE2 kParser = {
-      R"([ \t]*@([^ \t(]*)[ \t]*\((.*)\)[ \t]*)"};
-  std::string label, body;
+  //      Expected format (label + body): '@label(body)'
+  // Allowable whitespace (label + body): '  @label  (body)  '
+  //      Expected format (label-only): '@label'
+  // Allowable whitespace (label-only): '  @label  '
+  //
+  // Whitespace consists of spaces (' ') and tabs ('\t').
 
-  if (RE2::FullMatch(annotation, *kLabelOnlyParser, &label)) {
-    return AnnotationComponents({.label = std::move(label)});
+  // Skip beginning whitespace.
+  // (label + body): '  @label  (body)  ' --> '@label (body)  '
+  //   (label-only): '  @label  ' --> '@label  '
+  auto annotation_iter = annotation.begin();
+  while (annotation_iter != annotation.end() &&
+         IsWhitespace(*annotation_iter)) {
+    ++annotation_iter;
   }
-  if (RE2::FullMatch(annotation, *kParser, &label, &body)) {
-    if (label.empty() && body.empty()) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Annotation \"" << annotation << "\" is malformed";
-    }
-    return AnnotationComponents(
-        {.label = std::move(label), .body = std::move(body)});
+  // Move to the start of the label.
+  // (label + body): '@label  (body)  ' --> 'label (body)  '
+  //   (label-only): '@label  ' --> 'label  '
+  if (annotation_iter == annotation.end() || *annotation_iter != '@') {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Annotation \"" << annotation << "\" is malformed: "
+           << "Annotations must begin with '@'";
   }
-  return gutil::InvalidArgumentErrorBuilder()
-         << "Annotation \"" << annotation << "\" is malformed";
+  ++annotation_iter;
+
+  // Process the label.
+  // (label + body): 'label  (body)  ' --> ' (body)  ', capture label
+  //   (label-only): 'label  ' --> '  ', capture label
+  const auto label_start_iter = annotation_iter;
+  while (annotation_iter != annotation.end() &&
+         !IsWhitespace(*annotation_iter) && *annotation_iter != '(' &&
+         *annotation_iter != ')') {
+    ++annotation_iter;
+  }
+  if (annotation_iter == label_start_iter) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Annotation \"" << annotation << "\" is malformed: "
+           << "Annotation contains no label text";
+  }
+  std::string label(label_start_iter, annotation_iter);
+
+  // Skip whitespace.
+  // (label + body): ' (body)  ' --> '(body)  '
+  //   (label-only): '  ' --> ''
+  while (annotation_iter != annotation.end() &&
+         IsWhitespace(*annotation_iter)) {
+    ++annotation_iter;
+  }
+  //   (label-only): Return label.
+  if (annotation_iter == annotation.end()) {
+    return annotation::AnnotationComponents({.label = std::move(label)});
+  }
+  // Move to the start of the annotation body.
+  // '(body)  ' --> 'body)  '
+  if (*annotation_iter != '(') {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Annotation \"" << annotation << "\" is malformed: "
+           << "Expected '(' but found '" << *annotation_iter << "'";
+  }
+  ++annotation_iter;
+  const auto body_start_iter = annotation_iter;
+
+  // Process the annotation body.
+  // Process from back->front looking for )
+
+  // Skip whitespace.
+  // 'body)  ' --> 'body)'
+  annotation_iter = annotation.end();
+  --annotation_iter;
+  while (annotation_iter > body_start_iter && IsWhitespace(*annotation_iter)) {
+    --annotation_iter;
+  }
+  // Move to the end of the annotation body.
+  // 'body)' --> 'body'
+  if (*annotation_iter != ')') {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Annotation \"" << annotation << "\" is malformed: "
+           << "Missing ')' at the end of the annotation";
+  }
+  std::string body(body_start_iter, annotation_iter);
+
+  return annotation::AnnotationComponents(
+      {.label = std::move(label), .body = std::move(body)});
 }
-}  // namespace internal
 
+namespace annotation {
 // Parses an annotation value and returns the component arguments in order.
 absl::StatusOr<std::vector<std::string>> ParseAsArgList(std::string value) {
   std::vector<std::string> tokens;

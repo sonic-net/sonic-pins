@@ -25,6 +25,7 @@
 #include "google/rpc/code.pb.h"
 #include "google/rpc/status.pb.h"
 #include "grpcpp/grpcpp.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -35,6 +36,7 @@
 #include "p4_pdpi/testing/main_p4_pd.pb.h"
 #include "p4_pdpi/testing/test_helper.h"
 
+using ::gutil::PrintTextProto;
 using ::p4::config::v1::P4Info;
 
 // Overload the StatusOr insertion operator to output its status. This allows
@@ -157,7 +159,7 @@ static void RunInvalidIrFailToTranslateToGrpcTest(
             << std::endl
             << std::endl;
   std::cout << "--- IR (Input):" << std::endl;
-  std::cout << ir_write_rpc_status.DebugString();
+  std::cout << PrintTextProto(ir_write_rpc_status);
   const auto& status_or_grpc =
       pdpi::IrWriteRpcStatusToGrpcStatus(ir_write_rpc_status);
   if (!status_or_grpc.ok()) {
@@ -184,7 +186,7 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   }
   std::cout << std::endl << std::endl;
   std::cout << "--- PD(input):" << std::endl;
-  std::cout << pd.DebugString() << std::endl;
+  std::cout << PrintTextProto(pd) << std::endl;
   // Set-up message differencer.
   google::protobuf::util::MessageDifferencer diff;
   diff.set_report_moves(false);
@@ -213,7 +215,7 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   }
   const auto& ir = status_or_ir.value();
   std::cout << "---IR:" << std::endl;
-  std::cout << ir.DebugString() << std::endl;
+  std::cout << PrintTextProto(ir) << std::endl;
 
   // IR -> Grpc
   const auto& status_or_grpc_status = pdpi::IrWriteRpcStatusToGrpcStatus(ir);
@@ -265,7 +267,7 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
     Fail("Reverse translation from gRPC to IR resulted in a different IR.");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "IR(after reverse translation):" << std::endl
-              << ir2.DebugString() << std::endl;
+              << PrintTextProto(ir2) << std::endl;
     return;
   }
 
@@ -282,7 +284,7 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
     Fail("Reverse translation from IR2 to PD2 resulted in a different PD");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "PD(after reverse translation):" << std::endl
-              << pd2.DebugString() << std::endl;
+              << PrintTextProto(pd2) << std::endl;
     return;
   }
   std::cout << std::endl;
@@ -351,6 +353,11 @@ static void RunReadRequestTests(pdpi::IrP4Info info) {
                          entities { table_entry {} }
                          entities { table_entry {} }
                        )pb"));
+  RunPiReadRequestTest(info, "valid",
+                       gutil::ParseProtoOrDie<p4::v1::ReadRequest>(R"pb(
+                         device_id: 10
+                         entities { table_entry {} }
+                       )pb"));
 
   // There are no invalid IR read requests, so no RunIrReadRequestTest is
   // needed.
@@ -369,6 +376,13 @@ static void RunReadRequestTests(pdpi::IrP4Info info) {
   RunPdReadRequestTest(info, "no meter, counter",
                        gutil::ParseProtoOrDie<pdpi::ReadRequest>(R"pb(
                          device_id: 10
+                         read_counter_data: true
+                       )pb"),
+                       INPUT_IS_VALID);
+  RunPdReadRequestTest(info, "meter, counter",
+                       gutil::ParseProtoOrDie<pdpi::ReadRequest>(R"pb(
+                         device_id: 10
+                         read_meter_configs: true
                          read_counter_data: true
                        )pb"),
                        INPUT_IS_VALID);

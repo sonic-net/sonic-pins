@@ -358,15 +358,40 @@ tables {
     match_type: TERNARY
   }
   match_fields {
+    id: 6
+    name: "ipv6_upper_64_bits"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 64
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 7
+    name: "ipv6_upper_63_bits"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 63
+    match_type: TERNARY
+  }
+  match_fields {
     id: 4
     name: "mac"
     annotations: "@format(MAC_ADDRESS)"
     bitwidth: 48
     match_type: TERNARY
   }
+  match_fields {
+    id: 5
+    name: "unused_field"
+    annotations: "@unused"
+    bitwidth: 1
+    match_type: TERNARY
+  }
   action_refs {
     id: 16777219
     annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777223
+    annotations: "@proto_id(2)"
   }
   action_refs {
     id: 21257015
@@ -646,6 +671,118 @@ tables {
   }
   size: 1024
 }
+tables {
+  preamble {
+    id: 33554446
+    name: "ingress.referring_to_referring2_table"
+    alias: "referring_to_referring2_table"
+  }
+  match_fields {
+    id: 1
+    name: "referring2_table_id"
+    annotations: "@refers_to(referring2_table , referring_id)"
+    match_type: EXACT
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  action_refs {
+    id: 16777221
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 1024
+}
+tables {
+  preamble {
+    id: 33554447
+    name: "ingress.unused_table"
+    alias: "unused_table"
+    annotations: "@unused"
+  }
+  match_fields {
+    id: 2
+    name: "ipv4"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: EXACT
+  }
+  match_fields {
+    id: 1
+    name: "ipv6"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: EXACT
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 1024
+}
+tables {
+  preamble {
+    id: 33554451
+    name: "ingress.packet_count_and_meter_table"
+    alias: "packet_count_and_meter_table"
+    annotations: "@weight_proto_id(1)"
+  }
+  match_fields {
+    id: 1
+    name: "ipv4"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: LPM
+  }
+  action_refs {
+    id: 16777234
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  direct_resource_ids: 318767120
+  direct_resource_ids: 352321553
+  size: 1024
+}
+tables {
+  preamble {
+    id: 33554455
+    name: "ingress.byte_count_and_meter_table"
+    alias: "byte_count_and_meter_table"
+    annotations: "@weight_proto_id(1)"
+  }
+  match_fields {
+    id: 1
+    name: "ipv4"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: LPM
+  }
+  action_refs {
+    id: 16777238
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  direct_resource_ids: 318767124
+  direct_resource_ids: 352321557
+  size: 1024
+}
 actions {
   preamble {
     id: 16777217
@@ -727,6 +864,14 @@ actions {
 }
 actions {
   preamble {
+    id: 16777223
+    name: "unused_action"
+    alias: "unused_action"
+    annotations: "@unused"
+  }
+}
+actions {
+  preamble {
     id: 16777221
     name: "do_thing_4"
     alias: "do_thing_4"
@@ -762,6 +907,20 @@ actions {
     }
   }
 }
+actions {
+  preamble {
+    id: 16777234
+    name: "ingress.packet_count_and_meter"
+    alias: "packet_count_and_meter"
+  }
+}
+actions {
+  preamble {
+    id: 16777238
+    name: "ingress.byte_count_and_meter"
+    alias: "byte_count_and_meter"
+  }
+}
 action_profiles {
   preamble {
     id: 290772822
@@ -784,6 +943,28 @@ direct_counters {
   }
   direct_table_id: 33554439
 }
+direct_counters {
+  preamble {
+    id: 318767120
+    name: "ingress.my_packets_counter"
+    alias: "my_packets_counter"
+  }
+  spec {
+    unit: PACKETS
+  }
+  direct_table_id: 33554451
+}
+direct_counters {
+  preamble {
+    id: 318767124
+    name: "ingress.my_bytes_counter"
+    alias: "my_bytes_counter"
+  }
+  spec {
+    unit: BYTES
+  }
+  direct_table_id: 33554455
+}
 direct_meters {
   preamble {
     id: 352321539
@@ -794,6 +975,28 @@ direct_meters {
     unit: BYTES
   }
   direct_table_id: 33554439
+}
+direct_meters {
+  preamble {
+    id: 352321553
+    name: "ingress.my_meter2"
+    alias: "my_meter2"
+  }
+  spec {
+    unit: BYTES
+  }
+  direct_table_id: 33554451
+}
+direct_meters {
+  preamble {
+    id: 352321557
+    name: "ingress.my_meter3"
+    alias: "my_meter3"
+  }
+  spec {
+    unit: BYTES
+  }
+  direct_table_id: 33554455
 }
 controller_packet_metadata {
   preamble {
@@ -1340,6 +1543,44 @@ tables_by_id {
         format: MAC
       }
     }
+    match_fields_by_id {
+      key: 5
+      value {
+        match_field {
+          id: 5
+          name: "unused_field"
+          annotations: "@unused"
+          bitwidth: 1
+          match_type: TERNARY
+        }
+      }
+    }
+    match_fields_by_id {
+      key: 6
+      value {
+        match_field {
+          id: 6
+          name: "ipv6_upper_64_bits"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 64
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_id {
+      key: 7
+      value {
+        match_field {
+          id: 7
+          name: "ipv6_upper_63_bits"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 63
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
     match_fields_by_name {
       key: "ipv4"
       value {
@@ -1367,6 +1608,32 @@ tables_by_id {
       }
     }
     match_fields_by_name {
+      key: "ipv6_upper_63_bits"
+      value {
+        match_field {
+          id: 7
+          name: "ipv6_upper_63_bits"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 63
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_name {
+      key: "ipv6_upper_64_bits"
+      value {
+        match_field {
+          id: 6
+          name: "ipv6_upper_64_bits"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 64
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_name {
       key: "mac"
       value {
         match_field {
@@ -1386,6 +1653,18 @@ tables_by_id {
           id: 1
           name: "normal"
           bitwidth: 10
+          match_type: TERNARY
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "unused_field"
+      value {
+        match_field {
+          id: 5
+          name: "unused_field"
+          annotations: "@unused"
+          bitwidth: 1
           match_type: TERNARY
         }
       }
@@ -1443,6 +1722,21 @@ tables_by_id {
         }
       }
       proto_id: 1
+    }
+    entry_actions {
+      ref {
+        id: 16777223
+        annotations: "@proto_id(2)"
+      }
+      action {
+        preamble {
+          id: 16777223
+          name: "unused_action"
+          alias: "unused_action"
+          annotations: "@unused"
+        }
+      }
+      proto_id: 2
     }
     default_only_actions {
       ref {
@@ -2575,6 +2869,422 @@ tables_by_id {
     size: 1024
   }
 }
+tables_by_id {
+  key: 33554446
+  value {
+    preamble {
+      id: 33554446
+      name: "ingress.referring_to_referring2_table"
+      alias: "referring_to_referring2_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "referring2_table_id"
+          annotations: "@refers_to(referring2_table , referring_id)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+        references {
+          table: "referring2_table"
+          match_field: "referring_id"
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "referring2_table_id"
+      value {
+        match_field {
+          id: 1
+          name: "referring2_table_id"
+          annotations: "@refers_to(referring2_table , referring_id)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+        references {
+          table: "referring2_table"
+          match_field: "referring_id"
+        }
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777221
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777221
+          name: "do_thing_4"
+          alias: "do_thing_4"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_id {
+  key: 33554447
+  value {
+    preamble {
+      id: 33554447
+      name: "ingress.unused_table"
+      alias: "unused_table"
+      annotations: "@unused"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "ipv6"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 128
+          match_type: EXACT
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: EXACT
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv4"
+      value {
+        match_field {
+          id: 2
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: EXACT
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv6"
+      value {
+        match_field {
+          id: 1
+          name: "ipv6"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 128
+          match_type: EXACT
+        }
+        format: IPV6
+      }
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_id {
+  key: 33554451
+  value {
+    preamble {
+      id: 33554451
+      name: "ingress.packet_count_and_meter_table"
+      alias: "packet_count_and_meter_table"
+      annotations: "@weight_proto_id(1)"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv4"
+      value {
+        match_field {
+          id: 1
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777234
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777234
+          name: "ingress.packet_count_and_meter"
+          alias: "packet_count_and_meter"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    meter {
+      unit: BYTES
+    }
+    counter {
+      unit: PACKETS
+    }
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_id {
+  key: 33554455
+  value {
+    preamble {
+      id: 33554455
+      name: "ingress.byte_count_and_meter_table"
+      alias: "byte_count_and_meter_table"
+      annotations: "@weight_proto_id(1)"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv4"
+      value {
+        match_field {
+          id: 1
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777238
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777238
+          name: "ingress.byte_count_and_meter"
+          alias: "byte_count_and_meter"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    meter {
+      unit: BYTES
+    }
+    counter {
+      unit: BYTES
+    }
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_name {
+  key: "byte_count_and_meter_table"
+  value {
+    preamble {
+      id: 33554455
+      name: "ingress.byte_count_and_meter_table"
+      alias: "byte_count_and_meter_table"
+      annotations: "@weight_proto_id(1)"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv4"
+      value {
+        match_field {
+          id: 1
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777238
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777238
+          name: "ingress.byte_count_and_meter"
+          alias: "byte_count_and_meter"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    meter {
+      unit: BYTES
+    }
+    counter {
+      unit: BYTES
+    }
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
 tables_by_name {
   key: "count_and_meter_table"
   value {
@@ -3458,6 +4168,87 @@ tables_by_name {
   }
 }
 tables_by_name {
+  key: "packet_count_and_meter_table"
+  value {
+    preamble {
+      id: 33554451
+      name: "ingress.packet_count_and_meter_table"
+      alias: "packet_count_and_meter_table"
+      annotations: "@weight_proto_id(1)"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv4"
+      value {
+        match_field {
+          id: 1
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777234
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777234
+          name: "ingress.packet_count_and_meter"
+          alias: "packet_count_and_meter"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    meter {
+      unit: BYTES
+    }
+    counter {
+      unit: PACKETS
+    }
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_name {
   key: "referred_table"
   value {
     preamble {
@@ -3762,6 +4553,92 @@ tables_by_name {
   }
 }
 tables_by_name {
+  key: "referring_to_referring2_table"
+  value {
+    preamble {
+      id: 33554446
+      name: "ingress.referring_to_referring2_table"
+      alias: "referring_to_referring2_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "referring2_table_id"
+          annotations: "@refers_to(referring2_table , referring_id)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+        references {
+          table: "referring2_table"
+          match_field: "referring_id"
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "referring2_table_id"
+      value {
+        match_field {
+          id: 1
+          name: "referring2_table_id"
+          annotations: "@refers_to(referring2_table , referring_id)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+        references {
+          table: "referring2_table"
+          match_field: "referring_id"
+        }
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777221
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777221
+          name: "do_thing_4"
+          alias: "do_thing_4"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_name {
   key: "ternary_table"
   value {
     preamble {
@@ -3819,6 +4696,44 @@ tables_by_name {
         format: MAC
       }
     }
+    match_fields_by_id {
+      key: 5
+      value {
+        match_field {
+          id: 5
+          name: "unused_field"
+          annotations: "@unused"
+          bitwidth: 1
+          match_type: TERNARY
+        }
+      }
+    }
+    match_fields_by_id {
+      key: 6
+      value {
+        match_field {
+          id: 6
+          name: "ipv6_upper_64_bits"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 64
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_id {
+      key: 7
+      value {
+        match_field {
+          id: 7
+          name: "ipv6_upper_63_bits"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 63
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
     match_fields_by_name {
       key: "ipv4"
       value {
@@ -3846,6 +4761,32 @@ tables_by_name {
       }
     }
     match_fields_by_name {
+      key: "ipv6_upper_63_bits"
+      value {
+        match_field {
+          id: 7
+          name: "ipv6_upper_63_bits"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 63
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_name {
+      key: "ipv6_upper_64_bits"
+      value {
+        match_field {
+          id: 6
+          name: "ipv6_upper_64_bits"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 64
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_name {
       key: "mac"
       value {
         match_field {
@@ -3865,6 +4806,18 @@ tables_by_name {
           id: 1
           name: "normal"
           bitwidth: 10
+          match_type: TERNARY
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "unused_field"
+      value {
+        match_field {
+          id: 5
+          name: "unused_field"
+          annotations: "@unused"
+          bitwidth: 1
           match_type: TERNARY
         }
       }
@@ -3923,6 +4876,21 @@ tables_by_name {
       }
       proto_id: 1
     }
+    entry_actions {
+      ref {
+        id: 16777223
+        annotations: "@proto_id(2)"
+      }
+      action {
+        preamble {
+          id: 16777223
+          name: "unused_action"
+          alias: "unused_action"
+          annotations: "@unused"
+        }
+      }
+      proto_id: 2
+    }
     default_only_actions {
       ref {
         id: 21257015
@@ -3940,6 +4908,93 @@ tables_by_name {
     }
     size: 1024
     requires_priority: true
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_name {
+  key: "unused_table"
+  value {
+    preamble {
+      id: 33554447
+      name: "ingress.unused_table"
+      alias: "unused_table"
+      annotations: "@unused"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "ipv6"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 128
+          match_type: EXACT
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: EXACT
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv4"
+      value {
+        match_field {
+          id: 2
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: EXACT
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv6"
+      value {
+        match_field {
+          id: 1
+          name: "ipv6"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 128
+          match_type: EXACT
+        }
+        format: IPV6
+      }
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
     const_default_action {
       preamble {
         id: 21257015
@@ -4633,6 +5688,37 @@ actions_by_id {
   }
 }
 actions_by_id {
+  key: 16777223
+  value {
+    preamble {
+      id: 16777223
+      name: "unused_action"
+      alias: "unused_action"
+      annotations: "@unused"
+    }
+  }
+}
+actions_by_id {
+  key: 16777234
+  value {
+    preamble {
+      id: 16777234
+      name: "ingress.packet_count_and_meter"
+      alias: "packet_count_and_meter"
+    }
+  }
+}
+actions_by_id {
+  key: 16777238
+  value {
+    preamble {
+      id: 16777238
+      name: "ingress.byte_count_and_meter"
+      alias: "byte_count_and_meter"
+    }
+  }
+}
+actions_by_id {
   key: 21257015
   value {
     preamble {
@@ -4651,6 +5737,16 @@ actions_by_name {
       name: "NoAction"
       alias: "NoAction"
       annotations: "@noWarn(\"unused\")"
+    }
+  }
+}
+actions_by_name {
+  key: "byte_count_and_meter"
+  value {
+    preamble {
+      id: 16777238
+      name: "ingress.byte_count_and_meter"
+      alias: "byte_count_and_meter"
     }
   }
 }
@@ -4903,6 +5999,16 @@ actions_by_name {
   }
 }
 actions_by_name {
+  key: "packet_count_and_meter"
+  value {
+    preamble {
+      id: 16777234
+      name: "ingress.packet_count_and_meter"
+      alias: "packet_count_and_meter"
+    }
+  }
+}
+actions_by_name {
   key: "referring_action"
   value {
     preamble {
@@ -4981,6 +6087,17 @@ actions_by_name {
           match_field: "id"
         }
       }
+    }
+  }
+}
+actions_by_name {
+  key: "unused_action"
+  value {
+    preamble {
+      id: 16777223
+      name: "unused_action"
+      alias: "unused_action"
+      annotations: "@unused"
     }
   }
 }
@@ -5079,6 +6196,10 @@ packet_out_metadata_by_name {
 references {
   table: "referred_table"
   match_field: "id"
+}
+references {
+  table: "referring2_table"
+  match_field: "referring_id"
 }
 action_profiles_by_id {
   key: 290772822

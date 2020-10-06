@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/numeric/int128.h"
 #include "absl/strings/ascii.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -33,6 +34,7 @@ using ::gutil::IsOkAndHolds;
 using ::pdpi::SafeChar;
 using ::testing::Eq;
 using ::testing::Not;
+using ::testing::Property;
 
 // Constructs a byte string from a vector of hextets, padding to 8 hextets
 // (16 bytes) on the right to match the size of a padded IPv6 byte string.
@@ -158,6 +160,70 @@ TEST(Ipv6AddressTest, Ipv6AddressOfString_NegativeTests) {
     EXPECT_THAT(Ipv6Address::OfString(ip_str), Not(IsOk()))
         << "ip_str = " << ip_str;
   }
+}
+
+TEST(Ipv6AddressTest, IsUpper64BitAddress) {
+  // Easily-understood (and readable) edge cases first.
+  EXPECT_THAT(
+      Ipv6Address::OfString("::"),
+      IsOkAndHolds(Property(&Ipv6Address::IsUpper64BitAddress, Eq(true))));
+  EXPECT_THAT(
+      Ipv6Address::OfString("::ffff:ffff:ffff:ffff"),
+      IsOkAndHolds(Property(&Ipv6Address::IsUpper64BitAddress, Eq(false))));
+  EXPECT_THAT(
+      Ipv6Address::OfString("ffff:ffff:ffff:ffff::"),
+      IsOkAndHolds(Property(&Ipv6Address::IsUpper64BitAddress, Eq(true))));
+  EXPECT_THAT(
+      Ipv6Address::OfString("ffff:ffff:ffff:ffff:8000::"),
+      IsOkAndHolds(Property(&Ipv6Address::IsUpper64BitAddress, Eq(false))));
+  EXPECT_THAT(
+      Ipv6Address::OfString("0000:0000:0000:0000:8000::"),
+      IsOkAndHolds(Property(&Ipv6Address::IsUpper64BitAddress, Eq(false))));
+  EXPECT_THAT(
+      Ipv6Address::OfString("0000:0000:0000:0001::"),
+      IsOkAndHolds(Property(&Ipv6Address::IsUpper64BitAddress, Eq(true))));
+  if (HasFailure()) return;  // Skip the following comprehensive test.
+
+  absl::uint128 int_address = 1;
+  while (int_address > 0) {
+    Ipv6Address address(int_address);
+    EXPECT_EQ(address.IsUpper64BitAddress(),
+              absl::Uint128Low64(int_address) == 0)
+        << " for IP Address " << address.ToString();
+    int_address <<= 1;
+  }
+}
+
+TEST(Ipv6AddressTest, MinimumMaskLength) {
+  // Easily-understood (and readable) cases first.
+  EXPECT_THAT(Ipv6Address::OfString("::"),
+              IsOkAndHolds(Property(&Ipv6Address::MinimumMaskLength, Eq(0))));
+  EXPECT_THAT(Ipv6Address::OfString("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),
+              IsOkAndHolds(Property(&Ipv6Address::MinimumMaskLength, Eq(128))));
+  EXPECT_THAT(Ipv6Address::OfString("ffff:ffff:ffff:ffff:ffff:ffff:ffff::"),
+              IsOkAndHolds(Property(&Ipv6Address::MinimumMaskLength, Eq(112))));
+  EXPECT_THAT(Ipv6Address::OfString("ffff:ffff:ffff:ffff:ffff:ffff:fffe::"),
+              IsOkAndHolds(Property(&Ipv6Address::MinimumMaskLength, Eq(111))));
+  if (HasFailure()) return;  // Skip the following comprehensive test.
+
+  absl::uint128 int_address = 1;
+  int expected_bitwidth = 128;
+  while (int_address > 0) {
+    Ipv6Address address(int_address);
+    EXPECT_EQ(address.MinimumMaskLength(), expected_bitwidth)
+        << " for IP Address " << address.ToString();
+    int_address <<= 1;
+    --expected_bitwidth;
+  }
+}
+
+TEST(Ipv6AddressTest, Upper64BitMask) {
+  EXPECT_THAT(Ipv6Address::OfString("ffff:ffff:ffff:ffff::"),
+              IsOkAndHolds(Ipv6Address::Upper64BitMask()));
+}
+
+TEST(Ipv6AddressTest, Upper64BitMaskIsConsistent) {
+  EXPECT_TRUE(Ipv6Address::Upper64BitMask().IsUpper64BitAddress());
 }
 
 }  // namespace

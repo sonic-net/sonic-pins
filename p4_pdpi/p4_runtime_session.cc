@@ -19,8 +19,11 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/substitute.h"
 #include "absl/types/span.h"
+#include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_field.h"
+#include "google/protobuf/util/message_differencer.h"
 #include "grpcpp/channel.h"
 #include "grpcpp/create_channel.h"
 #include "gutil/status.h"
@@ -58,7 +61,7 @@ std::unique_ptr<P4Runtime::Stub> CreateP4RuntimeStub(
 // destructed.
 absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
     std::unique_ptr<P4Runtime::StubInterface> stub, uint32_t device_id,
-    const P4RuntimeSessionOptionalArgs& metadata) {
+    const P4RuntimeSessionOptionalArgs& metadata, bool error_if_not_primary) {
   // Open streaming channel.
   // Using `new` to access a private constructor.
   std::unique_ptr<P4RuntimeSession> session =
@@ -98,17 +101,16 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
   //   return gutil::InternalErrorBuilder() << "Received role doesn't match: "
   //                                        << response.ShortDebugString();
   // }
-  if (response.arbitration().election_id().high() !=
-      session->election_id_.high()) {
-    return gutil::InternalErrorBuilder()
-           << "Highest 64 bits of received election id doesn't match: "
-           << response.ShortDebugString();
-  }
-  if (response.arbitration().election_id().low() !=
-      session->election_id_.low()) {
-    return gutil::InternalErrorBuilder()
-           << "Lowest 64 bits of received election id doesn't match: "
-           << response.ShortDebugString();
+  // If we want to ensure that this session has become primary, then we check,
+  // returning the error that we get in the response otherwise.
+  if (error_if_not_primary) {
+    RETURN_IF_ERROR(gutil::ToAbslStatus(response.arbitration().status()))
+            .SetPrepend()
+        << absl::Substitute(
+               "failed to become primary because given election id '$0' was "
+               "less than highest seen election id '$1': ",
+               session->election_id_.DebugString(),
+               response.arbitration().election_id().DebugString());
   }
 
   // When object returned doesn't have the same type as the function's return
@@ -125,8 +127,10 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
 absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
     const std::string& address,
     const std::shared_ptr<grpc::ChannelCredentials>& credentials,
-    uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata) {
-  return Create(CreateP4RuntimeStub(address, credentials), device_id, metadata);
+    uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata,
+    bool error_if_not_primary) {
+  return Create(CreateP4RuntimeStub(address, credentials), device_id, metadata,
+                error_if_not_primary);
 }
 
 // Create the default session with the switch.
@@ -229,13 +233,76 @@ absl::StatusOr<std::vector<TableEntry>> ReadPiTableEntries(
   }
   return table_entries;
 }
-absl::Status ClearTableEntries(P4RuntimeSession* session) {
-  // Get P4Info from Switch. It is needed to sequence the delete requests.
+
+absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
+    P4RuntimeSession* session,
+    const p4::v1::TableEntry& target_entry_signature) {
+  // Some targets only support wildcard reads, so we read back all entries
+  // before looking for the one we are interested in.
+  ASSIGN_OR_RETURN(std::vector<TableEntry> entries,
+                   ReadPiTableEntries(session));
+
+  // We use a protobuf differ to find the entry we are interested in based on
+  // its "signature", given by the `table_id`, `match`, and `priority` fields.
+  using google::protobuf::util::MessageDifferencer;
+  MessageDifferencer differ;
+  differ.set_repeated_field_comparison(MessageDifferencer::AS_SET);
+  std::vector<const google::protobuf::FieldDescriptor*> signature_fields;
+  for (std::string field_name : {"table_id", "match", "priority"}) {
+    const google::protobuf::FieldDescriptor* field_descriptor =
+        TableEntry::descriptor()->FindFieldByName(field_name);
+    if (field_descriptor == nullptr) {
+      return gutil::InternalErrorBuilder()
+             << "failed to obtain FieldDescriptor for field '" << field_name
+             << "' of p4::v1::TableEntry";
+    }
+    signature_fields.push_back(field_descriptor);
+  }
+
+  for (const auto& entry : entries) {
+    if (differ.CompareWithFields(entry, target_entry_signature,
+                                 signature_fields, signature_fields)) {
+      return entry.counter_data();
+    }
+  }
+  return gutil::NotFoundErrorBuilder()
+         << "failed to read counter data for the table entry with the "
+            "following signature, since no table entry matching the signature "
+            "exists: <"
+         << target_entry_signature.ShortDebugString() << ">";
+}
+
+absl::Status CheckNoTableEntries(P4RuntimeSession* session) {
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,
       GetForwardingPipelineConfig(
           session,
           p4::v1::GetForwardingPipelineConfigRequest::P4INFO_AND_COOKIE));
+  // If the switch does not have a p4info, then it cannot have any table
+  // entries.
+  if (!response.has_config()) return absl::OkStatus();
+
+  // If the switch has a p4info, we read all table entries to ensure that there
+  // are none.
+  ASSIGN_OR_RETURN(auto table_entries, ReadPiTableEntries(session));
+  if (!table_entries.empty()) {
+    return gutil::UnknownErrorBuilder()
+           << "expected no table entries on switch, but "
+           << table_entries.size() << " entries remain:\n"
+           << absl::StrJoin(table_entries, "",
+                            [](std::string* out, auto& entry) {
+                              absl::StrAppend(out, entry.DebugString());
+                            });
+  }
+  return absl::OkStatus();
+}
+
+absl::Status ClearTableEntries(P4RuntimeSession* session) {
+  // Get P4Info from Switch. It is needed to sequence the delete requests.
+  ASSIGN_OR_RETURN(
+      p4::v1::GetForwardingPipelineConfigResponse response,
+      GetForwardingPipelineConfig(
+          session, p4::v1::GetForwardingPipelineConfigRequest::ALL));
 
   // If no p4info has been pushed to the switch, then it cannot have any table
   // entries to clear. Furthermore, reading table entries (i.e. part of the
@@ -254,16 +321,9 @@ absl::Status ClearTableEntries(P4RuntimeSession* session) {
   RETURN_IF_ERROR(RemovePiTableEntries(session, info, table_entries));
 
   // Verify that all entries were cleared successfully.
-  ASSIGN_OR_RETURN(table_entries, ReadPiTableEntries(session));
-  if (!table_entries.empty()) {
-    return gutil::UnknownErrorBuilder()
-           << "cleared all table entries, yet " << table_entries.size()
-           << " entries remain:\n"
-           << absl::StrJoin(table_entries, "",
-                            [](std::string* out, auto& entry) {
-                              absl::StrAppend(out, entry.DebugString());
-                            });
-  }
+  RETURN_IF_ERROR(CheckNoTableEntries(session)).SetPrepend()
+      << "cleared all table entries: ";
+
   return absl::OkStatus();
 }
 
@@ -307,16 +367,13 @@ absl::Status InstallPiTableEntries(P4RuntimeSession* session,
 absl::Status SetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
-    const P4Info& p4info, absl::optional<absl::string_view> p4_device_config) {
+    const p4::v1::ForwardingPipelineConfig& config) {
   SetForwardingPipelineConfigRequest request;
   request.set_device_id(session->DeviceId());
   request.set_role(session->Role());
   *request.mutable_election_id() = session->ElectionId();
   request.set_action(action);
-  *request.mutable_config()->mutable_p4info() = p4info;
-  if (p4_device_config.has_value()) {
-    *request.mutable_config()->mutable_p4_device_config() = *p4_device_config;
-  }
+  *request.mutable_config() = config;
 
   // Empty message; intentionally discarded.
   SetForwardingPipelineConfigResponse response;
@@ -324,6 +381,19 @@ absl::Status SetForwardingPipelineConfig(
   return gutil::GrpcStatusToAbslStatus(
       session->Stub().SetForwardingPipelineConfig(&context, request,
                                                   &response));
+}
+
+absl::Status SetForwardingPipelineConfig(
+    P4RuntimeSession* session,
+    p4::v1::SetForwardingPipelineConfigRequest::Action action,
+    const P4Info& p4info, absl::optional<absl::string_view> p4_device_config) {
+  p4::v1::ForwardingPipelineConfig config;
+  *config.mutable_p4info() = p4info;
+  if (p4_device_config.has_value()) {
+    *config.mutable_p4_device_config() = *p4_device_config;
+  }
+
+  return SetForwardingPipelineConfig(session, action, config);
 }
 
 absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>

@@ -18,6 +18,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "glog/logging.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -29,6 +30,7 @@
 #include "p4_pdpi/testing/main_p4_pd.pb.h"
 #include "p4_pdpi/testing/test_helper.h"
 
+using ::gutil::PrintTextProto;
 using ::p4::config::v1::P4Info;
 using ::p4::v1::Update;
 using ::p4::v1::WriteRequest;
@@ -71,7 +73,7 @@ void SequenceTest(const pdpi::IrP4Info& info, const std::string& test_name,
 
   // Output results.
   for (const auto& update : pd_updates) {
-    std::cout << update.DebugString() << std::endl;
+    std::cout << PrintTextProto(update) << std::endl;
   }
   std::cout << "--- Write requests (output):" << std::endl;
   if (result.empty()) std::cout << "<empty>" << std::endl << std::endl;
@@ -86,7 +88,7 @@ void SequenceTest(const pdpi::IrP4Info& info, const std::string& test_name,
     }
     std::cout << "WriteRequest #" << i << std::endl;
     i += 1;
-    std::cout << pd_write_request.DebugString() << std::endl;
+    std::cout << PrintTextProto(pd_write_request) << std::endl;
   }
 }
 
@@ -115,7 +117,7 @@ void SortTest(const pdpi::IrP4Info& info, const std::string& test_name,
   std::cout << "--- PD entries (input):" << std::endl;
   if (pd_entries.empty()) std::cout << "<empty>" << std::endl << std::endl;
   for (const auto& entry : pd_entries) {
-    std::cout << entry.DebugString() << std::endl;
+    std::cout << PrintTextProto(entry) << std::endl;
   }
 
   // Run sorting.
@@ -135,7 +137,68 @@ void SortTest(const pdpi::IrP4Info& info, const std::string& test_name,
       std::cerr << "Unable to convert TableEntry from PI to PD." << std::endl;
       return;
     }
-    std::cout << pd_entry.DebugString() << std::endl;
+    std::cout << PrintTextProto(pd_entry) << std::endl;
+  }
+}
+
+void GetEntriesUnreachableFromRootsTest(
+    const pdpi::IrP4Info& info, const std::string& test_name,
+    const std::vector<std::string> pd_table_entry_strings) {
+  // Convert input to PI.
+  std::vector<p4::v1::TableEntry> pi_entries;
+  std::vector<pdpi::TableEntry> pd_entries;
+  for (const auto& pd_entry_string : pd_table_entry_strings) {
+    const auto pd_entry =
+        gutil::ParseProtoOrDie<pdpi::TableEntry>(pd_entry_string);
+    pd_entries.push_back(pd_entry);
+    const auto pi_entry_or_status = pdpi::PdTableEntryToPi(info, pd_entry);
+    if (!pi_entry_or_status.status().ok()) {
+      std::cerr << "Unable to convert TableEntry from PD to PI." << std::endl;
+      return;
+    }
+    const auto& pi_entry = pi_entry_or_status.value();
+    pi_entries.push_back(pi_entry);
+  }
+
+  // Output input.
+  std::cout << TestHeader(absl::StrCat("GetEntriesUnreachableFromRootsTest: ",
+                                       test_name))
+            << std::endl
+            << std::endl;
+  std::cout << "--- PD entries (input):" << std::endl;
+  if (pd_entries.empty()) std::cout << "<empty>" << std::endl << std::endl;
+  for (const auto& entry : pd_entries) {
+    std::cout << PrintTextProto(entry) << std::endl;
+  }
+
+  // We use the entry metadata to determine whether to treat it as a root entry
+  // or not.
+  auto is_root = [](const p4::v1::TableEntry& entry) {
+    return entry.metadata() == "Root";
+  };
+
+  // Run GetEntriesUnreachableFromRoots.
+  auto unreachable_entries =
+      pdpi::GetEntriesUnreachableFromRoots(pi_entries, is_root, info);
+  if (!unreachable_entries.ok()) {
+    std::cout << "--- Getting unreachable entries from roots failed (output):"
+              << std::endl;
+    std::cout << unreachable_entries.status() << std::endl;
+    return;
+  }
+  std::cout << "--- Unreachable entries from roots (output):" << std::endl;
+  if (unreachable_entries->empty()) {
+    std::cout << "<empty>" << std::endl << std::endl;
+  }
+
+  // Output results.
+  for (const auto& entry : *unreachable_entries) {
+    pdpi::TableEntry pd_entry;
+    if (!pdpi::PiTableEntryToPd(info, entry, &pd_entry).ok()) {
+      std::cerr << "Unable to convert TableEntry from PI to PD." << std::endl;
+      return;
+    }
+    std::cout << PrintTextProto(pd_entry) << std::endl;
   }
 }
 
@@ -441,7 +504,421 @@ int main(int argc, char** argv) {
               }
             )pb"});
 
-  // TODO: Add negative test (where updates and P4Info are out of sync).
+  GetEntriesUnreachableFromRootsTest(info, "Empty input generates no garbage.",
+                                     {});
 
+  // Root  Root
+  GetEntriesUnreachableFromRootsTest(info, "All root entries means no garbage.",
+                                     {
+                                         R"pb(
+                                           referring_table_entry {
+                                             match { val: "0x001" }
+                                             action {
+                                               referring_action {
+                                                 referring_id_1: "key-a",
+                                                 referring_id_2: "key-a"
+                                               }
+                                             }
+                                             controller_metadata: "Root"
+                                           }
+                                         )pb",
+                                         R"pb(
+                                           referring_table_entry {
+                                             match { val: "0x002" }
+                                             action {
+                                               referring_action {
+                                                 referring_id_1: "key-a",
+                                                 referring_id_2: "key-b"
+                                               }
+                                             }
+                                             controller_metadata: "Root"
+                                           }
+                                         )pb",
+                                     });
+
+  // Root
+  //   |
+  // Dependency
+  GetEntriesUnreachableFromRootsTest(
+      info, "Root referring to the only entry generates no garbage.",
+      {
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "key-a"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Dependency"
+            }
+          )pb",
+      });
+
+  //    Root
+  //   |           \
+  // Dependency   Dependency
+  GetEntriesUnreachableFromRootsTest(
+      info, "Root referring to all dependencies generates no garbage.",
+      {
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "key-b"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Dependency"
+            }
+          )pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-b" }
+              action { do_thing_4 {} }
+              controller_metadata: "Dependency"
+            }
+          )pb",
+      });
+
+  // Root
+  //   |
+  // Dependency   Garbage
+  GetEntriesUnreachableFromRootsTest(info, "Garbage is unreachable.",
+                                     {
+                                         R"pb(
+                                           referring_table_entry {
+                                             match { val: "0x001" }
+                                             action {
+                                               referring_action {
+                                                 referring_id_1: "key-a",
+                                                 referring_id_2: "key-b"
+                                               }
+                                             }
+                                             controller_metadata: "Root"
+                                           }
+                                         )pb",
+                                         R"pb(
+                                           referred_table_entry {
+                                             match { id: "key-a" }
+                                             action { do_thing_4 {} }
+                                             controller_metadata: "Dependency"
+                                           }
+                                         )pb",
+                                         R"pb(
+                                           referred_table_entry {
+                                             match { id: "key-c" }
+                                             action { do_thing_4 {} }
+                                             controller_metadata: "Garbage"
+                                           }
+                                         )pb",
+                                     });
+  // Root
+  //   |
+  // Dependency   Root
+  GetEntriesUnreachableFromRootsTest(info,
+                                     "Root referring to dependency and a "
+                                     "standalone Root generates no garbage.",
+                                     {
+                                         R"pb(
+                                           referring_table_entry {
+                                             match { val: "0x001" }
+                                             action {
+                                               referring_action {
+                                                 referring_id_1: "key-a",
+                                                 referring_id_2: "key-b"
+                                               }
+                                             }
+                                             controller_metadata: "Root"
+                                           }
+                                         )pb",
+                                         R"pb(
+                                           referred_table_entry {
+                                             match { id: "key-a" }
+                                             action { do_thing_4 {} }
+                                             controller_metadata: "Dependency"
+                                           }
+                                         )pb",
+                                         R"pb(
+                                           referring_table_entry {
+                                             match { val: "0x001" }
+                                             action {
+                                               referring_action {
+                                                 referring_id_1: "non-exist",
+                                                 referring_id_2: "non-exist"
+                                               }
+                                             }
+                                             controller_metadata: "Root"
+                                           }
+                                         )pb",
+                                     });
+  // Garbage   Garbage
+  GetEntriesUnreachableFromRootsTest(info, "All entries are garbage.",
+                                     {
+                                         R"pb(
+                                           referred_table_entry {
+                                             match { id: "key-a" }
+                                             action { do_thing_4 {} }
+                                             controller_metadata: "Garbage"
+                                           }
+                                         )pb",
+                                         R"pb(
+                                           referred_table_entry {
+                                             match { id: "key-c" }
+                                             action { do_thing_4 {} }
+                                             controller_metadata: "Garbage"
+                                           }
+                                         )pb",
+                                     });
+
+  // Root  Root
+  //  \     /
+  //  Dependency
+  GetEntriesUnreachableFromRootsTest(
+      info, "Two roots referring to one dependency generates no garbage.",
+      {
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "key-a"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referring_table_entry {
+              match { val: "0x002" }
+              action {
+                referring_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "key-a"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Dependency"
+            }
+          )pb",
+      });
+
+  // Root
+  //   |
+  // Child dependency
+  //   |
+  // Grand child Dependency
+  GetEntriesUnreachableFromRootsTest(
+      info, "Children and grand children of the root are not garbage.",
+      {
+          R"pb(
+            referring_to_referring2_table_entry {
+              match { referring2_table_id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referring2_table_entry {
+              match { referring_id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Child dependency"
+            })pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Grand child Dependency"
+            }
+          )pb",
+      });
+  // NonRoot garbage
+  //        |
+  // NonRoot garbage
+  GetEntriesUnreachableFromRootsTest(
+      info, "NonRoot referring to other NonRoot is garbage.",
+      {
+          R"pb(
+            referred_table_entry {
+              match { id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "NonRoot garbage"
+            }
+          )pb",
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "key-a"
+                  referring_id_2: "non-existent"
+                }
+              }
+              controller_metadata: "NonRoot garbage"
+            }
+          )pb",
+      });
+
+  // Root
+  //   |
+  // Child dependency          NonRoot garbage
+  //   |                        /
+  // Grand child Dependency
+  GetEntriesUnreachableFromRootsTest(
+      info,
+      "NonRoot referring to other dependency is garbage, but other "
+      "dependencies that are referred by a root won't be removed.",
+      {
+          R"pb(
+            referring_to_referring2_table_entry {
+              match { referring2_table_id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referring2_table_entry {
+              match { referring_id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Child dependency"
+            })pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Grand child Dependency"
+            }
+          )pb",
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "key-a"
+                  referring_id_2: "non-existent"
+                }
+              }
+              controller_metadata: "NonRoot garbage"
+            }
+          )pb",
+      });
+
+  // Conglomeration of entries, courtesy of dilo@.
+  // Root
+  //   |
+  // Dependency    NonRoot Garbage  NonRoot Garbage        Root
+  //   |             /                      |                |
+  // Dependency                     NonRoot Garbage        Dependency      Root
+  GetEntriesUnreachableFromRootsTest(
+      info, "Conglomeration test.",
+      {
+          R"pb(
+            referring_to_referring2_table_entry {
+              match { referring2_table_id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referring2_table_entry {
+              match { referring_id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Child dependency"
+            })pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-a" }
+              action { do_thing_4 {} }
+              controller_metadata: "Grand child Dependency"
+            }
+          )pb",
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "key-a"
+                  referring_id_2: "non-existent"
+                }
+              }
+              controller_metadata: "NonRoot garbage"
+            }
+          )pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-b" }
+              action { do_thing_4 {} }
+              controller_metadata: "NonRoot garbage"
+            }
+          )pb",
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "key-b"
+                  referring_id_2: "non-existent"
+                }
+              }
+              controller_metadata: "NonRoot garbage"
+            }
+          )pb",
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "key-c",
+                  referring_id_2: "non-exist"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referred_table_entry {
+              match { id: "key-c" }
+              action { do_thing_4 {} }
+              controller_metadata: "Dependency"
+            }
+          )pb",
+          R"pb(
+            referring_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_action {
+                  referring_id_1: "non-exist",
+                  referring_id_2: "non-exist"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+      });
+  // TODO: Add negative test (where updates and P4Info are out of
+  // sync).
   return 0;
-}
+}  // NOLINT(readability/fn_size)

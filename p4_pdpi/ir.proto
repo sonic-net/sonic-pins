@@ -274,6 +274,8 @@ message IrTableEntry {
   p4.v1.MeterConfig meter_config = 6;
   // Optional. Counter data.
   p4.v1.CounterData counter_data = 7;
+  // Optional. Meter counter data.
+  p4.v1.MeterCounterData meter_counter_data = 9;
   // Optional, the metadata from the controller.
   bytes controller_metadata = 8;
 }
