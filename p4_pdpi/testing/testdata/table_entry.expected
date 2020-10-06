@@ -1,0 +1,4163 @@
+=========================================================================
+empty PI
+=========================================================================
+
+--- PI (Input):
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table ID 0 does not exist in the P4Info.
+
+=========================================================================
+invalid table id
+=========================================================================
+
+--- PI (Input):
+table_id: 431
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table ID 431 does not exist in the P4Info.
+
+=========================================================================
+missing matches
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect exact
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  lpm {
+    value: "\377\""
+    prefix_len: 24
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be an exact match type.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect lpm
+=========================================================================
+
+--- PI (Input):
+table_id: 33554436
+match {
+  field_id: 1
+  ternary {
+    value: "\377\""
+    mask: "\323T\022"
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Must be an LPM match type.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect ternary
+=========================================================================
+
+--- PI (Input):
+table_id: 33554435
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Must be a ternary match type.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect optional
+=========================================================================
+
+--- PI (Input):
+table_id: 33554441
+match {
+  field_id: 1
+  lpm {
+    value: "\377\""
+    prefix_len: 24
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be an optional match type.
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match field id
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 11
+  exact {
+    value: "\377\""
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 11 does not exist in table 'id_test_table'.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid bytestring value
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 2
+  exact {
+    value: "\377\"CE2"
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: cannot fit given byte string of 40 bits into 32 bits: 'ff22434532'
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid prefix length
+=========================================================================
+
+--- PI (Input):
+table_id: 33554436
+match {
+  field_id: 1
+  lpm {
+    value: "\377\""
+    prefix_len: 40
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Prefix length 40 cannot be greater than bitwidth 32.
+  - Action is required.
+
+=========================================================================
+duplicate match field id
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 1
+  exact {
+    value: "\020$2R"
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Duplicate match field found with ID 1.
+  - Missing matches: 'ipv4'. Expected 2 mandatory match conditions, but found 1 instead.
+  - Action is required.
+
+=========================================================================
+lpm value - masked bits set
+=========================================================================
+
+--- PI (Input):
+table_id: 33554436
+match {
+  field_id: 1
+  lpm {
+    value: "\020C#\022"
+    prefix_len: 24
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Lpm value has masked bits that are set. Value: '\020C#\022' Prefix Length: 24
+  - Action is required.
+
+=========================================================================
+ternary value too long
+=========================================================================
+
+--- PI (Input):
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "B\022"
+    mask: "\377"
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Bytestring of length 15 bits does not fit in 10 bits.
+  - Action is required.
+
+=========================================================================
+ternary value and mask too long
+=========================================================================
+
+--- PI (Input):
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "B\022"
+    mask: "\377\377"
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Bytestring of length 15 bits does not fit in 10 bits.
+  - Action is required.
+
+=========================================================================
+ternary value - masked bits set
+=========================================================================
+
+--- PI (Input):
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "\001\000"
+    mask: "\000\377"
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: Ternary value has masked bits that are set. Value: \001\000 Mask: \000\377
+  - Action is required.
+
+=========================================================================
+missing action
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action is required.
+
+=========================================================================
+invalid action
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action_profile_member_id: 12
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Unsupported action type: 2
+
+=========================================================================
+action set in table with action
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action_profile_action_set {
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\000\000\000\010"
+        }
+        params {
+          param_id: 2
+          value: "\000\000\000\t"
+        }
+      }
+      weight: 1
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Table requires an action since it does not use oneshot. Got action set instead.
+
+=========================================================================
+action in table with action set
+=========================================================================
+
+--- PI (Input):
+table_id: 33554438
+match {
+  field_id: 1
+  lpm {
+    value: "\377\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "\000\000\000\010"
+    }
+    params {
+      param_id: 2
+      value: "\000\000\000\t"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table requires an action set since it uses oneshot. Got action instead.
+
+=========================================================================
+missing action id
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action {
+    action_id: 1
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: - Action ID 1 does not exist in the P4Info.
+
+=========================================================================
+invalid action id
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action ID 16777219 is invalid: It is not a valid action for this table.
+
+=========================================================================
+missing action params
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "T"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+duplicate action param id
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "T"
+    }
+    params {
+      param_id: 1
+      value: "e"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Duplicate param field with ID 1.
+    - Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+invalid action param id
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 67
+      value: "T"
+    }
+    params {
+      param_id: 2
+      value: "#"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Unable to find param ID 67.
+    - Missing parameters: 'arg2'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+zero lpm prefix length
+=========================================================================
+
+--- PI (Input):
+table_id: 33554436
+match {
+  field_id: 1
+  lpm {
+    value: "\0202A\005"
+  }
+}
+action {
+  action {
+    action_id: 21257015
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid for the following reasons:
+    - A wild-card LPM match (i.e., prefix length of 0) must be represented by omitting the match altogether.
+    - Lpm value has masked bits that are set. Value: '\0202A\005' Prefix Length: 0
+
+=========================================================================
+zero ternary mask
+=========================================================================
+
+--- PI (Input):
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "\001\000"
+    mask: "\000"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+    params {
+      param_id: 1
+      value: "T"
+    }
+    params {
+      param_id: 2
+      value: "#"
+    }
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Match field 'normal' is invalid: A wild-card ternary match (i.e., mask of 0) must be represented by omitting the match altogether.
+
+=========================================================================
+zero priority
+=========================================================================
+
+--- PI (Input):
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "\001\000"
+    mask: "\001\377"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+    params {
+      param_id: 1
+      value: "T"
+    }
+    params {
+      param_id: 2
+      value: "#"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+
+=========================================================================
+negative priority
+=========================================================================
+
+--- PI (Input):
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "\001\000"
+    mask: "\001\377"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+    params {
+      param_id: 1
+      value: "T"
+    }
+    params {
+      param_id: 2
+      value: "#"
+    }
+  }
+}
+priority: -32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got -32 instead.
+
+=========================================================================
+absent priority
+=========================================================================
+
+--- PI (Input):
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "\001\000"
+    mask: "\001\377"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+    params {
+      param_id: 1
+      value: "T"
+    }
+    params {
+      param_id: 2
+      value: "#"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+
+=========================================================================
+unexpected priority
+=========================================================================
+
+--- PI (Input):
+table_id: 33554436
+match {
+  field_id: 1
+  lpm {
+    value: "\0202A\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 21257015
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Table entries with no ternary or optional matches cannot have a priority. Got 32 instead.
+
+=========================================================================
+action set with negative weight
+=========================================================================
+
+--- PI (Input):
+table_id: 33554438
+match {
+  field_id: 1
+  lpm {
+    value: "\377\000"
+    prefix_len: 24
+  }
+}
+action {
+  action_profile_action_set {
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\000\000\000\010"
+        }
+        params {
+          param_id: 2
+          value: "\000\000\000\t"
+        }
+      }
+      weight: -1
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Action Set is invalid: Expected positive action set weight, but got -1 instead.
+
+=========================================================================
+action set with invalid action
+=========================================================================
+
+--- PI (Input):
+table_id: 33554438
+match {
+  field_id: 1
+  lpm {
+    value: "\377\000"
+    prefix_len: 24
+  }
+}
+action {
+  action_profile_action_set {
+    action_profile_actions {
+      action {
+        action_id: 16777218
+        params {
+          param_id: 1
+          value: "\000\000\000\010"
+        }
+        params {
+          param_id: 2
+          value: "\000\000\000\t"
+        }
+      }
+      weight: 1
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Action Set is invalid: Action ID 16777218 is invalid: It is not a valid action for this table.
+
+=========================================================================
+counter in a table with no counters
+=========================================================================
+
+--- PI (Input):
+table_id: 33554438
+match {
+  field_id: 1
+  lpm {
+    value: "\377\000"
+    prefix_len: 24
+  }
+}
+action {
+  action_profile_action_set {
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\000\000\000\010"
+        }
+        params {
+          param_id: 2
+          value: "\000\000\000\t"
+        }
+      }
+      weight: 24
+    }
+  }
+}
+counter_data {
+  byte_count: 4213
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table does not have a counter, but table entry contained counter data.
+
+=========================================================================
+action in a table with no actions defined
+=========================================================================
+
+--- PI (Input):
+table_id: 33554445
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action_profile_member_id: 12
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action found for table which has no actions defined.
+
+=========================================================================
+empty IR
+=========================================================================
+
+--- IR (Input):
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for '' does not exist in the P4Info.
+
+=========================================================================
+invalid table name
+=========================================================================
+
+--- IR (Input):
+table_name: "invalid"
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'invalid' does not exist in the P4Info.
+
+=========================================================================
+missing matches
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect exact
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  lpm {
+    value {
+      ipv6: "::ff22"
+    }
+    prefix_length: 96
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be an exact match type.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect optional
+=========================================================================
+
+--- IR (Input):
+table_name: "optional_table"
+matches {
+  name: "ipv6"
+  lpm {
+    value {
+      ipv6: "::ff22"
+    }
+    prefix_length: 96
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid for the following reasons:
+    - Must be an optional match type.
+    - Oneof field "format" is not set
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect lpm
+=========================================================================
+
+--- IR (Input):
+table_name: "lpm2_table"
+matches {
+  name: "ipv6"
+  ternary {
+    value {
+      ipv6: "::ff22"
+    }
+    mask {
+      ipv6: "::00d3:5412"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be an LPM match type.
+  - Action is required.
+
+=========================================================================
+invalid match type - expect ternary
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+priority: 32
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Must be a ternary match type.
+  - Action is required.
+
+=========================================================================
+invalid match field name
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "invalid"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match Field 'invalid' does not exist in table.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid IR value
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv4"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Expected format 'IPV4', but got 'IPV6' instead.
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+
+=========================================================================
+invalid prefix length
+=========================================================================
+
+--- IR (Input):
+table_name: "lpm1_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "10.32.14.2"
+    }
+    prefix_length: 40
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Prefix length 40 is greater than bitwidth 32 in LPM.
+  - Action is required.
+
+=========================================================================
+duplicate match field name
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv6"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Duplicate match field found with name 'ipv6'.
+  - Missing matches: 'ipv4'. Expected 2 mandatory match conditions, but found 1 instead.
+  - Action is required.
+
+=========================================================================
+lpm value - masked bits set
+=========================================================================
+
+--- IR (Input):
+table_name: "lpm1_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "10.43.23.12"
+    }
+    prefix_length: 24
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid for the following reasons:
+    - Lpm value has masked bits that are set. Value: ipv4: "10.43.23.12"
+    Prefix Length: 24
+  - Action is required.
+
+=========================================================================
+ternary value too long
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x4212"
+    }
+    mask {
+      hex_str: "0x00ff"
+    }
+  }
+}
+priority: 32
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: IR Value '0x4212' has the wrong number of characters. Has 6 characters, but expected 5 instead.
+  - Action is required.
+
+=========================================================================
+ternary value and mask too long
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x4212"
+    }
+    mask {
+      hex_str: "0x0fff"
+    }
+  }
+}
+priority: 32
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: IR Value '0x4212' has the wrong number of characters. Has 6 characters, but expected 5 instead.
+  - Action is required.
+
+=========================================================================
+ternary value - masked bits set
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "ipv6"
+  ternary {
+    value {
+      ipv6: "::0100"
+    }
+    mask {
+      ipv6: "::00ff"
+    }
+  }
+}
+priority: 32
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid for the following reasons:
+    - Ternary value has masked bits that are set. Value: ipv6: "::0100"
+    Mask: ipv6: "::00ff"
+    
+  - Action is required.
+
+=========================================================================
+missing action
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action is required.
+
+=========================================================================
+missing action name
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action '' does not exist in the P4Info.
+
+=========================================================================
+invalid action name
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "invalid"
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'invalid' does not exist in the P4Info.
+
+=========================================================================
+missing action params
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+duplicate action param name
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Duplicate parameter field found with name 'arg2'.
+    - Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+invalid action param name
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Unable to find parameter 'arg'.
+
+=========================================================================
+action set in table with action
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234568"
+        }
+      }
+    }
+    weight: 1
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Table requires an action since it does not use onseshot. Got action set instead.
+
+=========================================================================
+action in table with action set
+=========================================================================
+
+--- IR (Input):
+table_name: "wcmp_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "34.234.42.0"
+    }
+    prefix_length: 24
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table requires an action set since it uses onseshot. Got action instead.
+
+=========================================================================
+zero lpm prefix length
+=========================================================================
+
+--- IR (Input):
+table_name: "lpm1_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "10.32.41.5"
+    }
+  }
+}
+action {
+  name: "NoAction"
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Match field 'ipv4' is invalid: A wild-card LPM match (i.e., prefix length of 0) must be represented by omitting the match altogether.
+
+=========================================================================
+zero ternary mask
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x100"
+    }
+    mask {
+      hex_str: "0x000"
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: A wild-card ternary match (i.e., mask of 0) must be represented by omitting the match altogether.
+  - Action 'do_thing_1' is invalid: It is not a valid action for this table.
+
+=========================================================================
+zero priority
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x100"
+    }
+    mask {
+      hex_str: "0x1ff"
+    }
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action 'do_thing_1' is invalid: It is not a valid action for this table.
+
+=========================================================================
+negative priority
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x100"
+    }
+    mask {
+      hex_str: "0x1ff"
+    }
+  }
+}
+priority: -32
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got -32 instead.
+  - Action 'do_thing_1' is invalid: It is not a valid action for this table.
+
+=========================================================================
+absent priority
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x100"
+    }
+    mask {
+      hex_str: "0x1ff"
+    }
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action 'do_thing_1' is invalid: It is not a valid action for this table.
+
+=========================================================================
+unexpected priority
+=========================================================================
+
+--- IR (Input):
+table_name: "lpm1_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "10.32.41.0"
+    }
+    prefix_length: 24
+  }
+}
+priority: 32
+action {
+  name: "NoAction"
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Table entries with no ternary or optional matches require a zero priority. Got 32 instead.
+
+=========================================================================
+action set with negative weight
+=========================================================================
+
+--- IR (Input):
+table_name: "wcmp_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "0.0.255.0"
+    }
+    prefix_length: 24
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x00000008"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x00000009"
+        }
+      }
+    }
+    weight: -1
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Expected positive action set weight, but got -1 instead.
+
+=========================================================================
+action set with invalid action
+=========================================================================
+
+--- IR (Input):
+table_name: "wcmp_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "0.0.255.0"
+    }
+    prefix_length: 24
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "invalid_do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x00000008"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x00000009"
+        }
+      }
+    }
+    weight: -1
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Action 'invalid_do_thing_1' does not exist in the P4Info.
+
+=========================================================================
+counter in a table with no counters
+=========================================================================
+
+--- IR (Input):
+table_name: "wcmp_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "0.0.255.0"
+    }
+    prefix_length: 24
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x00000008"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x00000009"
+        }
+      }
+    }
+    weight: 24
+  }
+}
+counter_data {
+  byte_count: 4213
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table does not have a counter, but table entry contained counter data.
+
+=========================================================================
+action in a table with no actions defined
+=========================================================================
+
+--- IR (Input):
+table_name: "no_action_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action found for table which has no actions defined.
+
+=========================================================================
+empty PD
+=========================================================================
+
+--- PD (Input):
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table is invalid: Oneof field "entry" is not set
+=========================================================================
+missing matches
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: invalid IPv6 address: ''
+  - Match field 'ipv4' is invalid: Invalid IPv4 address: ''
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+  - Action is required.
+=========================================================================
+missing action
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid: Action is required.
+=========================================================================
+exact match missing
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+  }
+  action {
+    do_thing_2 {
+      normal: "0x054"
+      ipv4: "10.43.12.5"
+      ipv6: "3242::fee2"
+      mac: "00:11:22:33:44:55"
+      str: "hello"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv4' is invalid: Invalid IPv4 address: ''
+  - Missing matches: 'ipv4'. Expected 2 mandatory match conditions, but found 1 instead.
+=========================================================================
+negative prefix length
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: -4
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: Prefix length -4 is out of bounds.
+=========================================================================
+prefix length too large
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: 132
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: Prefix length 132 is out of bounds.
+=========================================================================
+zero prefix length
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: A wild-card LPM match (i.e., prefix length of 0) must be represented by omitting the match altogether.
+=========================================================================
+ternary entry with zero mask
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x000"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x23"
+      arg2: "0x0251"
+    }
+  }
+  priority: 32
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid: A wild-card ternary match (i.e., mask of 0) must be represented by omitting the match altogether.
+  - Action 'do_thing_3' is invalid for the following reasons:
+    - Param 'arg1': IR Value '0x23' has the wrong number of characters. Has 4 characters, but expected 10 instead.
+    - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
+=========================================================================
+lpm value - masked bits set
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:aabb"
+      prefix_length: 96
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'lpm2_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid for the following reasons:
+    - Lpm value has masked bits that are set. Value: ipv6: "ffff::abcd:0:aabb"
+    Prefix Length: 96
+=========================================================================
+ternary value - masked bits set
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x001"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x23"
+      arg2: "0x0251"
+    }
+  }
+  priority: 32
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'normal' is invalid for the following reasons:
+    - Ternary value has masked bits that are set. Value: hex_str: "0x052"
+    Mask: hex_str: "0x001"
+    
+  - Action 'do_thing_3' is invalid for the following reasons:
+    - Param 'arg1': IR Value '0x23' has the wrong number of characters. Has 4 characters, but expected 10 instead.
+    - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
+=========================================================================
+action with missing arguments
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+  action {
+    do_thing_2 {
+      normal: "0x054"
+      mac: "00:11:22:33:44:55"
+      str: "hello"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Missing parameters: 'ipv4'. 'ipv6'. Expected 5 parameters, but found 3 instead.
+=========================================================================
+action with wrong argument format
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+  action {
+    do_thing_2 {
+      normal: "10.23.43.1"
+      ipv4: "10.43.12.5"
+      ipv6: "3242::fee2"
+      mac: "00:11:22:33:44:55"
+      str: "hello"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Param 'normal': IR Value '10.23.43.1' with hex string format does not start with 0x.
+=========================================================================
+ternary table with zero priority
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x23"
+      arg2: "0x0251"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid for the following reasons:
+  - Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+  - Action 'do_thing_3' is invalid for the following reasons:
+    - Param 'arg1': IR Value '0x23' has the wrong number of characters. Has 4 characters, but expected 10 instead.
+    - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
+=========================================================================
+ternary table with negative priority
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: -43
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got -43 instead.
+=========================================================================
+ternary table with priority absent
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+=========================================================================
+wcmp table with negative weight
+=========================================================================
+
+--- PD (Input):
+wcmp_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: -1
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Expected positive action set weight, but got -1 instead.
+=========================================================================
+valid wcmp table with choice of action
+=========================================================================
+
+--- PD (Input):
+wcmp2_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: 1
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234569"
+        arg1: "0x01234560"
+      }
+    }
+    weight: 2
+  }
+}
+
+--- IR:
+table_name: "wcmp2_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "0.0.255.0"
+    }
+    prefix_length: 24
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234568"
+        }
+      }
+    }
+    weight: 1
+  }
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234569"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234560"
+        }
+      }
+    }
+    weight: 2
+  }
+}
+
+--- PI:
+table_id: 33554440
+match {
+  field_id: 1
+  lpm {
+    value: "\377\000"
+    prefix_len: 24
+  }
+}
+action {
+  action_profile_action_set {
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\001#Eg"
+        }
+        params {
+          param_id: 2
+          value: "\001#Eh"
+        }
+      }
+      weight: 1
+    }
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\001#Ei"
+        }
+        params {
+          param_id: 2
+          value: "\001#E`"
+        }
+      }
+      weight: 2
+    }
+  }
+}
+
+
+=========================================================================
+valid wcmp table with watch_port
+=========================================================================
+
+--- PD (Input):
+wcmp2_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: 1
+    watch_port: "abc"
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234569"
+        arg1: "0x01234560"
+      }
+    }
+    weight: 2
+  }
+}
+
+--- IR:
+table_name: "wcmp2_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "0.0.255.0"
+    }
+    prefix_length: 24
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234568"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "abc"
+  }
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234569"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234560"
+        }
+      }
+    }
+    weight: 2
+  }
+}
+
+--- PI:
+table_id: 33554440
+match {
+  field_id: 1
+  lpm {
+    value: "\377\000"
+    prefix_len: 24
+  }
+}
+action {
+  action_profile_action_set {
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\001#Eg"
+        }
+        params {
+          param_id: 2
+          value: "\001#Eh"
+        }
+      }
+      weight: 1
+      watch_port: "abc"
+    }
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\001#Ei"
+        }
+        params {
+          param_id: 2
+          value: "\001#E`"
+        }
+      }
+      weight: 2
+    }
+  }
+}
+
+
+=========================================================================
+valid wcmp table
+=========================================================================
+
+--- PD (Input):
+wcmp_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: 1
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234569"
+        arg1: "0x01234560"
+      }
+    }
+    weight: 2
+  }
+}
+
+--- IR:
+table_name: "wcmp_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "0.0.255.0"
+    }
+    prefix_length: 24
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234568"
+        }
+      }
+    }
+    weight: 1
+  }
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234569"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234560"
+        }
+      }
+    }
+    weight: 2
+  }
+}
+
+--- PI:
+table_id: 33554438
+match {
+  field_id: 1
+  lpm {
+    value: "\377\000"
+    prefix_len: 24
+  }
+}
+action {
+  action_profile_action_set {
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\001#Eg"
+        }
+        params {
+          param_id: 2
+          value: "\001#Eh"
+        }
+      }
+      weight: 1
+    }
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\001#Ei"
+        }
+        params {
+          param_id: 2
+          value: "\001#E`"
+        }
+      }
+      weight: 2
+    }
+  }
+}
+
+
+=========================================================================
+exact matches of all formats
+=========================================================================
+
+--- PD (Input):
+exact_table_entry {
+  match {
+    normal: "0x054"
+    ipv4: "10.43.12.5"
+    ipv6: "3242::fee2"
+    mac: "00:11:22:33:44:55"
+    str: "hello"
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_name: "exact_table"
+matches {
+  name: "normal"
+  exact {
+    hex_str: "0x054"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.43.12.5"
+  }
+}
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "3242::fee2"
+  }
+}
+matches {
+  name: "mac"
+  exact {
+    mac: "00:11:22:33:44:55"
+  }
+}
+matches {
+  name: "str"
+  exact {
+    str: "hello"
+  }
+}
+action {
+  name: "NoAction"
+}
+
+--- PI:
+table_id: 33554434
+match {
+  field_id: 1
+  exact {
+    value: "T"
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\n+\014\005"
+  }
+}
+match {
+  field_id: 3
+  exact {
+    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+  }
+}
+match {
+  field_id: 4
+  exact {
+    value: "\021\"3DU"
+  }
+}
+match {
+  field_id: 5
+  exact {
+    value: "hello"
+  }
+}
+action {
+  action {
+    action_id: 21257015
+  }
+}
+
+
+=========================================================================
+valid optional table missing a match
+=========================================================================
+
+--- PD (Input):
+optional_table_entry {
+  match {
+    ipv6 {
+      value: "3242::fee2"
+    }
+  }
+  action {
+    do_thing_1 {
+      arg2: "0x01234567"
+      arg1: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_name: "optional_table"
+matches {
+  name: "ipv6"
+  optional {
+    value {
+      ipv6: "3242::fee2"
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- PI:
+table_id: 33554441
+match {
+  field_id: 1
+  optional {
+    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "\001#Eg"
+    }
+    params {
+      param_id: 2
+      value: "\001#Eh"
+    }
+  }
+}
+priority: 32
+
+
+=========================================================================
+ternary with wildcard
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x052"
+    }
+    mask {
+      hex_str: "0x273"
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_3"
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- PI:
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "R"
+    mask: "\002s"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+    params {
+      param_id: 1
+      value: "\001#Eg"
+    }
+    params {
+      param_id: 2
+      value: "\001#Eh"
+    }
+  }
+}
+priority: 32
+
+
+=========================================================================
+metadata
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: 32
+  controller_metadata: "abc"
+}
+
+--- IR:
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x052"
+    }
+    mask {
+      hex_str: "0x273"
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_3"
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+controller_metadata: "abc"
+
+--- PI:
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "R"
+    mask: "\002s"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+    params {
+      param_id: 1
+      value: "\001#Eg"
+    }
+    params {
+      param_id: 2
+      value: "\001#Eh"
+    }
+  }
+}
+priority: 32
+metadata: "abc"
+
+
+=========================================================================
+ternary table for all formats
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x052"
+    }
+    mask {
+      hex_str: "0x273"
+    }
+  }
+}
+matches {
+  name: "ipv4"
+  ternary {
+    value {
+      ipv4: "10.43.12.4"
+    }
+    mask {
+      ipv4: "10.43.12.5"
+    }
+  }
+}
+matches {
+  name: "ipv6"
+  ternary {
+    value {
+      ipv6: "::ee66"
+    }
+    mask {
+      ipv6: "::ff77"
+    }
+  }
+}
+matches {
+  name: "mac"
+  ternary {
+    value {
+      mac: "11:22:33:44:55:66"
+    }
+    mask {
+      mac: "33:66:77:66:77:77"
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_3"
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- PI:
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "R"
+    mask: "\002s"
+  }
+}
+match {
+  field_id: 2
+  ternary {
+    value: "\n+\014\004"
+    mask: "\n+\014\005"
+  }
+}
+match {
+  field_id: 3
+  ternary {
+    value: "\356f"
+    mask: "\377w"
+  }
+}
+match {
+  field_id: 4
+  ternary {
+    value: "\021\"3DUf"
+    mask: "3fwfww"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+    params {
+      param_id: 1
+      value: "\001#Eg"
+    }
+    params {
+      param_id: 2
+      value: "\001#Eh"
+    }
+  }
+}
+priority: 32
+
+
+=========================================================================
+ipv4 LPM table
+=========================================================================
+
+--- PD (Input):
+lpm1_table_entry {
+  match {
+    ipv4 {
+      value: "10.43.12.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_name: "lpm1_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "10.43.12.0"
+    }
+    prefix_length: 24
+  }
+}
+action {
+  name: "NoAction"
+}
+
+--- PI:
+table_id: 33554436
+match {
+  field_id: 1
+  lpm {
+    value: "\n+\014\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 21257015
+  }
+}
+
+
+=========================================================================
+ipv6 LPM table
+=========================================================================
+
+--- PD (Input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: 96
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_name: "lpm2_table"
+matches {
+  name: "ipv6"
+  lpm {
+    value {
+      ipv6: "ffff::abcd:0:0"
+    }
+    prefix_length: 96
+  }
+}
+action {
+  name: "NoAction"
+}
+
+--- PI:
+table_id: 33554437
+match {
+  field_id: 1
+  lpm {
+    value: "\377\377\000\000\000\000\000\000\000\000\253\315\000\000\000\000"
+    prefix_len: 96
+  }
+}
+action {
+  action {
+    action_id: 21257015
+  }
+}
+
+
+=========================================================================
+action with all formats as arguments
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+  action {
+    do_thing_2 {
+      normal: "0x054"
+      ipv4: "10.43.12.5"
+      ipv6: "3242::fee2"
+      mac: "00:11:22:33:44:55"
+      str: "hello"
+    }
+  }
+}
+
+--- IR:
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "16.36.50.82"
+  }
+}
+action {
+  name: "do_thing_2"
+  params {
+    name: "normal"
+    value {
+      hex_str: "0x054"
+    }
+  }
+  params {
+    name: "ipv4"
+    value {
+      ipv4: "10.43.12.5"
+    }
+  }
+  params {
+    name: "ipv6"
+    value {
+      ipv6: "3242::fee2"
+    }
+  }
+  params {
+    name: "mac"
+    value {
+      mac: "00:11:22:33:44:55"
+    }
+  }
+  params {
+    name: "str"
+    value {
+      str: "hello"
+    }
+  }
+}
+
+--- PI:
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action {
+    action_id: 16777218
+    params {
+      param_id: 1
+      value: "T"
+    }
+    params {
+      param_id: 2
+      value: "\n+\014\005"
+    }
+    params {
+      param_id: 3
+      value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+    }
+    params {
+      param_id: 4
+      value: "\021\"3DU"
+    }
+    params {
+      param_id: 5
+      value: "hello"
+    }
+  }
+}
+
+
+=========================================================================
+table entry without counters and meters
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+}
+
+--- IR:
+table_name: "count_and_meter_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "16.36.50.0"
+    }
+    prefix_length: 24
+  }
+}
+action {
+  name: "count_and_meter"
+}
+
+--- PI:
+table_id: 33554439
+match {
+  field_id: 1
+  lpm {
+    value: "\020$2\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 16777220
+  }
+}
+
+
+=========================================================================
+table entry with a meter
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+}
+
+--- IR:
+table_name: "count_and_meter_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "16.36.50.0"
+    }
+    prefix_length: 24
+  }
+}
+action {
+  name: "count_and_meter"
+}
+meter_config {
+  cir: 123
+  cburst: 345
+  pir: 123
+  pburst: 345
+}
+
+--- PI:
+table_id: 33554439
+match {
+  field_id: 1
+  lpm {
+    value: "\020$2\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 16777220
+  }
+}
+meter_config {
+  cir: 123
+  cburst: 345
+  pir: 123
+  pburst: 345
+}
+
+
+=========================================================================
+table entry with a byte counter
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    byte_count: 567
+  }
+}
+
+--- IR:
+table_name: "count_and_meter_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "16.36.50.0"
+    }
+    prefix_length: 24
+  }
+}
+action {
+  name: "count_and_meter"
+}
+counter_data {
+  byte_count: 567
+}
+
+--- PI:
+table_id: 33554439
+match {
+  field_id: 1
+  lpm {
+    value: "\020$2\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 16777220
+  }
+}
+counter_data {
+  byte_count: 567
+}
+
+
+=========================================================================
+table entry with a packet counter
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    packet_count: 789
+  }
+}
+
+--- IR:
+table_name: "count_and_meter_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "16.36.50.0"
+    }
+    prefix_length: 24
+  }
+}
+action {
+  name: "count_and_meter"
+}
+counter_data {
+  packet_count: 789
+}
+
+--- PI:
+table_id: 33554439
+match {
+  field_id: 1
+  lpm {
+    value: "\020$2\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 16777220
+  }
+}
+counter_data {
+  packet_count: 789
+}
+
+
+=========================================================================
+table entry with a counter (both units)
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- IR:
+table_name: "count_and_meter_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "16.36.50.0"
+    }
+    prefix_length: 24
+  }
+}
+action {
+  name: "count_and_meter"
+}
+counter_data {
+  byte_count: 567
+  packet_count: 789
+}
+
+--- PI:
+table_id: 33554439
+match {
+  field_id: 1
+  lpm {
+    value: "\020$2\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 16777220
+  }
+}
+counter_data {
+  byte_count: 567
+  packet_count: 789
+}
+
+
+=========================================================================
+table entry with counters and meters
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- IR:
+table_name: "count_and_meter_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "16.36.50.0"
+    }
+    prefix_length: 24
+  }
+}
+action {
+  name: "count_and_meter"
+}
+meter_config {
+  cir: 123
+  cburst: 345
+  pir: 123
+  pburst: 345
+}
+counter_data {
+  byte_count: 567
+  packet_count: 789
+}
+
+--- PI:
+table_id: 33554439
+match {
+  field_id: 1
+  lpm {
+    value: "\020$2\000"
+    prefix_len: 24
+  }
+}
+action {
+  action {
+    action_id: 16777220
+  }
+}
+meter_config {
+  cir: 123
+  cburst: 345
+  pir: 123
+  pburst: 345
+}
+counter_data {
+  byte_count: 567
+  packet_count: 789
+}
+
+
+=========================================================================
+exact match with empty string for Format::STRING
+=========================================================================
+
+--- PD (Input):
+exact_table_entry {
+  match {
+    normal: "0x054"
+    ipv4: "10.43.12.5"
+    ipv6: "3242::fee2"
+    mac: "00:11:22:33:44:55"
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_name: "exact_table"
+matches {
+  name: "normal"
+  exact {
+    hex_str: "0x054"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.43.12.5"
+  }
+}
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "3242::fee2"
+  }
+}
+matches {
+  name: "mac"
+  exact {
+    mac: "00:11:22:33:44:55"
+  }
+}
+matches {
+  name: "str"
+  exact {
+    str: ""
+  }
+}
+action {
+  name: "NoAction"
+}
+
+--- PI:
+table_id: 33554434
+match {
+  field_id: 1
+  exact {
+    value: "T"
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\n+\014\005"
+  }
+}
+match {
+  field_id: 3
+  exact {
+    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+  }
+}
+match {
+  field_id: 4
+  exact {
+    value: "\021\"3DU"
+  }
+}
+match {
+  field_id: 5
+  exact {
+  }
+}
+action {
+  action {
+    action_id: 21257015
+  }
+}
+
+
+=========================================================================
+ipv4 LPM table with /0
+=========================================================================
+
+--- PD (Input):
+lpm1_table_entry {
+  match {
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_name: "lpm1_table"
+action {
+  name: "NoAction"
+}
+
+--- PI:
+table_id: 33554436
+action {
+  action {
+    action_id: 21257015
+  }
+}
+
+
+=========================================================================
+exact match with string containing null characters for Format::STRING
+=========================================================================
+
+--- PD (Input):
+exact_table_entry {
+  match {
+    normal: "0x054"
+    ipv4: "10.43.12.5"
+    ipv6: "3242::fee2"
+    mac: "00:11:22:33:44:55"
+    str: "\0001u"
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_name: "exact_table"
+matches {
+  name: "normal"
+  exact {
+    hex_str: "0x054"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.43.12.5"
+  }
+}
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "3242::fee2"
+  }
+}
+matches {
+  name: "mac"
+  exact {
+    mac: "00:11:22:33:44:55"
+  }
+}
+matches {
+  name: "str"
+  exact {
+    str: "\0001u"
+  }
+}
+action {
+  name: "NoAction"
+}
+
+--- PI:
+table_id: 33554434
+match {
+  field_id: 1
+  exact {
+    value: "T"
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\n+\014\005"
+  }
+}
+match {
+  field_id: 3
+  exact {
+    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+  }
+}
+match {
+  field_id: 4
+  exact {
+    value: "\021\"3DU"
+  }
+}
+match {
+  field_id: 5
+  exact {
+    value: "\0001u"
+  }
+}
+action {
+  action {
+    action_id: 21257015
+  }
+}
+
+
+=========================================================================
+optional match with string containing null characters for Format::STRING
+=========================================================================
+
+--- PD (Input):
+optional_table_entry {
+  match {
+    str {
+      value: "\000324"
+    }
+  }
+  action {
+    do_thing_1 {
+      arg2: "0x01234567"
+      arg1: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_name: "optional_table"
+matches {
+  name: "str"
+  optional {
+    value {
+      str: "\000324"
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- PI:
+table_id: 33554441
+match {
+  field_id: 3
+  optional {
+    value: "\000324"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "\001#Eg"
+    }
+    params {
+      param_id: 2
+      value: "\001#Eh"
+    }
+  }
+}
+priority: 32
+
+
+=========================================================================
+valid wcmp table with watch_port containing null characters for Format::STRING
+=========================================================================
+
+--- PD (Input):
+wcmp2_table_entry {
+  match {
+    ipv4 {
+      value: "0.0.255.0"
+      prefix_length: 24
+    }
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234567"
+        arg1: "0x01234568"
+      }
+    }
+    weight: 1
+    watch_port: "\000abc"
+  }
+  wcmp_actions {
+    action {
+      do_thing_1 {
+        arg2: "0x01234569"
+        arg1: "0x01234560"
+      }
+    }
+    weight: 2
+  }
+}
+
+--- IR:
+table_name: "wcmp2_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "0.0.255.0"
+    }
+    prefix_length: 24
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234568"
+        }
+      }
+    }
+    weight: 1
+    watch_port: "\000abc"
+  }
+  actions {
+    action {
+      name: "do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234569"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234560"
+        }
+      }
+    }
+    weight: 2
+  }
+}
+
+--- PI:
+table_id: 33554440
+match {
+  field_id: 1
+  lpm {
+    value: "\377\000"
+    prefix_len: 24
+  }
+}
+action {
+  action_profile_action_set {
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\001#Eg"
+        }
+        params {
+          param_id: 2
+          value: "\001#Eh"
+        }
+      }
+      weight: 1
+      watch_port: "\000abc"
+    }
+    action_profile_actions {
+      action {
+        action_id: 16777217
+        params {
+          param_id: 1
+          value: "\001#Ei"
+        }
+        params {
+          param_id: 2
+          value: "\001#E`"
+        }
+      }
+      weight: 2
+    }
+  }
+}
+
+
+=========================================================================
+valid no action table
+=========================================================================
+
+--- PD (Input):
+no_action_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+}
+
+--- IR:
+table_name: "no_action_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "16.36.50.82"
+  }
+}
+
+--- PI:
+table_id: 33554445
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+
+
+=========================================================================
+missing matches with key_only=true
+=========================================================================
+
+--- PD (Input):
+id_test_table_entry {
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'id_test_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: invalid IPv6 address: ''
+  - Match field 'ipv4' is invalid: Invalid IPv4 address: ''
+  - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
+=========================================================================
+ternary table with priority absent with key_only=true
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+    ipv4 {
+      value: "10.43.12.4"
+      mask: "10.43.12.5"
+    }
+    ipv6 {
+      value: "::ee66"
+      mask: "::ff77"
+    }
+    mac {
+      value: "11:22:33:44:55:66"
+      mask: "33:66:77:66:77:77"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
+=========================================================================
+ipv4 LPM table with key_only=true
+=========================================================================
+
+--- PD (Input):
+lpm1_table_entry {
+  match {
+    ipv4 {
+      value: "10.43.12.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- IR:
+table_name: "lpm1_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "10.43.12.0"
+    }
+    prefix_length: 24
+  }
+}
+
+--- PI:
+table_id: 33554436
+match {
+  field_id: 1
+  lpm {
+    value: "\n+\014\000"
+    prefix_len: 24
+  }
+}
+
+
+=========================================================================
+ternary match with key_only=true
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x01234567"
+      arg2: "0x01234568"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x052"
+    }
+    mask {
+      hex_str: "0x273"
+    }
+  }
+}
+priority: 32
+
+--- PI:
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "R"
+    mask: "\002s"
+  }
+}
+priority: 32
+
+

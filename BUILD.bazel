@@ -1,0 +1,12 @@
+load("@com_github_bazelbuild_buildtools//buildifier:def.bzl", "buildifier")
+
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+exports_files(["LICENSE"])
+
+buildifier(
+    name = "buildifier",
+    exclude_patterns = ["./third_party/*"],
+)

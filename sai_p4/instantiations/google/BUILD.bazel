@@ -1,0 +1,232 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("//gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+# -- P4 program ----------------------------------------------------------------
+
+SHARED_DEPS = [
+    "acl_common_actions.p4",
+    "acl_ingress.p4",
+    "acl_pre_ingress.p4",
+    "hashing.p4",
+    "ids.h",
+    "roles.h",
+    "bitwidths.p4",
+    "minimum_guaranteed_sizes.p4",
+    "//sai_p4/fixed",
+]
+
+MIDDLEBLOCK_DEPS = SHARED_DEPS
+
+INSTANTIATIONS = [
+    # (<instantiation>, <dependencies>)
+    ("middleblock", MIDDLEBLOCK_DEPS),
+]
+
+[
+    p4_library(
+        name = instantiation,
+        src = "%s.p4" % instantiation,
+        # Do not access directly. Use the C++/Go APIs in the "P4Info" section of
+        # this BUILD file instead.
+        p4info_out = "generated/%s.p4info.pb.txt" % instantiation,
+        deps = deps,
+    )
+    for (instantiation, deps) in INSTANTIATIONS
+]
+
+cc_library(
+    name = "p4_ids",
+    hdrs = ["ids.h"],
+    deps = [
+        "//sai_p4/fixed:p4_ids",
+    ],
+)
+
+cc_library(
+    name = "p4_roles",
+    hdrs = ["roles.h"],
+)
+
+# -- PD proto for SDN controller -----------------------------------------------
+
+proto_library(
+    name = "sai_pd_proto",
+    srcs = ["sai_pd.proto"],
+    deps = [
+        "@com_github_p4lang_p4runtime//:p4runtime_proto",
+        "@com_google_googleapis//google/rpc:code_proto",
+        "@com_google_googleapis//google/rpc:status_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "sai_pd_cc_proto",
+    deps = [":sai_pd_proto"],
+)
+
+build_test(
+    name = "sai_pd_proto_test",
+    targets = [
+        ":sai_pd_proto",
+        ":sai_pd_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "sai_pd_util",
+    srcs = ["sai_pd_util.cc"],
+    hdrs = ["sai_pd_util.h"],
+    deps = [
+        ":sai_pd_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:optional",
+    ],
+)
+
+cc_test(
+    name = "sai_pd_util_test",
+    srcs = ["sai_pd_util_test.cc"],
+    deps = [
+        ":sai_pd_cc_proto",
+        ":sai_pd_util",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+# Ensures that the checked in and generated unioned P4Infos match.
+# To update the checked in unioned P4Info:
+#   blaze run :union_p4info_up_to_date_test -- --update
+cmd_diff_test(
+    name = "union_p4info_up_to_date_test",
+    actual_cmd = "$(execpath {p4info_union}) --list_of_p4infos='{p4infos}'".format(
+        p4info_union = "//p4_pdpi:p4info_union",
+        p4infos = ",".join([
+            "$(location %s.p4info.pb.txt)" % instantiation
+            for (instantiation, _) in INSTANTIATIONS
+        ]),
+    ),
+    data = [
+        "%s.p4info.pb.txt" % instantiation
+        for (instantiation, _) in INSTANTIATIONS
+    ],
+    expected = "unioned_p4info.pb.txt",
+    tools = ["//p4_pdpi:p4info_union"],
+)
+
+# Only for testing and updating the PD proto when the P4 program changes.
+p4_pd_proto(
+    name = "generated_sai_pd",
+    src = "unioned_p4info.pb.txt",
+    # Do not access directly. Use checked in sai_pd.proto instead.
+    out = "generated/sai_pd.proto",
+    package = "sai",
+    roles = ["sdn_controller"],
+)
+
+# -- P4Info --------------------------------------------------------------------
+
+# The P4Info proto, in C++ format.
+cc_library(
+    name = "sai_p4info_cc",
+    srcs = ["sai_p4info.cc"],
+    hdrs = ["sai_p4info.h"],
+    deps =
+        [instantiation + "_p4info_embed" for (instantiation, _) in INSTANTIATIONS] + [
+            ":instantiations",
+            ":unioned_p4info_embed",
+            "@com_github_google_glog//:glog",
+            "@com_google_protobuf//:protobuf",
+            "@com_google_absl//absl/status:statusor",
+            "@com_google_absl//absl/strings",
+            "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+            "//p4_pdpi:ir",
+            "//p4_pdpi:ir_cc_proto",
+            "//p4_pdpi:p4info_union_lib",
+            "//sai_p4/tools:p4info_tools",
+        ],
+)
+
+cc_test(
+    name = "sai_p4info_test",
+    srcs = ["sai_p4info_test.cc"],
+    deps = [
+        ":instantiations",
+        ":sai_p4info_cc",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:variant",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "instantiations",
+    hdrs = ["instantiations.h"],
+    deps = [
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+[
+    [
+        # Ensures that the checked in and compile-time generated P4Infos match.
+        # To update the checked in P4Info:
+        #   blaze run :<instantiation>_p4info_up_to_date_test -- --update
+        diff_test(
+            name = "%s_p4info_up_to_date_test" % instantiation,
+            actual = "generated/%s.p4info.pb.txt" % instantiation,  # Generated.
+            expected = "%s.p4info.pb.txt" % instantiation,  # Checked in.
+        ),
+
+        # Auxiliary targets, see go/totw/128.
+        cc_embed_data(
+            name = "%s_p4info_embed" % instantiation,
+            srcs = ["%s.p4info.pb.txt" % instantiation],
+            cc_file_output = "%s_p4info_embed.cc" % instantiation,
+            cpp_namespace = "sai",
+            h_file_output = "%s_p4info_embed.h" % instantiation,
+        ),
+    ]
+    for (instantiation, _) in INSTANTIATIONS
+]
+
+cc_embed_data(
+    name = "unioned_p4info_embed",
+    srcs = [
+        "unioned_p4info.pb.txt",
+    ],
+    cc_file_output = "unioned_p4info_embed.cc",
+    cpp_namespace = "sai",
+    h_file_output = "unioned_p4info_embed.h",
+)

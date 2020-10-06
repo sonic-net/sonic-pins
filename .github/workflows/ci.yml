@@ -1,0 +1,61 @@
+name: "build"
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    # Run hourly, at minute 0. This is when the cache key changes, and
+    # so this will ensure the new cache entry is generated on the master branch,
+    # making CI fast on all branches.
+    # https://crontab.guru/#0_*_*_*_*
+    - cron: "0 * * * *"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        bazelcmd: [build, test]
+    name: ${{ matrix.bazelcmd }}
+    # We use Ubuntu 20.04 as it comes with GCC v9.3 by default.
+    runs-on: ubuntu-20.04
+    env:
+      BAZEL: bazelisk-linux-amd64
+      SWSS: https://x-token-auth:${{ secrets.PINS_GITHUB_BOT_PERSONAL_ACCESS_TOKEN }}@github.com/pins/sonic-swss-common.git
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Compute hour of the day.
+      id: hour
+      run: echo "::set-output name=number::$(date +%H)"
+
+    - name: Mount bazel cache
+      uses: actions/cache@v2
+      with:
+        # See https://docs.bazel.build/versions/master/output_directories.html
+        path: "~/.cache/bazel"
+        # See https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
+        key: ${{ matrix.bazelcmd }}-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc') }}-${{ steps.hour.outputs.number }}
+        restore-keys: |
+          ${{ matrix.bazelcmd }}-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc') }}
+          ${{ matrix.bazelcmd }}-${{ runner.os }}-
+
+    - name: Install system dependencies
+      run: ./install_dependencies.sh
+
+    - name: Install bazelisk
+      run: |
+        curl -LO "https://github.com/bazelbuild/bazelisk/releases/download/v1.7.5/$BAZEL"
+        chmod +x $BAZEL
+
+    - name: Set up GitHub credentials for private repos
+      run: git config --global url."${SWSS}".InsteadOf "git@github.com:pins/sonic-swss-common.git"
+
+    - name: Build
+      run: ./$BAZEL ${{ matrix.bazelcmd }} //... --test_output=errors --distinct_host_configuration=false
+
+    - name: Compress cache
+      # This deletes cached archives while keeping the build cache.
+      run: rm -rf $(./$BAZEL info repository_cache)

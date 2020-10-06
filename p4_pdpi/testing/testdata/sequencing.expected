@@ -1,0 +1,797 @@
+=========================================================================
+SequenceTest: Empty input
+=========================================================================
+
+--- PD updates (input):
+<empty>
+
+--- Write requests (output):
+<empty>
+
+=========================================================================
+SequenceTest: Insert(a) -> Insert(a)
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-a"
+        referring_id_2: "non-existent"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-a"
+          referring_id_2: "non-existent"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: Delete(a) -> Delete(a)
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-a"
+        referring_id_2: "non-existent"
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-a"
+          referring_id_2: "non-existent"
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: Test case with 1 entry in the first batch and multiple ones in the second batch. Used to verify the API is stable.
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-a"
+        referring_id_2: "key-b"
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-b"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-a"
+          referring_id_2: "key-b"
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+updates {
+  type: DELETE
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-b"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: Insert(a), Insert(not-a)
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-a"
+        referring_id_2: "non-existent"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referred_table_entry {
+    match {
+      id: "not-key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-a"
+          referring_id_2: "non-existent"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "not-key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: Insert(a) -> Insert(a), Insert(different table)
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-a"
+        referring_id_2: "non-existent"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  lpm2_table_entry {
+    match {
+      ipv6 {
+        value: "ffff::abcd:0:0"
+        prefix_length: 96
+      }
+    }
+    action {
+      NoAction {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    lpm2_table_entry {
+      match {
+        ipv6 {
+          value: "ffff::abcd:0:0"
+          prefix_length: 96
+        }
+      }
+      action {
+        NoAction {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-a"
+          referring_id_2: "non-existent"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: Insert(a) -> Insert(a), Insert(b) -> Insert(b)
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-a"
+        referring_id_2: "non-existent"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x002"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-b"
+        referring_id_2: "non-existent"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-b"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-b"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-a"
+          referring_id_2: "non-existent"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x002"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-b"
+          referring_id_2: "non-existent"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: Insert(a) -> Insert(a), Insert(a) -> Insert(a) (i.e., two inserts pointing to the same insert)
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-a"
+        referring_id_2: "non-existent"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referring_table_entry {
+    match {
+      val: "0x002"
+    }
+    action {
+      referring_action {
+        referring_id_1: "key-a"
+        referring_id_2: "non-existent"
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-a"
+          referring_id_2: "non-existent"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    referring_table_entry {
+      match {
+        val: "0x002"
+      }
+      action {
+        referring_action {
+          referring_id_1: "key-a"
+          referring_id_2: "non-existent"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: A referring to B using a match field
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring2_table_entry {
+    match {
+      referring_id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  referred_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    referred_table_entry {
+      match {
+        id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring2_table_entry {
+      match {
+        referring_id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SortTest: A referring to B
+=========================================================================
+
+--- PD entries (input):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "non-existent"
+    }
+  }
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entries (output):
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "non-existent"
+    }
+  }
+}
+
+=========================================================================
+SortTest: A referring to B twice
+=========================================================================
+
+--- PD entries (input):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-a"
+    }
+  }
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entries (output):
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-a"
+    }
+  }
+}
+

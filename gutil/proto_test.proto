@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package gutil;
+
+message TestMessage {
+  int32 int_field = 1;
+  string string_field = 2;
+}

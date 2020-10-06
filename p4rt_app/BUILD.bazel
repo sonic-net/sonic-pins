@@ -1,0 +1,86 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+p4rt_version = "0.0.1"
+
+p4rt_maintainer = "PINS Working Group <pins-wg@opennetworking.org>"
+
+load("@rules_pkg//:pkg.bzl", "pkg_deb", "pkg_tar")
+
+cc_binary(
+    name = "p4rt",
+    srcs = ["p4rt.cc"],
+    deps = [
+        "//gutil:status",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/sonic:packetio_impl",
+        "//p4rt_app/sonic/adapters:system_call_adapter",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/flags:parse",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+pkg_tar(
+    name = "p4rt_binaries",
+    srcs = [
+        ":p4rt",  # TODO explore p4rt.stripped
+    ],
+    extension = "tar.bz2",
+    mode = "0755",
+    package_dir = "/usr/local/bin",
+    visibility = ["//visibility:private"],
+)
+
+pkg_tar(
+    name = "p4rt_debug",
+    srcs = [
+        ":p4rt.dwp",
+    ],
+    extension = "tar.bz2",
+    mode = "0755",
+    package_dir = "/usr/local/bin",
+    visibility = ["//visibility:private"],
+)
+
+pkg_deb(
+    name = "p4rt_deb",
+    architecture = "amd64",
+    data = ":p4rt_binaries",
+    description = "P4RT service",
+    maintainer = p4rt_maintainer,
+    package = "sonic-p4rt",
+    version = p4rt_version,
+)
+
+pkg_deb(
+    name = "p4rt_dbg_deb",
+    architecture = "amd64",
+    data = ":p4rt_debug",
+    description = "P4RT service debug symbols",
+    maintainer = p4rt_maintainer,
+    package = "sonic-p4rt-dbgsym",
+    version = p4rt_version,
+)

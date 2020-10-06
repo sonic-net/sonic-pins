@@ -1,0 +1,576 @@
+
+// P4 PD proto
+
+// NOTE: This file is automatically created from the P4 program, do not modify
+// manually.
+
+syntax = "proto3";
+
+package sai;
+
+import "google/rpc/code.proto";
+import "google/rpc/status.proto";
+import "p4/v1/p4runtime.proto";
+
+// PDPI uses the following formats for different kinds of values:
+// - Format::IPV4 for IPv4 addresses (32 bits), e.g., "10.0.0.1".
+// - Format::IPV6 for IPv6 addresses (128 bits) formatted according to RFC 5952.
+//   E.g. "2001:db8::1".
+// - Format::MAC for MAC addresses (48 bits), e.g., "01:02:03:04:aa".
+// - Format::STRING for entities that the controller refers to by string, e.g.,
+//   ports.
+// - Format::HEX_STRING for anything else, i.e. bitstrings of arbitrary length.
+//   E.g., "0x01ab".
+
+// -- General definitions ------------------------------------------------------
+
+// Ternary match. The value and mask are formatted according to the Format of
+// the match field.
+message Ternary {
+  string value = 1;
+  string mask = 2;
+}
+
+// LPM match. The value is formatted according to the Format of the match field.
+message Lpm {
+  string value = 1;
+  int32 prefix_length = 2;
+}
+
+// Optional match. The value is formatted according to the Format of the match
+// field.
+message Optional {
+  string value = 1;
+}
+
+// -- Tables -------------------------------------------------------------------
+
+message NeighborTableEntry {
+  message Match {
+    // Refers to 'router_interface_table.router_interface_id'.
+    string router_interface_id = 1;  // exact match / Format::STRING
+    string neighbor_id = 2;          // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    SetDstMacAction set_dst_mac = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message RouterInterfaceTableEntry {
+  message Match {
+    string router_interface_id = 1;  // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    SetPortAndSrcMacAction set_port_and_src_mac = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message NexthopTableEntry {
+  message Match {
+    string nexthop_id = 1;  // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    SetNexthopAction set_nexthop = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message WcmpGroupTableEntry {
+  message Match {
+    string wcmp_group_id = 1;  // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    SetNexthopIdAction set_nexthop_id = 1;
+  }
+  message WcmpAction {
+    Action action = 1;
+    int32 weight = 2;
+    string watch_port = 3;  // Format::STRING
+  }
+  repeated WcmpAction wcmp_actions = 2;
+  bytes controller_metadata = 8;
+}
+
+message Ipv4TableEntry {
+  message Match {
+    // Refers to 'vrf_table.vrf_id'.
+    string vrf_id = 1;  // exact match / Format::STRING
+    Lpm ipv4_dst = 2;   // lpm match / Format::IPV4
+  }
+  Match match = 1;
+  message Action {
+    oneof action {
+      SetWcmpGroupIdAction set_wcmp_group_id = 3;
+      SetNexthopIdAction set_nexthop_id = 2;
+      DropAction drop = 1;
+    }
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message Ipv6TableEntry {
+  message Match {
+    // Refers to 'vrf_table.vrf_id'.
+    string vrf_id = 1;  // exact match / Format::STRING
+    Lpm ipv6_dst = 2;   // lpm match / Format::IPV6
+  }
+  Match match = 1;
+  message Action {
+    oneof action {
+      SetWcmpGroupIdAction set_wcmp_group_id = 3;
+      SetNexthopIdAction set_nexthop_id = 2;
+      DropAction drop = 1;
+    }
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message MirrorSessionTableEntry {
+  message Match {
+    string mirror_session_id = 1;  // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message L3AdmitTableEntry {
+  message Match {
+    Ternary dst_mac = 1;   // ternary match / Format::MAC
+    Optional in_port = 2;  // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    AdmitToL3Action admit_to_l3 = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
+// Table entry restrictions:
+// ## The VRF ID 0 (or '' in P4Runtime) encodes the default VRF, which cannot
+// ## be read or written via this table, but is always present implicitly.
+// ## TODO: This constraint should read `vrf_id != ''` (since
+// ## constraints are a control plane (P4Runtime) concept), but
+// ## p4-constraints does not currently support strings.
+//   vrf_id != 0;
+message VrfTableEntry {
+  message Match {
+    string vrf_id = 1;  // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    NoAction no_action = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+// Table entry restrictions:
+// ## Only allow IP field matches for IP packets.
+//   dst_ip::mask != 0 -> is_ipv4 == 1;
+//   dst_ipv6::mask != 0 -> is_ipv6 == 1;
+//   ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+//   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+//   ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+//   ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+// ## Forbid using ether_type for IP packets (by convention, use is_ip*
+// instead).
+//   ether_type != 0x0800 && ether_type != 0x86dd;
+// ## Only allow arp_tpa for ARP packets
+//   arp_tpa::mask != 0 -> ether_type == 0x0806;
+// ## Only allow icmp_type for ICMP packets
+//   icmpv6_type::mask != 0 -> ((is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1) &&
+//   ip_protocol == 58);
+// ## Forbid illegal combinations of IP_TYPE fields.
+//   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+// ## Forbid unsupported combinations of IP_TYPE fields.
+//   is_ipv4::mask != 0 -> (is_ipv4 == 1);
+//   is_ipv6::mask != 0 -> (is_ipv6 == 1);
+message AclIngressTableEntry {
+  message Match {
+    Optional is_ip = 1;        // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;      // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 4;    // ternary match / Format::HEX_STRING / 16 bits
+    Ternary dst_mac = 5;       // ternary match / Format::MAC
+    Ternary src_ip = 6;        // ternary match / Format::IPV4
+    Ternary dst_ip = 7;        // ternary match / Format::IPV4
+    Ternary src_ipv6 = 8;      // ternary match / Format::IPV6
+    Ternary dst_ipv6 = 9;      // ternary match / Format::IPV6
+    Ternary ttl = 10;          // ternary match / Format::HEX_STRING / 8 bits
+    Ternary dscp = 11;         // ternary match / Format::HEX_STRING / 6 bits
+    Ternary ecn = 12;          // ternary match / Format::HEX_STRING / 2 bits
+    Ternary ip_protocol = 13;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary icmpv6_type = 14;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary l4_dst_port = 15;  // ternary match / Format::HEX_STRING / 16 bits
+    Ternary arp_tpa = 16;      // ternary match / Format::IPV4
+    Optional in_port = 17;     // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    oneof action {
+      CopyAction copy = 1;
+      TrapAction trap = 2;
+      ForwardAction forward = 3;
+      MirrorAction mirror = 4;
+      AclDropAction acl_drop = 5;
+    }
+  }
+  Action action = 2;
+  int32 priority = 3;
+  BytesMeterConfig meter_config = 4;
+  BytesAndPacketsCounterData counter_data = 6;
+  bytes controller_metadata = 8;
+}
+
+// Table entry restrictions:
+// ## Only allow IP field matches for IP packets.
+//   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+//   dst_ip::mask != 0 -> is_ipv4 == 1;
+//   dst_ipv6::mask != 0 -> is_ipv6 == 1;
+// ## Forbid illegal combinations of IP_TYPE fields.
+//   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+// ## Forbid unsupported combinations of IP_TYPE fields.
+//   is_ipv4::mask != 0 -> (is_ipv4 == 1);
+//   is_ipv6::mask != 0 -> (is_ipv6 == 1);
+message AclPreIngressTableEntry {
+  message Match {
+    Optional is_ip = 1;    // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;  // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;  // optional match / Format::HEX_STRING / 1 bits
+    Ternary src_mac = 4;   // ternary match / Format::MAC
+    Ternary dst_ip = 5;    // ternary match / Format::IPV4
+    Ternary dst_ipv6 = 6;  // ternary match / Format::IPV6
+    Ternary dscp = 7;      // ternary match / Format::HEX_STRING / 6 bits
+    Optional in_port = 8;  // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    SetVrfAction set_vrf = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  BytesAndPacketsCounterData counter_data = 6;
+  bytes controller_metadata = 8;
+}
+
+// Table entry restrictions:
+// ## WBB only allows for very specific table entries:
+// ## Traceroute (6 entries)
+//   (
+// ## IPv4 or IPv6
+//   ((is_ipv4 == 1 && is_ipv6::mask == 0) ||
+//   (is_ipv4::mask == 0 && is_ipv6 == 1)) &&
+// ## TTL 0, 1, and 2
+//   (ttl == 0 || ttl == 1 || ttl == 2) &&
+//   ether_type::mask == 0 && outer_vlan_id::mask == 0
+//   ) ||
+// ## LLDP
+//   (
+//   ether_type == 0x88cc &&
+//   is_ipv4::mask == 0 && is_ipv6::mask == 0 && ttl::mask == 0 &&
+//   outer_vlan_id::mask == 0
+//   ) ||
+// ## ND
+//   (
+// ## TODO remove optional match for VLAN ID once VLAN ID is
+// ## completely removed from ND flows.
+//   (( outer_vlan_id::mask == 0xfff && outer_vlan_id == 0x0FA0) ||
+//   outer_vlan_id::mask == 0);
+//   ether_type == 0x6007;
+//   is_ipv4::mask == 0;
+//   is_ipv6::mask == 0;
+//   ttl::mask == 0
+//   )
+message AclWbbIngressTableEntry {
+  message Match {
+    Optional is_ipv4 = 1;       // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 2;       // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 3;     // ternary match / Format::HEX_STRING / 16 bits
+    Ternary ttl = 4;            // ternary match / Format::HEX_STRING / 8 bits
+    Ternary outer_vlan_id = 5;  // ternary match / Format::HEX_STRING / 12 bits
+  }
+  Match match = 1;
+  message Action {
+    oneof action {
+      AclWbbIngressCopyAction acl_wbb_ingress_copy = 1;
+      AclWbbIngressTrapAction acl_wbb_ingress_trap = 2;
+    }
+  }
+  Action action = 2;
+  int32 priority = 3;
+  BytesMeterConfig meter_config = 4;
+  BytesAndPacketsCounterData counter_data = 6;
+  bytes controller_metadata = 8;
+}
+
+message AclEgressTableEntry {
+  message Match {
+    Ternary ether_type = 1;   // ternary match / Format::HEX_STRING / 16 bits
+    Ternary ip_protocol = 2;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary l4_dst_port = 3;  // ternary match / Format::HEX_STRING / 16 bits
+    Optional out_port = 4;    // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    AclDropAction acl_drop = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
+// -- Actions ------------------------------------------------------------------
+
+message SetDstMacAction {
+  string dst_mac = 1;  // Format::MAC
+}
+
+message SetPortAndSrcMacAction {
+  string port = 1;     // Format::STRING
+  string src_mac = 2;  // Format::MAC
+}
+
+message SetNexthopAction {
+  // Refers to 'router_interface_table.router_interface_id'.
+  // Refers to 'neighbor_table.router_interface_id'.
+  string router_interface_id = 1;  // Format::STRING
+  // Refers to 'neighbor_table.neighbor_id'.
+  string neighbor_id = 2;  // Format::STRING
+}
+
+message SetWcmpGroupIdAction {
+  // Refers to 'wcmp_group_table.wcmp_group_id'.
+  string wcmp_group_id = 1;  // Format::STRING
+}
+
+message SetNexthopIdAction {
+  // Refers to 'nexthop_table.nexthop_id'.
+  string nexthop_id = 1;  // Format::STRING
+}
+
+message DropAction {}
+
+message MirrorAsIpv4ErspanAction {
+  string port = 1;     // Format::STRING
+  string src_ip = 2;   // Format::IPV4
+  string dst_ip = 3;   // Format::IPV4
+  string src_mac = 4;  // Format::MAC
+  string dst_mac = 5;  // Format::MAC
+  string ttl = 6;      // Format::HEX_STRING / 8 bits
+  string tos = 7;      // Format::HEX_STRING / 8 bits
+}
+
+message AdmitToL3Action {}
+
+message SetVrfAction {
+  // Refers to 'vrf_table.vrf_id'.
+  string vrf_id = 1;  // Format::STRING
+}
+
+message CopyAction {
+  string qos_queue = 1;  // Format::STRING
+}
+
+message TrapAction {
+  string qos_queue = 1;  // Format::STRING
+}
+
+message ForwardAction {}
+
+message MirrorAction {
+  // Refers to 'mirror_session_table.mirror_session_id'.
+  string mirror_session_id = 1;  // Format::STRING
+}
+
+message AclWbbIngressCopyAction {}
+
+message AclWbbIngressTrapAction {}
+
+message AclDropAction {}
+
+message NoAction {}
+
+// -- All tables ---------------------------------------------------------------
+
+message TableEntry {
+  oneof entry {
+    NeighborTableEntry neighbor_table_entry = 64;
+    RouterInterfaceTableEntry router_interface_table_entry = 65;
+    NexthopTableEntry nexthop_table_entry = 66;
+    WcmpGroupTableEntry wcmp_group_table_entry = 67;
+    Ipv4TableEntry ipv4_table_entry = 68;
+    Ipv6TableEntry ipv6_table_entry = 69;
+    MirrorSessionTableEntry mirror_session_table_entry = 70;
+    L3AdmitTableEntry l3_admit_table_entry = 71;
+    VrfTableEntry vrf_table_entry = 74;
+    AclIngressTableEntry acl_ingress_table_entry = 256;
+    AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;
+    AclWbbIngressTableEntry acl_wbb_ingress_table_entry = 259;
+    AclEgressTableEntry acl_egress_table_entry = 260;
+  }
+}
+
+message TableEntries {
+  repeated TableEntry entries = 1;
+}
+
+// -- Packet-IO ----------------------------------------------------------------
+
+message PacketIn {
+  bytes payload = 1;
+
+  message Metadata {
+    string ingress_port = 1;        // Format::STRING
+    string target_egress_port = 2;  // Format::STRING
+  }
+  Metadata metadata = 2;
+}
+message PacketOut {
+  bytes payload = 1;
+
+  message Metadata {
+    string egress_port = 1;        // Format::STRING
+    string submit_to_ingress = 2;  // Format::HEX_STRING / 1 bits
+    string unused_pad = 3;         // Format::HEX_STRING / 7 bits
+  }
+  Metadata metadata = 2;
+}
+
+// -- Meter configs ------------------------------------------------------------
+
+message BytesMeterConfig {
+  // Committed/peak information rate (bytes per sec).
+  int64 bytes_per_second = 1;
+  // Committed/peak burst size.
+  int64 burst_bytes = 2;
+}
+
+message PacketsMeterConfig {
+  // Committed/peak information rate (packets per sec).
+  int64 packets_per_second = 1;
+  // Committed/peak burst size.
+  int64 burst_packets = 2;
+}
+
+// -- Counter data -------------------------------------------------------------
+
+message BytesCounterData {
+  // Number of bytes.
+  int64 byte_count = 1;
+}
+
+message PacketsCounterData {
+  // Number of packets.
+  int64 packet_count = 1;
+}
+
+message BytesAndPacketsCounterData {
+  // Number of bytes.
+  int64 byte_count = 1;
+  // Number of packets.
+  int64 packet_count = 2;
+}
+
+// -- RPC messages -------------------------------------------------------------
+
+// Describes an update in a Write RPC request.
+message Update {
+  // Required.
+  p4.v1.Update.Type type = 1;
+  // Required.
+  TableEntry table_entry = 2;
+}
+
+// Describes a Write RPC request.
+message WriteRequest {
+  // Required.
+  uint64 device_id = 1;
+  // Required.
+  p4.v1.Uint128 election_id = 2;
+  // Required.
+  repeated Update updates = 3;
+}
+
+// Describes the status of a single update in a Write RPC.
+message UpdateStatus {
+  // Required.
+  google.rpc.Code code = 1;
+  // Required for non-OK status.
+  string message = 2;
+}
+
+// Describes the result of a Write RPC.
+message WriteRpcStatus {
+  oneof status {
+    google.rpc.Status rpc_wide_error = 1;
+    WriteResponse rpc_response = 2;
+  }
+}
+
+// Describes a Write RPC response.
+message WriteResponse {
+  // Same order as `updates` in `WriteRequest`.
+  repeated UpdateStatus statuses = 1;
+}
+
+// Read requests.
+message ReadRequest {
+  // Required.
+  uint64 device_id = 1;
+  // Indicates if counter data should be read.
+  bool read_counter_data = 2;
+  // Indicates if meter configs should be read.
+  bool read_meter_configs = 3;
+}
+
+// A read request response.
+message ReadResponse {
+  // The table entries read by the switch.
+  repeated TableEntry table_entries = 1;
+}
+
+// A stream message request
+message StreamMessageRequest {
+  oneof update {
+    p4.v1.MasterArbitrationUpdate arbitration = 1;
+    PacketOut packet = 2;
+  }
+}
+
+// A stream error message
+message StreamError {
+  google.rpc.Status status = 1;
+  PacketOut packet_out = 2;
+}
+
+// A stream message response
+message StreamMessageResponse {
+  oneof update {
+    p4.v1.MasterArbitrationUpdate arbitration = 1;
+    PacketIn packet = 2;
+    // Used by the server to asynchronously report errors which occur when
+    // processing StreamMessageRequest messages.
+    StreamError error = 3;
+  }
+}
