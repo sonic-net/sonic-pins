@@ -44,16 +44,12 @@ class ActionSetTest : public test_lib::P4RuntimeComponentTestFixture {
  protected:
   ActionSetTest()
       : test_lib::P4RuntimeComponentTestFixture(
-            sai::Instantiation::kMiddleblock,
-            /*gnmi_ports=*/{
-                test_lib::FakeGnmiPortConfig{
-                    .port_id = "1",
-                    .port_name = "Ethernet0",
-                },
-            }) {}
+            sai::Instantiation::kMiddleblock) {}
 };
 
 TEST_F(ActionSetTest, WcmpInsertReadAndRemove) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+
   // Set the WCMP write request that has 2 actions with different weights.
   p4::v1::WriteRequest write_request;
   ASSERT_OK(gutil::ReadProtoFromString(

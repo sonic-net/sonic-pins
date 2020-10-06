@@ -20,7 +20,9 @@ control acl_pre_ingress(in headers_t headers,
   @id(ACL_PRE_INGRESS_SET_VRF_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
   action set_vrf(@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_VRF)
-                 @id(1) vrf_id_t vrf_id) {
+                 @refers_to(vrf_table, vrf_id)
+                 @id(1)
+                 vrf_id_t vrf_id) {
     local_metadata.vrf_id = vrf_id;
     acl_pre_ingress_counter.count();
   }
@@ -40,6 +42,9 @@ control acl_pre_ingress(in headers_t headers,
     // Forbid unsupported combinations of IP_TYPE fields.
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
+    // Reserve high priorities for switch-internal use.
+    // TODO: Remove once inband workaround is obsolete.
+    ::priority < 0x7fffffff;
   ")
   table acl_pre_ingress_table {
     key = {
@@ -51,10 +56,17 @@ control acl_pre_ingress(in headers_t headers,
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
       headers.ethernet.src_addr : ternary @name("src_mac") @id(4)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
+#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
+      headers.ethernet.dst_addr : ternary @name("dst_mac") @id(9)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
+#endif
       headers.ipv4.dst_addr : ternary @name("dst_ip") @id(5)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP) @format(IPV4_ADDRESS);
-      headers.ipv6.dst_addr : ternary @name("dst_ipv6") @id(6)
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6) @format(IPV6_ADDRESS);
+      headers.ipv6.dst_addr[127:64] : ternary @name("dst_ipv6") @id(6)
+          @composite_field(
+              @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3),
+              @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2)
+          ) @format(IPV6_ADDRESS);
       dscp : ternary @name("dscp") @id(7)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP);
       local_metadata.ingress_port : optional @name("in_port") @id(8)
@@ -76,6 +88,7 @@ control acl_pre_ingress(in headers_t headers,
       dscp = headers.ipv6.dscp;
     }
 
+    local_metadata.vrf_id = kDefaultVrf;
     acl_pre_ingress_table.apply();
   }
 }  // control acl_pre_ingress

@@ -25,23 +25,32 @@ type bit<NEXTHOP_ID_BITWIDTH> nexthop_id_t;
 #ifndef PLATFORM_BMV2
 @p4runtime_translation("", string)
 #endif
+type bit<TUNNEL_ID_BITWIDTH> tunnel_id_t;
+
+#ifndef PLATFORM_BMV2
+@p4runtime_translation("", string)
+#endif
 type bit<WCMP_GROUP_ID_BITWIDTH> wcmp_group_id_t;
 
 
 #ifndef PLATFORM_BMV2
 @p4runtime_translation("", string)
+// TODO: The following annotation is not yet standard, and not yet
+// understood by p4-symbolic. Work with the P4Runtime WG to standardize the
+// annotation (or a similar annotation), and teach it to p4-symbolic.
+@p4runtime_translation_mappings({
+  // The "default VRF", 0, corresponds to the empty string, "", in P4Runtime.
+  {"", 0},
+})
 #endif
 type bit<VRF_BITWIDTH> vrf_id_t;
+
+const vrf_id_t kDefaultVrf = 0;
 
 #ifndef PLATFORM_BMV2
 @p4runtime_translation("", string)
 #endif
 type bit<ROUTER_INTERFACE_ID_BITWIDTH> router_interface_id_t;
-
-#ifndef PLATFORM_BMV2
-@p4runtime_translation("", string)
-#endif
-type bit<NEIGHBOR_ID_BITWIDTH> neighbor_id_t;
 
 #ifndef PLATFORM_BMV2
 @p4runtime_translation("", string)
@@ -58,9 +67,17 @@ type bit<MIRROR_SESSION_ID_BITWIDTH> mirror_session_id_t;
 #endif
 type bit<QOS_QUEUE_BITWIDTH> qos_queue_t;
 
+// -- Untranslated Types -------------------------------------------------------
+
+typedef bit<ROUTE_METADATA_BITWIDTH> route_metadata_t;
+
 // -- Meters -------------------------------------------------------------------
 
-enum MeterColor_t { GREEN, YELLOW, RED };
+enum bit<2> MeterColor_t {
+  GREEN = 0,
+  YELLOW = 1,
+  RED = 2
+};
 
 // -- Per Packet State ---------------------------------------------------------
 
@@ -71,6 +88,11 @@ struct headers_t {
   gre_t erspan_gre;
 
   ethernet_t ethernet;
+
+  // Not extracted during parsing.
+  ipv6_t tunnel_encap_ipv6;
+  gre_t tunnel_encap_gre;
+
   ipv4_t ipv4;
   ipv6_t ipv6;
   icmp_t icmp;
@@ -95,6 +117,10 @@ struct local_metadata_t {
   bit<16> l4_src_port;
   bit<16> l4_dst_port;
   bit<WCMP_SELECTOR_INPUT_BITWIDTH> wcmp_selector_input;
+  // GRE tunnel encap related fields.
+  bool apply_tunnel_encap_at_egress;
+  ipv6_addr_t tunnel_encap_src_ipv6;
+  ipv6_addr_t tunnel_encap_dst_ipv6;
   // mirroring data, we can't group the into a struct, because BMv2 doesn't
   // support passing structs in clone3.
   bool mirror_session_id_valid;
@@ -111,13 +137,15 @@ struct local_metadata_t {
   bit<8> mirroring_ttl;
   @field_list(PreservedFieldList.CLONE_I2E)
   bit<8> mirroring_tos;
-  // TODO: consider modeling metering beyond control plane API.
   MeterColor_t color;
   // We consistently use local_metadata.ingress_port instead of
   // standard_metadata.ingress_port in the P4 tables to ensure that the P4Info
   // has port_id_t as the type for all fields that match on ports. This allows
   // tools to treat ports specially (e.g. a fuzzer).
   port_id_t ingress_port;
+  // The following field corresponds to SAI_ROUTE_ENTRY_ATTR_META_DATA/
+  // SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META.
+  route_metadata_t route_metadata;
 }
 
 // -- Packet IO headers --------------------------------------------------------

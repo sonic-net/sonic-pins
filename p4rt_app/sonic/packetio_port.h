@@ -20,10 +20,11 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "glog/logging.h"
 #include "p4_pdpi/utils/ir.h"
-#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
+#include "p4rt_app/sonic/packetio_selectables.h"
 #include "p4rt_app/sonic/receive_genetlink.h"
 #include "swss/select.h"
 #include "swss/selectable.h"
@@ -31,41 +32,20 @@
 namespace p4rt_app {
 namespace sonic {
 
-// Prefix for submit to ingress.
-ABSL_CONST_INIT extern const absl::string_view kSubmitToIngress;
-
-// A structure to hold port name, receive and transmit socket for a particular
-// netdev port.
-struct PacketIoPortSockets {
-  PacketIoPortSockets(const std::string port_name, int port_socket)
-      : port_name(port_name), port_socket(port_socket) {}
-  ~PacketIoPortSockets() {
-    if (port_socket >= 0) {
-      close(port_socket);
-    }
-  }
-  std::string port_name;
-  int port_socket;
+// A structure to hold port parameters related to packet I/O.
+struct PacketIoPortParams {
+  int socket;
+  std::unique_ptr<PacketInSelectable> packet_in_selectable;
 };
 
-// Blocking wait until port init is done.
-void WaitForPortInitDone(DBConnectorAdapter& app_db_client);
+// Checks whether the given port exists in the system or not.
+bool IsValidSystemPort(const SystemCallAdapter& system_call_adapter,
+                       absl::string_view port_name);
 
-// Discover all netdev ports in Linux that corresponds to each physical port on
-// the switch. CPU punted/generated packets originate/egress on a physical port
-// map to the netdev port. Returns a vector of the PacketIoPortSockets for all
-// the netdev ports in the system.
-absl::StatusOr<std::vector<std::unique_ptr<sonic::PacketIoPortSockets>>>
-DiscoverPacketIoPorts(const SystemCallAdapter& system_call_adapter);
-
-// Spawns the Receive thread for all the receive sockets passed in, this will
-// enable all punted packets to be received via the socket interface.
-// Invokes the callback function with the corresponding port on which the packet
-// arrived.
-// receive_sockets is an input vector of <port_name, receive_socket>.
-ABSL_MUST_USE_RESULT std::thread StartReceive(
-    packet_metadata::ReceiveCallbackFunction callback_function,
-    const absl::flat_hash_map<std::string, int>& socket_map);
+// Adds a port to packet I/O by creating the receive & transmit sockets.
+absl::StatusOr<std::unique_ptr<PacketIoPortParams>> AddPacketIoPort(
+    const SystemCallAdapter& system_call_adapter, absl::string_view port_name,
+    packet_metadata::ReceiveCallbackFunction callback_function);
 
 // Send a packet out on the specified egress socket.
 absl::Status SendPacketOut(const SystemCallAdapter& system_call_adapter,

@@ -50,6 +50,11 @@ absl::Status TranslateTableEntry(const TranslateTableEntryOptions& options,
 //  * OA expects UDF formats to be HEX_STRINGS
 void TranslateIrP4InfoForOrchAgent(pdpi::IrP4Info& p4_info);
 
+// TODO: Remove this when P4Info uses 64-bit IPv6 ACL match fields.
+// Shifts left by 64 bits the IPv6 address of all ternary IPv6 match fields.
+// If the IPv6 address is larger than 64 bits, does nothing.
+void Convert64BitIpv6AclMatchFieldsTo128Bit(pdpi::IrTableEntry& ir_table_entry);
+
 }  // namespace p4rt_app
 
 #endif  // GOOGLE_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_

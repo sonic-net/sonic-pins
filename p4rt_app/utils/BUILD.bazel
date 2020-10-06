@@ -26,7 +26,6 @@ cc_library(
         "//p4_pdpi/utils:annotation_parser",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -49,6 +48,8 @@ cc_library(
     deps = [
         "//p4_pdpi:ir_cc_proto",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
     ],
 )
 
@@ -58,6 +59,31 @@ cc_library(
     hdrs = ["ir_builder.h"],
     deps = [
         "//p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "event_execution_time_monitor",
+    srcs = ["event_execution_time_monitor.cc"],
+    hdrs = ["event_execution_time_monitor.h"],
+    deps = [
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
+    name = "event_execution_time_monitor_test",
+    srcs = ["event_execution_time_monitor_test.cc"],
+    deps = [
+        ":event_execution_time_monitor",
+        "//gutil:status_matchers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
     ],
 )

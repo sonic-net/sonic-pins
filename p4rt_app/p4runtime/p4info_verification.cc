@@ -13,14 +13,23 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/p4info_verification.h"
 
+#include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "google/protobuf/text_format.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/p4info_verification_schema.h"
+#include "p4rt_app/p4runtime/p4info_verification_schema.pb.h"
+#include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
+#include "p4rt_app/utils/status_utility.h"
+#include "p4rt_app/utils/table_utility.h"
 
 namespace p4rt_app {
+namespace {
 
 using ::google::protobuf::TextFormat;
 using ::google::protobuf::util::MessageDifferencer;
@@ -90,91 +99,15 @@ absl::Status ValidatePacketIo(const p4::config::v1::P4Info& p4info) {
   }
   return absl::OkStatus();
 }
-
-// Verifies if the P4info types match the expected values.
-absl::Status ValidateTypes(const p4::config::v1::P4Info& p4info) {
-  constexpr char kExpectedTypes[] = R"pb(
-    type_info {
-      new_types {
-        key: "neighbor_id_t"
-        value { translated_type { sdn_string {} } }
-      }
-      new_types {
-        key: "nexthop_id_t"
-        value { translated_type { sdn_string {} } }
-      }
-      new_types {
-        key: "port_id_t"
-        value { translated_type { sdn_string {} } }
-      }
-      new_types {
-        key: "router_interface_id_t"
-        value { translated_type { sdn_string {} } }
-      }
-      new_types {
-        key: "vrf_id_t"
-        value { translated_type { sdn_string {} } }
-      }
-      new_types {
-        key: "wcmp_group_id_t"
-        value { translated_type { sdn_string {} } }
-      }
-    }
-  )pb";
-  p4::config::v1::P4Info expected_p4info;
-  if (!TextFormat::ParseFromString(kExpectedTypes, &expected_p4info)) {
-    return gutil::InternalErrorBuilder() << "Invalid Type validation info.";
-  }
-
-  // Create local copy of the actual type_info fields so we can have an ordered
-  // map to compare with.
-  std::map<std::string, p4::config::v1::P4NewTypeSpec> configured_types(
-      p4info.type_info().new_types().begin(),
-      p4info.type_info().new_types().end());
-
-  // Create local copy of the expected type_info fields so we can have an
-  // ordered map to compare with.
-  std::map<std::string, p4::config::v1::P4NewTypeSpec> expected_types(
-      expected_p4info.type_info().new_types().begin(),
-      expected_p4info.type_info().new_types().end());
-
-  auto configured_type_iter = configured_types.begin();
-  auto expected_type_iter = expected_types.begin();
-  std::vector<std::string> errors;
-  while (configured_type_iter != configured_types.end() &&
-         expected_type_iter != expected_types.end()) {
-    if (configured_type_iter->first == expected_type_iter->first) {
-      // For expected fields we also place requirements on the value types.
-      if (!MessageDifferencer::Equals(expected_type_iter->second,
-                                      configured_type_iter->second)) {
-        errors.push_back(
-            absl::StrCat(configured_type_iter->first,
-                         " does not match the expected type definition ",
-                         expected_type_iter->second.ShortDebugString()));
-      }
-      ++configured_type_iter;
-      ++expected_type_iter;
-    } else if (configured_type_iter->first < expected_type_iter->first) {
-      // The pushed P4Info file can have extra values without it being an issue.
-      LOG(WARNING) << "P4Info has extra type: " << configured_type_iter->first;
-      ++configured_type_iter;
-    } else {
-      // The pushed P4Info cannot be missing any of the expected fields.
-      errors.push_back(absl::StrCat(expected_type_iter->first, " is missing"));
-      ++expected_type_iter;
-    }
-  }
-  if (!errors.empty()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "P4 type not supported by P4Info: "
-           << absl::StrJoin(errors, ", ");
-  }
-  return absl::OkStatus();
-}
+}  // namespace
 
 absl::Status ValidateP4Info(const p4::config::v1::P4Info& p4info) {
   RETURN_IF_ERROR(ValidatePacketIo(p4info));
-  RETURN_IF_ERROR(ValidateTypes(p4info));
+  ASSIGN_OR_RETURN(P4InfoVerificationSchema schema, SupportedSchema());
+  ASSIGN_OR_RETURN(auto ir_result, pdpi::CreateIrP4Info(p4info),
+                   _.SetPayload(kLibraryUrl, absl::Cord("PDPI")));
+  RETURN_IF_ERROR(IsSupportedBySchema(ir_result, schema));
+
   return absl::OkStatus();
 }
 

@@ -16,6 +16,7 @@
 
 #include <memory>
 
+#include "absl/status/status.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
@@ -25,14 +26,9 @@
 namespace p4rt_app {
 namespace test_lib {
 
-struct P4RuntimeGrpcServiceOptions {
-  bool use_genetlink = false;
-  bool translate_port_ids = true;
-};
-
 class P4RuntimeGrpcService {
  public:
-  explicit P4RuntimeGrpcService(const P4RuntimeGrpcServiceOptions& options);
+  explicit P4RuntimeGrpcService(const P4RuntimeImplOptions& options);
   ~P4RuntimeGrpcService();
 
   int GrpcPort() const;
@@ -41,22 +37,32 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable& GetP4rtAppDbTable();
   sonic::FakeSonicDbTable& GetPortAppDbTable();
 
+  // Accessors for AppStateDb tables.
+  sonic::FakeSonicDbTable& GetP4rtAppStateDbTable();
+
   // Accessors for CounterDb tables.
   sonic::FakeSonicDbTable& GetP4rtCountersDbTable();
 
   // Accessor for PacketIO interface.
   sonic::FakePacketIoInterface& GetFakePacketIoInterface();
 
+  // Accessor for the P4RT server.
+  P4RuntimeImpl& GetP4rtServer();
+
  private:
+  // The TCP port used to  open the P4RT App service. It is choosen randomly in
+  // the ctor, and shouldn't be modified otherwise.
+  int grpc_port_;
+
+  // Faked StateDb tables.
+  sonic::FakeSonicDbTable fake_p4rt_state_table_;
+
   // Faked AppDb tables.
   sonic::FakeSonicDbTable fake_p4rt_table_;
   sonic::FakeSonicDbTable fake_port_table_;
 
   // Faked CountersDb tables.
   sonic::FakeSonicDbTable fake_p4rt_counters_table_;
-
-  // Faked StateDb tables.
-  sonic::FakeSonicDbTable fake_p4rt_state_table_;
 
   // Faked PacketIO interface.
   sonic::FakePacketIoInterface* fake_packetio_interface_;  // No ownership.

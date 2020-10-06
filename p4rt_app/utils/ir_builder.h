@@ -14,6 +14,7 @@
 #ifndef GOOGLE_P4RT_APP_UTILS_IR_BUILDER_H_
 #define GOOGLE_P4RT_APP_UTILS_IR_BUILDER_H_
 
+#include "absl/strings/string_view.h"
 #include "google/protobuf/text_format.h"
 #include "p4_pdpi/ir.pb.h"
 
@@ -23,8 +24,8 @@ namespace p4rt_app {
 
 class IrActionDefinitionBuilder {
  public:
-  IrActionDefinitionBuilder() {}
-  IrActionDefinitionBuilder(pdpi::IrActionDefinition action)
+  IrActionDefinitionBuilder() = default;
+  explicit IrActionDefinitionBuilder(pdpi::IrActionDefinition action)
       : action_(std::move(action)) {}
 
   const pdpi::IrActionDefinition& operator()() const { return action_; }
@@ -38,21 +39,30 @@ class IrActionDefinitionBuilder {
     *action_.mutable_preamble() = std::move(preamble_proto);
     return *this;
   }
+  IrActionDefinitionBuilder& name(absl::string_view name_str) {
+    action_.mutable_preamble()->set_alias(std::string(name_str));
+    return *this;
+  }
 
-  IrActionDefinitionBuilder& param(p4::config::v1::Action::Param param_proto) {
+  IrActionDefinitionBuilder& param(
+      p4::config::v1::Action::Param param_proto,
+      pdpi::Format format = pdpi::Format::HEX_STRING) {
     pdpi::IrActionDefinition::IrActionParamDefinition param_def;
     *param_def.mutable_param() = std::move(param_proto);
+    param_def.set_format(format);
     (*action_.mutable_params_by_id())[param_def.param().id()] = param_def;
     (*action_.mutable_params_by_name())[param_def.param().name()] =
         std::move(param_def);
     return *this;
   }
 
-  IrActionDefinitionBuilder& param(absl::string_view param_str) {
+  IrActionDefinitionBuilder& param(
+      absl::string_view param_str,
+      pdpi::Format format = pdpi::Format::HEX_STRING) {
     p4::config::v1::Action::Param param_proto;
     google::protobuf::TextFormat::ParseFromString(std::string(param_str),
                                                   &param_proto);
-    return param(param_proto);
+    return param(param_proto, format);
   }
 
  private:
@@ -61,8 +71,8 @@ class IrActionDefinitionBuilder {
 
 class IrTableDefinitionBuilder {
  public:
-  IrTableDefinitionBuilder() {}
-  IrTableDefinitionBuilder(pdpi::IrTableDefinition table)
+  IrTableDefinitionBuilder() = default;
+  explicit IrTableDefinitionBuilder(pdpi::IrTableDefinition table)
       : table_(std::move(table)) {}
 
   const pdpi::IrTableDefinition& operator()() const { return table_; }
@@ -74,6 +84,10 @@ class IrTableDefinitionBuilder {
   }
   IrTableDefinitionBuilder& preamble(p4::config::v1::Preamble preamble_proto) {
     *table_.mutable_preamble() = std::move(preamble_proto);
+    return *this;
+  }
+  IrTableDefinitionBuilder& name(absl::string_view name_str) {
+    table_.mutable_preamble()->set_alias(std::string(name_str));
     return *this;
   }
 
@@ -162,6 +176,36 @@ class IrTableDefinitionBuilder {
 
  private:
   pdpi::IrTableDefinition table_;
+};
+
+// Currently only supports the following P4Info fields:
+//   tables_by_name
+//   tables_by_id
+class IrP4InfoBuilder {
+ public:
+  IrP4InfoBuilder() = default;
+  explicit IrP4InfoBuilder(pdpi::IrP4Info p4info)
+      : p4info_(std::move(p4info)) {}
+
+  const pdpi::IrP4Info& operator()() const { return p4info_; }
+
+  IrP4InfoBuilder& table(pdpi::IrTableDefinition ir_table) {
+    if (ir_table.preamble().id() == 0) {
+      ir_table.mutable_preamble()->set_id(++table_id_);
+    }
+    (*p4info_.mutable_tables_by_id())[ir_table.preamble().id()] = ir_table;
+    (*p4info_.mutable_tables_by_name())[ir_table.preamble().alias()] =
+        std::move(ir_table);
+    return *this;
+  }
+
+  IrP4InfoBuilder& table(const IrTableDefinitionBuilder& builder) {
+    return table(builder());
+  }
+
+ private:
+  pdpi::IrP4Info p4info_;
+  int table_id_ = 1;
 };
 
 }  // namespace p4rt_app

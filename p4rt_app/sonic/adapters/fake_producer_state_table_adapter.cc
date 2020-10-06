@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ namespace p4rt_app {
 namespace sonic {
 
 FakeProducerStateTableAdapter::FakeProducerStateTableAdapter(
-    const std::string &table_name, FakeSonicDbTable *sonic_db_table)
-    : table_name_(table_name), sonic_db_table_(sonic_db_table) {
+    FakeSonicDbTable *sonic_db_table)
+    : sonic_db_table_(sonic_db_table) {
   LOG_IF(FATAL, sonic_db_table == nullptr)
       << "FakeSonicDbTable cannot be nullptr.";
 }

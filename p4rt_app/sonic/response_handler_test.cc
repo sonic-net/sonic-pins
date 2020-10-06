@@ -14,7 +14,7 @@
 #include "p4rt_app/sonic/response_handler.h"
 
 #include <memory>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -26,7 +26,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/mock_db_connector_adapter.h"
+#include "p4rt_app/sonic/adapters/mock_table_adapter.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -58,8 +58,8 @@ std::vector<swss::FieldValueTuple> GetSwssError(const std::string& message) {
 
 TEST(ResponseHandlerTest, SingleRequests) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // We want the response to pass.
   EXPECT_CALL(mock_notifier, WaitForNotificationAndPop)
@@ -67,15 +67,15 @@ TEST(ResponseHandlerTest, SingleRequests) {
                       SetArgReferee<2>(GetSwssOkResponse()), Return(true)));
 
   EXPECT_THAT(GetAndProcessResponseNotification(
-                  /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-                  mock_state_db_client, "key0"),
+                  mock_notifier, mock_app_db_client, mock_state_db_client,
+                  "key0", ResponseTimeMonitor::kNone),
               IsOkAndHolds(EqualsProto(R"pb(code: OK)pb")));
 }
 
 TEST(ResponseHandlerTest, MultipleRequests) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -92,8 +92,8 @@ TEST(ResponseHandlerTest, MultipleRequests) {
 
   // The response path will successfully handle the response.
   EXPECT_OK(GetAndProcessResponseNotification(
-      /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-      mock_state_db_client, key_to_status_map));
+      mock_notifier, mock_app_db_client, mock_state_db_client,
+      key_to_status_map, ResponseTimeMonitor::kNone));
   EXPECT_THAT(ir_write_response, EqualsProto(R"pb(
                 statuses { code: OK }
                 statuses { code: OK }
@@ -102,8 +102,8 @@ TEST(ResponseHandlerTest, MultipleRequests) {
 
 TEST(ResponseHandlerTest, MissingResponseValueFails) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -117,15 +117,15 @@ TEST(ResponseHandlerTest, MissingResponseValueFails) {
 
   // The response path will successfully handle the response.
   EXPECT_THAT(GetAndProcessResponseNotification(
-                  /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-                  mock_state_db_client, key_to_status_map),
+                  mock_notifier, mock_app_db_client, mock_state_db_client,
+                  key_to_status_map, ResponseTimeMonitor::kNone),
               StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(ResponseHandlerTest, ResponsePathReturnsDuplicateKeys) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -143,8 +143,8 @@ TEST(ResponseHandlerTest, ResponsePathReturnsDuplicateKeys) {
   // We don't support sending duplicate keys so if we see duplicate keys
   // returned it is an internal failure.
   EXPECT_THAT(GetAndProcessResponseNotification(
-                  /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-                  mock_state_db_client, key_to_status_map),
+                  mock_notifier, mock_app_db_client, mock_state_db_client,
+                  key_to_status_map, ResponseTimeMonitor::kNone),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("received a duplicate key")));
 }
@@ -154,8 +154,8 @@ TEST(ResponseHandlerTest, ResponsePathReturnsDuplicateKeys) {
 // (e.g. missing vs. extra).
 TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithLowerValue) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -170,8 +170,8 @@ TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithLowerValue) {
   // Since we're waiting for one key and got another the P4RT App is out of sync
   // with the OrchAgent, and we should return an internal error.
   EXPECT_THAT(GetAndProcessResponseNotification(
-                  /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-                  mock_state_db_client, key_to_status_map),
+                  mock_notifier, mock_app_db_client, mock_state_db_client,
+                  key_to_status_map, ResponseTimeMonitor::kNone),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Got unexpected responses")));
 }
@@ -181,8 +181,8 @@ TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithLowerValue) {
 // (e.g. missing vs. extra).
 TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithHigherValue) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -197,16 +197,16 @@ TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithHigherValue) {
   // Since we're waiting for one key and got another the P4RT App is out of sync
   // with the OrchAgent, and we should return an internal error.
   EXPECT_THAT(GetAndProcessResponseNotification(
-                  /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-                  mock_state_db_client, key_to_status_map),
+                  mock_notifier, mock_app_db_client, mock_state_db_client,
+                  key_to_status_map, ResponseTimeMonitor::kNone),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Got unexpected responses")));
 }
 
 TEST(ResponseHandlerTest, ResponsePathFails) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 1 key.
   pdpi::IrWriteResponse ir_write_response;
@@ -217,16 +217,16 @@ TEST(ResponseHandlerTest, ResponsePathFails) {
   // return path itself. In which case we want to return an internal error.
   EXPECT_CALL(mock_notifier, WaitForNotificationAndPop).WillOnce(Return(false));
   EXPECT_THAT(
-      GetAndProcessResponseNotification(
-          /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-          mock_state_db_client, key_to_status_map),
+      GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
+                                        mock_state_db_client, key_to_status_map,
+                                        ResponseTimeMonitor::kNone),
       StatusIs(absl::StatusCode::kInternal, HasSubstr("timed out or failed")));
 }
 
 TEST(ResponseHandlerTest, ResponsePathDoesNotSetErrorTuple) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 1 key.
   pdpi::IrWriteResponse ir_write_response;
@@ -239,16 +239,16 @@ TEST(ResponseHandlerTest, ResponsePathDoesNotSetErrorTuple) {
       .WillOnce(DoAll(SetArgReferee<0>(kSwssSuccess), SetArgReferee<1>("key0"),
                       Return(true)));
   EXPECT_THAT(
-      GetAndProcessResponseNotification(
-          /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-          mock_state_db_client, key_to_status_map),
+      GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
+                                        mock_state_db_client, key_to_status_map,
+                                        ResponseTimeMonitor::kNone),
       StatusIs(absl::StatusCode::kInternal, HasSubstr("should not be empty")));
 }
 
 TEST(ResponseHandlerTest, ResponsePathSetsWrongErrorString) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 1 key.
   pdpi::IrWriteResponse ir_write_response;
@@ -262,15 +262,15 @@ TEST(ResponseHandlerTest, ResponsePathSetsWrongErrorString) {
                           {swss::FieldValueTuple("not_err_str", "Success")})),
                       Return(true)));
   EXPECT_THAT(GetAndProcessResponseNotification(
-                  /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-                  mock_state_db_client, key_to_status_map),
+                  mock_notifier, mock_app_db_client, mock_state_db_client,
+                  key_to_status_map, ResponseTimeMonitor::kNone),
               StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(ResponseHandlerTest, CleanupAppDbWithAnUpdate) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -290,17 +290,17 @@ TEST(ResponseHandlerTest, CleanupAppDbWithAnUpdate) {
   // checking the AppStateDb we return a result which implies the entry existed
   // before and should be reverted back to the old values (i.e. call hmset to
   // the AppDb entry).
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key1"))
-      .WillOnce(Return(std::unordered_map<std::string, std::string>{
+  EXPECT_CALL(mock_state_db_client, get("key1"))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
           {"action", "set_port_and_src_mac"},
       }));
-  EXPECT_CALL(mock_app_db_client, hmset).Times(1);
+  EXPECT_CALL(mock_app_db_client, set).Times(1);
 
   // Nothing goes wrong with the response path itself so we expect it to return
   // okay.
   EXPECT_OK(GetAndProcessResponseNotification(
-      /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-      mock_state_db_client, key_to_status_map));
+      mock_notifier, mock_app_db_client, mock_state_db_client,
+      key_to_status_map, ResponseTimeMonitor::kNone));
 
   // However, we expect the status to reflect the error.
   EXPECT_THAT(ir_write_response, EqualsProto(R"pb(
@@ -311,8 +311,8 @@ TEST(ResponseHandlerTest, CleanupAppDbWithAnUpdate) {
 
 TEST(ResponseHandlerTest, CleanupAppDbWithADelete) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -330,59 +330,21 @@ TEST(ResponseHandlerTest, CleanupAppDbWithADelete) {
   // The failure should invoke a cleanup response for the first key. When
   // checking the AppStateDb we do not return any values which implies the entry
   // did not exist before and the current AppDb entry should be deleted.
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key0"))
-      .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
-  EXPECT_CALL(mock_app_db_client, del("MY_TABLE:key0")).WillOnce(Return(1));
+  EXPECT_CALL(mock_state_db_client, get("key0"))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{}));
+  EXPECT_CALL(mock_app_db_client, del("key0")).Times(1);
 
   // Nothing goes wrong with the response path itself so we expect it to return
   // okay.
   EXPECT_OK(GetAndProcessResponseNotification(
-      /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-      mock_state_db_client, key_to_status_map));
+      mock_notifier, mock_app_db_client, mock_state_db_client,
+      key_to_status_map, ResponseTimeMonitor::kNone));
 
   // However, we expect the status to reflect the error.
   EXPECT_THAT(ir_write_response, EqualsProto(R"pb(
                 statuses { code: INTERNAL message: "my_error" }
                 statuses { code: OK }
               )pb"));
-}
-
-TEST(ResponseHandlerTest, CleanupAppDbFails) {
-  MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
-
-  // The test will wait for a response for 2 keys.
-  pdpi::IrWriteResponse ir_write_response;
-  absl::btree_map<std::string, pdpi::IrUpdateStatus*> key_to_status_map;
-  key_to_status_map["key0"] = ir_write_response.add_statuses();
-  key_to_status_map["key1"] = ir_write_response.add_statuses();
-
-  // The first key will update succefully, but the second will fail.
-  EXPECT_CALL(mock_notifier, WaitForNotificationAndPop)
-      .WillOnce(DoAll(SetArgReferee<0>(kSwssSuccess), SetArgReferee<1>("key0"),
-                      SetArgReferee<2>(GetSwssOkResponse()), Return(true)))
-      .WillOnce(DoAll(SetArgReferee<0>(kSwssInternal), SetArgReferee<1>("key1"),
-                      SetArgReferee<2>(GetSwssError("my_error")),
-                      Return(true)));
-
-  // The failure should invoke a cleanup response for the second key. When
-  // checking the AppStateDb we do not return any values which implies the entry
-  // did not exist before and the current AppDb entry should be deleted.
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key1"))
-      .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
-
-  // However, this test simulates that cleanup delete failing by returning 0
-  // instead of 1.
-  EXPECT_CALL(mock_app_db_client, del("MY_TABLE:key1")).WillOnce(Return(0));
-
-  // We do not expect the delete to fail, and doing so leaves us in an unknown
-  // state. So we return an internal error.
-  EXPECT_THAT(GetAndProcessResponseNotification(
-                  /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-                  mock_state_db_client, key_to_status_map),
-              StatusIs(absl::StatusCode::kInternal,
-                       HasSubstr("Unexpected number of delete entries")));
 }
 
 struct SwssToP4rtErrorMapping {
@@ -395,8 +357,8 @@ using ResponseHandlerErrorCodeTest =
 
 TEST_P(ResponseHandlerErrorCodeTest, VerifySwssToGrpcMapping) {
   MockConsumerNotifierAdapter mock_notifier;
-  MockDBConnectorAdapter mock_app_db_client;
-  MockDBConnectorAdapter mock_state_db_client;
+  MockTableAdapter mock_app_db_client;
+  MockTableAdapter mock_state_db_client;
 
   // The test will wait for a response for 1 key.
   pdpi::IrUpdateStatus ir_update_status;
@@ -408,13 +370,13 @@ TEST_P(ResponseHandlerErrorCodeTest, VerifySwssToGrpcMapping) {
       .WillOnce(DoAll(
           SetArgReferee<0>(GetParam().swss_error), SetArgReferee<1>("key0"),
           SetArgReferee<2>(GetSwssError("my_error")), Return(true)));
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key0"))
-      .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
-  EXPECT_CALL(mock_app_db_client, del("MY_TABLE:key0")).WillOnce(Return(1));
+  EXPECT_CALL(mock_state_db_client, get("key0"))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{}));
+  EXPECT_CALL(mock_app_db_client, del("key0")).Times(1);
 
   EXPECT_OK(GetAndProcessResponseNotification(
-      /*table_name=*/"MY_TABLE", mock_notifier, mock_app_db_client,
-      mock_state_db_client, key_to_status_map));
+      mock_notifier, mock_app_db_client, mock_state_db_client,
+      key_to_status_map, ResponseTimeMonitor::kNone));
   EXPECT_EQ(ir_update_status.code(), GetParam().p4rt_error);
   EXPECT_EQ(ir_update_status.message(), "my_error");
 }

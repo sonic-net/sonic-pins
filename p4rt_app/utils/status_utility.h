@@ -15,9 +15,22 @@
 #define GOOGLE_P4RT_APP_UTILS_STATUS_UTILITY_H_
 
 #include "absl/status/status.h"
+#include "absl/strings/cord.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4rt_app {
+// Status payload url for tracking the library stack.
+static constexpr absl::string_view kLibraryUrl = "p4rt_app_sublibrary";
+
+inline std::string LibraryPrefix(const absl::Status& status) {
+  auto payload = status.GetPayload(kLibraryUrl);
+  if (payload.has_value()) {
+    return absl::StrCat("[P4RT/", payload->Flatten(), "] ");
+  }
+  return "[P4RT] ";
+}
 
 // Translates absl::Status to pdpi::IrUpdateStatus
 pdpi::IrUpdateStatus GetIrUpdateStatus(absl::StatusCode code,

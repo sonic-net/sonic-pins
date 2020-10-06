@@ -21,10 +21,10 @@ cc_library(
     srcs = ["app_db_acl_def_table_manager.cc"],
     hdrs = ["app_db_acl_def_table_manager.h"],
     deps = [
+        ":redis_connections",
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/utils:annotation_parser",
-        "//p4rt_app/sonic/adapters:producer_state_table_adapter",
         "//p4rt_app/utils:table_utility",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -40,6 +40,7 @@ cc_test(
     srcs = ["app_db_acl_def_table_manager_test.cc"],
     deps = [
         ":app_db_acl_def_table_manager",
+        ":redis_connections",
         "//gutil:status_matchers",
         "//p4rt_app/sonic/adapters:fake_producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
@@ -58,17 +59,13 @@ cc_library(
     hdrs = ["app_db_manager.h"],
     deps = [
         ":app_db_to_pdpi_ir_translator",
+        ":redis_connections",
         ":response_handler",
         "//gutil:collections",
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
-        "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
-        "//p4rt_app/sonic/adapters:db_connector_adapter",
-        "//p4rt_app/sonic/adapters:producer_state_table_adapter",
         "//p4rt_app/utils:status_utility",
         "//p4rt_app/utils:table_utility",
-        "@boost//:bimap",
-        "@boost//:graph",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -86,13 +83,14 @@ cc_test(
     srcs = ["app_db_manager_test.cc"],
     deps = [
         ":app_db_manager",
+        ":redis_connections",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
-        "//p4rt_app/sonic/adapters:mock_db_connector_adapter",
         "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
+        "//p4rt_app/sonic/adapters:mock_table_adapter",
         "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/utils:table_utility",
         "//sai_p4/instantiations/google:sai_p4info_cc",
@@ -100,7 +98,7 @@ cc_test(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
     ],
@@ -120,6 +118,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -174,15 +173,26 @@ cc_library(
 )
 
 cc_library(
+    name = "packetio_selectables",
+    srcs = ["packetio_selectables.cc"],
+    hdrs = ["packetio_selectables.h"],
+    deps = [
+        ":receive_genetlink",
+        "@com_github_google_glog//:glog",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_library(
     name = "packetio_port",
     srcs = ["packetio_port.cc"],
     hdrs = ["packetio_port.h"],
     deps = [
+        ":packetio_selectables",
         ":receive_genetlink",
         "//gutil:collections",
         "//gutil:status",
         "//p4_pdpi/utils:ir",
-        "//p4rt_app/sonic/adapters:db_connector_adapter",
         "//p4rt_app/sonic/adapters:system_call_adapter",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -201,12 +211,31 @@ cc_library(
     deps = [
         ":packetio_interface",
         ":packetio_port",
+        ":receive_genetlink",
         "//gutil:collections",
+        "//gutil:status",
         "//p4rt_app/sonic/adapters:system_call_adapter",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "packetio_impl_test",
+    srcs = ["packetio_impl_test.cc"],
+    deps = [
+        ":packetio_impl",
+        "//gutil:status_matchers",
+        "//p4rt_app/sonic/adapters:mock_system_call_adapter",
+        "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -218,10 +247,13 @@ cc_library(
         ":packetio_interface",
         "//gutil:collections",
         "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -238,6 +270,16 @@ cc_test(
 )
 
 cc_library(
+    name = "redis_connections",
+    hdrs = ["redis_connections.h"],
+    deps = [
+        "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:producer_state_table_adapter",
+        "//p4rt_app/sonic/adapters:table_adapter",
+    ],
+)
+
+cc_library(
     name = "response_handler",
     srcs = ["response_handler.cc"],
     hdrs = ["response_handler.h"],
@@ -247,12 +289,14 @@ cc_library(
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/utils:ir",
         "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
-        "//p4rt_app/sonic/adapters:db_connector_adapter",
+        "//p4rt_app/sonic/adapters:table_adapter",
+        "//p4rt_app/utils:event_execution_time_monitor",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@sonic_swss_common//:libswsscommon",
     ],
@@ -268,8 +312,34 @@ cc_test(
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
-        "//p4rt_app/sonic/adapters:mock_db_connector_adapter",
+        "//p4rt_app/sonic/adapters:mock_table_adapter",
         "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "state_verification",
+    srcs = ["state_verification.cc"],
+    hdrs = ["state_verification.h"],
+    deps = [
+        "//gutil:status",
+        "//p4rt_app/sonic/adapters:table_adapter",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "state_verification_test",
+    srcs = ["state_verification_test.cc"],
+    deps = [
+        ":state_verification",
+        "//gutil:status_matchers",
+        "//p4rt_app/sonic/adapters:mock_table_adapter",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],

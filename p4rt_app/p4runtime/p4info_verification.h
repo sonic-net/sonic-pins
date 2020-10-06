@@ -20,7 +20,7 @@
 namespace p4rt_app {
 
 // Verifies if all the required P4Info fields are as expected.
-// For now, checks PacketIo metadata & Types info.
+// For now, checks PacketIo metadata & Fixed tables
 absl::Status ValidateP4Info(const p4::config::v1::P4Info& p4info);
 
 }  // namespace p4rt_app

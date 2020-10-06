@@ -15,20 +15,25 @@
  */
 #include "p4rt_app/sonic/response_handler.h"
 
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
+#include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "p4rt_app/utils/event_execution_time_monitor.h"
 #include "swss/rediscommand.h"
 #include "swss/status_code_util.h"
 #include "swss/table.h"
@@ -65,6 +70,20 @@ google::rpc::Code SwssToP4RTErrorCode(const std::string& status_str) {
     case swss::StatusCode::SWSS_RC_UNAVAIL:
       return google::rpc::Code::UNAVAILABLE;
   }
+}
+
+EventExecutionTimeMonitor* GetEventMonitor(ResponseTimeMonitor monitor) {
+  static EventExecutionTimeMonitor* const kP4rtMonitor =
+      new EventExecutionTimeMonitor("sonic::AppDbResponses(P4RT_TABLE)",
+                                    /*log_threshold=*/10000);
+
+  switch (monitor) {
+    case ResponseTimeMonitor::kP4rtTableWrite:
+      return kP4rtMonitor;
+    default:
+      return nullptr;
+  }
+  return nullptr;
 }
 
 // Get expected responses from the notification channel.
@@ -107,8 +126,9 @@ GetAppDbResponses(int expected_response_count,
              << "[OrchAgent] responded with '" << fvField(first_tuple)
              << "' as its first value, but P4RT App was expecting 'err_str'.";
     } else {
+      // Sanatize any response messages coming from the OA layers.
       result.set_code(SwssToP4RTErrorCode(status_str));
-      result.set_message(fvValue(first_tuple));
+      result.set_message(absl::CHexEscape(fvValue(first_tuple)));
     }
 
     // Insert into the responses map, but do not allow duplicates.
@@ -124,39 +144,21 @@ GetAppDbResponses(int expected_response_count,
 }
 
 // Restore APPL_DB to the last successful state.
-absl::Status RestoreApplDb(const std::string& table_name,
-                           const std::string& key,
-                           DBConnectorAdapter& app_db_client,
-                           DBConnectorAdapter& state_db_client) {
-  std::string state_db_key = absl::StrCat(table_name, ":", key);
-  std::string app_db_key = absl::StrCat(table_name, ":", key);
-
+absl::Status RestoreApplDb(TableAdapter& app_db_table,
+                           TableAdapter& state_db_table,
+                           const std::string& key) {
   // Query the APPL_STATE_DB with the same key as in APPL_DB.
-  std::unordered_map<std::string, std::string> values_map =
-      state_db_client.hgetall(state_db_key);
-  if (values_map.empty()) {
-    // No entry in APPL_STATE_DB with this key indicates this is an insert
-    // operation that has to be restored, which then has to be removed.
-    LOG(INFO) << "Restoring (by delete) AppDb entry: " << app_db_key;
-    auto del_entries = app_db_client.del(app_db_key);
-    RET_CHECK(del_entries == 1)
-        << "Unexpected number of delete entries when tring to delete a newly "
-           "added entry from ApplDB for a failed response, expected : 1, "
-           "actual: "
-        << del_entries;
-    return absl::OkStatus();
+  std::vector<std::pair<std::string, std::string>> values =
+      state_db_table.get(key);
+  if (values.empty()) {
+    LOG(INFO) << "Restoring (by delete) AppDb entry: " << key;
+    app_db_table.del(key);
+  } else {
+    // Update APPL_DB with the retrieved values from APPL_STATE_DB.
+    LOG(INFO) << "Restoring (by update) AppDb entry: " << key;
+    app_db_table.del(key);
+    app_db_table.set(key, values);
   }
-
-  std::vector<swss::FieldValueTuple> value_tuples;
-  value_tuples.resize(values_map.size());
-  int i = 0;
-  for (auto& entry : values_map) {
-    value_tuples.at(i++) = entry;
-  }
-  // Update APPL_DB with the retrieved values from APPL_STATE_DB.
-  LOG(INFO) << "Restoring (by update) AppDb entry: " << app_db_key;
-  app_db_client.del(app_db_key);
-  app_db_client.hmset(app_db_key, value_tuples);
 
   return absl::OkStatus();
 }
@@ -164,13 +166,25 @@ absl::Status RestoreApplDb(const std::string& table_name,
 }  // namespace
 
 absl::Status GetAndProcessResponseNotification(
-    const std::string& table_name,
-    ConsumerNotifierAdapter& notification_interface,
-    DBConnectorAdapter& app_db_client, DBConnectorAdapter& state_db_client,
-    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map) {
+    ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
+    TableAdapter& state_db_table,
+    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map,
+    ResponseTimeMonitor event_monitor) {
+  absl::Time start = absl::Now();
   ASSIGN_OR_RETURN(
       auto response_status_map,
       GetAppDbResponses(key_to_status_map.size(), notification_interface));
+  absl::Duration response_time = absl::Now() - start;
+
+  // Get the event monitor and increment it if present.
+  EventExecutionTimeMonitor* execution_time_monitor =
+      GetEventMonitor(event_monitor);
+  if (execution_time_monitor) {
+    absl::Status status =
+        execution_time_monitor->IncrementEventCountWithDuration(
+            key_to_status_map.size(), response_time);
+    LOG_IF(WARNING, !status.ok()) << status;
+  }
 
   // We have a map of all the keys we expect to have a response for, and a map
   // of all the keys returned by the OrchAgent. If anything doesn't match up
@@ -210,10 +224,10 @@ absl::Status GetAndProcessResponseNotification(
       if (response_iter->second.code() != google::rpc::Code::OK) {
         *expected_status = response_iter->second;
         LOG(WARNING) << "OrchAgent could not handle AppDb entry '"
-                     << response_key
-                     << "'. Failed with: " << response_status.DebugString();
-        RETURN_IF_ERROR(RestoreApplDb(table_name, response_key, app_db_client,
-                                      state_db_client));
+                     << response_key << "'. Failed with: "
+                     << response_status.ShortDebugString();
+        RETURN_IF_ERROR(
+            RestoreApplDb(app_db_table, state_db_table, response_key));
       }
       ++expected_iter;
       ++response_iter;
@@ -241,17 +255,16 @@ absl::Status GetAndProcessResponseNotification(
 }
 
 absl::StatusOr<pdpi::IrUpdateStatus> GetAndProcessResponseNotification(
-    const std::string& table_name,
-    ConsumerNotifierAdapter& notification_interface,
-    DBConnectorAdapter& app_db_client, DBConnectorAdapter& state_db_client,
-    const std::string& key) {
+    ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
+    TableAdapter& state_db_table, const std::string& key,
+    ResponseTimeMonitor event_monitor) {
   pdpi::IrUpdateStatus local_status;
   absl::btree_map<std::string, pdpi::IrUpdateStatus*> key_to_status_map;
   key_to_status_map[key] = &local_status;
 
   RETURN_IF_ERROR(GetAndProcessResponseNotification(
-      table_name, notification_interface, app_db_client, state_db_client,
-      key_to_status_map));
+      notification_interface, app_db_table, state_db_table, key_to_status_map,
+      event_monitor));
 
   return local_status;
 }

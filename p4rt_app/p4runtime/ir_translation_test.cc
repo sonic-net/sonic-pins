@@ -37,6 +37,11 @@ using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::HasSubstr;
 
+// Helper method so all tests use the same IrP4Info.
+const pdpi::IrP4Info& GetIrP4Info() {
+  return sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
+}
+
 TEST(PortTranslationTest, TranslatePort) {
   boost::bimap<std::string, std::string> map;
   map.insert({"key0", "val0"});
@@ -57,7 +62,7 @@ TEST(PortTranslationTest, TranslatePortFailsWithMissingKey) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(PortTranslationTest, ActionParameters) {
+TEST(PortIdTranslationTest, ActionParameterUpdatedToPortName) {
   boost::bimap<std::string, std::string> translation_map;
   translation_map.insert({"Ethernet0", "1"});
   translation_map.insert({"Ethernet4", "2"});
@@ -77,7 +82,7 @@ TEST(PortTranslationTest, ActionParameters) {
   ASSERT_OK(TranslateTableEntry(
       TranslateTableEntryOptions{
           .direction = TranslationDirection::kForOrchAgent,
-          .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+          .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = true,
           .port_map = translation_map},
       table_entry));
@@ -85,7 +90,7 @@ TEST(PortTranslationTest, ActionParameters) {
   EXPECT_EQ(table_entry.action().params(0).value().str(), "Ethernet0");
 }
 
-TEST(PortTranslationTest, ActionSetParameters) {
+TEST(PortIdTranslationTest, WatchPortUpdatedToPortName) {
   boost::bimap<std::string, std::string> translation_map;
   translation_map.insert({"Ethernet0", "1"});
   translation_map.insert({"Ethernet4", "2"});
@@ -110,7 +115,7 @@ TEST(PortTranslationTest, ActionSetParameters) {
   ASSERT_OK(TranslateTableEntry(
       TranslateTableEntryOptions{
           .direction = TranslationDirection::kForOrchAgent,
-          .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+          .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = true,
           .port_map = translation_map},
       table_entry));
@@ -120,7 +125,7 @@ TEST(PortTranslationTest, ActionSetParameters) {
   EXPECT_EQ(table_entry.action_set().actions(0).watch_port(), "Ethernet4");
 }
 
-TEST(PortTranslationTest, DISABLED_ExactMatchField) {
+TEST(PortIdTranslationTest, ExactMatchFieldUpdatedToPortName) {
   boost::bimap<std::string, std::string> translation_map;
   translation_map.insert({"Ethernet0", "1"});
   translation_map.insert({"Ethernet4", "2"});
@@ -138,7 +143,7 @@ TEST(PortTranslationTest, DISABLED_ExactMatchField) {
   ASSERT_OK(TranslateTableEntry(
       TranslateTableEntryOptions{
           .direction = TranslationDirection::kForOrchAgent,
-          .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+          .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = true,
           .port_map = translation_map},
       table_entry));
@@ -146,7 +151,7 @@ TEST(PortTranslationTest, DISABLED_ExactMatchField) {
   EXPECT_EQ(table_entry.matches(0).exact().str(), "Ethernet4");
 }
 
-TEST(PortTranslationTest, OptionalMatchField) {
+TEST(PortIdTranslationTest, OptionalMatchFieldUpdatedToPortName) {
   boost::bimap<std::string, std::string> translation_map;
   translation_map.insert({"Ethernet0", "1"});
   translation_map.insert({"Ethernet4", "2"});
@@ -162,9 +167,112 @@ TEST(PortTranslationTest, OptionalMatchField) {
   ASSERT_OK(TranslateTableEntry(
       TranslateTableEntryOptions{
           .direction = TranslationDirection::kForOrchAgent,
-          .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+          .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = true,
           .port_map = translation_map},
+      table_entry));
+  ASSERT_EQ(table_entry.matches_size(), 1);
+  EXPECT_EQ(table_entry.matches(0).optional().value().str(), "Ethernet4");
+}
+
+TEST(PortNamePassthroughTest, ActionParametersIgnoresPortName) {
+  pdpi::IrTableEntry table_entry;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        table_name: "router_interface_table"
+        action {
+          name: "set_port_and_src_mac"
+          params {
+            name: "port"
+            value { str: "Ethernet0" }
+          }
+        })pb",
+      &table_entry));
+
+  ASSERT_OK(TranslateTableEntry(
+      TranslateTableEntryOptions{
+          .direction = TranslationDirection::kForOrchAgent,
+          .ir_p4_info = GetIrP4Info(),
+          .translate_port_ids = false,
+          .port_map = {},
+      },
+      table_entry));
+  ASSERT_EQ(table_entry.action().params_size(), 1);
+  EXPECT_EQ(table_entry.action().params(0).value().str(), "Ethernet0");
+}
+
+TEST(PortNamePassthroughTest, WatchPortIgnoresPortName) {
+  pdpi::IrTableEntry table_entry;
+  ASSERT_TRUE(TextFormat::ParseFromString(R"pb(
+                                            table_name: "wcmp_group_table"
+                                            action_set {
+                                              actions {
+                                                action {
+                                                  name: "set_nexthop_id"
+                                                  params {
+                                                    name: "nexthop_id"
+                                                    value { str: "Ethernet0" }
+                                                  }
+                                                }
+                                                weight: 1
+                                                watch_port: "Ethernet4"
+                                              }
+                                            })pb",
+                                          &table_entry));
+  ASSERT_OK(TranslateTableEntry(
+      TranslateTableEntryOptions{
+          .direction = TranslationDirection::kForOrchAgent,
+          .ir_p4_info = GetIrP4Info(),
+          .translate_port_ids = false,
+          .port_map = {},
+      },
+      table_entry));
+
+  // Expect the watch_port to change.
+  ASSERT_EQ(table_entry.action_set().actions_size(), 1);
+  EXPECT_EQ(table_entry.action_set().actions(0).watch_port(), "Ethernet4");
+}
+
+TEST(PortNamePassthroughTest, ExactMatchFieldIgnoresPortName) {
+  pdpi::IrTableEntry table_entry;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        table_name: "l3_admit_table"
+        matches {
+          name: "in_port"
+          exact { str: "Ethernet4" }
+        })pb",
+      &table_entry));
+
+  ASSERT_OK(TranslateTableEntry(
+      TranslateTableEntryOptions{
+          .direction = TranslationDirection::kForOrchAgent,
+          .ir_p4_info = GetIrP4Info(),
+          .translate_port_ids = false,
+          .port_map = {},
+      },
+      table_entry));
+  ASSERT_EQ(table_entry.matches_size(), 1);
+  EXPECT_EQ(table_entry.matches(0).exact().str(), "Ethernet4");
+}
+
+TEST(PortNamePassthroughTest, OptionalMatchFieldIgnoresPortName) {
+  pdpi::IrTableEntry table_entry;
+  ASSERT_TRUE(
+      TextFormat::ParseFromString(R"pb(
+                                    table_name: "acl_pre_ingress_table"
+                                    matches {
+                                      name: "in_port"
+                                      optional { value { str: "Ethernet4" } }
+                                    })pb",
+                                  &table_entry));
+  ASSERT_OK(TranslateTableEntry(
+      TranslateTableEntryOptions{
+          .direction = TranslationDirection::kForOrchAgent,
+          .ir_p4_info = GetIrP4Info(),
+          .translate_port_ids = false,
+          .port_map = {},
+      },
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
   EXPECT_EQ(table_entry.matches(0).optional().value().str(), "Ethernet4");
@@ -183,18 +291,17 @@ TEST(IrTranslationTest, InvalidTableNameFails) {
                                           &table_entry));
 
   boost::bimap<std::string, std::string> translation_map;
-  EXPECT_THAT(
-      TranslateTableEntry(
-          TranslateTableEntryOptions{
-              .direction = TranslationDirection::kForOrchAgent,
-              .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-              .translate_port_ids = true,
-              .port_map = translation_map},
-          table_entry),
-      StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_name")));
+  EXPECT_THAT(TranslateTableEntry(
+                  TranslateTableEntryOptions{
+                      .direction = TranslationDirection::kForOrchAgent,
+                      .ir_p4_info = GetIrP4Info(),
+                      .translate_port_ids = true,
+                      .port_map = translation_map},
+                  table_entry),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_name")));
 }
 
-TEST(IrTranslationTest, DISABLED_InvalidMatchFieldNameFails) {
+TEST(IrTranslationTest, InvalidMatchFieldNameFails) {
   pdpi::IrTableEntry table_entry;
   ASSERT_TRUE(TextFormat::ParseFromString(
       R"pb(
@@ -209,18 +316,17 @@ TEST(IrTranslationTest, DISABLED_InvalidMatchFieldNameFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> translation_map;
-  EXPECT_THAT(
-      TranslateTableEntry(
-          TranslateTableEntryOptions{
-              .direction = TranslationDirection::kForOrchAgent,
-              .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-              .translate_port_ids = true,
-              .port_map = translation_map},
-          table_entry),
-      StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(TranslateTableEntry(
+                  TranslateTableEntryOptions{
+                      .direction = TranslationDirection::kForOrchAgent,
+                      .ir_p4_info = GetIrP4Info(),
+                      .translate_port_ids = true,
+                      .port_map = translation_map},
+                  table_entry),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(IrTranslationTest, DISABLED_InvalidMatchFieldTypeFails) {
+TEST(IrTranslationTest, InvalidMatchFieldTypeFails) {
   pdpi::IrTableEntry table_entry;
   ASSERT_TRUE(TextFormat::ParseFromString(
       R"pb(
@@ -232,15 +338,14 @@ TEST(IrTranslationTest, DISABLED_InvalidMatchFieldTypeFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> translation_map;
-  EXPECT_THAT(
-      TranslateTableEntry(
-          TranslateTableEntryOptions{
-              .direction = TranslationDirection::kForOrchAgent,
-              .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-              .translate_port_ids = true,
-              .port_map = translation_map},
-          table_entry),
-      StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_field")));
+  EXPECT_THAT(TranslateTableEntry(
+                  TranslateTableEntryOptions{
+                      .direction = TranslationDirection::kForOrchAgent,
+                      .ir_p4_info = GetIrP4Info(),
+                      .translate_port_ids = true,
+                      .port_map = translation_map},
+                  table_entry),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_field")));
 }
 
 TEST(IrTranslationTest, InvalidActionNameFails) {
@@ -258,15 +363,14 @@ TEST(IrTranslationTest, InvalidActionNameFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> translation_map;
-  EXPECT_THAT(
-      TranslateTableEntry(
-          TranslateTableEntryOptions{
-              .direction = TranslationDirection::kForOrchAgent,
-              .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-              .translate_port_ids = true,
-              .port_map = translation_map},
-          table_entry),
-      StatusIs(absl::StatusCode::kInternal, HasSubstr("some_action")));
+  EXPECT_THAT(TranslateTableEntry(
+                  TranslateTableEntryOptions{
+                      .direction = TranslationDirection::kForOrchAgent,
+                      .ir_p4_info = GetIrP4Info(),
+                      .translate_port_ids = true,
+                      .port_map = translation_map},
+                  table_entry),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("some_action")));
 }
 
 TEST(IrTranslationTest, InvalidActionParameterNameFails) {
@@ -284,15 +388,14 @@ TEST(IrTranslationTest, InvalidActionParameterNameFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> translation_map;
-  EXPECT_THAT(
-      TranslateTableEntry(
-          TranslateTableEntryOptions{
-              .direction = TranslationDirection::kForOrchAgent,
-              .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-              .translate_port_ids = true,
-              .port_map = translation_map},
-          table_entry),
-      StatusIs(absl::StatusCode::kInternal, HasSubstr("some_param")));
+  EXPECT_THAT(TranslateTableEntry(
+                  TranslateTableEntryOptions{
+                      .direction = TranslationDirection::kForOrchAgent,
+                      .ir_p4_info = GetIrP4Info(),
+                      .translate_port_ids = true,
+                      .port_map = translation_map},
+                  table_entry),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("some_param")));
 }
 
 TEST(IrTranslationTest, ActionParametersWithUnsupportedFormatFails) {
@@ -310,15 +413,14 @@ TEST(IrTranslationTest, ActionParametersWithUnsupportedFormatFails) {
       &table_entry));
 
   boost::bimap<std::string, std::string> translation_map;
-  EXPECT_THAT(
-      TranslateTableEntry(
-          TranslateTableEntryOptions{
-              .direction = TranslationDirection::kForController,
-              .ir_p4_info = sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-              .translate_port_ids = true,
-              .port_map = translation_map},
-          table_entry),
-      StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(TranslateTableEntry(
+                  TranslateTableEntryOptions{
+                      .direction = TranslationDirection::kForController,
+                      .ir_p4_info = GetIrP4Info(),
+                      .translate_port_ids = true,
+                      .port_map = translation_map},
+                  table_entry),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(P4RuntimeTweaksP4InfoTest, ForOrchAgentSetsCompositeUdfFormatToString) {
@@ -377,6 +479,98 @@ TEST(P4RuntimeTweaksP4InfoTest, ForOrchAgentIgnoresCompositeNonUdfFields) {
   pdpi::IrP4Info unchanged_ir_p4_info = ir_p4_info;
   TranslateIrP4InfoForOrchAgent(ir_p4_info);
   EXPECT_THAT(ir_p4_info, gutil::EqualsProto(unchanged_ir_p4_info));
+}
+
+// TODO: Remove tests below when P4Info uses 64-bit IPv6 ACL match
+// fields.
+TEST(Convert64BitIpv6AclMatchFieldsTo128BitTest, PadsSmallAddresses) {
+  pdpi::IrTableEntry ir_table_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_name: "table"
+        matches {
+          name: "ipv6_src"
+          ternary {
+            value { ipv6: "::aaaa:aaaa:aaaa:aaaa" }
+            mask { ipv6: "::ffff:ffff:ffff:ffff" }
+          }
+        }
+        matches {
+          name: "ipv6_dst"
+          ternary {
+            value { ipv6: "::bbbb:bbbb:bbbb:bbbb" }
+            mask { ipv6: "::ffff:ffff:ffff:ffff" }
+          }
+        }
+      )pb",
+      &ir_table_entry));
+  Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
+  EXPECT_THAT(ir_table_entry, gutil::EqualsProto(
+                                  R"pb(
+                                    table_name: "table"
+                                    matches {
+                                      name: "ipv6_src"
+                                      ternary {
+                                        value { ipv6: "aaaa:aaaa:aaaa:aaaa::" }
+                                        mask { ipv6: "ffff:ffff:ffff:ffff::" }
+                                      }
+                                    }
+                                    matches {
+                                      name: "ipv6_dst"
+                                      ternary {
+                                        value { ipv6: "bbbb:bbbb:bbbb:bbbb::" }
+                                        mask { ipv6: "ffff:ffff:ffff:ffff::" }
+                                      }
+                                    }
+                                  )pb"));
+}
+
+TEST(Convert64BitIpv6AclMatchFieldsTo128BitTest, KeepsLargeAddresses) {
+  pdpi::IrTableEntry ir_table_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_name: "table"
+        matches {
+          name: "ipv6_src"
+          ternary {
+            value { ipv6: "1::aaaa:aaaa:aaaa:aaaa" }
+            mask { ipv6: "1::ffff:ffff:ffff:ffff" }
+          }
+        }
+        matches {
+          name: "ipv6_dst"
+          ternary {
+            value { ipv6: "1::bbbb:bbbb:bbbb:bbbb" }
+            mask { ipv6: "1::ffff:ffff:ffff:ffff" }
+          }
+        }
+      )pb",
+      &ir_table_entry));
+
+  pdpi::IrTableEntry original_ir_table_entry = ir_table_entry;
+  Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
+  EXPECT_THAT(ir_table_entry, gutil::EqualsProto(original_ir_table_entry));
+}
+
+TEST(Convert64BitIpv6AclMatchFieldsTo128BitTest, KeepsNonTernaryAddresses) {
+  pdpi::IrTableEntry ir_table_entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        table_name: "table"
+        matches {
+          name: "ipv6_src"
+          lpm { value { ipv6: "::ffff:ffff:ffff:ffff" } }
+        }
+        matches {
+          name: "ipv6_dst"
+          optional { value { ipv6: "::bbbb:bbbb:bbbb:bbbb" } }
+        }
+      )pb",
+      &ir_table_entry));
+
+  pdpi::IrTableEntry original_ir_table_entry = ir_table_entry;
+  Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
+  EXPECT_THAT(ir_table_entry, gutil::EqualsProto(original_ir_table_entry));
 }
 
 }  // namespace
