@@ -16,32 +16,41 @@
 
 #include <stdint.h>
 
-#include <memory>
+#include <string>
 #include <utility>
 
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
-#include "thinkit/mirror_testbed.h"
+#include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {
+namespace {
 
-void TestP4Sessions(thinkit::MirrorTestbed& testbed) {
+using ::testing::Eq;
+
+}  // namespace
+
+void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut) {
+  ASSERT_OK_AND_ASSIGN(std::string output,
+                       ssh_client.RunCommand(sut.ChassisName(), "echo foo",
+                                             absl::ZeroDuration()));
+  EXPECT_THAT(output, Eq("foo\n"));
+}
+
+void TestP4Session(thinkit::Switch& sut) {
   // TODO: Remove kDeviceId once device ID is set through gNMI in
   // P4RT app.
   static constexpr uint64_t kDeviceId = 183807201;
-  ASSERT_OK_AND_ASSIGN(auto sut_p4runtime_stub,
-                       testbed.Sut().CreateP4RuntimeStub());
+  ASSERT_OK_AND_ASSIGN(auto sut_p4runtime_stub, sut.CreateP4RuntimeStub());
   EXPECT_OK(
       pdpi::P4RuntimeSession::Create(std::move(sut_p4runtime_stub), kDeviceId));
-  ASSERT_OK_AND_ASSIGN(auto control_switch_p4runtime_stub,
-                       testbed.ControlSwitch().CreateP4RuntimeStub());
-  EXPECT_OK(pdpi::P4RuntimeSession::Create(
-      std::move(control_switch_p4runtime_stub), kDeviceId));
 }
 
 }  // namespace pins_test

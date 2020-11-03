@@ -26,10 +26,11 @@ cc_library(
     deps = [
         "//gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
-        "//thinkit:mirror_testbed",
+        "//thinkit:ssh_client",
         "//thinkit:switch",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
     ],
 )
