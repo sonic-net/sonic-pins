@@ -15,6 +15,7 @@
 #ifndef GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
 #define GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
 
+#include "absl/strings/string_view.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
@@ -37,7 +38,10 @@ void TestGnmiCheckInterfaceStateOperation(thinkit::Switch& sut);
 
 // Tests that SUT specific port state is UP.
 void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,
-                                                  std::string if_name);
+                                                  absl::string_view if_name);
+// Tests that SUT specific port MTU can be updated.
+void TestGnmiInterfaceConfigSetMtu(thinkit::Switch& sut,
+                                   absl::string_view if_name);
 }  // namespace pins_test
 
 #endif  // GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
