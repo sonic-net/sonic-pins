@@ -34,6 +34,7 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "include/nlohmann/json.hpp"
+#include "tests/thinkit_util.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
@@ -46,8 +47,6 @@ using ::testing::HasSubstr;
 
 }  // namespace
 
-constexpr char kStateUp[] = "UP";
-constexpr char kInterfaces[] = "interfaces";
 constexpr char kMtuJsonVal[] = "{\"mtu\":2000}";
 
 void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut) {
