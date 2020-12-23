@@ -16,12 +16,17 @@
 #define GOOGLE_TESTS_THINKIT_GNMI_INTERFACE_TESTS_H_
 
 #include "absl/strings/string_view.h"
+#include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {
 
 void TestGnmiInterfaceConfigSetAdminStatus(thinkit::Switch& sut,
                                            absl::string_view if_name);
+
+void TestGnmiPortComponentPaths(thinkit::SSHClient& ssh_client,
+                                thinkit::Switch& sut,
+                                absl::string_view platform_json_path);
 
 }  // namespace pins_test
 
