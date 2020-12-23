@@ -38,7 +38,7 @@ namespace pins_test {
 namespace {
 
 using ::nlohmann::json;
-const LazyRE2 kSplitNameValueRE = {R"((\w+)\[(\w+)\=(\w+)\])"};
+const LazyRE2 kSplitNameValueRE = {R"((\w+)\[(\w+)=([\w-]+)\])"};
 }  // namespace
 
 gnmi::Path ConvertOCStringToPath(absl::string_view oc_path) {
