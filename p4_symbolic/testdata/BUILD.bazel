@@ -1,0 +1,29 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+
+# Make sure programs under p4-samples are visible to other
+# bazel packages.
+exports_files(
+    glob([
+        "**/*.p4",
+        "**/*.txt",
+    ]),
+    licenses = ["notice"],
+    visibility = ["//p4_symbolic:__subpackages__"],
+)

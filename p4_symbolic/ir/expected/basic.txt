@@ -1,0 +1,719 @@
+headers {
+  key: "ethernet"
+  value {
+    name: "ethernet_t"
+    id: 2
+    fields {
+      key: "dstAddr"
+      value {
+        name: "dstAddr"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "etherType"
+      value {
+        name: "etherType"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "srcAddr"
+      value {
+        name: "srcAddr"
+        bitwidth: 48
+      }
+    }
+  }
+}
+headers {
+  key: "ipv4"
+  value {
+    name: "ipv4_t"
+    id: 3
+    fields {
+      key: "diffserv"
+      value {
+        name: "diffserv"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "dstAddr"
+      value {
+        name: "dstAddr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "flags"
+      value {
+        name: "flags"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "fragOffset"
+      value {
+        name: "fragOffset"
+        bitwidth: 13
+      }
+    }
+    fields {
+      key: "hdrChecksum"
+      value {
+        name: "hdrChecksum"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "identification"
+      value {
+        name: "identification"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "ihl"
+      value {
+        name: "ihl"
+        bitwidth: 4
+      }
+    }
+    fields {
+      key: "protocol"
+      value {
+        name: "protocol"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "srcAddr"
+      value {
+        name: "srcAddr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "totalLen"
+      value {
+        name: "totalLen"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "ttl"
+      value {
+        name: "ttl"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "version"
+      value {
+        name: "version"
+        bitwidth: 4
+      }
+    }
+  }
+}
+headers {
+  key: "scalars"
+  value {
+    name: "scalars_0"
+  }
+}
+headers {
+  key: "standard_metadata"
+  value {
+    name: "standard_metadata"
+    id: 1
+    fields {
+      key: "_padding"
+      value {
+        name: "_padding"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "checksum_error"
+      value {
+        name: "checksum_error"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "deq_qdepth"
+      value {
+        name: "deq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "deq_timedelta"
+      value {
+        name: "deq_timedelta"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "egress_global_timestamp"
+      value {
+        name: "egress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "egress_port"
+      value {
+        name: "egress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "egress_rid"
+      value {
+        name: "egress_rid"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "egress_spec"
+      value {
+        name: "egress_spec"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "enq_qdepth"
+      value {
+        name: "enq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "enq_timestamp"
+      value {
+        name: "enq_timestamp"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ingress_global_timestamp"
+      value {
+        name: "ingress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ingress_port"
+      value {
+        name: "ingress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "instance_type"
+      value {
+        name: "instance_type"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "mcast_grp"
+      value {
+        name: "mcast_grp"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "packet_length"
+      value {
+        name: "packet_length"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "parser_error"
+      value {
+        name: "parser_error"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "priority"
+      value {
+        name: "priority"
+        bitwidth: 3
+      }
+    }
+  }
+}
+actions {
+  key: "MyIngress.drop"
+  value {
+    action_definition {
+      preamble {
+        id: 25652968
+        name: "MyIngress.drop"
+        alias: "drop"
+      }
+    }
+    action_implementation {
+      action_body {
+        source_info {
+          line: 104
+          column: 8
+          source_fragment: "mark_to_drop(standard_metadata)"
+        }
+        drop {
+          header {
+            header_name: "standard_metadata"
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  key: "MyIngress.ipv4_forward"
+  value {
+    action_definition {
+      preamble {
+        id: 28792405
+        name: "MyIngress.ipv4_forward"
+        alias: "ipv4_forward"
+      }
+      params_by_id {
+        key: 1
+        value {
+          param {
+            id: 1
+            name: "dstAddr"
+            bitwidth: 48
+          }
+        }
+      }
+      params_by_id {
+        key: 2
+        value {
+          param {
+            id: 2
+            name: "port"
+            bitwidth: 9
+          }
+        }
+      }
+      params_by_name {
+        key: "dstAddr"
+        value {
+          param {
+            id: 1
+            name: "dstAddr"
+            bitwidth: 48
+          }
+        }
+      }
+      params_by_name {
+        key: "port"
+        value {
+          param {
+            id: 2
+            name: "port"
+            bitwidth: 9
+          }
+        }
+      }
+    }
+    action_implementation {
+      parameter_to_bitwidth {
+        key: "dstAddr"
+        value: 48
+      }
+      parameter_to_bitwidth {
+        key: "port"
+        value: 9
+      }
+      action_body {
+        source_info {
+          line: 108
+          column: 8
+          source_fragment: "standard_metadata.egress_spec = port"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "standard_metadata"
+              field_name: "egress_spec"
+            }
+          }
+          right {
+            variable_value {
+              name: "port"
+            }
+          }
+        }
+      }
+      action_body {
+        source_info {
+          line: 109
+          column: 8
+          source_fragment: "hdr.ethernet.srcAddr = hdr.ethernet.dstAddr"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "ethernet"
+              field_name: "srcAddr"
+            }
+          }
+          right {
+            field_value {
+              header_name: "ethernet"
+              field_name: "dstAddr"
+            }
+          }
+        }
+      }
+      action_body {
+        source_info {
+          line: 110
+          column: 8
+          source_fragment: "hdr.ethernet.dstAddr = dstAddr"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "ethernet"
+              field_name: "dstAddr"
+            }
+          }
+          right {
+            variable_value {
+              name: "dstAddr"
+            }
+          }
+        }
+      }
+      action_body {
+        source_info {
+          line: 111
+          column: 8
+          source_fragment: "hdr.ipv4.ttl = hdr.ipv4.ttl - 1"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "ipv4"
+              field_name: "ttl"
+            }
+          }
+          right {
+            expression_value {
+              binary_expression {
+                operation: BIT_AND
+                left {
+                  expression_value {
+                    binary_expression {
+                      left {
+                        field_value {
+                          header_name: "ipv4"
+                          field_name: "ttl"
+                        }
+                      }
+                      right {
+                        hexstr_value {
+                          value: "0xff"
+                        }
+                      }
+                    }
+                  }
+                }
+                right {
+                  hexstr_value {
+                    value: "0xff"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  key: "NoAction"
+  value {
+    action_definition {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    action_implementation {
+    }
+  }
+}
+tables {
+  key: "MyIngress.ipv4_lpm"
+  value {
+    table_definition {
+      preamble {
+        id: 37375156
+        name: "MyIngress.ipv4_lpm"
+        alias: "ipv4_lpm"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.ipv4.dstAddr"
+            annotations: "@format(IPV4_ADDRESS)"
+            bitwidth: 32
+            match_type: LPM
+          }
+          format: IPV4
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.ipv4.dstAddr"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.ipv4.dstAddr"
+            annotations: "@format(IPV4_ADDRESS)"
+            bitwidth: 32
+            match_type: LPM
+          }
+          format: IPV4
+        }
+      }
+      entry_actions {
+        ref {
+          id: 28792405
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 28792405
+            name: "MyIngress.ipv4_forward"
+            alias: "ipv4_forward"
+          }
+          params_by_id {
+            key: 1
+            value {
+              param {
+                id: 1
+                name: "dstAddr"
+                bitwidth: 48
+              }
+            }
+          }
+          params_by_id {
+            key: 2
+            value {
+              param {
+                id: 2
+                name: "port"
+                bitwidth: 9
+              }
+            }
+          }
+          params_by_name {
+            key: "dstAddr"
+            value {
+              param {
+                id: 1
+                name: "dstAddr"
+                bitwidth: 48
+              }
+            }
+          }
+          params_by_name {
+            key: "port"
+            value {
+              param {
+                id: 2
+                name: "port"
+                bitwidth: 9
+              }
+            }
+          }
+        }
+        proto_id: 1
+      }
+      entry_actions {
+        ref {
+          id: 25652968
+          annotations: "@proto_id(2)"
+        }
+        action {
+          preamble {
+            id: 25652968
+            name: "MyIngress.drop"
+            alias: "drop"
+          }
+        }
+        proto_id: 2
+      }
+      entry_actions {
+        ref {
+          id: 21257015
+          annotations: "@proto_id(3)"
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+        proto_id: 3
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "MyIngress.drop"
+      match_name_to_field {
+        key: "hdr.ipv4.dstAddr"
+        value {
+          header_name: "ipv4"
+          field_name: "dstAddr"
+        }
+      }
+    }
+  }
+}
+conditionals {
+  key: "node_2"
+  value {
+    name: "node_2"
+    condition {
+      expression_value {
+        builtin_expression {
+          function: DATA_TO_BOOL
+          arguments {
+            field_value {
+              header_name: "ipv4"
+              field_name: "$valid$"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "MyIngress.ipv4_lpm"
+  }
+}
+initial_control: "node_2"
+
+=====MyIngress.ipv4_lpm Entries=====
+
+table_name: "MyIngress.ipv4_lpm"
+matches {
+  name: "hdr.ipv4.dstAddr"
+  lpm {
+    value {
+      ipv4: "10.10.0.0"
+    }
+    prefix_length: 16
+  }
+}
+action {
+  name: "MyIngress.ipv4_forward"
+  params {
+    name: "dstAddr"
+    value {
+      hex_str: "0x000000000000"
+    }
+  }
+  params {
+    name: "port"
+    value {
+      hex_str: "0x000"
+    }
+  }
+}
+
+table_name: "MyIngress.ipv4_lpm"
+matches {
+  name: "hdr.ipv4.dstAddr"
+  lpm {
+    value {
+      ipv4: "10.10.0.0"
+    }
+    prefix_length: 32
+  }
+}
+action {
+  name: "MyIngress.ipv4_forward"
+  params {
+    name: "dstAddr"
+    value {
+      hex_str: "0x000000000000"
+    }
+  }
+  params {
+    name: "port"
+    value {
+      hex_str: "0x001"
+    }
+  }
+}
+
+table_name: "MyIngress.ipv4_lpm"
+matches {
+  name: "hdr.ipv4.dstAddr"
+  lpm {
+    value {
+      ipv4: "10.0.0.0"
+    }
+    prefix_length: 8
+  }
+}
+action {
+  name: "MyIngress.ipv4_forward"
+  params {
+    name: "dstAddr"
+    value {
+      hex_str: "0x00000000000a"
+    }
+  }
+  params {
+    name: "port"
+    value {
+      hex_str: "0x001"
+    }
+  }
+}
+
+table_name: "MyIngress.ipv4_lpm"
+matches {
+  name: "hdr.ipv4.dstAddr"
+  lpm {
+    value {
+      ipv4: "20.20.0.0"
+    }
+    prefix_length: 16
+  }
+}
+action {
+  name: "MyIngress.ipv4_forward"
+  params {
+    name: "dstAddr"
+    value {
+      hex_str: "0x160000000016"
+    }
+  }
+  params {
+    name: "port"
+    value {
+      hex_str: "0x001"
+    }
+  }
+}
+

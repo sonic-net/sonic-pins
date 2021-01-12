@@ -1,0 +1,345 @@
+// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// This file contains protobuf definitions for parsing bmv2 json
+// files (outputs of p4c).
+// Some attributes here are intentionally un-constrained (e.g.
+// struct). This allows parsing of radically different possibilities
+// or types of constructs that may appear interchangably in that
+// attribute.
+
+// LINT: LEGACY_NAMES
+// Needed because the protobuf enum case names must match the json names.
+
+syntax = "proto3";
+
+package p4_symbolic.bmv2;
+
+import "google/protobuf/struct.proto";
+
+// Acceptable values for match type of keys of a table.
+enum TableMatchType {
+  // Casing must match the bmv2 json!
+  exact = 0;
+  lpm = 1;
+  ternary = 2;
+  range = 3;
+}
+
+// The type (of the match) of a parser transition.
+enum ParserTransitionType {
+  // The default transition (no matching).
+  default = 0;
+  // Transition is applied when hex strings match.
+  // The match hex string and the matched field are defined
+  // in ParserTransition.
+  hexstr = 1;
+  // Matching via a named parse value set.
+  // The name of the value set is defined in ParserTransition.
+  parse_vset = 2;
+}
+
+// The type of a table.
+// Determines where actions are defined and how they get selected.
+enum ActionSelectorType {
+  simple = 0;       // A Simple key and action table.
+  indirect = 1;     // Action profiles table.
+  indirect_ws = 2;  // Action profiles with dynamic selector.
+}
+
+// Specifies the overal structure of a p4 program json
+// file outputed by p4c with a bmv2 target.
+// Several fields may not be present in this specification
+// because they are irrelevant to our tool.
+message P4Program {
+  // Defined header types (e.g. ipv4 headers).
+  // This includes built-in header types imported
+  // into the program (e.g. v1model).
+  repeated HeaderType header_types = 1;
+  // The packet overall header, usually defined
+  // as a collection of the above header type.
+  repeated Header headers = 2;
+  // All parsers defined in the program.
+  repeated Parser parsers = 3;
+  // All de-parsers defined in the program.
+  repeated Deparser deparsers = 4;
+  // All actions defined in the program, including their names
+  // paramters, and bodies.
+  // Eventhough actions are typically attached to tables,
+  // they are defined seperatly in the JSON format,
+  // and the table definitions refer to them by their action id.
+  repeated Action actions = 5;
+  // All pipelines (e.g. control constructs) defined in the program,
+  // including all their tables, and the mapping of tables
+  // to actions via match keys.
+  repeated Pipeline pipelines = 6;
+}
+
+// A P4 header type definition.
+message HeaderType {
+  // Programmer assigned name
+  // e.g. IPv4Header
+  string name = 1;
+  // Auto-generated id
+  int32 id = 2;
+  // A list of the fields contained in the header type
+  // each field is a an array of 3 elements
+  // the field name, its bitwidth, and whether it is signed (typically false).
+  // e.g. ["ingress_port", 9, false]
+  // https://p4.org/p4-spec/docs/P4-16-v1.2.0.html#sec-header-types
+  repeated google.protobuf.ListValue fields = 3;
+}
+
+// A single header instance with a given name and type.
+// Corresponds to header declaration in a control parameter list
+// e.g. control MyIngress(..., inout standard_metadata_t standard_metadata)
+// will correspond to a header instance with name "standard_metadata" and
+// type "standard_metadata_t".
+// The type name must match one of the HeaderType instances found at
+// P4Program.header_types.
+message Header {
+  // Auto-generated id
+  int32 id = 1;
+  // The name of the header instance.
+  string name = 2;
+  // The name of the header type
+  // e.g. standard_metadata
+  string header_type = 3;
+  // True if this is a built in header type
+  // containing meta-data assigned by the switch
+  // e.g. standard_metadata
+  bool metadata = 4;
+}
+
+// Defines a P4 parser flow.
+message Parser {
+  // The name of the parser.
+  string name = 1;
+  // A numeric id.
+  int32 id = 2;
+  // The name of the start state of the parser.
+  string init_state = 3;
+  // A list of all parser states.
+  repeated ParserState parse_states = 4;
+}
+
+// Defines a parser state.
+message ParserState {
+  // The user defined name of the state (not qualified).
+  // It does not include the name of the parser.
+  string name = 1;
+  // Auto generated ID unique among all parser states including those
+  // belonging to a different parser.
+  int32 id = 2;
+  // All the possible transitions from this state to different states.
+  repeated ParserTransition transitions = 4;
+}
+
+// Defines a transition between two parser states.
+message ParserTransition {
+  // The value of the condition/match dictating whether
+  // this transition is applied or not.
+  // A hexstring or a parser value set depending on the type.
+  string value = 1;
+  // The type of the value above, usually a hex string.
+  ParserTransitionType type = 2;
+  // Any mask applied by the transition, if no mask is applied,
+  // protobuf will parse this as "".
+  string mask = 3;
+  // The name of the state this transition points to.
+  string next_state = 4;
+}
+
+// Defines a P4 deparser flow.
+message Deparser {
+  // The name of the deparser.
+  string name = 1;
+  // A numeric id.
+  int32 id = 2;
+  // Information on the source code location of the deparser definition.
+  SourceLocation source_info = 3;
+}
+
+// A pipeline is a sequence of actions and table applications
+// defined within the scope of one "control" construct.
+// Usually, there are two pipelines in a p4 program;
+// one for ingress and one for egress.
+message Pipeline {
+  // The name assigned by programmer.
+  // e.g. MyIngressPipeline.
+  string name = 1;
+  // Auto-generated ID unique among all pipelines.
+  int32 id = 2;
+  // Source information about where the pipeline is defined.
+  SourceLocation source_info = 3;
+  // The first table matched on in this pipeline.
+  string init_table = 4;
+  // All the tables and their actions that are part of this pipeline.
+  repeated Table tables = 5;
+  // All the conditional statements in this pipeline.
+  repeated Conditional conditionals = 6;
+}
+
+// A control plane table definition including its keys and actions.
+message Table {
+  // The table name assigned by programmer.
+  // This is a fully qualitifed name e.g. MyIngressPipeline.MyTable.
+  string name = 1;
+  // This is auto-generated and unique among all tables (including other
+  // pipelines). It is not the same id used in P4info and P4RT.
+  int32 id = 2;
+  // Source information about where the table is defined.
+  SourceLocation source_info = 3;
+  // An array of keys that are used for matching on this table.
+  repeated TableKey key = 4;
+  // The overal type of the match(s) of the table.
+  // In case the table have several keys with different match type,
+  // the overall match type of the table would be the most general.
+  // There is always a most general match because of P4 restrications
+  // on match combination (which may be under-documented).
+  // See https://github.com/p4lang/p4-spec/issues/411
+  TableMatchType match_type = 5;
+  // This seems to be the "type of the table",
+  // in all sample programs it is value is "simple".
+  ActionSelectorType type = 6;
+  // The maximum size of the table (in number of entries).
+  int32 max_size = 7;
+  // Actions and action_ids are index matching arrays
+  // that contain the name and the id of each action.
+  repeated int32 action_ids = 8;
+  repeated string actions = 9;
+  // Default table entry, which gets matched on if no other entry was matched.
+  DefaultTableEntry default_entry = 10;
+  // Map between action name and the next control construct name (e.g. table,
+  // conditional etc) to be taken if an entry with that action was matched.
+  map<string, string> next_tables = 11;
+}
+
+// A table key represents an input-matching column
+// with an id, a match type, and a packet attribute/value matched on.
+message TableKey {
+  // The kind of match applied by this key when the table
+  // is applied to a packet.
+  TableMatchType match_type = 1;
+  // This is essentially a string representation of the target.
+  // e.g. standard_metadata.ingress_port.
+  string name = 2;
+  // A hex-value mask applied in ternary matches.
+  // This field is set to null ("" when parsed with protobuf) if this is not a
+  // ternary match.
+  string mask = 3;
+  // The attribute being matched.
+  // e.g. ["standard_metadata", "ingress_port"]
+  repeated string target = 4;
+}
+
+// A default table entry is the entry that gets matched on if no other actual
+// entry for that table was matched.
+message DefaultTableEntry {
+  // Target action id.
+  int32 action_id = 1;
+  // Arguments passed to the action (all hexstrings).
+  repeated string action_data = 2;
+}
+
+// A conditional is the BMV2 representation of an if statement condition.
+// The body of the if and else branches are implicitly translated by p4c
+// into a table or action as is appropriate, and refered to here.
+message Conditional {
+  // Unique among all conditionals in the program.
+  int32 id = 1;
+  // Unique among conditionals and tables.
+  string name = 2;
+  // Condition expression.
+  google.protobuf.Struct expression = 3;
+  // Name of the next control construct (table or conditional)
+  // invoked by each branch.
+  string true_next = 4;
+  string false_next = 5;
+}
+
+// An action that can be taken when a table is matched on.
+message Action {
+  // The name assigned by programmer.
+  // This is a fully qualified name e.g. MyIngressPipeline.set_egress_spec.
+  string name = 1;
+  // This is auto-generated and unique among all actions. It is not the same
+  // id used in P4info and P4RT.
+  int32 id = 2;
+  // An array containing all parameters defined by this action.
+  repeated VariableDefinition runtime_data = 3;
+  // An array of statements within the action body.
+  // A statement that uses a variable/parameter in the p4 program
+  // is expressed here using the index of that variable in the above
+  // "runtime_data" array (not its name).
+  repeated google.protobuf.Struct primitives = 4;
+}
+
+// A value/expression is a struct.
+// It contains a type, which can be one of:
+// field, hexstr, regular, runtime_data, header, expression, op, or assign.
+// It also contains a value, which can be one of these option respectively
+// according to its type:
+// array, string, string, int, string, nested expression,
+// struct containing op, left, and right,
+// or an expression with no value and only parameters.
+
+// Describes the definition of a variable or action parameter.
+message VariableDefinition {
+  // Programmer defined name of the variable.
+  string name = 1;
+  // The bitwidth (representing the type).
+  int32 bitwidth = 2;
+}
+
+// Contains source code information about the location
+// in the source where the relevant construct was defined.
+message SourceLocation {
+  string filename = 1;
+  int32 line = 2;
+  int32 column = 3;
+  // If the direct parent of this construct (where the construct was parsed)
+  // has a name (e.g. it is a pipeline or a parser), this will be the name
+  // of that parent.
+  // Otherwise, this will be the actual code fragment that was parsed
+  // into the attached construct (e.g. in the case of a nested expression).
+  string source_fragment = 4;
+}
+
+// This enum specifies the exact statements types that are supported by our ir.
+// The names used inside the enum match *exactly* the values of the "op" field
+// in the respective statement JSON objects.
+enum StatementOp {
+  // Assignment (to a variable or header field).
+  assign = 0;
+  // Mark packet to be dropped.
+  mark_to_drop = 1;
+  // Modify a field via a hash calculation.
+  modify_field_with_hash_based_offset = 2;
+  // Cloning a packet.
+  clone_ingress_pkt_to_egress = 3;
+}
+
+// This specifies the exact expressions that are supported by our ir.
+// The names used inside the enum match *exactly* the values of the "type" field
+// in the respective expression (e.g. type-value) JSON objects.
+enum ExpressionType {
+  header = 0;        // A whole header accessed by name.
+  field = 1;         // Header/metadata field.
+  runtime_data = 2;  // Local variable.
+  hexstr_ = 3;       // Hexstring literal.
+  bool_ = 4;         // A boolean literal.
+  string_ = 5;       // A string literal.
+  expression = 6;    // An expression.
+}

@@ -1,0 +1,5 @@
+Finding packet for table tbl_reflector54 and row -1
+	Dropped = 0
+	standard_metadata.ingress_port = #b000000001
+	standard_metadata.egress_spec = #b000000001
+
