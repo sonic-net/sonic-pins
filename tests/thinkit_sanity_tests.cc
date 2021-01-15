@@ -128,10 +128,6 @@ constexpr char kV3ReleaseConfigBlob[] = R"({
 })";
 
 }  // namespace
-constexpr char kOpenconfigStr[] = "openconfig";
-constexpr char kStateUp[] = "UP";
-constexpr char kInterfaces[] = "interfaces";
-constexpr char KEthernet10GBSpeed[] = "\"openconfig-if-ethernet:SPEED_10GB\"";
 
 void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut) {
   EXPECT_OK(SSHable(sut, ssh_client));
