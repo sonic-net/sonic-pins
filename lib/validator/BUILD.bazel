@@ -31,6 +31,8 @@ cc_library(
     hdrs = ["validator.h"],
     deps = [
         ":validator_backend",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
@@ -43,10 +45,39 @@ cc_library(
     srcs = ["validator_backend.cc"],
     hdrs = ["validator_backend.h"],
     deps = [
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_library(
+    name = "common_backend",
+    srcs = ["common_backend.cc"],
+    hdrs = ["common_backend.h"],
+    deps = [
+        ":validator",
+        ":validator_backend",
+        "//gutil:status",
+        "//thinkit:ssh_client",
+        "@com_google_absl//absl/functional:bind_front",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "validator_backend_test",
+    srcs = ["validator_backend_test.cc"],
+    deps = [
+        ":validator_backend",
+        "//gutil:status_matchers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
     ],
 )
