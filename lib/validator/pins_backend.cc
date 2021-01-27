@@ -37,6 +37,7 @@
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
+#include "system/system.pb.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {
@@ -63,8 +64,6 @@ absl::Status PINSBackend::CanEstablishP4RuntimeSession(
   ASSIGN_OR_RETURN(auto p4runtime_stub, sut_switch->CreateP4RuntimeStub());
   return pdpi::P4RuntimeSession::Create(std::move(p4runtime_stub), sut_switch->DeviceId())
       .status();
-
-  return absl::OkStatus();
 }
 
 absl::Status PINSBackend::CanGetAllInterfaceOverGnmi(absl::string_view chassis,
@@ -83,6 +82,25 @@ absl::Status PINSBackend::CanGetAllInterfaceOverGnmi(absl::string_view chassis,
   context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
   context.set_wait_for_ready(true);
   return gutil::GrpcStatusToAbslStatus(gnmi_stub->Get(&context, req, &resp));
+}
+
+absl::Status PINSBackend::CanGetTimeOverGnoiSystem(absl::string_view chassis,
+                                                   absl::Duration timeout) {
+  auto sut = switches_map_.find(chassis);
+  if (sut == switches_map_.end()) {
+    return absl::InternalError(
+        absl::StrCat("ValidatorBackend passed invalid chassis: ", chassis));
+  }
+  auto& [sut_name, sut_switch] = *sut;
+  ASSIGN_OR_RETURN(auto gnoi_system_stub, sut_switch->CreateGnoiSystemStub());
+
+  gnoi::system::TimeRequest request;
+  gnoi::system::TimeResponse response;
+  grpc::ClientContext context;
+  context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
+  context.set_wait_for_ready(true);
+  return gutil::GrpcStatusToAbslStatus(
+      gnoi_system_stub->Time(&context, request, &response));
 }
 
 }  // namespace pins_test

@@ -148,6 +148,32 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::Stub* sut_gnmi_stub,
   return absl::OkStatus();
 }
 
+absl::Status PushGnmiConfig(gnmi::gNMI::Stub& stub,
+                            const std::string& chassis_name,
+                            const std::string& gnmi_config,
+                            absl::uint128 election_id) {
+  gnmi::SetRequest req;
+  req.mutable_prefix()->set_origin("openconfig");
+  req.mutable_prefix()->set_target(chassis_name);
+  gnmi::Update* replace = req.add_replace();
+  replace->mutable_path();
+  replace->mutable_val()->set_json_ietf_val(gnmi_config);
+  gnmi_ext::MasterArbitration* master_arbitration =
+      req.add_extension()->mutable_master_arbitration();
+  master_arbitration->mutable_role()->set_id("dataplane test");
+  master_arbitration->mutable_election_id()->set_high(
+      absl::Uint128High64(election_id));
+  master_arbitration->mutable_election_id()->set_low(
+      absl::Uint128Low64(election_id));
+
+  gnmi::SetResponse resp;
+  grpc::ClientContext context;
+  grpc::Status status = stub.Set(&context, req, &resp);
+  if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
+  LOG(INFO) << "Config push response: " << resp.ShortDebugString();
+  return absl::OkStatus();
+}
+
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
     gnmi::gNMI::Stub* sut_gnmi_stub, absl::string_view state_path,
     absl::string_view resp_parse_str) {
@@ -203,4 +229,5 @@ GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response) {
   }
   return elements;
 }
+
 }  // namespace pins_test

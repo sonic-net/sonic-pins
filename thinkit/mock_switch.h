@@ -22,6 +22,7 @@
 #include "gmock/gmock.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "system/system.grpc.pb.h"
 #include "thinkit/switch.h"
 
 namespace thinkit {
@@ -34,6 +35,9 @@ class MockSwitch : public Switch {
               CreateP4RuntimeStub, (), (override));
   MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnmi::gNMI::Stub>>, CreateGnmiStub,
               (), (override));
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>,
+
+              CreateGnoiSystemStub, (), (override));
 };
 
 }  // namespace thinkit

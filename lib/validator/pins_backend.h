@@ -36,6 +36,8 @@ class PINSBackend : public ValidatorBackend {
   static constexpr absl::string_view kP4RuntimeUsable = "P4RuntimeUsable";
   // Validates if a gNMI can be connected to and used.
   static constexpr absl::string_view kGnmiUsable = "GnmiUsable";
+  // Validates if a gNOI system connection can be established and used.
+  static constexpr absl::string_view kGnoiSystemUsable = "GnoiSystemUsable";
 
   PINSBackend(std::vector<std::unique_ptr<thinkit::Switch>> switches);
 
@@ -48,6 +50,11 @@ class PINSBackend : public ValidatorBackend {
   absl::Status CanGetAllInterfaceOverGnmi(absl::string_view chassis,
                                           absl::Duration timeout);
 
+  // Checks if a gNOI system get time request can be sent and a response
+  // received.
+  absl::Status CanGetTimeOverGnoiSystem(absl::string_view chassis,
+                                        absl::Duration timeout);
+
  protected:
   void SetupValidations() override {
     AddCallbacksToValidation(
@@ -57,9 +64,13 @@ class PINSBackend : public ValidatorBackend {
         kGnmiUsable,
         {absl::bind_front(&PINSBackend::CanGetAllInterfaceOverGnmi, this)});
     AddCallbacksToValidation(
+        kGnoiSystemUsable,
+        {absl::bind_front(&PINSBackend::CanGetTimeOverGnoiSystem, this)});
+    AddCallbacksToValidation(
         Validator::kReady,
         {absl::bind_front(&PINSBackend::CanEstablishP4RuntimeSession, this),
-         absl::bind_front(&PINSBackend::CanGetAllInterfaceOverGnmi, this)});
+         absl::bind_front(&PINSBackend::CanGetAllInterfaceOverGnmi, this),
+         absl::bind_front(&PINSBackend::CanGetTimeOverGnoiSystem, this)});
   }
 
  private:
