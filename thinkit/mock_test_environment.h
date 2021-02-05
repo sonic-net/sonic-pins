@@ -30,6 +30,7 @@ class MockTestEnvironment : public TestEnvironment {
   MOCK_METHOD(absl::Status, AppendToTestArtifact,
               (absl::string_view filename, absl::string_view contents),
               (override));
+  MOCK_METHOD(bool, MaskKnownFailures, (), (override));
 };
 
 }  // namespace thinkit
