@@ -65,11 +65,8 @@ struct MirrorTestbedFixtureParams {
 // requirements are abstracted through the ThinKit MirrorTestbedInterface which
 // is passed as a parameter.
 //
-// Individual tests should use the googletest TEST_P macro:
-//    TEST_P(MirrorTestbedFixture, MyTestName) {}
-//
-// PINS tests needing special SetUp or TearDown can inherit from this test
-// fixture similar to:
+// New PINS tests should extend this fixture, and if needed can extend the
+// SetUp() and/or TearDown() methods:
 //    class MyPinsTest : public thinkit::MirrorTestbedFixture {
 //      void SetUp() override {
 //        MirrorTestbedFixture::SetUp();  // called first.
@@ -80,12 +77,11 @@ struct MirrorTestbedFixtureParams {
 //      void TearDown() override {
 //        // custom tear down steps ...
 //
-//        MirrorTestbedFixture::SetUp();  // called last.
+//        MirrorTestbedFixture::TearDown();  // called last.
 //      }
 //    };
 //
-//  Individual tests should use the new suite name to take advantage of the
-//  custom setup/teardown:
+//  Individual tests should use the new suite name:
 //    TEST_P(MyPinsTest, MyTestName) {}
 class MirrorTestbedFixture
     : public testing::TestWithParam<MirrorTestbedFixtureParams> {
