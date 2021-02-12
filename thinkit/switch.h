@@ -20,6 +20,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "diag/diag.grpc.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "system/system.grpc.pb.h"
@@ -50,6 +51,10 @@ class Switch {
    // Creates and returns a stub to the gNOI System service.
   virtual absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>
   CreateGnoiSystemStub() = 0;
+
+  // Creates and returns a stub to the gNOI Diag service.
+  virtual absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::Stub>>
+  CreateGnoiDiagStub() = 0;
 };
 
 }  // namespace thinkit

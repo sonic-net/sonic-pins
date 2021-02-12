@@ -19,6 +19,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "diag/diag.grpc.pb.h"
 #include "gmock/gmock.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -38,6 +39,8 @@ class MockSwitch : public Switch {
   MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>,
 
               CreateGnoiSystemStub, (), (override));
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::Stub>>,
+              CreateGnoiDiagStub, (), (override));
 };
 
 }  // namespace thinkit
