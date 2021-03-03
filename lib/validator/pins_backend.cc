@@ -22,6 +22,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -101,6 +102,19 @@ absl::Status PINSBackend::CanGetTimeOverGnoiSystem(absl::string_view chassis,
   context.set_wait_for_ready(true);
   return gutil::GrpcStatusToAbslStatus(
       gnoi_system_stub->Time(&context, request, &response));
+}
+
+absl::Status PINSBackend::CheckAllInterfaceUpOverGnmi(absl::string_view chassis,
+                                                      absl::Duration timeout) {
+  auto sut = switches_map_.find(chassis);
+  if (sut == switches_map_.end()) {
+    return absl::InternalError(
+        absl::StrCat("ValidatorBackend passed invalid chassis: ", chassis));
+  }
+
+  auto& [sut_name, sut_switch] = *sut;
+  ASSIGN_OR_RETURN(auto gnmi_stub, sut_switch->CreateGnmiStub());
+  return pins_test::CheckAllInterfaceUpOverGnmi(*gnmi_stub);
 }
 
 }  // namespace pins_test

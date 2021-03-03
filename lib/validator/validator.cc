@@ -33,7 +33,11 @@
 namespace pins_test {
 
 Validator::Validator(std::vector<std::unique_ptr<ValidatorBackend>> backends)
-    : backends_(std::move(backends)) {}
+    : backends_(std::move(backends)) {
+  for (const auto& backend : backends_) {
+    backend->SetupValidations();
+  }
+}
 
 absl::Status Validator::RunValidations(
     absl::Span<const absl::string_view> devices,

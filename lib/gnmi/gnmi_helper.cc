@@ -19,6 +19,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
@@ -171,6 +172,62 @@ absl::Status PushGnmiConfig(gnmi::gNMI::Stub& stub,
   grpc::Status status = stub.Set(&context, req, &resp);
   if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
   LOG(INFO) << "Config push response: " << resp.ShortDebugString();
+  return absl::OkStatus();
+}
+
+absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub) {
+  ASSIGN_OR_RETURN(auto req,
+                   BuildGnmiGetRequest("interfaces", gnmi::GetRequest::STATE));
+  gnmi::GetResponse resp;
+  grpc::ClientContext context;
+  grpc::Status status = stub.Get(&context, req, &resp);
+  if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
+
+  if (resp.notification_size() < 1 || resp.notification(0).update_size() < 1) {
+    return absl::InternalError(
+        absl::StrCat("Invalid response: ", resp.DebugString()));
+  }
+
+  const auto resp_json = nlohmann::json::parse(
+      resp.notification(0).update(0).val().json_ietf_val());
+  const auto oc_intf_json = resp_json.find("openconfig-interfaces:interfaces");
+  if (oc_intf_json == resp_json.end()) {
+    return absl::NotFoundError(absl::StrCat(
+        "'openconfig-interfaces:interfaces' not found: ", resp_json.dump()));
+  }
+  const auto oc_intf_list_json = oc_intf_json->find("interface");
+  if (oc_intf_list_json == oc_intf_json->end()) {
+    return absl::NotFoundError(
+        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+  }
+
+  std::vector<std::string> unavailable_interfaces;
+  for (auto const& element : oc_intf_list_json->items()) {
+    auto const element_name_json = element.value().find("name");
+    if (element_name_json == element.value().end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'name' not found: ", element.value().dump()));
+    }
+    auto const element_interface_state_json = element.value().find("state");
+    if (element_interface_state_json == element.value().end()) {
+      return absl::NotFoundError(absl::StrCat(
+          "'state' not found: ", element.value().find("name")->dump()));
+    }
+    auto const element_status_json =
+        element_interface_state_json->find("oper-status");
+    if (element_status_json == element_interface_state_json->end()) {
+      return absl::NotFoundError(absl::StrCat(
+          "'oper-status' not found: ", element.value().find("name")->dump()));
+    }
+    if (element_status_json->dump().find("UP") == grpc::string_ref::npos) {
+      unavailable_interfaces.push_back(element.value().find("name")->dump());
+    }
+  }
+  if (!unavailable_interfaces.empty()) {
+    return absl::UnavailableError(
+        absl::StrCat("Interfaces are not ready. ",
+                     absl::StrJoin(unavailable_interfaces, "\n")));
+  }
   return absl::OkStatus();
 }
 

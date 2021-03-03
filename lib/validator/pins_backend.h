@@ -38,6 +38,8 @@ class PINSBackend : public ValidatorBackend {
   static constexpr absl::string_view kGnmiUsable = "GnmiUsable";
   // Validates if a gNOI system connection can be established and used.
   static constexpr absl::string_view kGnoiSystemUsable = "GnoiSystemUsable";
+  // Validates if all ports are up.
+  static constexpr absl::string_view kPortsUp = "PortsUp";
 
   PINSBackend(std::vector<std::unique_ptr<thinkit::Switch>> switches);
 
@@ -55,6 +57,10 @@ class PINSBackend : public ValidatorBackend {
   absl::Status CanGetTimeOverGnoiSystem(absl::string_view chassis,
                                         absl::Duration timeout);
 
+  // Checks if "oper-status" of all interfaces are "UP".
+  absl::Status CheckAllInterfaceUpOverGnmi(absl::string_view chassis,
+                                           absl::Duration timeout);
+
  protected:
   void SetupValidations() override {
     AddCallbacksToValidation(
@@ -66,6 +72,9 @@ class PINSBackend : public ValidatorBackend {
     AddCallbacksToValidation(
         kGnoiSystemUsable,
         {absl::bind_front(&PINSBackend::CanGetTimeOverGnoiSystem, this)});
+    AddCallbacksToValidation(
+        kPortsUp,
+        {absl::bind_front(&PINSBackend::CheckAllInterfaceUpOverGnmi, this)});
     AddCallbacksToValidation(
         Validator::kReady,
         {absl::bind_front(&PINSBackend::CanEstablishP4RuntimeSession, this),
