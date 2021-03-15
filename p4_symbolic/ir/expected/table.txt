@@ -297,7 +297,19 @@ tables {
     }
   }
 }
-initial_control: "MyIngress.ports_exact"
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "MyIngress.ports_exact"
+  }
+}
 
 =====MyIngress.ports_exact Entries=====
 

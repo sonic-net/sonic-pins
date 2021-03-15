@@ -68,6 +68,21 @@ namespace p4_symbolic {
 namespace symbolic {
 namespace control {
 
+// Evaluate the entire program, assuming it was written against v1model.p4.
+//
+// Note: This only evaluates the ingress and egress pipelines, but doesn't
+// evaluate the parser or deparser.
+// TODO: Also add support for executing the parser.
+absl::StatusOr<SymbolicTrace> EvaluateV1model(
+    const Dataplane &data_plane, SymbolicPerPacketState *state,
+    values::P4RuntimeTranslator *translator);
+
+// Evaluate the passed pipeline.
+absl::StatusOr<SymbolicTrace> EvaluatePipeline(
+    const Dataplane &data_plane, const std::string &pipeline_name,
+    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
+    const z3::expr &guard);
+
 // Evaluate the passed control construct.
 absl::StatusOr<SymbolicTrace> EvaluateControl(
     const Dataplane &data_plane, const std::string &control_name,
