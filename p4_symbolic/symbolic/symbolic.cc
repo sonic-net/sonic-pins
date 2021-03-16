@@ -19,7 +19,6 @@
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/packet.h"
-#include "p4_symbolic/symbolic/parser.h"
 #include "p4_symbolic/symbolic/util.h"
 
 namespace p4_symbolic {
@@ -31,8 +30,7 @@ z3::context &Z3Context() {
 }
 
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
-    const Dataplane &data_plane, const std::vector<int> &physical_ports,
-    bool hardcoded_parser) {
+    const Dataplane &data_plane, const std::vector<int> &physical_ports) {
   // Use global context to define a solver.
   std::unique_ptr<z3::solver> z3_solver =
       std::make_unique<z3::solver>(Z3Context());
@@ -43,13 +41,6 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
   ASSIGN_OR_RETURN(SymbolicPerPacketState ingress_headers,
                    SymbolicGuardedMap::CreateSymbolicGuardedMap(
                        data_plane.program.headers()));
-  if (hardcoded_parser) {
-    ASSIGN_OR_RETURN(std::vector<z3::expr> parser_constraints,
-                     parser::EvaluateHardcodedParser(ingress_headers));
-    for (const z3::expr &constraint : parser_constraints) {
-      z3_solver->add(constraint);
-    }
-  }
 
   // Initially, the p4runtime translator has empty state.
   values::P4RuntimeTranslator translator;
