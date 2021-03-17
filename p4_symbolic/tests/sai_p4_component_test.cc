@@ -31,15 +31,12 @@ using ::testing::Not;
 constexpr absl::string_view kTableEntries = R"PB(
   entries {
     acl_pre_ingress_table_entry  {
-      match {}
+      match {
+        src_mac { value: "22:22:22:11:11:11" mask: "ff:ff:ff:ff:ff:ff" }
+        dst_ip { value: "10.0.10.0" mask: "255.255.255.255" }
+      }
       action { set_vrf { vrf_id: "vrf-80" } }
       priority: 1
-    }
-  }
-  entries {
-    ipv6_table_entry {
-      match { vrf_id: "vrf-80" }
-      action { drop {} }
     }
   }
   entries {
