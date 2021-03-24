@@ -60,6 +60,13 @@ z3::expr Suffix(const z3::expr &bitvector, unsigned int suffix_size) {
 // the longest.
 absl::StatusOr<std::pair<z3::expr, z3::expr>> SortCheckAndPad(
     const z3::expr &a, const z3::expr &b) {
+  // Coerce bit<1> to bool.
+  if (a.is_bool() && b.is_bv() && b.get_sort().bv_size() == 1) {
+    return std::make_pair(a, b == 1);
+  }
+  if (b.is_bool() && a.is_bv() && a.get_sort().bv_size() == 1) {
+    return std::make_pair(a == 1, b);
+  }
   // Totally incompatible sorts (e.g. int and bitvector).
   if (a.get_sort().sort_kind() != b.get_sort().sort_kind()) {
     return absl::InvalidArgumentError(absl::StrFormat(
@@ -73,7 +80,7 @@ absl::StatusOr<std::pair<z3::expr, z3::expr>> SortCheckAndPad(
     int b_len = b.get_sort().bv_size();
     return std::make_pair(Pad(a, b_len - a_len), Pad(b, a_len - b_len));
   }
-  return std::make_pair(z3::expr(a), z3::expr(b));
+  return std::make_pair(a, b);
 }
 
 // Check that the two expressions have compatible sorts, and return an

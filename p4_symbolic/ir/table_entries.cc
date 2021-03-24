@@ -18,12 +18,59 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/util/io.h"
 
 namespace p4_symbolic {
 namespace ir {
+
+namespace {
+
+absl::Status UseFullyQualifiedTableName(const pdpi::IrP4Info &p4info,
+                                        pdpi::IrTableEntry &entry) {
+  auto &alias = entry.table_name();
+  RET_CHECK(p4info.tables_by_name().count(alias) == 1)
+      << "where alias = '" << alias << "' and IR table entry =\n"
+      << entry.DebugString();
+  auto &full_name = p4info.tables_by_name().at(alias).preamble().name();
+  entry.set_table_name(full_name);
+  return absl::OkStatus();
+}
+
+absl::Status UseFullyQualifiedActionName(const pdpi::IrP4Info &p4info,
+                                         pdpi::IrActionInvocation &action) {
+  auto &alias = action.name();
+  RET_CHECK(p4info.actions_by_name().count(alias) == 1)
+      << "where alias = '" << alias;
+  auto &full_name = p4info.actions_by_name().at(alias).preamble().name();
+  action.set_name(full_name);
+  return absl::OkStatus();
+}
+
+absl::Status UseFullyQualifiedNamesInEntry(const pdpi::IrP4Info &info,
+                                           pdpi::IrTableEntry &entry) {
+  RETURN_IF_ERROR(UseFullyQualifiedTableName(info, entry));
+  switch (entry.type_case()) {
+    case pdpi::IrTableEntry::kAction:
+      return UseFullyQualifiedActionName(info, *entry.mutable_action());
+    case pdpi::IrTableEntry::kActionSet:
+      for (auto &action : *entry.mutable_action_set()->mutable_actions()) {
+        RETURN_IF_ERROR(
+            UseFullyQualifiedActionName(info, *action.mutable_action()));
+      }
+      return absl::OkStatus();
+    default:
+      break;
+  }
+  return gutil::InvalidArgumentErrorBuilder()
+         << "unexpected or missing action in table entry: "
+         << entry.DebugString();
+}
+
+}  // namespace
 
 absl::StatusOr<TableEntries> ParseTableEntries(
     const pdpi::IrP4Info &p4info,
@@ -34,27 +81,7 @@ absl::StatusOr<TableEntries> ParseTableEntries(
   for (const p4::v1::TableEntry &pi_entry : entries) {
     ASSIGN_OR_RETURN(pdpi::IrTableEntry pdpi_entry,
                      pdpi::PiTableEntryToIr(p4info, pi_entry));
-
-    // Replace table and action aliases with their respective full name.
-    const std::string &table_alias = pdpi_entry.table_name();
-    const std::string &action_alias = pdpi_entry.action().name();
-
-    // Make sure both table and action referred to by entry exist.
-    RET_CHECK(p4info.tables_by_name().count(table_alias) == 1)
-        << "where table_alias = '" << table_alias << "' and PI table entry =\n"
-        << pi_entry.DebugString();
-    RET_CHECK(p4info.actions_by_name().count(action_alias) == 1)
-        << "where action_alias = '" << action_alias
-        << "' and PI table entry =\n"
-        << pi_entry.DebugString();
-
-    const std::string &table_name =
-        p4info.tables_by_name().at(table_alias).preamble().name();
-    const std::string &action_name =
-        p4info.actions_by_name().at(action_alias).preamble().name();
-
-    pdpi_entry.mutable_action()->set_name(action_name);
-    pdpi_entry.set_table_name(table_name);
+    RETURN_IF_ERROR(UseFullyQualifiedNamesInEntry(p4info, pdpi_entry));
     output[pdpi_entry.table_name()].push_back(pdpi_entry);
   }
   return output;

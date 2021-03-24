@@ -28,9 +28,13 @@
 #include "absl/strings/str_format.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
+#include "gutil/status.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/operators.h"
+#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -158,14 +162,17 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
         absl::StrCat("Found match with non-standard type"));
   }
 
+  absl::Status mismatch =
+      gutil::InvalidArgumentErrorBuilder()
+      << "match on field '" << field_name << "' must be of type "
+      << p4::config::v1::MatchField::MatchType_Name(
+             match_definition.match_type())
+      << " according to the table definition, but got entry with match: "
+      << match_definition.ShortDebugString();
+
   switch (match_definition.match_type()) {
     case p4::config::v1::MatchField::EXACT: {
-      if (match.match_value_case() != pdpi::IrMatch::kExact) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Match definition in table has type \"Exact\" but its "
-                         "invocation in TableEntry has a different type ",
-                         match_definition.DebugString()));
-      }
+      if (match.match_value_case() != pdpi::IrMatch::kExact) return mismatch;
       ASSIGN_OR_RETURN(z3::expr value_expression,
                        values::FormatP4RTValue(
                            field_name, match_definition.type_name().name(),
@@ -174,12 +181,7 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
     }
 
     case p4::config::v1::MatchField::LPM: {
-      if (match.match_value_case() != pdpi::IrMatch::kLpm) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Match definition in table has type \"LPM\" but its "
-                         "invocation in TableEntry has a different type ",
-                         match_definition.DebugString()));
-      }
+      if (match.match_value_case() != pdpi::IrMatch::kLpm) return mismatch;
 
       ASSIGN_OR_RETURN(z3::expr value_expression,
                        values::FormatBmv2Value(match.lpm().value()));
@@ -189,12 +191,7 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
     }
 
     case p4::config::v1::MatchField::TERNARY: {
-      if (match.match_value_case() != pdpi::IrMatch::kTernary) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Match definition in table has type \"TERNARY\" but "
-                         "its invocation in TableEntry has a different type ",
-                         match_definition.DebugString()));
-      }
+      if (match.match_value_case() != pdpi::IrMatch::kTernary) return mismatch;
 
       ASSIGN_OR_RETURN(z3::expr mask_expression,
                        values::FormatBmv2Value(match.ternary().mask()));
@@ -203,6 +200,13 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
       ASSIGN_OR_RETURN(z3::expr masked_field,
                        operators::BitAnd(field_expression, mask_expression));
       return operators::Eq(masked_field, value_expression);
+    }
+
+    case p4::config::v1::MatchField::OPTIONAL: {
+      if (match.match_value_case() != pdpi::IrMatch::kOptional) return mismatch;
+      ASSIGN_OR_RETURN(z3::expr value_expression,
+                       values::FormatBmv2Value(match.optional().value()));
+      return operators::Eq(field_expression, value_expression);
     }
 
     default:
@@ -266,6 +270,20 @@ absl::StatusOr<z3::expr> EvaluateTableEntryCondition(
   return condition_expression;
 }
 
+absl::Status EvaluateSingeTableEntryAction(
+    const pdpi::IrActionInvocation &action,
+    const google::protobuf::Map<std::string, ir::Action> &actions,
+    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
+    const z3::expr &guard) {
+  // Check that the action invoked by entry exists.
+  if (actions.count(action.name()) != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "unknown action '" << action.name() << "'";
+  }
+  return action::EvaluateAction(actions.at(action.name()), action.params(),
+                                state, translator, guard);
+}
+
 // Constructs a symbolic expressions that represents the action invocation
 // corresponding to this entry.
 absl::Status EvaluateTableEntryAction(
@@ -273,19 +291,41 @@ absl::Status EvaluateTableEntryAction(
     const google::protobuf::Map<std::string, ir::Action> &actions,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
-  // Check that the action invoked by entry exists.
-  const std::string &table_name = table.table_definition().preamble().name();
-  const std::string &action_name = entry.action().name();
-  if (actions.count(action_name) != 1) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Found a match entry ", entry.DebugString(), " in table",
-                     table_name, " referring to unknown action ", action_name));
+  switch (entry.type_case()) {
+    case pdpi::IrTableEntry::kAction:
+      RETURN_IF_ERROR(EvaluateSingeTableEntryAction(entry.action(), actions,
+                                                    state, translator, guard))
+              .SetPrepend()
+          << "In table entry '" << entry.ShortDebugString() << "':";
+      return absl::OkStatus();
+    case pdpi::IrTableEntry::kActionSet: {
+      auto &action_set = entry.action_set().actions();
+      // For action sets, we introduce a new free integer variable "selector"
+      // whose value determines which action is executed: to a first
+      // approximation, action i is executed iff `selector == i`.
+      std::string selector_name =
+          absl::StrCat("action selector for ", entry.DebugString());
+      z3::expr selector = Z3Context().int_const(selector_name.c_str());
+      z3::expr unselected = Z3Context().bool_val(true);
+      for (int i = 0; i < action_set.size(); ++i) {
+        auto &action = action_set.at(i).action();
+        bool is_last_action = i == action_set.size() - 1;
+        z3::expr selected = is_last_action ? unselected : (selector == i);
+        unselected = unselected && !selected;
+        RETURN_IF_ERROR(EvaluateSingeTableEntryAction(action, actions, state,
+                                                      translator,
+                                                      guard && selected))
+                .SetPrepend()
+            << "In table entry '" << entry.ShortDebugString() << "':";
+      }
+      return absl::OkStatus();
+    }
+    default:
+      break;
   }
-
-  // Instantiate the action's symbolic expression with the entry values.
-  const ir::Action &action = actions.at(action_name);
-  return action::EvaluateAction(action, entry.action().params(), state,
-                                translator, guard);
+  return gutil::InvalidArgumentErrorBuilder()
+         << "unexpected or missing action in table entry: "
+         << entry.DebugString();
 }
 
 }  // namespace
