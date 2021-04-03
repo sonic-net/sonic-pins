@@ -23,6 +23,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
+#include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/ir.h"
 
@@ -75,7 +76,7 @@ uint64_t BitsToUint64(const std::string& data);
 
 // Returns a mutation type uniformly randomly chosen from the enum in
 // fuzzer.proto.
-Mutation FuzzMutation(absl::BitGen* gen);
+Mutation FuzzMutation(absl::BitGen* gen, const FuzzerConfig& config);
 
 // Returns a randomly generated `bits` long number in network byte order, stored
 // in a `bytes` long string. Unused bits are set to 0.
@@ -92,60 +93,70 @@ uint64_t FuzzUint64(absl::BitGen* gen, int bits);
 // Does not set the match field id. See "9.1.1. Match Format" in the P4Runtime
 // specification for details about which FieldMatch values are valid.
 // Guarantees not to be a wildcard match.
-p4::v1::FieldMatch FuzzTernaryFieldMatch(absl::BitGen* gen, int bits);
+p4::v1::FieldMatch FuzzTernaryFieldMatch(absl::BitGen* gen,
+                                         const FuzzerConfig& config, int bits);
 
 // Randomly generates a field match that conforms to the given
 // match field info. See "9.1.1. Match Format" in the P4Runtime
 // specification for details about which FieldMatch values are valid.
-p4::v1::FieldMatch FuzzFieldMatch(
-    absl::BitGen* gen, const pdpi::IrMatchFieldDefinition& ir_match_field_info);
+// May fail if a reference to another table is required.
+absl::StatusOr<p4::v1::FieldMatch> FuzzFieldMatch(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    const pdpi::IrMatchFieldDefinition& ir_match_field_info);
 
 // Randomly generates an action that conforms to the given `ir_action_info`.
 // See "9.1.2. Action Specification"  in the P4Runtime specification for details
 // about which Action values are valid.
-p4::v1::Action FuzzAction(absl::BitGen* gen,
-                          const pdpi::IrActionDefinition& ir_action_info);
+// May fail if a reference to another table is required.
+absl::StatusOr<p4::v1::Action> FuzzAction(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    const pdpi::IrActionDefinition& ir_action_info);
 
 // Randomly generates an ActionProfileActionSet that conforms to the given
 // `ir_table_info` and `ir_p4_info` for tables that support one-shot
 // action selector programming. Refer to section "9.2.3. One Shot Action
 // Selector Programming" in the P4Runtime specification for details on
 // ActionProfileActionSets.
-p4::v1::ActionProfileActionSet FuzzActionProfileActionSet(
-    absl::BitGen* gen, const pdpi::IrP4Info& ir_p4_info,
+// May fail if a reference to another table is required.
+absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
     const pdpi::IrTableDefinition& ir_table_info);
 
 // Randomly chooses an id that belongs to a table in the switch.
-int FuzzTableId(absl::BitGen* gen, const SwitchState& switch_state);
+int FuzzTableId(absl::BitGen* gen, const FuzzerConfig& config);
 
 // Randomly generates a table entry that conforms to the given table info.
 // The p4 info is used to lookup action references. See go/p4-fuzzer-design for
 // details about which TableEntry values are valid.
-p4::v1::TableEntry FuzzValidTableEntry(
-    absl::BitGen* gen, const pdpi::IrP4Info& ir_p4_info,
+// May fail if a reference to another table is required.
+absl::StatusOr<p4::v1::TableEntry> FuzzValidTableEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
     const pdpi::IrTableDefinition& ir_table_info);
 
-// Randomly generates a table entry that conforms to the table info in the
-// p4 info with the given table id. See go/p4-fuzzer-design for details about
-// which TableEntry values are valid.
-p4::v1::TableEntry FuzzValidTableEntry(absl::BitGen* gen,
-                                       const pdpi::IrP4Info& p4_info,
-                                       const uint32_t table_id);
+// Same as above, but for a table_id.
+absl::StatusOr<p4::v1::TableEntry> FuzzValidTableEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state, const uint32_t table_id);
 
 // Randomly generates a set of valid table entries that, when installed in order
 // to an empty switch state, all install correctly.
 std::vector<AnnotatedTableEntry> ValidForwardingEntries(
-    absl::BitGen* gen, const pdpi::IrP4Info& ir_p4_info, const int num_entries);
+    absl::BitGen* gen, const FuzzerConfig& config, const int num_entries);
 
 // Randomly generates a set of updates, both valid and invalid.
 AnnotatedWriteRequest FuzzWriteRequest(absl::BitGen* gen,
-                                       const pdpi::IrP4Info& ir_p4_info,
+                                       const FuzzerConfig& config,
                                        const SwitchState& switch_state);
 
 // Takes a P4 Runtime table and returns randomly chosen action ref from the
 // action refs that are not in default only scope.
 pdpi::IrActionReference ChooseNonDefaultActionRef(
-    absl::BitGen* gen, const pdpi::IrTableDefinition& ir_table_info);
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const pdpi::IrTableDefinition& ir_table_info);
 
 }  // namespace p4_fuzzer
 
