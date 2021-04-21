@@ -70,7 +70,7 @@ class SymbolicGuardedMap {
   // Guarded setter.
   // Returns an error if the assigned value has incompatible sort with the
   // pre-defined value.
-  absl::Status Set(const std::string &key, const z3::expr &value,
+  absl::Status Set(const std::string &key, z3::expr value,
                    const z3::expr &guard);
 
   // Constant iterators.
