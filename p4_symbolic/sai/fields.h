@@ -111,8 +111,27 @@ struct SaiArp {
   z3::expr target_proto_addr;
 };
 
+// Symbolic version of `struct gre_t` in headers.p4.
+struct SaiGre {
+  z3::expr valid;
+  z3::expr checksum_present;
+  z3::expr routing_present;
+  z3::expr key_present;
+  z3::expr sequence_present;
+  z3::expr strict_source_route;
+  z3::expr recursion_control;
+  z3::expr acknowledgement_present;
+  z3::expr flags;
+  z3::expr version;
+  z3::expr protocol;
+};
+
 // Symbolic version of `struct headers_t` in metadata.p4.
 struct SaiHeaders {
+  SaiEthernet erspan_ethernet;
+  SaiIpv4 erspan_ipv4;
+  SaiGre erspan_gre;
+
   SaiEthernet ethernet;
   SaiIpv4 ipv4;
   SaiIpv6 ipv6;

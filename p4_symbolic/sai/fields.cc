@@ -110,6 +110,44 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
     return z3::expr(Z3Context());
   };
 
+  auto erspan_ethernet = SaiEthernet{
+      .valid = get_field("erspan_ethernet.$valid$"),
+      .dst_addr = get_field("erspan_ethernet.dst_addr"),
+      .src_addr = get_field("erspan_ethernet.src_addr"),
+      .ether_type = get_field("erspan_ethernet.ether_type"),
+  };
+  auto erspan_ipv4 = SaiIpv4{
+      .valid = get_field("erspan_ipv4.$valid$"),
+      .version = get_field("erspan_ipv4.version"),
+      .ihl = get_field("erspan_ipv4.ihl"),
+      .dscp = get_field("erspan_ipv4.dscp"),
+      .ecn = get_field("erspan_ipv4.ecn"),
+      .total_len = get_field("erspan_ipv4.total_len"),
+      .identification = get_field("erspan_ipv4.identification"),
+      .reserved = get_field("erspan_ipv4.reserved"),
+      .do_not_fragment = get_field("erspan_ipv4.do_not_fragment"),
+      .more_fragments = get_field("erspan_ipv4.more_fragments"),
+      .frag_offset = get_field("erspan_ipv4.frag_offset"),
+      .ttl = get_field("erspan_ipv4.ttl"),
+      .protocol = get_field("erspan_ipv4.protocol"),
+      .header_checksum = get_field("erspan_ipv4.header_checksum"),
+      .src_addr = get_field("erspan_ipv4.src_addr"),
+      .dst_addr = get_field("erspan_ipv4.dst_addr"),
+  };
+  auto erspan_gre = SaiGre{
+      .valid = get_field("erspan_gre.$valid$"),
+      .checksum_present = get_field("erspan_gre.checksum_present"),
+      .routing_present = get_field("erspan_gre.routing_present"),
+      .key_present = get_field("erspan_gre.key_present"),
+      .sequence_present = get_field("erspan_gre.sequence_present"),
+      .strict_source_route = get_field("erspan_gre.strict_source_route"),
+      .recursion_control = get_field("erspan_gre.recursion_control"),
+      .acknowledgement_present =
+          get_field("erspan_gre.acknowledgement_present"),
+      .flags = get_field("erspan_gre.flags"),
+      .version = get_field("erspan_gre.version"),
+      .protocol = get_field("erspan_gre.protocol"),
+  };
   auto ethernet = SaiEthernet{
       .valid = get_field("ethernet.$valid$"),
       .dst_addr = get_field("ethernet.dst_addr"),
@@ -205,13 +243,19 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
                             });
   }
   return SaiFields{
-      .headers = SaiHeaders{.ethernet = ethernet,
-                            .ipv4 = ipv4,
-                            .ipv6 = ipv6,
-                            .udp = udp,
-                            .tcp = tcp,
-                            .icmp = icmp,
-                            .arp = arp},
+      .headers =
+          SaiHeaders{
+              .erspan_ethernet = erspan_ethernet,
+              .erspan_ipv4 = erspan_ipv4,
+              .erspan_gre = erspan_gre,
+              .ethernet = ethernet,
+              .ipv4 = ipv4,
+              .ipv6 = ipv6,
+              .udp = udp,
+              .tcp = tcp,
+              .icmp = icmp,
+              .arp = arp,
+          },
       .local_metadata = local_metadata,
       .standard_metadata = standard_metadata,
   };
