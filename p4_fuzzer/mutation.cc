@@ -25,44 +25,6 @@ uint32_t UniformNotFromList(BitGen* gen, const std::vector<uint32_t>& list) {
 
   return choice;
 }
-
-// Returns the list of all table IDs in the underlying P4 program.
-const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config) {
-  std::vector<uint32_t> table_ids;
-
-  for (auto& [table_id, table_def] : config.info.tables_by_id()) {
-    table_ids.push_back(table_id);
-  }
-
-  return table_ids;
-}
-
-// Returns the list of all action IDs in the underlying P4 program.
-const std::vector<uint32_t> AllActionIds(const FuzzerConfig& config) {
-  std::vector<uint32_t> action_ids;
-
-  for (auto& [action_id, action_def] : config.info.actions_by_id()) {
-    action_ids.push_back(action_id);
-  }
-
-  return action_ids;
-}
-
-// Returns the list of all match field IDs in the underlying P4 program for
-// table with id table_id.
-const std::vector<uint32_t> AllMatchFieldIds(const FuzzerConfig& config,
-                                             const uint32_t table_id) {
-  std::vector<uint32_t> match_ids;
-
-  for (auto& [match_id, match_def] :
-       gutil::FindOrDie(config.info.tables_by_id(), table_id)
-           .match_fields_by_id()) {
-    match_ids.push_back(match_id);
-  }
-
-  return match_ids;
-}
-
 }  // namespace
 
 absl::Status MutateInvalidMatchFieldId(BitGen* gen, TableEntry* entry,
@@ -219,7 +181,7 @@ absl::Status MutateInvalidActionSelectorWeight(BitGen* gen,
     action_profile_action->set_weight(0);
   } else {
     action_profile_action->set_weight(
-        absl::Uniform<int32_t>(*gen, -1 * kActionProfileActionMaxWeight, 0));
+        absl::Uniform<int32_t>(*gen, -1 * kActionProfileActionSetMaxWeight, 0));
   }
 
   return absl::OkStatus();
@@ -249,9 +211,11 @@ absl::Status MutateDuplicateInsert(absl::BitGen* gen, p4::v1::Update* update,
   return absl::OkStatus();
 }
 
-absl::Status MutateNonexistingDelete(absl::BitGen* gen, p4::v1::Update* update,
-                                     const FuzzerConfig& config,
-                                     const SwitchState& switch_state) {
+absl::Status MutateNonexistingModifyDelete(absl::BitGen* gen,
+                                           p4::v1::Update* update,
+                                           const FuzzerConfig& config,
+                                           const SwitchState& switch_state,
+                                           p4::v1::Update_Type type) {
   const int table_id = FuzzTableId(gen, config);
 
   ASSIGN_OR_RETURN(p4::v1::TableEntry entry,
@@ -261,7 +225,7 @@ absl::Status MutateNonexistingDelete(absl::BitGen* gen, p4::v1::Update* update,
   }
 
   *update->mutable_entity()->mutable_table_entry() = entry;
-  update->set_type(p4::v1::Update::DELETE);
+  update->set_type(type);
 
   return absl::OkStatus();
 }
@@ -374,7 +338,12 @@ absl::Status MutateUpdate(BitGen* gen, const FuzzerConfig& config,
       return MutateDuplicateInsert(gen, update, config, switch_state);
 
     case Mutation::NONEXISTING_DELETE:
-      return MutateNonexistingDelete(gen, update, config, switch_state);
+      return MutateNonexistingModifyDelete(gen, update, config, switch_state,
+                                           p4::v1::Update::DELETE);
+
+    case Mutation::NONEXISTING_MODIFY:
+      return MutateNonexistingModifyDelete(gen, update, config, switch_state,
+                                           p4::v1::Update::MODIFY);
 
     case Mutation::INVALID_PORT:
       return MutateInvalidValue(gen, update, config, switch_state, IsPort);

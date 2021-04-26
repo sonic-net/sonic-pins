@@ -125,13 +125,27 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
       break;
     }
 
-    case Update::DELETE:
+    case Update::DELETE: {
       if (tables_[table_id].erase(TableEntryKey(table_entry)) != 1) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Cannot erase non-existent table entries. Update: "
                << update.DebugString();
       }
       break;
+    }
+
+    case Update::MODIFY: {
+      auto [iter, not_present] =
+          table.insert(/*value=*/{TableEntryKey(table_entry), table_entry});
+
+      if (not_present) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Cannot modify a non-existing update. Update: "
+               << update.DebugString();
+      }
+      break;
+    }
+
     default:
       LOG(FATAL) << "Update of unsupported type: " << update.DebugString();
   }

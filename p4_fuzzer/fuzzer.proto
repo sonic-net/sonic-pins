@@ -54,6 +54,9 @@ enum Mutation {
 
   // Picks a table that is not owned by the fuzzer role.
   DIFFERENT_ROLE = 14;
+
+  // Attempts to modify a table entry that does not exist in the switch.
+  NONEXISTING_MODIFY = 15;
 }
 
 // Human readable version of a (fuzzed) table entry. Contains the original

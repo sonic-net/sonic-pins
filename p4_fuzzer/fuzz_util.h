@@ -29,10 +29,13 @@
 
 namespace p4_fuzzer {
 
-// Upper bound on the weight of each ActionProfileAction in an
-// ActionProfileActionSet for tables that support one-shot action selector
-// programming.
-constexpr int32_t kActionProfileActionMaxWeight = 100;
+// Upper bound of the number of actions in an ActionProfileActionSet for tables
+// that support one-shot action selector programming.
+constexpr uint32_t kActionProfileActionSetMaxCardinality = 32;
+// Upper bound on the weight of an ActionProfileActionSet for tables that
+// support one-shot action selector programming.
+// TODO: Update to use the @max_group_size annotation.
+constexpr int32_t kActionProfileActionSetMaxWeight = 256;
 
 // A predicate over P4 values (match field or action parameter).
 using P4ValuePredicate =
@@ -60,6 +63,17 @@ const T& UniformFromVector(absl::BitGen* gen, const std::vector<T>& vec) {
   int index = absl::Uniform<int>(*gen, /*lo=*/0, /*hi=*/vec.size());
   return vec[index];
 }
+
+// Returns the list of all table IDs in the underlying P4 program.
+const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config);
+
+// Returns the list of all action IDs in the underlying P4 program.
+const std::vector<uint32_t> AllActionIds(const FuzzerConfig& config);
+
+// Returns the list of all match field IDs in the underlying P4 program for
+// table with id table_id.
+const std::vector<uint32_t> AllMatchFieldIds(const FuzzerConfig& config,
+                                             const uint32_t table_id);
 
 // Takes a string `data` that represents a number in network byte
 // order (big-endian), and masks off all but the least significant `used_bits`
@@ -127,6 +141,13 @@ absl::StatusOr<p4::v1::FieldMatch> FuzzFieldMatch(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
     const pdpi::IrMatchFieldDefinition& ir_match_field_info);
+
+// Randomly generate an action for a table.
+// May fail if a reference to another table is required.
+absl::StatusOr<p4::v1::TableAction> FuzzAction(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    const pdpi::IrTableDefinition& table_definition);
 
 // Randomly generates an action that conforms to the given `ir_action_info`.
 // See "9.1.2. Action Specification"  in the P4Runtime specification for details

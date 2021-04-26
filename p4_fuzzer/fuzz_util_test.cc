@@ -2,15 +2,75 @@
 
 #include <memory>
 
+#include "absl/random/seed_sequences.h"
+#include "absl/status/statusor.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/collections.h"
 #include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"
+#include "gutil/testing.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/mutation.h"
 #include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
+#include "sai_p4/instantiations/google/instantiations.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace p4_fuzzer {
 namespace {
+
+using ::gutil::EqualsProto;
+
+absl::StatusOr<pdpi::IrP4Info> ConstructIrInfo(int max_group_size = 256) {
+  auto p4info = gutil::ParseProtoOrDie<p4::config::v1::P4Info>(
+      R"pb(
+        tables {
+          preamble {
+            id: 200
+            name: "ingress.routing.wcmp_group_table"
+            alias: "wcmp_group_table"
+            annotations: "@p4runtime_role(\"sdn_controller\")"
+            annotations: "@oneshot"
+          }
+          match_fields { id: 1 name: "wcmp_group_id" match_type: EXACT }
+          action_refs { id: 300 annotations: "@proto_id(1)" }
+          action_refs {
+            id: 301
+            annotations: "@defaultonly"
+            scope: DEFAULT_ONLY
+          }
+          const_default_action_id: 301
+          implementation_id: 100
+          size: 4096
+        }
+        actions { preamble { id: 301 name: "NoAction" alias: "NoAction" } }
+        actions {
+          preamble {
+            id: 300
+            name: "ingress.routing.set_nexthop_id"
+            alias: "set_nexthop_id"
+          }
+          params { id: 1 name: "nexthop_id" }
+        }
+        action_profiles {
+          preamble {
+            id: 100
+            name: "ingress.routing.wcmp_group_selector"
+            alias: "wcmp_group_selector"
+          }
+          table_ids: 200
+          with_selector: true
+          size: 65536
+        }
+      )pb");
+  p4info.mutable_action_profiles(0)->set_max_group_size(max_group_size);
+  return pdpi::CreateIrP4Info(p4info);
+}
 
 TEST(FuzzUtilTest, SetUnusedBitsToZeroInThreeBytes) {
   std::string data("\xff\xff\xff", 3);
@@ -115,6 +175,80 @@ TEST(FuzzUtilTest, FuzzUint64LargeInRange) {
     EXPECT_LT(FuzzUint64(&gen, /*bits=*/10), 1024);
   }
 }
+
+TEST(FuzzUtilTest, FuzzWriteRequestAreReproducible) {
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_info, ConstructIrInfo());
+  const SwitchState switch_state(ir_info);
+  const FuzzerConfig config{
+      .info = ir_info,
+      .ports = {"1"},
+      .qos_queues = {"0x1"},
+      .role = "sdn_controller",
+  };
+
+  // Use the same sequence seed for both generators.
+  absl::SeedSeq seed;
+  absl::BitGen gen_0(seed);
+  absl::BitGen gen_1(seed);
+
+  // Create 1000 instances, and verify that they are identical.
+  for (int i = 0; i < 1000; ++i) {
+    ASSERT_THAT(FuzzWriteRequest(&gen_0, config, switch_state),
+                EqualsProto(FuzzWriteRequest(&gen_1, config, switch_state)));
+  }
+}
+
+// Test that FuzzActionProfileActionSet correctly generates an ActionProfile
+// Action Set of acceptable weights and size.
+TEST(FuzzUtilTest, FuzzActionProfileActionSetWithinParameters) {
+  // Initialize required state.
+  absl::BitGen gen;
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_info, ConstructIrInfo());
+  const SwitchState switch_state(ir_info);
+  const FuzzerConfig config{
+      .info = ir_info,
+      .ports = {"1"},
+      .qos_queues = {"0x1"},
+      .role = "sdn_controller",
+  };
+  const pdpi::IrTableDefinition& table_definition =
+      ir_info.tables_by_id().at(200);
+
+  // Main logic.
+  for (int i = 0; i < 1000; ++i) {
+    auto action_profile_set = FuzzActionProfileActionSet(
+        &gen, config, switch_state, table_definition);
+
+    // Due to a bug in FuzzValue, FuzzActionProfileActionSet is currently flaky
+    // and may require several attempts to succeed.
+    // TODO: Remove once the bug is fixed.
+    while (!action_profile_set.ok() ||
+           action_profile_set->action_profile_actions_size() == 0) {
+      action_profile_set = FuzzActionProfileActionSet(
+          &gen, config, switch_state, table_definition);
+    }
+
+    // The number of actions should always be less than or equal to the max
+    // cardinality.
+    EXPECT_LE(action_profile_set->action_profile_actions_size(),
+              kActionProfileActionSetMaxCardinality);
+
+    int total_weight = 0;
+    for (auto& action : action_profile_set->action_profile_actions()) {
+      total_weight += action.weight();
+    }
+    EXPECT_LE(total_weight, kActionProfileActionSetMaxWeight);
+  }
+}
+
+// TODO: When we use max_group_size:
+// Test FuzzActionProfileActionSet with max weight set to 0 (correct action
+// appears to be to either generate whatever we want, or do a binary search or
+// something to determine a rough max weight for the switch).
+
+// TODO: When we use max_group_size:
+// Test that FuzzActionProfileActionSet correctly handles a request for too
+// many actions with too low weight
 
 }  // namespace
 }  // namespace p4_fuzzer
