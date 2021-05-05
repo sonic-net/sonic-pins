@@ -35,6 +35,7 @@
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/values.h"
+#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -330,7 +331,7 @@ absl::Status EvaluateTableEntryAction(
 
 }  // namespace
 
-absl::StatusOr<SymbolicTrace> EvaluateTable(
+absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const Dataplane &data_plane, const ir::Table &table,
     const std::vector<pdpi::IrTableEntry> &entries,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
@@ -478,20 +479,22 @@ absl::StatusOr<SymbolicTrace> EvaluateTable(
   }
 
   // Evaluate the next control.
-  ASSIGN_OR_RETURN(SymbolicTrace result,
+  ASSIGN_OR_RETURN(SymbolicTableMatches result,
                    control::EvaluateControl(data_plane, next_control, state,
                                             translator, guard));
 
   // The trace should not contain information for this table, otherwise, it
   // means we visited the table twice in the same execution path!
-  if (result.matched_entries.count(table_name) == 1) {
+  if (result.contains(table_name)) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Table \"", table_name, "\" was executed twice in the same path."));
   }
 
   // Add this table's match to the trace, and return it.
-  SymbolicTableMatch table_match = {guard, match_index};
-  result.matched_entries.insert({table_name, table_match});
+  result.insert({table_name, SymbolicTableMatch{
+                                 .matched = guard,
+                                 .entry_index = match_index,
+                             }});
   return result;
 }
 

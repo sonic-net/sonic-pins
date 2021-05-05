@@ -16,6 +16,7 @@
 
 #include "p4_symbolic/symbolic/guarded_map.h"
 
+#include "absl/container/btree_map.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "p4_symbolic/symbolic/operators.h"

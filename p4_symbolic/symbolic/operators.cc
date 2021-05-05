@@ -25,6 +25,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic {
 namespace symbolic {
