@@ -131,18 +131,6 @@ absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
       absl::StrCat("The system has alarms set: ", absl::StrJoin(alarms, "; ")));
 }
 
-absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
-                   thinkit_switch.CreateGnmiStub());
-  ASSIGN_OR_RETURN(std::vector<std::string> alarms,
-                   pins_test::GetAlarms(*gnmi_stub));
-  if (alarms.empty()) {
-    return absl::OkStatus();
-  }
-  return absl::FailedPreconditionError(
-      absl::StrCat("The system has alarms set: ", absl::StrJoin(alarms, "; ")));
-}
-
 absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
                          absl::Duration timeout) {
   RETURN_IF_ERROR(Pingable(thinkit_switch));
