@@ -223,8 +223,9 @@ absl::StatusOr<gnmi::GetResponse> GetAllInterfaceOverGnmi(
   return resp;
 }
 
-absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub,
-                                         absl::Duration timeout) {
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
+                                    absl::Duration timeout) {
   ASSIGN_OR_RETURN(auto req,
                    BuildGnmiGetRequest("interfaces", gnmi::GetRequest::STATE));
   gnmi::GetResponse resp;
@@ -250,7 +251,7 @@ absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub,
         absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
   }
 
-  std::vector<std::string> unavailable_interfaces;
+  absl::flat_hash_map<std::string, std::string> interface_to_oper_status_map;
   for (auto const& element : oc_intf_list_json->items()) {
     const auto element_name_json = element.value().find("name");
     if (element_name_json == element.value().end()) {
@@ -275,8 +276,23 @@ absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub,
       return absl::NotFoundError(
           absl::StrCat("'oper-status' not found: ", name));
     }
-    if (!absl::StrContains(element_status_json->dump(), "UP")) {
-      unavailable_interfaces.push_back(name);
+    interface_to_oper_status_map[name] =
+        std::string(StripQuotes(element_status_json->dump()));
+  }
+
+  return interface_to_oper_status_map;
+}
+
+absl::Status CheckAllInterfaceOperStateOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(const auto interface_to_oper_status_map,
+                   GetInterfaceToOperStatusMapOverGnmi(stub, timeout));
+
+  std::vector<std::string> unavailable_interfaces;
+  for (const auto& [interface, oper_status] : interface_to_oper_status_map) {
+    if (oper_status != interface_oper_state) {
+      unavailable_interfaces.push_back(interface);
     }
   }
   if (!unavailable_interfaces.empty()) {
@@ -343,19 +359,38 @@ GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response) {
   return elements;
 }
 
+absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(const auto interface_to_oper_status_map,
+                   GetInterfaceToOperStatusMapOverGnmi(stub, timeout));
+
+  std::vector<std::string> up_interfaces;
+  for (const auto& [interface, oper_status] : interface_to_oper_status_map) {
+    // Ignore the interfaces that is not EthernetXX. For example: bond0,
+    // Loopback0, etc.
+    if (!absl::StartsWith(interface, "Ethernet")) {
+      LOG(INFO) << "Ignoring interface: " << interface;
+      continue;
+    }
+    if (oper_status == "UP") {
+      up_interfaces.push_back(interface);
+    }
+  }
+
+  return up_interfaces;
+}
+
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     gnmi::gNMI::Stub& stub, absl::string_view if_name) {
   std::string if_req = absl::StrCat("interfaces/interface[name=", if_name,
                                     "]/state/oper-status");
   ASSIGN_OR_RETURN(auto request,
                    BuildGnmiGetRequest(if_req, gnmi::GetRequest::STATE));
-  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
 
   gnmi::GetResponse response;
   grpc::ClientContext context;
   grpc::Status status = stub.Get(&context, request, &response);
   if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
-  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
 
   if (response.notification_size() != 1 ||
       response.notification(0).update_size() != 1) {
@@ -365,7 +400,6 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
   ASSIGN_OR_RETURN(
       std::string oper_status,
       ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"));
-  LOG(INFO) << "Got the operational status: " << oper_status << ".";
 
   if (absl::StrContains((oper_status), "UP")) {
     return OperStatus::kUp;

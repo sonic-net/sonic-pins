@@ -19,6 +19,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -109,12 +110,23 @@ absl::Status CanGetAllInterfaceOverGnmi(
 absl::StatusOr<gnmi::GetResponse> GetAllInterfaceOverGnmi(
     gnmi::gNMI::Stub& stub, absl::Duration timeout = absl::Seconds(60));
 
-// Checks if all interfaces are up.
-absl::Status CheckAllInterfaceUpOverGnmi(
-    gnmi::gNMI::Stub& stub, absl::Duration timeout = absl::Seconds(60));
+// Gets the interface to oper status map.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
+                                    absl::Duration timeout);
+
+// Checks if all interfaces oper-status is up/down.
+absl::Status CheckAllInterfaceOperStateOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
+    absl::Duration timeout = absl::Seconds(60));
 
 // Returns gNMI Path for OC strings.
 gnmi::Path ConvertOCStringToPath(absl::string_view oc_path);
+
+// Gets all the EthernetXX interfaces whose operational status is UP.
+absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
+    gnmi::gNMI::StubInterface& stub,
+    absl::Duration timeout = absl::Seconds(60));
 
 // Gets the operational status of an interface.
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(

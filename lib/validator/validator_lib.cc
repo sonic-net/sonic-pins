@@ -115,7 +115,8 @@ absl::Status GnoiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
 absl::Status PortsUp(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
   ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
                    thinkit_switch.CreateGnmiStub());
-  return pins_test::CheckAllInterfaceUpOverGnmi(*gnmi_stub, timeout);
+  return pins_test::CheckAllInterfaceOperStateOverGnmi(
+      *gnmi_stub, /*interface_oper_state=*/"UP", timeout);
 }
 
 absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
