@@ -12,28 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THINKIT_MOCK_TEST_ENVIRONMENT_H_
-#define THINKIT_MOCK_TEST_ENVIRONMENT_H_
+#ifndef GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
+#define GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
 
-#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
+#include "thinkit/generic_testbed.h"
+#include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
 
 namespace thinkit {
 
-class MockTestEnvironment : public TestEnvironment {
+class MockGenericTestbed : public GenericTestbed {
  public:
-  MOCK_METHOD(absl::Status, StoreTestArtifact,
-              (absl::string_view filename, absl::string_view contents),
+  MOCK_METHOD(Switch&, Sut, (), (override));
+  MOCK_METHOD(TestEnvironment&, Environment, (), (override));
+  MOCK_METHOD(absl::StatusOr<HttpResponse>, SendRestRequestToIxia,
+              (RequestType type, absl::string_view url,
+               absl::string_view payload),
               (override));
-  MOCK_METHOD(absl::Status, AppendToTestArtifact,
-              (absl::string_view filename, absl::string_view contents),
-              (override));
-  MOCK_METHOD(bool, MaskKnownFailures, (), (override));
-  MOCK_METHOD(void, SetTestCaseID, (absl::string_view), (override));
 };
 
 }  // namespace thinkit
 
-#endif  // THINKIT_MOCK_TEST_ENVIRONMENT_H_
+#endif  // GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
