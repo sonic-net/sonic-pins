@@ -49,6 +49,9 @@ class TestEnvironment {
 
   // Should known failures be masked, or should the test fail instead?
   virtual bool MaskKnownFailures() = 0;
+
+  // Set the `test_case_id` for use by tracking tools.
+  virtual void SetTestCaseID(absl::string_view test_case_id) {}
 };
 
 }  // namespace thinkit

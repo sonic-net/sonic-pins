@@ -24,9 +24,9 @@
 
 namespace thinkit {
 
-// RemoteFile represents a file on a remote device. It is meant to be used as a
-// parameter object with designated initializers.
-struct RemoteFile {
+// RemoteFile represents a file path on a remote device. It is meant to be used
+// as a parameter object with designated initializers.
+struct RemotePath {
   absl::string_view device;
   absl::string_view file_path;
 };
@@ -48,24 +48,30 @@ class SSHClient {
   // Copies a local file's contents to a remote destination file, creating a new
   // file if needed and replacing any existing contents that was there.
   virtual absl::Status PutFile(absl::string_view source,
-                               const RemoteFile& destination,
+                               const RemotePath& destination,
                                absl::Duration timeout) = 0;
 
   // Puts the provided contents into a remote destination file, creating a new
   // file if needed and replacing any existing contents that was there.
   virtual absl::Status PutFileContents(absl::string_view contents,
-                                       const RemoteFile& destination,
+                                       const RemotePath& destination,
                                        absl::Duration timeout) = 0;
 
   // Copies a remote file's contents to a local file, creating a new
   // file if needed and replacing any existing contents that was there.
-  virtual absl::Status GetFile(const RemoteFile& source,
+  virtual absl::Status GetFile(const RemotePath& source,
                                absl::string_view destination,
                                absl::Duration timeout) = 0;
 
   // Returns the contents of a remote file.
   virtual absl::StatusOr<std::string> GetFileContents(
-      const RemoteFile& source, absl::Duration timeout) = 0;
+      const RemotePath& source, absl::Duration timeout) = 0;
+
+  // Copies a remote directory to a local directory, creating a new directory if
+  // needed.
+  virtual absl::Status GetDirectory(const RemotePath& source,
+                                    absl::string_view destination,
+                                    absl::Duration timeout) = 0;
 };
 
 }  // namespace thinkit

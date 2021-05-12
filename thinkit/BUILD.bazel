@@ -27,9 +27,21 @@ package(
 cc_library(
     name = "thinkit",
     deps = [
+        ":generic_testbed",
         ":mirror_testbed",
         ":switch",
         ":test_environment",
+    ],
+)
+
+cc_library(
+    name = "thinkit_mocks",
+    testonly = 1,
+    deps = [
+        ":mock_generic_testbed",
+        ":mock_mirror_testbed",
+        ":mock_switch",
+        ":mock_test_environment",
     ],
 )
 
@@ -201,6 +213,40 @@ cc_test(
     srcs = ["mock_ssh_client_test.cc"],
     deps = [
         ":mock_ssh_client",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "generic_testbed",
+    hdrs = ["generic_testbed.h"],
+    deps = [
+        ":switch",
+        ":test_environment",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "mock_generic_testbed",
+    testonly = 1,
+    hdrs = ["mock_generic_testbed.h"],
+    deps = [
+        ":generic_testbed",
+        ":switch",
+        ":test_environment",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "mock_generic_testbed_test",
+    srcs = ["mock_generic_testbed_test.cc"],
+    deps = [
+        ":mock_generic_testbed",
         "@com_google_googletest//:gtest_main",
     ],
 )
