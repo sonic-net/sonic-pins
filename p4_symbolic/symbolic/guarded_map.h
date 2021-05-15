@@ -64,13 +64,13 @@ class SymbolicGuardedMap {
   SymbolicGuardedMap &operator=(SymbolicGuardedMap &&other) = delete;
 
   // Getters.
-  bool ContainsKey(const std::string &key) const;
-  absl::StatusOr<z3::expr> Get(const std::string &key) const;
+  bool ContainsKey(absl::string_view key) const;
+  absl::StatusOr<z3::expr> Get(absl::string_view key) const;
 
   // Guarded setter.
   // Returns an error if the assigned value has incompatible sort with the
   // pre-defined value.
-  absl::Status Set(const std::string &key, z3::expr value,
+  absl::Status Set(absl::string_view key, z3::expr value,
                    const z3::expr &guard);
 
   // Constant iterators.

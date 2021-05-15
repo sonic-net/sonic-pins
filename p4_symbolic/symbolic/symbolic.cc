@@ -47,6 +47,10 @@ absl::StatusOr<z3::expr> IsDropped(const SymbolicPerPacketState &state) {
   return operators::Eq(egress_spec, EgressSpecDroppedValue());
 }
 
+absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state) {
+  return state.Get(std::string(kGotClonedPseudoField));
+}
+
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
     const Dataplane &data_plane, const std::vector<int> &physical_ports) {
   // Use global context to define a solver.
@@ -72,6 +76,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
 
   // Alias the event that the packet is dropped for ease of use in assertions
   ASSIGN_OR_RETURN(z3::expr dropped, IsDropped(egress_headers));
+  ASSIGN_OR_RETURN(z3::expr got_cloned, GotCloned(egress_headers));
 
   // Restrict ports to the available physical ports.
   if (absl::c_find(physical_ports, kDropPort) != physical_ports.end()) {
@@ -102,6 +107,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
   auto trace = SymbolicTrace{
       .matched_entries = std::move(matched_entries),
       .dropped = dropped,
+      .got_cloned = got_cloned,
   };
   auto context = SymbolicContext{
       .ingress_port = ingress_port,

@@ -68,9 +68,11 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
     }
   }
 
-  // Finally, we have a special field marking if the packet represented by
-  // these headers was dropped.
-  symbolic_headers.insert({"$dropped$", Z3Context().bool_val(false)});
+  // Initialize pseudo header fields.
+  symbolic_headers.insert({
+      std::string(kGotClonedPseudoField),
+      Z3Context().bool_val(false),
+  });
   return symbolic_headers;
 }
 
@@ -104,6 +106,8 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
 
   // Extract the trace (matches on every table).
   ASSIGN_OR_RETURN(bool dropped, EvalZ3Bool(context.trace.dropped, model));
+  ASSIGN_OR_RETURN(bool got_cloned,
+                   EvalZ3Bool(context.trace.got_cloned, model));
   absl::btree_map<std::string, ConcreteTableMatch> matched_entries;
   for (const auto &[table, match] : context.trace.matched_entries) {
     ASSIGN_OR_RETURN(bool matched, EvalZ3Bool(match.matched, model));
@@ -123,6 +127,7 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
           ConcreteTrace{
               .matched_entries = matched_entries,
               .dropped = dropped,
+              .got_cloned = got_cloned,
           },
   };
 }

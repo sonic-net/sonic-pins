@@ -26,6 +26,7 @@
 
 #include "absl/container/btree_map.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "gutil/status.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/table_entries.h"
@@ -35,6 +36,10 @@
 
 namespace p4_symbolic {
 namespace symbolic {
+
+// Boolean pseudo header field that is set to true by p4-symbolic if the packet
+// gets cloned. Not an actual header field, but convenient for analysis.
+constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
 
 // Maps the name of a header field in the p4 program to its concrete value.
 using ConcretePerPacketState = absl::btree_map<std::string, std::string>;
@@ -58,6 +63,7 @@ using SymbolicPerPacketState = SymbolicGuardedMap;
 // processing. See v1model.p4 for details.
 z3::expr EgressSpecDroppedValue();
 absl::StatusOr<z3::expr> IsDropped(const SymbolicPerPacketState &state);
+absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state);
 
 // Expresses a concrete match for a corresponding concrete packet with a
 // table in the program.
@@ -97,9 +103,12 @@ struct ConcreteTrace {
   // Can be extended more in the future to include useful
   // flags about dropping the packet, taking specific code (e.g. if)
   // branches, vrf, other interesting events, etc.
-  bool dropped;  // true if the packet was dropped.
+  bool dropped;     // true if the packet was dropped.
+  bool got_cloned;  // true if the packet got cloned.
   std::string to_string() const {
-    auto result = absl::StrCat("dropped = ", dropped);
+    std::string result;
+    absl::StrAppend(&result, "dropped = ", dropped, "\n");
+    absl::StrAppend(&result, "got cloned = ", got_cloned, "\n");
     for (const auto &[table, match] : matched_entries) {
       result = absl::StrCat(result, "\n", table, " => ", match.to_string());
     }
@@ -114,6 +123,7 @@ struct SymbolicTrace {
   // TODO: Rename to matches_by_table_name.
   SymbolicTableMatches matched_entries;
   z3::expr dropped;
+  z3::expr got_cloned;
 };
 
 // Specifies the concrete data inside a packet.
