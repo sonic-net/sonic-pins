@@ -26,11 +26,11 @@ cc_binary(
     ],
     deps = [
         ":parser",
+        "//gutil:io",
         "//gutil:status",
         "//p4_symbolic/bmv2",
         "//p4_symbolic/sai:parser",
         "//p4_symbolic/symbolic",
-        "//p4_symbolic/util",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",
@@ -45,7 +45,8 @@ cc_library(
     srcs = ["parser.cc"],
     hdrs = ["parser.h"],
     deps = [
-	"//gutil:proto",
+        "//gutil:io",
+        "//gutil:proto",
         "//gutil:status",
 	"//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/bmv2",
@@ -53,7 +54,6 @@ cc_library(
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/ir:pdpi_driver",
         "//p4_symbolic/symbolic",
-	"//p4_symbolic/util",
         "@com_google_absl//absl/types:span",
     ],
 )
