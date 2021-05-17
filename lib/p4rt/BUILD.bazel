@@ -31,3 +31,25 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "packet_listener",
+    testonly = 1,
+    srcs = ["packet_listener.cc"],
+    hdrs = ["packet_listener.h"],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//thinkit:control_interface",
+        "//thinkit:packet_generation_finalizer",
+        "//thinkit:switch",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+    ],
+)

@@ -16,21 +16,44 @@
 #define GOOGLE_LIB_GPINS_CONTROL_INTERFACE_H_
 
 #include <memory>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "system/system.grpc.pb.h"
 #include "thinkit/control_interface.h"
+#include "thinkit/packet_generation_finalizer.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {
 
 class GpinsControlInterface : public thinkit::ControlInterface {
  public:
-  GpinsControlInterface(std::unique_ptr<thinkit::Switch> sut)
-      : sut_(std::move(sut)) {}
+  static absl::StatusOr<GpinsControlInterface> CreateGpinsControlInterface(
+      std::unique_ptr<thinkit::Switch> sut);
+
+  GpinsControlInterface(
+      std::unique_ptr<thinkit::Switch> sut,
+      std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
+      pdpi::IrP4Info ir_p4info,
+      absl::flat_hash_map<std::string, std::string> interface_name_to_port_id);
+
+  absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
+  CollectPackets(thinkit::PacketCallback callback) override;
+
+  absl::Status SendPacket(absl::string_view interface,
+                          absl::string_view packet) override;
+
+  absl::Status SendPackets(absl::string_view interface,
+                           absl::Span<const std::string> packets) override;
 
   absl::Status SetAdminLinkState(absl::Span<const std::string> interfaces,
                                  thinkit::LinkState state) override;
@@ -53,6 +76,10 @@ class GpinsControlInterface : public thinkit::ControlInterface {
 
  private:
   std::unique_ptr<thinkit::Switch> sut_;
+  std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
+  pdpi::IrP4Info ir_p4info_;
+  absl::flat_hash_map<std::string, std::string> interface_name_to_port_id_;
+  absl::flat_hash_map<std::string, std::string> interface_port_id_to_name_;
 };
 
 }  // namespace pins_test

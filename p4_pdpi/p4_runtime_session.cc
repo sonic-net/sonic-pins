@@ -218,6 +218,26 @@ P4RuntimeSession::GetForwardingPipelineConfig(
   return response;
 }
 
+bool P4RuntimeSession::StreamChannelRead(
+    p4::v1::StreamMessageResponse& response,
+    std::optional<absl::Duration> timeout) {
+  absl::MutexLock lock(&stream_read_lock_);
+  auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
+    return !stream_messages_.empty() || !is_stream_up_;
+  };
+  if (timeout.has_value()) {
+    stream_read_lock_.AwaitWithTimeout(absl::Condition(&cond), *timeout);
+  } else {
+    stream_read_lock_.Await(absl::Condition(&cond));
+  }
+  if (!stream_messages_.empty()) {
+    response = stream_messages_.front();
+    stream_messages_.pop();
+    return true;
+  }
+  return false;
+}
+
 bool P4RuntimeSession::StreamChannelWrite(
     const p4::v1::StreamMessageRequest& request) {
   absl::MutexLock lock(&stream_write_lock_);

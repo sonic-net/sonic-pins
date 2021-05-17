@@ -14,18 +14,30 @@
 
 #include "lib/gpins_control_interface.h"
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/time.h"
 #include "diag/diag.grpc.pb.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/p4rt/packet_listener.h"
 #include "lib/validator/validator_lib.h"
+#include "p4_pdpi/packetlib/packetlib.h"
+#include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_pdpi/pd.h"
 #include "proto/gnmi/gnmi.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
+#include "include/nlohmann/json.hpp"
+#include "tests/forwarding/util.h"
 #include "thinkit/control_interface.h"
+#include "thinkit/packet_generation_finalizer.h"
 
 namespace pins_test {
 
@@ -48,6 +60,42 @@ absl::StatusOr<absl::string_view> GetLinkState(thinkit::LinkState state) {
 }
 
 }  // namespace
+
+GpinsControlInterface::GpinsControlInterface(
+    std::unique_ptr<thinkit::Switch> sut,
+    std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
+    pdpi::IrP4Info ir_p4info,
+    absl::flat_hash_map<std::string, std::string> interface_name_to_port_id)
+    : sut_(std::move(sut)),
+      control_p4_session_(std::move(control_p4_session)),
+      ir_p4info_(std::move(ir_p4info)),
+      interface_name_to_port_id_(std::move(interface_name_to_port_id)) {
+  for (const auto& [name, port_id] : interface_name_to_port_id_) {
+    interface_port_id_to_name_[port_id] = name;
+  }
+}
+
+absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
+GpinsControlInterface::CollectPackets(thinkit::PacketCallback callback) {
+  return absl::make_unique<PacketListener>(
+      control_p4_session_.get(), &ir_p4info_, &interface_name_to_port_id_,
+      callback);
+}
+
+absl::Status GpinsControlInterface::SendPacket(absl::string_view interface,
+                                               absl::string_view packet) {
+  return gpins::InjectEgressPacket(interface_name_to_port_id_[interface],
+                                   std::string(packet), ir_p4info_,
+                                   control_p4_session_.get());
+}
+
+absl::Status GpinsControlInterface::SendPackets(
+    absl::string_view interface, absl::Span<const std::string> packets) {
+  for (absl::string_view packet : packets) {
+    RETURN_IF_ERROR(SendPacket(interface, packet));
+  }
+  return absl::OkStatus();
+}
 
 absl::Status GpinsControlInterface::SetAdminLinkState(
     absl::Span<const std::string> interfaces, thinkit::LinkState state) {
@@ -162,8 +210,6 @@ GpinsControlInterface::GetUpLinks(absl::Span<const std::string> interfaces) {
   return up_links;
 }
 
-absl::Status GpinsControlInterface::CheckUp() {
-  return pins_test::SwitchReady(*sut_);
-}
+absl::Status GpinsControlInterface::CheckUp() { return SwitchReady(*sut_); }
 
 }  // namespace pins_test
