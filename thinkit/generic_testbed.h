@@ -17,8 +17,11 @@
 
 #include <string>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "thinkit/control_interface.h"
+#include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
 
@@ -37,6 +40,13 @@ enum class RequestType {
   kDelete,
 };
 
+// InterfaceInfo represents the mode of an interface and the name of the peer
+// interface.
+struct InterfaceInfo {
+  third_party::pins_infra::thinkit::InterfaceMode interface_mode;
+  std::string peer_interface_name;  // Empty if not applicable.
+};
+
 // The GenericTestbed interface represents a testbed with control interface and
 // Ixia interface.
 class GenericTestbed {
@@ -46,8 +56,16 @@ class GenericTestbed {
   // Returns the switch (aka system) under test.
   virtual Switch& Sut() = 0;
 
+  // Returns the control interface responsible for packet injection and various
+  // management operations.
+  virtual ControlInterface& Interface() = 0;
+
   // Returns the test environment in which the test is run.
   virtual TestEnvironment& Environment() = 0;
+
+  // Returns the information for all SUT interfaces.
+  virtual absl::flat_hash_map<std::string, InterfaceInfo>
+  GetSutInterfaceInfo() = 0;
 
   // Sends a REST request to the Ixia and returns the response.
   virtual absl::StatusOr<HttpResponse> SendRestRequestToIxia(

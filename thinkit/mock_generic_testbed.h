@@ -18,6 +18,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
+#include "thinkit/control_interface.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
@@ -27,7 +28,10 @@ namespace thinkit {
 class MockGenericTestbed : public GenericTestbed {
  public:
   MOCK_METHOD(Switch&, Sut, (), (override));
+  MOCK_METHOD(ControlInterface&, Interface, (), (override));
   MOCK_METHOD(TestEnvironment&, Environment, (), (override));
+  MOCK_METHOD((absl::flat_hash_map<std::string, InterfaceInfo>),
+              GetSutInterfaceInfo, (), (override));
   MOCK_METHOD(absl::StatusOr<HttpResponse>, SendRestRequestToIxia,
               (RequestType type, absl::string_view url,
                absl::string_view payload),

@@ -19,6 +19,16 @@ package(
 )
 
 proto_library(
+    name = "generic_testbed_proto",
+    srcs = ["generic_testbed.proto"],
+)
+
+cc_proto_library(
+    name = "generic_testbed_cc_proto",
+    deps = [":generic_testbed_proto"],
+)
+
+proto_library(
     name = "metrics_proto",
     srcs = ["metrics.proto"],
 )

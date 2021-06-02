@@ -32,10 +32,11 @@ class BazelTestEnvironment : public TestEnvironment {
 
   absl::Status StoreTestArtifact(absl::string_view filename,
                                  absl::string_view contents) override;
+  using TestEnvironment::StoreTestArtifact; // Inherit protobuf overload.
 
   absl::Status AppendToTestArtifact(absl::string_view filename,
                                     absl::string_view contents) override;
-
+  using TestEnvironment::AppendToTestArtifact; // Inherit protobuf overload.
 
   bool MaskKnownFailures() { return mask_known_failures_; };
 
