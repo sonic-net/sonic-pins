@@ -18,30 +18,48 @@
 #include <ios>
 
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "thinkit/test_environment.h"
 
 namespace thinkit {
 
 // Simple `thinkit::TestEnvironment` that works well with the Bazel build
 // system.
+// Calls to {Store,AppendTo}TestArtifact within a BazelTestEnvironment
+// object are guaranteed to be thread-safe due to writes being sequential.
 class BazelTestEnvironment : public TestEnvironment {
  public:
   BazelTestEnvironment() = delete;
-  BazelTestEnvironment(bool mask_known_failures)
-      : mask_known_failures_{mask_known_failures} {}
+  explicit BazelTestEnvironment(
+      bool mask_known_failures,
+      std::function<void(absl::string_view)> set_test_case_id = [](auto) {})
+      : mask_known_failures_{mask_known_failures},
+        set_test_case_id_(std::move(set_test_case_id)) {}
 
   absl::Status StoreTestArtifact(absl::string_view filename,
-                                 absl::string_view contents) override;
-  using TestEnvironment::StoreTestArtifact; // Inherit protobuf overload.
+                                 absl::string_view contents)
+      ABSL_LOCKS_EXCLUDED(write_mutex_) override;
+  using TestEnvironment::StoreTestArtifact;  // Inherit protobuf overload which
+                                             // calls string_view version.
 
   absl::Status AppendToTestArtifact(absl::string_view filename,
-                                    absl::string_view contents) override;
-  using TestEnvironment::AppendToTestArtifact; // Inherit protobuf overload.
+                                    absl::string_view contents)
+      ABSL_LOCKS_EXCLUDED(write_mutex_) override;
+  using TestEnvironment::AppendToTestArtifact;  // Inherit protobuf overload
+                                                // which calls string_view
+                                                // version.
 
   bool MaskKnownFailures() { return mask_known_failures_; };
 
+  void SetTestCaseID(absl::string_view test_case_id) override {
+    set_test_case_id_(test_case_id);
+  }
+
  private:
   bool mask_known_failures_;
+  std::function<void(absl::string_view)> set_test_case_id_;
+  // The mutex is used to ensure that writes to disk are sequential.
+  absl::Mutex write_mutex_;
 };
 
 }  // namespace thinkit

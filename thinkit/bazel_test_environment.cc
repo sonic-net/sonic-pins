@@ -24,6 +24,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "thinkit/test_environment.h"
@@ -34,7 +35,7 @@ namespace {
 
 absl::StatusOr<std::string> ArtifactDirectory() {
   // Pick appropriate artifact directory using Bazel environment variables, see
-  // https://docs.bazel.build/versions/master/test-encyclopedia.html#initial-conditions
+  // https://docs.bazel.build/versions/main/test-encyclopedia.html#initial-conditions
   char* base_dir = std::getenv("TEST_UNDECLARED_OUTPUTS_DIR");
   if (base_dir == nullptr) {
     base_dir = std::getenv("TEST_TMPDIR");
@@ -84,11 +85,13 @@ absl::Status WriteToTestArtifact(absl::string_view filename,
 
 absl::Status BazelTestEnvironment::StoreTestArtifact(
     absl::string_view filename, absl::string_view contents) {
+  absl::MutexLock lock(&this->write_mutex_);
   return WriteToTestArtifact(filename, contents, std::ios_base::trunc);
 }
 
 absl::Status BazelTestEnvironment::AppendToTestArtifact(
     absl::string_view filename, absl::string_view contents) {
+  absl::MutexLock lock(&this->write_mutex_);
   return WriteToTestArtifact(filename, contents, std::ios_base::app);
 }
 

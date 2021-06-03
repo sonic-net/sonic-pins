@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package third_party.pins_infra.thinkit;
+package thinkit;
 
 option cc_generic_services = false;
 

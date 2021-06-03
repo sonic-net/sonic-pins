@@ -18,8 +18,10 @@
 #include <memory>
 
 #include "absl/memory/memory.h"
+#include "absl/status/statusor.h"
 #include "gtest/gtest.h"
 #include "thinkit/generic_testbed.h"
+#include "thinkit/proto/generic_testbed.pb.h"
 
 namespace thinkit {
 
@@ -34,7 +36,10 @@ class GenericTestbedInterface {
   virtual void SetUp() = 0;
   virtual void TearDown() = 0;
 
-  virtual GenericTestbed& GetGenericTestbed() = 0;
+  // Declares the test requirements for this test and returns a testbed that can
+  // support them.
+  virtual absl::StatusOr<std::unique_ptr<GenericTestbed>>
+  GetTestbedWithRequirements(const thinkit::TestRequirements& requirements) = 0;
 };
 
 // The Thinkit `TestParams` defines test parameters to
@@ -84,8 +89,9 @@ class GenericTestbedFixture : public testing::TestWithParam<TestParams> {
 
   // Accessor for the Generic testbed. This is only safe to be called after the
   // SetUp has completed.
-  GenericTestbed& GetGenericTestbed() {
-    return generic_testbed_interface_->GetGenericTestbed();
+  absl::StatusOr<std::unique_ptr<GenericTestbed>> GetTestbedWithRequirements(
+      const thinkit::TestRequirements& requirements) {
+    return generic_testbed_interface_->GetTestbedWithRequirements(requirements);
   }
 
   std::string GetGnmiConfig() { return GetParam().gnmi_config; }
