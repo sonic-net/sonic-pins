@@ -1,7 +1,9 @@
 #include "p4_fuzzer/fuzz_util.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <limits>
 
 #include "absl/algorithm/container.h"
 #include "absl/base/casts.h"
@@ -385,6 +387,24 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
 
 }  // namespace
 
+// Gets the action profile corresponding to the given table.
+absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
+    const FuzzerConfig& config, int table_id) {
+  for (const auto& [id, action_profile_definition] :
+       config.info.action_profiles_by_id()) {
+    if (action_profile_definition.has_action_profile()) {
+      // Does the action profile apply to the given table?
+      auto& action_profile = action_profile_definition.action_profile();
+      if (absl::c_linear_search(action_profile.table_ids(), table_id)) {
+        return action_profile;
+      }
+    }
+  }
+
+  return gutil::NotFoundErrorBuilder()
+         << "No action profile corresponds to table with id " << table_id;
+}
+
 // Returns the list of all table IDs in the underlying P4 program.
 const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
@@ -531,6 +551,8 @@ std::string FuzzNonZeroBits(absl::BitGen* gen, int bits) {
 }
 
 // Fuzzes a value, with special handling for ports and IDs.
+// TODO: This will sometimes return an empty string, which is
+// always an invalid value.
 absl::StatusOr<std::string> FuzzValue(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
@@ -562,8 +584,6 @@ absl::StatusOr<std::string> FuzzValue(
     return FuzzRandomId(gen);
   }
 
-  // Some other value: Normally fuzz bits randomly.
-  if (non_zero) return FuzzNonZeroBits(gen, bits);
   return FuzzBits(gen, bits);
 }
 
@@ -622,7 +642,7 @@ absl::StatusOr<p4::v1::FieldMatch> FuzzExactFieldMatch(
   ASSIGN_OR_RETURN(
       std::string value,
       FuzzValue(gen, config, switch_state, field.type_name(), field.bitwidth(),
-                ir_match_field_info.references(), /*non_zero=*/false));
+                ir_match_field_info.references(), /*non_zero=*/true));
 
   match.mutable_exact()->set_value(value);
   return match;
@@ -691,7 +711,7 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
         std::string value,
         FuzzValue(gen, config, switch_state, ir_param.param().type_name(),
                   ir_param.param().bitwidth(), ir_param.references(),
-                  /*non_zero=*/false));
+                  /*non_zero=*/true));
     param->set_value(value);
   }
 
@@ -699,12 +719,10 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
 }
 
 // Gets a set of actions with a skewed distribution of weights, which add up to
-// at most kActionProfileActionSetMaxWeight by repeatedly sampling a uniform
-// weight from 1 to the maximum possible weight remaining.
-// We could achieve uniform weights between 1 and
-// kActionProfileActionSetMaxWeight, which add up to
-// kActionProfileActionSetMaxWeight by using e.g. a Dirichlet Distribution via
-// Pólya's urn (see
+// at most the max_group_size of the action profile by repeatedly sampling a
+// uniform weight from 1 to the maximum possible weight remaining. We could
+// achieve uniform weights between 1 and max_group_size, which add up to
+// max_group_size by using e.g. a Dirichlet Distribution via Pólya's urn (see
 // https://en.wikipedia.org/wiki/Dirichlet_distribution#P%C3%B3lya's_urn).
 // However, uniform sampling gives us highly clustered weights almost all the
 // time and we prefer to generate skewed weights more often. Therefore, this
@@ -715,18 +733,61 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     const pdpi::IrTableDefinition& ir_table_info) {
   p4::v1::ActionProfileActionSet action_set;
 
-  int number_of_actions =
-      Uniform<int>(*gen, 0, kActionProfileActionSetMaxCardinality);
-  // Since each action must have at least weight 1, any given action can have at
-  // most weight kActionProfileMaxWeight - (number_of_actions - 1).
-  int max_weight = kActionProfileActionSetMaxWeight - (number_of_actions - 1);
+  ASSIGN_OR_RETURN(auto action_profile,
+                   GetActionProfile(config, ir_table_info.preamble().id()));
 
+  // The max_group_size specifies the maximum total weight of a group of actions
+  // in an Action Selector (described by an ActionProfileActionSet).
+  // If max_group_size is 0, then any weights less than size are allowed by the
+  // server.
+  int unallocated_weight = action_profile.max_group_size() == 0
+                               ? action_profile.size()
+                               : action_profile.max_group_size();
+
+  // Note that the semantics of `size` in an action selector is the maximum
+  // sum of all member weights across ALL selector groups. The `max_group_size`
+  // is the maximum sum of all member weights within a single group.
+  // Thus, the maximum total weight of a single group should be
+  // no larger than either the max_group_size or the size.
+  // TODO: When https://github.com/p4lang/p4runtime/issues/355 is fixed,
+  // `max_group_size` will never be greater than `size`, rendering this
+  // assignment unnecessary.
+  unallocated_weight = static_cast<int>(
+      std::min(int64_t{unallocated_weight}, action_profile.size()));
+
+  // It is entirely unclear what should happen if max_group_size or size is
+  // negative or if size is 0. Since these values are nonsensical, we will
+  // return an InvalidArgumentError until the specification changes.
+  // TODO: This if-statement can also disappear if
+  // https://github.com/p4lang/p4runtime/issues/355 is resolved, ruling out
+  // these cases.
+  if (unallocated_weight <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "non-positive size '" << action_profile.size()
+           << "' or negative max_group_size '"
+           << action_profile.max_group_size() << "' in action profile '"
+           << action_profile.preamble().alias() << "'";
+  }
+
+  // We want to randomly select some number of actions up to our max
+  // cardinality; however, we can't have more actions than the amount of weight
+  // we support since every action must have weight >= 1.
+  int number_of_actions = Uniform<int>(
+      absl::IntervalClosedClosed, *gen, 0,
+      std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
+
+  // TODO: Repeated nexthop members should be supported. Remove
+  // this workaround once the bug on the switch has been fixed.
   // Action sets in GPINS cannot have repeated nexthop members. We hard-code
   // this restriction here in the fuzzer.
   absl::flat_hash_set<std::string> used_nexthops;
   bool is_wcmp_table =
       ir_table_info.preamble().id() == ROUTING_WCMP_GROUP_TABLE_ID;
   for (int i = 0; i < number_of_actions; i++) {
+    // Since each action must have at least weight 1, we need to take the number
+    // of remaining actions into account to determine the acceptable max weight.
+    int remaining_actions = number_of_actions - i - 1;
+    int max_weight = unallocated_weight - remaining_actions;
     ASSIGN_OR_RETURN(auto action,
                      FuzzActionProfileAction(gen, config, switch_state,
                                              ir_table_info, max_weight));
@@ -740,7 +801,7 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
       continue;
     }
     *action_set.add_action_profile_actions() = action;
-    max_weight -= action.weight();
+    unallocated_weight -= action.weight();
   }
 
   return action_set;

@@ -1,18 +1,21 @@
 #include "p4_fuzzer/fuzz_util.h"
 
 #include <memory>
+#include <string>
 
+#include "absl/random/distributions.h"
 #include "absl/random/seed_sequences.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/mutation.h"
 #include "p4_pdpi/ir.h"
@@ -26,50 +29,110 @@ namespace {
 
 using ::gutil::EqualsProto;
 
+// Table, table actions, and corresponding action profile IDs.
+constexpr int kTableId = 100;
+constexpr int kActionId = 200;
+constexpr int kActionNoOpId = 201;
+constexpr int kActionProfileId = 300;
+constexpr int kActionProfileSize = 65536;
+
 absl::StatusOr<pdpi::IrP4Info> ConstructIrInfo(int max_group_size = 256) {
   auto p4info = gutil::ParseProtoOrDie<p4::config::v1::P4Info>(
       R"pb(
         tables {
           preamble {
-            id: 200
+            # id : kTableId
             name: "ingress.routing.wcmp_group_table"
             alias: "wcmp_group_table"
             annotations: "@p4runtime_role(\"sdn_controller\")"
             annotations: "@oneshot"
           }
           match_fields { id: 1 name: "wcmp_group_id" match_type: EXACT }
-          action_refs { id: 300 annotations: "@proto_id(1)" }
           action_refs {
-            id: 301
+            # id: kActionId
+            annotations: "@proto_id(1)"
+          }
+          action_refs {
+            # id: kActionNoOpId
             annotations: "@defaultonly"
             scope: DEFAULT_ONLY
           }
-          const_default_action_id: 301
-          implementation_id: 100
+          # const_default_action_id: kActionNoOpId
+          # implementation_id: kActionProfileId
           size: 4096
         }
-        actions { preamble { id: 301 name: "NoAction" alias: "NoAction" } }
         actions {
           preamble {
-            id: 300
+            # id: kActionId
             name: "ingress.routing.set_nexthop_id"
             alias: "set_nexthop_id"
           }
           params { id: 1 name: "nexthop_id" }
         }
+        actions {
+          preamble {
+            # id: kActionNoOpId
+            name: "NoAction"
+            alias: "NoAction"
+          }
+        }
         action_profiles {
           preamble {
-            id: 100
+            # id: kActionProfileId
             name: "ingress.routing.wcmp_group_selector"
             alias: "wcmp_group_selector"
           }
-          table_ids: 200
+          # table_ids: kTableId
           with_selector: true
-          size: 65536
+          # size: kActionProfileSize
         }
       )pb");
-  p4info.mutable_action_profiles(0)->set_max_group_size(max_group_size);
+  // Set up table, action, and action profile Ids appropriately.
+  p4info.mutable_tables(0)->mutable_preamble()->set_id(kTableId);
+  p4info.mutable_tables(0)->mutable_action_refs(0)->set_id(kActionId);
+  p4info.mutable_tables(0)->mutable_action_refs(1)->set_id(kActionNoOpId);
+  p4info.mutable_tables(0)->set_const_default_action_id(kActionNoOpId);
+  p4info.mutable_tables(0)->set_implementation_id(kActionProfileId);
+  p4info.mutable_actions(0)->mutable_preamble()->set_id(kActionId);
+  p4info.mutable_actions(1)->mutable_preamble()->set_id(kActionNoOpId);
+  p4info.mutable_action_profiles(0)->mutable_preamble()->set_id(
+      kActionProfileId);
+  p4info.mutable_action_profiles(0)->add_table_ids(kTableId);
+  p4info.mutable_action_profiles(0)->set_size(kActionProfileSize);
+
+  if (max_group_size != 0) {
+    p4info.mutable_action_profiles(0)->set_max_group_size(max_group_size);
+  }
   return pdpi::CreateIrP4Info(p4info);
+}
+
+absl::StatusOr<p4::v1::ActionProfileActionSet>
+FuzzActionProfileActionSetForHardcodedConfig(int max_group_size = 256) {
+  // Initialize required state.
+  absl::BitGen gen;
+  ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_info,
+                   ConstructIrInfo(max_group_size));
+  const SwitchState switch_state(ir_info);
+  const FuzzerConfig config{
+      .info = ir_info,
+      .ports = {"1"},
+      .qos_queues = {"0x1"},
+      .role = "sdn_controller",
+  };
+  const pdpi::IrTableDefinition& table_definition =
+      ir_info.tables_by_id().at(kTableId);
+
+  // Get an ActionProfileActionSet.
+  auto action_profile_set =
+      FuzzActionProfileActionSet(&gen, config, switch_state, table_definition);
+  // Due to a bug in FuzzValue, FuzzActionProfileActionSet is currently flaky
+  // and may require several attempts to succeed.
+  // TODO: Remove once the bug is fixed.
+  while (!action_profile_set.ok()) {
+    action_profile_set = FuzzActionProfileActionSet(&gen, config, switch_state,
+                                                    table_definition);
+  }
+  return action_profile_set;
 }
 
 TEST(FuzzUtilTest, SetUnusedBitsToZeroInThreeBytes) {
@@ -199,56 +262,80 @@ TEST(FuzzUtilTest, FuzzWriteRequestAreReproducible) {
 }
 
 // Test that FuzzActionProfileActionSet correctly generates an ActionProfile
-// Action Set of acceptable weights and size.
-TEST(FuzzUtilTest, FuzzActionProfileActionSetWithinParameters) {
-  // Initialize required state.
+// Action Set of acceptable weights and size (derived from max_group_size and
+// kActionProfileActionSetMaxCardinality).
+TEST(FuzzActionProfileActionSetTest,
+     StaysWithinMaxGroupSizeAndCardinalityParameters) {
   absl::BitGen gen;
-  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_info, ConstructIrInfo());
-  const SwitchState switch_state(ir_info);
-  const FuzzerConfig config{
-      .info = ir_info,
-      .ports = {"1"},
-      .qos_queues = {"0x1"},
-      .role = "sdn_controller",
-  };
-  const pdpi::IrTableDefinition& table_definition =
-      ir_info.tables_by_id().at(200);
-
-  // Main logic.
   for (int i = 0; i < 1000; ++i) {
-    auto action_profile_set = FuzzActionProfileActionSet(
-        &gen, config, switch_state, table_definition);
-
-    // Due to a bug in FuzzValue, FuzzActionProfileActionSet is currently flaky
-    // and may require several attempts to succeed.
-    // TODO: Remove once the bug is fixed.
-    while (!action_profile_set.ok() ||
-           action_profile_set->action_profile_actions_size() == 0) {
-      action_profile_set = FuzzActionProfileActionSet(
-          &gen, config, switch_state, table_definition);
-    }
+    // Tests a broad enough band of max weights to give us interesting coverage
+    // while being narrow enough to likely catch issues when they happen.
+    int max_group_size =
+        absl::Uniform<int>(gen, kActionProfileActionSetMaxCardinality, 10000);
+    ASSERT_OK_AND_ASSIGN(
+        auto action_profile_set,
+        FuzzActionProfileActionSetForHardcodedConfig(max_group_size));
 
     // The number of actions should always be less than or equal to the max
     // cardinality.
-    EXPECT_LE(action_profile_set->action_profile_actions_size(),
+    EXPECT_LE(action_profile_set.action_profile_actions_size(),
               kActionProfileActionSetMaxCardinality);
 
     int total_weight = 0;
-    for (auto& action : action_profile_set->action_profile_actions()) {
+    for (auto& action : action_profile_set.action_profile_actions()) {
       total_weight += action.weight();
     }
-    EXPECT_LE(total_weight, kActionProfileActionSetMaxWeight);
+    EXPECT_LE(total_weight, max_group_size);
   }
 }
 
-// TODO: When we use max_group_size:
-// Test FuzzActionProfileActionSet with max weight set to 0 (correct action
-// appears to be to either generate whatever we want, or do a binary search or
-// something to determine a rough max weight for the switch).
+// Test that FuzzActionProfileActionSet correctly generates an ActionProfile
+// Action Set of acceptable weights and size when max_group_size is set to 0.
+TEST(FuzzActionProfileActionSetTest, HandlesZeroMaxGroupSizeCorrectly) {
+  for (int i = 0; i < 1000; ++i) {
+    ASSERT_OK_AND_ASSIGN(
+        auto action_profile_set,
+        FuzzActionProfileActionSetForHardcodedConfig(/*max_group_size=*/0));
 
-// TODO: When we use max_group_size:
-// Test that FuzzActionProfileActionSet correctly handles a request for too
-// many actions with too low weight
+    // The number of actions should always be less than or equal to the max
+    // cardinality.
+    EXPECT_LE(action_profile_set.action_profile_actions_size(),
+              kActionProfileActionSetMaxCardinality);
+
+    int total_weight = 0;
+    for (auto& action : action_profile_set.action_profile_actions()) {
+      total_weight += action.weight();
+    }
+    EXPECT_LE(total_weight, kActionProfileSize);
+  }
+}
+
+// Test that FuzzActionProfileActionSet correctly handles a request with low max
+// group size (in particular, lower than the max number of actions).
+TEST(FuzzActionProfileActionSetTest, HandlesLowMaxGroupSizeCorrectly) {
+  absl::BitGen gen;
+  for (int i = 0; i < 1000; ++i) {
+    int max_group_size =
+        absl::Uniform<int>(gen, 1, kActionProfileActionSetMaxCardinality);
+
+    ASSERT_OK_AND_ASSIGN(
+        auto action_profile_set,
+        FuzzActionProfileActionSetForHardcodedConfig(max_group_size));
+    // The number of actions must be less than max_group_size since every
+    // action has at least weight 1.
+    EXPECT_LE(action_profile_set.action_profile_actions_size(), max_group_size);
+
+    int total_weight = 0;
+    for (auto& action : action_profile_set.action_profile_actions()) {
+      total_weight += action.weight();
+    }
+    EXPECT_LE(total_weight, max_group_size);
+  }
+}
+
+// TODO: Add a direct test for FuzzValue that either sometimes
+// generates something for non-standard match fields, or, if that is never
+// correct, makes sure it still works with that possibility removed.
 
 }  // namespace
 }  // namespace p4_fuzzer

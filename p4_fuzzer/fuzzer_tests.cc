@@ -137,10 +137,8 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
           // TODO: acl_lookup_table has a resource limit problem.
           // TODO: router_interface_table, ipv4_table and
           // ipv6_table all have resource limit problems.
-          // TODO: acl_ingress_table has resource limit problems.
           if (!(mask_known_failures &&
                 (table.preamble().alias() == "acl_lookup_table" ||
-                 table.preamble().alias() == "acl_ingress_table" ||
                  table.preamble().alias() == "router_interface_table" ||
                  table.preamble().alias() == "ipv4_table" ||
                  table.preamble().alias() == "ipv6_table"))) {
