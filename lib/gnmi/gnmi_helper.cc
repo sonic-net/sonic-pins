@@ -212,7 +212,8 @@ absl::Status CanGetAllInterfaceOverGnmi(gnmi::gNMI::StubInterface& stub,
 
 absl::StatusOr<gnmi::GetResponse> GetAllInterfaceOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(auto req, BuildGnmiGetRequest("", gnmi::GetRequest::ALL));
+  ASSIGN_OR_RETURN(auto req,
+                   BuildGnmiGetRequest("interfaces", gnmi::GetRequest::STATE));
   gnmi::GetResponse resp;
   grpc::ClientContext context;
   context.set_wait_for_ready(true);
@@ -420,9 +421,8 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
-  ASSIGN_OR_RETURN(
-      gnmi::GetResponse response,
-      pins_test::GetAllInterfaceOverGnmi(stub, absl::ZeroDuration()));
+  ASSIGN_OR_RETURN(gnmi::GetResponse response,
+                   pins_test::GetAllInterfaceOverGnmi(stub, absl::Seconds(60)));
   if (response.notification_size() < 1) {
     return absl::InternalError(
         absl::StrCat("Invalid response: ", response.DebugString()));
@@ -452,8 +452,9 @@ GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
     }
     std::string name = element_name_json->get<std::string>();
 
-    // TODO: Remove once CpuX contains the oper-state subtree.
-    if (absl::StartsWith(name, "Cpu")) {
+    // Ignore the interfaces that is not EthernetXX. For example: bond0,
+    // Loopback0, etc.
+    if (!absl::StartsWith(name, "Ethernet")) {
       LOG(INFO) << "Skipping " << name << ".";
       continue;
     }
@@ -463,12 +464,15 @@ GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
       return absl::NotFoundError(
           absl::StrCat("'state' not found: ", element.value().dump()));
     }
-    const auto element_id_json = element_interface_state_json->find("id");
+
+    const auto element_id_json =
+        element_interface_state_json->find("openconfig-pins-interfaces:id");
     if (element_id_json == element_interface_state_json->end()) {
       return absl::NotFoundError(
-          absl::StrCat("'id' not found: ", element.value().dump()));
+          absl::StrCat("'openconfig-pins-interfaces:id' not found: ",
+                       element.value().dump()));
     }
-    interface_name_to_port_id[name] = element_id_json->get<std::string>();
+    interface_name_to_port_id[name] = absl::StrCat(element_id_json->get<int>());
   }
   return interface_name_to_port_id;
 }

@@ -43,17 +43,27 @@ namespace pins_test {
 
 namespace {
 
+constexpr char kIfEnabledConfigPath[] =
+    R"(interfaces/interface[name=$0]/config/enabled)";
 constexpr char kInterfaceStatePath[] =
     R"(interfaces/interface[name=$0]/state$1)";
+constexpr char kIfEnableConfig[] = R"({"enabled":$0})";
 
-absl::StatusOr<absl::string_view> GetLinkState(thinkit::LinkState state) {
+absl::StatusOr<gnmi::SetRequest> BuildGnmiSetLinkStateRequest(
+    absl::string_view interface, thinkit::LinkState state) {
   switch (state) {
-    case (thinkit::LinkState::kUp):
-      return "UP";
-    case (thinkit::LinkState::kDown):
-      return "Down";
-    case (thinkit::LinkState::kUnknown):
-      return "UNKNOWN";
+    case thinkit::LinkState::kUp:
+      return pins_test::BuildGnmiSetRequest(
+          absl::Substitute(kIfEnabledConfigPath, interface),
+          pins_test::GnmiSetType::kUpdate,
+          absl::Substitute(kIfEnableConfig, "true"));
+    case thinkit::LinkState::kDown:
+      return pins_test::BuildGnmiSetRequest(
+          absl::Substitute(kIfEnabledConfigPath, interface),
+          pins_test::GnmiSetType::kUpdate,
+          absl::Substitute(kIfEnableConfig, "false"));
+    case thinkit::LinkState::kUnknown:
+      return absl::InvalidArgumentError("Invalid link state: Unknown");
     default:
       return absl::InvalidArgumentError("Invalid link state.");
   }
@@ -101,14 +111,10 @@ absl::Status GpinsControlInterface::SetAdminLinkState(
     absl::Span<const std::string> interfaces, thinkit::LinkState state) {
   ASSIGN_OR_RETURN(auto gnmi_stub, sut_->CreateGnmiStub());
   gnmi::SetResponse response;
-  ASSIGN_OR_RETURN(absl::string_view link_state, GetLinkState(state));
   for (const std::string& interface : interfaces) {
     grpc::ClientContext context;
-    ASSIGN_OR_RETURN(
-        gnmi::SetRequest gnmi_set_request,
-        pins_test::BuildGnmiSetRequest(
-            absl::Substitute(kInterfaceStatePath, interface, "/admin-status"),
-            pins_test::GnmiSetType::kUpdate, link_state));
+    ASSIGN_OR_RETURN(gnmi::SetRequest gnmi_set_request,
+                     BuildGnmiSetLinkStateRequest(interface, state));
     LOG(INFO) << "Sending gNMI set admin link state request: "
               << gnmi_set_request.ShortDebugString();
     RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
@@ -191,20 +197,12 @@ GpinsControlInterface::GetUpLinks(absl::Span<const std::string> interfaces) {
   absl::flat_hash_set<std::string> up_links;
   for (const std::string& interface : interfaces) {
     grpc::ClientContext context;
-    ASSIGN_OR_RETURN(gnmi::GetRequest gnmi_get_request,
-                     pins_test::BuildGnmiGetRequest(
-                         absl::Substitute(kInterfaceStatePath, interface, ""),
-                         gnmi::GetRequest::STATE));
-    RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
-        gnmi_stub->Get(&context, gnmi_get_request, &response)));
     ASSIGN_OR_RETURN(std::string admin_status_response,
-                     pins_test::ParseGnmiGetResponse(
-                         response, "openconfig-interfaces:admin-status"));
-    ASSIGN_OR_RETURN(std::string oper_status_response,
-                     pins_test::ParseGnmiGetResponse(
-                         response, "openconfig-interfaces:oper-status"));
-    if (absl::StrContains(admin_status_response, "UP") &&
-        absl::StrContains(oper_status_response, "UP"))
+                     GetGnmiStatePathInfo(
+                         gnmi_stub.get(),
+                         absl::Substitute(kInterfaceStatePath, interface, ""),
+                         "openconfig-interfaces:state"));
+    if (absl::StrContains(admin_status_response, "\"oper-status\":\"UP\""))
       up_links.insert(interface);
   }
   return up_links;

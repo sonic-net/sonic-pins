@@ -515,7 +515,7 @@ TEST(GetInterfacePortIdMap, SuccessfullyReturnsInterfacePortIdMap) {
                  update {
                    path { elem { name: "interfaces" } }
                    val {
-                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"id\":\"1\"}}]}}"
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"openconfig-pins-interfaces:id\":1}}]}}"
                    }
                  }
                })pb")),
@@ -545,9 +545,9 @@ TEST(GetInterfacePortIdMap, PortIdNotFoundInState) {
                })pb")),
       Return(grpc::Status::OK)));
 
-  EXPECT_THAT(
-      GetAllInterfaceNameToPortId(stub),
-      StatusIs(absl::StatusCode::kNotFound, HasSubstr("'id' not found")));
+  EXPECT_THAT(GetAllInterfaceNameToPortId(stub),
+              StatusIs(absl::StatusCode::kNotFound,
+                       HasSubstr("'openconfig-pins-interfaces:id' not found")));
 }
 
 TEST(GetInterfacePortIdMap, InterfaceStateNotFound) {
