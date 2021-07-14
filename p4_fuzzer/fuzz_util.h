@@ -60,9 +60,9 @@ const T& UniformFromVector(absl::BitGen* gen, const std::vector<T>& vec) {
   return vec[index];
 }
 
-// Gets the action profile corresponding to the given table.
+// Gets the action profile corresponding to the given table from the IrP4Info.
 absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
-    const FuzzerConfig& config, int table_id);
+    const pdpi::IrP4Info& ir_info, int table_id);
 
 // Returns the list of all table IDs in the underlying P4 program.
 const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config);

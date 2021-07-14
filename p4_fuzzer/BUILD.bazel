@@ -138,6 +138,7 @@ cc_test(
     deps = [
         ":fuzzer_cc_proto",
         ":mutation_and_fuzz_util",
+        ":test_utils",
         "//gutil:collections",
         "//gutil:proto",
         "//gutil:proto_matchers",
@@ -197,6 +198,7 @@ cc_test(
     name = "oracle_util_test",
     srcs = ["oracle_util_test.cc"],
     deps = [
+        ":mutation_and_fuzz_util",
         ":oracle_util",
         ":test_utils",
         "//gutil:collections",
@@ -209,6 +211,7 @@ cc_test(
         "//p4_pdpi/netaddr:ipv4_address",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",

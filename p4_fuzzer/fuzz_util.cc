@@ -387,11 +387,11 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
 
 }  // namespace
 
-// Gets the action profile corresponding to the given table.
+// Gets the action profile corresponding to the given table from the IrP4Info.
 absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
-    const FuzzerConfig& config, int table_id) {
+    const pdpi::IrP4Info& ir_info, int table_id) {
   for (const auto& [id, action_profile_definition] :
-       config.info.action_profiles_by_id()) {
+       ir_info.action_profiles_by_id()) {
     if (action_profile_definition.has_action_profile()) {
       // Does the action profile apply to the given table?
       auto& action_profile = action_profile_definition.action_profile();
@@ -733,8 +733,9 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     const pdpi::IrTableDefinition& ir_table_info) {
   p4::v1::ActionProfileActionSet action_set;
 
-  ASSIGN_OR_RETURN(auto action_profile,
-                   GetActionProfile(config, ir_table_info.preamble().id()));
+  ASSIGN_OR_RETURN(
+      auto action_profile,
+      GetActionProfile(config.info, ir_table_info.preamble().id()));
 
   // The max_group_size specifies the maximum total weight of a group of actions
   // in an Action Selector (described by an ActionProfileActionSet).
@@ -788,20 +789,34 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     // of remaining actions into account to determine the acceptable max weight.
     int remaining_actions = number_of_actions - i - 1;
     int max_weight = unallocated_weight - remaining_actions;
-    ASSIGN_OR_RETURN(auto action,
-                     FuzzActionProfileAction(gen, config, switch_state,
-                                             ir_table_info, max_weight));
+
+    auto action = FuzzActionProfileAction(gen, config, switch_state,
+                                          ir_table_info, max_weight);
+    // Due to a bug in FuzzValue, FuzzActionProfileAction is currently flaky
+    // and may require several attempts to succeed.
+    // TODO: Once the bug is fixed, just a simple assign_or_return
+    // should work.
+    while (!action.ok()) {
+      // We do not want to accidentally mask errors unrelated to bug 191307441.
+      if (absl::StrContains(action.status().message(), "referenced fields")) {
+        action = FuzzActionProfileAction(gen, config, switch_state,
+                                         ir_table_info, max_weight);
+      } else {
+        return action.status();
+      }
+    }
+
     bool is_set_nexthop_action =
-        action.action().action_id() == ROUTING_SET_NEXTHOP_ID_ACTION_ID;
+        action->action().action_id() == ROUTING_SET_NEXTHOP_ID_ACTION_ID;
     // If this nexthop has already been used, skip. This will generate fewer
     // actions, but that's fine.
     if (is_wcmp_table && is_set_nexthop_action &&
-        action.action().params_size() == 1 &&
-        used_nexthops.insert(action.action().params()[0].value()).second) {
+        action->action().params_size() == 1 &&
+        used_nexthops.insert(action->action().params()[0].value()).second) {
       continue;
     }
-    *action_set.add_action_profile_actions() = action;
-    unallocated_weight -= action.weight();
+    *action_set.add_action_profile_actions() = *action;
+    unallocated_weight -= action->weight();
   }
 
   return action_set;

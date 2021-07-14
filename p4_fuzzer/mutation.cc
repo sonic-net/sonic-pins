@@ -178,7 +178,7 @@ absl::Status MutateInvalidActionSelectorWeight(BitGen* gen,
       action_set->mutable_action_profile_actions(action_to_fuzz);
 
   ASSIGN_OR_RETURN(auto action_profile,
-                   GetActionProfile(config, entry->table_id()));
+                   GetActionProfile(config.info, entry->table_id()));
 
   if (absl::Bernoulli(*gen, 0.5)) {
     action_profile_action->set_weight(0);
