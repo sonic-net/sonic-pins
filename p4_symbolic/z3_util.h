@@ -11,9 +11,11 @@
 
 namespace p4_symbolic {
 
-// Global z3::context used for creating symbolic expressions during symbolic
-// evaluation.
-z3::context& Z3Context();
+// Returns the global z3::context used for creating symbolic expressions during
+// symbolic evaluation. If parameter `renew` is set to true, it deletes the
+// older context and returns a new one.
+// TODO: `renew` is a workaround for using a global context.
+z3::context& Z3Context(bool renew = false);
 
 // -- Evaluation ---------------------------------------------------------------
 
