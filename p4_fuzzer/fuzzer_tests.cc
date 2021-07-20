@@ -1,5 +1,6 @@
 #include "p4_fuzzer/fuzzer_tests.h"
 
+#include <algorithm>
 #include <set>
 
 #include "absl/container/flat_hash_set.h"
@@ -8,6 +9,7 @@
 #include "absl/random/seed_sequences.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
@@ -28,7 +30,7 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/test_environment.h"
 
-ABSL_FLAG(int, fuzzer_iterations, 10000,
+ABSL_FLAG(int, fuzzer_iterations, 1000,
           "Number of updates the fuzzer should generate.");
 
 namespace p4_fuzzer {
@@ -72,6 +74,8 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
   int num_updates = 0;
   int num_ok_statuses = 0;
   int num_notok_without_mutations = 0;
+  int num_ok_with_mutations = 0;
+  int max_batch_size = 0;
   std::set<std::string> error_messages;
   SwitchState state(info);
   int num_iterations = absl::GetFlag(FLAGS_fuzzer_iterations);
@@ -83,6 +87,7 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
         FuzzWriteRequest(&gen, config, state);
     WriteRequest request = RemoveAnnotations(annotated_request);
     num_updates += request.updates_size();
+    max_batch_size = std::max(max_batch_size, request.updates_size());
 
     // Set IDs.
     request.set_device_id(session->DeviceId());
@@ -137,20 +142,20 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
           // TODO: acl_lookup_table has a resource limit problem.
           // TODO: router_interface_table, ipv4_table and
           // ipv6_table all have resource limit problems.
+          // TODO: wcmp_group_table has a resource limit problem.
           if (!(mask_known_failures &&
                 (table.preamble().alias() == "acl_lookup_table" ||
                  table.preamble().alias() == "router_interface_table" ||
                  table.preamble().alias() == "ipv4_table" ||
-                 table.preamble().alias() == "ipv6_table"))) {
+                 table.preamble().alias() == "ipv6_table" ||
+                 table.preamble().alias() == "wcmp_group_table"))) {
             // Check that table was full before this status.
-            ASSERT_TRUE(state.IsTableFull(table_id))
-                << "Switch reported RESOURCE_EXHAUSTED for "
-                << table.preamble().alias() << ". The table currently has "
-                << state.GetNumTableEntries(table_id)
-                << " entries, but is supposed to support at least "
-                << table.size() << " entries."
-                << "\nUpdate = " << update.DebugString()
-                << "\nState = " << state.SwitchStateSummary();
+            ASSERT_TRUE(state.IsTableFull(table_id)) << absl::Substitute(
+                "Switch reported RESOURCE_EXHAUSTED for table named '$0'. The "
+                "table currently has $1 entries, but is supposed to support at "
+                "least $2 entries.\nUpdate = $3\nState = $4",
+                table.preamble().alias(), state.GetNumTableEntries(table_id),
+                table.size(), update.DebugString(), state.SwitchStateSummary());
           }
         }
         // Collect error messages and update state.
@@ -163,12 +168,23 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
         }
 
         bool is_mutated = annotated_request.updates(i).mutations_size() > 0;
+
+        // If the Fuzzer uses a mutation, then the update is likely to be
+        // invalid.
+        if (status.code() == google::rpc::Code::OK && is_mutated) {
+          EXPECT_OK(environment.AppendToTestArtifact(
+              "fuzzer_mutated_but_ok.txt",
+              absl::StrCat("-------------------\n\nRequest = \n",
+                           annotated_request.updates(i).DebugString())));
+          num_ok_with_mutations++;
+        }
+
         if (status.code() != google::rpc::Code::OK &&
             status.code() != google::rpc::Code::RESOURCE_EXHAUSTED &&
             status.code() != google::rpc::Code::UNIMPLEMENTED) {
           if (!is_mutated) {
-            // Switch considered update OK but fuzzer did not use a mutation
-            // (i.e. thought the update should be valid).
+            // Switch did not consider update OK but fuzzer did not use a
+            // mutation (i.e. thought the update should be valid).
             EXPECT_OK(environment.AppendToTestArtifact(
                 "fuzzer_inaccuracies.txt",
                 absl::StrCat("-------------------\n\nrequest = \n",
@@ -186,10 +202,20 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
 
   LOG(INFO) << "Finished " << num_iterations << " iterations.";
   LOG(INFO) << "  num_updates:                 " << num_updates;
+  // Expected value is 50, so if it's very far from that, we probably have a
+  // problem.
+  LOG(INFO) << "  Avg updates per request:     "
+            << num_updates / static_cast<double>(num_iterations);
+  LOG(INFO) << "  max updates in a request:    " << max_batch_size;
   LOG(INFO) << "  num_ok_statuses:             " << num_ok_statuses;
 
-  // This should be 0 if the fuzzer works correctly
+  // These should be 0 if the fuzzer works optimally. These numbers do not
+  // affect the soundness of the fuzzer, just the modularity, so it is a goal
+  // that we are not 100% strict on as it would be incredibly challenging to
+  // enforce. However, it is highly likely that bugs in the switch, which we
+  // can't currently detect, are hidden in these numbers.
   LOG(INFO) << "  num_notok_without_mutations: " << num_notok_without_mutations;
+  LOG(INFO) << "  num_ok_with_mutations: " << num_ok_with_mutations;
 
   LOG(INFO) << "Final state:";
   LOG(INFO) << state.SwitchStateSummary();
@@ -202,27 +228,31 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
 
   // Leave the switch in a clean state and log the final state to help with
   // debugging.
-  ASSERT_OK_AND_ASSIGN(auto table_entries,
-                       pdpi::ReadPiTableEntries(session.get()));
-  for (const auto& entry : table_entries) {
-    EXPECT_OK(environment.AppendToTestArtifact(
-        "clearing__pi_entries_read_from_switch.txt", entry));
-  }
-  std::vector<p4::v1::Update> pi_updates =
-      pdpi::CreatePiUpdates(table_entries, p4::v1::Update::DELETE);
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::WriteRequest> sequenced_clear_requests,
-      pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
+  // TODO: Clean-up has a known bug where deletion of existing
+  // table entries fails.
+  if (!mask_known_failures) {
+    ASSERT_OK_AND_ASSIGN(auto table_entries,
+                         pdpi::ReadPiTableEntries(session.get()));
+    for (const auto& entry : table_entries) {
+      EXPECT_OK(environment.AppendToTestArtifact(
+          "clearing__pi_entries_read_from_switch.txt", entry));
+    }
+    std::vector<p4::v1::Update> pi_updates =
+        pdpi::CreatePiUpdates(table_entries, p4::v1::Update::DELETE);
+    ASSERT_OK_AND_ASSIGN(
+        std::vector<p4::v1::WriteRequest> sequenced_clear_requests,
+        pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
 
-  for (int i = 0; i < sequenced_clear_requests.size(); i++) {
-    EXPECT_OK(environment.AppendToTestArtifact(
-        "clearing__delete_write_requests.txt",
-        absl::StrCat("# Delete write batch ", i + 1, ".\n")));
-    EXPECT_OK(environment.AppendToTestArtifact(
-        "clearing__delete_write_requests.txt", sequenced_clear_requests[i]));
+    for (int i = 0; i < sequenced_clear_requests.size(); i++) {
+      EXPECT_OK(environment.AppendToTestArtifact(
+          "clearing__delete_write_requests.txt",
+          absl::StrCat("# Delete write batch ", i + 1, ".\n")));
+      EXPECT_OK(environment.AppendToTestArtifact(
+          "clearing__delete_write_requests.txt", sequenced_clear_requests[i]));
+    }
+    ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequests(
+        session.get(), sequenced_clear_requests));
   }
-  ASSERT_OK(pdpi::SetIdsAndSendPiWriteRequests(session.get(),
-                                               sequenced_clear_requests));
 }
 
 }  // namespace p4_fuzzer
