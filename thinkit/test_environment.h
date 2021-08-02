@@ -15,6 +15,9 @@
 #ifndef THINKIT_TEST_ENVIRONMENT_H_
 #define THINKIT_TEST_ENVIRONMENT_H_
 
+#include <string>
+#include <vector>
+
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -51,7 +54,12 @@ class TestEnvironment {
   virtual bool MaskKnownFailures() = 0;
 
   // Set the `test_case_id` for use by tracking tools.
-  virtual void SetTestCaseID(absl::string_view test_case_id) {}
+  virtual void SetTestCaseID(absl::string_view test_case_id) {
+    SetTestCaseIDs({std::string(test_case_id)});
+  }
+
+  // Set the `test_case_ids` for use by tracking tools.
+  virtual void SetTestCaseIDs(const std::vector<std::string>& test_case_ids) {}
 };
 
 }  // namespace thinkit

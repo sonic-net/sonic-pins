@@ -15,8 +15,16 @@
 #ifndef GOOGLE_THINKIT_BAZEL_TEST_ENVIRONMENT_H_
 #define GOOGLE_THINKIT_BAZEL_TEST_ENVIRONMENT_H_
 
+#include <fstream>
+#include <functional>
 #include <ios>
+#include <string>
+#include <utility>
+#include <vector>
 
+#include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "thinkit/test_environment.h"
@@ -32,9 +40,10 @@ class BazelTestEnvironment : public TestEnvironment {
   BazelTestEnvironment() = delete;
   explicit BazelTestEnvironment(
       bool mask_known_failures,
-      std::function<void(absl::string_view)> set_test_case_id = [](auto) {})
+      std::function<void(const std::vector<std::string>&)> set_test_case_ids =
+          [](auto) {})
       : mask_known_failures_{mask_known_failures},
-        set_test_case_id_(std::move(set_test_case_id)) {}
+        set_test_case_ids_(std::move(set_test_case_ids)) {}
 
   absl::Status StoreTestArtifact(absl::string_view filename,
                                  absl::string_view contents)
@@ -51,13 +60,17 @@ class BazelTestEnvironment : public TestEnvironment {
 
   bool MaskKnownFailures() { return mask_known_failures_; };
 
-  void SetTestCaseID(absl::string_view test_case_id) override {
-    set_test_case_id_(test_case_id);
+  void SetTestCaseIDs(const std::vector<std::string>& test_case_ids) override {
+    set_test_case_ids_(test_case_ids);
   }
 
  private:
   bool mask_known_failures_;
-  std::function<void(absl::string_view)> set_test_case_id_;
+  std::function<void(const std::vector<std::string>&)> set_test_case_ids_;
+  // Open files are cached to avoid closing them after every append. On certain
+  // file systems (e.g. b/111316875) closing files is abnormally slow and this
+  // avoids it. However, this approach should also generally be faster.
+  absl::flat_hash_map<std::string, std::ofstream> open_file_by_filepath_;
   // The mutex is used to ensure that writes to disk are sequential.
   absl::Mutex write_mutex_;
 };

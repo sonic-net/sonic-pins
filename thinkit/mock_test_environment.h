@@ -15,6 +15,9 @@
 #ifndef THINKIT_MOCK_TEST_ENVIRONMENT_H_
 #define THINKIT_MOCK_TEST_ENVIRONMENT_H_
 
+#include <string>
+#include <vector>
+
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
@@ -32,6 +35,8 @@ class MockTestEnvironment : public TestEnvironment {
               (override));
   MOCK_METHOD(bool, MaskKnownFailures, (), (override));
   MOCK_METHOD(void, SetTestCaseID, (absl::string_view), (override));
+  MOCK_METHOD(void, SetTestCaseIDs, (const std::vector<std::string> &),
+              (override));
 };
 
 }  // namespace thinkit

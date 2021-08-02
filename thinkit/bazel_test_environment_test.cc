@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <vector>
 
 // Switching benchmark dependency to third_party seems to not output any
 // benchmarking information when run.
@@ -20,7 +21,7 @@ namespace thinkit {
 namespace {
 
 using ::gutil::IsOk;
-using ::testing::StrEq;
+using ::testing::UnorderedElementsAre;
 
 // -- Tests --------------------------------------------------------------------
 
@@ -41,6 +42,18 @@ TEST(BazelTestEnvironmentTest, AppendToTestArtifact) {
   EXPECT_OK(environment->AppendToTestArtifact(kTestArtifact, "Hello, Test!\n"));
 }
 
+// Sanity check to rule out crashes and error statuses with mixed appends and
+// stores.
+TEST(BazelTestEnvironmentTest, AppendStoreAppendTestArtifact) {
+  std::unique_ptr<TestEnvironment> environment =
+      absl::make_unique<BazelTestEnvironment>(/*mask_known_failures=*/true);
+  EXPECT_OK(
+      environment->AppendToTestArtifact(kTestArtifact, "Hello, World!\n"));
+  EXPECT_OK(environment->StoreTestArtifact(kTestArtifact, "Hello, Test!\n"));
+  EXPECT_OK(environment->AppendToTestArtifact(kTestArtifact,
+                                              "Hello again, World!\n"));
+}
+
 TEST(BazelTestEnvironmentTest,
      BazelTestEnvironmentStoreAndAppendTestArtifactWithProto) {
   // Explicitly uses the BazelTestEnvironment to ensure that we inherit
@@ -55,18 +68,19 @@ TEST(BazelTestEnvironmentTest,
 
 // Test that SetTestCaseID correctly calls its input function.
 TEST(BazelTestEnvironmentTest, SetTestCaseIdCallsMemberFunction) {
-  std::string stored_test_case_id;
+  std::vector<std::string> stored_test_case_ids;
   std::string test_id = "1";
 
   std::unique_ptr<TestEnvironment> environment =
       absl::make_unique<BazelTestEnvironment>(
           /*mask_known_failures=*/true,
-          /*set_test_case_id=*/[&](absl::string_view test_case_id) {
-            stored_test_case_id = test_case_id;
+          /*set_test_case_ids=*/[&](const std::vector<std::string>&
+                                        test_case_ids) {
+            stored_test_case_ids = test_case_ids;
           });
 
   environment->SetTestCaseID(test_id);
-  EXPECT_THAT(test_id, StrEq(stored_test_case_id));
+  EXPECT_THAT(stored_test_case_ids, UnorderedElementsAre(test_id));
 }
 
 // SetTestCaseID should not crash even if the environment is constructed without
@@ -126,5 +140,41 @@ BENCHMARK(BM_Bazel_StoreTestArtifact)
     ->Args({/*write_size in bytes=*/1})
     ->Args({1024})
     ->Args({1024 * 1024});
+
+// Benchmarks how performance of Append changes based on the size of the file
+// that is appended to. Ideally, performance should not change at all, but this
+// problem came up in a previous issue (b/193839478).
+void BenchmarkAppendTimeBasedOnStartingSize(benchmark::State& state,
+                                            int start_size, int append_size) {
+  const std::string filename = "benchmark_file";
+  BazelTestEnvironment env(false);
+
+  // We create a file of the given size to start, then benchmark the time that
+  // appends take.
+  ASSERT_THAT(env.StoreTestArtifact(filename, std::string(start_size, 'a')),
+              IsOk());
+  std::string str(append_size, 'a');
+  for (auto s : state) {
+    ASSERT_THAT(env.AppendToTestArtifact(filename, str), IsOk());
+  }
+
+  // Causes number of iterations (items) per second to be output.
+  state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
+}
+
+void BM_Bazel_AppendTimeBasedOnStartingSize(benchmark::State& state) {
+  BenchmarkAppendTimeBasedOnStartingSize(state, /*start_size=*/state.range(0),
+                                         /*append_size=*/state.range(1));
+}
+
+BENCHMARK(BM_Bazel_AppendTimeBasedOnStartingSize)
+    ->Args({
+        /*start_size in bytes=*/1,
+        /*write_size in bytes=*/1024,
+    })
+    ->Args({1024, 1024})
+    ->Args({1024 * 1024, 1024})
+    ->Args({1024 * 1024 * 1024, 1024});
+
 }  // namespace
 }  // namespace thinkit

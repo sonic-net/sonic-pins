@@ -19,9 +19,13 @@
 #include <fstream>
 #include <ios>
 #include <ostream>
+#include <string>
 #include <system_error>  // NOLINT
+#include <type_traits>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
@@ -62,20 +66,35 @@ absl::StatusOr<std::string> ArtifactDirectory() {
   }
   return dir;
 }
-
-absl::Status WriteToTestArtifact(absl::string_view filename,
-                                 absl::string_view contents,
-                                 std::ios_base::openmode mode) {
+absl::Status WriteToTestArtifact(
+    absl::string_view filename, absl::string_view contents,
+    std::ios_base::openmode mode,
+    absl::flat_hash_map<std::string, std::ofstream>& open_file_by_filepath) {
   ASSIGN_OR_RETURN(std::string directory, ArtifactDirectory());
   std::string filepath = absl::StrCat(directory, "/", filename);
-  std::ofstream file;
-  file.open(filepath, mode);
+  // Note that pointer-stability of values is not a concern here because the
+  // reference is local and nothing is added to the map while the reference is
+  // live.
+  std::ofstream& file = open_file_by_filepath[filepath];
+  if (file.is_open() && mode == std::ios_base::trunc) {
+    // If we have an open file descriptor and we want to truncate the file, then
+    // we close it and reopen it in truncation mode.
+    file.close();
+  }
+  // If the file is not open, then we just want to open it in the given mode.
   if (!file.is_open()) {
-    return gutil::InternalErrorBuilder()
-           << "unable to open test artifact file: '" << filepath << "'";
+    file.open(filepath, mode);
+    // If the file is still not open, we have a problem.
+    if (!file.is_open()) {
+      return gutil::InternalErrorBuilder()
+             << "unable to open test artifact file: '" << filepath << "'";
+    }
   }
   file << contents;
-  file.close();
+
+  // We flush the contents to persist them, but leave the file open so that we
+  // can continue to append to it.
+  file.flush();
   if (file.good()) return absl::OkStatus();
   return gutil::InternalErrorBuilder()
          << "failed to store test artifact: '" << filepath << "'";
@@ -86,13 +105,15 @@ absl::Status WriteToTestArtifact(absl::string_view filename,
 absl::Status BazelTestEnvironment::StoreTestArtifact(
     absl::string_view filename, absl::string_view contents) {
   absl::MutexLock lock(&this->write_mutex_);
-  return WriteToTestArtifact(filename, contents, std::ios_base::trunc);
+  return WriteToTestArtifact(filename, contents, std::ios_base::trunc,
+                             open_file_by_filepath_);
 }
 
 absl::Status BazelTestEnvironment::AppendToTestArtifact(
     absl::string_view filename, absl::string_view contents) {
   absl::MutexLock lock(&this->write_mutex_);
-  return WriteToTestArtifact(filename, contents, std::ios_base::app);
+  return WriteToTestArtifact(filename, contents, std::ios_base::app,
+                             open_file_by_filepath_);
 }
 
 }  // namespace thinkit

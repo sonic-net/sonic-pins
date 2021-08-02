@@ -19,6 +19,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "diag/diag.grpc.pb.h"
+#include "thinkit/packet_generation_finalizer.h"
 
 namespace thinkit {
 
@@ -34,9 +35,35 @@ enum class RebootType {
   kCold,
 };
 
+// Callback when a packet is received, first parameter which is control
+// interface port it was received on and second parameter is the hexstring (with
+// 0x prefix) of the packet.
+using PacketCallback =
+    std::function<void(absl::string_view, absl::string_view)>;
+
+// A `ControlInterface` represents any device or devices that can at the very
+// least send and receive packets over their interfaces. It may be able to get
+// and set link state, as well as perform various other operations like link
+// qualification or reboot.
 class ControlInterface {
  public:
   virtual ~ControlInterface() {}
+
+  // Starts collecting packets, calling `callback` whenever a packet is
+  // received. This continues until the `PacketGenerationFinalizer` goes out of
+  // scope.
+  virtual absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
+  CollectPackets(PacketCallback callback) = 0;
+
+  // Sends a `packet` hexstring (with 0x prefix) out of the control interface’s
+  // `interface`.
+  virtual absl::Status SendPacket(absl::string_view interface,
+                                  absl::string_view packet) = 0;
+
+  // Sends a list of `packet` hexstring (with 0x prefix) out of the control
+  // interface’s `interface`.
+  virtual absl::Status SendPackets(absl::string_view interface,
+                                   absl::Span<const std::string> packets) = 0;
 
   // Sets the admin link state on the control interface 'interfaces'.
   virtual absl::Status SetAdminLinkState(
@@ -55,12 +82,13 @@ class ControlInterface {
   virtual absl::StatusOr<gnoi::diag::GetBERTResultResponse> GetBERTResult(
       const gnoi::diag::GetBERTResultRequest& request) = 0;
 
-  // Gets the control interface’s `interfaces` with both admin-status and
-  // oper-status up.
+  // Gets which control interface’s `interfaces` are admin and operationally up.
   virtual absl::StatusOr<absl::flat_hash_set<std::string>> GetUpLinks(
       absl::Span<const std::string> interfaces) = 0;
 
-  // Checks if the control interface is up.
+  // Checks if the control interface is up. This implies that it is in a state
+  // that it can perform its operations. This can be used to check when the
+  // control interface is ready after a reboot.
   virtual absl::Status CheckUp() = 0;
 };
 

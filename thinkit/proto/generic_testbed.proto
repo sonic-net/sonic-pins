@@ -18,7 +18,13 @@ package thinkit;
 
 option cc_generic_services = false;
 
-// Mode types for the SUT interfaces are connected..
+// Mode types for how the SUT interfaces are connected.
+// DISCONNECTED      - Nothing is plugged into the interface.
+// LOOPBACK          - A loopback is plugged into the interface.
+// CONTROL_INTERFACE - The interface is connected to another switch or device
+//                     that can send or receive packets.
+// TRAFFIC_GENERATOR - The interface is connected to a traffic generator
+//                     (e.g. Ixia).
 enum InterfaceMode {
   UNKNOWN_MODE = 0;
   DISCONNECTED = 1;

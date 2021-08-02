@@ -33,6 +33,7 @@ struct HttpResponse {
   std::string response;
 };
 
+// HTTP request types.
 enum class RequestType {
   kGet,
   kPost,
@@ -42,6 +43,13 @@ enum class RequestType {
 
 // InterfaceInfo represents the mode of an interface and the name of the peer
 // interface.
+// - When `interface_mode` is CONTROL_INTERFACE or TRAFFIC_GENERATOR,
+//   `peer_interface_name` will be populated with the name of the interface on
+//   the other end.
+// - In the case of CONTROL_INTERFACE, the `peer_interface_name` should be used
+//   in functions called on the `ControlInterface` returned by Interface().
+// - In the case of TRAFFIC_GENERATOR, the format of the `peer_interface_name`
+//   is "<hostname of generator>/<card number>/<port number>".
 struct InterfaceInfo {
   thinkit::InterfaceMode interface_mode;
   std::string peer_interface_name;  // Empty if not applicable.
@@ -53,17 +61,19 @@ class GenericTestbed {
  public:
   virtual ~GenericTestbed() {}
 
-  // Returns the switch (aka system) under test.
+  // Returns the PINS switch (aka system) under test.
   virtual Switch& Sut() = 0;
 
   // Returns the control interface responsible for packet injection and various
-  // management operations.
+  // management operations. This could be but isn't limited to being another
+  // PINS switch, a non-PINS switch, or a host machine.
   virtual ControlInterface& Interface() = 0;
 
   // Returns the test environment in which the test is run.
   virtual TestEnvironment& Environment() = 0;
 
-  // Returns the information for all SUT interfaces.
+  // Returns a map from SUT interface name (e.g. Ethernet0) to its
+  // `InterfaceInfo`, which describes what it's connected to.
   virtual absl::flat_hash_map<std::string, InterfaceInfo>
   GetSutInterfaceInfo() = 0;
 
