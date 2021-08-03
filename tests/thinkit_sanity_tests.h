@@ -34,8 +34,11 @@ void TestGnmiGetInterfaceOperation(thinkit::Switch& sut);
 // Tests that gNMI get all works fine with SUT.
 void TestGnmiGetAllOperation(thinkit::Switch& sut);
 
-// Tests that SUT all ports state is UP.
-void TestGnmiCheckInterfaceStateOperation(thinkit::MirrorTestbed& testbed);
+// Tests that all ports state are UP. Uses the interfaces if provided to
+// check the port states.
+void TestGnmiCheckInterfaceStateOperation(
+    thinkit::MirrorTestbed& testbed,
+    absl::Span<const std::string> interfaces = {});
 
 // Tests that no gNMI alarms are set.
 void TestGnmiCheckAlarms(thinkit::MirrorTestbed& testbed);

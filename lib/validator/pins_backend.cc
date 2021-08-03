@@ -84,7 +84,7 @@ absl::Status PINSBackend::PortsUp(absl::string_view chassis,
         absl::StrCat("ValidatorBackend passed invalid chassis: ", chassis));
   }
   auto& [sut_name, sut_switch] = *sut;
-  return pins_test::PortsUp(*sut_switch, timeout);
+  return pins_test::PortsUp(*sut_switch, {}, timeout);
 }
 
 }  // namespace pins_test

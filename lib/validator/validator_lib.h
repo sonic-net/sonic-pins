@@ -52,8 +52,10 @@ absl::Status GnmiAble(thinkit::Switch& thinkit_switch,
 absl::Status GnoiAble(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
-// Checks if "oper-status" of all interfaces are "UP".
+// Checks if "oper-status" of all interfaces are "UP". If the interfaces is
+// provided, checks only those interfaces.
 absl::Status PortsUp(thinkit::Switch& thinkit_switch,
+                     absl::Span<const std::string> interfaces = {},
                      absl::Duration timeout = kDefaultTimeout);
 
 // Checks to make sure no alarms are set.
@@ -63,12 +65,14 @@ absl::Status NoAlarms(thinkit::Switch& thinkit_switch,
 // Checks if the switch is ready by running the following validations:
 // Pingable, P4rtAble, GnmiAble, GnoiAble, PortsUp.
 absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
+                         absl::Span<const std::string> interfaces = {},
                          absl::Duration timeout = kDefaultTimeout);
 
 // Checks if the switch is ready by running the following validations:
 // Pingable, SSHable, P4rtAble, GnmiAble, GnoiAble, PortsUp.
 absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
                                 thinkit::SSHClient& ssh_client,
+                                absl::Span<const std::string> interfaces = {},
                                 absl::Duration timeout = kDefaultTimeout);
 
 }  // namespace pins_test

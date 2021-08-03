@@ -27,6 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "absl/types/span.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "thinkit/switch.h"
@@ -117,6 +118,12 @@ absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
                                     absl::Duration timeout);
 
+// Checks if given interfaces' oper-status is up/down.
+absl::Status CheckInterfaceOperStateOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
+    absl::Span<const std::string> interfaces,
+    absl::Duration timeout = absl::Seconds(60));
+
 // Checks if all interfaces oper-status is up/down.
 absl::Status CheckAllInterfaceOperStateOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
@@ -133,7 +140,7 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
 
 // Gets the operational status of an interface.
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
-    gnmi::gNMI::Stub& stub, absl::string_view if_name);
+    gnmi::gNMI::StubInterface& stub, absl::string_view if_name);
 
 // Gets the interface name to port id map.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
