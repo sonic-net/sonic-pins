@@ -28,10 +28,12 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/test_data.h"
 
-namespace gpins {
+namespace pins {
 namespace {
 
 TEST_P(SmokeTestFixture, ModifyWorks) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "3b18d5dc-3881-42a5-b667-d2ca0362ab3a");
   const sai::WriteRequest pd_insert = gutil::ParseProtoOrDie<sai::WriteRequest>(
       R"pb(
         updates {
@@ -71,7 +73,112 @@ TEST_P(SmokeTestFixture, ModifyWorks) {
   ASSERT_OK(pdpi::ClearTableEntries(SutP4RuntimeSession()));
 }
 
+// TODO: Enable once the bug is fixed.
+TEST_P(SmokeTestFixture,
+       DISABLED_InstallDefaultRouteForEmptyStringVrfShouldSucceed) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "2d67413c-9b6e-4187-84d4-c9313b84cab3");
+  const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
+      R"pb(
+        ipv4_table_entry {
+          match { vrf_id: "" }
+          action { drop {} }
+        }
+      )pb");
+
+  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
+                       pdpi::PartialPdTableEntryToPiTableEntry(IrP4Info(), pd_entry));
+  ASSERT_OK(pdpi::InstallPiTableEntry(SutP4RuntimeSession(), pi_entry));
+}
+
+// TODO: Enable once the bug is fixed.
+TEST_P(SmokeTestFixture, DISABLED_Bug181149419) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "e6ba12b7-18e0-4681-9562-87e2fc01d429");
+  // Adding 8 mirror sessions should succeed.
+  for (int i = 0; i < 8; i++) {
+    sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
+        R"pb(
+          mirror_session_table_entry {
+            match { mirror_session_id: "session" }
+            action {
+              mirror_as_ipv4_erspan {
+                port: "1"
+                src_ip: "10.206.196.0"
+                dst_ip: "172.20.0.202"
+                src_mac: "00:02:03:04:05:06"
+                dst_mac: "00:1a:11:17:5f:80"
+                ttl: "0x40"
+                tos: "0x00"
+              }
+            }
+          }
+        )pb");
+    pd_entry.mutable_mirror_session_table_entry()
+        ->mutable_match()
+        ->set_mirror_session_id(absl::StrCat("session-", i));
+
+    ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
+                         pdpi::PartialPdTableEntryToPiTableEntry(IrP4Info(), pd_entry));
+    EXPECT_OK(pdpi::InstallPiTableEntry(SutP4RuntimeSession(), pi_entry));
+  }
+  // Adding one entry above the limit will fail.
+  {
+    sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
+        R"pb(
+          mirror_session_table_entry {
+            match { mirror_session_id: "session-9" }
+            action {
+              mirror_as_ipv4_erspan {
+                port: "1"
+                src_ip: "10.206.196.0"
+                dst_ip: "172.20.0.202"
+                src_mac: "00:02:03:04:05:06"
+                dst_mac: "00:1a:11:17:5f:80"
+                ttl: "0x40"
+                tos: "0x00"
+              }
+            }
+          }
+        )pb");
+
+    ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
+                         pdpi::PartialPdTableEntryToPiTableEntry(IrP4Info(), pd_entry));
+    EXPECT_FALSE(
+        pdpi::InstallPiTableEntry(SutP4RuntimeSession(), pi_entry).ok());
+  }
+  // Adding ACL entries that use the 8 mirrors should all succeed.
+  for (int i = 0; i < 8; i++) {
+    sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
+        R"pb(
+          acl_ingress_table_entry {
+            match {
+              is_ipv4 { value: "0x1" }
+              src_ip { value: "10.0.0.0" mask: "255.255.255.255" }
+              dscp { value: "0x1c" mask: "0x3c" }
+            }
+            action { mirror { mirror_session_id: "session-1" } }
+            priority: 2100
+          }
+        )pb");
+    pd_entry.mutable_acl_ingress_table_entry()
+        ->mutable_action()
+        ->mutable_acl_mirror()
+        ->set_mirror_session_id(absl::StrCat("session-", i));
+    pd_entry.mutable_acl_ingress_table_entry()
+        ->mutable_match()
+        ->mutable_src_ip()
+        ->set_value(absl::StrCat("10.0.0.", i));
+
+    ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
+                         pdpi::PartialPdTableEntryToPiTableEntry(IrP4Info(), pd_entry));
+    ASSERT_OK(pdpi::InstallPiTableEntry(SutP4RuntimeSession(), pi_entry));
+  }
+}
+
 TEST_P(SmokeTestFixture, InsertTableEntry) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "da103fbb-8fd4-4385-b997-34e12a41004b");
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
         router_interface_table_entry {
@@ -88,6 +195,8 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
 }
 
 TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "bd22f5fe-4103-4729-91d0-cb2bc8258940");
   sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
         router_interface_table_entry {
@@ -108,6 +217,8 @@ TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
 }
 
 TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "8bdacde4-b261-4242-b65d-462c828a427d");
   pdpi::P4RuntimeSession* session = SutP4RuntimeSession();
   const pdpi::IrP4Info& ir_p4info = IrP4Info();
   std::vector<sai::TableEntry> write_pd_entries =
@@ -156,4 +267,4 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
 }
 
 }  // namespace
-}  // namespace gpins
+}  // namespace pins
