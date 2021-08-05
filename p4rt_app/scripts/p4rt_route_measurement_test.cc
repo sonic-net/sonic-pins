@@ -72,9 +72,9 @@ DEFINE_string(server_address, "unix:/sock/p4rt.sock",
 DEFINE_bool(insecure, true, "Use insecure connection");
 DEFINE_string(ca_cert, "/keys/ca_cert.lnk",
               "CA bundle file. Used when insecure is false");
-DEFINE_string(cert, "/keys/gpins_test_user.cert",
+DEFINE_string(cert, "/keys/pins_test_user.cert",
               "Cert file. Used when insecure is false");
-DEFINE_string(key, "/keys/gpins_test_user.key",
+DEFINE_string(key, "/keys/pins_test_user.key",
               "Key file. Used when insecure is false");
 DEFINE_string(host_name, "",
               "Host name of the switch for validating the switch cert. Used "
@@ -479,7 +479,7 @@ absl::Status GenerateRandomVrfs(absl::BitGen& bitgen, RouteEntryInfo& routes,
     std::string name = absl::StrCat("vrf-", vrf);
     ASSIGN_OR_RETURN(
         routes.vrfs_by_name[name],
-        gpins::VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, name));
+        pins::VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, name));
   }
   return absl::OkStatus();
 }
@@ -504,7 +504,7 @@ absl::Status GenerateRandomRIFs(absl::BitGen& bitgen, RouteEntryInfo& routes,
     std::string port_name = absl::StrCat(routes.port_ids[port]);
     ASSIGN_OR_RETURN(
         routes.router_interfaces_by_name[rif_name],
-        gpins::RouterInterfaceTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+        pins::RouterInterfaceTableUpdate(ir_p4info, p4::v1::Update::INSERT,
                                           rif_name, port_name, mac.ToString()));
     routes.port_by_rif_name[rif_name] = port_name;
   }
@@ -530,11 +530,11 @@ absl::Status GenerateRandomNextHops(absl::BitGen& bitgen,
 
     ASSIGN_OR_RETURN(
         routes.neighbors_by_name[neighbor_name],
-        gpins::NeighborTableUpdate(ir_p4info, p4::v1::Update::INSERT, rif,
+        pins::NeighborTableUpdate(ir_p4info, p4::v1::Update::INSERT, rif,
                                    neighbor_name, mac.ToString()));
     ASSIGN_OR_RETURN(
         routes.next_hops_by_name[nexthop_name],
-        gpins::NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+        pins::NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT,
                                   nexthop_name, rif, neighbor_name));
 
     std::string* port_name = gutil::FindOrNull(routes.port_by_rif_name, rif);
@@ -575,7 +575,7 @@ absl::StatusOr<P4WriteRequests> ComputeEncapNeighbors(
 
     ASSIGN_OR_RETURN(
         route_entry.neighbors_by_name[neighbor_name],
-        gpins::NeighborTableUpdate(ir_p4info, p4::v1::Update::INSERT, rif,
+        pins::NeighborTableUpdate(ir_p4info, p4::v1::Update::INSERT, rif,
                                    neighbor_name, mac.ToString()));
     *requests.inserts.back().add_updates() =
         route_entry.neighbors_by_name[neighbor_name];
@@ -584,7 +584,7 @@ absl::StatusOr<P4WriteRequests> ComputeEncapNeighbors(
     // DELETE the entry.
     ASSIGN_OR_RETURN(
         *requests.deletes.back().add_updates(),
-        gpins::NeighborTableUpdate(ir_p4info, p4::v1::Update::DELETE, rif,
+        pins::NeighborTableUpdate(ir_p4info, p4::v1::Update::DELETE, rif,
                                    neighbor_name, mac.ToString()));
   }
   return requests;
@@ -620,12 +620,12 @@ absl::StatusOr<P4WriteRequests> ComputeIpv4WriteRequests(
         nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
     ASSIGN_OR_RETURN(
         *requests.inserts.back().add_updates(),
-        gpins::Ipv4TableUpdate(
+        pins::Ipv4TableUpdate(
             ir_p4info, p4::v1::Update::INSERT,
-            gpins::IpTableOptions{
+            pins::IpTableOptions{
                 .vrf_id = vrf,
                 .dst_addr_lpm = std::make_pair(ip.ToString(), 32),
-                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .action = pins::IpTableOptions::Action::kSetNextHopId,
                 .nexthop_id = nexthop,
             }));
 
@@ -633,24 +633,24 @@ absl::StatusOr<P4WriteRequests> ComputeIpv4WriteRequests(
     nexthop = nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
     ASSIGN_OR_RETURN(
         *requests.modifies.back().add_updates(),
-        gpins::Ipv4TableUpdate(
+        pins::Ipv4TableUpdate(
             ir_p4info, p4::v1::Update::MODIFY,
-            gpins::IpTableOptions{
+            pins::IpTableOptions{
                 .vrf_id = vrf,
                 .dst_addr_lpm = std::make_pair(ip.ToString(), 32),
-                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .action = pins::IpTableOptions::Action::kSetNextHopId,
                 .nexthop_id = nexthop,
             }));
 
     // DELETE the entry.
     ASSIGN_OR_RETURN(
         *requests.deletes.back().add_updates(),
-        gpins::Ipv4TableUpdate(
+        pins::Ipv4TableUpdate(
             ir_p4info, p4::v1::Update::DELETE,
-            gpins::IpTableOptions{
+            pins::IpTableOptions{
                 .vrf_id = vrf,
                 .dst_addr_lpm = std::make_pair(ip.ToString(), 32),
-                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .action = pins::IpTableOptions::Action::kSetNextHopId,
                 .nexthop_id = nexthop,
             }));
   }
@@ -686,11 +686,11 @@ std::vector<int> RandmizeWeights(absl::BitGen& bitgen, int size,
   return weights;
 }
 
-absl::StatusOr<std::vector<gpins::WcmpAction>> ComputeWcmpGroupAction(
+absl::StatusOr<std::vector<pins::WcmpAction>> ComputeWcmpGroupAction(
     absl::BitGen& bitgen, int members_per_group, bool set_watch_port,
     const std::vector<std::string>& nexthops,
     const absl::flat_hash_map<std::string, std::string>& port_by_nexthop_name) {
-  std::vector<gpins::WcmpAction> actions(members_per_group);
+  std::vector<pins::WcmpAction> actions(members_per_group);
 
   // Get a random set of next hops, but don't allow duplicates.
   ASSIGN_OR_RETURN(auto nexthop_indices,
@@ -748,7 +748,7 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
 
       // The initial INSERT request.
       ASSIGN_OR_RETURN(
-          std::vector<gpins::WcmpAction> actions,
+          std::vector<pins::WcmpAction> actions,
           ComputeWcmpGroupAction(bitgen, members_per_group, set_watch_port,
                                  nexthops, routes.port_by_next_hop_name));
 
@@ -764,7 +764,7 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
 
       ASSIGN_OR_RETURN(
           *requests.inserts[batch_num].add_updates(),
-          gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+          pins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::INSERT,
                                       group_name, actions));
       VLOG(1) << "WCMP insert: "
               << requests.inserts[batch_num].ShortDebugString();
@@ -783,7 +783,7 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
       }
       ASSIGN_OR_RETURN(
           *requests.modifies[batch_num].add_updates(),
-          gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::MODIFY,
+          pins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::MODIFY,
                                       group_name, actions));
       VLOG(1) << "WCMP modify: "
               << requests.modifies[batch_num].ShortDebugString();
@@ -791,7 +791,7 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
       // DELETE the entries.
       ASSIGN_OR_RETURN(
           *requests.deletes[batch_num].add_updates(),
-          gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::DELETE,
+          pins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::DELETE,
                                       group_name, actions));
       VLOG(1) << "WCMP delete: "
               << requests.deletes[batch_num].ShortDebugString();
@@ -843,12 +843,12 @@ absl::StatusOr<P4WriteRequests> ComputeIpv6WriteRequests(
         nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
     ASSIGN_OR_RETURN(
         *requests.inserts.back().add_updates(),
-        gpins::Ipv6TableUpdate(
+        pins::Ipv6TableUpdate(
             ir_p4info, p4::v1::Update::INSERT,
-            gpins::IpTableOptions{
+            pins::IpTableOptions{
                 .vrf_id = vrf,
                 .dst_addr_lpm = std::make_pair(ip.ToString(), 64),
-                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .action = pins::IpTableOptions::Action::kSetNextHopId,
                 .nexthop_id = nexthop,
             }));
 
@@ -856,24 +856,24 @@ absl::StatusOr<P4WriteRequests> ComputeIpv6WriteRequests(
     nexthop = nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
     ASSIGN_OR_RETURN(
         *requests.modifies.back().add_updates(),
-        gpins::Ipv6TableUpdate(
+        pins::Ipv6TableUpdate(
             ir_p4info, p4::v1::Update::MODIFY,
-            gpins::IpTableOptions{
+            pins::IpTableOptions{
                 .vrf_id = vrf,
                 .dst_addr_lpm = std::make_pair(ip.ToString(), 64),
-                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .action = pins::IpTableOptions::Action::kSetNextHopId,
                 .nexthop_id = nexthop,
             }));
 
     // DELETE the entry.
     ASSIGN_OR_RETURN(
         *requests.deletes.back().add_updates(),
-        gpins::Ipv6TableUpdate(
+        pins::Ipv6TableUpdate(
             ir_p4info, p4::v1::Update::DELETE,
-            gpins::IpTableOptions{
+            pins::IpTableOptions{
                 .vrf_id = vrf,
                 .dst_addr_lpm = std::make_pair(ip.ToString(), 64),
-                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .action = pins::IpTableOptions::Action::kSetNextHopId,
                 .nexthop_id = nexthop,
             }));
   }
@@ -926,13 +926,13 @@ absl::StatusOr<P4WriteRequests> ComputeEncapWriteRequests(
     std::string nexthop_name = absl::StrCat("nh-", tunnel_name);
 
     ASSIGN_OR_RETURN(*requests.inserts.back().add_updates(),
-                     gpins::TunnelTableUpdate(
+                     pins::TunnelTableUpdate(
                          ir_p4info, p4::v1::Update::INSERT, tunnel_name,
                          neighbor, src_ip6.ToString(), router_interface_id));
 
     ASSIGN_OR_RETURN(
         route_entry.next_hops_by_name[nexthop_name],
-        gpins::NexthopTunnelTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+        pins::NexthopTunnelTableUpdate(ir_p4info, p4::v1::Update::INSERT,
                                         nexthop_name, tunnel_name));
     *requests.inserts.back().add_updates() =
         route_entry.next_hops_by_name[nexthop_name];
@@ -942,11 +942,11 @@ absl::StatusOr<P4WriteRequests> ComputeEncapWriteRequests(
     // DELETE the entry.
     ASSIGN_OR_RETURN(
         *requests.deletes.back().add_updates(),
-        gpins::NexthopTunnelTableUpdate(ir_p4info, p4::v1::Update::DELETE,
+        pins::NexthopTunnelTableUpdate(ir_p4info, p4::v1::Update::DELETE,
                                         nexthop_name, tunnel_name));
 
     ASSIGN_OR_RETURN(*requests.deletes.back().add_updates(),
-                     gpins::TunnelTableUpdate(
+                     pins::TunnelTableUpdate(
                          ir_p4info, p4::v1::Update::DELETE, tunnel_name,
                          neighbor, src_ip6.ToString(), router_interface_id));
 

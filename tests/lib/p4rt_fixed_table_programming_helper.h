@@ -22,7 +22,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 
-namespace gpins {
+namespace pins {
 
 absl::StatusOr<p4::v1::Update> RouterInterfaceTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
@@ -103,6 +103,6 @@ absl::StatusOr<p4::v1::Update> WcmpGroupTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
     absl::string_view wcmp_group_id, const std::vector<WcmpAction>& actions);
 
-}  // namespace gpins
+}  // namespace pins
 
 #endif  // GOOGLE_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_

@@ -18,10 +18,10 @@
 #include "tests/forwarding/p4_blackbox_fixture.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
-namespace gpins {
+namespace pins {
 
 class SmokeTestFixture : public P4BlackboxFixture {};
 
-}  // namespace gpins
+}  // namespace pins
 
 #endif  // PINS_TESTS_FORWARDING_SMOKE_TEST_H_
