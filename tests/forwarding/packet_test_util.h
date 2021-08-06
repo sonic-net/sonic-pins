@@ -74,6 +74,7 @@ struct TestInputOutput {
 // Holds a map of the input packet raw data to its TestInputOutput.
 struct TestData {
   absl::Mutex mutex;
+  int total_packets_sent = 0;
   int total_packets_received = 0;
   int total_invalid_packets_received = 0;
   absl::flat_hash_map<std::string, TestInputOutput> input_output_per_packet
