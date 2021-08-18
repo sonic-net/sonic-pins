@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -135,6 +136,17 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
   return req;
 }
 
+absl::StatusOr<std::string> ParseJsonResponse(absl::string_view val,
+                                              absl::string_view match_tag) {
+  const auto resp_json = json::parse(val);
+  const auto match_tag_json = resp_json.find(match_tag);
+  if (match_tag_json == resp_json.end()) {
+    return gutil::InternalErrorBuilder().LogError()
+           << match_tag << " not present in JSON response " << val;
+  }
+  return match_tag_json->dump();
+}
+
 absl::StatusOr<std::string> ParseGnmiGetResponse(
     const gnmi::GetResponse& response, absl::string_view match_tag) {
   if (response.notification_size() != 1)
@@ -146,16 +158,20 @@ absl::StatusOr<std::string> ParseGnmiGetResponse(
     return gutil::InternalErrorBuilder().LogError()
            << "Unexpected update size in response (should be 1): "
            << response.notification(0).update_size();
-
-  const auto resp_json =
-      json::parse(response.notification(0).update(0).val().json_ietf_val());
-  const auto match_tag_json = resp_json.find(match_tag);
-  if (match_tag_json == resp_json.end()) {
-    return gutil::InternalErrorBuilder().LogError()
-           << match_tag << " not present in JSON response "
-           << response.ShortDebugString();
+  switch (response.notification(0).update(0).val().value_case()) {
+    case gnmi::TypedValue::kStringVal:
+      return response.notification(0).update(0).val().string_val();
+    case gnmi::TypedValue::kJsonVal:
+      return ParseJsonResponse(
+          response.notification(0).update(0).val().json_val(), match_tag);
+    case gnmi::TypedValue::kJsonIetfVal:
+      return ParseJsonResponse(
+          response.notification(0).update(0).val().json_ietf_val(), match_tag);
+    default:
+      return gutil::InternalErrorBuilder().LogError()
+             << "Unexpected data type: "
+             << response.notification(0).update(0).val().value_case();
   }
-  return match_tag_json->dump();
 }
 
 absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* sut_gnmi_stub,
@@ -263,8 +279,8 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
     }
     std::string name = std::string(StripQuotes(element_name_json->dump()));
 
-    // TODO: Remove once CpuX contains the oper-state subtree.
-    if (absl::StartsWith(name, "Cpu")) {
+    // TODO: Remove once CPU contains the oper-state subtree.
+    if (absl::StartsWith(name, "CPU")) {
       LOG(INFO) << "Skipping " << name << ".";
       continue;
     }

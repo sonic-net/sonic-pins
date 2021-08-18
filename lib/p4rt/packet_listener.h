@@ -45,7 +45,7 @@ class PacketListener : public thinkit::PacketGenerationFinalizer {
                      interface_port_id_to_name,
                  thinkit::PacketCallback callback);
 
- ~PacketListener() ABSL_LOCKS_EXCLUDED(mutex_) {
+  ~PacketListener() ABSL_LOCKS_EXCLUDED(mutex_) {
     {
       absl::MutexLock lock(&mutex_);
       time_to_exit_ = true;

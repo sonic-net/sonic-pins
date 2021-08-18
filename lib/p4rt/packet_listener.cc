@@ -20,11 +20,20 @@ PacketListener::PacketListener(
     const absl::flat_hash_map<std::string, std::string>*
         interface_port_id_to_name,
     thinkit::PacketCallback callback)
-    : session_(std::move(session)),
+    : session_(session),
+      time_to_exit_(false),
       receive_packet_thread_([this, ir_p4info, interface_port_id_to_name,
-                              callback = std::move(callback)]() {
+                              callback = std::move(
+                                  callback)]() ABSL_LOCKS_EXCLUDED(mutex_) {
         p4::v1::StreamMessageResponse pi_response;
         while (session_->StreamChannelRead(pi_response)) {
+          {
+            absl::MutexLock lock(&mutex_);
+            if (time_to_exit_) {
+              break;
+            }
+          }
+
           sai::StreamMessageResponse pd_response;
           if (!pdpi::PiStreamMessageResponseToPd(*ir_p4info, pi_response,
                                                  &pd_response)
@@ -37,6 +46,8 @@ PacketListener::PacketListener(
             return;
           }
           std::string port_id = pd_response.packet().metadata().ingress_port();
+
+          LOG(INFO) << "Packet received from port id: " << port_id;
           auto port_name = interface_port_id_to_name->find(port_id);
           if (port_name == interface_port_id_to_name->end()) {
             LOG(WARNING) << port_id << " not found.";
