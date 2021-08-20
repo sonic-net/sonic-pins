@@ -79,6 +79,9 @@ struct TestData {
   int total_invalid_packets_received = 0;
   absl::flat_hash_map<std::string, TestInputOutput> input_output_per_packet
       ABSL_GUARDED_BY(mutex);
+  // Clears the received packets in the output vector and the send/receive
+  // counters.
+  void ClearReceivedPackets() ABSL_LOCKS_EXCLUDED(mutex);
 };
 
 // Checks wehether this a valid test configuration. Not all configurations are
