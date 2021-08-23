@@ -25,6 +25,7 @@
 #include "absl/types/span.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/ir.pb.h"
 
@@ -32,14 +33,14 @@ namespace p4_fuzzer {
 
 // An update and it's corresponding status.
 struct UpdateStatus {
-  p4::v1::Update update;
+  AnnotatedUpdate update;
   pdpi::IrUpdateStatus status;
 };
 
 // An update with an index and it's corresponding status.
 struct IndexUpdateStatus {
   int index;
-  p4::v1::Update update;
+  AnnotatedUpdate update;
   pdpi::IrUpdateStatus status;
 };
 
@@ -59,7 +60,7 @@ absl::Status UpdateOracle(const pdpi::IrP4Info& ir_p4_info,
 // now, batches are processed in sequence.  Returns nullopt if everything is
 // valid, and a list of problems otherwise.
 absl::optional<std::vector<std::string>> WriteRequestOracle(
-    const pdpi::IrP4Info& ir_p4_info, const p4::v1::WriteRequest& request,
+    const pdpi::IrP4Info& ir_p4_info, const AnnotatedWriteRequest& request,
     const absl::Span<const pdpi::IrUpdateStatus>& statuses,
     const SwitchState& state);
 

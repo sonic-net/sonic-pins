@@ -205,9 +205,10 @@ std::vector<AnnotatedTableEntry> ValidForwardingEntries(
     absl::BitGen* gen, const FuzzerConfig& config, const int num_entries);
 
 // Randomly generates a set of updates, both valid and invalid.
-AnnotatedWriteRequest FuzzWriteRequest(absl::BitGen* gen,
-                                       const FuzzerConfig& config,
-                                       const SwitchState& switch_state);
+AnnotatedWriteRequest FuzzWriteRequest(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    absl::optional<int> max_batch_size = absl::nullopt);
 
 // Takes a P4 Runtime table and returns randomly chosen action ref from the
 // action refs that are not in default only scope.

@@ -88,7 +88,6 @@ class SwitchState {
 
   // Returns a summary of the state.
   std::string SwitchStateSummary() const;
-
  private:
   // A map from table ids to the entries they store.
   absl::flat_hash_map<int, TableEntries> tables_;

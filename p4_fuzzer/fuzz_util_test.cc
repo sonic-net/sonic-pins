@@ -147,57 +147,44 @@ TEST(FuzzUtilTest, FuzzUint64LargeInRange) {
   }
 }
 
-TEST(FuzzUtilTest, FuzzWriteRequestAreReproducible) {
-  ASSERT_OK_AND_ASSIGN(const FuzzerTestState fuzzer_state,
-                       ConstructFuzzerTestState(TestP4InfoOptions()));
-
-  // Use the same sequence seed for both generators.
-  absl::SeedSeq seed;
-  absl::BitGen gen_0(seed);
-  absl::BitGen gen_1(seed);
-
-  // Create 20 instances (of, in expectation, ~50 updates each), and verify that
-  // they are identical.
-  for (int i = 0; i < 20; ++i) {
-    ASSERT_THAT(FuzzWriteRequest(&gen_0, fuzzer_state.config,
-                                 fuzzer_state.switch_state),
-                EqualsProto(FuzzWriteRequest(&gen_1, fuzzer_state.config,
-                                             fuzzer_state.switch_state)));
-  }
-}
-
 // Test that FuzzActionProfileActionSet correctly generates an ActionProfile
 // Action Set of acceptable weights and size (derived from max_group_size and
 // kActionProfileActionSetMaxCardinality).
 TEST(FuzzActionProfileActionSetTest,
      StaysWithinMaxGroupSizeAndCardinalityParameters) {
-  absl::BitGen gen;
+  // As implied by the name, 1000 is basically arbitrarily chosen and anything
+  // above that would be just as good. Lower is probably worse though.
+  const int kGroupSizeArbitraryUpperBound = 1000;
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrTableDefinition& table_definition,
+                       GetAOneShotTableDefinition(fuzzer_state.config.info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrActionProfileDefinition action_profile_definition,
+      GetActionProfileImplementingTable(fuzzer_state.config.info,
+                                        table_definition));
   for (int i = 0; i < 1000; ++i) {
     // Tests a broad enough band of max weights to give us interesting coverage
     // while being narrow enough to likely catch issues when they happen.
-    int max_group_size =
-        absl::Uniform<int>(gen, kActionProfileActionSetMaxCardinality, 10000);
-    auto options =
-        TestP4InfoOptions{.action_profile_max_group_size = max_group_size};
-    ASSERT_OK_AND_ASSIGN(FuzzerTestState fuzzer_state,
-                         ConstructFuzzerTestState(options));
-    const pdpi::IrTableDefinition& table_definition =
-        fuzzer_state.config.info.tables_by_id().at(
-            options.action_selector_table_id);
+    int max_group_size = absl::Uniform<int>(
+        fuzzer_state.gen, kActionProfileActionSetMaxCardinality,
+        kGroupSizeArbitraryUpperBound);
+
+    SetMaxGroupSizeInActionProfile(fuzzer_state.config.info,
+                                   action_profile_definition, max_group_size);
 
     // Fuzz an ActionProfileActionSet.
-    ASSERT_OK_AND_ASSIGN(auto action_profile_set,
+    ASSERT_OK_AND_ASSIGN(auto action_profile_action_set,
                          FuzzActionProfileActionSet(
                              &fuzzer_state.gen, fuzzer_state.config,
                              fuzzer_state.switch_state, table_definition));
 
     // The number of actions should always be less than or equal to the max
     // cardinality.
-    EXPECT_LE(action_profile_set.action_profile_actions_size(),
+    EXPECT_LE(action_profile_action_set.action_profile_actions_size(),
               kActionProfileActionSetMaxCardinality);
 
     int total_weight = 0;
-    for (auto& action : action_profile_set.action_profile_actions()) {
+    for (auto& action : action_profile_action_set.action_profile_actions()) {
       total_weight += action.weight();
     }
     EXPECT_LE(total_weight, max_group_size);
@@ -207,64 +194,86 @@ TEST(FuzzActionProfileActionSetTest,
 // Test that FuzzActionProfileActionSet correctly generates an ActionProfile
 // Action Set of acceptable weights and size when max_group_size is set to 0.
 TEST(FuzzActionProfileActionSetTest, HandlesZeroMaxGroupSizeCorrectly) {
-  auto options = TestP4InfoOptions{.action_profile_max_group_size = 0};
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrTableDefinition& table_definition,
+                       GetAOneShotTableDefinition(fuzzer_state.config.info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrActionProfileDefinition action_profile_definition,
+      GetActionProfileImplementingTable(fuzzer_state.config.info,
+                                        table_definition));
+  SetMaxGroupSizeInActionProfile(fuzzer_state.config.info,
+                                 action_profile_definition,
+                                 /*max_group_size=*/0);
   for (int i = 0; i < 1000; ++i) {
-    ASSERT_OK_AND_ASSIGN(FuzzerTestState fuzzer_state,
-                         ConstructFuzzerTestState(options));
-    const pdpi::IrTableDefinition& table_definition =
-        fuzzer_state.config.info.tables_by_id().at(
-            options.action_selector_table_id);
-
     // Fuzz an ActionProfileActionSet.
-    ASSERT_OK_AND_ASSIGN(auto action_profile_set,
+    ASSERT_OK_AND_ASSIGN(auto action_profile_action_set,
                          FuzzActionProfileActionSet(
                              &fuzzer_state.gen, fuzzer_state.config,
                              fuzzer_state.switch_state, table_definition));
 
     // The number of actions should always be less than or equal to the max
     // cardinality.
-    EXPECT_LE(action_profile_set.action_profile_actions_size(),
+    EXPECT_LE(action_profile_action_set.action_profile_actions_size(),
               kActionProfileActionSetMaxCardinality);
 
     int total_weight = 0;
-    for (auto& action : action_profile_set.action_profile_actions()) {
+    for (auto& action : action_profile_action_set.action_profile_actions()) {
       total_weight += action.weight();
     }
     // When max_group_size is set to 0, size is the upperbound for weight.
-    EXPECT_LE(total_weight, options.action_profile_size);
+    EXPECT_LE(total_weight, action_profile_definition.action_profile().size());
   }
 }
 
 // Test that FuzzActionProfileActionSet correctly handles a request with low max
 // group size (in particular, lower than the max number of actions).
 TEST(FuzzActionProfileActionSetTest, HandlesLowMaxGroupSizeCorrectly) {
-  absl::BitGen gen;
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrTableDefinition& table_definition,
+                       GetAOneShotTableDefinition(fuzzer_state.config.info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrActionProfileDefinition action_profile_definition,
+      GetActionProfileImplementingTable(fuzzer_state.config.info,
+                                        table_definition));
   for (int i = 0; i < 1000; ++i) {
     // Set up.
-    int max_group_size =
-        absl::Uniform<int>(gen, 1, kActionProfileActionSetMaxCardinality);
-    auto options =
-        TestP4InfoOptions{.action_profile_max_group_size = max_group_size};
-    ASSERT_OK_AND_ASSIGN(FuzzerTestState fuzzer_state,
-                         ConstructFuzzerTestState(options));
-    const pdpi::IrTableDefinition& table_definition =
-        fuzzer_state.config.info.tables_by_id().at(
-            options.action_selector_table_id);
+    const int max_group_size = absl::Uniform<int>(
+        fuzzer_state.gen, 1, kActionProfileActionSetMaxCardinality);
 
-    ASSERT_OK_AND_ASSIGN(auto action_profile_set,
+    SetMaxGroupSizeInActionProfile(fuzzer_state.config.info,
+                                   action_profile_definition, max_group_size);
+
+    ASSERT_OK_AND_ASSIGN(auto action_profile_action_set,
                          FuzzActionProfileActionSet(
                              &fuzzer_state.gen, fuzzer_state.config,
                              fuzzer_state.switch_state, table_definition));
 
     // The number of actions must be less than max_group_size since every
     // action has at least weight 1.
-    EXPECT_LE(action_profile_set.action_profile_actions_size(), max_group_size);
+    EXPECT_LE(action_profile_action_set.action_profile_actions_size(),
+              max_group_size);
 
     int total_weight = 0;
-    for (auto& action : action_profile_set.action_profile_actions()) {
+    for (auto& action : action_profile_action_set.action_profile_actions()) {
       total_weight += action.weight();
     }
     EXPECT_LE(total_weight, max_group_size);
+  }
+}
+
+TEST(FuzzUtilTest, FuzzWriteRequestRespectMaxBatchSize) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+
+  // Create 200 instances of, in expectation, ~50 updates each without the
+  // max_batch_size parameter and verify that they all have batches smaller than
+  // max_batch_size.
+  for (int i = 0; i < 200; ++i) {
+    int max_batch_size = absl::Uniform<int>(fuzzer_state.gen, 0, 50);
+    EXPECT_LE(FuzzWriteRequest(&fuzzer_state.gen, fuzzer_state.config,
+                               fuzzer_state.switch_state, max_batch_size)
+                  .updates_size(),
+              max_batch_size)
+        << absl::StrCat(" using max_batch_size=", max_batch_size);
   }
 }
 
