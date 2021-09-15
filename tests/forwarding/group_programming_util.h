@@ -77,16 +77,6 @@ absl::Status VerifyGroupMembersFromReceiveTraffic(
 absl::StatusOr<std::vector<int>> GenerateNRandomWeights(int n,
                                                         int total_weight);
 
-// TODO: Temporary fix to rescale TH3 weights.
-// To be removed when 256 member support is available.
-int RescaleWeightForTomahawk3(int weight);
-
-// TODO: Rescales the member weights to <=128 for now to match
-// hardware behaviour, remove when hardware supports > 128 weights.
-// Halves member weights >= 2 and works only for sum of initial member weights
-// <= 256.
-void RescaleMemberWeights(std::vector<GroupMember>& members);
-
 // Returns a human-readable description of the actual vs expected
 // distribution of packets on the group member ports.
 // expect_single_port specifies whether all packets are expected on a single
