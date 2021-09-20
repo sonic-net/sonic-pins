@@ -14,7 +14,25 @@
 
 #include "lib/p4rt/packet_listener.h"
 
+#include <functional>
+#include <string>
+#include <utility>
+
+#include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
+#include "absl/strings/escaping.h"
+#include "absl/synchronization/mutex.h"
+#include "glog/logging.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/pd.h"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "thinkit/control_device.h"
+
 namespace pins_test {
+
 PacketListener::PacketListener(
     pdpi::P4RuntimeSession* session, const pdpi::IrP4Info* ir_p4info,
     const absl::flat_hash_map<std::string, std::string>*

@@ -12,17 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_MOCK_CONTROL_INTERFACE_H_
-#define GOOGLE_THINKIT_MOCK_CONTROL_INTERFACE_H_
+#ifndef GOOGLE_THINKIT_MOCK_CONTROL_DEVICE_H_
+#define GOOGLE_THINKIT_MOCK_CONTROL_DEVICE_H_
+
+#include <memory>
+#include <string>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
+#include "diag/diag.pb.h"
 #include "gmock/gmock.h"
-#include "thinkit/control_interface.h"
+#include "thinkit/control_device.h"
+#include "thinkit/packet_generation_finalizer.h"
 
 namespace thinkit {
-class MockControlInterface : public ControlInterface {
+
+class MockControlDevice : public ControlDevice {
  public:
   MOCK_METHOD(
       absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>,
@@ -51,4 +60,4 @@ class MockControlInterface : public ControlInterface {
 
 }  // namespace thinkit
 
-#endif  // GOOGLE_THINKIT_MOCK_CONTROL_INTERFACE_H_
+#endif  // GOOGLE_THINKIT_MOCK_CONTROL_DEVICE_H_

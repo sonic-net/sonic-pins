@@ -12,35 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "lib/gpins_control_interface.h"
+#include "lib/gpins_control_device.h"
+
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
+#include "diag/diag.pb.h"
 #include "glog/logging.h"
+#include "grpcpp/client_context.h"
+#include "grpcpp/impl/codegen/client_context.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/packet_listener.h"
 #include "lib/validator/validator_lib.h"
+#include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "include/nlohmann/json.hpp"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "system/system.grpc.pb.h"
+#include "system/system.pb.h"
 #include "tests/forwarding/util.h"
-#include "thinkit/control_interface.h"
+#include "thinkit/control_device.h"
 #include "thinkit/packet_generation_finalizer.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
-
 namespace {
 
 constexpr char kIfEnabledConfigPath[] =
@@ -71,7 +88,7 @@ absl::StatusOr<gnmi::SetRequest> BuildGnmiSetLinkStateRequest(
 
 }  // namespace
 
-GpinsControlInterface::GpinsControlInterface(
+GpinsControlDevice::GpinsControlDevice(
     std::unique_ptr<thinkit::Switch> sut,
     std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
     pdpi::IrP4Info ir_p4info,
@@ -86,20 +103,20 @@ GpinsControlInterface::GpinsControlInterface(
 }
 
 absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
-GpinsControlInterface::CollectPackets(thinkit::PacketCallback callback) {
+GpinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
   return absl::make_unique<PacketListener>(
       control_p4_session_.get(), &ir_p4info_, &interface_name_to_port_id_,
       callback);
 }
 
-absl::Status GpinsControlInterface::SendPacket(absl::string_view interface,
-                                               absl::string_view packet) {
+absl::Status GpinsControlDevice::SendPacket(absl::string_view interface,
+                                            absl::string_view packet) {
   return gpins::InjectEgressPacket(interface_name_to_port_id_[interface],
                                    std::string(packet), ir_p4info_,
                                    control_p4_session_.get());
 }
 
-absl::Status GpinsControlInterface::SendPackets(
+absl::Status GpinsControlDevice::SendPackets(
     absl::string_view interface, absl::Span<const std::string> packets) {
   for (absl::string_view packet : packets) {
     RETURN_IF_ERROR(SendPacket(interface, packet));
@@ -107,7 +124,7 @@ absl::Status GpinsControlInterface::SendPackets(
   return absl::OkStatus();
 }
 
-absl::Status GpinsControlInterface::SetAdminLinkState(
+absl::Status GpinsControlDevice::SetAdminLinkState(
     absl::Span<const std::string> interfaces, thinkit::LinkState state) {
   ASSIGN_OR_RETURN(auto gnmi_stub, sut_->CreateGnmiStub());
   gnmi::SetResponse response;
@@ -123,7 +140,7 @@ absl::Status GpinsControlInterface::SetAdminLinkState(
   return absl::OkStatus();
 }
 
-absl::Status GpinsControlInterface::Reboot(thinkit::RebootType reboot_type) {
+absl::Status GpinsControlDevice::Reboot(thinkit::RebootType reboot_type) {
   ASSIGN_OR_RETURN(auto gnoi_system_stub, sut_->CreateGnoiSystemStub());
   gnoi::system::RebootRequest request;
   if (reboot_type == thinkit::RebootType::kCold) {
@@ -142,7 +159,7 @@ absl::Status GpinsControlInterface::Reboot(thinkit::RebootType reboot_type) {
       gnoi_system_stub->Reboot(&context, request, &response));
 }
 
-absl::StatusOr<gnoi::diag::StartBERTResponse> GpinsControlInterface::StartBERT(
+absl::StatusOr<gnoi::diag::StartBERTResponse> GpinsControlDevice::StartBERT(
     const gnoi::diag::StartBERTRequest& request) {
   ASSIGN_OR_RETURN(auto gnoi_diag_stub, sut_->CreateGnoiDiagStub());
   gnoi::diag::StartBERTResponse response;
@@ -157,7 +174,7 @@ absl::StatusOr<gnoi::diag::StartBERTResponse> GpinsControlInterface::StartBERT(
   return response;
 }
 
-absl::StatusOr<gnoi::diag::StopBERTResponse> GpinsControlInterface::StopBERT(
+absl::StatusOr<gnoi::diag::StopBERTResponse> GpinsControlDevice::StopBERT(
     const gnoi::diag::StopBERTRequest& request) {
   ASSIGN_OR_RETURN(auto gnoi_diag_stub, sut_->CreateGnoiDiagStub());
   gnoi::diag::StopBERTResponse response;
@@ -173,7 +190,7 @@ absl::StatusOr<gnoi::diag::StopBERTResponse> GpinsControlInterface::StopBERT(
 }
 
 absl::StatusOr<gnoi::diag::GetBERTResultResponse>
-GpinsControlInterface::GetBERTResult(
+GpinsControlDevice::GetBERTResult(
     const gnoi::diag::GetBERTResultRequest& request) {
   ASSIGN_OR_RETURN(auto gnoi_diag_stub, sut_->CreateGnoiDiagStub());
   gnoi::diag::GetBERTResultResponse response;
@@ -189,8 +206,8 @@ GpinsControlInterface::GetBERTResult(
   return response;
 }
 
-absl::StatusOr<absl::flat_hash_set<std::string>>
-GpinsControlInterface::GetUpLinks(absl::Span<const std::string> interfaces) {
+absl::StatusOr<absl::flat_hash_set<std::string>> GpinsControlDevice::GetUpLinks(
+    absl::Span<const std::string> interfaces) {
   ASSIGN_OR_RETURN(auto gnmi_stub, sut_->CreateGnmiStub());
   gnmi::GetResponse response;
   absl::flat_hash_set<std::string> up_links;
@@ -207,6 +224,6 @@ GpinsControlInterface::GetUpLinks(absl::Span<const std::string> interfaces) {
   return up_links;
 }
 
-absl::Status GpinsControlInterface::CheckUp() { return SwitchReady(*sut_); }
+absl::Status GpinsControlDevice::CheckUp() { return SwitchReady(*sut_); }
 
 }  // namespace pins_test
