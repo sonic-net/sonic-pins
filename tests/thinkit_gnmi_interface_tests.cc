@@ -22,7 +22,6 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
@@ -100,9 +99,27 @@ void TestGnmiInterfaceConfigSetAdminStatus(thinkit::Switch& sut,
   LOG(INFO) << "Enabling front panel port: " << if_name;
   ASSERT_OK(SetGnmiConfigPath(sut_gnmi_stub.get(), if_enabled_config_path,
                               GnmiSetType::kUpdate, kEnabledTrue));
-  absl::SleepFor(absl::Seconds(5));
 
   // Perform state path verifications.
+  // Verify /interfaces/interface[name=<port>]/state/oper-status = UP using
+  // polling with timeout.
+  if_state_path = absl::StrCat("interfaces/interface[name=", if_name,
+                               "]/state/oper-status");
+  resp_parse_str = "openconfig-interfaces:oper-status";
+  auto oper_status_check = false;
+  auto start_time = absl::Now();
+  auto timeout = absl::Seconds(60);
+  while (absl::Now() < (start_time + timeout)) {
+    ASSERT_OK_AND_ASSIGN(state_path_response,
+                         GetGnmiStatePathInfo(sut_gnmi_stub.get(),
+                                              if_state_path, resp_parse_str));
+    if (absl::StrContains(state_path_response, kStateUp)) {
+      oper_status_check = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(oper_status_check);
+
   // Verify /interfaces/interface[name=<port>]/state/enabled = true.
   if_state_path =
       absl::StrCat("interfaces/interface[name=", if_name, "]/state/enabled");
@@ -116,15 +133,6 @@ void TestGnmiInterfaceConfigSetAdminStatus(thinkit::Switch& sut,
   if_state_path = absl::StrCat("interfaces/interface[name=", if_name,
                                "]/state/admin-status");
   resp_parse_str = "openconfig-interfaces:admin-status";
-  ASSERT_OK_AND_ASSIGN(
-      state_path_response,
-      GetGnmiStatePathInfo(sut_gnmi_stub.get(), if_state_path, resp_parse_str));
-  EXPECT_THAT(state_path_response, HasSubstr(kStateUp));
-
-  // Verify /interfaces/interface[name=<port>]/state/oper-status = UP.
-  if_state_path = absl::StrCat("interfaces/interface[name=", if_name,
-                               "]/state/oper-status");
-  resp_parse_str = "openconfig-interfaces:oper-status";
   ASSERT_OK_AND_ASSIGN(
       state_path_response,
       GetGnmiStatePathInfo(sut_gnmi_stub.get(), if_state_path, resp_parse_str));
@@ -191,7 +199,7 @@ void TestGnmiPortComponentPaths(
 
 void TestGnmiInterfaceConfigSetPortSpeed(
     thinkit::Switch& sut, absl::string_view if_name,
-    const std::vector<int>& supported_speeds) {
+    const absl::flat_hash_set<int>& supported_speeds) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
 
   // Get current configured port speed for the port.
