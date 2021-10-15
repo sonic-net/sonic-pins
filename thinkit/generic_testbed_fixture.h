@@ -44,7 +44,7 @@ class GenericTestbedInterface {
 
 // The Thinkit `TestParams` defines test parameters to
 // `GenericTestbedFixture` class.
-struct TestParams {
+struct GenericTestbedFixtureParams {
   // Ownership transferred in GenericTestbedFixture class.
   GenericTestbedInterface* generic_testbed;
   std::string gnmi_config;
@@ -74,7 +74,8 @@ struct TestParams {
 //
 //  Individual tests should use the new suite name:
 //    TEST_P(MyPinsTest, MyTestName) {}
-class GenericTestbedFixture : public testing::TestWithParam<TestParams> {
+class GenericTestbedFixture
+    : public testing::TestWithParam<GenericTestbedFixtureParams> {
  protected:
   // A derived class that needs/wants to do its own setup can override this
   // method. However, it should take care to call this base setup first. That
