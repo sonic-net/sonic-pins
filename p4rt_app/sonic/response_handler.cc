@@ -122,17 +122,21 @@ GetAppDbResponses(int expected_response_count,
 }
 
 // Restore APPL_DB to the last successful state.
-absl::Status RestoreApplDb(const std::string& key,
+absl::Status RestoreApplDb(const std::string& table_name,
+                           const std::string& key,
                            swss::DBConnectorInterface& app_db_client,
                            swss::DBConnectorInterface& state_db_client) {
+  std::string state_db_key = absl::StrCat(table_name, "|", key);
+  std::string app_db_key = absl::StrCat(table_name, ":", key);
+
   // Query the APPL_STATE_DB with the same key as in APPL_DB.
   std::unordered_map<std::string, std::string> values_map =
-      state_db_client.hgetall(key);
+      state_db_client.hgetall(state_db_key);
   if (values_map.empty()) {
     // No entry in APPL_STATE_DB with this key indicates this is an insert
     // operation that has to be restored, which then has to be removed.
-    LOG(INFO) << "Restoring (by delete) AppDb entry: " << key;
-    auto del_entries = app_db_client.del(key);
+    LOG(INFO) << "Restoring (by delete) AppDb entry: " << app_db_key;
+    auto del_entries = app_db_client.del(app_db_key);
     RET_CHECK(del_entries == 1)
         << "Unexpected number of delete entries when tring to delete a newly "
            "added entry from ApplDB for a failed response, expected : 1, "
@@ -148,9 +152,9 @@ absl::Status RestoreApplDb(const std::string& key,
     value_tuples.at(i++) = entry;
   }
   // Update APPL_DB with the retrieved values from APPL_STATE_DB.
-  LOG(INFO) << "Restoring (by update) AppDb entry: " << key;
-  app_db_client.del(key);
-  app_db_client.hmset(key, value_tuples);
+  LOG(INFO) << "Restoring (by update) AppDb entry: " << app_db_key;
+  app_db_client.del(app_db_key);
+  app_db_client.hmset(app_db_key, value_tuples);
 
   return absl::OkStatus();
 }
@@ -207,9 +211,8 @@ absl::Status GetAndProcessResponseNotification(
         LOG(WARNING) << "OrchAgent could not handle AppDb entry '"
                      << response_key
                      << "'. Failed with: " << response_status.DebugString();
-        RETURN_IF_ERROR(
-            RestoreApplDb(absl::StrCat(table_name, ":", response_key),
-                          app_db_client, state_db_client));
+        RETURN_IF_ERROR(RestoreApplDb(table_name, response_key, app_db_client,
+                                      state_db_client));
       }
       ++expected_iter;
       ++response_iter;

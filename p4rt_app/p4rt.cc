@@ -36,7 +36,6 @@
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/packetio_impl.h"
-#include "swss/component_state_helper.h"
 #include "swss/consumernotifier.h"
 #include "swss/dbconnector.h"
 #include "swss/producerstatetable.h"

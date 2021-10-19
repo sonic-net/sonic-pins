@@ -291,7 +291,7 @@ TEST(ResponseHandlerTest, CleanupAppDbWithAnUpdate) {
   // checking the AppStateDb we return a result which implies the entry existed
   // before and should be reverted back to the old values (i.e. call hmset to
   // the AppDb entry).
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key1"))
+  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE|key1"))
       .WillOnce(Return(std::unordered_map<std::string, std::string>{
           {"action", "set_port_and_src_mac"},
       }));
@@ -331,7 +331,7 @@ TEST(ResponseHandlerTest, CleanupAppDbWithADelete) {
   // The failure should invoke a cleanup response for the first key. When
   // checking the AppStateDb we do not return any values which implies the entry
   // did not exist before and the current AppDb entry should be deleted.
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key0"))
+  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE|key0"))
       .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
   EXPECT_CALL(mock_app_db_client, del("MY_TABLE:key0")).WillOnce(Return(1));
 
@@ -370,7 +370,7 @@ TEST(ResponseHandlerTest, CleanupAppDbFails) {
   // The failure should invoke a cleanup response for the second key. When
   // checking the AppStateDb we do not return any values which implies the entry
   // did not exist before and the current AppDb entry should be deleted.
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key1"))
+  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE|key1"))
       .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
 
   // However, this test simulates that cleanup delete failing by returning 0
@@ -409,7 +409,7 @@ TEST_P(ResponseHandlerErrorCodeTest, VerifySwssToGrpcMapping) {
       .WillOnce(DoAll(
           SetArgReferee<0>(GetParam().swss_error), SetArgReferee<1>("key0"),
           SetArgReferee<2>(GetSwssError("my_error")), Return(true)));
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key0"))
+  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE|key0"))
       .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
   EXPECT_CALL(mock_app_db_client, del("MY_TABLE:key0")).WillOnce(Return(1));
 
