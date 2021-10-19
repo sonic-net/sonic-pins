@@ -33,6 +33,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
@@ -107,19 +108,70 @@ struct QueueInfo {
   int rate_packets_per_second = 0;  // Rate of packets in packets per second.
 };
 
-// TODO: Parse QueueInfo from gNMI config.
+// Extract the queue configurations from the gNMI configuration.
+// The function returns a map keyed on queue name and value
+// holds queue configuration information.
+// TODO: Need to handle exceptions cleanly for failures
+// during json parsing which can crash the test run.
+// Currently we are assuming validity of config json parameter passed into
+// the test.
 absl::StatusOr<absl::flat_hash_map<std::string, QueueInfo>>
-GetDefaultQueueInfo() {
-  return absl::flat_hash_map<std::string, QueueInfo>{
-      {"BE1", QueueInfo{"BE1", "0x2", 120}},
-      {"AF1", QueueInfo{"AF1", "0x3", 120}},
-      {"AF2", QueueInfo{"AF2", "0x4", 800}},
-      {"AF3", QueueInfo{"AF3", "0x5", 120}},
-      {"AF4", QueueInfo{"AF4", "0x6", 4000}},
-      {"LLQ1", QueueInfo{"LLQ1", "0x0", 800}},
-      {"LLQ2", QueueInfo{"LLQ2", "0x1", 800}},
-      {"NC1", QueueInfo{"NC1", "0x7", 16000}},
-  };
+ExtractQueueInfoViaGnmiConfig(absl::string_view gnmi_config) {
+  nlohmann::json config = nlohmann::json::parse(gnmi_config);
+  if (!config.is_object()) {
+    return absl::InvalidArgumentError("Could not parse gnmi configuration.");
+  }
+
+  absl::flat_hash_map<std::string, QueueInfo> queue_info_by_queue_name;
+  auto &qos_interfaces =
+      config["openconfig-qos:qos"]["interfaces"]["interface"];
+
+  std::string cpu_scheduler_policy;
+  for (auto &interface : qos_interfaces) {
+    if (interface["interface-id"].get<std::string>() == "CPU") {
+      cpu_scheduler_policy =
+          interface["output"]["scheduler-policy"]["config"]["name"]
+              .get<std::string>();
+      break;
+    }
+  }
+
+  auto &scheduler_policies =
+      config["openconfig-qos:qos"]["scheduler-policies"]["scheduler-policy"];
+  for (auto &policy : scheduler_policies) {
+    if (policy["name"].get<std::string>() == cpu_scheduler_policy) {
+      for (auto &scheduler : policy["schedulers"]["scheduler"]) {
+        std::string queue_name =
+            scheduler["inputs"]["input"][0]["config"]["queue"]
+                .get<std::string>();
+        queue_info_by_queue_name[queue_name].gnmi_queue_name = queue_name;
+        std::string peak_rate = scheduler["two-rate-three-color"]["config"]
+                                         ["google-pins-qos:pir-pkts"]
+                                             .get<std::string>();
+        if (!absl::SimpleAtoi(peak_rate, &queue_info_by_queue_name[queue_name]
+                                              .rate_packets_per_second)) {
+          return absl::InternalError(
+              absl::StrCat("Unable to parse rate as int ", peak_rate,
+                           " for queue ", queue_name));
+        }
+        LOG(INFO) << "Queue: " << queue_name
+                  << ", configured rate:" << peak_rate;
+      }
+      break;
+    }
+  }
+
+  // TODO: Remove these once P4 uses gnmi queue names
+  queue_info_by_queue_name["BE1"].p4_queue_name = "0x2";
+  queue_info_by_queue_name["AF1"].p4_queue_name = "0x3";
+  queue_info_by_queue_name["AF2"].p4_queue_name = "0x4";
+  queue_info_by_queue_name["AF3"].p4_queue_name = "0x5";
+  queue_info_by_queue_name["AF4"].p4_queue_name = "0x6";
+  queue_info_by_queue_name["LLQ1"].p4_queue_name = "0x0";
+  queue_info_by_queue_name["LLQ2"].p4_queue_name = "0x1";
+  queue_info_by_queue_name["NC1"].p4_queue_name = "0x7";
+
+  return queue_info_by_queue_name;
 }
 
 // Set up the switch to punt packets to CPU.
@@ -937,7 +989,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }
 
-TEST_P(CpuQosTestWithIxia, TestCPUQueueRateLimit) {
+TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndRateLimit) {
   // Pick a testbed with an Ixia Traffic Generator.
   auto requirements =
       gutil::ParseProtoOrDie<thinkit::TestRequirements>(
@@ -955,46 +1007,17 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueRateLimit) {
 
   thinkit::Switch& sut = generic_testbed->Sut();
 
-  // Connect to TestTracker for test status.
-  if (auto &id = GetParam().test_case_id; id.has_value()) {
-    generic_testbed->Environment().SetTestCaseID(*id);
-  }
-
   // Push GNMI config.
   ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
 
   // Hook up to GNMI.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
-  // Get Queues
-  // TODO: Extract Queue info from config instead of hardcoded
-  // default.
-  ASSERT_OK_AND_ASSIGN(auto queues, GetDefaultQueueInfo());
-
-  // Set up P4Runtime session.
-  // TODO: Use `CreateWithP4InfoAndClearTables` cl/397193959 when
-  // its available.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pdpi::P4RuntimeSession::Create(generic_testbed->Sut()));
-  auto clear_table_entries = absl::Cleanup(
-      [&]() { ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get())); });
-
   // Flow details.
   const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
   const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
   const auto source_ip = netaddr::Ipv4Address(192, 168, 10, 1);
   const auto dest_ip = netaddr::Ipv4Address(172, 0, 0, 1);
-
-  // BE1 is guaranteed to exist in the map which is currently hardocoded
-  // and we will test for BE1 queue.
-  // TODO: When we replace hardcoding with extraction of members
-  // from the config, we need to add iteration logic to go over the configured
-  // queues.
-  QueueInfo queue_under_test = queues["BE1"];
-
-  ASSERT_OK(SetUpPuntToCPU(dest_mac, source_ip, dest_ip,
-                           queue_under_test.p4_queue_name, GetParam().p4info,
-                           *sut_p4_session));
 
   static constexpr absl::Duration kPollInterval = absl::Seconds(5);
   static constexpr absl::Duration kTotalTime = absl::Seconds(30);
@@ -1007,10 +1030,6 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueRateLimit) {
        gnmi_counters_check++) {
     absl::SleepFor(kPollInterval);
 
-    ASSERT_OK_AND_ASSIGN(
-        final_counters,
-        GetGnmiQueueCounters("CPU", queue_under_test.gnmi_queue_name,
-                             *gnmi_stub));
   }
 }
 
