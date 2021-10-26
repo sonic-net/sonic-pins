@@ -44,11 +44,6 @@ class DBConnectorAdapter {
       const std::string& key,
       const std::vector<std::pair<std::string, std::string>>& values);
 
-  // virtual std::shared_ptr<std::string> hget(const std::string& key,
-  //                                           const std::string& field);
-
-  virtual void batch_del(const std::vector<std::string>& keys);
-
  protected:
   // Test only constructor for Mock and Fake classes.
   DBConnectorAdapter() = default;

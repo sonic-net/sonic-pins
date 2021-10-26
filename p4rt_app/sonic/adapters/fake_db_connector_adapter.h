@@ -51,7 +51,6 @@ class FakeDBConnectorAdapter final : public DBConnectorAdapter {
   int64_t del(const std::string& key) override;
   void hmset(const std::string& key,
              const std::vector<swss::FieldValueTuple>& values) override;
-  void batch_del(const std::vector<std::string>& keys) override;
 
  private:
   // The DBConnector interface has access to all tables (e.g. P4RT, or

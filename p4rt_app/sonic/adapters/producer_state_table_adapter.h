@@ -38,11 +38,6 @@ class ProducerStateTableAdapter {
 
   virtual void del(const std::string& key);
 
-  virtual void batch_set(
-      const std::vector<swss::KeyOpFieldsValuesTuple>& values);
-
-  virtual void batch_del(const std::vector<std::string>& keys);
-
  protected:
   // Test only constructor used to construct Mock & Fake classes.
   ProducerStateTableAdapter() = default;

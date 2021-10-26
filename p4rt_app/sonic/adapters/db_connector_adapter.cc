@@ -54,12 +54,7 @@ void DBConnectorAdapter::hmset(
     const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {
   LOG_IF(FATAL, db_connector_ == nullptr) << "db_connector_ cannot be nullptr.";
-  db_connector_->hmset(key, values);
-}
-
-void DBConnectorAdapter::batch_del(const std::vector<std::string>& keys) {
-  LOG_IF(FATAL, db_connector_ == nullptr) << "db_connector_ cannot be nullptr.";
-  db_connector_->del(keys);
+  db_connector_->hmset(key, values.begin(), values.end());
 }
 
 }  // namespace sonic

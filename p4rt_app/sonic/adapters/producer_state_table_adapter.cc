@@ -33,7 +33,7 @@ ProducerStateTableAdapter::ProducerStateTableAdapter(
 std::string ProducerStateTableAdapter::get_table_name() const {
   LOG_IF(FATAL, producer_state_table_ == nullptr)
       << "producer_state_table_ cannot be nullptr.";
-  return producer_state_table_->get_table_name();
+  return producer_state_table_->getTableName();
 }
 
 void ProducerStateTableAdapter::set(
@@ -47,20 +47,6 @@ void ProducerStateTableAdapter::del(const std::string& key) {
   LOG_IF(FATAL, producer_state_table_ == nullptr)
       << "producer_state_table_ cannot be nullptr.";
   producer_state_table_->del(key);
-}
-
-void ProducerStateTableAdapter::batch_set(
-    const std::vector<swss::KeyOpFieldsValuesTuple>& values) {
-  LOG_IF(FATAL, producer_state_table_ == nullptr)
-      << "producer_state_table_ cannot be nullptr.";
-  producer_state_table_->set(values);
-}
-
-void ProducerStateTableAdapter::batch_del(
-    const std::vector<std::string>& keys) {
-  LOG_IF(FATAL, producer_state_table_ == nullptr)
-      << "producer_state_table_ cannot be nullptr.";
-  producer_state_table_->del(keys);
 }
 
 }  // namespace sonic

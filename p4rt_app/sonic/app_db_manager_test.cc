@@ -48,6 +48,7 @@ using ::testing::DoAll;
 using ::testing::Eq;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::_;
 
 const std::vector<std::pair<std::string, std::string>>&
 GetSuccessfulResponseValues() {
@@ -65,7 +66,6 @@ class AppDbManagerTest : public ::testing::Test {
   }
 
   const std::string p4rt_table_name_ = "P4RT";
-  const std::string vrf_table_name_ = "VRF_TABLE";
 
   // Mock AppDb tables.
   MockDBConnectorAdapter mock_app_db_client_;
@@ -115,9 +115,8 @@ TEST_F(AppDbManagerTest, InsertTableEntry) {
                             .SetAction("set_port_and_src_mac")
                             .AddActionParam("port", "Ethernet28/5")
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple(expected.GetKey(), "", expected.GetValueList())};
-  EXPECT_CALL(mock_p4rt_table_, batch_set(expected_key_value)).Times(1);
+  EXPECT_CALL(mock_p4rt_table_, set(expected.GetKey(), expected.GetValueList()))
+      .Times(1);
 
   // Expected OrchAgent response.
   EXPECT_CALL(mock_p4rt_notification_, WaitForNotificationAndPop)
@@ -225,6 +224,72 @@ TEST_F(AppDbManagerTest, InsertDuplicateTableEntryFails) {
   EXPECT_EQ(response.statuses(0).code(), google::rpc::ALREADY_EXISTS);
 }
 
+TEST_F(AppDbManagerTest, ModifyTableEntry) {
+  pdpi::IrTableEntry table_entry;
+  ASSERT_TRUE(
+      TextFormat::ParseFromString(R"pb(
+                                    table_name: "router_interface_table"
+                                    priority: 123
+                                    matches {
+                                      name: "router_interface_id"
+                                      exact { hex_str: "16" }
+                                    }
+                                    action {
+                                      name: "set_port_and_src_mac"
+                                      params {
+                                        name: "port"
+                                        value { str: "Ethernet28/5" }
+                                      }
+                                      params {
+                                        name: "src_mac"
+                                        value { mac: "00:02:03:04:05:06" }
+                                      }
+                                    })pb",
+                                  &table_entry));
+  AppDbUpdates updates;
+  updates.entries.push_back(AppDbEntry{
+      .rpc_index = 0,
+      .entry = table_entry,
+      .update_type = p4::v1::Update::MODIFY,
+      .appdb_table = AppDbTableType::P4RT,
+  });
+  updates.total_rpc_updates = 1;
+
+  // RedisDB returns that the entry does not exists.
+  const auto expected = AppDbEntryBuilder{}
+                            .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
+                            .SetPriority(123)
+                            .AddMatchField("router_interface_id", "16")
+                            .SetAction("set_port_and_src_mac")
+                            .AddActionParam("port", "Ethernet28/5")
+                            .AddActionParam("src_mac", "00:02:03:04:05:06");
+
+  EXPECT_CALL(mock_app_db_client_,
+              exists(Eq(absl::StrCat("P4RT:", expected.GetKey()))))
+      .WillOnce(Return(true));
+  EXPECT_CALL(mock_app_db_client_,
+              del(absl::StrCat("P4RT:", expected.GetKey())))
+      .Times(1);
+  EXPECT_CALL(mock_p4rt_table_, set(expected.GetKey(), expected.GetValueList()))
+      .Times(1);
+
+  // Expected OrchAgent response.
+  EXPECT_CALL(mock_p4rt_notification_, WaitForNotificationAndPop)
+      .WillOnce(DoAll(SetArgReferee<0>("SWSS_RC_SUCCESS"),
+                      SetArgReferee<1>(expected.GetKey()),
+                      SetArgReferee<2>(GetSuccessfulResponseValues()),
+                      Return(true)));
+
+  pdpi::IrWriteResponse response;
+  response.add_statuses();
+  EXPECT_OK(UpdateAppDb(updates,
+                        sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+                        mock_p4rt_table_, mock_p4rt_notification_,
+                        mock_app_db_client_, mock_state_db_client_, &response));
+  ASSERT_EQ(response.statuses_size(), 1);
+  EXPECT_EQ(response.statuses(0).code(), google::rpc::OK);
+}
+
 TEST_F(AppDbManagerTest, ModifyNonExistentTableEntryFails) {
   pdpi::IrTableEntry table_entry;
   ASSERT_TRUE(
@@ -271,6 +336,64 @@ TEST_F(AppDbManagerTest, ModifyNonExistentTableEntryFails) {
                         mock_p4rt_table_, mock_p4rt_notification_,
                         mock_app_db_client_, mock_state_db_client_, &response));
   EXPECT_EQ(response.statuses(0).code(), google::rpc::NOT_FOUND);
+}
+
+TEST_F(AppDbManagerTest, DeleteTableEntry) {
+  pdpi::IrTableEntry table_entry;
+  ASSERT_TRUE(
+      TextFormat::ParseFromString(R"pb(
+                                    table_name: "router_interface_table"
+                                    priority: 123
+                                    matches {
+                                      name: "router_interface_id"
+                                      exact { hex_str: "16" }
+                                    }
+                                    action {
+                                      name: "set_port_and_src_mac"
+                                      params {
+                                        name: "port"
+                                        value { str: "Ethernet28/5" }
+                                      }
+                                      params {
+                                        name: "src_mac"
+                                        value { mac: "00:02:03:04:05:06" }
+                                      }
+                                    })pb",
+                                  &table_entry));
+  AppDbUpdates updates;
+  updates.entries.push_back(AppDbEntry{
+      .rpc_index = 0,
+      .entry = table_entry,
+      .update_type = p4::v1::Update::DELETE,
+      .appdb_table = AppDbTableType::P4RT,
+  });
+  updates.total_rpc_updates = 1;
+
+  // RedisDB returns that the entry does not exists.
+  const auto expected = AppDbEntryBuilder{}
+                            .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
+                            .SetPriority(123)
+                            .AddMatchField("router_interface_id", "16");
+  EXPECT_CALL(mock_app_db_client_,
+              exists(Eq(absl::StrCat("P4RT:", expected.GetKey()))))
+      .WillOnce(Return(true));
+  EXPECT_CALL(mock_p4rt_table_, del(expected.GetKey())).Times(1);
+
+  // Expected OrchAgent response.
+  EXPECT_CALL(mock_p4rt_notification_, WaitForNotificationAndPop)
+      .WillOnce(DoAll(SetArgReferee<0>("SWSS_RC_SUCCESS"),
+                      SetArgReferee<1>(expected.GetKey()),
+                      SetArgReferee<2>(GetSuccessfulResponseValues()),
+                      Return(true)));
+
+  pdpi::IrWriteResponse response;
+  response.add_statuses();
+  EXPECT_OK(UpdateAppDb(updates,
+                        sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+                        mock_p4rt_table_, mock_p4rt_notification_,
+                        mock_app_db_client_, mock_state_db_client_, &response));
+  ASSERT_EQ(response.statuses_size(), 1);
+  EXPECT_EQ(response.statuses(0).code(), google::rpc::OK);
 }
 
 TEST_F(AppDbManagerTest, DeleteNonExistentTableEntryFails) {
