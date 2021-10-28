@@ -39,6 +39,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
+#include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
@@ -69,7 +71,13 @@
 namespace pins_test {
 namespace {
 
+using ::gutil::EqualsProto;
+using ::gutil::IsOkAndHolds;
 using ::p4::config::v1::P4Info;
+
+// Size of the "frame check sequence" (FCS) that is part of Layer 2 Ethernet
+// frames.
+constexpr int kFrameCheckSequenceSize = 4;
 
 // The maximum time the switch is allowed to take before queue counters read via
 // gNMI have to be incremented after a packet hits a queue.
@@ -361,6 +369,140 @@ absl::StatusOr<p4::v1::TableEntry> MakeRouterInterface(
           )pb",
           router_interface_id, p4rt_port_name, mac.ToString())));
   return pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry);
+}
+
+// Purpose: Verify that P4Runtime per-entry ACL counters increment.
+TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
+  LOG(INFO) << "-- START OF TEST ---------------------------------------------";
+  Testbed().Environment().SetTestCaseID("cfd7e8aa-6521-4683-9c07-038ea146934d");
+
+  // Setup: the testbed consists of a SUT connected to a control device
+  // that allows us to send and receive packets to/from the SUT.
+  thinkit::Switch &sut = Testbed().Sut();
+  thinkit::Switch &control_device = Testbed().ControlSwitch();
+  const P4Info &p4info = GetParam().p4info;
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(p4info));
+
+  // Set up gNMI.
+  EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
+                                                      GetParam().gnmi_config));
+  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
+  ASSERT_OK(pins_test::PushGnmiConfig(control_device, GetParam().gnmi_config));
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
+
+  // TODO: Poll for config to be applied, links to come up instead.
+  LOG(INFO) << "Sleeping 10 seconds to wait for config to be applied/links to "
+               "come up.";
+  absl::SleepFor(absl::Seconds(10));
+
+  // Pick a link to be used for packet injection.
+  ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
+                       PickSutToControlDeviceLinkThatsUp(Testbed()));
+  LOG(INFO) << "Link used to inject test packets: "
+            << link_used_for_test_packets;
+
+  // Set up P4Runtime.
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
+                                                             p4info));
+  // We install a RIF to make this test non-trivial, as all packets are dropped
+  // by default if no RIF exists (b/190736007).
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::TableEntry router_interface_entry,
+      MakeRouterInterface(
+          /*router_interface_id=*/"ingress-rif-to-workaround-b/190736007",
+          /*p4rt_port_name=*/link_used_for_test_packets.sut_port_p4rt_name,
+          // An arbitrary MAC address will do.
+          /*mac=*/netaddr::MacAddress(0x00, 0x07, 0xE9, 0x42, 0xAC, 0x28),
+          /*ir_p4info=*/ir_p4info));
+  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(),
+                                      router_interface_entry));
+
+  // Install ACL table entry to be hit with a test packet.
+  ASSERT_OK_AND_ASSIGN(const sai::TableEntry pd_acl_entry,
+                       gutil::ParseTextProto<sai::TableEntry>(R"pb(
+                         acl_ingress_table_entry {
+                           priority: 1
+                           match {
+                             is_ipv6 { value: "0x1" }
+                             ttl { value: "0xff" mask: "0xff" }
+                           }
+                           action { acl_drop {} }
+                         }
+                       )pb"));
+  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_acl_entry,
+                       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_acl_entry));
+  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
+
+  // Check that the counters are initially zero.
+  ASSERT_THAT(
+      pdpi::ReadPiCounterData(sut_p4rt_session.get(), pi_acl_entry),
+      IsOkAndHolds(EqualsProto(R"pb(byte_count: 0 packet_count: 0)pb")));
+
+  // Send test packet hitting the ACL table entry.
+  ASSERT_OK_AND_ASSIGN(
+      packetlib::Packet test_packet,
+      gutil::ParseTextProto<packetlib::Packet>(R"pb(
+        headers {
+          ethernet_header {
+            ethernet_destination: "00:01:02:02:02:02"
+            ethernet_source: "00:01:02:03:04:05"
+            ethertype: "0x86dd"
+          }
+        }
+        headers {
+          ipv6_header {
+            dscp: "0x00"
+            ecn: "0x0"
+            flow_label: "0x00000"
+            next_header: "0xfd"  # Reserved for experimentation.
+            hop_limit: "0xff"
+            ipv6_source: "2001:db8:0:12::1"
+            ipv6_destination: "2001:db8:0:12::2"
+          }
+        }
+        payload: "IPv6 packet with TTL 0xff (255)."
+      )pb"));
+  // The ACL entry should match the test packet.
+  ASSERT_EQ(test_packet.headers().at(1).ipv6_header().hop_limit(),
+            pd_acl_entry.acl_ingress_table_entry().match().ttl().value());
+  ASSERT_OK(packetlib::PadPacketToMinimumSize(test_packet));
+  ASSERT_OK(packetlib::UpdateAllComputedFields(test_packet));
+  ASSERT_OK_AND_ASSIGN(const std::string raw_packet,
+                       packetlib::SerializePacket(test_packet));
+  ASSERT_OK(pins::InjectEgressPacket(
+      /*port=*/link_used_for_test_packets.control_device_port_p4rt_name,
+      /*packet=*/raw_packet, ir_p4info, control_p4rt_session.get()));
+
+  // Check that the counters increment within kMaxQueueCounterUpdateTime.
+  absl::Time time_packet_sent = absl::Now();
+  p4::v1::CounterData counter_data;
+  do {
+    ASSERT_OK_AND_ASSIGN(
+        counter_data,
+        pdpi::ReadPiCounterData(sut_p4rt_session.get(), pi_acl_entry));
+  } while (counter_data.packet_count() == 0 &&
+           absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
+  p4::v1::CounterData expected_counter_data;
+  expected_counter_data.set_packet_count(1);
+  expected_counter_data.set_byte_count(raw_packet.size() +
+                                       kFrameCheckSequenceSize);
+  ASSERT_THAT(counter_data, EqualsProto(expected_counter_data))
+      << "Counter for the table entry given below did not match expectation "
+         "within "
+      << kMaxQueueCounterUpdateTime
+      << " after injecting the following test packet:\n-- test packet--\n"
+      << test_packet.DebugString() << "-- table entry --\n"
+      << pd_acl_entry.DebugString();
+
+  LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }
 
 // Purpose: Verify DSCP-to-queue mapping for traffic to switch loopback IP.
