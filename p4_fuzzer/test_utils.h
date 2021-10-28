@@ -53,6 +53,19 @@ inline FuzzerTestState ConstructFuzzerTestStateFromSaiMiddleBlock() {
       /*role=*/"sdn_controller");
 }
 
+// Gets a MatchField of a given type from a table definition. Deterministic for
+// a given IrP4Info.
+absl::StatusOr<pdpi::IrMatchFieldDefinition>
+GetAMatchFieldDefinitionWithMatchType(
+    const pdpi::IrTableDefinition& table_definition,
+    p4::config::v1::MatchField::MatchType match_type);
+
+// Gets a table that has a field with the given match type. Deterministic for a
+// given IrP4Info.
+absl::StatusOr<pdpi::IrTableDefinition> GetATableDefinitionWithMatchType(
+    const FuzzerTestState& fuzzer_state,
+    p4::config::v1::MatchField::MatchType match_type);
+
 // Helpers to get specific pieces of the IrP4Info.
 // Gets a table that uses one-shot programming. Deterministic for a given
 // IrP4Info.

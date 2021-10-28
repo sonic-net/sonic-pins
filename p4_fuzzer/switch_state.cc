@@ -17,8 +17,10 @@
 #include <iterator>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/btree_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -36,11 +38,17 @@ using ::gutil::FindOrDie;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::IrP4Info;
+using ::pdpi::IrTableEntry;
 
-SwitchState::SwitchState(IrP4Info ir_p4info) : ir_p4info_(ir_p4info) {
+SwitchState::SwitchState(IrP4Info ir_p4info)
+    : ir_p4info_(std::move(ir_p4info)) {
   for (auto& [table_id, table] : ir_p4info_.tables_by_id()) {
     tables_[table_id] = TableEntries();
   }
+}
+
+void SwitchState::ClearTableEntries() {
+  *this = SwitchState(std::move(ir_p4info_));
 }
 
 bool SwitchState::AllTablesEmpty() const {
@@ -71,10 +79,10 @@ int64_t SwitchState::GetNumTableEntries() const {
 
 const std::vector<uint32_t> SwitchState::AllTableIds() const {
   std::vector<uint32_t> table_ids;
-
   for (auto& [key, table] : ir_p4info_.tables_by_id()) {
     table_ids.push_back(key);
   }
+  // absl::c_sort(table_ids);
 
   return table_ids;
 }
@@ -103,7 +111,7 @@ std::vector<TableEntry> SwitchState::GetTableEntries(
 absl::optional<TableEntry> SwitchState::GetTableEntry(TableEntry entry) const {
   auto table = FindOrDie(tables_, entry.table_id());
 
-  if (auto table_iter = table.find(TableEntryKey(entry));
+  if (auto table_iter = table.find(pdpi::TableEntryKey(entry));
       table_iter != table.end()) {
     auto [table_key, table_entry] = *table_iter;
     return table_entry;
@@ -117,12 +125,12 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
 
   auto& table = FindOrDie(tables_, table_id);
 
-  TableEntry table_entry = update.entity().table_entry();
+  const TableEntry& table_entry = update.entity().table_entry();
 
   switch (update.type()) {
     case Update::INSERT: {
       auto [iter, not_present] =
-          table.insert(/*value=*/{TableEntryKey(table_entry), table_entry});
+          table.insert(/*value=*/{pdpi::TableEntryKey(table_entry), table_entry});
 
       if (!not_present) {
         return gutil::InvalidArgumentErrorBuilder()
@@ -133,7 +141,7 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
     }
 
     case Update::DELETE: {
-      if (tables_[table_id].erase(TableEntryKey(table_entry)) != 1) {
+      if (tables_[table_id].erase(pdpi::TableEntryKey(table_entry)) != 1) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Cannot erase non-existent table entries. Update: "
                << update.DebugString();
@@ -143,7 +151,7 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
 
     case Update::MODIFY: {
       auto [iter, not_present] =
-          table.insert(/*value=*/{TableEntryKey(table_entry), table_entry});
+          table.insert(/*value=*/{pdpi::TableEntryKey(table_entry), table_entry});
 
       if (not_present) {
         return gutil::InvalidArgumentErrorBuilder()
@@ -156,6 +164,23 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
     default:
       LOG(FATAL) << "Update of unsupported type: " << update.DebugString();
   }
+  return absl::OkStatus();
+}
+
+absl::Status SwitchState::SetTableEntries(
+    absl::Span<const p4::v1::TableEntry> table_entries) {
+  ClearTableEntries();
+
+  for (const p4::v1::TableEntry& entry : table_entries) {
+    auto table = tables_.find(entry.table_id());
+    if (table == tables_.end()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "table entry with unknown table ID '" << entry.table_id()
+             << "'";
+    }
+    table->second.insert({pdpi::TableEntryKey(entry), entry});
+  }
+
   return absl::OkStatus();
 }
 
@@ -230,6 +255,26 @@ std::string SwitchState::SwitchStateSummary() const {
       "current size", "max size", GetNumTableEntries(), "N/A", res);
 }
 
+absl::btree_set<std::string> SwitchState::GetIdsForMatchField(
+    const pdpi::IrMatchFieldReference& field) const {
+  absl::btree_set<std::string> result;
+  const auto& table_definition =
+      FindOrDie(ir_p4info_.tables_by_name(), field.table());
+  const auto& match_definition =
+      FindOrDie(table_definition.match_fields_by_name(), field.match_field());
+  // Loop over all table entries in this table and collect IDs.
+  for (const auto& [key, entry] :
+       FindOrDie(tables_, table_definition.preamble().id())) {
+    // Find the correct match field.
+    for (const auto& match : entry.match()) {
+      if (match.field_id() == match_definition.match_field().id()) {
+        result.insert(match.exact().value());
+        break;
+      }
+    }
+  }
+  return result;
+}
 
 
 }  // namespace p4_fuzzer

@@ -221,7 +221,7 @@ absl::Status MutateDuplicateInsert(absl::BitGen* gen, p4::v1::Update* update,
 
   update->set_type(p4::v1::Update::INSERT);
   *update->mutable_entity()->mutable_table_entry() =
-      UniformFromVector(gen, entries);
+      UniformFromSpan(gen, entries);
 
   return absl::OkStatus();
 }

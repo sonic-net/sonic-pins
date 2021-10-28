@@ -15,10 +15,13 @@
 
 #include <cstdint>
 
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -38,7 +41,6 @@ using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::CreateIrP4Info;
 using ::pdpi::IrP4Info;
-using ::testing::StrEq;
 
 // All P4Runtime table IDs must have their most significant byte equal to this
 // value.
@@ -95,6 +97,18 @@ TEST(SwitchStateTest, RuleInsert) {
 
   EXPECT_EQ(state.GetTableEntries(42).size(), 1);
   EXPECT_EQ(state.GetTableEntries(43).size(), 0);
+
+  state.ClearTableEntries();
+  EXPECT_TRUE(state.AllTablesEmpty());
+}
+
+TEST(SwitchStateTest, ClearTableEntriesPreservesP4Info) {
+  const IrP4Info p4info = pdpi::GetTestIrP4Info();
+  SwitchState state(p4info);
+  EXPECT_THAT(state.GetIrP4Info(), gutil::EqualsProto(p4info));
+
+  state.ClearTableEntries();
+  EXPECT_THAT(state.GetIrP4Info(), gutil::EqualsProto(p4info));
 }
 
 TEST(SwitchStateTest, RuleDelete) {
