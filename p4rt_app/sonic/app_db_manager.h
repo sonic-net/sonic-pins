@@ -79,9 +79,9 @@ std::vector<std::string> GetAllAppDbP4TableEntryKeys(
 // include the "P4RT_" prefix assumed by this AppDbManager.
 //
 // Sample:
-//   "P4RT:ROUTER_INTERFACE_TABLE:{\"router_interface_id\":\"16\"}"
+//   "P4RT_TABLE:ROUTER_INTERFACE_TABLE:{\"router_interface_id\":\"16\"}"
 //
-// NOTE: The resulting IrTableEntry will not include the "P4RT:" prefix.
+// NOTE: The resulting IrTableEntry will not include the "P4RT_TABLE:" prefix.
 absl::StatusOr<pdpi::IrTableEntry> ReadAppDbP4TableEntry(
     const pdpi::IrP4Info& p4info, DBConnectorAdapter& app_db_client,
     DBConnectorAdapter& counters_db_client, const std::string& key);

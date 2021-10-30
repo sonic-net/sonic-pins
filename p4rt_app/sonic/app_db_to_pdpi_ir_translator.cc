@@ -89,7 +89,8 @@ absl::StatusOr<std::string> SonicDbKeyToP4TableName(
   const std::string &table_name = split[0];
   if (!absl::StartsWith(table_name, kP4rtTablePrefix)) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "Key \"" << app_db_key << "\" does not start with \"P4RT:\".";
+           << "Key \"" << app_db_key << "\" does not start with "
+           << "\"" << APP_P4RT_TABLE_NAME << ":" << "\".";
   }
   absl::string_view sonic_table_name = split[1];
   // Strip off the table type.
@@ -100,7 +101,8 @@ absl::StatusOr<std::string> SonicDbKeyToP4TableName(
     return gutil::InvalidArgumentErrorBuilder()
            << "Key \"" << app_db_key << "\" "
            << "does not follow the expected format: "
-           << "P4RT:<TableType>_<P4TableName>";
+           << "\"" << APP_P4RT_TABLE_NAME << ":" << type_name
+           << "<TableType>_<P4TableName>\"";
   }
   return absl::AsciiStrToLower(sonic_table_name.substr(++split_pos));
 }

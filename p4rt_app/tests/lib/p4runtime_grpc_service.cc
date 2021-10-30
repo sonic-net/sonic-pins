@@ -36,9 +36,9 @@ namespace test_lib {
 P4RuntimeGrpcService::P4RuntimeGrpcService(
     const P4RuntimeGrpcServiceOptions& options) {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
-  const std::string kP4rtTableName = "P4RT";
-  const std::string kPortTableName = "PORT_TABLE";
-  const std::string kCountersTableName = "COUNTERS";
+  const std::string kP4rtTableName = APP_P4RT_TABLE_NAME;
+  const std::string kPortTableName = APP_PORT_TABLE_NAME;
+  const std::string kCountersTableName = COUNTERS_TABLE;
 
   // Connect SONiC AppDB tables with their equivelant AppStateDB tables.
   fake_p4rt_table_ = sonic::FakeSonicDbTable(&fake_p4rt_state_table_);

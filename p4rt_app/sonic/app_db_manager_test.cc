@@ -21,6 +21,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/memory/memory.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
@@ -65,7 +66,7 @@ class AppDbManagerTest : public ::testing::Test {
         .WillByDefault(Return(p4rt_table_name_));
   }
 
-  const std::string p4rt_table_name_ = "P4RT";
+  const std::string p4rt_table_name_ = APP_P4RT_TABLE_NAME;
 
   // Mock AppDb tables.
   MockDBConnectorAdapter mock_app_db_client_;
@@ -109,7 +110,7 @@ TEST_F(AppDbManagerTest, InsertTableEntry) {
 
   // Expected RedisDB entry.
   const auto expected = AppDbEntryBuilder{}
-                            .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
+                            .SetTableName(APP_P4RT_ROUTER_INTERFACE_TABLE_NAME)
                             .SetPriority(123)
                             .AddMatchField("router_interface_id", "16")
                             .SetAction("set_port_and_src_mac")
@@ -209,7 +210,7 @@ TEST_F(AppDbManagerTest, InsertDuplicateTableEntryFails) {
 
   // RedisDB returns that the entry already exists.
   const auto expected = AppDbEntryBuilder{}
-                            .SetTableName("P4RT:FIXED_ROUTER_INTERFACE_TABLE")
+                            .SetTableName(absl::StrCat(APP_P4RT_TABLE_NAME, ":", "FIXED_ROUTER_INTERFACE_TABLE"))
                             .SetPriority(123)
                             .AddMatchField("router_interface_id", "16");
   EXPECT_CALL(mock_app_db_client_, exists(Eq(expected.GetKey())))
@@ -264,11 +265,12 @@ TEST_F(AppDbManagerTest, ModifyTableEntry) {
                             .AddActionParam("port", "Ethernet28/5")
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
 
-  EXPECT_CALL(mock_app_db_client_,
-              exists(Eq(absl::StrCat("P4RT:", expected.GetKey()))))
+  EXPECT_CALL(
+      mock_app_db_client_,
+      exists(Eq(absl::StrCat(APP_P4RT_TABLE_NAME, ":", expected.GetKey()))))
       .WillOnce(Return(true));
   EXPECT_CALL(mock_app_db_client_,
-              del(absl::StrCat("P4RT:", expected.GetKey())))
+              del(absl::StrCat(APP_P4RT_TABLE_NAME, ":", expected.GetKey())))
       .Times(1);
   EXPECT_CALL(mock_p4rt_table_, set(expected.GetKey(), expected.GetValueList()))
       .Times(1);
@@ -323,7 +325,7 @@ TEST_F(AppDbManagerTest, ModifyNonExistentTableEntryFails) {
 
   // RedisDB returns that the entry does not exists.
   const auto expected = AppDbEntryBuilder{}
-                            .SetTableName("P4RT:FIXED_ROUTER_INTERFACE_TABLE")
+                            .SetTableName(absl::StrCat(APP_P4RT_TABLE_NAME, ":", "FIXED_ROUTER_INTERFACE_TABLE"))
                             .SetPriority(123)
                             .AddMatchField("router_interface_id", "16");
   EXPECT_CALL(mock_app_db_client_, exists(Eq(expected.GetKey())))
@@ -374,8 +376,9 @@ TEST_F(AppDbManagerTest, DeleteTableEntry) {
                             .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
                             .SetPriority(123)
                             .AddMatchField("router_interface_id", "16");
-  EXPECT_CALL(mock_app_db_client_,
-              exists(Eq(absl::StrCat("P4RT:", expected.GetKey()))))
+  EXPECT_CALL(
+      mock_app_db_client_,
+      exists(Eq(absl::StrCat(APP_P4RT_TABLE_NAME, ":", expected.GetKey()))))
       .WillOnce(Return(true));
   EXPECT_CALL(mock_p4rt_table_, del(expected.GetKey())).Times(1);
 
@@ -429,7 +432,7 @@ TEST_F(AppDbManagerTest, DeleteNonExistentTableEntryFails) {
 
   // RedisDB returns that the entry does not exists.
   const auto expected = AppDbEntryBuilder{}
-                            .SetTableName("P4RT:FIXED_ROUTER_INTERFACE_TABLE")
+                            .SetTableName(absl::StrCat(APP_P4RT_TABLE_NAME, ":", "FIXED_ROUTER_INTERFACE_TABLE"))
                             .SetPriority(123)
                             .AddMatchField("router_interface_id", "16");
   EXPECT_CALL(mock_app_db_client_, exists(Eq(expected.GetKey())))
@@ -447,7 +450,7 @@ TEST_F(AppDbManagerTest, DeleteNonExistentTableEntryFails) {
 TEST_F(AppDbManagerTest, ReadAppDbP4TableEntryWithoutCounterData) {
   const auto app_db_entry =
       AppDbEntryBuilder{}
-          .SetTableName("P4RT:FIXED_ROUTER_INTERFACE_TABLE")
+          .SetTableName(absl::StrCat(APP_P4RT_TABLE_NAME, ":", "FIXED_ROUTER_INTERFACE_TABLE"))
           .SetPriority(123)
           .AddMatchField("router_interface_id", "16")
           .SetAction("set_port_and_src_mac")
@@ -494,7 +497,7 @@ TEST_F(AppDbManagerTest, ReadAppDbP4TableEntryWithoutCounterData) {
 TEST_F(AppDbManagerTest, ReadAppDbP4TableEntryWithCounterData) {
   const auto app_db_entry =
       AppDbEntryBuilder{}
-          .SetTableName("P4RT:FIXED_ROUTER_INTERFACE_TABLE")
+          .SetTableName(absl::StrCat(APP_P4RT_TABLE_NAME, ":", "FIXED_ROUTER_INTERFACE_TABLE"))
           .SetPriority(123)
           .AddMatchField("router_interface_id", "16")
           .SetAction("set_port_and_src_mac")
@@ -551,7 +554,7 @@ TEST_F(AppDbManagerTest, ReadAppDbP4TableEntryWithCounterData) {
 TEST_F(AppDbManagerTest, ReadAppDbP4TableEntryIgnoresInvalidCounterData) {
   const auto app_db_entry =
       AppDbEntryBuilder{}
-          .SetTableName("P4RT:FIXED_ROUTER_INTERFACE_TABLE")
+          .SetTableName(absl::StrCat(APP_P4RT_TABLE_NAME, ":", "FIXED_ROUTER_INTERFACE_TABLE"))
           .SetPriority(123)
           .AddMatchField("router_interface_id", "16")
           .SetAction("set_port_and_src_mac")
@@ -597,16 +600,16 @@ TEST_F(AppDbManagerTest, ReadAppDbP4TableEntryIgnoresInvalidCounterData) {
 TEST_F(AppDbManagerTest, GetAllP4KeysReturnsInstalledKeys) {
   MockDBConnectorAdapter mock_app_db_client;
   EXPECT_CALL(mock_app_db_client, keys)
-      .WillOnce(Return(std::vector<std::string>{"P4RT:TABLE:{key}"}));
+      .WillOnce(Return(std::vector<std::string>{"P4RT_TABLE:TABLE:{key}"}));
 
   EXPECT_THAT(GetAllAppDbP4TableEntryKeys(mock_app_db_client),
-              ContainerEq(std::vector<std::string>{"P4RT:TABLE:{key}"}));
+              ContainerEq(std::vector<std::string>{"P4RT_TABLE:TABLE:{key}"}));
 }
 
 TEST_F(AppDbManagerTest, GetAllP4KeysDoesNotReturnUninstalledKey) {
   MockDBConnectorAdapter mock_app_db_client;
   EXPECT_CALL(mock_app_db_client, keys)
-      .WillOnce(Return(std::vector<std::string>{"_P4RT:TABLE:{key}"}));
+      .WillOnce(Return(std::vector<std::string>{"_P4RT_TABLE:TABLE:{key}"}));
 
   EXPECT_THAT(GetAllAppDbP4TableEntryKeys(mock_app_db_client),
               ContainerEq(std::vector<std::string>{}));
@@ -616,20 +619,20 @@ TEST_F(AppDbManagerTest, GetAllP4KeysIgnoresKeySet) {
   MockDBConnectorAdapter mock_app_db_client;
   EXPECT_CALL(mock_app_db_client, keys)
       .WillOnce(Return(
-          std::vector<std::string>{"P4RT_KEY_SET:TABLE", "P4RT:TABLE:{key}"}));
+          std::vector<std::string>{"P4RT_KEY_SET:TABLE", "P4RT_TABLE:TABLE:{key}"}));
 
   EXPECT_THAT(GetAllAppDbP4TableEntryKeys(mock_app_db_client),
-              ContainerEq(std::vector<std::string>{"P4RT:TABLE:{key}"}));
+              ContainerEq(std::vector<std::string>{"P4RT_TABLE:TABLE:{key}"}));
 }
 
 TEST_F(AppDbManagerTest, GetAllP4KeysIgnoresDelSet) {
   MockDBConnectorAdapter mock_app_db_client;
   EXPECT_CALL(mock_app_db_client, keys)
       .WillOnce(Return(
-          std::vector<std::string>{"P4RT_DEL_SET:TABLE", "P4RT:TABLE:{key}"}));
+          std::vector<std::string>{"P4RT_DEL_SET:TABLE", "P4RT_TABLE:TABLE:{key}"}));
 
   EXPECT_THAT(GetAllAppDbP4TableEntryKeys(mock_app_db_client),
-              ContainerEq(std::vector<std::string>{"P4RT:TABLE:{key}"}));
+              ContainerEq(std::vector<std::string>{"P4RT_TABLE:TABLE:{key}"}));
 }
 
 TEST(PortIdTranslationTest, GetMap) {

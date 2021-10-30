@@ -89,7 +89,7 @@ TEST_F(FixedL3TableTest, SupportRouterInterfaceTableFlows) {
 
   // Expected P4RT AppDb entry.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
-                            .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
+                            .SetTableName(APP_P4RT_ROUTER_INTERFACE_TABLE_NAME)
                             .AddMatchField("router_interface_id", "16")
                             .SetAction("set_port_and_src_mac")
                             .AddActionParam("port", "Ethernet4")
@@ -136,7 +136,7 @@ TEST_F(FixedL3TableTest, SupportNeighborTableFlows) {
   // Expected P4RT AppDb entries.
   auto neighbor_entry =
       test_lib::AppDbEntryBuilder{}
-          .SetTableName("FIXED_NEIGHBOR_TABLE")
+          .SetTableName(APP_P4RT_NEIGHBOR_TABLE_NAME)
           .AddMatchField("neighbor_id", "fe80::021a:11ff:fe17:5f80")
           .AddMatchField("router_interface_id", "1")
           .SetAction("set_dst_mac")
@@ -174,7 +174,7 @@ TEST_F(FixedL3TableTest, SupportNexthopTableFlows) {
   // Expected P4RT AppDb entries.
   auto nexthop_entry =
       test_lib::AppDbEntryBuilder{}
-          .SetTableName("FIXED_NEXTHOP_TABLE")
+          .SetTableName(APP_P4RT_NEXTHOP_TABLE_NAME)
           .AddMatchField("nexthop_id", "8")
           .SetAction("set_nexthop")
           .AddActionParam("router_interface_id", "8")
@@ -210,7 +210,7 @@ TEST_F(FixedL3TableTest, SupportIpv4TableFlow) {
 
   // Expected P4RT AppDb entry.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
-                            .SetTableName("FIXED_IPV4_TABLE")
+                            .SetTableName(APP_P4RT_IPV4_TABLE_NAME)
                             .AddMatchField("ipv4_dst", "10.81.8.0/23")
                             .AddMatchField("vrf_id", "50")
                             .SetAction("set_nexthop_id")
@@ -256,7 +256,7 @@ TEST_F(FixedL3TableTest, SupportIpv6TableFlow) {
 
   // Expected P4RT AppDb entry.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
-                            .SetTableName("FIXED_IPV6_TABLE")
+                            .SetTableName(APP_P4RT_IPV6_TABLE_NAME)
                             .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
                             .AddMatchField("vrf_id", "80")
                             .SetAction("set_nexthop_id")

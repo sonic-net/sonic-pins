@@ -239,15 +239,15 @@ std::vector<std::string> GetAllAppDbP4TableEntryKeys(
     const std::vector<std::string> split = absl::StrSplit(key, ':');
     if (split.size() < 2) continue;
 
-    // The P4RT table entries will either start with "_P4RT" (if orchagent has
-    // not installed the entry) or "P4RT" (if orchagent has installed the
+    // The P4RT table entries will either start with "_P4RT_TABLE" (if orchagent has
+    // not installed the entry) or "P4RT_TABLE" (if orchagent has installed the
     // entry). When getting the P4 table entries we are only concerned with what
     // orchagent has installed.
-    if (split[0] != "P4RT") continue;
+    if (split[0] != APP_P4RT_TABLE_NAME) continue;
 
-    // The P4RT:DEFINITION table does not hold any P4RT entries, and should also
-    // be ignored.
-    if (split[1] == "DEFINITION") continue;
+    // The P4RT_TABLE:ACL_TABLE_DEFINITION_TABLE table does not hold any P4RT entries,
+    // and should also be ignored.
+    if (split[1] == APP_P4RT_ACL_TABLE_DEFINITION_NAME) continue;
 
     p4rt_keys.push_back(key);
   }

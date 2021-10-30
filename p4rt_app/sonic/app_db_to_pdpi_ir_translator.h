@@ -24,6 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "p4_pdpi/ir.pb.h"
 #include "swss/rediscommand.h"
+#include "swss/schema.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -31,7 +32,7 @@ namespace sonic {
 // The P4RT tables in the AppDb are identified by the P4Info table alias and
 // this prefix. For example if P4Info defines a table called "router_interface"
 // the relevant AppDb table would be called "P4RT_ROUTER_INTERFACE".
-constexpr absl::string_view kP4rtTablePrefix = "P4RT";
+constexpr absl::string_view kP4rtTablePrefix = APP_P4RT_TABLE_NAME;
 
 // Given a PDPI IrTableEntry will generate the SONiC AppDb key for a P4RT table.
 absl::StatusOr<std::string> IrTableEntryToAppDbKey(

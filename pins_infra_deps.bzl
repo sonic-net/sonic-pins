@@ -160,9 +160,9 @@ def pins_infra_deps():
     if not native.existing_rule("sonic_swss_common"):
         http_archive(
             name = "sonic_swss_common",
-            url = "https://github.com/pins/sonic-swss-common-public/archive/20134286204b1c2818e9682bca0a0ab1da6efbd9.zip",
-            strip_prefix = "sonic-swss-common-public-20134286204b1c2818e9682bca0a0ab1da6efbd9",
-            sha256 = "2d45013839beb0cf04b5aaac50921f3f6a407eb641fe44ad301a2562613448e9",
+            url = "https://github.com/pins/sonic-swss-common-public/archive/a90eee02a65f06e47759fedc3edffdf511737d94.zip",
+            strip_prefix = "sonic-swss-common-public-a90eee02a65f06e47759fedc3edffdf511737d94",
+            sha256 = "0c70701d3f2f1037bc58fd99feab0c9d12bee7dd29bd8304d5f1593797599090",
         )
     if not native.existing_rule("rules_pkg"):
         http_archive(

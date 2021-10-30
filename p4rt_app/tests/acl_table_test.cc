@@ -79,7 +79,7 @@ TEST_F(AclTableTest, ReadCounters) {
 
   // Fake OrchAgent updating the counters.
   auto counter_db_entry = test_lib::AppDbEntryBuilder{}
-                              .SetTableName("P4RT:ACL_ACL_INGRESS_TABLE")
+                              .SetTableName(absl::StrCat(APP_P4RT_TABLE_NAME, ":", "ACL_ACL_INGRESS_TABLE"))
                               .SetPriority(10)
                               .AddMatchField("is_ip", "0x1");
   p4rt_service_.GetP4rtCountersDbTable().InsertTableEntry(

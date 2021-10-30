@@ -85,7 +85,7 @@ TEST_F(ResponsePathTest, TableEntryInsertReadAndRemove) {
 
   // Expected P4RT AppDb entry.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
-                            .SetTableName("FIXED_IPV6_TABLE")
+                            .SetTableName(APP_P4RT_IPV6_TABLE_NAME)
                             .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
                             .AddMatchField("vrf_id", "80")
                             .SetAction("set_nexthop_id")
@@ -155,7 +155,7 @@ TEST_F(ResponsePathTest, TableEntryModify) {
 
   // Expected P4RT AppDb entry.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
-                            .SetTableName("FIXED_IPV6_TABLE")
+                            .SetTableName(APP_P4RT_IPV6_TABLE_NAME)
                             .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
                             .AddMatchField("vrf_id", "80");
 
@@ -275,7 +275,7 @@ TEST_F(ResponsePathTest, InsertRequestFails) {
 
   auto neighbor_entry =
       test_lib::AppDbEntryBuilder{}
-          .SetTableName("FIXED_NEIGHBOR_TABLE")
+          .SetTableName(APP_P4RT_NEIGHBOR_TABLE_NAME)
           .AddMatchField("neighbor_id", "fe80::021a:11ff:fe17:5f80")
           .AddMatchField("router_interface_id", "1");
 
@@ -458,7 +458,7 @@ TEST_F(ResponsePathTest, OneOfManyInsertRequestFails) {
       &request));
 
   auto nexthop_entry = test_lib::AppDbEntryBuilder{}
-                           .SetTableName("FIXED_NEXTHOP_TABLE")
+                           .SetTableName(APP_P4RT_NEXTHOP_TABLE_NAME)
                            .AddMatchField("nexthop_id", "8");
 
   // Assume the Orchagent fails for one request with an invalid parameter.
