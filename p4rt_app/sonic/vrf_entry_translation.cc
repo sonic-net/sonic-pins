@@ -37,8 +37,9 @@ namespace {
 // Today VRF is only used for matching.
 std::vector<swss::FieldValueTuple> GetVrfValues() {
   return std::vector<swss::FieldValueTuple>{
-      std::make_pair("v4", "false"),
+      std::make_pair("v4", "true"),
       std::make_pair("v6", "true"),
+      std::make_pair("sync_mode", "true"),
   };
 }
 
