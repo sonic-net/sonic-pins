@@ -22,17 +22,8 @@ type bit<WCMP_GROUP_ID_BITWIDTH> wcmp_group_id_t;
 
 #ifndef PLATFORM_BMV2
 @p4runtime_translation("", string)
-// TODO: The following annotation is not yet standard, and not yet
-// understood by p4-symbolic. Work with the P4Runtime WG to standardize the
-// annotation (or a similar annotation), and teach it to p4-symbolic.
-@p4runtime_translation_mappings({
-  // The "default VRF", 0, corresponds to the empty string, "", in P4Runtime.
-  {"", 0},
-})
 #endif
 type bit<VRF_BITWIDTH> vrf_id_t;
-
-const vrf_id_t kDefaultVrf = 0;
 
 #ifndef PLATFORM_BMV2
 @p4runtime_translation("", string)

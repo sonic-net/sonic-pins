@@ -18,14 +18,12 @@
 #include "../../fixed/packet_rewrites.p4"
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
-#include "hashing.p4"
 
 control ingress(inout headers_t headers,
                 inout local_metadata_t local_metadata,
                 inout standard_metadata_t standard_metadata) {
   apply {
     acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
-    hashing.apply(headers, local_metadata, standard_metadata);
     routing.apply(headers, local_metadata, standard_metadata);
     acl_ingress.apply(headers, local_metadata, standard_metadata);
     ttl.apply(headers, local_metadata, standard_metadata);

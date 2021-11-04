@@ -58,7 +58,6 @@ cc_library(
     deps = [
         ":app_db_to_pdpi_ir_translator",
         ":response_handler",
-        ":vrf_entry_translation",
         "//gutil:collections",
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
@@ -266,47 +265,6 @@ cc_test(
         "@sonic_swss_common//:libswsscommon",
         "@sonic_swss_common//tests/mocks:mock_consumer_notifier",
         "@sonic_swss_common//tests/mocks:mock_db_connector",
-    ],
-)
-
-cc_library(
-    name = "vrf_entry_translation",
-    srcs = ["vrf_entry_translation.cc"],
-    hdrs = ["vrf_entry_translation.h"],
-    deps = [
-        ":response_handler",
-        "//gutil:status",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
-        "//p4rt_app/utils:status_utility",
-        "@com_github_google_glog//:glog",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_googleapis//google/rpc:code_cc_proto",
-        "@sonic_swss_common//:libswsscommon",
-    ],
-)
-
-cc_test(
-    name = "vrf_entry_translation_test",
-    srcs = ["vrf_entry_translation_test.cc"],
-    deps = [
-        ":vrf_entry_translation",
-        "//gutil:proto_matchers",
-        "//gutil:status_matchers",
-        "//p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/status",
-        "@com_google_googleapis//google/rpc:code_cc_proto",
-        "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
-        "@sonic_swss_common//tests/mocks:mock_consumer_notifier",
-        "@sonic_swss_common//tests/mocks:mock_db_connector",
-        "@sonic_swss_common//tests/mocks:mock_producer_state_table",
     ],
 )
 

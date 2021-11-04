@@ -29,7 +29,6 @@ SHARED_DEPS = [
     "acl_common_actions.p4",
     "acl_ingress.p4",
     "acl_pre_ingress.p4",
-    "hashing.p4",
     "ids.h",
     "roles.h",
     "bitwidths.p4",

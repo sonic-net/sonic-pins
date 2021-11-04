@@ -16,5 +16,8 @@ bazel query :all \
     bazel run "${target}" -- --update
 done
 
+# union_p4info combines all the other p4info files.
+bazel run :union_p4info_up_to_date_test -- --update
+
 # Check P4 program.
 bazel test :sai_p4info_test

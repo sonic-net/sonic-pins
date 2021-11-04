@@ -47,7 +47,6 @@
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/packetio_port.h"
 #include "p4rt_app/sonic/response_handler.h"
-#include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "sai_p4/fixed/ids.h"
@@ -94,10 +93,6 @@ absl::Status AllowRoleAccessToTable(const std::string& role_name,
 
 sonic::AppDbTableType GetAppDbTableType(
     const pdpi::IrTableEntry& ir_table_entry) {
-  if (ir_table_entry.table_name() == "vrf_table") {
-    return sonic::AppDbTableType::VRF_TABLE;
-  }
-
   // By default we assume and AppDb P4RT entry.
   return sonic::AppDbTableType::P4RT;
 }
@@ -148,19 +143,6 @@ absl::Status AppendTableEntryReads(
     *response.add_entities()->mutable_table_entry() = *translate_status;
   }
 
-  // Get all VRF_TABLE entries from the AppDb.
-  ASSIGN_OR_RETURN(std::vector<pdpi::IrTableEntry> vrf_entries,
-                   sonic::GetAllAppDbVrfTableEntries(app_db_client));
-  for (const auto& ir_table_entry : vrf_entries) {
-    auto translate_status = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
-    if (!translate_status.ok()) {
-      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
-                 << ir_table_entry.DebugString();
-      return gutil::StatusBuilder(translate_status.status().code())
-             << "[P4RT/PDPI] " << translate_status.status().message();
-    }
-    *response.add_entities()->mutable_table_entry() = *translate_status;
-  }
   return absl::OkStatus();
 }
 
@@ -323,8 +305,6 @@ P4RuntimeImpl::P4RuntimeImpl(
     std::unique_ptr<swss::DBConnectorInterface> counter_db_client,
     std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_p4rt,
     std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_p4rt,
-    std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_vrf,
-    std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_vrf,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl, bool use_genetlink,
     bool translate_port_ids)
     : app_db_client_(std::move(app_db_client)),
@@ -332,8 +312,6 @@ P4RuntimeImpl::P4RuntimeImpl(
       counter_db_client_(std::move(counter_db_client)),
       app_db_table_p4rt_(std::move(app_db_table_p4rt)),
       app_db_notifier_p4rt_(std::move(app_db_notifier_p4rt)),
-      app_db_table_vrf_(std::move(app_db_table_vrf)),
-      app_db_notifier_vrf_(std::move(app_db_notifier_vrf)),
       packetio_impl_(std::move(packetio_impl)),
       translate_port_ids_(translate_port_ids) {
   absl::optional<std::string> init_failure;
@@ -461,10 +439,10 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     // Any AppDb update failures should be appended to the `rpc_response`. If
     // UpdateAppDb fails we should go critical.
-    auto app_db_write_status = sonic::UpdateAppDb(
-        app_db_updates, *ir_p4info_, *app_db_table_p4rt_,
-        *app_db_notifier_p4rt_, *app_db_client_, *state_db_client_,
-        *app_db_table_vrf_, *app_db_notifier_vrf_, rpc_response);
+    auto app_db_write_status =
+        sonic::UpdateAppDb(app_db_updates, *ir_p4info_, *app_db_table_p4rt_,
+                           *app_db_notifier_p4rt_, *app_db_client_,
+                           *state_db_client_, rpc_response);
 
     auto grpc_status = pdpi::IrWriteRpcStatusToGrpcStatus(rpc_status);
     if (!grpc_status.ok()) {

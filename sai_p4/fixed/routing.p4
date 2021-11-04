@@ -186,36 +186,6 @@ control routing(in headers_t headers,
   // so we can use `NoAction` throughout.
   action no_action() {}
 
-  // Programming this table does not affect packet forwarding directly -- the
-  // table performs no actions -- but results in the creation/deletion of VRFs.
-  // This is a prerequisite to using these VRFs, e.g. in the `ipv4_table` and
-  // `ipv6_table` below, as is indicated by the `@refers_to(vrf_table, vrf_id)`
-  // annotations.
-  // TODO: Currently we don't expose any `sai_virtual_router_attr_t`
-  // attributes here, but we may explore that in the future.
-  @entry_restriction("
-    // The VRF ID 0 (or '' in P4Runtime) encodes the default VRF, which cannot
-    // be read or written via this table, but is always present implicitly.
-    // TODO: This constraint should read `vrf_id != ''` (since
-    // constraints are a control plane (P4Runtime) concept), but
-    // p4-constraints does not currently support strings.
-    vrf_id != 0;
-  ")
-  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
-  @id(ROUTING_VRF_TABLE_ID)
-  table vrf_table {
-    key = {
-      local_metadata.vrf_id : exact @id(1) @name("vrf_id");
-    }
-    actions = {
-      // TODO: Add support for CamlCase actions to the PD generator
-      // so we can use `NoAction` instead of `no_action`.
-      @proto_id(1) no_action;
-    }
-    const default_action = no_action;
-    size = ROUTING_VRF_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
   // Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to SAI_PACKET_ACTION_DROP.
   @id(ROUTING_DROP_ACTION_ID)
   action drop() {
@@ -239,8 +209,7 @@ control routing(in headers_t headers,
   table ipv4_table {
     key = {
       // Sets vrf_id in sai_route_entry_t.
-      local_metadata.vrf_id : exact @id(1) @name("vrf_id")
-          @refers_to(vrf_table, vrf_id);
+      local_metadata.vrf_id : exact @id(1) @name("vrf_id");
       // Sets destination in sai_route_entry_t to an IPv4 prefix.
       headers.ipv4.dst_addr : lpm @format(IPV4_ADDRESS) @id(2)
                                   @name("ipv4_dst");
@@ -259,8 +228,7 @@ control routing(in headers_t headers,
   table ipv6_table {
     key = {
       // Sets vrf_id in sai_route_entry_t.
-      local_metadata.vrf_id : exact @id(1) @name("vrf_id")
-          @refers_to(vrf_table, vrf_id);
+      local_metadata.vrf_id : exact @id(1) @name("vrf_id");
       // Sets destination in sai_route_entry_t to an IPv6 prefix.
       headers.ipv6.dst_addr : lpm @format(IPV6_ADDRESS) @id(2)
                                   @name("ipv6_dst");
@@ -279,8 +247,6 @@ control routing(in headers_t headers,
     // TODO: This should just be the default behavior of v1model:
     // https://github.com/p4lang/behavioral-model/issues/992
     mark_to_drop(standard_metadata);
-
-    vrf_table.apply();
 
     if (local_metadata.admit_to_l3) {
 

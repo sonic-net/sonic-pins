@@ -205,29 +205,6 @@ tables {
 }
 tables {
   preamble {
-    id: 33554506
-    name: "ingress.routing.vrf_table"
-    alias: "vrf_table"
-    annotations: "@entry_restriction(\"\n    // The VRF ID 0 (or \'\' in P4Runtime) encodes the default VRF, which cannot\n    // be read or written via this table, but is always present implicitly.\n    // TODO: This constraint should read `vrf_id != \'\'` (since\n    // constraints are a control plane (P4Runtime) concept), but\n    // p4-constraints does not currently support strings.\n    vrf_id != 0;\n  \")"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-  }
-  match_fields {
-    id: 1
-    name: "vrf_id"
-    match_type: EXACT
-    type_name {
-      name: "vrf_id_t"
-    }
-  }
-  action_refs {
-    id: 24742814
-    annotations: "@proto_id(1)"
-  }
-  const_default_action_id: 24742814
-  size: 32
-}
-tables {
-  preamble {
     id: 33554500
     name: "ingress.routing.ipv4_table"
     alias: "ipv4_table"
@@ -236,7 +213,6 @@ tables {
   match_fields {
     id: 1
     name: "vrf_id"
-    annotations: "@refers_to(vrf_table , vrf_id)"
     match_type: EXACT
     type_name {
       name: "vrf_id_t"
@@ -274,7 +250,6 @@ tables {
   match_fields {
     id: 1
     name: "vrf_id"
-    annotations: "@refers_to(vrf_table , vrf_id)"
     match_type: EXACT
     type_name {
       name: "vrf_id_t"
@@ -540,45 +515,9 @@ actions {
     id: 1
     name: "vrf_id"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_VRF)"
-    annotations: "@refers_to(vrf_table , vrf_id)"
     type_name {
       name: "vrf_id_t"
     }
-  }
-}
-actions {
-  preamble {
-    id: 17825802
-    name: "ingress.hashing.select_ecmp_hash_algorithm"
-    alias: "select_ecmp_hash_algorithm"
-    annotations: "@sai_hash_algorithm(SAI_HASH_ALGORITHM_CRC_32LO)"
-    annotations: "@sai_hash_seed(0)"
-    annotations: "@sai_hash_offset(0)"
-  }
-}
-actions {
-  preamble {
-    id: 16777227
-    name: "ingress.hashing.compute_ecmp_hash_ipv4"
-    alias: "compute_ecmp_hash_ipv4"
-    annotations: "@sai_ecmp_hash(SAI_SWITCH_ATTR_ECMP_HASH_IPV4)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_SRC_IPV4)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_DST_IPV4)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_L4_SRC_PORT)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_L4_DST_PORT)"
-  }
-}
-actions {
-  preamble {
-    id: 16777228
-    name: "ingress.hashing.compute_ecmp_hash_ipv6"
-    alias: "compute_ecmp_hash_ipv6"
-    annotations: "@sai_ecmp_hash(SAI_SWITCH_ATTR_ECMP_HASH_IPV6)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_SRC_IPV6)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_DST_IPV6)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_L4_SRC_PORT)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_L4_DST_PORT)"
-    annotations: "@sai_native_hash_field(SAI_NATIVE_HASH_FIELD_IPV6_FLOW_LABEL)"
   }
 }
 actions {
@@ -651,13 +590,6 @@ actions {
     type_name {
       name: "nexthop_id_t"
     }
-  }
-}
-actions {
-  preamble {
-    id: 24742814
-    name: "ingress.routing.no_action"
-    alias: "no_action"
   }
 }
 actions {

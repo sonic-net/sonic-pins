@@ -66,8 +66,6 @@ absl::Status UpdateAppDb(const AppDbUpdates& updates,
                          swss::ConsumerNotifierInterface& p4rt_notification,
                          swss::DBConnectorInterface& app_db_client,
                          swss::DBConnectorInterface& state_db_client,
-                         swss::ProducerStateTableInterface& vrf_table,
-                         swss::ConsumerNotifierInterface& vrf_notification,
                          pdpi::IrWriteResponse* response);
 
 // Returns all P4RT keys currently installed in the AppDb. This does not include

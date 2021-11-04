@@ -102,7 +102,6 @@ message WcmpGroupTableEntry {
 
 message Ipv4TableEntry {
   message Match {
-    // Refers to 'vrf_table.vrf_id'.
     string vrf_id = 1;  // exact match / Format::STRING
     Lpm ipv4_dst = 2;   // lpm match / Format::IPV4
   }
@@ -120,7 +119,6 @@ message Ipv4TableEntry {
 
 message Ipv6TableEntry {
   message Match {
-    // Refers to 'vrf_table.vrf_id'.
     string vrf_id = 1;  // exact match / Format::STRING
     Lpm ipv6_dst = 2;   // lpm match / Format::IPV6
   }
@@ -159,25 +157,6 @@ message L3AdmitTableEntry {
   }
   Action action = 2;
   int32 priority = 3;
-  bytes controller_metadata = 8;
-}
-
-// Table entry restrictions:
-// ## The VRF ID 0 (or '' in P4Runtime) encodes the default VRF, which cannot
-// ## be read or written via this table, but is always present implicitly.
-// ## TODO: This constraint should read `vrf_id != ''` (since
-// ## constraints are a control plane (P4Runtime) concept), but
-// ## p4-constraints does not currently support strings.
-//   vrf_id != 0;
-message VrfTableEntry {
-  message Match {
-    string vrf_id = 1;  // exact match / Format::STRING
-  }
-  Match match = 1;
-  message Action {
-    NoAction no_action = 1;
-  }
-  Action action = 2;
   bytes controller_metadata = 8;
 }
 
@@ -384,7 +363,6 @@ message MirrorAsIpv4ErspanAction {
 message AdmitToL3Action {}
 
 message SetVrfAction {
-  // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
 }
 
@@ -409,8 +387,6 @@ message AclWbbIngressTrapAction {}
 
 message AclDropAction {}
 
-message NoAction {}
-
 // -- All tables ---------------------------------------------------------------
 
 message TableEntry {
@@ -423,7 +399,6 @@ message TableEntry {
     Ipv6TableEntry ipv6_table_entry = 69;
     MirrorSessionTableEntry mirror_session_table_entry = 70;
     L3AdmitTableEntry l3_admit_table_entry = 71;
-    VrfTableEntry vrf_table_entry = 74;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;
     AclWbbIngressTableEntry acl_wbb_ingress_table_entry = 259;

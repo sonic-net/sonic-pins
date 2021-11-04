@@ -40,7 +40,6 @@ class P4RuntimeGrpcService {
   // Accessors for AppDb tables.
   swss::FakeSonicDbTable& GetP4rtAppDbTable();
   swss::FakeSonicDbTable& GetPortAppDbTable();
-  swss::FakeSonicDbTable& GetVrfAppDbTable();
 
   // Accessors for CounterDb tables.
   swss::FakeSonicDbTable& GetP4rtCountersDbTable();
@@ -51,7 +50,6 @@ class P4RuntimeGrpcService {
  private:
   // Faked AppDb tables.
   swss::FakeSonicDbTable fake_p4rt_table_;
-  swss::FakeSonicDbTable fake_vrf_table_;
   swss::FakeSonicDbTable fake_port_table_;
 
   // Faked CountersDb tables.

@@ -80,12 +80,6 @@ int main(int argc, char** argv) {
   auto notification_channel_p4rt = absl::make_unique<swss::ConsumerNotifier>(
       "APPL_DB_P4RT_RESPONSE_CHANNEL", sonic_app_db.get());
 
-  // Create interfaces to interact with the AppDb VRF table.
-  auto app_db_table_vrf = absl::make_unique<swss::ProducerStateTable>(
-      sonic_app_db.get(), "VRF_TABLE");
-  auto notification_channel_vrf = absl::make_unique<swss::ConsumerNotifier>(
-      "APPL_DB_VRF_TABLE_RESPONSE_CHANNEL", sonic_app_db.get());
-
   // Wait for PortInitDone to be done.
   p4rt_app::sonic::WaitForPortInitDone(*sonic_app_db);
 
@@ -101,8 +95,7 @@ int main(int argc, char** argv) {
   p4rt_app::P4RuntimeImpl p4runtime_server(
       std::move(sonic_app_db), std::move(sonic_state_db),
       std::move(sonic_counters_db), std::move(app_db_table_p4rt),
-      std::move(notification_channel_p4rt), std::move(app_db_table_vrf),
-      std::move(notification_channel_vrf), std::move(*packetio_impl_or),
+      std::move(notification_channel_p4rt), std::move(*packetio_impl_or),
       FLAGS_use_genetlink, FLAGS_use_port_ids);
 
   // Start a P4 runtime server

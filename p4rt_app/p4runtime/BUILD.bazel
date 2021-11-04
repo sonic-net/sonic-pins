@@ -63,7 +63,6 @@ cc_library(
         "//p4rt_app/sonic:packetio_interface",
         "//p4rt_app/sonic:packetio_port",
         "//p4rt_app/sonic:response_handler",
-        "//p4rt_app/sonic:vrf_entry_translation",
         "//p4rt_app/sonic/adapters:system_call_adapter",
         "//p4rt_app/utils:status_utility",
         "//p4rt_app/utils:table_utility",

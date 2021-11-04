@@ -34,7 +34,6 @@
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/packetio_port.h"
 #include "p4rt_app/sonic/response_handler.h"
-#include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "swss/consumernotifierinterface.h"
 #include "swss/dbconnectorinterface.h"
 #include "swss/producerstatetableinterface.h"
@@ -63,8 +62,6 @@ class P4RuntimeImpl final : public p4::v1::P4Runtime::Service {
       std::unique_ptr<swss::DBConnectorInterface> counter_db_client,
       std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_p4rt,
       std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_p4rt,
-      std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_vrf,
-      std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_vrf,
       std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
       bool use_genetlink, bool translate_port_ids);
   ~P4RuntimeImpl() override = default;
@@ -139,12 +136,6 @@ class P4RuntimeImpl final : public p4::v1::P4Runtime::Service {
   std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_p4rt_
       ABSL_GUARDED_BY(server_state_lock_);
   std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_p4rt_
-      ABSL_GUARDED_BY(server_state_lock_);
-
-  // A RedisDB interface to write entries into the VRF_TABLE AppDb table.
-  std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_vrf_
-      ABSL_GUARDED_BY(server_state_lock_);
-  std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_vrf_
       ABSL_GUARDED_BY(server_state_lock_);
 
   // A RedisDB interface to write entries into the SWITCH_TABLE AppDb table.
