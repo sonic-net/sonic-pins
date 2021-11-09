@@ -52,6 +52,7 @@ namespace pins_test {
 namespace {
 
 using ::nlohmann::json;
+
 // Splits string in format "component[name=integrated_circuit0]" to three
 // tokens.
 const LazyRE2 kSplitNameValueRE = {R"((\w+)\[(\w+)=([\S+]+)\])"};
@@ -59,6 +60,57 @@ const LazyRE2 kSplitNameValueRE = {R"((\w+)\[(\w+)=([\S+]+)\])"};
 // Splits string to tokens seperated by a char '/' as long as '/' is not
 // included in [].
 const LazyRE2 kSplitBreakSquareBraceRE = {R"(([^\[\/]+(\[[^\]]+\])?)\/?)"};
+
+// Given a JSON string for OpenConfig interfaces. This function will parse
+// through the JSON and identify any ports with an 'openconfig-p4rt:id' value
+// set, and return a map of the Port Name to the Port ID.
+//
+// `field_type` is the type of open config data this function should parse (e.g.
+// "config" or "state").
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetPortNameToIdMapFromJsonString(const std::string& json_string,
+                                 const std::string& field_type) {
+  VLOG(2) << "Getting Port Name -> ID Map from JSON string: " << json_string;
+  const nlohmann::basic_json<> response_json = json::parse(json_string);
+
+  const auto oc_intf_json =
+      response_json.find("openconfig-interfaces:interfaces");
+  if (oc_intf_json == response_json.end()) {
+    return absl::NotFoundError(
+        absl::StrCat("'openconfig-interfaces:interfaces' not found: ",
+                     response_json.dump()));
+  }
+  const auto oc_intf_list_json = oc_intf_json->find("interface");
+  if (oc_intf_list_json == oc_intf_json->end()) {
+    return absl::NotFoundError(
+        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+  }
+
+  absl::flat_hash_map<std::string, std::string> interface_name_to_port_id;
+  for (const auto& element : oc_intf_list_json->items()) {
+    const auto element_name_json = element.value().find("name");
+    if (element_name_json == element.value().end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'name' not found: ", element.value().dump()));
+    }
+    std::string name = element_name_json->get<std::string>();
+
+    const auto element_interface_json = element.value().find(field_type);
+    if (element_interface_json == element.value().end()) {
+      return gutil::NotFoundErrorBuilder()
+             << "'" << field_type << "' not found: " << element.value().dump();
+    }
+
+    const auto element_id_json =
+        element_interface_json->find("openconfig-p4rt:id");
+    if (element_id_json == element_interface_json->end()) {
+      continue;
+    }
+
+    interface_name_to_port_id[name] = absl::StrCat(element_id_json->get<int>());
+  }
+  return interface_name_to_port_id;
+}
 
 }  // namespace
 
@@ -221,6 +273,55 @@ absl::Status PushGnmiConfig(thinkit::Switch& chassis,
                             const std::string& gnmi_config) {
   ASSIGN_OR_RETURN(auto stub, chassis.CreateGnmiStub());
   return pins_test::PushGnmiConfig(*stub, chassis.ChassisName(), gnmi_config);
+}
+
+absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
+                                          const std::string& gnmi_config,
+                                          const absl::Duration& timeout) {
+  VLOG(1) << "Waiting for gNMI to converge.";
+  // Get expected port ID mapping from the gNMI config.
+  absl::flat_hash_map<std::string, std::string> expected_port_id_by_name;
+  ASSIGN_OR_RETURN(
+      expected_port_id_by_name,
+      GetPortNameToIdMapFromJsonString(gnmi_config, /*field_type=*/"config"));
+  VLOG(1) << "gNMI has converged.";
+
+  // Poll the switch's state waiting for the port name and ID mappings to match.
+  absl::Time start_time = absl::Now();
+  bool converged = false;
+  LOG(INFO) << "Waiting for port name & ID mappings to converge.";
+  while (!converged && (absl::Now() < (start_time + timeout))) {
+    ASSIGN_OR_RETURN(gnmi::GetResponse response,
+                     GetAllInterfaceOverGnmi(stub, absl::Seconds(60)));
+    if (response.notification_size() < 1) {
+      return absl::InternalError(
+          absl::StrCat("Invalid response: ", response.DebugString()));
+    }
+
+    absl::flat_hash_map<std::string, std::string> actual_port_id_by_name;
+    ASSIGN_OR_RETURN(
+        actual_port_id_by_name,
+        GetPortNameToIdMapFromJsonString(
+            response.notification(0).update(0).val().json_ietf_val(),
+            /*field_type=*/"state"));
+
+    if (expected_port_id_by_name == actual_port_id_by_name) {
+      converged = true;
+    }
+  }
+
+  if (!converged) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "gNMI config did not coverge after " << timeout << ".";
+  }
+  return absl::OkStatus();
+}
+
+absl::Status WaitForGnmiPortIdConvergence(thinkit::Switch& chassis,
+                                          const std::string& gnmi_config,
+                                          const absl::Duration& timeout) {
+  ASSIGN_OR_RETURN(auto stub, chassis.CreateGnmiStub());
+  return WaitForGnmiPortIdConvergence(*stub, gnmi_config, timeout);
 }
 
 absl::Status CanGetAllInterfaceOverGnmi(gnmi::gNMI::StubInterface& stub,

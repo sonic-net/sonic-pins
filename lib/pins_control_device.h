@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_LIB_GPINS_CONTROL_DEVICE_H_
-#define PINS_LIB_GPINS_CONTROL_DEVICE_H_
+#ifndef PINS_LIB_PINS_CONTROL_DEVICE_H_
+#define PINS_LIB_PINS_CONTROL_DEVICE_H_
 
 #include <memory>
 #include <string>
@@ -39,14 +39,14 @@
 
 namespace pins_test {
 
-// A `GpinsControlDevice` represents a single GPINs switch used as a control
+// A `PinsControlDevice` represents a single PINs switch used as a control
 // device for a ThinKit generic testbed.
-class GpinsControlDevice : public thinkit::ControlDevice {
+class PinsControlDevice : public thinkit::ControlDevice {
  public:
-  static absl::StatusOr<GpinsControlDevice> CreateGpinsControlDevice(
+  static absl::StatusOr<PinsControlDevice> CreatePinsControlDevice(
       std::unique_ptr<thinkit::Switch> sut);
 
-  GpinsControlDevice(
+  PinsControlDevice(
       std::unique_ptr<thinkit::Switch> sut,
       std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
       pdpi::IrP4Info ir_p4info,
@@ -92,4 +92,4 @@ class GpinsControlDevice : public thinkit::ControlDevice {
 
 }  // namespace pins_test
 
-#endif  // PINS_LIB_GPINS_CONTROL_DEVICE_H_
+#endif  // PINS_LIB_PINS_CONTROL_DEVICE_H_

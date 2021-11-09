@@ -19,10 +19,10 @@ package(
 )
 
 cc_library(
-    name = "gpins_control_device",
+    name = "pins_control_device",
     testonly = 1,
-    srcs = ["gpins_control_device.cc"],
-    hdrs = ["gpins_control_device.h"],
+    srcs = ["pins_control_device.cc"],
+    hdrs = ["pins_control_device.h"],
     deps = [
         "//gutil:status",
         "//gutil:testing",

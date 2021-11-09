@@ -20,7 +20,10 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/escaping.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
@@ -1127,5 +1130,115 @@ TEST(CheckParseGnmiGetResponse, StringResponseSuccess) {
       ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
       IsOkAndHolds(HasSubstr("UP")));
 }
+
+// Generates an OpenConfig JSON string with the interface and p4rt port ID.
+std::string OpenConfigInterface(absl::string_view field_type,
+                                absl::string_view port_name,
+                                absl::string_view port_id) {
+  return absl::StrFormat(R"(
+    {
+      "openconfig-interfaces:interfaces":{
+        "interface" : [
+          {
+            "name" : "%s",
+            "%s" : {
+              "openconfig-p4rt:id" : %s
+            }
+          }
+        ]
+      }
+    })",
+                         port_name, field_type, port_id);
+}
+
+TEST(WaitForGnmiPortIdConvergenceTest, SwitchConvergesSuccessfully) {
+  gnmi::MockgNMIStub mock_stub;
+
+  // gNMI will report the state as mapping from Ethernet0 -> 1.
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() =
+      OpenConfigInterface("state", "Ethernet0", "1");
+  EXPECT_CALL(mock_stub, Get)
+      .WillOnce(DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  // Push the config with Ethernet0 -> 1.
+  EXPECT_OK(WaitForGnmiPortIdConvergence(
+      mock_stub, OpenConfigInterface("config", "Ethernet0", "1"),
+      absl::Seconds(1)));
+}
+
+TEST(WaitForGnmiPortIdConvergenceTest, SwitchDoesNotCoverge) {
+  gnmi::MockgNMIStub mock_stub;
+
+  // gNMI will report the state as mapping from Ethernet0 -> 2.
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() =
+      OpenConfigInterface("state", "Ethernet0", "2");
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  // Since we push a config with Ethernet0 -> 1 the switch should never
+  // converge, and it should timetout.
+  EXPECT_THAT(WaitForGnmiPortIdConvergence(
+                  mock_stub, OpenConfigInterface("config", "Ethernet0", "1"),
+                  absl::Seconds(1)),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHavePortId) {
+  gnmi::MockgNMIStub mock_stub;
+
+  // gNMI will report the state, but it's missing the P4RT ID for Ethernet0.
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces":{
+        "interface" : [
+          {
+            "name" : "Ethernet0",
+            "state" : {}
+          }
+        ]
+      }
+    })";
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  // Since we push a config with Ethernet0 -> 1 the switch should never
+  // converge, and it should timetout.
+  EXPECT_THAT(WaitForGnmiPortIdConvergence(
+                  mock_stub, OpenConfigInterface("config", "Ethernet0", "1"),
+                  absl::Seconds(1)),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHaveAResponse) {
+  gnmi::MockgNMIStub mock_stub;
+
+  // gNMI will not report back any notification.
+  gnmi::GetResponse response;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+
+  // Since the switch doesn't actually provide a notification it's misbehaving,
+  // and we should return an internal error.
+  EXPECT_THAT(WaitForGnmiPortIdConvergence(
+                  mock_stub, OpenConfigInterface("config", "Ethernet0", "1"),
+                  absl::Seconds(1)),
+              StatusIs(absl::StatusCode::kInternal));
+}
+
 }  // namespace
 }  // namespace pins_test
