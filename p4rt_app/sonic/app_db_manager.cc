@@ -31,15 +31,15 @@
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
+#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
 #include "p4rt_app/sonic/response_handler.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
-#include "swss/consumernotifierinterface.h"
-#include "swss/dbconnectorinterface.h"
 #include "swss/json.h"
 #include "swss/json.hpp"
-#include "swss/producerstatetableinterface.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -88,8 +88,7 @@ absl::StatusOr<std::string> CreateEntryForAppDbDelete(
     const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<std::string>& p4rt_deletes,
-    swss::ProducerStateTableInterface& p4rt_table,
-    swss::DBConnectorInterface& app_db_client) {
+    ProducerStateTableAdapter& p4rt_table, DBConnectorAdapter& app_db_client) {
   LOG(INFO) << "Delete PDPI IR entry: " << entry.ShortDebugString();
 
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
@@ -128,9 +127,8 @@ absl::StatusOr<std::string> CreateEntryForAppDbInsert(
     const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts,
-    swss::ProducerStateTableInterface& p4rt_table,
-    swss::DBConnectorInterface& app_db_client,
-    swss::DBConnectorInterface& state_db_client) {
+    ProducerStateTableAdapter& p4rt_table, DBConnectorAdapter& app_db_client,
+    DBConnectorAdapter& state_db_client) {
   LOG(INFO) << "Insert PDPI IR entry: " << entry.ShortDebugString();
 
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
@@ -165,9 +163,8 @@ absl::StatusOr<std::string> CreateEntryForAppDbModify(
     const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies,
-    swss::ProducerStateTableInterface& p4rt_table,
-    swss::DBConnectorInterface& app_db_client,
-    swss::DBConnectorInterface& state_db_client) {
+    ProducerStateTableAdapter& p4rt_table, DBConnectorAdapter& app_db_client,
+    DBConnectorAdapter& state_db_client) {
   LOG(INFO) << "Modify PDPI IR entry: " << entry.ShortDebugString();
 
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
@@ -232,9 +229,8 @@ void WriteBatchToAppDb(
     const std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts,
     const std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies,
     const std::vector<std::string>& p4rt_deletes,
-    swss::DBConnectorInterface& app_db_client,
-    swss::ProducerStateTableInterface& p4rt_table) {
-  if (!p4rt_inserts.empty()) p4rt_table.set(p4rt_inserts);
+    DBConnectorAdapter& app_db_client, ProducerStateTableAdapter& p4rt_table) {
+  if (!p4rt_inserts.empty()) p4rt_table.batch_set(p4rt_inserts);
 
   if (!p4rt_modifies.empty()) {
     std::vector<std::string> del_keys(p4rt_modifies.size());
@@ -245,21 +241,21 @@ void WriteBatchToAppDb(
     // On modify we need to first remove the existing entries to get rid of any
     // action paramters that may be replaced with a new action. Doing this
     // through the app_db_client will not invoke an action in the OrchAgent.
-    app_db_client.del(del_keys);
+    app_db_client.batch_del(del_keys);
 
     // Then we re-insert the entries through the ProducerStateTable which will
     // inoke an update action in the OrchAgent.
-    p4rt_table.set(p4rt_modifies);
+    p4rt_table.batch_set(p4rt_modifies);
   }
 
-  if (!p4rt_deletes.empty()) p4rt_table.del(p4rt_deletes);
+  if (!p4rt_deletes.empty()) p4rt_table.batch_del(p4rt_deletes);
 }
 
 }  // namespace
 
 absl::StatusOr<pdpi::IrTableEntry> ReadAppDbP4TableEntry(
-    const pdpi::IrP4Info& p4info, swss::DBConnectorInterface& app_db_client,
-    swss::DBConnectorInterface& counters_db_client, const std::string& key) {
+    const pdpi::IrP4Info& p4info, DBConnectorAdapter& app_db_client,
+    DBConnectorAdapter& counters_db_client, const std::string& key) {
   VLOG(1) << "Read AppDb entry: " << key;
   ASSIGN_OR_RETURN(
       pdpi::IrTableEntry table_entry,
@@ -271,7 +267,7 @@ absl::StatusOr<pdpi::IrTableEntry> ReadAppDbP4TableEntry(
 }
 
 std::vector<std::string> GetAllAppDbP4TableEntryKeys(
-    swss::DBConnectorInterface& app_db_client) {
+    DBConnectorAdapter& app_db_client) {
   std::vector<std::string> p4rt_keys;
 
   for (const auto& key : app_db_client.keys("*")) {
@@ -295,10 +291,10 @@ std::vector<std::string> GetAllAppDbP4TableEntryKeys(
 
 absl::Status UpdateAppDb(const AppDbUpdates& updates,
                          const pdpi::IrP4Info& p4_info,
-                         swss::ProducerStateTableInterface& p4rt_table,
-                         swss::ConsumerNotifierInterface& p4rt_notification,
-                         swss::DBConnectorInterface& app_db_client,
-                         swss::DBConnectorInterface& state_db_client,
+                         ProducerStateTableAdapter& p4rt_table,
+                         ConsumerNotifierAdapter& p4rt_notification,
+                         DBConnectorAdapter& app_db_client,
+                         DBConnectorAdapter& state_db_client,
                          pdpi::IrWriteResponse* response) {
   // We keep a temporary cache of any keys that are duplicated in the batch
   // request so the flow can be rejected.
@@ -365,7 +361,7 @@ absl::Status UpdateAppDb(const AppDbUpdates& updates,
 }
 
 absl::StatusOr<boost::bimap<std::string, std::string>> GetPortIdTranslationMap(
-    swss::DBConnectorInterface& app_db_client) {
+    DBConnectorAdapter& app_db_client) {
   boost::bimap<std::string, std::string> translation_map;
 
   for (const std::string& key : app_db_client.keys("PORT_TABLE:Ethernet*")) {

@@ -19,8 +19,8 @@
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
-#include "swss/fakes/fake_sonic_db_table.h"
 
 namespace p4rt_app {
 namespace test_lib {
@@ -38,26 +38,25 @@ class P4RuntimeGrpcService {
   int GrpcPort() const;
 
   // Accessors for AppDb tables.
-  swss::FakeSonicDbTable& GetP4rtAppDbTable();
-  swss::FakeSonicDbTable& GetPortAppDbTable();
+  sonic::FakeSonicDbTable& GetP4rtAppDbTable();
+  sonic::FakeSonicDbTable& GetPortAppDbTable();
 
   // Accessors for CounterDb tables.
-  swss::FakeSonicDbTable& GetP4rtCountersDbTable();
+  sonic::FakeSonicDbTable& GetP4rtCountersDbTable();
 
   // Accessor for PacketIO interface.
   sonic::FakePacketIoInterface& GetFakePacketIoInterface();
 
  private:
   // Faked AppDb tables.
-  swss::FakeSonicDbTable fake_p4rt_table_;
-  swss::FakeSonicDbTable fake_port_table_;
+  sonic::FakeSonicDbTable fake_p4rt_table_;
+  sonic::FakeSonicDbTable fake_port_table_;
 
   // Faked CountersDb tables.
-  swss::FakeSonicDbTable fake_p4rt_counters_table_;
+  sonic::FakeSonicDbTable fake_p4rt_counters_table_;
 
   // Faked StateDb tables.
-  swss::FakeSonicDbTable fake_p4rt_state_table_;
-  swss::FakeSonicDbTable fake_vrf_state_table_;
+  sonic::FakeSonicDbTable fake_p4rt_state_table_;
 
   // Faked PacketIO interface.
   sonic::FakePacketIoInterface* fake_packetio_interface_;  // No ownership.

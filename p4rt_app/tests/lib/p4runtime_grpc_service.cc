@@ -25,14 +25,10 @@
 #include "grpcpp/server_builder.h"
 #include "gutil/status_matchers.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/sonic/adapters/fake_consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/fake_db_connector_adapter.h"
+#include "p4rt_app/sonic/adapters/fake_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
-#include "swss/consumerstatetable.h"
-#include "swss/dbconnector.h"
-#include "swss/fakes/fake_consumer_notifier.h"
-#include "swss/fakes/fake_db_connector.h"
-#include "swss/fakes/fake_producer_state_table.h"
-#include "swss/fakes/fake_sonic_db_table.h"
-#include "swss/notificationproducer.h"
 
 namespace p4rt_app {
 namespace test_lib {
@@ -45,26 +41,29 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(
   const std::string kCountersTableName = "COUNTERS";
 
   // Connect SONiC AppDB tables with their equivelant AppStateDB tables.
-  fake_p4rt_table_ = swss::FakeSonicDbTable(&fake_p4rt_state_table_);
+  fake_p4rt_table_ = sonic::FakeSonicDbTable(&fake_p4rt_state_table_);
 
   // Create AppDb interfaces used by the P4RT App.
-  auto fake_app_db_client = absl::make_unique<swss::FakeDBConnector>(":");
+  auto fake_app_db_client = absl::make_unique<sonic::FakeDBConnectorAdapter>();
   fake_app_db_client->AddSonicDbTable(kP4rtTableName, &fake_p4rt_table_);
   fake_app_db_client->AddSonicDbTable(kPortTableName, &fake_port_table_);
 
   // P4RT table.
-  auto fake_app_db_table_p4rt = absl::make_unique<swss::FakeProducerStateTable>(
-      kP4rtTableName, &fake_p4rt_table_);
+  auto fake_app_db_table_p4rt =
+      absl::make_unique<sonic::FakeProducerStateTableAdapter>(
+          kP4rtTableName, &fake_p4rt_table_);
   auto fake_notify_p4rt =
-      absl::make_unique<swss::FakeConsumerNotifier>(&fake_p4rt_table_);
+      absl::make_unique<sonic::FakeConsumerNotifierAdapter>(&fake_p4rt_table_);
 
   // Create StateDb interfaces used by the P4RT App.
-  auto fake_state_db_client = absl::make_unique<swss::FakeDBConnector>("|");
+  auto fake_state_db_client =
+      absl::make_unique<sonic::FakeDBConnectorAdapter>();
   fake_state_db_client->AddSonicDbTable(kP4rtTableName,
                                         &fake_p4rt_state_table_);
 
   // Create CounterDb interfaces used by the P4RT App.
-  auto fake_counter_db_client = absl::make_unique<swss::FakeDBConnector>(":");
+  auto fake_counter_db_client =
+      absl::make_unique<sonic::FakeDBConnectorAdapter>();
   fake_counter_db_client->AddSonicDbTable(kCountersTableName,
                                           &fake_p4rt_counters_table_);
 
@@ -102,15 +101,15 @@ P4RuntimeGrpcService::~P4RuntimeGrpcService() {
 
 int P4RuntimeGrpcService::GrpcPort() const { return 9999; }
 
-swss::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtAppDbTable() {
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtAppDbTable() {
   return fake_p4rt_table_;
 }
 
-swss::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppDbTable() {
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppDbTable() {
   return fake_port_table_;
 }
 
-swss::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtCountersDbTable() {
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtCountersDbTable() {
   return fake_p4rt_counters_table_;
 }
 

@@ -29,6 +29,7 @@
 #include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "p4_pdpi/utils/annotation_parser.h"
+#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
 #include "swss/json.hpp"
@@ -665,7 +666,7 @@ StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
 }  // namespace
 
 StatusOr<std::string> InsertAclTableDefinition(
-    swss::ProducerStateTableInterface& sonic_db_producer,
+    ProducerStateTableAdapter& sonic_db_producer,
     const IrTableDefinition& ir_table) {
   ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
   ASSIGN_OR_RETURN(std::vector<swss::FieldValueTuple> values,
@@ -675,7 +676,7 @@ StatusOr<std::string> InsertAclTableDefinition(
 }
 
 absl::Status RemoveAclTableDefinition(
-    swss::ProducerStateTableInterface& sonic_db_producer,
+    ProducerStateTableAdapter& sonic_db_producer,
     const IrTableDefinition& ir_table) {
   ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
   sonic_db_producer.del(key);

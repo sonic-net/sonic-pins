@@ -29,14 +29,14 @@
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
+#include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
+#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/packetio_port.h"
 #include "p4rt_app/sonic/response_handler.h"
-#include "swss/consumernotifierinterface.h"
-#include "swss/dbconnectorinterface.h"
-#include "swss/producerstatetableinterface.h"
 
 namespace p4rt_app {
 
@@ -57,11 +57,11 @@ class P4RuntimeImpl final : public p4::v1::P4Runtime::Service {
   // TODO: find way to group arguments so we don't have to pass so
   // many at once.
   P4RuntimeImpl(
-      std::unique_ptr<swss::DBConnectorInterface> app_db_client,
-      std::unique_ptr<swss::DBConnectorInterface> state_db_client,
-      std::unique_ptr<swss::DBConnectorInterface> counter_db_client,
-      std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_p4rt,
-      std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_p4rt,
+      std::unique_ptr<sonic::DBConnectorAdapter> app_db_client,
+      std::unique_ptr<sonic::DBConnectorAdapter> app_state_db_client,
+      std::unique_ptr<sonic::DBConnectorAdapter> counter_db_client,
+      std::unique_ptr<sonic::ProducerStateTableAdapter> app_db_table_p4rt,
+      std::unique_ptr<sonic::ConsumerNotifierAdapter> app_db_notifier_p4rt,
       std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
       bool use_genetlink, bool translate_port_ids);
   ~P4RuntimeImpl() override = default;
@@ -119,29 +119,23 @@ class P4RuntimeImpl final : public p4::v1::P4Runtime::Service {
   // A RedisDB interface to handle requests into AppDb tables that cannot be
   // done through the ProducerStateTable interface. For example, read out all
   // P4RT entries.
-  std::unique_ptr<swss::DBConnectorInterface> app_db_client_
+  std::unique_ptr<sonic::DBConnectorAdapter> app_db_client_
       ABSL_GUARDED_BY(server_state_lock_);
 
-  // A RedisDB interface to handle requests into the StateDb tables that cannot
-  // be done through other interfaces.
-  std::unique_ptr<swss::DBConnectorInterface> state_db_client_
+  // A RedisDB interface to handle requests into the AppStateDb tables that
+  // cannot be done through other interfaces.
+  std::unique_ptr<sonic::DBConnectorAdapter> app_state_db_client_
       ABSL_GUARDED_BY(server_state_lock_);
 
   // A RedisDB interface to handle requests into the CounterDb tables that
   // cannot be done through other interfaces.
-  std::unique_ptr<swss::DBConnectorInterface> counter_db_client_
+  std::unique_ptr<sonic::DBConnectorAdapter> counter_db_client_
       ABSL_GUARDED_BY(server_state_lock_);
 
   // A RedisDB interface to write entries into the P4RT AppDb table.
-  std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_p4rt_
+  std::unique_ptr<sonic::ProducerStateTableAdapter> app_db_table_p4rt_
       ABSL_GUARDED_BY(server_state_lock_);
-  std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_p4rt_
-      ABSL_GUARDED_BY(server_state_lock_);
-
-  // A RedisDB interface to write entries into the SWITCH_TABLE AppDb table.
-  std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_switch_
-      ABSL_GUARDED_BY(server_state_lock_);
-  std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_switch_
+  std::unique_ptr<sonic::ConsumerNotifierAdapter> app_db_notifier_p4rt_
       ABSL_GUARDED_BY(server_state_lock_);
 
   // P4RT can accept multiple connections to a single switch for redundancy.

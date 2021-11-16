@@ -22,14 +22,13 @@
 #include "absl/status/statusor.h"
 #include "glog/logging.h"
 #include "p4_pdpi/utils/ir.h"
+#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/receive_genetlink.h"
-#include "swss/dbconnectorinterface.h"
 #include "swss/select.h"
 #include "swss/selectable.h"
 
 namespace p4rt_app {
-
 namespace sonic {
 
 // Prefix for submit to ingress.
@@ -50,7 +49,7 @@ struct PacketIoPortSockets {
 };
 
 // Blocking wait until port init is done.
-void WaitForPortInitDone(swss::DBConnectorInterface& app_db_client);
+void WaitForPortInitDone(DBConnectorAdapter& app_db_client);
 
 // Discover all netdev ports in Linux that corresponds to each physical port on
 // the switch. CPU punted/generated packets originate/egress on a physical port

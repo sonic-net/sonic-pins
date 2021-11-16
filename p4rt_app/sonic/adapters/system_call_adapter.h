@@ -18,7 +18,9 @@
 
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <stddef.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 namespace p4rt_app {
 namespace sonic {

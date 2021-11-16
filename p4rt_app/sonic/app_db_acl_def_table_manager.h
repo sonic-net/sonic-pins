@@ -18,7 +18,7 @@
 #include "absl/strings/ascii.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
-#include "swss/producerstatetableinterface.h"
+#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -26,18 +26,18 @@ namespace sonic {
 // Insert an ACL table definition entry into the AppDB ACL Table Definition
 // Table, returns the key that was used.
 absl::StatusOr<std::string> InsertAclTableDefinition(
-    swss::ProducerStateTableInterface& sonic_db_producer,
+    ProducerStateTableAdapter& sonic_db_producer,
     const pdpi::IrTableDefinition& ir_table);
 
 // Remove an ACL table definition entry from the AppDB ACL Table Definition
 // Table.
 absl::Status RemoveAclTableDefinition(
-    swss::ProducerStateTableInterface& sonic_db_producer,
+    ProducerStateTableAdapter& sonic_db_producer,
     const pdpi::IrTableDefinition& ir_table);
 
 // Read an ACL table definition entry from the AppDB ACL Table Definition Table.
 inline absl::StatusOr<pdpi::IrTableDefinition> ReadAclTableDefinition(
-    swss::ProducerStateTableInterface& sonic_db_producer,
+    ProducerStateTableAdapter& sonic_db_producer,
     absl::string_view table_name) {
   return gutil::UnimplementedErrorBuilder()
          << "ReadAclTableDefinition is not implemented.";

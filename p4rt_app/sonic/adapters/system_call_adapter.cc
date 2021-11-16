@@ -14,7 +14,11 @@
 
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <stddef.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 namespace p4rt_app {

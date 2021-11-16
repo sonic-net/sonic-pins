@@ -34,11 +34,12 @@
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
+#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/packetio_impl.h"
-#include "swss/consumernotifier.h"
 #include "swss/dbconnector.h"
-#include "swss/producerstatetable.h"
 #include "swss/schema.h"
 
 using ::grpc::Server;
@@ -60,25 +61,29 @@ int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   // Open a database connection into the SONiC AppDb.
+  swss::DBConnector app_db(APPL_DB, kRedisDbHost, kRedisDbPort, /*timeout=*/0);
   auto sonic_app_db =
-      absl::make_unique<swss::DBConnector>(APPL_DB, kRedisDbHost, kRedisDbPort,
-                                           /*timeout=*/0);
+      absl::make_unique<p4rt_app::sonic::DBConnectorAdapter>(&app_db);
 
-  // Open a database connection into the SONiC StateDb.
-  auto sonic_state_db = absl::make_unique<swss::DBConnector>(
-      APPL_STATE_DB, kRedisDbHost, kRedisDbPort,
-      /*timeout=*/0);
+  // Open a database connection into the SONiC AppStateDb.
+  swss::DBConnector app_state_db(APPL_STATE_DB, kRedisDbHost, kRedisDbPort,
+                                 /*timeout=*/0);
+  auto sonic_app_state_db =
+      absl::make_unique<p4rt_app::sonic::DBConnectorAdapter>(&app_state_db);
 
   // Open a database connection into the SONiC CountersDb
-  auto sonic_counters_db = absl::make_unique<swss::DBConnector>(
-      COUNTERS_DB, kRedisDbHost, kRedisDbPort,
-      /*timeout=*/0);
+  swss::DBConnector counters_db(COUNTERS_DB, kRedisDbHost, kRedisDbPort,
+                                /*timeout=*/0);
+  auto sonic_counters_db =
+      absl::make_unique<p4rt_app::sonic::DBConnectorAdapter>(&counters_db);
 
   // Create interfaces to interact with the AppDb P4RT table.
   auto app_db_table_p4rt =
-      absl::make_unique<swss::ProducerStateTable>(sonic_app_db.get(), "P4RT");
-  auto notification_channel_p4rt = absl::make_unique<swss::ConsumerNotifier>(
-      "APPL_DB_P4RT_RESPONSE_CHANNEL", sonic_app_db.get());
+      absl::make_unique<p4rt_app::sonic::ProducerStateTableAdapter>(
+          &app_db, APP_P4RT_TABLE_NAME);
+  auto notification_channel_p4rt =
+      absl::make_unique<p4rt_app::sonic::ConsumerNotifierAdapter>(
+          "APPL_DB_P4RT_RESPONSE_CHANNEL", &app_db);
 
   // Wait for PortInitDone to be done.
   p4rt_app::sonic::WaitForPortInitDone(*sonic_app_db);
@@ -93,7 +98,7 @@ int main(int argc, char** argv) {
 
   // Create the P4RT server.
   p4rt_app::P4RuntimeImpl p4runtime_server(
-      std::move(sonic_app_db), std::move(sonic_state_db),
+      std::move(sonic_app_db), std::move(sonic_app_state_db),
       std::move(sonic_counters_db), std::move(app_db_table_p4rt),
       std::move(notification_channel_p4rt), std::move(*packetio_impl_or),
       FLAGS_use_genetlink, FLAGS_use_port_ids);

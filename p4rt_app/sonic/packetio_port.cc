@@ -34,6 +34,8 @@
 #include "absl/strings/substitute.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
+#include "p4rt_app/sonic/adapters/system_call_adapter.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -224,7 +226,7 @@ absl::StatusOr<std::unique_ptr<PacketIoPortSockets>> CreatePacketIoSockets(
 
 }  // namespace
 
-void WaitForPortInitDone(swss::DBConnectorInterface &app_db_client) {
+void WaitForPortInitDone(DBConnectorAdapter &app_db_client) {
   while (true) {
     auto port_init_map = app_db_client.hgetall("PORT_TABLE:PortInitDone");
     if (!port_init_map.empty()) {

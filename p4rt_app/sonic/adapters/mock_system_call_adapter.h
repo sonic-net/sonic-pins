@@ -16,6 +16,9 @@
 #ifndef GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H
 #define GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H
 
+#include <stddef.h>
+#include <unistd.h>
+
 #include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 

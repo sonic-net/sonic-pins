@@ -43,6 +43,9 @@
 #include "p4_pdpi/utils/ir.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
+#include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
+#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/packetio_port.h"
@@ -104,8 +107,8 @@ absl::Status AppendTableEntryReads(
     const pdpi::IrP4Info& p4_info, const std::string& role_name,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    swss::DBConnectorInterface& app_db_client,
-    swss::DBConnectorInterface& counters_db_client) {
+    sonic::DBConnectorAdapter& app_db_client,
+    sonic::DBConnectorAdapter& counters_db_client) {
   RETURN_IF_ERROR(SupportedTableEntryRequest(pi_table_entry));
 
   // Get all P4RT keys from the AppDb.
@@ -150,8 +153,8 @@ absl::StatusOr<p4::v1::ReadResponse> DoRead(
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    swss::DBConnectorInterface& app_db_client,
-    swss::DBConnectorInterface& counters_db_client) {
+    sonic::DBConnectorAdapter& app_db_client,
+    sonic::DBConnectorAdapter& counters_db_client) {
   p4::v1::ReadResponse response;
   for (const auto& entity : request.entities()) {
     LOG(INFO) << "Read request: " << entity.ShortDebugString();
@@ -300,15 +303,15 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
 }  // namespace
 
 P4RuntimeImpl::P4RuntimeImpl(
-    std::unique_ptr<swss::DBConnectorInterface> app_db_client,
-    std::unique_ptr<swss::DBConnectorInterface> state_db_client,
-    std::unique_ptr<swss::DBConnectorInterface> counter_db_client,
-    std::unique_ptr<swss::ProducerStateTableInterface> app_db_table_p4rt,
-    std::unique_ptr<swss::ConsumerNotifierInterface> app_db_notifier_p4rt,
+    std::unique_ptr<sonic::DBConnectorAdapter> app_db_client,
+    std::unique_ptr<sonic::DBConnectorAdapter> app_state_db_client,
+    std::unique_ptr<sonic::DBConnectorAdapter> counter_db_client,
+    std::unique_ptr<sonic::ProducerStateTableAdapter> app_db_table_p4rt,
+    std::unique_ptr<sonic::ConsumerNotifierAdapter> app_db_notifier_p4rt,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl, bool use_genetlink,
     bool translate_port_ids)
     : app_db_client_(std::move(app_db_client)),
-      state_db_client_(std::move(state_db_client)),
+      app_state_db_client_(std::move(app_state_db_client)),
       counter_db_client_(std::move(counter_db_client)),
       app_db_table_p4rt_(std::move(app_db_table_p4rt)),
       app_db_notifier_p4rt_(std::move(app_db_notifier_p4rt)),
@@ -442,7 +445,7 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     auto app_db_write_status =
         sonic::UpdateAppDb(app_db_updates, *ir_p4info_, *app_db_table_p4rt_,
                            *app_db_notifier_p4rt_, *app_db_client_,
-                           *state_db_client_, rpc_response);
+                           *app_state_db_client_, rpc_response);
 
     auto grpc_status = pdpi::IrWriteRpcStatusToGrpcStatus(rpc_status);
     if (!grpc_status.ok()) {
@@ -750,7 +753,7 @@ absl::Status P4RuntimeImpl::ApplyForwardingPipelineConfig(
           pdpi::IrUpdateStatus status,
           sonic::GetAndProcessResponseNotification(
               app_db_table_p4rt_->get_table_name(), *app_db_notifier_p4rt_,
-              *app_db_client_, *state_db_client_, acl_key));
+              *app_db_client_, *app_state_db_client_, acl_key));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.

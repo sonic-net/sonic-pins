@@ -25,9 +25,8 @@
 #include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "swss/mocks/mock_consumer_notifier.h"
-#include "swss/mocks/mock_db_connector.h"
-#include "swss/rediscommand.h"
+#include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/mock_db_connector_adapter.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -58,9 +57,9 @@ std::vector<swss::FieldValueTuple> GetSwssError(const std::string& message) {
 }
 
 TEST(ResponseHandlerTest, SingleRequests) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // We want the response to pass.
   EXPECT_CALL(mock_notifier, WaitForNotificationAndPop)
@@ -74,9 +73,9 @@ TEST(ResponseHandlerTest, SingleRequests) {
 }
 
 TEST(ResponseHandlerTest, MultipleRequests) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -102,9 +101,9 @@ TEST(ResponseHandlerTest, MultipleRequests) {
 }
 
 TEST(ResponseHandlerTest, MissingResponseValueFails) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -124,9 +123,9 @@ TEST(ResponseHandlerTest, MissingResponseValueFails) {
 }
 
 TEST(ResponseHandlerTest, ResponsePathReturnsDuplicateKeys) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -154,9 +153,9 @@ TEST(ResponseHandlerTest, ResponsePathReturnsDuplicateKeys) {
 // separate maps. Lower and higher value keys are handled slightly different
 // (e.g. missing vs. extra).
 TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithLowerValue) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -181,9 +180,9 @@ TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithLowerValue) {
 // separate maps. Lower and higher value keys are handled slightly different
 // (e.g. missing vs. extra).
 TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithHigherValue) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -205,9 +204,9 @@ TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithHigherValue) {
 }
 
 TEST(ResponseHandlerTest, ResponsePathFails) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 1 key.
   pdpi::IrWriteResponse ir_write_response;
@@ -225,9 +224,9 @@ TEST(ResponseHandlerTest, ResponsePathFails) {
 }
 
 TEST(ResponseHandlerTest, ResponsePathDoesNotSetErrorTuple) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 1 key.
   pdpi::IrWriteResponse ir_write_response;
@@ -247,9 +246,9 @@ TEST(ResponseHandlerTest, ResponsePathDoesNotSetErrorTuple) {
 }
 
 TEST(ResponseHandlerTest, ResponsePathSetsWrongErrorString) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 1 key.
   pdpi::IrWriteResponse ir_write_response;
@@ -269,9 +268,9 @@ TEST(ResponseHandlerTest, ResponsePathSetsWrongErrorString) {
 }
 
 TEST(ResponseHandlerTest, CleanupAppDbWithAnUpdate) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -291,7 +290,7 @@ TEST(ResponseHandlerTest, CleanupAppDbWithAnUpdate) {
   // checking the AppStateDb we return a result which implies the entry existed
   // before and should be reverted back to the old values (i.e. call hmset to
   // the AppDb entry).
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE|key1"))
+  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key1"))
       .WillOnce(Return(std::unordered_map<std::string, std::string>{
           {"action", "set_port_and_src_mac"},
       }));
@@ -311,9 +310,9 @@ TEST(ResponseHandlerTest, CleanupAppDbWithAnUpdate) {
 }
 
 TEST(ResponseHandlerTest, CleanupAppDbWithADelete) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -331,7 +330,7 @@ TEST(ResponseHandlerTest, CleanupAppDbWithADelete) {
   // The failure should invoke a cleanup response for the first key. When
   // checking the AppStateDb we do not return any values which implies the entry
   // did not exist before and the current AppDb entry should be deleted.
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE|key0"))
+  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key0"))
       .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
   EXPECT_CALL(mock_app_db_client, del("MY_TABLE:key0")).WillOnce(Return(1));
 
@@ -349,9 +348,9 @@ TEST(ResponseHandlerTest, CleanupAppDbWithADelete) {
 }
 
 TEST(ResponseHandlerTest, CleanupAppDbFails) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 2 keys.
   pdpi::IrWriteResponse ir_write_response;
@@ -370,7 +369,7 @@ TEST(ResponseHandlerTest, CleanupAppDbFails) {
   // The failure should invoke a cleanup response for the second key. When
   // checking the AppStateDb we do not return any values which implies the entry
   // did not exist before and the current AppDb entry should be deleted.
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE|key1"))
+  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key1"))
       .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
 
   // However, this test simulates that cleanup delete failing by returning 0
@@ -395,9 +394,9 @@ using ResponseHandlerErrorCodeTest =
     ::testing::TestWithParam<SwssToP4rtErrorMapping>;
 
 TEST_P(ResponseHandlerErrorCodeTest, VerifySwssToGrpcMapping) {
-  swss::MockConsumerNotifier mock_notifier;
-  swss::MockDBConnector mock_app_db_client;
-  swss::MockDBConnector mock_state_db_client;
+  MockConsumerNotifierAdapter mock_notifier;
+  MockDBConnectorAdapter mock_app_db_client;
+  MockDBConnectorAdapter mock_state_db_client;
 
   // The test will wait for a response for 1 key.
   pdpi::IrUpdateStatus ir_update_status;
@@ -409,7 +408,7 @@ TEST_P(ResponseHandlerErrorCodeTest, VerifySwssToGrpcMapping) {
       .WillOnce(DoAll(
           SetArgReferee<0>(GetParam().swss_error), SetArgReferee<1>("key0"),
           SetArgReferee<2>(GetSwssError("my_error")), Return(true)));
-  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE|key0"))
+  EXPECT_CALL(mock_state_db_client, hgetall("MY_TABLE:key0"))
       .WillOnce(Return(std::unordered_map<std::string, std::string>{}));
   EXPECT_CALL(mock_app_db_client, del("MY_TABLE:key0")).WillOnce(Return(1));
 
