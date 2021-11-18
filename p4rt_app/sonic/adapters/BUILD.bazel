@@ -33,7 +33,7 @@ cc_library(
     deps = [
         ":consumer_notifier_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -73,7 +73,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -104,7 +104,7 @@ cc_library(
     deps = [
         ":producer_state_table_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -148,7 +148,7 @@ cc_library(
         ":fake_sonic_db_table",
         ":producer_state_table_adapter",
         "@com_github_google_glog//:glog",
-        "@sonic_swss_common//:common",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 

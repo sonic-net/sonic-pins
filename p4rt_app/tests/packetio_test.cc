@@ -46,7 +46,6 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "swss/fakes/fake_sonic_db_table.h"
 
 namespace p4rt_app {
 namespace {

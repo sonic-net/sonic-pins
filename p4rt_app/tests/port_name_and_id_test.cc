@@ -32,7 +32,6 @@
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
-#include "swss/fakes/fake_sonic_db_table.h"
 
 namespace p4rt_app {
 namespace {
