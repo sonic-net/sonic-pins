@@ -25,7 +25,7 @@ jobs:
         # See https://docs.bazel.build/versions/master/output_directories.html
         path: "/tmp/repo-cache"
         # See https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
-        key: bazel-repo-cache-v1-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc', '.bazelversion') }}
+        key: bazel-repo-cache-v1-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc', '.bazelversion', 'WORKSPACE.bazel') }}
         restore-keys: |
           bazel-repo-cache-v1-${{ runner.os }}-
 
