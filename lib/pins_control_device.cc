@@ -36,6 +36,7 @@
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/p4rt/p4rt_programming_context.h"
 #include "lib/p4rt/packet_listener.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -90,49 +91,84 @@ absl::StatusOr<gnmi::SetRequest> BuildGnmiSetLinkStateRequest(
 }  // namespace
 
 PinsControlDevice::PinsControlDevice(
-    std::unique_ptr<thinkit::Switch> sut,
-    std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
-    pdpi::IrP4Info ir_p4info,
+    std::unique_ptr<thinkit::Switch> sut, sai::Instantiation instantiation,
+    std::unique_ptr<pdpi::P4RuntimeSession> control_session,
     absl::flat_hash_map<std::string, std::string> interface_name_to_port_id)
     : sut_(std::move(sut)),
-      control_p4_session_(std::move(control_p4_session)),
-      ir_p4info_(std::move(ir_p4info)),
+      instantiation_(instantiation),
+      control_session_(std::move(control_session)),
       interface_name_to_port_id_(std::move(interface_name_to_port_id)) {
   for (const auto& [name, port_id] : interface_name_to_port_id_) {
     interface_port_id_to_name_[port_id] = name;
   }
 }
 
-absl::StatusOr<PinsControlDevice> PinsControlDevice::CreatePinsControlDevice(
-    std::unique_ptr<thinkit::Switch> sut) {
-  p4::config::v1::P4Info p4info =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-  ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
-
-  // Adds PacketIO rule
-  ASSIGN_OR_RETURN(
-      auto control_p4_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(*sut, p4info));
+absl::StatusOr<PinsControlDevice> PinsControlDevice::Create(
+    std::unique_ptr<thinkit::Switch> sut, sai::Instantiation instantiation) {
   ASSIGN_OR_RETURN(auto gnmi_stub, sut->CreateGnmiStub());
   ASSIGN_OR_RETURN(auto interface_name_to_port_id,
                    GetAllInterfaceNameToPortId(*gnmi_stub));
-  return PinsControlDevice(std::move(sut), std::move(control_p4_session),
-                            std::move(ir_p4info),
-                            std::move(interface_name_to_port_id));
+  ASSIGN_OR_RETURN(auto control_session,
+                   pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
+                       *sut, sai::GetP4Info(instantiation)));
+  return PinsControlDevice(std::move(sut), instantiation,
+                           std::move(control_session),
+                           std::move(interface_name_to_port_id));
 }
 
 absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
 PinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
+  if (control_session_ == nullptr) {
+    return absl::InternalError(
+        "No P4RuntimeSession exists; Likely failed to establish another "
+        "P4RuntimeSession.");
+  }
+
+  // Program the punt all table entry through the context, which will remove
+  // this flow once packet collection has finished.
+  P4rtProgrammingContext context(control_session_.get());
+  ASSIGN_OR_RETURN(
+      p4::v1::WriteRequest punt_all_request,
+      pdpi::PdWriteRequestToPi(sai::GetIrP4Info(instantiation_),
+                               gutil::ParseProtoOrDie<sai::WriteRequest>(
+                                   R"pb(updates {
+                                          type: INSERT
+                                          table_entry {
+                                            acl_ingress_table_entry {
+                                              match {}  # Wildcard match.
+                                              action {
+                                                acl_trap { qos_queue: "0x1" }
+                                              }            # Action: punt.
+                                              priority: 1  # Highest priority.
+                                            }
+                                          }
+                                        })pb")));
+  RETURN_IF_ERROR(context.SendWriteRequest(punt_all_request));
   return absl::make_unique<PacketListener>(
-      control_p4_session_.get(), &ir_p4info_, &interface_port_id_to_name_,
-      callback);
+      control_session_.get(), std::move(context),
+      sai::Instantiation::kMiddleblock, &interface_port_id_to_name_,
+      std::move(callback), /*on_finish=*/[this]() {
+        // After the packet listener is finished and destroyed the old session,
+        // try to replace it with a new session.
+        auto session = pdpi::P4RuntimeSession::Create(*sut_);
+        if (!session.ok()) {
+          LOG(ERROR) << "Failed to establish another P4RuntimeSession:"
+                     << session.status();
+        }
+        control_session_ = std::move(session).value_or(nullptr);
+      });
 }
 
 absl::Status PinsControlDevice::SendPacket(absl::string_view interface,
                                            absl::string_view packet) {
-  return gpins::InjectEgressPacket(interface_name_to_port_id_[interface],
-                                   std::string(packet), ir_p4info_,
-                                   control_p4_session_.get());
+  if (control_session_ == nullptr) {
+    return absl::InternalError(
+        "No P4RuntimeSession exists; Likely failed to establish another "
+        "P4RuntimeSession.");
+  }
+  return gpins::InjectEgressPacket(
+      interface_name_to_port_id_[interface], std::string(packet),
+      sai::GetIrP4Info(instantiation_), control_session_.get());
 }
 
 absl::Status PinsControlDevice::SendPackets(

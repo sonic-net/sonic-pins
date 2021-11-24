@@ -21,7 +21,6 @@
 
 #include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
-#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
 namespace pins_test {
@@ -47,9 +46,16 @@ class P4rtProgrammingContext {
         write_request_function_(absl::bind_front(
             &P4rtProgrammingContext::SendWriteRequest, this)) {}
 
+  P4rtProgrammingContext(const P4rtProgrammingContext& other) = delete;
+  P4rtProgrammingContext(P4rtProgrammingContext&& other) = default;
+
   // The destructor reverts the programmed requests, logging an error if it
   // fails to do so.
   ~P4rtProgrammingContext();
+
+  P4rtProgrammingContext& operator=(const P4rtProgrammingContext& other) =
+      delete;
+  P4rtProgrammingContext& operator=(P4rtProgrammingContext&& other) = default;
 
   // Returns the `SendWriteRequest` function as a standalone function for
   // convenience.

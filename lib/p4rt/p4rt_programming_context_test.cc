@@ -133,6 +133,43 @@ TEST(P4rtProgrammingContext, RevertsOnDestruction) {
   EXPECT_OK(context.SendWriteRequest(preingress_request));
 }
 
+TEST(P4rtProgrammingContext, MoveDoesntBreakRevertsOnDestruction) {
+  MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
+      mock_write_request;
+  Sequence sequence;
+  EXPECT_CALL(mock_write_request, Call(_, EqualsProto(kInsertVrfRequest)))
+      .InSequence(sequence)
+      .WillOnce(Return(absl::OkStatus()));
+
+  EXPECT_CALL(mock_write_request,
+              Call(_, EqualsProto(kInsertPreingressRequest)))
+      .InSequence(sequence)
+      .WillOnce(Return(absl::OkStatus()));
+
+  // Expect the deletes to be in reverse order.
+  EXPECT_CALL(mock_write_request,
+              Call(_, EqualsProto(kDeletePreingressRequest)))
+      .InSequence(sequence)
+      .WillOnce(Return(absl::OkStatus()));
+
+  EXPECT_CALL(mock_write_request, Call(_, EqualsProto(kDeleteVrfRequest)))
+      .InSequence(sequence)
+      .WillOnce(Return(absl::OkStatus()));
+
+  P4rtProgrammingContext context(nullptr, mock_write_request.AsStdFunction());
+  auto vrf_request =
+      gutil::ParseProtoOrDie<p4::v1::WriteRequest>(kInsertVrfRequest);
+  EXPECT_OK(context.SendWriteRequest(vrf_request));
+  auto preingress_request =
+      gutil::ParseProtoOrDie<p4::v1::WriteRequest>(kInsertPreingressRequest);
+  EXPECT_OK(context.SendWriteRequest(preingress_request));
+
+  // Expect that moving the context does not cause any double reverts or
+  // anything similar.
+  P4rtProgrammingContext new_context(std::move(context));
+  P4rtProgrammingContext newest_context = std::move(new_context);
+}
+
 TEST(P4rtProgrammingContext, WorksWithGetWriteRequestFunction) {
   MockFunction<absl::Status(pdpi::P4RuntimeSession*, p4::v1::WriteRequest&)>
       mock_write_request;
