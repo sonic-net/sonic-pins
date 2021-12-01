@@ -91,10 +91,19 @@ absl::StatusOr<std::string> SetUpTrafficItem(
 absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
                           thinkit::GenericTestbed &generic_testbed);
 
+// Same as above, except that `trefs` accept multiple traffics.
+absl::Status StartTraffic(absl::Span<const std::string> trefs,
+                          absl::string_view href,
+                          thinkit::GenericTestbed &generic_testbed);
+
 // StopTraffic - stops traffic running from the Ixia. StartTraffic is
 // presumed to have been run first.  Takes in the tref returned by IxiaSession
 // as a parameter.
 absl::Status StopTraffic(absl::string_view tref,
+                         thinkit::GenericTestbed &generic_testbed);
+
+// Same as above, except that `trefs` accept multiple traffics.
+absl::Status StopTraffic(absl::Span<const std::string> trefs,
                          thinkit::GenericTestbed &generic_testbed);
 
 // SetFrameRate - sets the frame rate for the traffic to be generated

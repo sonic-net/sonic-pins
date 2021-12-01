@@ -34,6 +34,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "glog/logging.h"
 #include "google/protobuf/map.h"
 #include "grpcpp/impl/codegen/client_context.h"
@@ -141,6 +142,17 @@ gnmi::Path ConvertOCStringToPath(absl::string_view oc_path) {
     }
   }
   return path;
+}
+
+gnoi::types::Path GnmiToGnoiPath(gnmi::Path path) {
+  gnoi::types::Path gnoi_path;
+  gnoi_path.set_origin(std::move(*path.mutable_origin()));
+  for (gnmi::PathElem& element : *path.mutable_elem()) {
+    gnoi::types::PathElem& gnoi_element = *gnoi_path.add_elem();
+    gnoi_element.set_name(std::move(*element.mutable_name()));
+    *gnoi_element.mutable_key() = std::move(*element.mutable_key());
+  }
+  return gnoi_path;
 }
 
 absl::StatusOr<gnmi::SetRequest> BuildGnmiSetRequest(
@@ -578,53 +590,9 @@ GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
     return absl::InternalError(
         absl::StrCat("Invalid response: ", response.DebugString()));
   }
-
-  const auto response_json = nlohmann::json::parse(
-      response.notification(0).update(0).val().json_ietf_val());
-  const auto oc_intf_json =
-      response_json.find("openconfig-interfaces:interfaces");
-  if (oc_intf_json == response_json.end()) {
-    return absl::NotFoundError(
-        absl::StrCat("'openconfig-interfaces:interfaces' not found: ",
-                     response_json.dump()));
-  }
-  const auto oc_intf_list_json = oc_intf_json->find("interface");
-  if (oc_intf_list_json == oc_intf_json->end()) {
-    return absl::NotFoundError(
-        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
-  }
-
-  absl::flat_hash_map<std::string, std::string> interface_name_to_port_id;
-  for (auto const& element : oc_intf_list_json->items()) {
-    const auto element_name_json = element.value().find("name");
-    if (element_name_json == element.value().end()) {
-      return absl::NotFoundError(
-          absl::StrCat("'name' not found: ", element.value().dump()));
-    }
-    std::string name = element_name_json->get<std::string>();
-
-    // Ignore the interfaces that is not EthernetXX. For example: bond0,
-    // Loopback0, etc.
-    if (!absl::StartsWith(name, "Ethernet")) {
-      LOG(INFO) << "Skipping " << name << ".";
-      continue;
-    }
-
-    const auto element_interface_state_json = element.value().find("state");
-    if (element_interface_state_json == element.value().end()) {
-      return absl::NotFoundError(
-          absl::StrCat("'state' not found: ", element.value().dump()));
-    }
-
-    const auto element_id_json =
-        element_interface_state_json->find("openconfig-p4rt:id");
-    if (element_id_json == element_interface_state_json->end()) {
-      return absl::NotFoundError(absl::StrCat(
-          "'openconfig-p4rt:id' not found: ", element.value().dump()));
-    }
-    interface_name_to_port_id[name] = absl::StrCat(element_id_json->get<int>());
-  }
-  return interface_name_to_port_id;
+  return GetPortNameToIdMapFromJsonString(
+      response.notification(0).update(0).val().json_ietf_val(),
+      /*field_type=*/"state");
 }
 
 absl::StatusOr<std::vector<std::string>> ParseAlarms(
@@ -721,6 +689,40 @@ absl::StatusOr<std::vector<std::string>> GetAlarms(
     return std::vector<std::string>();
   }
   return ParseAlarms(alarm_json->dump());
+}
+
+absl::StatusOr<gnmi::GetResponse> GetAllSystemProcesses(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      gnmi::GetRequest request,
+      BuildGnmiGetRequest("system/processes", gnmi::GetRequest::STATE));
+  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+  gnmi::GetResponse response;
+  grpc::ClientContext context;
+  grpc::Status status = gnmi_stub.Get(&context, request, &response);
+  if (!status.ok()) {
+    return gutil::GrpcStatusToAbslStatus(status);
+  }
+
+  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  return response;
+}
+
+absl::StatusOr<gnmi::GetResponse> GetSystemMemory(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      gnmi::GetRequest request,
+      BuildGnmiGetRequest("system/memory", gnmi::GetRequest::STATE));
+  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+  gnmi::GetResponse response;
+  grpc::ClientContext context;
+  grpc::Status status = gnmi_stub.Get(&context, request, &response);
+  if (!status.ok()) {
+    return gutil::GrpcStatusToAbslStatus(status);
+  }
+
+  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  return response;
 }
 
 absl::string_view StripQuotes(absl::string_view string) {
