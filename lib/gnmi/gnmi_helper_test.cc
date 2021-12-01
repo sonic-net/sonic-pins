@@ -144,6 +144,26 @@ TEST(OCStringToPath, OCStringToPathTestCase3) {
       )pb"));
 }
 
+TEST(GnmiToGnoiPath, ConversionWorks) {
+  EXPECT_THAT(GnmiToGnoiPath(
+                  ConvertOCStringToPath("interfaces/interface[name=ethernet0]/"
+                                        "config/mtu/ic[name=1/1]/value")),
+              EqualsProto(R"pb(
+                elem { name: "interfaces" }
+                elem {
+                  name: "interface"
+                  key { key: "name" value: "ethernet0" }
+                }
+                elem { name: "config" }
+                elem { name: "mtu" }
+                elem {
+                  name: "ic"
+                  key { key: "name" value: "1/1" }
+                }
+                elem { name: "value" }
+              )pb"));
+}
+
 TEST(ParseAlarms, NoAlarms) {
   EXPECT_THAT(ParseAlarms("[]"), IsOkAndHolds(IsEmpty()));
 }
@@ -358,6 +378,38 @@ TEST(GetAlarms, NormalInput) {
           "[telemetry:telemetry CRITICAL] Software Error ERROR: Go Panic")));
 }
 
+TEST(GetAllSystemProcesses, FailedRPCReturnsError) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                                 path {
+                                   elem { name: "system" }
+                                   elem { name: "processes" }
+                                 }
+                                 type: STATE)pb")),
+                        _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(GetAllSystemProcesses(stub),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(GetSystemMemory, FailedRPCReturnsError) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                                 path {
+                                   elem { name: "system" }
+                                   elem { name: "memory" }
+                                 }
+                                 type: STATE)pb")),
+                        _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(GetSystemMemory(stub),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
 TEST(StripQuotes, VariousInputs) {
   EXPECT_EQ(StripQuotes(R"("test")"), R"(test)");
   EXPECT_EQ(StripQuotes(R"("test)"), R"(test)");
@@ -542,15 +594,13 @@ TEST(GetInterfacePortIdMap, PortIdNotFoundInState) {
                  update {
                    path { elem { name: "interfaces" } }
                    val {
-                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"CPU\"},{\"name\":\"Ethernet0\",\"state\":{\"name\":\"Ethernet0\"}}]}}"
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"CPU\",\"state\":{\"name\":\"CPU\"}},{\"name\":\"Ethernet0\",\"state\":{\"name\":\"Ethernet0\"}}]}}"
                    }
                  }
                })pb")),
       Return(grpc::Status::OK)));
 
-  EXPECT_THAT(GetAllInterfaceNameToPortId(stub),
-              StatusIs(absl::StatusCode::kNotFound,
-                       HasSubstr("'openconfig-p4rt:id' not found")));
+  EXPECT_THAT(GetAllInterfaceNameToPortId(stub), IsOkAndHolds(IsEmpty()));
 }
 
 TEST(GetInterfacePortIdMap, InterfaceStateNotFound) {
