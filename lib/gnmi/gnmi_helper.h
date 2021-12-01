@@ -26,8 +26,9 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "p4_pdpi/p4_runtime_session.h"
 #include "absl/types/span.h"
+#include "github.com/openconfig/gnoi/types/types.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "thinkit/switch.h"
@@ -140,6 +141,9 @@ absl::Status CheckAllInterfaceOperStateOverGnmi(
 // Returns gNMI Path for OC strings.
 gnmi::Path ConvertOCStringToPath(absl::string_view oc_path);
 
+// Converts from a gNMI path to a gNOI path.
+gnoi::types::Path GnmiToGnoiPath(gnmi::Path path);
+
 // Gets all the EthernetXX interfaces whose operational status is UP.
 absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
     gnmi::gNMI::StubInterface& stub,
@@ -152,6 +156,14 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
 // Gets the interface name to port id map.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub);
+
+// Gets all system process id over gNMI.
+absl::StatusOr<gnmi::GetResponse> GetAllSystemProcesses(
+    gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Gets system memory usage over gNMI.
+absl::StatusOr<gnmi::GetResponse> GetSystemMemory(
+    gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Parses the alarms JSON array returned from a gNMI Get request to
 // "openconfig-system:system/alarms/alarm". Returns the list of alarms.

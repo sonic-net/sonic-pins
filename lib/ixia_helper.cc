@@ -320,6 +320,13 @@ absl::Status WaitForComplete(const thinkit::HttpResponse &response,
 
 absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
                           thinkit::GenericTestbed &generic_testbed) {
+  return StartTraffic(std::vector<std::string>{std::string(tref)}, href,
+                      generic_testbed);
+}
+
+absl::Status StartTraffic(absl::Span<const std::string> trefs,
+                          absl::string_view href,
+                          thinkit::GenericTestbed &generic_testbed) {
   LOG(INFO) << "\n\n\n\n\n---------- Starting... ----------\n\n\n\n\n";
 
   // Extract IxRef from href which is the substring ending at /ixnetwork
@@ -336,10 +343,12 @@ absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
 
   // Start the process of getting the traffic flowing.
   // POST to /ixnetwork/traffic/trafficItem/operations/generate with
-  // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1"]}
+  // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
+  // "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/2"]}
   std::string generate_path =
       "/ixnetwork/traffic/trafficItem/operations/generate";
-  std::string generate_json = absl::StrCat("{\"arg1\":[\"", tref, "\"]}");
+  std::string generate_json =
+      absl::StrCat(R"({"arg1":[")", absl::StrJoin(trefs, R"(",")"), R"("]})");
   LOG(INFO) << "path " << generate_path;
   LOG(INFO) << "json " << generate_json;
   ASSIGN_OR_RETURN(
@@ -366,10 +375,12 @@ absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
 
   // POST to
   // /ixnetwork/traffic/trafficItem/operations/startstatelesstrafficblocking
-  // with {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1"]}
+  // with  {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
+  // "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/2"]}
   std::string start_path =
       "/ixnetwork/traffic/trafficItem/operations/startstatelesstrafficblocking";
-  std::string start_json = absl::StrCat("{\"arg1\":[\"", tref, "\"]}");
+  std::string start_json =
+      absl::StrCat(R"({"arg1":[")", absl::StrJoin(trefs, R"(",")"), R"("]})");
   LOG(INFO) << "path " << start_path;
   LOG(INFO) << "json " << start_json;
   ASSIGN_OR_RETURN(thinkit::HttpResponse start_response,
@@ -397,21 +408,29 @@ absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
     return absl::InternalError("bad state");
   std::string state = temp.substr(ixstate + 8, ixquote - ixstate - 8);
   LOG(INFO) << "state is " << state;
-  if (state != "started")
+  if (!(state == "started" || state == "startedWaitingForStats"))
     return absl::InternalError(absl::StrFormat("unexpected state: %s", state));
   return absl::OkStatus();
 }
 
 absl::Status StopTraffic(absl::string_view tref,
                          thinkit::GenericTestbed &generic_testbed) {
+  return StopTraffic(std::vector<std::string>{std::string(tref)},
+                     generic_testbed);
+}
+
+absl::Status StopTraffic(absl::Span<const std::string> trefs,
+                         thinkit::GenericTestbed &generic_testbed) {
   LOG(INFO) << "\n\n\n\n\n---------- Stopping... ----------\n\n\n\n\n";
 
   // POST to
   // /ixnetwork/traffic/trafficItem/operations/stopstatelesstrafficblocking with
-  // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1"]}
+  // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1",
+  // "/api/v1/sessions/1/ixnetwork/traffic/trafficItem/2"]}
   std::string stop_path =
       "/ixnetwork/traffic/trafficItem/operations/stopstatelesstrafficblocking";
-  std::string stop_json = absl::StrCat("{\"arg1\":[\"", tref, "\"]}");
+  std::string stop_json =
+      absl::StrCat(R"({"arg1":[")", absl::StrJoin(trefs, R"(",")"), R"("]})");
   LOG(INFO) << "path " << stop_path;
   LOG(INFO) << "json " << stop_json;
   ASSIGN_OR_RETURN(thinkit::HttpResponse stop_response,
