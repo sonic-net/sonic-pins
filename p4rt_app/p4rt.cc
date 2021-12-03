@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
           &app_db, APP_P4RT_TABLE_NAME);
   auto notification_channel_p4rt =
       absl::make_unique<p4rt_app::sonic::ConsumerNotifierAdapter>(
-          "APPL_DB_P4RT_RESPONSE_CHANNEL", &app_db);
+          "APPL_DB_P4RT_TABLE_RESPONSE_CHANNEL", &app_db);
 
   // Wait for PortInitDone to be done.
   p4rt_app::sonic::WaitForPortInitDone(*sonic_app_db);
