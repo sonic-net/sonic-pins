@@ -31,9 +31,9 @@
 
 namespace pins_test {
 
-const int kMaxPortLanes = 8;
-const int kEthernetLen = 8;
-constexpr char kEthernet[] = "Ethernet";
+inline constexpr int kMaxPortLanes = 8;
+inline constexpr int kEthernetLen = 8;
+inline constexpr char kEthernet[] = "Ethernet";
 
 // // PortBreakoutInfo contains physical channels and operational status for an
 // // interface.
@@ -94,7 +94,8 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
 // breakoutSpeed1 + numBreakouts2 x breakoutSpeed2 + ... Eg: "1x400G", 2x100G +
 // 1x200G"
 absl::Status GetBreakoutModeConfigFromString(
-    gnmi::SetRequest& req, const absl::string_view index,
+    gnmi::SetRequest& req, gnmi::gNMI::StubInterface* sut_gnmi_stub,
+    const absl::string_view port_index, const absl::string_view intf_name,
     const absl::string_view breakout_mode);
 
 // GetNonExistingPortsAfterBreakout returns list of ports that were part of a
@@ -107,8 +108,9 @@ absl::Status GetBreakoutModeConfigFromString(
 // the port, ports in original breakout config that were not in new breakout
 // config should no longer exist as new breakout is now applied.
 std::vector<std::string> GetNonExistingPortsAfterBreakout(
-    absl::flat_hash_map<std::string, PortBreakoutInfo>& orig_port_info,
-    absl::flat_hash_map<std::string, PortBreakoutInfo>& new_port_info,
+    const absl::flat_hash_map<std::string, PortBreakoutInfo>&
+        original_port_info,
+    const absl::flat_hash_map<std::string, PortBreakoutInfo>& new_port_info,
     bool expected_success);
 
 // ValidateBreakoutState checks the breakout related state paths with the
@@ -121,13 +123,18 @@ std::vector<std::string> GetNonExistingPortsAfterBreakout(
 // new mode.
 absl::Status ValidateBreakoutState(
     gnmi::gNMI::StubInterface* sut_gnmi_stub,
-    absl::flat_hash_map<std::string, PortBreakoutInfo>& expected_port_info,
-    std::vector<std::string>& non_existing_ports_list);
+    const absl::flat_hash_map<std::string, PortBreakoutInfo>&
+        expected_port_info,
+    const std::vector<std::string>& non_existing_ports_list);
 
 absl::StatusOr<std::string> GetPortIndex(
     const std::string& platform_json_contents, absl::string_view port);
 
-std::string ConstructSupportedBreakoutMode(std::string& num_breakouts,
-                                           std::string& breakout_speed);
+std::string ConstructSupportedBreakoutMode(absl::string_view num_breakouts,
+                                           absl::string_view breakout_speed);
+
+// IsCopperPort returns whether the port is copper or optic.
+absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
+                                  absl::string_view port);
 }  // namespace pins_test
 #endif  // PINS_TESTS_THINKIT_GNMI_INTERFACE_UTIL_H_

@@ -34,6 +34,98 @@ using ::testing::Return;
 using ::testing::ReturnRefOfCopy;
 using ::testing::SetArgPointee;
 
+constexpr char get_xcvrd_req_str[] =
+    R"pb(prefix { origin: "openconfig" }
+         path {
+           elem { name: "interfaces" }
+           elem {
+             name: "interface"
+             key { key: "name" value: "Ethernet0" }
+           }
+           elem { name: "state" }
+           elem { name: "transceiver" }
+         }
+         type: STATE)pb";
+
+constexpr char get_xcvrd_resp_str[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path {
+               elem { name: "interfaces" }
+               elem {
+                 name: "interface"
+                 key { key: "name" value: "Ethernet0" }
+               }
+               elem { name: "state" }
+               elem { name: "transceiver" }
+             }
+             val {
+               json_ietf_val: "{\"openconfig-platform-transceiver:transceiver\":\"Ethernet0\"}"
+             }
+           }
+         }
+    )pb";
+
+constexpr char cable_len_req_str[] =
+    R"pb(prefix { origin: "openconfig" }
+         path {
+           elem { name: "components" }
+           elem {
+             name: "component"
+             key { key: "name" value: "Ethernet0" }
+           }
+           elem { name: "transceiver" }
+           elem { name: "state" }
+           elem { name: "openconfig-platform-ext:cable-length" }
+         }
+         type: STATE)pb";
+
+constexpr char cable_len_resp_copper_str[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path {
+               elem { name: "components" }
+               elem {
+                 name: "component"
+                 key { key: "name" value: "Ethernet0" }
+               }
+               elem { name: "transceiver" }
+               elem { name: "state" }
+               elem { name: "openconfig-platform-ext:cable-length" }
+             }
+             val {
+               json_ietf_val: "{\"openconfig-platform-ext:cable-length\":\"10\"}"
+             }
+           }
+         }
+    )pb";
+
+constexpr char cable_len_resp_optic_str[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path {
+               elem { name: "components" }
+               elem {
+                 name: "component"
+                 key { key: "name" value: "Ethernet0" }
+               }
+               elem { name: "transceiver" }
+               elem { name: "state" }
+               elem { name: "cable-length" }
+             }
+             val {
+               json_ietf_val: "{\"openconfig-platform-ext:cable-length\":\"0\"}"
+             }
+           }
+         }
+    )pb";
+
 class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -630,7 +722,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
 TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetExpectedPortInfoForBreakoutModeMixedBreakoutModeSuccess) {
   const std::string port = "Ethernet0";
-  absl::string_view breakout_mode = "1x200G+2x100G";
+  absl::string_view breakout_mode = "1x200G(4)+2x100G(4)";
 
   auto breakout_info =
       pins_test::GetExpectedPortInfoForBreakoutMode(port, breakout_mode);
@@ -644,7 +736,7 @@ TEST_F(
     GNMIThinkitInterfaceUtilityTest,
     TestGetExpectedPortInfoForBreakoutModeAlternatedMixedBreakoutModeSuccess) {
   const std::string port = "Ethernet0";
-  absl::string_view breakout_mode = "2x100G+1x200G";
+  absl::string_view breakout_mode = "2x100G(4)+1x200G(4)";
   auto breakout_info =
       pins_test::GetExpectedPortInfoForBreakoutMode(port, breakout_mode);
   ASSERT_OK(breakout_info.status());
@@ -713,7 +805,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
 TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetExpectedPortInfoForBreakoutModeInvalidBreakoutModeFailure) {
   const std::string port = "Ethernet0";
-  absl::string_view breakout_mode = "3x200G+2x100G";
+  absl::string_view breakout_mode = "3x200G(4)+2x100G(4)";
 
   EXPECT_THAT(
       pins_test::GetExpectedPortInfoForBreakoutMode(port, breakout_mode),
@@ -921,6 +1013,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
 TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetBreakoutModeConfigFromStringUnchannelizedBreakoutModeSuccess) {
   const std::string port_index = "1";
+  const std::string intf_name = "Ethernet0";
   const std::string breakout_mode = "1x400G";
   gnmi::SetRequest req, expected_breakout_config;
   const std::string expected_breakout_config_str =
@@ -934,14 +1027,34 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
     })pb";
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       expected_breakout_config_str, &expected_breakout_config));
-  ASSERT_OK(pins_test::GetBreakoutModeConfigFromString(req, port_index,
-                                                       breakout_mode));
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest get_xcvrd_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str,
+                                                            &get_xcvrd_req));
+  gnmi::GetResponse get_xcvrd_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str,
+                                                            &get_xcvrd_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(get_xcvrd_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(get_xcvrd_resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  gnmi::GetResponse cable_len_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      cable_len_resp_optic_str, &cable_len_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(cable_len_resp), Return(grpc::Status::OK)));
+  ASSERT_OK(pins_test::GetBreakoutModeConfigFromString(
+      req, mock_gnmi_stub_ptr.get(), port_index, intf_name, breakout_mode));
   EXPECT_THAT(req, EqualsProto(expected_breakout_config));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetBreakoutModeConfigFromStringChannelizedBreakoutModeSuccess) {
   const std::string port_index = "1";
+  const std::string intf_name = "Ethernet0";
   const std::string breakout_mode = "2x200G";
   gnmi::SetRequest req, expected_breakout_config;
   const std::string expected_breakout_config_str = R"pb(
@@ -955,15 +1068,35 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   )pb";
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       expected_breakout_config_str, &expected_breakout_config));
-  ASSERT_OK(pins_test::GetBreakoutModeConfigFromString(req, port_index,
-                                                       breakout_mode));
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest get_xcvrd_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str,
+                                                            &get_xcvrd_req));
+  gnmi::GetResponse get_xcvrd_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str,
+                                                            &get_xcvrd_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(get_xcvrd_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(get_xcvrd_resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  gnmi::GetResponse cable_len_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      cable_len_resp_optic_str, &cable_len_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(cable_len_resp), Return(grpc::Status::OK)));
+  ASSERT_OK(pins_test::GetBreakoutModeConfigFromString(
+      req, mock_gnmi_stub_ptr.get(), port_index, intf_name, breakout_mode));
   EXPECT_THAT(req, EqualsProto(expected_breakout_config));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetBreakoutModeConfigFromStringMixedBreakoutModeSuccess) {
   const std::string port_index = "1";
-  const std::string breakout_mode = "1x200G+2x100G";
+  const std::string intf_name = "Ethernet0";
+  const std::string breakout_mode = "1x200G(4)+2x100G(4)";
   gnmi::SetRequest req, expected_breakout_config;
   const std::string expected_breakout_config_str = R"pb(
     prefix { origin: "openconfig" }
@@ -976,20 +1109,132 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   )pb";
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       expected_breakout_config_str, &expected_breakout_config));
-  ASSERT_OK(pins_test::GetBreakoutModeConfigFromString(req, port_index,
-                                                       breakout_mode));
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest get_xcvrd_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str,
+                                                            &get_xcvrd_req));
+  gnmi::GetResponse get_xcvrd_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str,
+                                                            &get_xcvrd_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(get_xcvrd_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(get_xcvrd_resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  gnmi::GetResponse cable_len_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      cable_len_resp_optic_str, &cable_len_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(cable_len_resp), Return(grpc::Status::OK)));
+  ASSERT_OK(pins_test::GetBreakoutModeConfigFromString(
+      req, mock_gnmi_stub_ptr.get(), port_index, intf_name, breakout_mode));
+  EXPECT_THAT(req, EqualsProto(expected_breakout_config));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetBreakoutModeConfigFromStringCopperPortSuccess) {
+  const std::string port_index = "1";
+  const std::string intf_name = "Ethernet0";
+  const std::string breakout_mode = "1x200G(4)+2x100G(4)";
+  gnmi::SetRequest req, expected_breakout_config;
+  const std::string expected_breakout_config_str = R"pb(
+    prefix { origin: "openconfig" }
+    replace {
+      path {}
+      val {
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": false,\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet0\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\"\n               },\n               \"name\": \"Ethernet0\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n        ,{\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": false,\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet4\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\"\n               },\n               \"name\": \"Ethernet4\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n        ,{\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": false,\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet6\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\"\n               },\n               \"name\": \"Ethernet6\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n         ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           },{\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n               \"index\": 1,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 2\n             },\n             \"index\": 1\n           } ] } }\n                 }\n               }]\n             }\n           }"
+      }
+    }
+  )pb";
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      expected_breakout_config_str, &expected_breakout_config));
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest get_xcvrd_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str,
+                                                            &get_xcvrd_req));
+  gnmi::GetResponse get_xcvrd_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str,
+                                                            &get_xcvrd_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(get_xcvrd_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(get_xcvrd_resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  gnmi::GetResponse cable_len_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      cable_len_resp_copper_str, &cable_len_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(cable_len_resp), Return(grpc::Status::OK)));
+  ASSERT_OK(pins_test::GetBreakoutModeConfigFromString(
+      req, mock_gnmi_stub_ptr.get(), port_index, intf_name, breakout_mode));
   EXPECT_THAT(req, EqualsProto(expected_breakout_config));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetBreakoutModeConfigFromStringIntConversionFailure) {
   const std::string port_index = "1";
+  const std::string intf_name = "Ethernet0";
   const std::string breakout_mode = "Xx400G";
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest get_xcvrd_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str,
+                                                            &get_xcvrd_req));
+  gnmi::GetResponse get_xcvrd_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str,
+                                                            &get_xcvrd_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(get_xcvrd_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(get_xcvrd_resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  gnmi::GetResponse cable_len_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      cable_len_resp_optic_str, &cable_len_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(cable_len_resp), Return(grpc::Status::OK)));
   gnmi::SetRequest req;
-  EXPECT_THAT(pins_test::GetBreakoutModeConfigFromString(req, port_index,
-                                                         breakout_mode),
-              StatusIs(absl::StatusCode::kInternal,
-                       HasSubstr("Failed to convert string (X) to integer")));
+  EXPECT_THAT(
+      pins_test::GetBreakoutModeConfigFromString(
+          req, mock_gnmi_stub_ptr.get(), port_index, intf_name, breakout_mode),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Failed to convert string (X) to integer")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetBreakoutModeConfigFromStringIsCopperPortFailure) {
+  const std::string port_index = "1";
+  const std::string intf_name = "Ethernet0";
+  const std::string breakout_mode = "Xx400G";
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest get_xcvrd_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(prefix { origin: "openconfig" }
+           path {
+             elem { name: "interfaces" }
+             elem {
+               name: "interface"
+               key { key: "name" value: "Ethernet0" }
+             }
+             elem { name: "state" }
+             elem { name: "transceiver" }
+           }
+           type: STATE)pb",
+      &get_xcvrd_req));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(get_xcvrd_req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  gnmi::SetRequest req;
+  EXPECT_THAT(
+      pins_test::GetBreakoutModeConfigFromString(
+          req, mock_gnmi_stub_ptr.get(), port_index, intf_name, breakout_mode),
+      StatusIs(absl::StatusCode::kDeadlineExceeded,
+               HasSubstr("Failed to get GNMI state path value for port "
+                         "transceiver for port Ethernet0")));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1496,5 +1741,130 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
                                                           "1x100G"),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Failed to convert string (X) to integer")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest, TestIsCopperPortSuccessOpticPort) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest req;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str, &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str, &resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  gnmi::GetResponse cable_len_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      cable_len_resp_optic_str, &cable_len_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(cable_len_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(pins_test::IsCopperPort(mock_gnmi_stub_ptr.get(), "Ethernet0"),
+              false);
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest, TestIsCopperPortSuccessCopperPort) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest req;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str, &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str, &resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  gnmi::GetResponse cable_len_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      cable_len_resp_copper_str, &cable_len_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(cable_len_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(pins_test::IsCopperPort(mock_gnmi_stub_ptr.get(), "Ethernet0"),
+              true);
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest, TestIsCopperPortTransceiverGetFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest req;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str, &req));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(pins_test::IsCopperPort(mock_gnmi_stub_ptr.get(), "Ethernet0"),
+              StatusIs(absl::StatusCode::kDeadlineExceeded,
+                       HasSubstr("Failed to get GNMI state path value for "
+                                 "port transceiver for port Ethernet0")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest, TestIsCopperPortCableLengthGetFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest req;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str, &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str, &resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(pins_test::IsCopperPort(mock_gnmi_stub_ptr.get(), "Ethernet0"),
+              StatusIs(absl::StatusCode::kDeadlineExceeded,
+                       HasSubstr("Failed to get GNMI state path value for "
+                                 "cable-length for port Ethernet0")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestIsCopperPortFloatConversionFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest req;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_req_str, &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(get_xcvrd_resp_str, &resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest cable_len_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(cable_len_req_str,
+                                                            &cable_len_req));
+  gnmi::GetResponse cable_len_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(notification {
+             timestamp: 1631864194292383538
+             prefix { origin: "openconfig" }
+             update {
+               path {
+                 elem { name: "components" }
+                 elem {
+                   name: "component"
+                   key { key: "name" value: "Ethernet0" }
+                 }
+                 elem { name: "transceiver" }
+                 elem { name: "state" }
+                 elem { name: "openconfig-platform-ext:cable-length" }
+               }
+               val {
+                 json_ietf_val: "{\"openconfig-platform-ext:cable-length\":\"XYZ\"}"
+               }
+             }
+           }
+      )pb",
+      &cable_len_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(cable_len_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(cable_len_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(pins_test::IsCopperPort(mock_gnmi_stub_ptr.get(), "Ethernet0"),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to convert string (XYZ) to float")));
 }
 }  // namespace pins_test
