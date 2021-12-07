@@ -15,8 +15,15 @@
 #ifndef PINS_TESTS_FORWARDING_GROUP_PROGRAMMING_H_
 #define PINS_TESTS_FORWARDING_GROUP_PROGRAMMING_H_
 
+#include <string>
+#include <vector>
+
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/ir.pb.h"
@@ -64,13 +71,6 @@ absl::Status DeleteGroup(pdpi::P4RuntimeSession& p4_session,
 absl::Status VerifyGroupMembersFromP4Read(
     pdpi::P4RuntimeSession& p4_session, const pdpi::IrP4Info& ir_p4info,
     absl::string_view group_id, absl::Span<const GroupMember> expected_members);
-
-// Verifies the actual members inferred from receive traffic matches the
-// expected members.
-// actual_ports is a map of the number of packets received(value) per port(key).
-absl::Status VerifyGroupMembersFromReceiveTraffic(
-    const absl::flat_hash_map<int, int>& actual_packets_received_per_port,
-    const absl::flat_hash_set<int>& expected_member_ports);
 
 // Generates N random weights that add up to total_weight, with at least 1 in
 // each bucket.
