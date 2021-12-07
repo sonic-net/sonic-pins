@@ -410,7 +410,8 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   grpc::ClientContext context;
   ASSERT_OK_AND_ASSIGN(auto port_index, GetPortIndex(platform_json_contents,
                                                      port_info.port_name));
-  ASSERT_OK(GetBreakoutModeConfigFromString(req, port_index,
+  ASSERT_OK(GetBreakoutModeConfigFromString(req, sut_gnmi_stub, port_index,
+                                            port_info.port_name,
                                             port_info.supported_breakout_mode));
 
   // Apply breakout config on port. Expect the set operation to fail
@@ -454,8 +455,10 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
                                   non_existing_port_list));
 
   // Restore original port breakout config on port under test.
-  ASSERT_OK(GetBreakoutModeConfigFromString(req, port_index,
+  ASSERT_OK(GetBreakoutModeConfigFromString(req, sut_gnmi_stub, port_index,
+                                            port_info.port_name,
                                             port_info.curr_breakout_mode));
+
   LOG(INFO) << "Restoring original breakout mode "
             << port_info.curr_breakout_mode << " on port "
             << port_info.port_name << " on DUT";
