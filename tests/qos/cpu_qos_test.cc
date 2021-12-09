@@ -237,7 +237,7 @@ absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
             src_ip { value: "$1" mask: "255.255.255.255" }
             dst_ip { value: "$2" mask: "255.255.255.255" }
           }
-          action { acl_trap { qos_queue: "$3" } }
+          action { acl_experimental_trap { qos_queue: "$3" } }
           priority: 1
           meter_config { bytes_per_second: $4 burst_bytes: $5 }
         }
@@ -495,9 +495,15 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
   // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping 10 seconds to wait for config to be applied/links to "
-               "come up.";
-  absl::SleepFor(absl::Seconds(10));
+  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
+            << " to wait for config to be applied/links to come up.";
+  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+  ASSERT_OK(
+      pins_test::WaitForGnmiPortIdConvergence(sut, GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      control_device, GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -535,7 +541,7 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
                            priority: 1
                            match {
                              is_ipv6 { value: "0x1" }
-                             ttl { value: "0xff" mask: "0xff" }
+                             ip_protocol { value: "0xfd" mask: "0xff" }
                            }
                            action { acl_drop {} }
                          }
@@ -571,11 +577,13 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
             ipv6_destination: "2001:db8:0:12::2"
           }
         }
-        payload: "IPv6 packet with TTL 0xff (255)."
+        payload: "IPv6 packet with next header 0xfd (253)."
       )pb"));
   // The ACL entry should match the test packet.
-  ASSERT_EQ(test_packet.headers().at(1).ipv6_header().hop_limit(),
-            pd_acl_entry.acl_ingress_table_entry().match().ttl().value());
+  ASSERT_EQ(
+      test_packet.headers().at(1).ipv6_header().next_header(),
+      pd_acl_entry.acl_ingress_table_entry().match().ip_protocol().value());
+
   ASSERT_OK(packetlib::PadPacketToMinimumSize(test_packet));
   ASSERT_OK(packetlib::UpdateAllComputedFields(test_packet));
   ASSERT_OK_AND_ASSIGN(const std::string raw_packet,
@@ -792,6 +800,12 @@ TEST_P(CpuQosTestWithoutIxia,
   LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
             << " to wait for config to be applied/links to come up.";
   absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+  ASSERT_OK(
+      pins_test::WaitForGnmiPortIdConvergence(sut, GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      control_device, GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -902,6 +916,12 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
             << " to wait for config to be applied/links to come up.";
   absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+  ASSERT_OK(
+      pins_test::WaitForGnmiPortIdConvergence(sut, GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      control_device, GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -1150,6 +1170,9 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   // Wait to let the links come up. Switch guarantees state paths to reflect
   // in 10s. Lets wait for a bit more.
   absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+  ASSERT_OK(
+      pins_test::WaitForGnmiPortIdConvergence(sut, GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
 
   // TODO: Move this to helper function.
   // Loop through the interface_info looking for Ixia/SUT interface pairs,
@@ -1277,8 +1300,6 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
     // Wait for Traffic to be sent.
     absl::SleepFor(kTrafficDuration);
-
-    ASSERT_OK(pins_test::ixia::StopTraffic(traffic_ref, *generic_testbed));
 
     // Check for counters every 5 seconds upto 30 seconds till the fetched gNMI
     // queue counter stats match packets and bytes sent by Ixia.
