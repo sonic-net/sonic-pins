@@ -25,31 +25,31 @@
 
 namespace pins_test {
 
-struct InterfacePair {
+struct InterfaceLink {
   std::string sut_interface;
   std::string peer_interface;
 
-  bool operator==(const InterfacePair& other) const {
+  bool operator==(const InterfaceLink& other) const {
     return sut_interface == other.sut_interface &&
            peer_interface == other.peer_interface;
   }
 };
 
-// Returns all the SUT interfaces in a list of `interface_pairs`.
+// Returns all the SUT interfaces in a list of interface `links`.
 std::vector<std::string> GetSutInterfaces(
-    absl::Span<const InterfacePair> interface_pairs);
+    absl::Span<const InterfaceLink> links);
 
-// Returns all the peer interfaces in a list of `interface_pairs`.
+// Returns all the peer interfaces in a list of interface `links`.
 std::vector<std::string> GetPeerInterfaces(
-    absl::Span<const InterfacePair> interface_pairs);
+    absl::Span<const InterfaceLink> links);
 
-// Returns all interface pairs connected to a control device.
-std::vector<InterfacePair> GetAllControlInterfaces(
+// Returns all interface links connected to a control device.
+std::vector<InterfaceLink> GetAllControlLinks(
     const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>&
         sut_interface_info);
 
-// Returns all interface pairs connected to a traffic generator.
-std::vector<InterfacePair> GetAllTrafficGeneratorInterfaces(
+// Returns all interface links connected to a traffic generator.
+std::vector<InterfaceLink> GetAllTrafficGeneratorLinks(
     const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>&
         sut_interface_info);
 
@@ -79,12 +79,11 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfaces(
     decltype(GetAllConnectedInterfaces) get_interfaces,
     thinkit::GenericTestbed& testbed);
 
-// Returns the subset of interface pairs that are up on the SUT. Pass in one of
+// Returns the subset of interface links that are up on the SUT. Pass in one of
 // the above GetAll* functions as the first parameter.
-// e.g. GetUpInterfacePairs(GetAllConnectedInterfaces, testbed);
-absl::StatusOr<std::vector<InterfacePair>> GetUpInterfacePairs(
-    decltype(GetAllControlInterfaces) get_interfaces,
-    thinkit::GenericTestbed& testbed);
+// e.g. GetUpLinks(GetAllControlLinks, testbed);
+absl::StatusOr<std::vector<InterfaceLink>> GetUpLinks(
+    decltype(GetAllControlLinks) get_links, thinkit::GenericTestbed& testbed);
 
 }  // namespace pins_test
 
