@@ -14,6 +14,8 @@
 
 #include "lib/basic_traffic/basic_traffic.h"
 
+#include <algorithm>
+#include <functional>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -33,21 +35,17 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "glog/logging.h"
 #include "gutil/collections.h"
-#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "lib/basic_traffic/basic_p4rt_util.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_programming_context.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/switch.h"
@@ -152,7 +150,9 @@ PrecomputePackets(
           "10.0.%d.%d", egress_port_id / 256, egress_port_id % 256));
       // Maintain the same payload size while adding the `key`, using \0.
       packet.set_payload(absl::StrCat(
-          key, std::string(packet.payload().size() - key.size(), '\0')));
+          key,
+          std::string(std::max<int>(0, packet.payload().size() - key.size()),
+                      '\0')));
 
       // Serialize the modified copy.
       RETURN_IF_ERROR(PadPacketToMinimumSize(packet).status());
@@ -180,7 +180,7 @@ absl::string_view RemovePadding(absl::string_view payload) {
 
 absl::Status ProgramRoutes(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    sai::Instantiation instantiation,
+    const pdpi::IrP4Info& ir_p4info,
     const absl::flat_hash_map<std::string, std::string>& port_id_from_interface,
     absl::Span<const InterfacePair> pairs) {
   absl::flat_hash_set<std::string> interfaces;
@@ -191,21 +191,19 @@ absl::Status ProgramRoutes(
     egress_interfaces.insert(pair.egress_interface);
   }
 
-  RETURN_IF_ERROR(ProgramTrafficVrf(write_request, instantiation));
+  RETURN_IF_ERROR(ProgramTrafficVrf(write_request, ir_p4info));
   for (const std::string& interface : interfaces) {
     ASSIGN_OR_RETURN(int port_id, ToInt(gutil::FindOrStatus(
                                       port_id_from_interface, interface)));
-    RETURN_IF_ERROR(
-        ProgramRouterInterface(write_request, port_id, instantiation));
+    RETURN_IF_ERROR(ProgramRouterInterface(write_request, port_id, ir_p4info));
   }
   for (const std::string& egress_interface : egress_interfaces) {
     ASSIGN_OR_RETURN(
         int egress_port_id,
         ToInt(gutil::FindOrStatus(port_id_from_interface, egress_interface)));
-    RETURN_IF_ERROR(
-        ProgramIPv4Route(write_request, egress_port_id, instantiation));
+    RETURN_IF_ERROR(ProgramIPv4Route(write_request, egress_port_id, ir_p4info));
   }
-  return ProgramL3AdmitTableEntry(write_request);
+  return ProgramL3AdmitTableEntry(write_request, ir_p4info);
 }
 
 std::vector<InterfacePair> OneToOne(
@@ -255,7 +253,7 @@ std::vector<InterfacePair> AllToAll(absl::Span<const std::string> interfaces) {
 
 absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
     thinkit::GenericTestbed& testbed, pdpi::P4RuntimeSession* session,
-    absl::Span<const InterfacePair> pairs,
+    const pdpi::IrP4Info& ir_p4info, absl::Span<const InterfacePair> pairs,
     absl::Span<const packetlib::Packet> packets, absl::Duration duration,
     SendTrafficOptions options) {
   // The time to wait for packets to finish passing through the switch and be
@@ -282,8 +280,7 @@ absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
   P4rtProgrammingContext p4rt_context(session,
                                       std::move(options.write_request));
   RETURN_IF_ERROR(ProgramRoutes(p4rt_context.GetWriteRequestFunction(),
-                                options.instantiation,
-                                port_id_from_sut_interface, pairs));
+                                ir_p4info, port_id_from_sut_interface, pairs));
 
   // Precompute packets to send.
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
