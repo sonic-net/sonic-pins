@@ -83,6 +83,10 @@ pkg_deb(
     name = "p4rt_deb",
     architecture = "amd64",
     data = ":p4rt_binaries",
+    depends = [
+        "libswsscommon",
+        "libgmpxx4ldbl",
+    ],
     description = "P4RT service",
     maintainer = p4rt_maintainer,
     package = "sonic-p4rt",
@@ -94,8 +98,7 @@ pkg_deb(
     architecture = "amd64",
     data = ":p4rt_debug",
     depends = [
-        "libswsscommon",
-        "libgmpxx4ldbl",
+        "sonic-p4rt",
     ],
     description = "P4RT service debug symbols",
     maintainer = p4rt_maintainer,
