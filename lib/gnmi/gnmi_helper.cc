@@ -31,6 +31,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -113,7 +114,65 @@ GetPortNameToIdMapFromJsonString(const std::string& json_string,
   return interface_name_to_port_id;
 }
 
+std::string ForceP4rtDeviceId(const std::string& gnmi_config,
+                              const std::string& device_id) {
+  LOG(INFO) << "Forcing P4RT Device ID to be '" << device_id << "'.";
+
+  // Parse the current gnmi config into a JSON object.
+  nlohmann::basic_json<> json;
+  if (!gnmi_config.empty()) json = json::parse(gnmi_config);
+
+  // Verify the OpenConfig components list exists.
+  auto oc_component_list = json.find("openconfig-platform:components");
+  if (oc_component_list == json.end()) return json.dump();
+
+  // And that it has a list of components.
+  auto component_list = oc_component_list->find("component");
+  if (component_list == oc_component_list->end()) return json.dump();
+
+  // The Device ID should always be written to integrated_circuit0. If this
+  // component doesn't exist then we will not update the device ID.
+  for (nlohmann::basic_json<>& component : *component_list) {
+    if (component["name"] == "integrated_circuit0") {
+      component["integrated-circuit"]["config"]["openconfig-p4rt:node-id"] =
+          device_id;
+    }
+  }
+
+  return json.dump();
+}
+
 }  // namespace
+
+std::string GnmiFieldTypeToString(GnmiFieldType field_type) {
+  switch (field_type) {
+    case GnmiFieldType::kConfig:
+      return "config";
+    case GnmiFieldType::kState:
+      return "state";
+  }
+  LOG(DFATAL) << "invalid GnmiFieldType: " << static_cast<int>(field_type);
+  return "";
+}
+
+std::string OpenConfigWithInterfaces(
+    GnmiFieldType field_type,
+    absl::Span<const OpenConfigInterfaceDescription> interfaces) {
+  using json = nlohmann::json;
+  std::vector<json> port_configs;
+  for (const auto& interface : interfaces) {
+    port_configs.push_back({{"name", interface.port_name},
+                            {GnmiFieldTypeToString(field_type),
+                             {{"openconfig-p4rt:id", interface.port_id}}}});
+  }
+  json open_config{
+      {"openconfig-interfaces:interfaces", {{"interface", port_configs}}}};
+  return open_config.dump();
+}
+
+std::string EmptyOpenConfig() {
+  return OpenConfigWithInterfaces(GnmiFieldType::kConfig, /*interfaces=*/{});
+}
 
 // This API generates gNMI path from OC path string.
 // Example1:
@@ -284,7 +343,9 @@ absl::Status PushGnmiConfig(gnmi::gNMI::StubInterface& stub,
 absl::Status PushGnmiConfig(thinkit::Switch& chassis,
                             const std::string& gnmi_config) {
   ASSIGN_OR_RETURN(auto stub, chassis.CreateGnmiStub());
-  return pins_test::PushGnmiConfig(*stub, chassis.ChassisName(), gnmi_config);
+  return pins_test::PushGnmiConfig(
+      *stub, chassis.ChassisName(),
+      ForceP4rtDeviceId(gnmi_config, absl::StrCat(chassis.DeviceId())));
 }
 
 absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
@@ -658,9 +719,11 @@ absl::StatusOr<std::vector<std::string>> GetAlarms(
   LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
   gnmi::GetResponse response;
   grpc::ClientContext context;
-  grpc::Status status = gnmi_stub.Get(&context, request, &response);
+  absl::Status status = gutil::GrpcStatusToAbslStatus(
+      gnmi_stub.Get(&context, request, &response));
   if (!status.ok()) {
-    return gutil::GrpcStatusToAbslStatus(status);
+    LOG(WARNING) << "GET request failed with: " << status;
+    return status;
   }
 
   LOG(INFO) << "Received GET response: " << response.ShortDebugString();

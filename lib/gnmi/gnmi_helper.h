@@ -47,6 +47,28 @@ enum class OperStatus {
   kTesting,
 };
 
+enum class GnmiFieldType {
+  kConfig,
+  kState,
+};
+
+// Describes a single interface in a gNMI config.
+struct OpenConfigInterfaceDescription {
+  absl::string_view port_name;
+  int port_id;
+};
+
+std::string GnmiFieldTypeToString(GnmiFieldType field_type);
+
+// Generates an OpenConfig JSON string using the given list of `interfaces` to
+// define interfaces of the given `field_type`.
+std::string OpenConfigWithInterfaces(
+    GnmiFieldType field_type,
+    absl::Span<const OpenConfigInterfaceDescription> interfaces);
+
+// Generates a valid, empty OpenConfig JSON string.
+std::string EmptyOpenConfig();
+
 // Builds gNMI Set Request for a given OC path, set type and set value.
 // The path should be in the following format below.
 // "interfaces/interface[Ethernet0]/config/mtu".
@@ -98,11 +120,16 @@ void AddSubtreeToGnmiSubscription(absl::string_view subtree_root,
 absl::StatusOr<std::vector<absl::string_view>>
 GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response);
 
+// Pushes a given gNMI config to a given chassis. This method will automatically
+// configure the arbitration settings for the request.
 absl::Status PushGnmiConfig(
     gnmi::gNMI::StubInterface& stub, const std::string& chassis_name,
     const std::string& gnmi_config,
     absl::uint128 election_id = pdpi::TimeBasedElectionId());
 
+// Pushes a given gNMI config to a thinkit switch. This method will make
+// sensible changes to the config like:
+//    * Update the P4RT device ID to match the chassis settings.
 absl::Status PushGnmiConfig(thinkit::Switch& chassis,
                             const std::string& gnmi_config);
 
