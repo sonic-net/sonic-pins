@@ -58,6 +58,12 @@ absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
     const std::string& interface_info, const std::string& port,
     const BreakoutType breakout_type = BreakoutType::kAny);
 
+// BreakoutResultsInSpeedChangeOnly returns whether changing from current to new
+// breakout mode would result in a speed change only.
+absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
+    const std::string& port, const std::string& curr_breakout_Mode,
+    const std::string& new_breakout_mode);
+
 // GetRandomPortWithSupportedBreakoutModes attempts to get a random port from
 // list of front panel ports that supports at least one more breakout mode other
 // than the currently configured breakout mode.

@@ -123,6 +123,27 @@ absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
   return modes;
 }
 
+absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
+    const std::string& port, const std::string& curr_breakout_mode,
+    const std::string& new_breakout_mode) {
+  // Get list of interfaces for current and new breakout modes.
+  ASSIGN_OR_RETURN(auto curr_port_info, GetExpectedPortInfoForBreakoutMode(
+                                            port, curr_breakout_mode));
+  ASSIGN_OR_RETURN(auto new_port_info,
+                   GetExpectedPortInfoForBreakoutMode(port, new_breakout_mode));
+  for (auto& key : curr_port_info) {
+    if (!new_port_info.count(key.first)) {
+      return false;
+    }
+  }
+  for (auto& key : new_port_info) {
+    if (!curr_port_info.count(key.first)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface& sut_gnmi_stub,
     const std::string& platform_json_contents,
@@ -133,6 +154,12 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
       GetInterfaceToOperStatusMapOverGnmi(sut_gnmi_stub,
                                           /*timeout=*/absl::Seconds(60)),
       _ << "Failed to get oper-status map for ports on switch");
+
+  // Consider only ports that have p4rt ID modelled as this ID is required to
+  // configure P4RT router interface on the port.
+  ASSIGN_OR_RETURN(auto port_id_by_interface,
+                   GetAllInterfaceNameToPortId(sut_gnmi_stub),
+                   _ << "Failed to get interface name to p4rt id map");
 
   // Consider only operationally up front panel parent ports.
   std::vector<std::string> up_parent_port_list;
@@ -172,6 +199,12 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     auto port = up_parent_port_list[index];
     port_info.port_name = port;
 
+    // Check if port has a p4rt id value in the state path.
+    if (!port_id_by_interface.count(port_info.port_name)) {
+      up_parent_port_list.erase(up_parent_port_list.begin() + index);
+      continue;
+    }
+
     // Get the port entry from platform.json interfaces info.
     const auto interface_json = interfaces_json->find(port);
     if (interface_json == interfaces_json->end()) {
@@ -199,9 +232,16 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     // Get a supported breakout mode other than current breakout mode.
     for (const auto& supported_breakout_mode : supported_breakout_modes) {
       if (supported_breakout_mode != port_info.curr_breakout_mode) {
-        port_info.supported_breakout_mode = supported_breakout_mode;
-        StripSymbolFromString(port_info.supported_breakout_mode, '\"');
-        break;
+        // Check if new breakout mode would result in a speed change only.
+        ASSIGN_OR_RETURN(auto speed_change_only,
+                         BreakoutResultsInSpeedChangeOnly(
+                             port_info.port_name, port_info.curr_breakout_mode,
+                             supported_breakout_mode));
+        if (!speed_change_only) {
+          port_info.supported_breakout_mode = supported_breakout_mode;
+          StripSymbolFromString(port_info.supported_breakout_mode, '\"');
+          break;
+        }
       }
     }
     if (!port_info.supported_breakout_mode.empty()) {
@@ -321,6 +361,54 @@ GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
   return port_info;
 }
 
+absl::StatusOr<std::string> GenerateComponentBreakoutConfig(
+    absl::string_view breakout_speed, int index, int num_breakouts,
+    absl::string_view num_physical_channels) {
+  auto component_config = absl::Substitute(
+      R"pb({
+             "config": {
+               "breakout-speed": "openconfig-if-ethernet:SPEED_$0B",
+               "index": $1,
+               "num-breakouts": $2,
+               "num-physical-channels": $3
+             },
+             "index": $1
+           })pb",
+      breakout_speed, index, num_breakouts, num_physical_channels);
+  return component_config;
+}
+
+absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
+    absl::string_view port, const int id, absl::string_view breakout_speed) {
+  auto interface_config = absl::Substitute(
+      R"pb({
+             "config": {
+               "enabled": true,
+               "loopback-mode": false,
+               "mtu": 9216,
+               "name": "$0",
+               "type": "iana-if-type:ethernetCsmacd"
+             },
+             "name": "$0",
+             "openconfig-if-ethernet:ethernet": {
+               "config": { "port-speed": "openconfig-if-ethernet:SPEED_$1B" }
+             },
+             "subinterfaces": {
+               "subinterface":
+               [ {
+                 "config": { "index": 0 },
+                 "index": 0,
+                 "openconfig-if-ip:ipv6": {
+                   "unnumbered": { "config": { "enabled": true } }
+                 }
+               }]
+             }
+           }
+      )pb",
+      port, breakout_speed);
+  return interface_config;
+}
+
 absl::Status GetBreakoutModeConfigFromString(
     gnmi::SetRequest& req, const absl::string_view port_index,
     const absl::string_view breakout_mode) {
@@ -332,8 +420,18 @@ absl::Status GetBreakoutModeConfigFromString(
   // 1x200G}
   std::vector<std::string> modes = absl::StrSplit(breakout_mode, '+');
   std::vector<std::string> group_configs;
+  std::vector<std::string> interface_configs;
   auto max_channels_in_group = kMaxPortLanes / modes.size();
   auto index = 0;
+
+  // Get current port number.
+  int curr_port_number;
+  if (!absl::SimpleAtoi(port_index, &curr_port_number)) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Failed to convert string (" << port_index << ") to integer";
+  }
+  curr_port_number = (curr_port_number - 1) * kMaxPortLanes;
+
   for (auto& mode : modes) {
     auto num_breakouts_str = mode.substr(0, mode.find('x'));
     int num_breakouts;
@@ -344,36 +442,57 @@ absl::Status GetBreakoutModeConfigFromString(
     }
     auto breakout_speed = mode.substr(mode.find('x') + 1);
     auto num_physical_channels = max_channels_in_group / num_breakouts;
-    auto group_config = absl::Substitute(
-        R"pb({
-               "config": {
-                 "breakout-speed": "openconfig-if-ethernet:SPEED_$0B",
-                 "index": $1,
-                 "num-breakouts": $2,
-                 "num-physical-channels": $3
-               },
-               "index": $1
-             })pb",
-        breakout_speed, index, num_breakouts,
-        std::to_string(num_physical_channels));
+    ASSIGN_OR_RETURN(
+        auto group_config,
+        GenerateComponentBreakoutConfig(breakout_speed, index, num_breakouts,
+                                        std::to_string(num_physical_channels)));
     group_configs.push_back(group_config);
+
+    // Get the interface config for all ports corresponding to current breakout
+    // group.
+    for (int i = 0; i < num_breakouts; i++) {
+      auto port = absl::StrCat(kEthernet, std::to_string(curr_port_number));
+      ASSIGN_OR_RETURN(auto interfaceConfig,
+                       GenerateInterfaceBreakoutConfig(port, curr_port_number,
+                                                       breakout_speed));
+      interface_configs.push_back(interfaceConfig);
+      int offset = max_channels_in_group / num_breakouts;
+      curr_port_number += offset;
+    }
     index += 1;
   }
 
-  std::string main;
+  std::string componentConfig, interfaceConfig;
   for (auto& group_config : group_configs) {
-    main += absl::StrCat(group_config, ",");
+    componentConfig += absl::StrCat(group_config, ",");
   }
-  // Pop the last comma from the group config array.
-  main.pop_back();
-  auto kBreakoutConfig = absl::Substitute(
-      R"pb({ "openconfig-platform-port:groups": { "group": [ $0 ] } })pb",
-      main);
+  for (auto& interface_config : interface_configs) {
+    interfaceConfig += absl::StrCat(interface_config, ",");
+  }
+  // Pop the last comma from the component and interface config array.
+  componentConfig.pop_back();
+  interfaceConfig.pop_back();
 
+  auto kBreakoutConfig = absl::Substitute(
+      R"pb({
+             "openconfig-interfaces:interfaces": { "interface": [ $0 ] },
+             "openconfig-platform:components": {
+               "component":
+               [ {
+                 "name": "$1",
+                 "config": { "name": "$1" },
+                 "port": {
+                   "config": { "port-id": $2 },
+                   "breakout-mode": { "groups": { "group": [ $3 ] } }
+                 }
+               }]
+             }
+           })pb",
+      interfaceConfig, absl::StrCat("1/", port_index), port_index,
+      componentConfig);
   // Build GNMI config set request for given port breakout mode.
-  ASSIGN_OR_RETURN(req,
-                   BuildGnmiSetRequest(kBreakoutPath, GnmiSetType::kReplace,
-                                       kBreakoutConfig));
+  ASSIGN_OR_RETURN(
+      req, BuildGnmiSetRequest("", GnmiSetType::kReplace, kBreakoutConfig));
   return absl::OkStatus();
 }
 
