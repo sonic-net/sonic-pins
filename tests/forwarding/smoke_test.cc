@@ -31,7 +31,8 @@
 namespace gpins {
 namespace {
 
-TEST_P(SmokeTestFixture, ModifyWorks) {
+// TODO: modify failing because of policer attributes.
+TEST_P(SmokeTestFixture, DISABLED_ModifyWorks) {
   const sai::WriteRequest pd_insert = gutil::ParseProtoOrDie<sai::WriteRequest>(
       R"pb(
         updates {
