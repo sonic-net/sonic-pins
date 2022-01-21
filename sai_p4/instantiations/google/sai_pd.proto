@@ -216,7 +216,6 @@ message Ipv6TunnelTerminationTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 message MulticastRouterInterfaceTableEntry {
   message Match {
     string multicast_replica_port = 1;  // exact match / Format::STRING
@@ -247,7 +246,6 @@ message DisableVlanChecksTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 message Ipv4MulticastTableEntry {
   message Match {
     // Refers to 'vrf_table.vrf_id'.
@@ -256,14 +254,12 @@ message Ipv4MulticastTableEntry {
   }
   Match match = 1;
   message Action {
-    // CAUTION: This action is not (yet) supported.
     SetMulticastGroupIdAction set_multicast_group_id = 1;
   }
   Action action = 2;
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 message Ipv6MulticastTableEntry {
   message Match {
     // Refers to 'vrf_table.vrf_id'.
@@ -272,7 +268,6 @@ message Ipv6MulticastTableEntry {
   }
   Match match = 1;
   message Action {
-    // CAUTION: This action is not (yet) supported.
     SetMulticastGroupIdAction set_multicast_group_id = 1;
   }
   Action action = 2;
@@ -753,6 +748,7 @@ message AclIngressMirrorAndRedirectTableEntry {
   Match match = 1;
   message Action {
     oneof action {
+      AclForwardAction acl_forward = 4;
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 2;
       // CAUTION: This action is not (yet) supported.
@@ -875,7 +871,6 @@ message SetIpNexthopAndDisableRewritesAction {
   string disable_vlan_rewrite = 6;     // Format::HEX_STRING / 1 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message SetMulticastGroupIdAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
@@ -1004,13 +999,10 @@ message TableEntry {
     VrfTableEntry vrf_table_entry = 74;
     // CAUTION: This table is not (yet) supported.
     Ipv6TunnelTerminationTableEntry ipv6_tunnel_termination_table_entry = 75;
-    // CAUTION: This table is not (yet) supported.
     MulticastRouterInterfaceTableEntry multicast_router_interface_table_entry =
         76;
     DisableVlanChecksTableEntry disable_vlan_checks_table_entry = 77;
-    // CAUTION: This table is not (yet) supported.
     Ipv4MulticastTableEntry ipv4_multicast_table_entry = 78;
-    // CAUTION: This table is not (yet) supported.
     Ipv6MulticastTableEntry ipv6_multicast_table_entry = 79;
     TunnelTableEntry tunnel_table_entry = 80;
     AclIngressTableEntry acl_ingress_table_entry = 256;

@@ -263,7 +263,8 @@ control acl_ingress(in headers_t headers,
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
 #endif
       // Field for v4 IP protocol and v6 next header.
-      ip_protocol : ternary @name("ip_protocol") @id(13)
+      ip_protocol : ternary
+          @id(13) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
 #if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR)
       headers.icmp.type : ternary @name("icmp_type") @id(19)
@@ -391,6 +392,7 @@ control acl_ingress(in headers_t headers,
 
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_INGRESS_COUNTING_TABLE_ID)
+  @sai_acl_priority(7)
   @sai_acl(INGRESS)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
@@ -405,9 +407,11 @@ control acl_ingress(in headers_t headers,
   ")
   table acl_ingress_counting_table {
     key = {
-      headers.ipv4.isValid() || headers.ipv6.isValid() : optional @name("is_ip")
-          @id(1) @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
-      headers.ipv4.isValid() : optional @name("is_ipv4") @id(2)
+      headers.ipv4.isValid() || headers.ipv6.isValid() : optional
+          @id(1) @name("is_ip")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
+      headers.ipv4.isValid() : optional
+          @id(2) @name("is_ipv4")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV4ANY);
       headers.ipv6.isValid() : optional @name("is_ipv6") @id(3)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
@@ -451,8 +455,7 @@ control acl_ingress(in headers_t headers,
   ")
   action redirect_to_ipmc_group(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
-    // TODO: Add this once supported by PDPI and its customers.
-    // @refers_to(multicast_group_table, multicast_group_id)
+    @refers_to(builtin::multicast_group_table, multicast_group_id)
     multicast_group_id_t multicast_group_id) {
     standard_metadata.mcast_grp = multicast_group_id;
 
@@ -465,6 +468,7 @@ control acl_ingress(in headers_t headers,
   // ACL table that mirrors and redirects packets.
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
+  @sai_acl_priority(15)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
@@ -541,6 +545,7 @@ control acl_ingress(in headers_t headers,
         @unsupported;
     }
     actions = {
+      @proto_id(4) acl_forward();
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
       @proto_id(3) redirect_to_ipmc_group();
@@ -553,6 +558,7 @@ control acl_ingress(in headers_t headers,
   // ACL table that only drops or denies packets, and is otherwise a no-op.
   @id(ACL_INGRESS_SECURITY_TABLE_ID)
   @sai_acl(INGRESS)
+  @sai_acl_priority(20)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
