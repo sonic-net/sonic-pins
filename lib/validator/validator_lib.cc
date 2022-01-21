@@ -91,7 +91,13 @@ absl::Status SSHable(thinkit::Switch& thinkit_switch,
 
 // Checks if a P4Runtime session could be established.
 absl::Status P4rtAble(thinkit::Switch& thinkit_switch) {
-  return pdpi::P4RuntimeSession::Create(thinkit_switch).status();
+  // Uses a metadata with minimum election id to connect as backup and not
+  // change election id necessary to connect as primary in the future.
+  return pdpi::P4RuntimeSession::Create(
+             thinkit_switch,
+             pdpi::P4RuntimeSessionOptionalArgs{.election_id = 0},
+             /*error_if_not_primary=*/false)
+      .status();
 }
 
 // Checks if a gNMI get all interface request can be sent and a response
@@ -157,12 +163,15 @@ absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
 absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
                                 thinkit::SSHClient& ssh_client,
                                 absl::Span<const std::string> interfaces,
+                                bool check_interfaces_state,
                                 absl::Duration timeout) {
   RETURN_IF_ERROR(Pingable(thinkit_switch));
   RETURN_IF_ERROR(SSHable(thinkit_switch, ssh_client));
   RETURN_IF_ERROR(P4rtAble(thinkit_switch));
   RETURN_IF_ERROR(GnmiAble(thinkit_switch));
-  RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces));
+  if (check_interfaces_state) {
+    RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces));
+  }
   RETURN_IF_ERROR(GnoiAble(thinkit_switch));
   return NoAlarms(thinkit_switch);
 }

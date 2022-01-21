@@ -386,7 +386,7 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
   ASSIGN_OR_RETURN(thinkit::HttpResponse start_response,
                    generic_testbed.SendRestRequestToIxia(
                        thinkit::RequestType::kPost, start_path, start_json));
-  RETURN_IF_ERROR(WaitForComplete(generate_response, generic_testbed));
+  RETURN_IF_ERROR(WaitForComplete(start_response, generic_testbed));
 
   // GET to /ixnetwork/traffic/trafficItem
   std::string titem_path = "/ixnetwork/traffic/trafficItem";

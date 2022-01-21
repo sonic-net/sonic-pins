@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/numeric/int128.h"
@@ -69,8 +70,8 @@ const LazyRE2 kSplitBreakSquareBraceRE = {R"(([^\[\/]+(\[[^\]]+\])?)\/?)"};
 // `field_type` is the type of open config data this function should parse (e.g.
 // "config" or "state").
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-GetPortNameToIdMapFromJsonString(const std::string& json_string,
-                                 const std::string& field_type) {
+GetPortNameToIdMapFromJsonString(absl::string_view json_string,
+                                 absl::string_view field_type) {
   VLOG(2) << "Getting Port Name -> ID Map from JSON string: " << json_string;
   const nlohmann::basic_json<> response_json = json::parse(json_string);
 
@@ -500,8 +501,8 @@ absl::Status CheckInterfaceOperStateOverGnmi(
 
   if (!unavailable_interfaces.empty()) {
     return absl::UnavailableError(absl::StrCat(
-        "Some interfaces are not in the expected state: \n",
-        absl::StrJoin(unavailable_interfaces, "\n"),
+        "Some interfaces are not in the expected state ", interface_oper_state,
+        ": \n", absl::StrJoin(unavailable_interfaces, "\n"),
         "\n\nInterfaces provided: \n", absl::StrJoin(interfaces, "\n")));
   }
   return absl::OkStatus();
@@ -521,6 +522,9 @@ absl::Status CheckAllInterfaceOperStateOverGnmi(
       continue;
     }
     if (oper_status != interface_oper_state) {
+      LOG(INFO) << "Interface "
+                << interface << " not found in interfaces that are "
+                << interface_oper_state;
       unavailable_interfaces.push_back(interface);
     }
   }
@@ -643,6 +647,11 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllInterfaceNameToPortId(absl::string_view gnmi_config) {
+  return GetPortNameToIdMapFromJsonString(gnmi_config, /*field_type=*/"config");
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
   ASSIGN_OR_RETURN(gnmi::GetResponse response,
                    pins_test::GetAllInterfaceOverGnmi(stub, absl::Seconds(60)));
@@ -653,6 +662,30 @@ GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
   return GetPortNameToIdMapFromJsonString(
       response.notification(0).update(0).val().json_ietf_val(),
       /*field_type=*/"state");
+}
+
+absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(
+    absl::string_view gnmi_config) {
+  ASSIGN_OR_RETURN(auto interface_name_to_port_id,
+                   GetAllInterfaceNameToPortId(gnmi_config));
+
+  absl::btree_set<std::string> port_ids;
+  for (const auto& [_, port_id] : interface_name_to_port_id) {
+    port_ids.insert(port_id);
+  }
+  return port_ids;
+}
+
+absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(
+    gnmi::gNMI::StubInterface& stub) {
+  ASSIGN_OR_RETURN(auto interface_name_to_port_id,
+                   GetAllInterfaceNameToPortId(stub));
+
+  absl::btree_set<std::string> port_ids;
+  for (const auto& [_, port_id] : interface_name_to_port_id) {
+    port_ids.insert(port_id);
+  }
+  return port_ids;
 }
 
 absl::StatusOr<std::vector<std::string>> ParseAlarms(

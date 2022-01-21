@@ -19,6 +19,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
@@ -54,7 +55,7 @@ enum class GnmiFieldType {
 
 // Describes a single interface in a gNMI config.
 struct OpenConfigInterfaceDescription {
-  absl::string_view port_name;
+  std::string port_name;
   int port_id;
 };
 
@@ -180,9 +181,21 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::string_view if_name);
 
-// Gets the interface name to port id map.
+// Returns the interface name to port id map from a gNMI config.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllInterfaceNameToPortId(absl::string_view gnmi_config);
+
+// Reads the gNMI state and returns the interface name to port id map.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub);
+
+// Returns the ordered set of all port ids mapped by the given gNMI config.
+absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(
+    absl::string_view gnmi_config);
+
+// Reads the gNMI state and returns the ordered set of all port ids mapped.
+absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(
+    gnmi::gNMI::StubInterface& stub);
 
 // Gets all system process id over gNMI.
 absl::StatusOr<gnmi::GetResponse> GetAllSystemProcesses(
@@ -203,6 +216,5 @@ absl::StatusOr<std::vector<std::string>> GetAlarms(
 
 // Strips the beginning and ending double-quotes from the `string`.
 absl::string_view StripQuotes(absl::string_view string);
-
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_
