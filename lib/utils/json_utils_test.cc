@@ -725,6 +725,330 @@ TEST(ReplaceNamesinJsonObject, TestReplacementNamesReplaced) {
             expected_json);
 }
 
+// Map of yang list paths to names of key leaves used for testing.
+static const auto* const kPathKeyNameMap = new StringMap({
+    {"/outer_element/container1", "key_leaf1"},
+    {"/outer_element/container1/middle_element/container2", "key_leaf2"},
+    {"/outer_element/container1/middle_element/container2/inner_element/"
+     "container3",
+     "key_leaf3"},
+});
+
+TEST(FlattenJson, TestInvalidJsonType) {
+  nlohmann::json root(nlohmann::json::value_t::discarded);
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+              gutil::StatusIs(absl::StatusCode::kInvalidArgument,
+                              testing::HasSubstr("Invalid json type")));
+}
+
+TEST(FlattenJson, TestUnknownKeyOuter) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "unknown_container" : [
+        {
+          "leaf": "value"
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(
+      FlattenJsonToMap(root, *kPathKeyNameMap),
+      gutil::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("No key found for path "
+                             "[/outer_element/unknown_container] while parsing "
+                             "path [/outer_element/unknown_container].")));
+}
+
+TEST(FlattenJson, TestUnknownKeyInner) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "value2",
+                "inner_element": {
+                  "unknown_container": [
+                    {
+                      "leaf": "value"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+              gutil::StatusIs(
+                  absl::StatusCode::kInvalidArgument,
+                  testing::HasSubstr(
+                      "No key found for path "
+                      "[/outer_element/container1/middle_element/container2/"
+                      "inner_element/unknown_container] while parsing path "
+                      "[/outer_element/container1[key_leaf1='value1']/"
+                      "middle_element/container2[key_leaf2='value2']/"
+                      "inner_element/unknown_container].")));
+}
+
+TEST(FlattenJson, TestMissingKeyLeafOuter) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1"
+        },
+        {
+          "key_leaf1": "value2"
+        },
+        {
+          "bad_key_leaf": "value"
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(
+      FlattenJsonToMap(root, *kPathKeyNameMap),
+      gutil::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr(
+              "No key leaf 'key_leaf1' found for array element 2 under path: "
+              "[/outer_element/container1].")));
+}
+
+TEST(FlattenJson, TestMissingKeyLeafInner) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "value2",
+                "inner_element": {
+                  "container3": [
+                    {
+                      "bad_key_leaf": "value3"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(
+      FlattenJsonToMap(root, *kPathKeyNameMap),
+      gutil::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr(
+              "No key leaf 'key_leaf3' found for array element 0 under path: "
+              "[/outer_element/container1[key_leaf1='value1']/middle_element/"
+              "container2[key_leaf2='value2']/inner_element/container3].")));
+}
+
+TEST(FlattenJson, TestInvalidKeyLeafTypeOuter) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1"
+        },
+        {
+          "key_leaf1": "value2"
+        },
+        {
+          "key_leaf1": {
+            "leaf": "leaf_value"
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(
+      FlattenJsonToMap(root, *kPathKeyNameMap),
+      gutil::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr("Invalid type 'object' for key leaf 'key_leaf1' "
+                             "for array element 2 under path "
+                             "[/outer_element/container1")));
+}
+
+TEST(FlattenJson, TestInvalidKeyLeafTypeInner) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "value2",
+                "inner_element": {
+                  "container3": [
+                    {
+                      "key_leaf3": "value3"
+                    },
+                    {
+                      "key_leaf3": {
+                        "leaf": "leaf_value"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(
+      FlattenJsonToMap(root, *kPathKeyNameMap),
+      gutil::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr(
+              "Invalid type 'object' for key leaf 'key_leaf3' for array "
+              "element 1 under path "
+              "[/outer_element/container1[key_leaf1='value1']/middle_element/"
+              "container2[key_leaf2='value2']/inner_element/container3]")));
+}
+
+TEST(FlattenJson, TestEmptySuccess) {
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(""));
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+              gutil::IsOkAndHolds(StringMap{}));
+}
+
+TEST(FlattenJson, TestSuccess) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element_1" : {
+      "outer_leaf_int": -34,
+      "outer_leaf_uint": 123,
+      "outer_leaf_float": 6.45,
+      "outer_leaf_boolean": false,
+      "outer_leaf_string": "just a string"
+    },
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "outer_value1",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "middle_value1",
+                "inner_element": {
+                  "container3": [
+                    {
+                      "key_leaf3": "inner_value1",
+                      "inner_object1": {
+                        "leaf1": "value1"
+                      }
+                    },
+                    {
+                      "key_leaf3": -12
+                    },
+                    {
+                      "key_leaf3": 87
+                    },
+                    {
+                      "key_leaf3": 3.67
+                    },
+                    {
+                      "key_leaf3": true
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2": "middle_value2",
+                "inner_element": {
+                  "inner_leaf": "inner_value1"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1": "outer_value2",
+          "middle_element": {
+            "outer_leaf": "outer_value"
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  const auto kExpectedMap = StringMap{
+      {"/outer_element_1/outer_leaf_int", "-34"},
+      {"/outer_element_1/outer_leaf_uint", "123"},
+      {"/outer_element_1/outer_leaf_float", "6.45"},
+      {"/outer_element_1/outer_leaf_boolean", "false"},
+      {"/outer_element_1/outer_leaf_string", "just a string"},
+
+      {"/outer_element/container1[key_leaf1='outer_value1']/key_leaf1",
+       "outer_value1"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/key_leaf2",
+       "middle_value1"},
+
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='inner_value1']/key_leaf3",
+       "inner_value1"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='inner_value1']/inner_object1/leaf1",
+       "value1"},
+
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='-12']/key_leaf3",
+       "-12"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='87']/key_leaf3",
+       "87"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='3.67']/key_leaf3",
+       "3.67"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='true']/key_leaf3",
+       "true"},
+
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value2']/key_leaf2",
+       "middle_value2"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value2']/inner_element/inner_leaf",
+       "inner_value1"},
+
+      {"/outer_element/container1[key_leaf1='outer_value2']/key_leaf1",
+       "outer_value2"},
+      {"/outer_element/container1[key_leaf1='outer_value2']/middle_element/"
+       "outer_leaf",
+       "outer_value"},
+  };
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+              gutil::IsOkAndHolds(kExpectedMap));
+}
+
 }  // namespace
 
 }  // namespace json_yang
