@@ -16,9 +16,11 @@
 
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
@@ -146,6 +148,57 @@ absl::StatusOr<std::string> IxiaSession(
   std::string endp_path = tref + "/endpointSet";
   std::string endp_json =
       absl::StrCat("[{\"sources\":[\"", vref, "/protocols\"]}]");
+  LOG(INFO) << "path " << endp_path;
+  LOG(INFO) << "json " << endp_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse endp_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPost, endp_path, endp_json));
+
+  LOG(INFO) << "Received response " << endp_response.response_code;
+  LOG(INFO) << "Received response " << endp_response.response;
+  if (endp_response.response_code != 201)
+    return absl::InternalError(absl::StrFormat("unexpected response %d: %s",
+                                               endp_response.response_code,
+                                               endp_response.response));
+
+  return tref;
+}
+
+// SetupTrafficItem - Sets up a traffic item with source and destination port.
+// Returns either an error or the
+// href string for the first traffic item, e.g. something like
+// "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1"
+absl::StatusOr<std::string> SetUpTrafficItem(
+    absl::string_view vref_src, absl::string_view vref_dst,
+    thinkit::GenericTestbed &generic_testbed) {
+  // POST to /traffic/trafficItem with:
+  // [{"name":"Unicast Traffic"}]
+  constexpr absl::string_view kTrafficPath = "/ixnetwork/traffic/trafficItem";
+  constexpr absl::string_view kTrafficJson = "[{\"name\":\"Unicast Traffic\"}]";
+
+  ASSIGN_OR_RETURN(
+      thinkit::HttpResponse traffic_response,
+      generic_testbed.SendRestRequestToIxia(thinkit::RequestType::kPost,
+                                            kTrafficPath, kTrafficJson));
+
+  LOG(INFO) << "Received response " << traffic_response.response_code;
+  LOG(INFO) << "Received response " << traffic_response.response;
+  if (traffic_response.response_code != 201)
+    return absl::InternalError(absl::StrFormat("unexpected response %d: %s",
+                                               traffic_response.response_code,
+                                               traffic_response.response));
+
+  // something like
+  // {"links":[{"rel":"self","method":"GET","href":"/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1"}]}
+  // and we need to extract /ixnetwork/traffic/trafficItem/1 for use
+  ASSIGN_OR_RETURN(std::string tref, ExtractHref(traffic_response));
+  LOG(INFO) << "tref = " << tref;
+  // POST to /ixnetwork/traffic/trafficItem/1/endpointSet with
+  // [{"sources":["/api/v1/sessions/1/ixnetwork/vport/2/protocols"]}]
+  std::string endp_path = tref + "/endpointSet";
+  std::string endp_json = absl::StrCat("[{\"sources\":[\"", vref_src,
+                                       "/protocols\"],\"destinations\":[\"",
+                                       vref_dst, "/protocols\"]}]");
   LOG(INFO) << "path " << endp_path;
   LOG(INFO) << "json " << endp_json;
   ASSIGN_OR_RETURN(thinkit::HttpResponse endp_response,
@@ -623,6 +676,139 @@ absl::Status SetDestIPv6(absl::string_view tref, absl::string_view dip,
     return absl::InternalError(
         absl::StrFormat("unexpected response: %u", dip_response.response_code));
   return absl::OkStatus();
+}
+
+absl::Status SetIpPriority(absl::string_view tref, int dscp, bool is_ipv4,
+                           int ecn_bits,
+                           thinkit::GenericTestbed &generic_testbed) {
+  // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/stack/2/field/3
+  // with {"singleValue":"10/00"} to enable or disable ECN.
+
+  if (dscp < 0 || dscp > 63) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Invalid dscp: %d, valid range 0 - 63", dscp));
+  }
+
+  if (ecn_bits < 0 || ecn_bits > 3) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Invalid ecn_bits: %d, valid range 0 - 3", dscp));
+  }
+
+  std::string sip_path =
+      is_ipv4 ? absl::StrCat(tref, "/configElement/1/stack/2/field/3")
+              : absl::StrCat(tref, "/configElement/1/stack/2/field/2");
+  std::string sip_json =
+      absl::StrCat("{\"activeFieldChoice\":true,\"singleValue\":\"",
+                   absl::StrFormat("%X", (dscp << 2) | (ecn_bits)), "\"}");
+  LOG(INFO) << "path " << sip_path;
+  LOG(INFO) << "json " << sip_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse sip_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, sip_path, sip_json));
+  LOG(INFO) << "Returns " << sip_response.response_code;
+  if (sip_response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", sip_response.response_code));
+  return absl::OkStatus();
+}
+
+absl::Status AppendTcp(absl::string_view tref,
+                       thinkit::GenericTestbed &generic_testbed) {
+  // GET to /ixnetwork/traffic/protocolTemplate to find the correct protocol
+  // template to use for TCP traffic.
+  constexpr absl::string_view kProtoPath =
+      "/ixnetwork/traffic/protocolTemplate?links=true&skip=0&take=end";
+  ASSIGN_OR_RETURN(thinkit::HttpResponse proto_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kGet, kProtoPath, ""));
+  LOG(INFO) << "Returns " << proto_response.response_code;
+  if (proto_response.response_code != 200)
+    return absl::InternalError(absl::StrFormat("unexpected response: %u",
+                                               proto_response.response_code));
+
+  std::size_t ixname = proto_response.response.find("\"displayName\":\"TCP\"");
+  if (ixname == std::string::npos)
+    return absl::InternalError("no TCP template");
+  std::size_t ixhref = proto_response.response.find("\"href\":", ixname);
+  if (ixhref == std::string::npos)
+    return absl::InternalError("no TCP template(2)");
+  std::size_t ixqt = proto_response.response.find('"', ixhref + 8);
+  if (ixqt == std::string::npos)
+    return absl::InternalError("no TCP template(3)");
+  std::string tcpref =
+      proto_response.response.substr(ixhref + 8, ixqt - ixhref - 8);
+  std::size_t ixfield = tcpref.find("/field");
+  if (ixfield != std::string::npos) {
+    tcpref = tcpref.substr(0, ixfield);
+  }
+
+  // POST to
+  // /ixnetwork/traffic/trafficItem/configElement/stack/operations/appendprotocol
+  // {"arg1":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/configElement/1/stack/1","arg2":"/api/v1/sessions/1/ixnetwork/traffic/protocolTemplate/<template>"}
+  std::string append_path =
+      "/ixnetwork/traffic/trafficItem/configElement/stack/operations/"
+      "appendprotocol";
+
+  std::string append_json =
+      absl::StrCat("{\"arg1\":\"", tref,
+                   "/configElement/1/stack/2\",\"arg2\":\"", tcpref, "\"}");
+  LOG(INFO) << "path " << append_path;
+  LOG(INFO) << "json " << append_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPost, append_path, append_json));
+  LOG(INFO) << "Received code: " << append_response.response_code;
+  LOG(INFO) << "Received response: " << append_response.response;
+  return ixia::WaitForComplete(append_response, generic_testbed);
+}
+
+absl::Status AppendUdp(absl::string_view tref,
+                       thinkit::GenericTestbed &generic_testbed) {
+  // GET to /ixnetwork/traffic/protocolTemplate to find the correct protocol
+  // template to use for UDP traffic.
+  constexpr absl::string_view kProtoPath =
+      "/ixnetwork/traffic/protocolTemplate?links=true&skip=0&take=end";
+  ASSIGN_OR_RETURN(thinkit::HttpResponse proto_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kGet, kProtoPath, ""));
+  LOG(INFO) << "Returns " << proto_response.response_code;
+  if (proto_response.response_code != 200)
+    return absl::InternalError(absl::StrFormat("unexpected response: %u",
+                                               proto_response.response_code));
+
+  std::size_t ixname = proto_response.response.find("\"displayName\":\"UDP\"");
+  if (ixname == std::string::npos)
+    return absl::InternalError("no UDP template");
+  std::size_t ixhref = proto_response.response.find("\"href\":", ixname);
+  if (ixhref == std::string::npos)
+    return absl::InternalError("no UDP template(2)");
+  std::size_t ixqt = proto_response.response.find('"', ixhref + 8);
+  if (ixqt == std::string::npos)
+    return absl::InternalError("no UDP template(3)");
+  std::string tcpref =
+      proto_response.response.substr(ixhref + 8, ixqt - ixhref - 8);
+  std::size_t ixfield = tcpref.find("/field");
+  if (ixfield != std::string::npos) {
+    tcpref = tcpref.substr(0, ixfield);
+  }
+
+  // POST to
+  // /ixnetwork/traffic/trafficItem/configElement/stack/operations/appendprotocol
+  // {"arg1":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/configElement/1/stack/1","arg2":"/api/v1/sessions/1/ixnetwork/traffic/protocolTemplate/<template>"}
+  constexpr absl::string_view kAppendPath =
+      "/ixnetwork/traffic/trafficItem/configElement/stack/operations/"
+      "appendprotocol";
+
+  std::string append_json =
+      absl::StrCat("{\"arg1\":\"", tref,
+                   "/configElement/1/stack/2\",\"arg2\":\"", tcpref, "\"}");
+  LOG(INFO) << "json " << append_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPost, kAppendPath, append_json));
+  LOG(INFO) << "Received code: " << append_response.response_code;
+  LOG(INFO) << "Received response: " << append_response.response;
+  return ixia::WaitForComplete(append_response, generic_testbed);
 }
 
 }  // namespace pins_test::ixia
