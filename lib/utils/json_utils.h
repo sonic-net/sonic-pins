@@ -72,6 +72,7 @@ bool JsonValueIsEqual(const Json::Value& value1, const Json::Value& value2);
 namespace json_yang {
 // Helper functions to manipulate JSON that encode data modeled with YANG.
 // See http://datatracker.ietf.org/doc/html/rfc7159 for JSON.
+// See http://datatracker.ietf.org/doc/html/rfc7950 for YANG modeling language.
 // See http://datatracker.ietf.org/doc/html/rfc7951 for JSON encoding of YANG.
 
 // Returns a JSON value from the input JSON string that contains data modeled
@@ -94,6 +95,23 @@ nlohmann::json ReplaceNamesinJsonObject(
     const nlohmann::json& source,
     const absl::flat_hash_map<std::string, std::string>&
         old_name_to_new_name_map);
+
+// Returns a map of flattened paths to leaves in the JSON encoded YANG modeled
+// data to string values from the input JSON value using the map of yang paths
+// (representing array-link containers) to the leaf that is defined as the key
+// for the elements in the array in the yang model.
+//
+// A list data node in YANG is represented as an array in JSON. The YANG model
+// is required to define one or more leaf data nodes as keys that uniquely
+// identify the elements in the list. (see rfc7950#section-7.8.2).
+//
+//  - yang_path_key_name_map contains a map of yang list paths to the name of
+//    the leaf that's defined as the key for that list (currently only supports
+//    one key).
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>> FlattenJsonToMap(
+    const nlohmann::json& root,
+    const absl::flat_hash_map<std::string, std::string>&
+        yang_path_key_name_map);
 
 }  // namespace json_yang
 
