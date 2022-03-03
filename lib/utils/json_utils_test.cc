@@ -13,10 +13,14 @@
 // limitations under the License.
 #include "lib/utils/json_utils.h"
 
+#include <string>
+
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/status_matchers.h"
 #include "include/json/reader.h"
+#include "include/nlohmann/json.hpp"
 
 namespace pins_test {
 
@@ -519,3 +523,208 @@ TEST(JsonIsSubset, GpinsJsonIsSubsetInterfaceState) {
 }
 
 }  // namespace pins_test
+
+namespace json_yang {
+
+namespace {
+
+using StringMap = absl::flat_hash_map<std::string, std::string>;
+
+using ::gutil::StatusIs;
+using ::testing::HasSubstr;
+
+TEST(ParseJson, TestInvalidJson) {
+  // Trailing comma after the last element in the container is unexpected.
+  constexpr char kBadJson[] = R"({
+    "outer" : {
+      "inner" : "value",
+    }
+  })";
+  EXPECT_THAT(ParseJson(kBadJson), StatusIs(absl::StatusCode::kInvalidArgument,
+                                            HasSubstr("json parse error")));
+}
+
+TEST(ParseJson, TestEmptyJson) {
+  ASSERT_OK_AND_ASSIGN(auto empty_json, ParseJson(""));
+  EXPECT_TRUE(empty_json.is_null());
+}
+
+TEST(ParseJson, TestValidJson) {
+  constexpr char kGoodJson[] = R"({
+    "outer" : {
+      "inner" : "value"
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(auto good_json, ParseJson(kGoodJson));
+  ASSERT_TRUE(good_json.contains("outer"));
+  EXPECT_TRUE(good_json["outer"].contains("inner"));
+}
+
+TEST(DumpJson, TestInvalidJson) {
+  // Invalid UTF-8 byte sequence.
+  nlohmann::json invalid_json = "a\xA9z";
+  EXPECT_EQ(DumpJson(invalid_json), "\"a\xEF\xBF\xBDz\"");
+}
+
+TEST(DumpJson, TestEmptyJson) {
+  nlohmann::json null_json(nlohmann::json::value_t::null);
+  EXPECT_EQ(DumpJson(null_json), "");
+}
+
+constexpr char kExpectedDump[] = R"({
+  "a": 1,
+  "b": "2",
+  "c": -3,
+  "d": 4.5,
+  "e": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ]
+})";
+TEST(DumpJson, TestValidJson) {
+  nlohmann::json good_json = {
+      {"a", 1}, {"b", "2"}, {"c", -3}, {"d", 4.5}, {"e", {1, 2, 3, 4, 5}},
+  };
+  EXPECT_EQ(DumpJson(good_json), kExpectedDump);
+}
+
+TEST(ReplaceNamesinJsonObject, TestReplacementEmptyJson) {
+  ASSERT_OK_AND_ASSIGN(nlohmann::json example_json, ParseJson(""));
+  EXPECT_EQ(ReplaceNamesinJsonObject(example_json, StringMap{}), example_json);
+}
+
+TEST(ReplaceJsonPathElements, TestReplacementEmptyNamesMap) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "leaf": "value1",
+          "key_leaf": "key_value1",
+          "element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "leaf": "value2"
+              }
+            ],
+            "element": {
+              "leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  ASSERT_OK_AND_ASSIGN(auto example_json, ParseJson(kExampleJson));
+  EXPECT_EQ(ReplaceNamesinJsonObject(example_json, StringMap{}), example_json);
+}
+
+TEST(ReplaceNamesinJsonObject, TestReplacementNamesReplaced) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "leaf": "value1",
+          "key_leaf": "key_value1",
+          "element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "leaf": "value2"
+              }
+            ],
+            "element": {
+              "leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  constexpr char kExpectedJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "new_leaf": "value1",
+          "key_leaf": "key_value1",
+          "new_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "new_leaf": "value2"
+              }
+            ],
+            "new_element": {
+              "new_leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "new_element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "new_leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  ASSERT_OK_AND_ASSIGN(auto example_json, ParseJson(kExampleJson));
+  ASSERT_OK_AND_ASSIGN(auto expected_json, ParseJson(kExpectedJson));
+  EXPECT_EQ(ReplaceNamesinJsonObject(
+                example_json, StringMap{{"element", "new_element"},
+                                        {"leaf", "new_leaf"},
+                                        {"no_such_element", "such_element"}}),
+            expected_json);
+}
+
+}  // namespace
+
+}  // namespace json_yang
