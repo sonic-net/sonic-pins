@@ -101,31 +101,55 @@ absl::Status FlattenJson(const absl::string_view path,
       // Find the value of the key leaf for each element in the array to
       // construct the path element.
       for (int i = 0; i < source.size(); ++i) {
-        if (!source[i].contains(key_name)) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "No key leaf '", key_name, "' found for array element ", i,
-              " under path: [", path, "]."));
-        }
         std::string key_value;
-        switch (source[i][key_name].type()) {
-          case nlohmann::json::value_t::number_integer:
-          case nlohmann::json::value_t::number_unsigned:
-          case nlohmann::json::value_t::number_float:
-          case nlohmann::json::value_t::string:
-          case nlohmann::json::value_t::boolean:
-            key_value = GetSimpleJsonValue(source[i][key_name]);
-            break;
-          default:
-            // This is an error case. The key leaf must be a simple value.
+        if (key_name.empty()) {
+          switch (source[i].type()) {
+            case nlohmann::json::value_t::number_integer:
+            case nlohmann::json::value_t::number_unsigned:
+            case nlohmann::json::value_t::number_float:
+            case nlohmann::json::value_t::string:
+            case nlohmann::json::value_t::boolean:
+              key_value = GetSimpleJsonValue(source[i]);
+              break;
+            default:
+              return absl::InvalidArgumentError(absl::StrCat(
+                  "Invalid type '", source[i].type_name(),
+                  "' for array element (leaf list) ", i, " under path [", path,
+                  "]. Expected: integer, unsigned, float, string, bool."));
+              break;
+          }
+        } else {
+          if (!source[i].contains(key_name)) {
             return absl::InvalidArgumentError(absl::StrCat(
-                "Invalid type '", source[i][key_name].type_name(),
-                "' for key leaf '", key_name, "' for array element ", i,
-                " under path [", path,
-                "]. Expected: integer, unsigned, float, string, bool."));
-            break;
+                "No key leaf '", key_name, "' found for array element ", i,
+                " under path: [", path, "]."));
+          }
+
+          switch (source[i][key_name].type()) {
+            case nlohmann::json::value_t::number_integer:
+            case nlohmann::json::value_t::number_unsigned:
+            case nlohmann::json::value_t::number_float:
+            case nlohmann::json::value_t::string:
+            case nlohmann::json::value_t::boolean:
+              key_value = GetSimpleJsonValue(source[i][key_name]);
+              break;
+            default:
+              // This is an error case. The key leaf must be a simple value.
+              return absl::InvalidArgumentError(absl::StrCat(
+                  "Invalid type '", source[i][key_name].type_name(),
+                  "' for key leaf '", key_name, "' for array element ", i,
+                  " under path [", path,
+                  "]. Expected: integer, unsigned, float, string, bool."));
+              break;
+          }
         }
-        const std::string member_path =
-            absl::StrCat(path, "[", key_name, "='", key_value, "']");
+        std::string member_path;
+        if (key_name.empty()) {
+          member_path = absl::StrCat(path, "['", key_value, "']");
+        } else {
+          member_path =
+              absl::StrCat(path, "[", key_name, "='", key_value, "']");
+        }
         // Traverse each array element recursively after adding the path element
         // to the path.
         RETURN_IF_ERROR(FlattenJson(member_path, path_without_keys, source[i],
