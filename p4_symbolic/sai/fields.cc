@@ -154,6 +154,32 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
       .src_addr = get_field("ethernet.src_addr"),
       .ether_type = get_field("ethernet.ether_type"),
   };
+  auto tunnel_encap_ipv6 = SaiIpv6{
+      .valid = get_field("tunnel_encap_ipv6.$valid$"),
+      .version = get_field("tunnel_encap_ipv6.version"),
+      .dscp = get_field("tunnel_encap_ipv6.dscp"),
+      .ecn = get_field("tunnel_encap_ipv6.ecn"),
+      .flow_label = get_field("tunnel_encap_ipv6.flow_label"),
+      .payload_length = get_field("tunnel_encap_ipv6.payload_length"),
+      .next_header = get_field("tunnel_encap_ipv6.next_header"),
+      .hop_limit = get_field("tunnel_encap_ipv6.hop_limit"),
+      .src_addr = get_field("tunnel_encap_ipv6.src_addr"),
+      .dst_addr = get_field("tunnel_encap_ipv6.dst_addr"),
+  };
+  auto tunnel_encap_gre = SaiGre{
+      .valid = get_field("tunnel_encap_gre.$valid$"),
+      .checksum_present = get_field("tunnel_encap_gre.checksum_present"),
+      .routing_present = get_field("tunnel_encap_gre.routing_present"),
+      .key_present = get_field("tunnel_encap_gre.key_present"),
+      .sequence_present = get_field("tunnel_encap_gre.sequence_present"),
+      .strict_source_route = get_field("tunnel_encap_gre.strict_source_route"),
+      .recursion_control = get_field("tunnel_encap_gre.recursion_control"),
+      .acknowledgement_present =
+          get_field("tunnel_encap_gre.acknowledgement_present"),
+      .flags = get_field("tunnel_encap_gre.flags"),
+      .version = get_field("tunnel_encap_gre.version"),
+      .protocol = get_field("tunnel_encap_gre.protocol"),
+  };
   auto ipv4 = SaiIpv4{
       .valid = get_field("ipv4.$valid$"),
       .version = get_field("ipv4.version"),
@@ -229,6 +255,7 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
       .l4_dst_port = get_metadata_field("l4_dst_port"),
       .mirror_session_id_valid = get_metadata_field("mirror_session_id_valid"),
       .ingress_port = get_metadata_field("ingress_port"),
+      .route_metadata = get_metadata_field("route_metadata"),
   };
   auto standard_metadata = V1ModelStandardMetadata{
       .ingress_port = get_field("standard_metadata.ingress_port"),
@@ -249,6 +276,8 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
               .erspan_ipv4 = erspan_ipv4,
               .erspan_gre = erspan_gre,
               .ethernet = ethernet,
+              .tunnel_encap_ipv6 = tunnel_encap_ipv6,
+              .tunnel_encap_gre = tunnel_encap_gre,
               .ipv4 = ipv4,
               .ipv6 = ipv6,
               .udp = udp,

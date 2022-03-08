@@ -103,7 +103,7 @@ TEST_P(InstantiationTest, SaiP4InfoIsOk) {
 }
 
 INSTANTIATE_TEST_SUITE_P(P4InfoVerificationTest, InstantiationTest,
-                         testing::ValuesIn(sai::AllInstantiations()),
+                         testing::ValuesIn(sai::AllSaiInstantiations()),
                          [](testing::TestParamInfo<sai::Instantiation> info) {
                            return sai::InstantiationToString(info.param);
                          });

@@ -36,7 +36,7 @@ namespace {
 
 TEST(EvaluateSaiPipeline,
      SatisfiableForAllInstantiationsWithEmptyEntriesAndPorts) {
-  for (auto instantiation : sai::AllInstantiations()) {
+  for (auto instantiation : sai::AllSaiInstantiations()) {
     const auto config = sai::GetNonstandardForwardingPipelineConfig(
         instantiation, sai::NonstandardPlatform::kP4Symbolic);
     ASSERT_OK_AND_ASSIGN(
