@@ -15,6 +15,7 @@
 #include "tests/forwarding/packet_test_util.h"
 
 namespace pins {
+#include "p4_pdpi/netaddr/ipv6_address.h"
 
 using ::packetlib::EthernetHeader;
 using ::packetlib::IpDscp;
@@ -33,17 +34,16 @@ using ::packetlib::Ipv6Header;
 using ::packetlib::UdpHeader;
 using ::packetlib::UdpPort;
 
-const uint64_t kBaseDstMac = 234;
-const uint64_t kMaxMacAddr = static_cast<uint64_t>(1) << (6 * 8);
+namespace {
+constexpr uint64_t kBaseDstMac = 234;
+constexpr uint64_t kMacAddrSize = static_cast<uint64_t>(1) << (48);
 
 // Base IPv4 address for generating the outer IP header for packets that are not
 // supposed to be decapped.
-const uint32_t kBaseIpV4Src = 0x01020304;       // 1.2.3.4
-const uint32_t kBaseIpV4Dst = 0x02030405;       // 2.3.4.5
-const uint32_t kBaseDecapIpV4Src = 0x0a020304;  // 10.2.3.4
-const uint32_t kBaseDecapIpV4Dst = 0x14030405;  // 20.3.4.5
-
-namespace {
+constexpr uint32_t kBaseIpV4Src = 0x01020304;       // 1.2.3.4
+constexpr uint32_t kBaseIpV4Dst = 0x02030405;       // 2.3.4.5
+constexpr uint32_t kBaseDecapIpV4Src = 0x0a020304;  // 10.2.3.4
+constexpr uint32_t kBaseDecapIpV4Dst = 0x14030405;  // 20.3.4.5
 
 std::string PacketFieldToString(const PacketField field) {
   switch (field) {
@@ -152,7 +152,7 @@ bool IsValidTestConfiguration(const TestConfiguration& config) {
 
 // Returns the ith destination MAC that is used when varying that field.
 netaddr::MacAddress GetIthDstMac(int i) {
-  return netaddr::MacAddress(std::bitset<48>(kBaseDstMac + i % kMaxMacAddr));
+  return netaddr::MacAddress(std::bitset<48>(kBaseDstMac + i % kMacAddrSize));
 }
 
 // Returns a human-readable description of a test config.
@@ -175,18 +175,21 @@ std::string TestConfigurationToPayload(const TestConfiguration& config) {
 // and vary in exactly one field (the one specified in the config).
 absl::StatusOr<packetlib::Packet> GenerateIthPacket(
     const TestConfiguration& config, int index) {
+  constexpr uint64_t kDefaultSrcIpUpper = 0x0001000200030004;
+  constexpr uint64_t kDefaultDstIpUpper = 0x0002000300040005;
+  constexpr uint64_t kDefaultSrcMac = 123;
+
   packetlib::Packet packet;
   const auto& field = config.field;
 
   EthernetHeader* eth = packet.add_headers()->mutable_ethernet_header();
 
-  uint64_t default_src_mac = 123;
   eth->set_ethernet_source(
-      netaddr::MacAddress(std::bitset<48>(default_src_mac)).ToString());
+      netaddr::MacAddress(std::bitset<48>(kDefaultSrcMac)).ToString());
   if (field == PacketField::kEthernetSrc) {
     eth->set_ethernet_source(
         netaddr::MacAddress(
-            std::bitset<48>(default_src_mac + index % kMaxMacAddr))
+            std::bitset<48>(kDefaultSrcMac + index % kMacAddrSize))
             .ToString());
   }
   eth->set_ethernet_destination(
@@ -239,20 +242,14 @@ absl::StatusOr<packetlib::Packet> GenerateIthPacket(
       ip->set_fragment_offset(IpFragmentOffset(0));
     } else {
       Ipv6Header* ip = packet.add_headers()->mutable_ipv6_header();
-      auto default_src = absl::MakeUint128(0x0001000200030004, 0);
-      if (field == PacketField::kIpSrc) {
-        ip->set_ipv6_source(
-            netaddr::Ipv6Address(default_src + index).ToString());
-      } else {
-        ip->set_ipv6_source(netaddr::Ipv6Address(default_src).ToString());
-      }
-      auto default_dst = absl::MakeUint128(0x0002000300040005, 0);
-      if (field == PacketField::kIpDst) {
-        ip->set_ipv6_destination(
-            netaddr::Ipv6Address(default_dst + index).ToString());
-      } else {
-        ip->set_ipv6_destination(netaddr::Ipv6Address(default_dst).ToString());
-      }
+      auto src_ip = absl::MakeUint128(
+          kDefaultSrcIpUpper + (field == PacketField::kIpSrc ? index : 0), 0);
+      ip->set_ipv6_source(netaddr::Ipv6Address(src_ip).ToString());
+
+      auto dst_ip = absl::MakeUint128(
+          kDefaultDstIpUpper + (field == PacketField::kIpDst ? index : 0), 0);
+      ip->set_ipv6_destination(netaddr::Ipv6Address(dst_ip).ToString());
+
       ip->set_hop_limit(IpHopLimit(hop_limit));
       ip->set_dscp(IpDscp(dscp));
       uint32_t flow_label = 0;
@@ -310,7 +307,7 @@ absl::StatusOr<packetlib::Packet> GenerateIthPacket(
       ip->set_fragment_offset(IpFragmentOffset(0));
     } else {
       Ipv6Header* ip = packet.add_headers()->mutable_ipv6_header();
-      auto default_inner_src = absl::MakeUint128(0x00030000400050006, 0);
+      auto default_inner_src = absl::MakeUint128(0x0003000400050006, 0);
       if (field == PacketField::kInnerIpSrc) {
         ip->set_ipv6_source(
             netaddr::Ipv6Address(default_inner_src + index).ToString());

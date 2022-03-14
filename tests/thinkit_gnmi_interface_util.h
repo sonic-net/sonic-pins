@@ -34,6 +34,9 @@ namespace pins_test {
 inline constexpr int kMaxPortLanes = 8;
 inline constexpr int kEthernetLen = 8;
 inline constexpr char kEthernet[] = "Ethernet";
+const int kSlotIndex = 0;
+const int kPortIndex = 1;
+const int kLaneIndex = 2;
 
 // // PortBreakoutInfo contains physical channels and operational status for an
 // // interface.
@@ -136,5 +139,10 @@ std::string ConstructSupportedBreakoutMode(absl::string_view num_breakouts,
 // IsCopperPort returns whether the port is copper or optic.
 absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                                   absl::string_view port);
+
+// Returns vector of <slot/port/lane> from front panel port
+// Ethernet<slot/port/lane>
+absl::StatusOr<std::vector<std::string>> GetSlotPortLaneForPort(
+    const absl::string_view port);
 }  // namespace pins_test
 #endif  // PINS_TESTS_THINKIT_GNMI_INTERFACE_UTIL_H_
