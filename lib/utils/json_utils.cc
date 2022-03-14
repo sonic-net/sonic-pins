@@ -72,6 +72,7 @@ absl::Status FlattenJson(const absl::string_view path,
                          const absl::string_view path_without_keys,
                          const nlohmann::json& source,
                          const StringMap& yang_path_key_name_map,
+                         bool ignore_unknown_key_paths,
                          StringMap& flattened_map) {
   switch (source.type()) {
     case nlohmann::json::value_t::object: {
@@ -83,7 +84,7 @@ absl::Status FlattenJson(const absl::string_view path,
             absl::StrCat(path_without_keys, "/", name);
         RETURN_IF_ERROR(FlattenJson(member_path, member_path_without_keys,
                                     value, yang_path_key_name_map,
-                                    flattened_map));
+                                    ignore_unknown_key_paths, flattened_map));
       }
       break;
     }
@@ -92,6 +93,11 @@ absl::Status FlattenJson(const absl::string_view path,
       // in the array.
       auto key_name_iter = yang_path_key_name_map.find(path_without_keys);
       if (key_name_iter == yang_path_key_name_map.end()) {
+        if (ignore_unknown_key_paths) {
+          // Ignore this array. The array elements will not be in the flattened
+          // map.
+          return absl::OkStatus();
+        }
         return absl::InvalidArgumentError(
             absl::StrCat("No key found for path [", path_without_keys,
                          "] while parsing path [", path, "]."));
@@ -153,7 +159,8 @@ absl::Status FlattenJson(const absl::string_view path,
         // Traverse each array element recursively after adding the path element
         // to the path.
         RETURN_IF_ERROR(FlattenJson(member_path, path_without_keys, source[i],
-                                    yang_path_key_name_map, flattened_map));
+                                    yang_path_key_name_map,
+                                    ignore_unknown_key_paths, flattened_map));
       }
       break;
     }
@@ -234,10 +241,11 @@ nlohmann::json ReplaceNamesinJsonObject(
 }
 
 absl::StatusOr<StringMap> FlattenJsonToMap(
-    const nlohmann::json& root, const StringMap& yang_path_key_name_map) {
+    const nlohmann::json& root, const StringMap& yang_path_key_name_map,
+    bool ignore_unknown_key_paths) {
   StringMap flattened_json;
-  RETURN_IF_ERROR(
-      FlattenJson("", "", root, yang_path_key_name_map, flattened_json));
+  RETURN_IF_ERROR(FlattenJson("", "", root, yang_path_key_name_map,
+                              ignore_unknown_key_paths, flattened_json));
   return flattened_json;
 }
 
@@ -246,9 +254,11 @@ absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
                                   const StringMap& yang_path_key_name_map,
                                   std::vector<std::string>& differences) {
   ASSIGN_OR_RETURN(auto flat_source,
-                   FlattenJsonToMap(source, yang_path_key_name_map));
+                   FlattenJsonToMap(source, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
   ASSIGN_OR_RETURN(auto flat_target,
-                   FlattenJsonToMap(target, yang_path_key_name_map));
+                   FlattenJsonToMap(target, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
 
   // Iterate over all the paths in source and compare to the paths in target.
   bool is_subset = true;
