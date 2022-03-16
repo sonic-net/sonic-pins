@@ -47,6 +47,10 @@ absl::Status SetPortSpeed(const std::string &port_speed,
                           const std::string &iface,
                           gnmi::gNMI::StubInterface &gnmi_stub);
 
+// Get configured port speed.
+absl::StatusOr<int64_t> GetPortSpeed(const std::string &interface_name,
+                                     gnmi::gNMI::StubInterface &gnmi_stub);
+
 // Set port MTU using gNMI.
 absl::Status SetPortMtu(int port_mtu, const std::string &interface_name,
                         gnmi::gNMI::StubInterface &gnmi_stub);
@@ -77,6 +81,18 @@ ParseIpv4DscpToQueueMapping(absl::string_view gnmi_config);
 absl::StatusOr<absl::flat_hash_map<int, std::string>>
 ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config);
 
+// Get IPv4 DSCP to queue mapping from switch.
+absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv4DscpToQueueMapping(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Get IPv6 DSCP to queue mapping from switch.
+absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
+    absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Set a port in loopback mode.
+absl::Status SetPortLoopbackMode(bool port_loopback,
+                                 absl::string_view interface_name,
+                                 gnmi::gNMI::StubInterface &gnmi_stub);
 }  // namespace pins_test
 
 #endif  // PINS_TESTS_QOS_QOS_TEST_UTIL_H_
