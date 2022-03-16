@@ -83,37 +83,6 @@ absl::StatusOr<int> ToInt(absl::StatusOr<std::string> result) {
   return integer;
 }
 
-// Programs the routes to forward traffic through all the interface pairs.
-absl::Status ProgramRoutes(
-    P4rtProgrammingContext& context, sai::Instantiation instantiation,
-    const absl::flat_hash_map<std::string, std::string>& port_id_from_interface,
-    absl::Span<const InterfacePair> pairs) {
-  absl::flat_hash_set<std::string> interfaces;
-  absl::flat_hash_set<std::string> egress_interfaces;
-  for (const InterfacePair& pair : pairs) {
-    interfaces.insert(pair.ingress_interface);
-    interfaces.insert(pair.egress_interface);
-    egress_interfaces.insert(pair.egress_interface);
-  }
-
-  RETURN_IF_ERROR(
-      ProgramTrafficVrf(context.GetWriteRequestFunction(), instantiation));
-  for (const std::string& interface : interfaces) {
-    ASSIGN_OR_RETURN(int port_id, ToInt(gutil::FindOrStatus(
-                                      port_id_from_interface, interface)));
-    RETURN_IF_ERROR(ProgramRouterInterface(context.GetWriteRequestFunction(),
-                                           port_id, instantiation));
-  }
-  for (const std::string& egress_interface : egress_interfaces) {
-    ASSIGN_OR_RETURN(
-        int egress_port_id,
-        ToInt(gutil::FindOrStatus(port_id_from_interface, egress_interface)));
-    RETURN_IF_ERROR(ProgramIPv4Route(context.GetWriteRequestFunction(),
-                                     egress_port_id, instantiation));
-  }
-  return absl::OkStatus();
-}
-
 // Converts the `key` into a string.
 std::string SerializeKey(Key key) {
   return absl::StrCat(key.pair_index, ":", key.packet_index);
@@ -209,6 +178,36 @@ absl::string_view RemovePadding(absl::string_view payload) {
 
 }  // namespace
 
+absl::Status ProgramRoutes(
+    const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
+    sai::Instantiation instantiation,
+    const absl::flat_hash_map<std::string, std::string>& port_id_from_interface,
+    absl::Span<const InterfacePair> pairs) {
+  absl::flat_hash_set<std::string> interfaces;
+  absl::flat_hash_set<std::string> egress_interfaces;
+  for (const InterfacePair& pair : pairs) {
+    interfaces.insert(pair.ingress_interface);
+    interfaces.insert(pair.egress_interface);
+    egress_interfaces.insert(pair.egress_interface);
+  }
+
+  RETURN_IF_ERROR(ProgramTrafficVrf(write_request, instantiation));
+  for (const std::string& interface : interfaces) {
+    ASSIGN_OR_RETURN(int port_id, ToInt(gutil::FindOrStatus(
+                                      port_id_from_interface, interface)));
+    RETURN_IF_ERROR(
+        ProgramRouterInterface(write_request, port_id, instantiation));
+  }
+  for (const std::string& egress_interface : egress_interfaces) {
+    ASSIGN_OR_RETURN(
+        int egress_port_id,
+        ToInt(gutil::FindOrStatus(port_id_from_interface, egress_interface)));
+    RETURN_IF_ERROR(
+        ProgramIPv4Route(write_request, egress_port_id, instantiation));
+  }
+  return absl::OkStatus();
+}
+
 std::vector<InterfacePair> OneToOne(
     absl::Span<const std::string> sources,
     absl::Span<const std::string> destinations) {
@@ -282,7 +281,8 @@ absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
                    GetAllInterfaceNameToPortId(*gnmi_stub));
   P4rtProgrammingContext p4rt_context(session,
                                       std::move(options.write_request));
-  RETURN_IF_ERROR(ProgramRoutes(p4rt_context, options.instantiation,
+  RETURN_IF_ERROR(ProgramRoutes(p4rt_context.GetWriteRequestFunction(),
+                                options.instantiation,
                                 port_id_from_sut_interface, pairs));
 
   // Precompute packets to send.
