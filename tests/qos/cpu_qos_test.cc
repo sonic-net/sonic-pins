@@ -69,6 +69,7 @@
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/util.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
 #include "tests/qos/qos_test_util.h"
 #include "thinkit/control_device.h"
@@ -372,34 +373,17 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
-
-  // Set up gNMI.
+  // Configure mirror testbed.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(control_device, GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
-
-  // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
-            << " to wait for config to be applied/links to come up.";
-  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
-  ASSERT_OK(
-      pins_test::WaitForGnmiPortIdConvergence(sut, GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
-  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
-      control_device, GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      control_p4rt_session;
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session, control_p4rt_session),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          sut, control_device, GetParam().gnmi_config, p4info));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -675,34 +659,17 @@ TEST_P(CpuQosTestWithoutIxia,
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
-
-  // Set up gNMI.
+  // Configure mirror testbed.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(control_device, GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
-
-  // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
-            << " to wait for config to be applied/links to come up.";
-  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
-  ASSERT_OK(
-      pins_test::WaitForGnmiPortIdConvergence(sut, GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
-  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
-      control_device, GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      control_p4rt_session;
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session, control_p4rt_session),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          sut, control_device, GetParam().gnmi_config, p4info));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -731,6 +698,7 @@ TEST_P(CpuQosTestWithoutIxia,
 
   // Read CPU queue state prior to injecting test packets. The state should
   // remain unchanged when we inject test packets.
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(openconfig::QueuesByName initial_cpu_queue_state,
                        GetCpuQueueStateViaGnmi(*gnmi_stub));
 
@@ -793,33 +761,17 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
-
-  // Set up gNMI.
+  // Configure mirror testbed.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-  ASSERT_OK(pins_test::PushGnmiConfig(control_device, GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
-  // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
-            << " to wait for config to be applied/links to come up.";
-  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
-  ASSERT_OK(
-      pins_test::WaitForGnmiPortIdConvergence(sut, GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
-  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
-      control_device, GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+    std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      control_p4rt_session;
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session, control_p4rt_session),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          sut, control_device, GetParam().gnmi_config, p4info));
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -839,8 +791,8 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
             link_used_for_test_packets.sut_port_p4rt_name,
             /*mac=*/kSutMacAddress,
             /*ir_p4info=*/ir_p4info));
-    ASSERT_OK(
-        pdpi::InstallPiTableEntry(p4rt_session.get(), router_interface_entry));
+    ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(),
+                                        router_interface_entry));
   }
 
   // Extract DSCP-to-queue mapping from gNMI config.
@@ -888,10 +840,11 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
       LOG(INFO) << "Target queue: " << target_queue;
 
       // Read counters of the target queue.
+      ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
       ASSERT_OK_AND_ASSIGN(
           const QueueCounters queue_counters_before_test_packet,
           GetGnmiQueueCounters(/*port=*/"CPU", /*queue=*/target_queue,
-                               *gnmi_stub));
+                               *sut_gnmi_stub));
 
       // Inject test packet.
       ASSERT_OK_AND_ASSIGN(
@@ -916,7 +869,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
         ASSERT_OK_AND_ASSIGN(
             queue_counters_after_test_packet,
             GetGnmiQueueCounters(/*port=*/"CPU", /*queue=*/target_queue,
-                                 *gnmi_stub));
+                                 *sut_gnmi_stub));
       } while (
           // It may take several seconds for the queue counters to update.
           CumulativeNumPacketsEnqueued(queue_counters_after_test_packet) ==
@@ -1021,15 +974,16 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
 
   thinkit::Switch &sut = generic_testbed->Sut();
 
-  // Set up P4Runtime session.
+  // Configure SUT.
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "gnmi_config.json", GetParam().gnmi_config));
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "p4info.textproto", GetParam().p4info));
+
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           generic_testbed->Sut(), GetParam().p4info));
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           sut, GetParam().gnmi_config, GetParam().p4info));
 
-  // Push GNMI config.
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-
-  // Hook up to GNMI.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
   // Flow details.
@@ -1075,15 +1029,15 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
   thinkit::Switch &sut = generic_testbed->Sut();
 
-  // Set up P4Runtime session.
+  // Configure SUT.
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "gnmi_config.json", GetParam().gnmi_config));
+  EXPECT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "p4info.textproto", GetParam().p4info));
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           generic_testbed->Sut(), GetParam().p4info));
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           sut, GetParam().gnmi_config, GetParam().p4info));
 
-  // Push GNMI config.
-  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
-
-  // Hook up to GNMI.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
   // Flow details.
