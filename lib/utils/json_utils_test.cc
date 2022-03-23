@@ -596,7 +596,7 @@ TEST(ReplaceNamesinJsonObject, TestReplacementEmptyJson) {
   EXPECT_EQ(ReplaceNamesinJsonObject(example_json, StringMap{}), example_json);
 }
 
-TEST(ReplaceJsonPathElements, TestReplacementEmptyNamesMap) {
+TEST(ReplaceNamesinJsonObject, TestReplacementEmptyNamesMap) {
   constexpr char kExampleJson[] = R"({
     "outer_element" : {
       "container1" : [
@@ -723,6 +723,144 @@ TEST(ReplaceNamesinJsonObject, TestReplacementNamesReplaced) {
                                         {"leaf", "new_leaf"},
                                         {"no_such_element", "such_element"}}),
             expected_json);
+}
+
+TEST(ReplaceNamesinJsonObject, TestInPlaceReplacementEmptyJson) {
+  ASSERT_OK_AND_ASSIGN(nlohmann::json empty_json, ParseJson(""));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json expected_json, ParseJson(""));
+  ReplaceNamesinJsonObject(StringMap{}, empty_json);
+  EXPECT_EQ(empty_json, expected_json);
+}
+
+TEST(ReplaceNamesinJsonObject, TestInPlaceReplacementEmptyNamesMap) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "leaf": "value1",
+          "key_leaf": "key_value1",
+          "element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "leaf": "value2"
+              }
+            ],
+            "element": {
+              "leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  ASSERT_OK_AND_ASSIGN(auto example_json, ParseJson(kExampleJson));
+  ASSERT_OK_AND_ASSIGN(auto expected_json, ParseJson(kExampleJson));
+  ReplaceNamesinJsonObject(StringMap{}, example_json);
+  EXPECT_EQ(example_json, expected_json);
+}
+
+TEST(ReplaceNamesinJsonObject, TestInPlaceReplacementNamesReplaced) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "leaf": "value1",
+          "key_leaf": "key_value1",
+          "element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "leaf": "value2"
+              }
+            ],
+            "element": {
+              "leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  constexpr char kExpectedJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "new_leaf": "value1",
+          "key_leaf": "key_value1",
+          "new_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "new_leaf": "value2"
+              }
+            ],
+            "new_element": {
+              "new_leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "new_element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "new_leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  ASSERT_OK_AND_ASSIGN(auto example_json, ParseJson(kExampleJson));
+  ASSERT_OK_AND_ASSIGN(auto expected_json, ParseJson(kExpectedJson));
+  ReplaceNamesinJsonObject(StringMap{{"element", "new_element"},
+                                     {"leaf", "new_leaf"},
+                                     {"no_such_element", "such_element"}},
+                           example_json);
+  EXPECT_EQ(example_json, expected_json);
 }
 
 // Map of yang list paths to names of key leaves used for testing.
