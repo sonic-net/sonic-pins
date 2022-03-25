@@ -16,6 +16,7 @@
 
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
@@ -25,10 +26,12 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
+#include "gutil/overload.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "include/nlohmann/json.hpp"
+#include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {
 
@@ -101,6 +104,15 @@ absl::StatusOr<std::string> IxiaConnect(
   // Extract the href path from the response and return it.
   ASSIGN_OR_RETURN(std::string href, ExtractHref(chassis_response));
   return href;
+}
+
+absl::StatusOr<std::string> IxiaVport(
+    absl::string_view href,
+    absl::string_view fully_qualified_ixia_interface_name,
+    thinkit::GenericTestbed &generic_testbed) {
+  ASSIGN_OR_RETURN(IxiaPortInfo port_info,
+                   ExtractPortInfo(fully_qualified_ixia_interface_name));
+  return IxiaVport(href, port_info.card, port_info.port, generic_testbed);
 }
 
 // IxiaVport - Connect to an Ixia Card/Port.  Returns either an error or the
@@ -888,6 +900,67 @@ absl::Status AppendUdp(absl::string_view tref,
   LOG(INFO) << "Received code: " << append_response.response_code;
   LOG(INFO) << "Received response: " << append_response.response;
   return ixia::WaitForComplete(append_response, generic_testbed);
+}
+
+absl::Status SetIpTrafficParameters(absl::string_view tref,
+                                    const Ipv4TrafficParameters &params,
+                                    thinkit::GenericTestbed &testbed) {
+  RETURN_IF_ERROR(AppendIPv4(tref, testbed));
+  RETURN_IF_ERROR(SetSrcIPv4(tref, params.src_ipv4.ToString(), testbed));
+  RETURN_IF_ERROR(SetDestIPv4(tref, params.dst_ipv4.ToString(), testbed));
+  if (params.priority.has_value()) {
+    RETURN_IF_ERROR(SetIpPriority(tref, params.priority->dscp,
+                                  params.priority->ecn, /*is_ipv4=*/true,
+                                  testbed));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status SetIpTrafficParameters(absl::string_view tref,
+                                    const Ipv6TrafficParameters &params,
+                                    thinkit::GenericTestbed &testbed) {
+  RETURN_IF_ERROR(AppendIPv4(tref, testbed));
+  RETURN_IF_ERROR(SetSrcIPv6(tref, params.src_ipv6.ToString(), testbed));
+  RETURN_IF_ERROR(SetDestIPv6(tref, params.dst_ipv6.ToString(), testbed));
+  if (params.priority.has_value()) {
+    RETURN_IF_ERROR(SetIpPriority(tref, params.priority->dscp,
+                                  params.priority->ecn, /*is_ipv4=*/false,
+                                  testbed));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status SetTrafficParameters(absl::string_view tref,
+                                  const TrafficParameters &params,
+                                  thinkit::GenericTestbed &testbed) {
+  if (params.frame_count.has_value()) {
+    RETURN_IF_ERROR(SetFrameCount(tref, *params.frame_count, testbed));
+  }
+  if (params.frame_size_in_bytes.has_value()) {
+    RETURN_IF_ERROR(SetFrameSize(tref, *params.frame_size_in_bytes, testbed));
+  }
+  RETURN_IF_ERROR(std::visit(
+      gutil::Overload{
+          [&](FramesPerSecond speed) {
+            return SetFrameRate(tref, speed.frames_per_second, testbed);
+          },
+          [&](PercentOfMaxLineRate speed) {
+            return SetLineRate(tref, speed.percent_of_max_line_rate, testbed);
+          }},
+      params.traffic_speed));
+
+  RETURN_IF_ERROR(SetSrcMac(tref, params.src_mac.ToString(), testbed));
+  RETURN_IF_ERROR(SetDestMac(tref, params.dst_mac.ToString(), testbed));
+
+  if (params.ip_parameters.has_value()) {
+    RETURN_IF_ERROR(std::visit(
+        [&](const auto &ip_params) {
+          return SetIpTrafficParameters(tref, ip_params, testbed);
+        },
+        *params.ip_parameters));
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace pins_test::ixia

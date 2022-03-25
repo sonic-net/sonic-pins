@@ -24,6 +24,7 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "glog/logging.h"
 #include "grpcpp/impl/codegen/client_context.h"
 #include "grpcpp/support/status.h"
 #include "gutil/status.h"

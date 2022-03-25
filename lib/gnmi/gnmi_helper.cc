@@ -142,6 +142,16 @@ std::string ForceP4rtDeviceId(const std::string& gnmi_config,
   return json.dump();
 }
 
+absl::StatusOr<json> GetField(const json& object,
+                              absl::string_view field_name) {
+  auto field = object.find(field_name);
+  if (field == object.end()) {
+    return absl::NotFoundError(
+        absl::StrCat(field_name, " not found in ", object.dump(), "."));
+  }
+  return absl::StatusOr<json>(*std::move(field));
+}
+
 }  // namespace
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type) {
@@ -822,6 +832,62 @@ absl::StatusOr<gnmi::GetResponse> GetSystemMemory(
 
 absl::string_view StripQuotes(absl::string_view string) {
   return absl::StripPrefix(absl::StripSuffix(string, "\""), "\"");
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      std::string response,
+      pins_test::GetGnmiStatePathInfo(&gnmi_stub, "interfaces",
+                                      "openconfig-interfaces:interfaces"));
+  json response_json = json::parse(response);
+  ASSIGN_OR_RETURN(json interfaces, GetField(response_json, "interface"));
+
+  absl::flat_hash_map<std::string, std::string> interface_to_transceiver;
+  for (const auto& interface : interfaces.items()) {
+    ASSIGN_OR_RETURN(json name, GetField(interface.value(), "name"));
+    if (!absl::StartsWith(name.get<std::string>(), "Ethernet")) {
+      continue;
+    }
+
+    ASSIGN_OR_RETURN(json state, GetField(interface.value(), "state"));
+    ASSIGN_OR_RETURN(
+        json transceiver,
+        GetField(state, "openconfig-platform-transceiver:transceiver"));
+    interface_to_transceiver[name.get<std::string>()] =
+        transceiver.get<std::string>();
+  }
+  return interface_to_transceiver;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, TransceiverPart>>
+GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(std::string response, pins_test::GetGnmiStatePathInfo(
+                                             &gnmi_stub, "components",
+                                             "openconfig-platform:components"));
+  json response_json = json::parse(response);
+  ASSIGN_OR_RETURN(json components, GetField(response_json, "component"));
+
+  absl::flat_hash_map<std::string, TransceiverPart> part_information;
+  for (const auto& component : components.items()) {
+    ASSIGN_OR_RETURN(json name, GetField(component.value(), "name"));
+    if (!absl::StartsWith(name.get<std::string>(), "Ethernet")) {
+      continue;
+    }
+
+    ASSIGN_OR_RETURN(json state, GetField(component.value(), "state"));
+    ASSIGN_OR_RETURN(json empty, GetField(state, "empty"));
+    if (empty.get<bool>()) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(json vendor,
+                     GetField(state, "openconfig-platform-ext:vendor-name"));
+    ASSIGN_OR_RETURN(json part_number, GetField(state, "part-no"));
+    part_information[name.get<std::string>()] =
+        TransceiverPart{.vendor = vendor.get<std::string>(),
+                        .part_number = part_number.get<std::string>()};
+  }
+  return part_information;
 }
 
 }  // namespace pins_test

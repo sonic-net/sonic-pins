@@ -19,6 +19,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_format.h"
@@ -1363,5 +1364,99 @@ TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHaveAResponse) {
           absl::Seconds(1)),
       StatusIs(absl::StatusCode::kInternal));
 }
+
+TEST(InterfaceToTransceiver, WorksProperly) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces": {
+        "interface": [
+          {
+            "name": "CPU"
+          },
+          {
+            "name": "Ethernet0",
+            "state": {
+              "openconfig-platform-transceiver:transceiver": "Ethernet1"
+            }
+          }
+        ]
+      }
+    })";
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+  absl::flat_hash_map<std::string, std::string> expected_map{
+      {"Ethernet0", "Ethernet1"}};
+  EXPECT_THAT(GetInterfaceToTransceiverMap(mock_stub),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
+}
+
+TEST(TransceiverPartInformation, WorksProperly) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-platform:components": {
+        "component": [
+          {
+            "name": "1/1"
+          },
+          {
+            "name": "Ethernet1",
+            "state": {
+              "empty": false,
+              "openconfig-platform-ext:vendor-name": "Vendor",
+              "part-no": "123"
+            }
+          }
+        ]
+      }
+    })";
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+  absl::flat_hash_map<std::string, TransceiverPart> expected_map{
+      {"Ethernet1", TransceiverPart{.vendor = "Vendor", .part_number = "123"}}};
+  EXPECT_THAT(GetTransceiverPartInformation(mock_stub),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
+}
+
+TEST(TransceiverPartInformation, EmptyTransceiver) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-platform:components": {
+        "component": [
+          {
+            "name": "1/1"
+          },
+          {
+            "name": "Ethernet1",
+            "state": {
+              "empty": true
+            }
+          }
+        ]
+      }
+    })";
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+  EXPECT_THAT(GetTransceiverPartInformation(mock_stub),
+              IsOkAndHolds(IsEmpty()));
+}
+
 }  // namespace
 }  // namespace pins_test
