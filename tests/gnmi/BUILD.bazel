@@ -23,7 +23,6 @@ cc_library(
     srcs = ["link_flap_tests.cc"],
     hdrs = ["link_flap_tests.h"],
     deps = [
-        "//gutil:status",
         "//gutil:status_matchers",
         "//gutil:testing",
         "//lib/gnmi:gnmi_helper",

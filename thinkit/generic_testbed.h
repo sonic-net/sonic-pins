@@ -16,6 +16,7 @@
 #define GOOGLE_THINKIT_GENERIC_TESTBED_H_
 
 #include <string>
+#include <tuple>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
@@ -53,6 +54,10 @@ enum class RequestType {
 struct InterfaceInfo {
   thinkit::InterfaceMode interface_mode;
   std::string peer_interface_name;  // Empty if not applicable.
+  bool operator==(const InterfaceInfo& other) const {
+    return std::tie(interface_mode, peer_interface_name) ==
+           std::tie(other.interface_mode, other.peer_interface_name);
+  }
 };
 
 // The GenericTestbed interface represents a testbed with control interface and

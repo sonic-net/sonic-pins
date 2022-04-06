@@ -120,7 +120,6 @@ cc_library(
     hdrs = ["mirror_testbed_fixture.h"],
     deps = [
         ":mirror_testbed",
-        "//gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "@com_github_google_glog//:glog",
@@ -158,6 +157,7 @@ cc_library(
     name = "test_environment",
     hdrs = ["test_environment.h"],
     deps = [
+        "//thinkit/proto:metrics_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
@@ -170,6 +170,7 @@ cc_library(
     hdrs = ["mock_test_environment.h"],
     deps = [
         ":test_environment",
+        "//thinkit/proto:metrics_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
@@ -276,6 +277,7 @@ cc_library(
     deps = [
         ":generic_testbed",
         "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
