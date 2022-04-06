@@ -207,116 +207,10 @@ action_set {
 -- MODIFICATIONS ---------------------------------------------------------------
 NONE
 
-================================================================================
-All unchanged due to no ports
-Available ports: 1
-================================================================================
--- ORIGINAL ENTRY --------------------------------------------------------------
-table_name: "neighbor_table"
-matches {
-  name: "router_interface_id"
-  exact {
-    str: "router-interface-1"
-  }
-}
-matches {
-  name: "neighbor_id"
-  exact {
-    str: "fe80::3e28:6dff:fe34:c002"
-  }
-}
-action {
-  name: "set_dst_mac"
-  params {
-    name: "dst_mac"
-    value {
-      mac: "3c:28:6d:34:c0:02"
-    }
-  }
-}
--- MODIFICATIONS ---------------------------------------------------------------
-NONE
-
--- ORIGINAL ENTRY --------------------------------------------------------------
-table_name: "nexthop_table"
-matches {
-  name: "nexthop_id"
-  exact {
-    str: "nexthop-1"
-  }
-}
-action {
-  name: "set_nexthop"
-  params {
-    name: "router_interface_id"
-    value {
-      str: "router-interface-1"
-    }
-  }
-  params {
-    name: "neighbor_id"
-    value {
-      str: "fe80::3e28:6dff:fe34:c002"
-    }
-  }
-}
--- MODIFICATIONS ---------------------------------------------------------------
-NONE
-
--- ORIGINAL ENTRY --------------------------------------------------------------
-table_name: "ipv4_table"
-matches {
-  name: "vrf_id"
-  exact {
-    str: "vrf-80"
-  }
-}
-action {
-  name: "set_wcmp_group_id"
-  params {
-    name: "wcmp_group_id"
-    value {
-      str: "group-4294934531"
-    }
-  }
-}
--- MODIFICATIONS ---------------------------------------------------------------
-NONE
-
--- ORIGINAL ENTRY --------------------------------------------------------------
-table_name: "ipv6_table"
-matches {
-  name: "vrf_id"
-  exact {
-    str: "vrf-80"
-  }
-}
-action {
-  name: "set_wcmp_group_id"
-  params {
-    name: "wcmp_group_id"
-    value {
-      str: "group-4294934531"
-    }
-  }
-}
--- MODIFICATIONS ---------------------------------------------------------------
-NONE
-
--- ORIGINAL ENTRY --------------------------------------------------------------
-table_name: "vrf_table"
-matches {
-  name: "vrf_id"
-  exact {
-    str: "vrf-80"
-  }
-}
-action {
-  name: "no_action"
-}
--- MODIFICATIONS ---------------------------------------------------------------
-NONE
-
+tests/lib/switch_test_setup_helpers_golden_test_runner.cc:87: Failure
+Value of: pins_test::RewritePortsInTableEntries( test_case.info, test_case.new_ports_available, entries_to_rewrite)
+Expected: is OK
+  Actual: NOT_FOUND: Key not found: 'set_nexthop' (of type absl::lts_20230802::Status)
 ================================================================================
 Roughly even number of 1, 2, and 'a_port', with existing 'a_port' and port-less entries unchanged
 Available ports: 1,2,a_port
@@ -726,4 +620,3 @@ modified: action_set.actions[3].watch_port: "14" -> "1"
 modified: action_set.actions[4].watch_port: "15" -> "a_port"
 modified: action_set.actions[5].watch_port: "16" -> "2"
 modified: action_set.actions[6].watch_port: "17" -> "1"
-
