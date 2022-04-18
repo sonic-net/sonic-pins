@@ -139,6 +139,15 @@ absl::StatusOr<bool> IsJsonSubset(
     const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
     std::vector<std::string>& differences);
 
+// Returns true only if lhs and rhs have the same sets of paths with the same
+// values and false with the differences populated if not. Object/Array members
+// can be in any order. Uses the yang key leaf map to identify array
+// elements.
+absl::StatusOr<bool> AreJsonEqual(
+    const nlohmann::json& lhs, const nlohmann::json& rhs,
+    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    std::vector<std::string>& differences);
+
 }  // namespace json_yang
 
 #endif  // PLATFORMS_NETWORKING_PINS_CONFIG_UTILS_JSON_UTILS_H_
