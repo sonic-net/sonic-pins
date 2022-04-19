@@ -33,13 +33,14 @@ namespace pins_test {
 
 inline constexpr int kMaxPortLanes = 8;
 inline constexpr int kEthernetLen = 8;
+inline constexpr int kBreakoutSpeedOffset = 3;
 inline constexpr char kEthernet[] = "Ethernet";
 const int kSlotIndex = 0;
 const int kPortIndex = 1;
 const int kLaneIndex = 2;
 
-// // PortBreakoutInfo contains physical channels and operational status for an
-// // interface.
+// PortBreakoutInfo contains physical channels and operational status for an
+// interface.
 typedef struct {
   std::string physical_channels;  // Eg. format: [0,1,2,3]
   std::string oper_status;        // Eg. format: "UP"
@@ -53,6 +54,12 @@ typedef struct {
                                         // different from current breakout mode.
 } RandomPortBreakoutInfo;
 
+typedef struct {
+  int slot;
+  int port;
+  int lane;
+} SlotPortLane;
+
 enum BreakoutType { kAny, kChannelized };
 
 // GetSupportedBreakoutModesForPort returns list of supported breakout modes for
@@ -64,7 +71,7 @@ absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
 // BreakoutResultsInSpeedChangeOnly returns whether changing from current to new
 // breakout mode would result in a speed change only.
 absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
-    const std::string& port, const std::string& curr_breakout_Mode,
+    const std::string& port, const std::string& current_breakout_mode,
     const std::string& new_breakout_mode);
 
 // GetRandomPortWithSupportedBreakoutModes attempts to get a random port from
@@ -140,9 +147,16 @@ std::string ConstructSupportedBreakoutMode(absl::string_view num_breakouts,
 absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                                   absl::string_view port);
 
-// Returns vector of <slot/port/lane> from front panel port
-// Ethernet<slot/port/lane>
-absl::StatusOr<std::vector<std::string>> GetSlotPortLaneForPort(
+// Returns (slot/port/lane) info for a front panel port Ethernet<slot/port/lane>
+absl::StatusOr<SlotPortLane> GetSlotPortLaneForPort(
     const absl::string_view port);
+
+// GetCurrentBreakoutModeForPort returns the current breakout mode for the
+// master port.
+absl::StatusOr<std::string> GetCurrentBreakoutModeForPort(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub, absl::string_view port);
+
+// IsParentPort returns status OK is port is a parent port.
+absl::StatusOr<bool> IsParentPort(absl::string_view port);
 }  // namespace pins_test
 #endif  // PINS_TESTS_THINKIT_GNMI_INTERFACE_UTIL_H_
