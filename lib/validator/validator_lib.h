@@ -90,7 +90,7 @@ absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
                                 bool check_interfaces_state = true,
                                 absl::Duration /*timeout*/ = kDefaultTimeout);
 
-// Wait for the expected conditon to return success. The condition will be
+// Wait for the expected condition to return success. The condition will be
 // checked until either the timeout is expired (in which case an error status is
 // returned) or the condition returns ok.
 //
@@ -115,7 +115,7 @@ absl::Status WaitForCondition(Func condition, absl::Duration timeout,
   } while (!final_status.ok() && absl::Now() < deadline);
   if (final_status.ok()) return final_status;
   return absl::DeadlineExceededError(absl::StrCat(
-      "Failed to read requested condition after ",
+      "Failed to reach the requested condition after ",
       absl::FormatDuration(timeout), ": ", final_status.message()));
 }
 
