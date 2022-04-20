@@ -34,25 +34,6 @@ namespace {
 
 using StringMap = absl::flat_hash_map<std::string, std::string>;
 
-// Helper function to return the simple JSON value (number, boolean, string).
-// - returns an empty string if not a simple JSON value (object, array, null).
-std::string GetSimpleJsonValue(const nlohmann::json& source) {
-  switch (source.type()) {
-    case nlohmann::json::value_t::number_integer:
-      return absl::StrCat(source.get<int>());
-    case nlohmann::json::value_t::number_unsigned:
-      return absl::StrCat(source.get<uint>());
-    case nlohmann::json::value_t::number_float:
-      return absl::StrCat(source.get<float>());
-    case nlohmann::json::value_t::string:
-      return source.get<std::string>();
-    case nlohmann::json::value_t::boolean:
-      return source.get<bool>() ? "true" : "false";
-    default:
-      return "";
-  }
-}
-
 // Helper function to perform flattening recursively.
 //
 // A list data node in YANG is represented as an array in JSON. The YANG model
@@ -115,7 +96,7 @@ absl::Status FlattenJson(const absl::string_view path,
             case nlohmann::json::value_t::number_float:
             case nlohmann::json::value_t::string:
             case nlohmann::json::value_t::boolean:
-              key_value = GetSimpleJsonValue(source[i]);
+              key_value = GetSimpleJsonValueAsString(source[i]);
               break;
             default:
               return absl::InvalidArgumentError(absl::StrCat(
@@ -137,7 +118,7 @@ absl::Status FlattenJson(const absl::string_view path,
             case nlohmann::json::value_t::number_float:
             case nlohmann::json::value_t::string:
             case nlohmann::json::value_t::boolean:
-              key_value = GetSimpleJsonValue(source[i][key_name]);
+              key_value = GetSimpleJsonValueAsString(source[i][key_name]);
               break;
             default:
               // This is an error case. The key leaf must be a simple value.
@@ -169,7 +150,7 @@ absl::Status FlattenJson(const absl::string_view path,
     case nlohmann::json::value_t::number_float:
     case nlohmann::json::value_t::string:
     case nlohmann::json::value_t::boolean:
-      flattened_map[path] = GetSimpleJsonValue(source);
+      flattened_map[path] = GetSimpleJsonValueAsString(source);
       break;
     case nlohmann::json::value_t::null:
       // No yang path.
@@ -207,6 +188,12 @@ std::string DumpJson(const nlohmann::json& value) {
   return value.dump(
       /*indent =*/2, /*indent_char =*/' ', /*ensure_ascii =*/false,
       /*error_handler =*/nlohmann::json::error_handler_t::replace);
+}
+
+std::string FormatJsonBestEffort(absl::string_view raw_json) {
+  using Json = nlohmann::json;
+  Json json = Json::parse(raw_json, /*cb=*/nullptr, /*allow_exceptions=*/false);
+  return json.is_discarded() ? std::string(raw_json) : DumpJson(json);
 }
 
 nlohmann::json ReplaceNamesinJsonObject(
@@ -359,6 +346,23 @@ absl::StatusOr<bool> AreJsonEqual(
     }
   }
   return are_equal;
+}
+
+std::string GetSimpleJsonValueAsString(const nlohmann::json& source) {
+  switch (source.type()) {
+    case nlohmann::json::value_t::number_integer:
+      return absl::StrCat(source.get<int>());
+    case nlohmann::json::value_t::number_unsigned:
+      return absl::StrCat(source.get<uint>());
+    case nlohmann::json::value_t::number_float:
+      return absl::StrCat(source.get<float>());
+    case nlohmann::json::value_t::string:
+      return source.get<std::string>();
+    case nlohmann::json::value_t::boolean:
+      return source.get<bool>() ? "true" : "false";
+    default:
+      return "";
+  }
 }
 
 }  // namespace json_yang

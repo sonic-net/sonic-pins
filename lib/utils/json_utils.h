@@ -86,6 +86,10 @@ absl::StatusOr<nlohmann::json> ParseJson(absl::string_view json_str);
 // - Replaces invalid UTF-8 sequences with U+FFFD.
 std::string DumpJson(const nlohmann::json& value);
 
+// Returns a neatly formatted version of the input JSON string, best effort.
+// If the input string cannot be parsed as JSON, returns the original string.
+std::string FormatJsonBestEffort(absl::string_view raw_json);
+
 // Returns a JSON value by recursively replacing the names of name/value pairs
 // in JSON objects using the mapping specified in the old to new names map.
 //   - If source already contains the new name then it may be overwritten.
@@ -147,6 +151,10 @@ absl::StatusOr<bool> AreJsonEqual(
     const nlohmann::json& lhs, const nlohmann::json& rhs,
     const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
     std::vector<std::string>& differences);
+
+// Helper function to return the simple JSON value (number, boolean, string).
+// - returns an empty string if not a simple JSON value (object, array, null).
+std::string GetSimpleJsonValueAsString(const nlohmann::json& source);
 
 }  // namespace json_yang
 
