@@ -49,7 +49,6 @@ using ::testing::DoAll;
 using ::testing::Eq;
 using ::testing::Return;
 using ::testing::SetArgReferee;
-using ::testing::_;
 
 const std::vector<std::pair<std::string, std::string>>&
 GetSuccessfulResponseValues() {
@@ -116,8 +115,9 @@ TEST_F(AppDbManagerTest, InsertTableEntry) {
                             .SetAction("set_port_and_src_mac")
                             .AddActionParam("port", "Ethernet28/5")
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
-  EXPECT_CALL(mock_p4rt_table_, set(expected.GetKey(), expected.GetValueList()))
-      .Times(1);
+  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
+      std::make_tuple(expected.GetKey(), "", expected.GetValueList())};
+  EXPECT_CALL(mock_p4rt_table_, batch_set(expected_key_value)).Times(1);
 
   // Expected OrchAgent response.
   EXPECT_CALL(mock_p4rt_notification_, WaitForNotificationAndPop)
@@ -264,16 +264,17 @@ TEST_F(AppDbManagerTest, ModifyTableEntry) {
                             .SetAction("set_port_and_src_mac")
                             .AddActionParam("port", "Ethernet28/5")
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
+  std::vector<std::string> expected_del = {
+      absl::StrCat(APP_P4RT_TABLE_NAME, ":", expected.GetKey())};
+  std::vector<swss::KeyOpFieldsValuesTuple> expected_set = {
+      std::make_tuple(expected.GetKey(), "", expected.GetValueList())};
 
   EXPECT_CALL(
       mock_app_db_client_,
       exists(Eq(absl::StrCat(APP_P4RT_TABLE_NAME, ":", expected.GetKey()))))
       .WillOnce(Return(true));
-  EXPECT_CALL(mock_app_db_client_,
-              del(absl::StrCat(APP_P4RT_TABLE_NAME, ":", expected.GetKey())))
-      .Times(1);
-  EXPECT_CALL(mock_p4rt_table_, set(expected.GetKey(), expected.GetValueList()))
-      .Times(1);
+  EXPECT_CALL(mock_app_db_client_, batch_del(expected_del)).Times(1);
+  EXPECT_CALL(mock_p4rt_table_, batch_set(expected_set)).Times(1);
 
   // Expected OrchAgent response.
   EXPECT_CALL(mock_p4rt_notification_, WaitForNotificationAndPop)
@@ -380,7 +381,8 @@ TEST_F(AppDbManagerTest, DeleteTableEntry) {
       mock_app_db_client_,
       exists(Eq(absl::StrCat(APP_P4RT_TABLE_NAME, ":", expected.GetKey()))))
       .WillOnce(Return(true));
-  EXPECT_CALL(mock_p4rt_table_, del(expected.GetKey())).Times(1);
+  std::vector<std::string> del_keys = {expected.GetKey()};
+  EXPECT_CALL(mock_p4rt_table_, batch_del(del_keys)).Times(1);
 
   // Expected OrchAgent response.
   EXPECT_CALL(mock_p4rt_notification_, WaitForNotificationAndPop)

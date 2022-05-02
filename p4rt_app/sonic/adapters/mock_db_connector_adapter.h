@@ -43,6 +43,9 @@ class MockDBConnectorAdapter final : public DBConnectorAdapter {
               (const std::string& key,
                (const std::vector<std::pair<std::string, std::string>>)&values),
               (override));
+
+  MOCK_METHOD(void, batch_del, (const std::vector<std::string>& keys),
+              (override));
 };
 
 }  // namespace sonic

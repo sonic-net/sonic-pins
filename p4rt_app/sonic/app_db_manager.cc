@@ -82,11 +82,12 @@ absl::flat_hash_set<std::string> FindDuplicateKeys(
   return duplicates;
 }
 
-// Validates the AppDb entry to be deleted and updates the AppDb. On success the
-// P4RT key to be deleted is returned.
+// Validates the AppDb entry to be deleted and updates the p4rt_deletes (to be
+// deleted in a batch later). On success the P4RT key to be deleted is returned.
 absl::StatusOr<std::string> CreateEntryForAppDbDelete(
     const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
+    std::vector<std::string>& p4rt_deletes,
     ProducerStateTableAdapter& p4rt_table, DBConnectorAdapter& app_db_client) {
   LOG(INFO) << "Delete PDPI IR entry: " << entry.ShortDebugString();
 
@@ -116,15 +117,16 @@ absl::StatusOr<std::string> CreateEntryForAppDbDelete(
                                       app_db_client.hgetall(p4rt_prefix_key)));
 
   LOG(INFO) << "Delete AppDb entry: " << key;
-  p4rt_table.del(key);
+  p4rt_deletes.push_back(key);
   return key;
 }
 
-// Formats the IR entry as a AppDb entry and updates the AppDb. On success the
-// P4RT key is returned.
+// Formats the IR entry as a AppDb entry and updates the p4rt_inserts (to be
+// inserted in a batch later). On success the P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForAppDbInsert(
     const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
+    std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts,
     ProducerStateTableAdapter& p4rt_table, DBConnectorAdapter& app_db_client,
     DBConnectorAdapter& state_db_client) {
   LOG(INFO) << "Insert PDPI IR entry: " << entry.ShortDebugString();
@@ -147,16 +149,20 @@ absl::StatusOr<std::string> CreateEntryForAppDbInsert(
   }
 
   LOG(INFO) << "Insert AppDb entry: " << key;
-  ASSIGN_OR_RETURN(auto values, IrTableEntryToAppDbValues(entry));
-  p4rt_table.set(key, values);
+  swss::KeyOpFieldsValuesTuple key_value;
+  kfvKey(key_value) = key;
+  ASSIGN_OR_RETURN(kfvFieldsValues(key_value),
+                   IrTableEntryToAppDbValues(entry));
+  p4rt_inserts.push_back(std::move(key_value));
   return key;
 }
 
-// Formats the IR entry as a AppDb entry and updates the AppDb. On success the
-// P4RT key is returned.
+// Formats the IR entry as a AppDb entry and updates the p4rt_modifies (to be
+// modified in a batch later). On success the P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForAppDbModify(
     const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
+    std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies,
     ProducerStateTableAdapter& p4rt_table, DBConnectorAdapter& app_db_client,
     DBConnectorAdapter& state_db_client) {
   LOG(INFO) << "Modify PDPI IR entry: " << entry.ShortDebugString();
@@ -179,9 +185,11 @@ absl::StatusOr<std::string> CreateEntryForAppDbModify(
   }
 
   LOG(INFO) << "Modify AppDb entry: " << key;
-  ASSIGN_OR_RETURN(auto values, IrTableEntryToAppDbValues(entry));
-  app_db_client.del(absl::StrCat(p4rt_table.get_table_name(), ":", key));
-  p4rt_table.set(key, values);
+  swss::KeyOpFieldsValuesTuple key_value;
+  kfvKey(key_value) = key;
+  ASSIGN_OR_RETURN(kfvFieldsValues(key_value),
+                   IrTableEntryToAppDbValues(entry));
+  p4rt_modifies.push_back(std::move(key_value));
   return key;
 }
 
@@ -214,6 +222,33 @@ absl::Status AppendCounterData(
     }
   }
   return absl::OkStatus();
+}
+
+// Writes into the APP_DB Producer Table using the bulk option.
+void WriteBatchToAppDb(
+    const std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts,
+    const std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies,
+    const std::vector<std::string>& p4rt_deletes,
+    DBConnectorAdapter& app_db_client, ProducerStateTableAdapter& p4rt_table) {
+  if (!p4rt_inserts.empty()) p4rt_table.batch_set(p4rt_inserts);
+
+  if (!p4rt_modifies.empty()) {
+    std::vector<std::string> del_keys;
+    for (const auto& key_value : p4rt_modifies) {
+      del_keys.push_back(
+          absl::StrCat(p4rt_table.get_table_name(), ":", kfvKey(key_value)));
+    }
+    // On modify we need to first remove the existing entries to get rid of any
+    // action paramters that may be replaced with a new action.  Doing this
+    // through the app_db_client will not invoke an action in the OrchAgent.
+    app_db_client.batch_del(del_keys);
+
+    // Then we re-insert the entries through the ProducerStateTable which will
+    // inoke an update action in the OrchAgent.
+    p4rt_table.batch_set(p4rt_modifies);
+  }
+
+  if (!p4rt_deletes.empty()) p4rt_table.batch_del(p4rt_deletes);
 }
 
 }  // namespace
@@ -266,6 +301,14 @@ absl::Status UpdateAppDb(const AppDbUpdates& updates,
   absl::flat_hash_set<std::string> duplicate_keys =
       FindDuplicateKeys(updates, p4_info);
 
+  // We break the requests up by type (i.e. INSERT/MODIFY/DELETE), but P4Runtime
+  // error reporting requires the response ordering to match the request
+  // ordering. So we keep a mapping of the statuses.
+  std::vector<swss::KeyOpFieldsValuesTuple> p4rt_inserts;
+  std::vector<swss::KeyOpFieldsValuesTuple> p4rt_modifies;
+  std::vector<std::string> p4rt_deletes;
+  absl::btree_map<std::string, pdpi::IrUpdateStatus*> app_db_status;
+
   for (const auto& entry : updates.entries) {
     // If we cannot determine the table type then something went wrong with the
     // IR translation, and we should not continue with this request.
@@ -280,17 +323,18 @@ absl::Status UpdateAppDb(const AppDbUpdates& updates,
     switch (entry.update_type) {
       case p4::v1::Update::INSERT:
         key = CreateEntryForAppDbInsert(entry.entry, p4_info, duplicate_keys,
-                                        p4rt_table, app_db_client,
+                                        p4rt_inserts, p4rt_table, app_db_client,
                                         state_db_client);
         break;
       case p4::v1::Update::MODIFY:
         key = CreateEntryForAppDbModify(entry.entry, p4_info, duplicate_keys,
-                                        p4rt_table, app_db_client,
-                                        state_db_client);
+                                        p4rt_modifies, p4rt_table,
+                                        app_db_client, state_db_client);
         break;
       case p4::v1::Update::DELETE:
-        key = CreateEntryForAppDbDelete(entry.entry, p4_info, duplicate_keys,
-                                        p4rt_table, app_db_client);
+        key =
+            CreateEntryForAppDbDelete(entry.entry, p4_info, duplicate_keys,
+                                      p4rt_deletes, p4rt_table, app_db_client);
         break;
       default:
         key = gutil::InvalidArgumentErrorBuilder()
@@ -302,13 +346,15 @@ absl::Status UpdateAppDb(const AppDbUpdates& updates,
       *response->mutable_statuses(entry.rpc_index) =
           GetIrUpdateStatus(key.status());
       continue;
-    } else {
-      ASSIGN_OR_RETURN(*response->mutable_statuses(entry.rpc_index),
-                       GetAndProcessResponseNotification(
-                           p4rt_table.get_table_name(), p4rt_notification,
-                           app_db_client, state_db_client, *key));
     }
+    app_db_status[*key] = response->mutable_statuses(entry.rpc_index);
   }
+
+  WriteBatchToAppDb(p4rt_inserts, p4rt_modifies, p4rt_deletes, app_db_client,
+                    p4rt_table);
+  RETURN_IF_ERROR(GetAndProcessResponseNotification(
+      p4rt_table.get_table_name(), p4rt_notification, app_db_client,
+      state_db_client, app_db_status));
 
   return absl::OkStatus();
 }

@@ -49,5 +49,19 @@ void ProducerStateTableAdapter::del(const std::string& key) {
   producer_state_table_->del(key);
 }
 
+void ProducerStateTableAdapter::batch_set(
+    const std::vector<swss::KeyOpFieldsValuesTuple>& values) {
+  LOG_IF(FATAL, producer_state_table_ == nullptr)
+      << "producer_state_table_ cannot be nullptr.";
+  producer_state_table_->set(values);
+}
+
+void ProducerStateTableAdapter::batch_del(
+    const std::vector<std::string>& keys) {
+  LOG_IF(FATAL, producer_state_table_ == nullptr)
+      << "producer_state_table_ cannot be nullptr.";
+  producer_state_table_->del(keys);
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app

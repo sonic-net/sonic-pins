@@ -39,6 +39,8 @@ class FakeProducerStateTableAdapter final : public ProducerStateTableAdapter {
   void set(const std::string &key,
            const std::vector<swss::FieldValueTuple> &values) override;
   void del(const std::string &key) override;
+  void batch_set(const std::vector<swss::KeyOpFieldsValuesTuple> &values);
+  void batch_del(const std::vector<std::string> &keys);
 
   std::string get_table_name() const override { return table_name_; }
 
