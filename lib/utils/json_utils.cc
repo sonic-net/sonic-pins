@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
@@ -32,6 +33,8 @@ namespace json_yang {
 
 namespace {
 
+using StringSetMap =
+    absl::flat_hash_map<std::string, absl::btree_set<std::string>>;
 using StringMap = absl::flat_hash_map<std::string, std::string>;
 
 // Helper function to perform flattening recursively.
@@ -47,12 +50,12 @@ using StringMap = absl::flat_hash_map<std::string, std::string>;
 //    key/value pairs for array elements. This is used to look up key leaves.
 //    e. g. /outer_element/array_container/array_element/leaf
 //  - yang_path_key_name_map contains a map of yang list paths to the name of
-//    the leaf that's defined as the key for that list (currently only supports
-//    one key).
+//    the leaf that's defined as the key for that list (multiple keys are
+//    supported).
 absl::Status FlattenJson(const absl::string_view path,
                          const absl::string_view path_without_keys,
                          const nlohmann::json& source,
-                         const StringMap& yang_path_key_name_map,
+                         const StringSetMap& yang_path_key_name_map,
                          bool ignore_unknown_key_paths,
                          StringMap& flattened_map) {
   switch (source.type()) {
@@ -83,13 +86,14 @@ absl::Status FlattenJson(const absl::string_view path,
             absl::StrCat("No key found for path [", path_without_keys,
                          "] while parsing path [", path, "]."));
       }
-      const std::string& key_name = key_name_iter->second;
+      const absl::btree_set<std::string>& key_names = key_name_iter->second;
 
       // Find the value of the key leaf for each element in the array to
       // construct the path element.
       for (int i = 0; i < source.size(); ++i) {
+        std::string member_path = std::string(path);
         std::string key_value;
-        if (key_name.empty()) {
+        if (key_names.empty()) {
           switch (source[i].type()) {
             case nlohmann::json::value_t::number_integer:
             case nlohmann::json::value_t::number_unsigned:
@@ -105,7 +109,9 @@ absl::Status FlattenJson(const absl::string_view path,
                   "]. Expected: integer, unsigned, float, string, bool."));
               break;
           }
-        } else {
+          member_path = absl::StrCat(path, "['", key_value, "']");
+        }
+        for (const auto& key_name : key_names) {
           if (!source[i].contains(key_name)) {
             return absl::InvalidArgumentError(absl::StrCat(
                 "No key leaf '", key_name, "' found for array element ", i,
@@ -129,14 +135,9 @@ absl::Status FlattenJson(const absl::string_view path,
                   "]. Expected: integer, unsigned, float, string, bool."));
               break;
           }
+          absl::StrAppend(&member_path, "[", key_name, "='", key_value, "']");
         }
-        std::string member_path;
-        if (key_name.empty()) {
-          member_path = absl::StrCat(path, "['", key_value, "']");
-        } else {
-          member_path =
-              absl::StrCat(path, "[", key_name, "='", key_value, "']");
-        }
+
         // Traverse each array element recursively after adding the path element
         // to the path.
         RETURN_IF_ERROR(FlattenJson(member_path, path_without_keys, source[i],
@@ -263,7 +264,7 @@ void ReplaceNamesinJsonObject(const StringMap& old_name_to_new_name_map,
 }
 
 absl::StatusOr<StringMap> FlattenJsonToMap(
-    const nlohmann::json& root, const StringMap& yang_path_key_name_map,
+    const nlohmann::json& root, const StringSetMap& yang_path_key_name_map,
     bool ignore_unknown_key_paths) {
   StringMap flattened_json;
   RETURN_IF_ERROR(FlattenJson("", "", root, yang_path_key_name_map,
@@ -273,7 +274,7 @@ absl::StatusOr<StringMap> FlattenJsonToMap(
 
 absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
                                   const nlohmann::json& target,
-                                  const StringMap& yang_path_key_name_map,
+                                  const StringSetMap& yang_path_key_name_map,
                                   std::vector<std::string>& differences) {
   ASSIGN_OR_RETURN(auto flat_source,
                    FlattenJsonToMap(source, yang_path_key_name_map,
@@ -300,10 +301,10 @@ absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
   return is_subset;
 }
 
-absl::StatusOr<bool> AreJsonEqual(
-    const nlohmann::json& lhs, const nlohmann::json& rhs,
-    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
-    std::vector<std::string>& differences) {
+absl::StatusOr<bool> AreJsonEqual(const nlohmann::json& lhs,
+                                  const nlohmann::json& rhs,
+                                  const StringSetMap& yang_path_key_name_map,
+                                  std::vector<std::string>& differences) {
   // Create a flattened map of the lhs.
   ASSIGN_OR_RETURN(const StringMap& flat_lhs,
                    FlattenJsonToMap(lhs, yang_path_key_name_map,
