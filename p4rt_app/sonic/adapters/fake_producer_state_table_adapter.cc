@@ -43,5 +43,19 @@ void FakeProducerStateTableAdapter::del(const std::string &key) {
   sonic_db_table_->PushNotification(key);
 }
 
+void FakeProducerStateTableAdapter::batch_set(
+    const std::vector<swss::KeyOpFieldsValuesTuple> &key_values) {
+  for (const auto &[key, op, values] : key_values) {
+    FakeProducerStateTableAdapter::set(key, values);
+  }
+}
+
+void FakeProducerStateTableAdapter::batch_del(
+    const std::vector<std::string> &keys) {
+  for (const auto &key : keys) {
+    FakeProducerStateTableAdapter::del(key);
+  }
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app

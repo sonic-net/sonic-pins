@@ -34,6 +34,13 @@ class MockProducerStateTableAdapter final : public ProducerStateTableAdapter {
               (override));
 
   MOCK_METHOD(void, del, (const std::string& key), (override));
+
+  MOCK_METHOD(void, batch_set,
+              (const std::vector<swss::KeyOpFieldsValuesTuple>& key_values),
+              (override));
+
+  MOCK_METHOD(void, batch_del, (const std::vector<std::string>& keys),
+              (override));
 };
 
 }  // namespace sonic

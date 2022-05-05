@@ -204,5 +204,11 @@ void FakeDBConnectorAdapter::hmset(
   sonic_db_table_iter->second->InsertTableEntry(redis_key->key, values);
 }
 
+void FakeDBConnectorAdapter::batch_del(const std::vector<std::string>& keys) {
+  for (const auto& key : keys) {
+    FakeDBConnectorAdapter::del(key);
+  }
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app
