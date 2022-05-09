@@ -2,10 +2,23 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
+#include "google/protobuf/util/json_util.h"
+#include "gutil/collections.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
+#include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/gnmi/openconfig.pb.h"
+#include "lib/utils/json_utils.h"
+#include "proto/gnmi/gnmi.pb.h"
+#include "tests/qos/gnmi_parsers.h"
 
 namespace pins_test {
 
@@ -13,7 +26,7 @@ QueueCounters operator-(const QueueCounters &x, const QueueCounters &y) {
   return QueueCounters{
       .num_packets_transmitted =
           x.num_packets_transmitted - y.num_packets_transmitted,
-      .num_packet_dropped = x.num_packet_dropped - y.num_packet_dropped,
+      .num_packets_dropped = x.num_packets_dropped - y.num_packets_dropped,
   };
 }
 
@@ -49,7 +62,7 @@ absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
                            "openconfig-qos:dropped-pkts"));
 
   if (!absl::SimpleAtoi(StripQuotes(drop_counter_response),
-                        &counters.num_packet_dropped)) {
+                        &counters.num_packets_dropped)) {
     return absl::InternalError(
         absl::StrCat("Unable to parse counter from ", drop_counter_response));
   }
@@ -71,13 +84,13 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiQueueCounterWithTimestamp(
 
 // Returns the total number of packets enqueued for the queue with the given
 // `QueueCounters`.
-int64_t CumulativeNumPacketsEnqueued(const QueueCounters &counters) {
-  return counters.num_packet_dropped + counters.num_packets_transmitted;
+int64_t TotalPacketsForQueue(const QueueCounters &counters) {
+  return counters.num_packets_dropped + counters.num_packets_transmitted;
 }
 
-absl::Status SetPortSpeed(const std::string &port_speed,
-                          const std::string &iface,
-                          gnmi::gNMI::StubInterface &gnmi_stub) {
+absl::Status SetPortSpeedInBitsPerSecond(const std::string &port_speed,
+                                         const std::string &iface,
+                                         gnmi::gNMI::StubInterface &gnmi_stub) {
   std::string ops_config_path = absl::StrCat(
       "interfaces/interface[name=", iface, "]/ethernet/config/port-speed");
   std::string ops_val =
@@ -89,8 +102,9 @@ absl::Status SetPortSpeed(const std::string &port_speed,
   return absl::OkStatus();
 }
 
-absl::StatusOr<int64_t> GetPortSpeed(const std::string &interface_name,
-                                     gnmi::gNMI::StubInterface &gnmi_stub) {
+absl::StatusOr<int64_t>
+GetPortSpeedInBitsPerSecond(const std::string &interface_name,
+                            gnmi::gNMI::StubInterface &gnmi_stub) {
   // Map keyed on openconfig speed string to value in bits per second.
   // http://ops.openconfig.net/branches/models/master/docs/openconfig-interfaces.html#mod-openconfig-if-ethernet
   const auto kPortSpeedTable =
@@ -224,6 +238,160 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
 
   RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(
       &gnmi_stub, config_path, GnmiSetType::kUpdate, config_json));
+
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::string>
+GetQueueNameByDscpAndPort(int dscp, absl::string_view port,
+                          gnmi::gNMI::StubInterface &gnmi_stub) {
+  absl::flat_hash_map<int, std::string> queue_by_dscp;
+  ASSIGN_OR_RETURN(queue_by_dscp, GetIpv4DscpToQueueMapping(port, gnmi_stub));
+  return gutil::FindOrStatus(queue_by_dscp, dscp);
+}
+
+absl::StatusOr<std::string>
+GetSchedulerPolicyNameByEgressPort(absl::string_view egress_port,
+                                   gnmi::gNMI::StubInterface &gnmi) {
+  const std::string kPath = absl::StrFormat(
+      "qos/interfaces/interface[interface-id=%s]/output/scheduler-policy/"
+      "config/name",
+      egress_port);
+  ASSIGN_OR_RETURN(std::string name,
+                   ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG,
+                                "openconfig-qos:name"));
+  return std::string(StripQuotes(name));
+}
+
+static std::string
+SchedulerPolicyPath(absl::string_view scheduler_policy_name) {
+  return absl::StrFormat("qos/scheduler-policies/scheduler-policy[name=%s]",
+                         scheduler_policy_name);
+}
+
+absl::StatusOr<std::string>
+GetSchedulerPolicyConfig(absl::string_view scheduler_policy_name,
+                         gnmi::gNMI::StubInterface &gnmi) {
+  std::string path = SchedulerPolicyPath(scheduler_policy_name);
+  return ReadGnmiPath(&gnmi, path, gnmi::GetRequest::CONFIG, "");
+}
+
+absl::Status
+UpdateSchedulerPolicyConfig(absl::string_view scheduler_policy_name,
+                            absl::string_view config,
+                            gnmi::gNMI::StubInterface &gnmi) {
+  std::string path = SchedulerPolicyPath(scheduler_policy_name);
+  return SetGnmiConfigPath(&gnmi, path, GnmiSetType::kUpdate, config);
+}
+
+absl::Status SetSchedulerPolicyParameters(
+    absl::string_view scheduler_policy_name,
+    absl::flat_hash_map<std::string, SchedulerParameters> params_by_queue_name,
+    gnmi::gNMI::StubInterface &gnmi, absl::Duration convergence_timeout) {
+  // Pull existing config.
+  const std::string kPath = SchedulerPolicyPath(scheduler_policy_name);
+  const std::string kRoot = "openconfig-qos:scheduler-policy";
+  ASSIGN_OR_RETURN(const std::string kRawConfig,
+                   ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG, kRoot));
+  ASSIGN_OR_RETURN(
+      openconfig::Qos::SchedulerPolicy proto_config,
+      gutil::ParseJsonAsProto<openconfig::Qos::SchedulerPolicy>(
+          StripBrackets(kRawConfig), /*ignore_unknown_fields=*/true));
+
+  // Updated config.
+  for (openconfig::Qos::Scheduler &scheduler :
+       *proto_config.mutable_schedulers()->mutable_scheduler()) {
+    if (scheduler.inputs().input_size() == 0)
+      continue;
+    if (scheduler.inputs().input_size() > 1) {
+      return gutil::UnimplementedErrorBuilder()
+             << "scheduler with several inputs unsupported: "
+             << scheduler.DebugString();
+    }
+    const std::string kQueue = scheduler.inputs().input(0).config().queue();
+    const std::string kSchedulerPath = absl::StrFormat(
+        "%s/schedulers/scheduler[sequence=%d]",
+        SchedulerPolicyPath(scheduler_policy_name), scheduler.sequence());
+    LOG(INFO) << "found scheduler '" << kSchedulerPath << " for queue "
+              << kQueue;
+    SchedulerParameters *const params =
+        gutil::FindOrNull(params_by_queue_name, kQueue);
+    LOG(INFO) << "-> " << (params == nullptr ? "no " : "")
+              << "changes requested";
+    if (params == nullptr)
+      continue;
+
+    if (scheduler.config().type() !=
+        "openconfig-qos-types:TWO_RATE_THREE_COLOR") {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "scheduler '" << kSchedulerPath << "' of unsupported type: '"
+             << scheduler.config().type() << "'";
+    }
+
+    auto &config = *scheduler.mutable_two_rate_three_color()->mutable_config();
+    if (auto pir = params->peak_information_rate; pir.has_value()) {
+      // OpenConfig uses bits, but our API uses bytes for consistency.
+      config.set_pir(absl::StrCat(*pir * 8));
+    }
+    if (auto be = params->excess_burst_size; be.has_value()) {
+      config.set_be(*be);
+    }
+    if (auto cir = params->committed_information_rate; cir.has_value()) {
+      // OpenConfig uses bits, but our API uses bytes for consistency.
+      config.set_cir(absl::StrCat(*cir * 8));
+    }
+    if (auto bc = params->committed_burst_size; bc.has_value()) {
+      config.set_bc(*bc);
+    }
+
+    LOG(INFO) << "modified scheduler: " << scheduler.DebugString();
+
+    // We update the entire scheduler subtree, instead of applying updates
+    // incrementally, to work around b/228117691.
+    {
+      // Convert proto back to JSON string.
+      ASSIGN_OR_RETURN(std::string scheduler_json,
+                       gutil::SerializeProtoAsJson(scheduler));
+      // Apply updated scheduler.
+      RETURN_IF_ERROR(SetGnmiConfigPath(
+          &gnmi, kSchedulerPath, GnmiSetType::kUpdate,
+          absl::StrFormat(R"({ "scheduler": [%s] })", scheduler_json)));
+    }
+  }
+
+  // Wait for convergence.
+  const absl::Time kDeadline = absl::Now() + convergence_timeout;
+  std::string config_state_diff;
+  do {
+    ASSIGN_OR_RETURN(std::string raw_config,
+                     ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::ALL, kRoot));
+    ASSIGN_OR_RETURN(
+        openconfig::Qos::SchedulerPolicy proto_config,
+        gutil::ParseJsonAsProto<openconfig::Qos::SchedulerPolicy>(
+            StripBrackets(raw_config), /*ignore_unknown_fields=*/true));
+    for (openconfig::Qos::Scheduler &scheduler :
+         *proto_config.mutable_schedulers()->mutable_scheduler()) {
+      if (!scheduler.has_two_rate_three_color())
+        continue;
+      auto &config = scheduler.two_rate_three_color().config();
+      auto &state = scheduler.two_rate_three_color().state();
+      ASSIGN_OR_RETURN(config_state_diff, gutil::ProtoDiff(config, state));
+      if (!config_state_diff.empty()) {
+        absl::StrAppendFormat(&config_state_diff,
+                              "between two-rate-three-color config and state, "
+                              "for scheduler '%s[%d]'",
+                              scheduler_policy_name, scheduler.sequence());
+        break;
+      }
+    }
+  } while (!config_state_diff.empty() && absl::Now() < kDeadline);
+
+  if (!config_state_diff.empty()) {
+    return gutil::DeadlineExceededErrorBuilder()
+           << "QoS scheduler policy state paths did not converge within "
+           << convergence_timeout << "; diff:\n"
+           << config_state_diff;
+  }
 
   return absl::OkStatus();
 }
