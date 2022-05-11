@@ -912,9 +912,8 @@ TEST_F(
               "Breakout modes not found for Ethernet1/1/1 in platform.json")));
 }
 
-TEST_F(
-    GNMIThinkitInterfaceUtilityTest,
-    TestGetRandomPortWithSupportedBreakoutModesNoSupportedBreakoutTypeFailure) {
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetRandomPortWithSupportedBreakoutModesNoSupportedNewBreakoutType) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   const std::string platform_json_contents =
       R"pb({
@@ -980,6 +979,81 @@ TEST_F(
       pins_test::GetRandomPortWithSupportedBreakoutModes(
           *mock_gnmi_stub_ptr, platform_json_contents,
           pins_test::BreakoutType::kChannelized),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr(
+                   "No random interface with supported breakout modes found")));
+}
+
+TEST_F(
+    GNMIThinkitInterfaceUtilityTest,
+    TestGetRandomPortWithSupportedBreakoutModesNoSupportedCurrentBreakoutType) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  const std::string platform_json_contents =
+      R"pb({
+             "interfaces": {
+               "Ethernet1/1/1": {
+                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
+               },
+               "Ethernet1/2/1": { "breakout_modes": "1x400G, 2x200G[100G,40G]" }
+             }
+           }
+      )pb";
+  gnmi::GetRequest req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(prefix { origin: "openconfig" }
+           path { elem { name: "interfaces" } }
+           type: STATE)pb",
+      &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(notification {
+             timestamp: 1631864194292383538
+             prefix { origin: "openconfig" }
+             update {
+               path { elem { name: "interfaces" } }
+               val {
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}},{\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 2}}]}}"
+               }
+             }
+           }
+      )pb",
+      &resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto current_breakout_mode_get_req_1,
+                       currentBreakoutModeGetReq("1/1"));
+  ASSERT_OK_AND_ASSIGN(auto current_breakout_mode_get_resp_1,
+                       currentBreakoutModeGetUnchannelizedResp("1/1"));
+  ASSERT_OK_AND_ASSIGN(auto current_breakout_mode_get_req_2,
+                       currentBreakoutModeGetReq("1/2"));
+  ASSERT_OK_AND_ASSIGN(auto current_breakout_mode_get_resp_2,
+                       currentBreakoutModeGetUnchannelizedResp("1/2"));
+  ON_CALL(*mock_gnmi_stub_ptr,
+          Get(_, EqualsProto(current_breakout_mode_get_req_1), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(current_breakout_mode_get_resp_1),
+                           Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr,
+          Get(_, EqualsProto(current_breakout_mode_get_req_2), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(current_breakout_mode_get_resp_2),
+                           Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto hardware_port_get_req_1,
+                       hardwarePortGetReq("Ethernet1/1/1"));
+  ASSERT_OK_AND_ASSIGN(auto hardware_port_get_resp_1,
+                       hardwarePortGetResp("Ethernet1/1/1", "1"));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(hardware_port_get_req_1), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(hardware_port_get_resp_1),
+                           Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto hardware_port_get_req_2,
+                       hardwarePortGetReq("Ethernet1/2/1"));
+  ASSERT_OK_AND_ASSIGN(auto hardware_port_get_resp_2,
+                       hardwarePortGetResp("Ethernet1/2/1", "2"));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(hardware_port_get_req_2), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(hardware_port_get_resp_2),
+                           Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      pins_test::GetRandomPortWithSupportedBreakoutModes(
+          *mock_gnmi_stub_ptr, platform_json_contents,
+          pins_test::BreakoutType::kAny, pins_test::BreakoutType::kChannelized),
       StatusIs(absl::StatusCode::kInternal,
                HasSubstr(
                    "No random interface with supported breakout modes found")));

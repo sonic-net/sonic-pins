@@ -80,7 +80,8 @@ absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
 absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface &sut_gnmi_stub,
     const std::string &platform_json_contents,
-    const BreakoutType breakout_type = BreakoutType::kAny);
+    const BreakoutType new_breakout_type = BreakoutType::kAny,
+    const BreakoutType current_breakout_type = BreakoutType::kAny);
 
 // GetBreakoutStateInfoForPort returns the state values of physical channels and
 // operational status information for ports in a given breakout mode.
@@ -158,5 +159,9 @@ absl::StatusOr<std::string> GetCurrentBreakoutModeForPort(
 
 // IsParentPort returns status OK is port is a parent port.
 absl::StatusOr<bool> IsParentPort(absl::string_view port);
+
+// IsChannelizedBreakoutMode returns whether the given breakout mode is
+// channelized or no.
+absl::StatusOr<bool> IsChannelizedBreakoutMode(const std::string& mode);
 }  // namespace pins_test
 #endif  // PINS_TESTS_THINKIT_GNMI_INTERFACE_UTIL_H_

@@ -102,17 +102,8 @@ absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
   std::vector<std::string> supported_breakout_modes;
   if (breakout_type == BreakoutType::kChannelized) {
     for (const auto& mode : modes) {
-      // A breakout mode is a channelized mode if it is either a mixed mode (eg.
-      // 1x200G(4)+2x100G(4)) or it results in more than one number of
-      // interfaces (eg. 2x200G).
-      auto num_breakouts_str = mode.substr(0, mode.find('x'));
-      int num_breakouts;
-      if (!absl::SimpleAtoi(num_breakouts_str, &num_breakouts)) {
-        return gutil::InternalErrorBuilder().LogError()
-               << "Failed to convert string (" << num_breakouts_str
-               << ") to integer";
-      }
-      if ((num_breakouts > 1) || absl::StrContains(mode, "+")) {
+      ASSIGN_OR_RETURN(auto is_channelized, IsChannelizedBreakoutMode(mode));
+      if (is_channelized) {
         supported_breakout_modes.push_back(mode);
       }
     }
@@ -217,10 +208,25 @@ absl::StatusOr<std::string> GetCurrentBreakoutModeForPort(
   return current_breakout_mode;
 }
 
+absl::StatusOr<bool> IsChannelizedBreakoutMode(const std::string& mode) {
+  // A breakout mode is a channelized mode if it is either a mixed mode (eg.
+  // 1x200G(4)+2x100G(4)) or it results in more than one number of
+  // interfaces (eg. 2x200G).
+  auto num_breakouts_str = mode.substr(0, mode.find('x'));
+  int num_breakouts;
+  if (!absl::SimpleAtoi(num_breakouts_str, &num_breakouts)) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Failed to convert string (" << num_breakouts_str
+           << ") to integer";
+  }
+  return ((num_breakouts > 1) || absl::StrContains(mode, "+"));
+}
+
 absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     gnmi::gNMI::StubInterface& sut_gnmi_stub,
     const std::string& platform_json_contents,
-    const BreakoutType breakout_type) {
+    const BreakoutType new_breakout_type,
+    const BreakoutType current_breakout_type) {
   // Get map of front panel port to oper-status on the switch.
   ASSIGN_OR_RETURN(
       auto interface_to_oper_status_map,
@@ -284,11 +290,21 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
         GetCurrentBreakoutModeForPort(sut_gnmi_stub, port_info.port_name));
     port_info.curr_breakout_mode = curr_breakout_mode;
 
+    // Skip the port if it does not have the required breakout type for the
+    // currently configure breakout mode.
+    if (current_breakout_type == kChannelized) {
+      ASSIGN_OR_RETURN(auto is_channelized,
+                       IsChannelizedBreakoutMode(curr_breakout_mode));
+      if (!is_channelized) {
+        up_parent_port_list.erase(up_parent_port_list.begin() + index);
+        continue;
+      }
+    }
     // Get supported breakout modes based on breakout type for the port.
     ASSIGN_OR_RETURN(
         auto supported_breakout_modes,
         GetSupportedBreakoutModesForPort(interface_json->dump(), port,
-                                         breakout_type),
+                                         new_breakout_type),
         _ << "Breakout modes not found for " << port << " in platform.json");
 
     // Get a supported breakout mode other than current breakout mode.
