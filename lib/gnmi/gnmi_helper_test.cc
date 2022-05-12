@@ -644,6 +644,47 @@ TEST(ConstructedOpenConfig, CreatesACorrectConfig) {
             nlohmann::json::parse(reference_config_with_two_interfaces));
 }
 
+TEST(GetInterfacePortIdMap, ReturnsOnlyEnabledInterfaces) {
+  gnmi::MockgNMIStub stub;
+  std::string reference_config =
+      R"json({
+      "openconfig-interfaces:interfaces":{
+        "interface":[
+          {
+            "name":"Ethernet0",
+            "config":{
+              "enabled":true,
+              "openconfig-p4rt:id":1
+            }
+          },
+          {
+            "name":"Ethernet1",
+            "config":{
+              "enabled":false,
+              "openconfig-p4rt:id":2
+            }
+          },
+          {
+            "name":"Ethernet2",
+            "config":{
+              "enabled":true,
+              "openconfig-p4rt:id":3
+            }
+          }
+        ]
+      }
+    })json";
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                                            /*oc_path=*/"interfaces",
+                                            /*gnmi_config=*/reference_config)),
+                                        Return(grpc::Status::OK)));
+
+  const absl::flat_hash_map<std::string, std::string> expected_map = {
+      {"Ethernet0", "1"}, {"Ethernet2", "3"}};
+  EXPECT_THAT(GetAllEnabledInterfaceNameToPortId(stub),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
+}
+
 TEST(GetInterfacePortIdMap, StubSuccessfullyReturnsInterfacePortIdMap) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub, Get).WillOnce(

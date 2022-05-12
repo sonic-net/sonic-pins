@@ -16,11 +16,13 @@
 #define PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_
 
 #include <functional>
+#include <list>
 #include <string>
 #include <utility>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -120,8 +122,12 @@ template <typename Func, typename... Args>
 absl::Status WaitForCondition(Func&& condition, absl::Duration timeout,
                               Args&&... args) {
   absl::Time deadline = absl::Now() + timeout;
+  constexpr int kMaxResults = 2;
   absl::Status final_status = absl::OkStatus();
+  uint64_t number_of_function_invocations = 0;
+  std::list<std::string> latest_results;
   do {
+    number_of_function_invocations++;
     if constexpr (std::is_invocable_r_v<absl::Status, Func, Args...,
                                         absl::Duration>) {
       final_status = condition(std::forward<Args>(args)...,
@@ -129,11 +135,17 @@ absl::Status WaitForCondition(Func&& condition, absl::Duration timeout,
     } else {
       final_status = condition(std::forward<Args>(args)...);
     }
+    latest_results.push_back(absl::StrCat(absl::FormatTime(absl::Now()), ": ",
+                                          final_status.message()));
+    if (latest_results.size() > kMaxResults) latest_results.pop_front();
   } while (!final_status.ok() && absl::Now() < deadline);
   if (final_status.ok()) return final_status;
+
   return absl::DeadlineExceededError(absl::StrCat(
       "Failed to reach the requested condition after ",
-      absl::FormatDuration(timeout), ": ", final_status.message()));
+      absl::FormatDuration(timeout), " with ", number_of_function_invocations,
+      " function invocations. Latest results:\n",
+      absl::StrJoin(latest_results, "\n")));
 }
 
 // Waits for the expected condition to return an error. The inverse of
