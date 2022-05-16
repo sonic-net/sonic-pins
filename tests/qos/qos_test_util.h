@@ -88,6 +88,8 @@ absl::StatusOr<bool> CheckLinkUp(const std::string &iface,
 struct IxiaLink {
   std::string ixia_interface;
   std::string sut_interface;
+  // Speed of the SUT interface in bits/second.
+  int64_t sut_interface_bits_per_second = 0;
 };
 
 // Go over the connections and return vector of connections
@@ -111,6 +113,16 @@ absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv4DscpToQueueMapping(
 // Get IPv6 DSCP to queue mapping from switch.
 absl::StatusOr<absl::flat_hash_map<int, std::string>> GetIpv6DscpToQueueMapping(
     absl::string_view port, gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Get queue to IPv4 DSCP mapping from switch.
+absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
+GetQueueToIpv4DscpsMapping(absl::string_view port,
+                           gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Get queue to IPv6 DSCP mapping from switch.
+absl::StatusOr<absl::flat_hash_map<std::string, std::vector<int>>>
+GetQueueToIpv6DscpsMapping(absl::string_view port,
+                           gnmi::gNMI::StubInterface &gnmi_stub);
 
 // Get name of queue configured for the given DSCP.
 absl::StatusOr<std::string>
@@ -156,6 +168,19 @@ absl::Status SetSchedulerPolicyParameters(
     absl::flat_hash_map<std::string, SchedulerParameters> params_by_queue_name,
     gnmi::gNMI::StubInterface &gnmi,
     absl::Duration convergence_timeout = absl::Seconds(10));
+
+// Reads the weights of all round-robin schedulers belonging to the given
+// scheduler policy from the state path, and returns them keyed by the name of
+// the queue they apply to.
+absl::StatusOr<absl::flat_hash_map<std::string, int64_t>>
+GetSchedulerPolicyWeightsByQueue(absl::string_view scheduler_policy_name,
+                                 gnmi::gNMI::StubInterface &gnmi);
+
+// Reads all strictly prioritized queues belonging to the given scheduler policy
+// from the state paths, and returns them in descrending order of priority.
+absl::StatusOr<std::vector<std::string>>
+GetStrictlyPrioritizedQueuesInDescendingOrderOfPriority(
+    absl::string_view scheduler_policy_name, gnmi::gNMI::StubInterface &gnmi);
 
 }  // namespace pins_test
 
