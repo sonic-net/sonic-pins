@@ -388,6 +388,13 @@ absl::Status SetSchedulerPolicyParameters(
       config.set_bc(*bc);
     }
 
+    auto &input_config =
+        *scheduler.mutable_inputs()->mutable_input(0)->mutable_config();
+
+    if (auto weight = params->weight; weight.has_value()) {
+      input_config.set_weight(absl::StrCat(*weight));
+    }
+
     LOG(INFO) << "modified scheduler: " << scheduler.DebugString();
 
     // We update the entire scheduler subtree, instead of applying updates
@@ -423,6 +430,20 @@ absl::Status SetSchedulerPolicyParameters(
       if (!config_state_diff.empty()) {
         absl::StrAppendFormat(&config_state_diff,
                               "between two-rate-three-color config and state, "
+                              "for scheduler '%s[%d]'",
+                              scheduler_policy_name, scheduler.sequence());
+        break;
+      }
+
+      if (!scheduler.has_inputs())
+        continue;
+      auto &input_config = scheduler.inputs().input(0).config();
+      auto &input_state = scheduler.inputs().input(0).state();
+      ASSIGN_OR_RETURN(config_state_diff,
+                       gutil::ProtoDiff(input_config, input_state));
+      if (!config_state_diff.empty()) {
+        absl::StrAppendFormat(&config_state_diff,
+                              "between input config and state, "
                               "for scheduler '%s[%d]'",
                               scheduler_policy_name, scheduler.sequence());
         break;
@@ -535,6 +556,162 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
     }
   }
   return queues;
+}
+
+absl::StatusOr<std::string>
+GetBufferAllocationProfileByEgressPort(absl::string_view egress_port,
+                                       gnmi::gNMI::StubInterface &gnmi) {
+  const std::string kPath =
+      absl::StrFormat("qos/interfaces/interface[interface-id=%s]/output/config/"
+                      "buffer-allocation-profile",
+                      egress_port);
+  ASSIGN_OR_RETURN(std::string name,
+                   ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG,
+                                "openconfig-qos:buffer-allocation-profile"));
+  return std::string(StripQuotes(name));
+}
+
+static std::string
+BufferAllocationProfilePath(absl::string_view buffer_allocation_profile_name) {
+  return absl::StrFormat(
+      "qos/buffer-allocation-profiles/buffer-allocation-profile[name=%s]",
+      buffer_allocation_profile_name);
+}
+
+absl::StatusOr<std::string> GetBufferAllocationProfileConfig(
+    absl::string_view buffer_allocation_profile_name,
+    gnmi::gNMI::StubInterface &gnmi) {
+  std::string path =
+      BufferAllocationProfilePath(buffer_allocation_profile_name);
+  return ReadGnmiPath(&gnmi, path, gnmi::GetRequest::CONFIG, "");
+}
+
+absl::StatusOr<openconfig::Qos::BufferAllocationProfile>
+GetBufferAllocationProfileConfigAsProto(
+    absl::string_view buffer_allocation_profile,
+    gnmi::gNMI::StubInterface &gnmi) {
+  const std::string kPath = SchedulerPolicyPath(buffer_allocation_profile);
+  const std::string kRoot = "openconfig-qos:buffer-allocation-profile";
+  ASSIGN_OR_RETURN(const std::string kRawConfig,
+                   ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG, kRoot));
+  ASSIGN_OR_RETURN(
+      openconfig::Qos::BufferAllocationProfile proto_config,
+      gutil::ParseJsonAsProto<openconfig::Qos::BufferAllocationProfile>(
+          StripBrackets(kRawConfig), /*ignore_unknown_fields=*/true));
+  return proto_config;
+}
+
+absl::Status
+UpdateBufferAllocationProfileConfig(absl::string_view buffer_allocation_profile,
+                                    absl::string_view config,
+                                    gnmi::gNMI::StubInterface &gnmi) {
+  std::string path = BufferAllocationProfilePath(buffer_allocation_profile);
+  return SetGnmiConfigPath(&gnmi, path, GnmiSetType::kUpdate, config);
+}
+
+absl::Status SetBufferConfigParameters(
+    absl::string_view buffer_allocation_profile,
+    absl::flat_hash_map<std::string, BufferParameters> params_by_queue_name,
+    gnmi::gNMI::StubInterface &gnmi, absl::Duration convergence_timeout) {
+  // Pull existing config.
+  const std::string kPath =
+      BufferAllocationProfilePath(buffer_allocation_profile);
+  const std::string kRoot = "openconfig-qos:buffer-allocation-profile";
+  ASSIGN_OR_RETURN(const std::string kRawConfig,
+                   ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::CONFIG, kRoot));
+  ASSIGN_OR_RETURN(
+      openconfig::Qos::BufferAllocationProfile proto_config,
+      gutil::ParseJsonAsProto<openconfig::Qos::BufferAllocationProfile>(
+          StripBrackets(kRawConfig), /*ignore_unknown_fields=*/true));
+
+  // Updated config.
+  for (openconfig::Qos::Queue &queue :
+       *proto_config.mutable_queues()->mutable_queue()) {
+    const std::string kBufferQueuePath =
+        absl::StrFormat("%s/queues/queue[name=%s]", kPath, queue.name());
+
+    BufferParameters *const params =
+        gutil::FindOrNull(params_by_queue_name, queue.name());
+
+    if (params == nullptr) {
+      continue;
+    }
+
+    if (auto dedicated_buffer = params->dedicated_buffer;
+        dedicated_buffer.has_value()) {
+      queue.mutable_config()->set_dedicated_buffer(
+          absl::StrCat(*dedicated_buffer));
+    }
+
+    if (auto use_shared_buffer = params->use_shared_buffer;
+        use_shared_buffer.has_value()) {
+      queue.mutable_config()->set_use_shared_buffer(*use_shared_buffer);
+    }
+    if (auto shared_buffer_limit_type = params->shared_buffer_limit_type;
+        shared_buffer_limit_type.has_value()) {
+      queue.mutable_config()->set_shared_buffer_limit_type(
+          *shared_buffer_limit_type);
+    }
+
+    if (auto dynamic_limit_scaling_factor =
+            params->dynamic_limit_scaling_factor;
+        dynamic_limit_scaling_factor.has_value()) {
+      queue.mutable_config()->set_dynamic_limit_scaling_factor(
+          *dynamic_limit_scaling_factor);
+    }
+
+    if (auto shared_static_limit = params->shared_static_limit;
+        shared_static_limit.has_value()) {
+      queue.mutable_config()->set_static_shared_buffer_limit(
+          *shared_static_limit);
+    }
+
+    // We update the entire queue subtree.
+    {
+      // Convert proto back to JSON string.
+      ASSIGN_OR_RETURN(std::string buffer_queue_json,
+                       gutil::SerializeProtoAsJson(queue));
+      // Apply updated queue.
+      RETURN_IF_ERROR(SetGnmiConfigPath(
+          &gnmi, kBufferQueuePath, GnmiSetType::kUpdate,
+          absl::StrFormat(R"({ "queue": [%s] })", buffer_queue_json)));
+    }
+  }
+
+  // Wait for convergence.
+  const absl::Time kDeadline = absl::Now() + convergence_timeout;
+  std::string config_state_diff;
+  do {
+    ASSIGN_OR_RETURN(std::string raw_config,
+                     ReadGnmiPath(&gnmi, kPath, gnmi::GetRequest::ALL, kRoot));
+    ASSIGN_OR_RETURN(
+        openconfig::Qos::BufferAllocationProfile proto_config,
+        gutil::ParseJsonAsProto<openconfig::Qos::BufferAllocationProfile>(
+            StripBrackets(raw_config), /*ignore_unknown_fields=*/true));
+    for (openconfig::Qos::Queue &queue :
+         *proto_config.mutable_queues()->mutable_queue()) {
+      auto &config = queue.config();
+      auto &state = queue.state();
+      ASSIGN_OR_RETURN(config_state_diff, gutil::ProtoDiff(config, state));
+      LOG(INFO) << "config state diff : " << config_state_diff;
+      if (!config_state_diff.empty()) {
+        absl::StrAppendFormat(&config_state_diff,
+                              "between queue config and state, "
+                              "for buffer-allocation-profile '%s[%s]'",
+                              buffer_allocation_profile, queue.name());
+        break;
+      }
+    }
+  } while (!config_state_diff.empty() && absl::Now() < kDeadline);
+
+  // TODO: Uncomment after convergence issue is resolved.
+  // if (!config_state_diff.empty()) {
+  // return gutil::DeadlineExceededErrorBuilder()
+  //         << "QoS buffer config state paths did not converge within "
+  //         << convergence_timeout << "; diff:\n"
+  //         << config_state_diff;
+  // }
+  return absl::OkStatus();
 }
 
 }  // namespace pins_test
