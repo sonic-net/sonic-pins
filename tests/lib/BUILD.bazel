@@ -85,6 +85,7 @@ cc_library(
     deps = [
         "//gutil:collections",
         "//gutil:proto",
+        "//gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//lib/gnmi:openconfig_cc_proto",
         "//lib/validator:validator_lib",
@@ -106,6 +107,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@com_google_googletest//:gtest",
     ],
 )
 

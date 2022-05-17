@@ -488,10 +488,6 @@ GetQueuesForSchedulerPolicyInDescendingOrderOfPriority(
       kSchedulerPolicy.schedulers().scheduler().begin(),
       kSchedulerPolicy.schedulers().scheduler().end());
   absl::c_sort(schedulers, [](const auto &a, const auto &b) -> bool {
-    // TODO: Remove this temporary workaround once strict queues
-    // are no longer inverted.
-    if (IsStrict(a) && IsStrict(b))
-      return a.sequence() > b.sequence();
     return a.sequence() < b.sequence();
   });
 
