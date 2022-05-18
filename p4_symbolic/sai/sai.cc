@@ -44,7 +44,7 @@ absl::Status CheckPhysicalPortAndPortIdTypeValueConsistency(
   absl::flat_hash_set<uint64_t> numeric_value_set;
   if (auto it = translation_per_type.find(kPortIdTypeName);
       it != translation_per_type.end()) {
-    for (const auto& [_, numeric_value] : it->second)
+    for (const auto& [_, numeric_value] : it->second.static_mapping)
       numeric_value_set.insert(numeric_value);
   }
 
