@@ -36,13 +36,27 @@ namespace {
 constexpr absl::Duration kGnmiTimeoutDefault = absl::Minutes(3);
 constexpr char kPortNamedType[] = "port_id_t";
 
-absl::Status ClearTableEntries(
+// Only clears table entries if a P4RT session can be established.
+//
+// P4RT requires a device ID to be pushed over gNMI which is not enforced by
+// this helper function. Given that we can't know the switch's state in all
+// cases where this will be called, we default to best effort for clearing the
+// entries.
+absl::Status TryClearingTableEntries(
     thinkit::Switch& thinkit_switch,
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));
-  RETURN_IF_ERROR(pdpi::ClearTableEntries(session.get()));
-  RETURN_IF_ERROR(session->Finish());
+  absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> session =
+      pdpi::P4RuntimeSession::Create(thinkit_switch, metadata);
+  if (!session.ok()) {
+    LOG(WARNING)
+        << "P4RT session could not be established to clear tables. This is "
+           "expected if no gNMI config has been previously pushed: "
+        << session.status();
+    return absl::OkStatus();
+  }
+
+  RETURN_IF_ERROR(pdpi::ClearTableEntries(session.value().get()));
+  RETURN_IF_ERROR(session.value()->Finish());
   return absl::OkStatus();
 }
 
@@ -129,7 +143,7 @@ ConfigureSwitchAndReturnP4RuntimeSession(
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
   // Since the gNMI Config push relies on tables being cleared, we construct a
   // P4RuntimeSession and clear the tables first.
-  RETURN_IF_ERROR(ClearTableEntries(thinkit_switch, metadata));
+  RETURN_IF_ERROR(TryClearingTableEntries(thinkit_switch, metadata));
 
   if (gnmi_config.has_value()) {
     RETURN_IF_ERROR(
