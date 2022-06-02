@@ -2729,6 +2729,69 @@ TEST(GetSimpleJsonValue, TestGetSimpleJsonValue) {
       "");
 }
 
+TEST(IsJsonSubset, StringMapsMatch) {
+  const auto source_map = StringMap{
+      {"/outer_element/container1[key_leaf1='value1']/key_leaf1", "value1"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/key_leaf2",
+       "value2"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/inner_leaf",
+       "inner_value"},
+  };
+  std::vector<std::string> differences;
+  EXPECT_TRUE(IsJsonSubset(source_map, source_map, differences));
+}
+
+TEST(IsJsonSubset, StringMapsWithArray) {
+  const auto source_map = StringMap{
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container7['2.7']",
+       "2.7"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container4['-2']",
+       "-2"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/"
+       "container5['true']",
+       "true"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container3['2']",
+       "2"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container7['9']",
+       "9"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container3['0']",
+       "0"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container6['b']",
+       "b"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container6['a']",
+       "a"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container3['1']",
+       "1"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container4['0']",
+       "0"},
+      {"/outer_element/container1[key_leaf1='value1']/key_leaf1", "value1"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/container4['-1']",
+       "-1"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/key_leaf2",
+       "value2"}};
+  auto target_map = source_map;
+  target_map.erase(
+      "/outer_element/container1[key_leaf1='value1']/middle_element/"
+      "container2[key_leaf2='value2']/inner_element/container7['2.7']");
+  std::vector<std::string> differences;
+  EXPECT_FALSE(IsJsonSubset(source_map, target_map, differences));
+  EXPECT_TRUE(IsJsonSubset(target_map, source_map, differences));
+}
+
 }  // namespace
 
 }  // namespace json_yang

@@ -272,22 +272,13 @@ absl::StatusOr<StringMap> FlattenJsonToMap(
   return flattened_json;
 }
 
-absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
-                                  const nlohmann::json& target,
-                                  const StringSetMap& yang_path_key_name_map,
-                                  std::vector<std::string>& differences) {
-  ASSIGN_OR_RETURN(auto flat_source,
-                   FlattenJsonToMap(source, yang_path_key_name_map,
-                                    /*ignore_unknown_key_paths=*/false));
-  ASSIGN_OR_RETURN(auto flat_target,
-                   FlattenJsonToMap(target, yang_path_key_name_map,
-                                    /*ignore_unknown_key_paths=*/false));
-
+bool IsJsonSubset(const StringMap& source_map, const StringMap& target_map,
+                  std::vector<std::string>& differences) {
   // Iterate over all the paths in source and compare to the paths in target.
   bool is_subset = true;
-  for (const auto& [source_path, source_value] : flat_source) {
-    auto target_iter = flat_target.find(source_path);
-    if (target_iter == flat_target.end()) {
+  for (const auto& [source_path, source_value] : source_map) {
+    auto target_iter = target_map.find(source_path);
+    if (target_iter == target_map.end()) {
       differences.push_back(absl::StrCat("Missing: [", source_path,
                                          "] with value '", source_value, "'."));
       is_subset = false;
@@ -299,6 +290,19 @@ absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
     }
   }
   return is_subset;
+}
+
+absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
+                                  const nlohmann::json& target,
+                                  const StringSetMap& yang_path_key_name_map,
+                                  std::vector<std::string>& differences) {
+  ASSIGN_OR_RETURN(auto flat_source,
+                   FlattenJsonToMap(source, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
+  ASSIGN_OR_RETURN(auto flat_target,
+                   FlattenJsonToMap(target, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
+  return IsJsonSubset(flat_source, flat_target, differences);
 }
 
 absl::StatusOr<bool> AreJsonEqual(const nlohmann::json& lhs,
