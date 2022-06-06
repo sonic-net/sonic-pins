@@ -1271,4 +1271,67 @@ absl::Status SetTrafficParameters(absl::string_view tref,
   return absl::OkStatus();
 }
 
+// Go over the connections and return vector of connections
+// whose links are up.
+absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
+    thinkit::GenericTestbed &generic_testbed,
+    gnmi::gNMI::StubInterface &gnmi_stub) {
+  std::vector<IxiaLink> links;
+
+  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
+      generic_testbed.GetSutInterfaceInfo();
+  // Loop through the interface_info looking for Ixia/SUT interface pairs,
+  // checking if the link is up.  Add the pair to connections.
+  for (const auto &[interface, info] : interface_info) {
+    bool sut_link_up = false;
+    if (info.interface_mode == thinkit::TRAFFIC_GENERATOR) {
+      ASSIGN_OR_RETURN(sut_link_up, CheckLinkUp(interface, gnmi_stub));
+      if (sut_link_up) {
+        ASSIGN_OR_RETURN(int64_t bit_per_second,
+                         GetPortSpeedInBitsPerSecond(interface, gnmi_stub));
+        links.push_back(IxiaLink{
+            .ixia_interface = info.peer_interface_name,
+            .sut_interface = interface,
+            .sut_interface_bits_per_second = bit_per_second,
+        });
+      }
+    }
+  }
+
+  return links;
+}
+
+// Go over the connections and return Ixia link info.
+absl::StatusOr<IxiaLink> GetIxiaLink(thinkit::GenericTestbed &generic_testbed,
+                                     gnmi::gNMI::StubInterface &gnmi_stub,
+                                     const std::string &switch_port) {
+  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
+      generic_testbed.GetSutInterfaceInfo();
+  ASSIGN_OR_RETURN(thinkit::InterfaceInfo info,
+                   gutil::FindOrStatus(interface_info, switch_port));
+  ASSIGN_OR_RETURN(int64_t bits_per_second,
+                   GetPortSpeedInBitsPerSecond(switch_port, gnmi_stub));
+  return IxiaLink{.ixia_interface = info.peer_interface_name,
+                  .sut_interface = switch_port,
+                  .sut_interface_bits_per_second = bits_per_second};
+}
+
+// Connects to Ixia on the given testbed and returns a string handle identifying
+// the connection (aka "topology ref").
+absl::StatusOr<std::string> ConnectToIxia(thinkit::GenericTestbed &testbed) {
+  ASSIGN_OR_RETURN(auto gnmi_stub, testbed.Sut().CreateGnmiStub());
+  ASSIGN_OR_RETURN(std::vector<IxiaLink> ready_links,
+                   GetReadyIxiaLinks(testbed, *gnmi_stub));
+  if (ready_links.empty()) {
+    return gutil::UnavailableErrorBuilder() << "no Ixia-to-SUT link up";
+  }
+  absl::string_view ixia_interface = ready_links[0].ixia_interface;
+  ASSIGN_OR_RETURN(ixia::IxiaPortInfo ixia_port_info,
+                   ixia::ExtractPortInfo(ixia_interface));
+  ASSIGN_OR_RETURN(
+      std::string ixia_connection_handle,
+      pins_test::ixia::IxiaConnect(ixia_port_info.hostname, testbed));
+  return ixia_connection_handle;
+}
+
 }  // namespace pins_test::ixia

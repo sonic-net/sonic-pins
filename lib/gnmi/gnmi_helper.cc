@@ -1035,4 +1035,70 @@ GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub) {
   return interface_to_lane_speed;
 }
 
+absl::Status SetPortSpeedInBitsPerSecond(const std::string& port_speed,
+                                         const std::string& interface_name,
+                                         gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string ops_config_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/config/port-speed");
+  std::string ops_val =
+      absl::StrCat("{\"openconfig-if-ethernet:port-speed\":", port_speed, "}");
+
+  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(&gnmi_stub, ops_config_path,
+                                               GnmiSetType::kUpdate, ops_val));
+
+  return absl::OkStatus();
+}
+
+absl::StatusOr<int64_t> GetPortSpeedInBitsPerSecond(
+    const std::string& interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
+  // Map keyed on openconfig speed string to value in bits per second.
+  // http://ops.openconfig.net/branches/models/master/docs/openconfig-interfaces.html#mod-openconfig-if-ethernet
+  const auto kPortSpeedTable =
+      absl::flat_hash_map<absl::string_view, uint64_t>({
+          {"openconfig-if-ethernet:SPEED_100GB", 100000000000},
+          {"openconfig-if-ethernet:SPEED_200GB", 200000000000},
+          {"openconfig-if-ethernet:SPEED_400GB", 400000000000},
+      });
+  std::string speed_state_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/state/port-speed");
+
+  std::string parse_str = "openconfig-if-ethernet:port-speed";
+  ASSIGN_OR_RETURN(
+      std::string response,
+      GetGnmiStatePathInfo(&gnmi_stub, speed_state_path, parse_str));
+
+  auto speed = kPortSpeedTable.find(StripQuotes(response));
+  if (speed == kPortSpeedTable.end()) {
+    return absl::NotFoundError(response);
+  }
+  return speed->second;
+}
+
+absl::Status SetPortMtu(int port_mtu, const std::string& interface_name,
+                        gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path = absl::StrCat(
+      "interfaces/interface[name=", interface_name, "]/config/mtu");
+  std::string value = absl::StrCat("{\"config:mtu\":", port_mtu, "}");
+
+  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
+                                               GnmiSetType::kUpdate, value));
+
+  return absl::OkStatus();
+}
+
+absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
+                                 gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string oper_status_state_path = absl::StrCat(
+      "interfaces/interface[name=", interface_name, "]/state/oper-status");
+
+  std::string parse_str = "openconfig-interfaces:oper-status";
+  ASSIGN_OR_RETURN(
+      std::string ops_response,
+      GetGnmiStatePathInfo(&gnmi_stub, oper_status_state_path, parse_str));
+
+  return ops_response == "\"UP\"";
+}
+
 }  // namespace pins_test
