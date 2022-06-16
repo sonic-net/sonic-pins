@@ -15,6 +15,7 @@
 
 #include <string>
 
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -901,6 +902,8 @@ static const auto* const kPathKeyNameMap = new StringSetMap({
     {"/outer_element/container1/middle_element/container2/inner_element/"
      "container3",
      {"key_leaf3"}},
+    {"/outer_element2/known_container3/known_list1", {"leaf5"}},
+    {"/known_outer_element4", {"leaf7"}},
 });
 
 static const auto* const kPathKeyNameMapWithMultipleKeys = new StringSetMap({
@@ -930,14 +933,13 @@ TEST(FlattenJson, TestUnknownKeyOuter) {
     }
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
-  EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap,
-                       /*ignore_unknown_key_paths=*/false),
-      gutil::StatusIs(
-          absl::StatusCode::kInvalidArgument,
-          testing::HasSubstr("No key found for path "
-                             "[/outer_element/unknown_container] while parsing "
-                             "path [/outer_element/unknown_container].")));
+  std::vector<std::string> missing_paths = {"/outer_element/unknown_container"};
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
+              gutil::StatusIs(absl::StatusCode::kInvalidArgument,
+                              testing::HasSubstr(absl::StrCat(
+                                  "No key found in the map for the paths: \n",
+                                  absl::StrJoin(missing_paths, "\n")))));
 }
 
 TEST(FlattenJson, TestUnknownKeyOuterIgnoreUnknownKeyPaths) {
@@ -960,7 +962,7 @@ TEST(FlattenJson, TestUnknownKeyOuterIgnoreUnknownKeyPaths) {
               gutil::IsOkAndHolds(kExpectedMap));
 }
 
-TEST(FlattenJson, TestUnknownKeyInner) {
+TEST(FlattenJson, TestUnknownKeyMultiple) {
   constexpr char kExampleJson[] = R"({
     "outer_element" : {
       "container1" : [
@@ -975,6 +977,11 @@ TEST(FlattenJson, TestUnknownKeyInner) {
                     {
                       "leaf": "value"
                     }
+                  ],
+                 "unknown_container2": [
+                    {
+                      "leaf2": "value2"
+                    }
                   ]
                 }
               }
@@ -982,20 +989,45 @@ TEST(FlattenJson, TestUnknownKeyInner) {
           }
         }
       ]
-    }
+    },
+    "outer_element2" : {
+      "unknown_container3" : [
+        {
+          "leaf4": "value"
+        }
+      ],
+      "known_container3" : {
+      "known_list1" : [
+        {
+          "leaf5": "value"
+        }
+      ]
+      } 
+    },
+    "unknown_outer_element3" : [
+        {
+          "leaf6": "value"
+        }
+    ],
+    "known_outer_element4" : [
+        {
+          "leaf7": "value"
+        }
+    ]
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  std::vector<std::string> missing_paths = {
+      "/outer_element/container1/middle_element/container2/inner_element/"
+      "unknown_container",
+      "/outer_element/container1/middle_element/container2/inner_element/"
+      "unknown_container2",
+      "/outer_element2/unknown_container3", "/unknown_outer_element3"};
   EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
                                /*ignore_unknown_key_paths=*/false),
-              gutil::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  testing::HasSubstr(
-                      "No key found for path "
-                      "[/outer_element/container1/middle_element/container2/"
-                      "inner_element/unknown_container] while parsing path "
-                      "[/outer_element/container1[key_leaf1='value1']/"
-                      "middle_element/container2[key_leaf2='value2']/"
-                      "inner_element/unknown_container].")));
+              gutil::StatusIs(absl::StatusCode::kInvalidArgument,
+                              testing::StrEq(absl::StrCat(
+                                  "No key found in the map for the paths: \n",
+                                  absl::StrJoin(missing_paths, "\n")))));
 }
 
 TEST(FlattenJson, TestUnknownKeyInnerIgnoreUnknownKeyPaths) {
