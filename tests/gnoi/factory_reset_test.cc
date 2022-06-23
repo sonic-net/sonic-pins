@@ -54,7 +54,8 @@ void IssueGnoiFactoryResetAndValidateStatus(
     EXPECT_OK(status);
   } else {
     EXPECT_EQ(status.error_code(), expected_status.error_code());
-    EXPECT_EQ(status.error_message(), expected_status.error_message());
+    EXPECT_THAT(status.error_message(),
+                testing::HasSubstr(expected_status.error_message()));
   }
 }
 

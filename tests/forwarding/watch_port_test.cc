@@ -310,8 +310,9 @@ absl::Status SendNPacketsToSut(int num_packets,
                      pins::GenerateIthPacket(test_config, i));
     ASSIGN_OR_RETURN(std::string raw_packet, SerializePacket(packet));
     ASSIGN_OR_RETURN(std::string port_string, pdpi::IntToDecimalString(port));
-    RETURN_IF_ERROR(
-        pins::InjectEgressPacket(port_string, raw_packet, ir_p4info, &p4_session));
+    RETURN_IF_ERROR(InjectEgressPacket(port_string, raw_packet, ir_p4info,
+                                       &p4_session,
+                                       /*packet_delay=*/std::nullopt));
 
     dvaas::Packet p;
     p.set_port(port_string);

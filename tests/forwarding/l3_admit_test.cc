@@ -258,7 +258,9 @@ absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
     ASSIGN_OR_RETURN(std::string packet,
                      UdpPacket(dst_mac, dst_ip,
                                absl::Substitute("[Packet:$0] $1", i, payload)));
-    RETURN_IF_ERROR(InjectEgressPacket(port_id, packet, ir_p4info, &session));
+    // Rate limit to 500pps to avoid punt packet drops on the control switch.
+    RETURN_IF_ERROR(InjectEgressPacket(port_id, packet, ir_p4info, &session,
+                                       /*packet_delay=*/absl::Milliseconds(2)));
   }
   return absl::OkStatus();
 }
@@ -282,7 +284,7 @@ TEST_P(L3AdmitTestFixture,
       .switch_ip = std::make_pair("10.0.0.1", 32),
       .peer_port = "1",
       .peer_mac = "00:00:00:00:00:02",
-      .peer_ip = "10.0.0.2",
+      .peer_ip = "fe80::2",
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
@@ -371,7 +373,7 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
       .switch_ip = std::make_pair("10.0.0.1", 32),
       .peer_port = "1",
       .peer_mac = "00:00:00:00:00:02",
-      .peer_ip = "10.0.0.2",
+      .peer_ip = "fe80::2",
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
@@ -450,7 +452,7 @@ TEST_P(L3AdmitTestFixture, DISABLED_L3AdmitCanUseInPortToRestrictMacAddresses) {
       .switch_ip = std::make_pair("10.0.0.1", 32),
       .peer_port = "1",
       .peer_mac = "00:00:00:00:00:02",
-      .peer_ip = "10.0.0.2",
+      .peer_ip = "fe80::2",
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
@@ -540,56 +542,56 @@ ASSERT_OK(
 
 // Add an L3 route to enable forwarding, but do not add an explicit L3Admit
   // rule.
-  L3Route l3_route{
-      .vrf_id = "vrf-1",
-      .switch_mac = "00:00:00:00:00:01",
-      .switch_ip = std::make_pair("10.0.0.1", 32),
-      .peer_port = "1",
-      .peer_mac = "00:00:00:00:00:02",
-      .peer_ip = "10.0.0.2",
-      .router_interface_id = "rif-1",
-      .nexthop_id = "nexthop-1",
-  };
-  ASSERT_OK(AddAndSetDefaultVrf(GetSutP4RuntimeSession(), 
-			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-                          l3_route.vrf_id));
-  ASSERT_OK(AddL3Route(GetSutP4RuntimeSession(), 
-			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-			  l3_route));
+L3Route l3_route{
+    .vrf_id = "vrf-1",
+    .switch_mac = "00:00:00:00:00:01",
+    .switch_ip = std::make_pair("10.0.0.1", 32),
+    .peer_port = "1",
+    .peer_mac = "00:00:00:00:00:02",
+    .peer_ip = "fe80::2",
+    .router_interface_id = "rif-1",
+    .nexthop_id = "nexthop-1",
+};
+ASSERT_OK(AddAndSetDefaultVrf(
+    GetSutP4RuntimeSession(),
+    sai::GetIrP4Info(sai::Instantiation::kMiddleblock), l3_route.vrf_id));
+ASSERT_OK(AddL3Route(GetSutP4RuntimeSession(),
+                     sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+                     l3_route));
 
-  // Send 1 set of packets to the switch using the switch's MAC address from the
-  // L3 route.
-  const int kNumberOfTestPacket = 100;
-  const std::string kGoodPayload =
-      "Testing L3 forwarding. This packet should arrive to packet in.";
-  ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(), 
-			  sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-                          /*port_id=*/"1", kNumberOfTestPacket,
-                          /*dst_mac=*/"00:00:00:00:00:01",
-                          /*dst_ip=*/"10.0.0.1", kGoodPayload));
+// Send 1 set of packets to the switch using the switch's MAC address from the
+// L3 route.
+const int kNumberOfTestPacket = 100;
+const std::string kGoodPayload =
+    "Testing L3 forwarding. This packet should arrive to packet in.";
+ASSERT_OK(SendUdpPacket(GetControlP4RuntimeSession(),
+                        sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+                        /*port_id=*/"1", kNumberOfTestPacket,
+                        /*dst_mac=*/"00:00:00:00:00:01",
+                        /*dst_ip=*/"10.0.0.1", kGoodPayload));
 
-  absl::Time timeout = absl::Now() + absl::Minutes(1);
-  int good_packet_count = 0;
-  while (good_packet_count < kNumberOfTestPacket) {
-    if (packetio_control->HasPacketInMessage()) {
-      ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
-                           packetio_control->GetNextPacketInMessage());
+absl::Time timeout = absl::Now() + absl::Minutes(1);
+int good_packet_count = 0;
+while (good_packet_count < kNumberOfTestPacket) {
+  if (packetio_control->HasPacketInMessage()) {
+    ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
+                         packetio_control->GetNextPacketInMessage());
 
-      // Verify this is the packet we expect.
-      packetlib::Packet packet_in =
-          packetlib::ParsePacket(response.packet().payload());
-      if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
-          absl::StrContains(packet_in.payload(), kGoodPayload)) {
-        ++good_packet_count;
-      } else {
-        LOG(WARNING) << "Unexpected response: " << response.DebugString();
-      }
+    // Verify this is the packet we expect.
+    packetlib::Packet packet_in =
+        packetlib::ParsePacket(response.packet().payload());
+    if (response.update_case() == p4::v1::StreamMessageResponse::kPacket &&
+        absl::StrContains(packet_in.payload(), kGoodPayload)) {
+      ++good_packet_count;
+    } else {
+      LOG(WARNING) << "Unexpected response: " << response.DebugString();
     }
+  }
 
-    if (absl::Now() > timeout) {
-      LOG(ERROR) << "Reached timeout waiting on packets to arrive.";
-      break;
-    }
+  if (absl::Now() > timeout) {
+    LOG(ERROR) << "Reached timeout waiting on packets to arrive.";
+    break;
+  }
   }
   LOG(INFO) << "Done collecting packets.";
 
@@ -646,7 +648,7 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
       .switch_ip = std::make_pair("10.0.0.1", 32),
       .peer_port = "1",
       .peer_mac = "00:00:00:00:00:02",
-      .peer_ip = "10.0.0.2",
+      .peer_ip = "fe80::2",
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
