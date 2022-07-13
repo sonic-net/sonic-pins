@@ -50,17 +50,17 @@ namespace pins {
 
 namespace {
 // Number of packets sent to one port.
-constexpr int kPacketsNum = 400000;
+constexpr int kPacketsNum = 4000000;
 
 // Number of packets sent per second.
-constexpr int kPacketsPerSecond = 3000;
+constexpr int kPacketsPerSecond = 160000;
 
 // The maximum number of bytes that should be copied from a sampled packet to
-// the sFlow datagram
+// the sFlow datagram.
 constexpr int kSampleSize = 128;
 
-// Once accumulated data reaches kMaxPacketSize, Sflow would generate an sflow
-// packet.
+// Once accumulated data reaches kMaxPacketSize, sFlow would generate an sFlow
+// datagram.
 constexpr int kMaxPacketSize = 1400;
 
 // Sflowtool binary name in the collector.
@@ -259,6 +259,12 @@ absl::StatusOr<std::vector<Counters>> GetIxiaInterfaceCounters(
     LOG(INFO) << "\n";
     counters.push_back(initial_in_counter);
   }
+  // Reads CPU counter.
+  ASSIGN_OR_RETURN(auto initial_in_counter, ReadCounters("CPU", gnmi_stub));
+  LOG(INFO) << "Ingress Counters (\"CPU\"):\n";
+  ShowCounters(initial_in_counter);
+  LOG(INFO) << "\n";
+  counters.push_back(initial_in_counter);
   return counters;
 }
 
@@ -320,40 +326,31 @@ absl::Status SendSflowTraffic(const std::vector<std::string>& traffic_refs,
         << ". Port id: " << ixia_links[i].port_id << ". Sent " << pkt_count
         << ". Received " << delta.in_pkts << ".";
   }
-
+  // Show CPU counter data.
+  auto delta =
+      DeltaCounters(initial_in_counters.back(), final_in_counters.back());
+  LOG(INFO) << "\nIngress Deltas (\"CPU\"):\n";
+  ShowCounters(delta);
   return absl::OkStatus();
 }
 
 int GetSflowSamplesOnSut(const std::string& sflowtool_output,
                          const int port_id) {
-  // Every "startDatagram" indicates an sFlow datagram.
   constexpr int kFieldSize = 20, kSrcIpIdx = 9;
   int count = 0;
+  // Each line indicates one sFlow sample.
   for (absl::string_view sflow : absl::StrSplit(sflowtool_output, '\n')) {
+    // Split by column.
     std::vector<absl::string_view> fields = absl::StrSplit(sflow, ',');
     if (fields.size() < kFieldSize) {
       continue;
     }
-    // Filter src ip.
+    // Filter source ip.
     if (fields[kSrcIpIdx] == GetSrcIpv4AddrByPortId(port_id)) {
       count++;
     }
   }
   return count;
-}
-
-// Set port speed by configuraing interface/ethernet/config/port-speed value.
-absl::Status SetPortSpeed(absl::string_view port_speed, absl::string_view iface,
-                          gnmi::gNMI::StubInterface& gnmi_stub) {
-  std::string ops_config_path = absl::StrCat(
-      "interfaces/interface[name=", iface, "]/ethernet/config/port-speed");
-  std::string ops_val =
-      absl::StrCat("{\"openconfig-if-ethernet:port-speed\":", port_speed, "}");
-
-  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(
-      &gnmi_stub, ops_config_path, pins_test::GnmiSetType::kUpdate, ops_val));
-
-  return absl::OkStatus();
 }
 
 // Get port speed by reading interface/ethernet/state/port-speed path.
@@ -416,6 +413,26 @@ absl::StatusOr<std::vector<IxiaLink>> GetIxiaConnectedUpLinks(
   return ixia_links;
 }
 
+// Used for printing result.
+struct SflowResult {
+  std::string sut_interface;
+  int packets;
+  int sampling_rate;
+  int expected_samples;
+  int actual_samples;
+
+  std::string DebugString() {
+    return absl::Substitute(
+        "Ingress interface: $0\n"
+        "Total packets input: $1\n"
+        "Sampling rate: 1 in $2\n"
+        "Expected samples: $3\n"
+        "Actual samples: $4",
+        sut_interface, packets, sampling_rate, expected_samples,
+        actual_samples);
+  }
+};
+
 }  // namespace
 
 void SflowTestFixture::SetUp() {
@@ -442,13 +459,15 @@ void SflowTestFixture::SetUp() {
   ASSERT_OK_AND_ASSIGN(ir_p4_info_, pdpi::CreateIrP4Info(GetP4Info()));
 
   ASSERT_OK_AND_ASSIGN(gnmi_stub_, testbed_->Sut().CreateGnmiStub());
+  // TODO: Remove unused set speed in sflow test.
   // Go through all the ports that connect to the Ixia and set them
   // first to 200GB.
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       testbed_->GetSutInterfaceInfo();
   for (const auto& [interface, info] : interface_info) {
     if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      ASSERT_OK(SetPortSpeed(kSpeed200GB, interface, *gnmi_stub_));
+      ASSERT_OK(pins_test::SetPortSpeedInBitsPerSecond(std::string(kSpeed200GB),
+                                                       interface, *gnmi_stub_));
     }
   }
 
@@ -468,33 +487,35 @@ void SflowTestFixture::SetUp() {
     }
     return absl::OkStatus();
   };
-
-  // Wait to let the links come up. Switch guarantees state paths to reflect
-  // in 10s. Lets wait for a bit more.
+  // Waits for speed config to be applied.
   EXPECT_OK(pins_test::WaitForCondition(speed_config_applied, absl::Seconds(30),
                                         kSpeed200GB, gnmi_stub_.get()));
-  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
-      testbed_->Sut(), GetParam().gnmi_config,
-      /*timeout=*/absl::Minutes(3)));
-
-  ASSERT_OK_AND_ASSIGN(ready_links_,
-                       GetIxiaConnectedUpLinks(*testbed_, *gnmi_stub_));
+  auto links_up = [this]() -> absl::Status {
+    ASSIGN_OR_RETURN(ready_links_,
+                     GetIxiaConnectedUpLinks(*testbed_, *gnmi_stub_));
+    if (ready_links_.empty()) {
+      return absl::FailedPreconditionError("No Ixia links up.");
+    }
+    return absl::OkStatus();
+  };
+  // Waits for links to be up.
+  EXPECT_OK(pins_test::WaitForCondition(links_up, absl::Seconds(30)));
 
   // If links didn't come, lets try 100GB as some testbeds have 100GB
   // IXIA connections.
   if (ready_links_.empty()) {
     for (const auto& [interface, info] : interface_info) {
-     if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-        ASSERT_OK(SetPortSpeed(kSpeed100GB, interface, *gnmi_stub_));
+      if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
+        ASSERT_OK(pins_test::SetPortSpeedInBitsPerSecond(
+            std::string(kSpeed100GB), interface, *gnmi_stub_));
       }
     }
-    // Wait to let the links come up. Switch guarantees state paths to reflect
-    // in 10s. Lets wait for a bit more.
+    // Waits for speed config to be applied.
     EXPECT_OK(pins_test::WaitForCondition(speed_config_applied,
                                           absl::Seconds(30), kSpeed100GB,
                                           gnmi_stub_.get()));
-    ASSERT_OK_AND_ASSIGN(ready_links_,
-                         GetIxiaConnectedUpLinks(*testbed_, *gnmi_stub_));
+    // Waits for links to come up.
+    EXPECT_OK(pins_test::WaitForCondition(links_up, absl::Seconds(30)));
   }
   ASSERT_FALSE(ready_links_.empty()) << "Ixia links are not ready";
 }
@@ -514,6 +535,53 @@ void SflowTestFixture::TearDown() {
     delete GetParam().testbed_interface;
   }
   LOG(INFO) << "\n------ TearDown END ------\n";
+}
+
+// This test checks sFlow works as expected with no rules.
+// 1. Set up Ixia traffic and send packets to SUT via Ixia.
+// 2. Collect sFlow samples via sflowtool on SUT.
+// 3. Validate the result is as expected.
+TEST_P(SflowTestFixture, CheckIngressSflowSamplePackets) {
+  // ixia_ref_pair would include the traffic reference and topology reference
+  // which could be used to send traffic later.
+  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
+  // Set up Ixia traffic.
+  ASSERT_OK_AND_ASSIGN(
+      ixia_ref_pair, SetUpIxiaTraffic({ready_links_[0]}, *testbed_, kPacketsNum,
+                                      kPacketsPerSecond));
+
+  // Start sflowtool on SUT.
+  std::string sflow_result;
+  ASSERT_OK_AND_ASSIGN(
+      std::thread sflow_tool_thread,
+      StartSflowCollector(
+          ssh_client_, testbed_->Sut().ChassisName(),
+          /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 30,
+          sflow_result));
+  // Send packets from Ixia to SUT.
+  ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                             {ready_links_[0]}, *testbed_, gnmi_stub_.get(),
+                             kPacketsNum, kPacketsPerSecond));
+  // Wait for sflowtool to finish.
+  if (sflow_tool_thread.joinable()) {
+    sflow_tool_thread.join();
+  }
+  LOG(INFO) << "SFLOW result is:" << sflow_result;
+  // Verify sflowtool result. Since we use port id to generate packets, we use
+  // port id to filter sflow packets.
+  const int sflow_count =
+      GetSflowSamplesOnSut(sflow_result, ready_links_[0].port_id);
+  const double expected_count = 1.0 * kPacketsNum / kSamplingRateInterval;
+  SflowResult result = SflowResult{
+      .sut_interface = ready_links_[0].sut_interface,
+      .packets = kPacketsNum,
+      .sampling_rate = kSamplingRateInterval,
+      .expected_samples = static_cast<int>(expected_count),
+      .actual_samples = sflow_count,
+  };
+  LOG(INFO) << "------ Test result ------\n" << result.DebugString();
+  EXPECT_GE(sflow_count, expected_count * (1 - kTolerance));
+  EXPECT_LE(sflow_count, expected_count * (1 + kTolerance));
 }
 
 }  // namespace pins
