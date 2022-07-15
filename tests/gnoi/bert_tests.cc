@@ -145,9 +145,7 @@ void SendStartBertRequestSuccessfullyOnControlSwitch(
   ASSERT_THAT(response.per_port_responses(),
               SizeIs(request.per_port_requests_size()));
 
-  // TODO: Sandcastle does not populate bert_request_id in
-  // response, remove check for now.
-  // EXPECT_EQ(response.bert_operation_id(), request.bert_operation_id());
+  EXPECT_EQ(response.bert_operation_id(), request.bert_operation_id());
 
   for (int idx = 0; idx < response.per_port_responses_size(); ++idx) {
     auto per_port_response = response.per_port_responses(idx);

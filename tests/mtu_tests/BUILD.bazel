@@ -47,6 +47,7 @@ cc_library(
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//tests/forwarding:util",
         "//thinkit:control_device",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
