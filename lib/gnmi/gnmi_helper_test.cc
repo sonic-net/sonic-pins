@@ -114,6 +114,137 @@ static constexpr char kAlarmsJson[] = R"([
 static constexpr char kDeviceIdIs123456[] =
     R"({"openconfig-platform:components":{"component":[{"integrated-circuit":{"config":{"openconfig-p4rt:node-id":"123456"}},"name":"integrated_circuit0"}]}})";
 
+static constexpr char kBreakoutSample[] = R"(
+    {
+      "openconfig-platform:components": {
+        "component":[
+          {
+            "config" : {
+               "name" : "1/1"
+            },
+            "name" : "1/1",
+            "port" : {
+               "config" : {
+                  "openconfig-pins-platform-port:port-id" : 1
+               },
+               "openconfig-platform-port:breakout-mode" : {
+                  "groups" : {
+                     "group" : [
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_400GB",
+                              "index" : 0,
+                              "num-breakouts" : 2,
+                              "num-physical-channels" : 4
+                           },
+                           "index" : 0
+                        }
+                     ]
+                  }
+               }
+            }
+         },
+         {
+            "config" : {
+               "name" : "1/2"
+            },
+            "name" : "1/2",
+            "port" : {
+               "config" : {
+                  "openconfig-pins-platform-port:port-id" : 2
+               },
+               "openconfig-platform-port:breakout-mode" : {
+                  "groups" : {
+                     "group" : [
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_400GB",
+                              "index" : 0,
+                              "num-breakouts" : 1,
+                              "num-physical-channels" : 4
+                           },
+                           "index" : 0
+                        },
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_200GB",
+                              "index" : 1,
+                              "num-breakouts" : 2,
+                              "num-physical-channels" : 2
+                           },
+                           "index" : 1
+                        }
+                     ]
+                  }
+               }
+            }
+         },
+         {
+            "config" : {
+               "name" : "1/10"
+            },
+            "name" : "1/10",
+            "port" : {
+               "config" : {
+                  "openconfig-pins-platform-port:port-id" : 10
+               },
+               "openconfig-platform-port:breakout-mode" : {
+                  "groups" : {
+                     "group" : [
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_200GB",
+                              "index" : 0,
+                              "num-breakouts" : 2,
+                              "num-physical-channels" : 2
+                           },
+                           "index" : 0
+                        },
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_400GB",
+                              "index" : 1,
+                              "num-breakouts" : 1,
+                              "num-physical-channels" : 4
+                           },
+                           "index" : 1
+                        }
+                     ]
+                  }
+               }
+            }
+         },
+         {
+            "config" : {
+               "name" : "1/14"
+            },
+            "name" : "1/14",
+            "port" : {
+               "config" : {
+                  "openconfig-pins-platform-port:port-id" : 14
+               },
+               "openconfig-platform-port:breakout-mode" : {
+                  "groups" : {
+                     "group" : [
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_200GB",
+                              "index" : 0,
+                              "num-breakouts" : 4,
+                              "num-physical-channels" : 2
+                           },
+                           "index" : 0
+                        }
+                     ]
+                  }
+               }
+            }
+         }
+        ]
+      }
+    }
+  )";
+
 TEST(ConvertOCStringToPath, RegressionTest20220401) {
   EXPECT_THAT(ConvertOCStringToPath(
                   "openconfig-qos:qos/scheduler-policies/"
@@ -1944,6 +2075,45 @@ TEST(GetGnmiStatePathAndTimestamp, EmptyNotification) {
           &stub, "interfaces/interface[name=\"Ethernet1/4/1\"]/state/counters",
           "openconfig-interfaces:in-pkts"),
       StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(BreakoutModeMatchTest, LocalFileTestDataTest) {
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample, {BreakoutSpeed::k400GB}),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("Couldn't find the breakout mode")));
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k400GB, BreakoutSpeed::k400GB}),
+      IsOkAndHolds(1));
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k400GB, BreakoutSpeed::k400GB},
+                               /*ignore_ports=*/{1}),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("Couldn't find the breakout mode")));
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k200GB, BreakoutSpeed::k200GB,
+                                BreakoutSpeed::k200GB, BreakoutSpeed::k200GB}),
+      IsOkAndHolds(14));
+
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k400GB, BreakoutSpeed::k200GB}),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("Couldn't find the breakout mode")));
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k400GB, BreakoutSpeed::k200GB,
+                                BreakoutSpeed::k200GB}),
+      IsOkAndHolds(2));
+
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k200GB, BreakoutSpeed::k200GB,
+                                BreakoutSpeed::k400GB}),
+      IsOkAndHolds(10));
 }
 }  // namespace
 }  // namespace pins_test

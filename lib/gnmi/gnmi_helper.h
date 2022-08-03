@@ -42,6 +42,15 @@ namespace pins_test {
 inline constexpr char kOpenconfigStr[] = "openconfig";
 inline constexpr char kTarget[] = "target";
 
+// Breakout mode is represented as vector of breakout speed.
+enum class BreakoutSpeed {
+  k100GB,
+  k200GB,
+  k400GB,
+};
+using BreakoutMode = std::vector<BreakoutSpeed>;
+std::ostream& operator<<(std::ostream& os, const BreakoutMode& breakout);
+
 enum class GnmiSetType : char { kUpdate, kReplace, kDelete };
 
 enum class OperStatus {
@@ -289,6 +298,13 @@ absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
 // when it doesn't exist, or updating the value if it does.
 std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
                                        const std::string& device_id);
+
+// Return the port id whose breakout mode matches the given input.
+// Input: the configuration's open config as string format.
+// Ignore ports is optional that is set as empty as default.
+absl::StatusOr<int> FindPortWithBreakoutMode(
+    absl::string_view json_config, const BreakoutMode& breakout,
+    const absl::flat_hash_set<int>& ignore_ports = {});
 
 // Returns a map from physical transceiver names to ethernet PMD type.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
