@@ -464,6 +464,7 @@ message MarkForP2pTunnelEncapAction {
   string encap_src_ip = 1;  // Format::IPV6 / 128 bits
   // Refers to 'neighbor_table.neighbor_id'.
   string encap_dst_ip = 2;  // Format::IPV6 / 128 bits
+  // Refers to 'neighbor_table.router_interface_id'.
   // Refers to 'router_interface_table.router_interface_id'.
   string router_interface_id = 3;  // Format::STRING
 }

@@ -2,6 +2,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/strip.h"
 #include "absl/types/optional.h"
 
 namespace sai_pd {
@@ -13,6 +14,14 @@ absl::optional<std::string> TableEntryName(const sai::TableEntry& entry) {
       entry.GetReflection()->GetOneofFieldDescriptor(entry, oneof);
   if (field == nullptr) return absl::nullopt;
   return field->name();
+}
+
+absl::optional<std::string> TableName(const sai::TableEntry& entry) {
+  auto table_entry_name = TableEntryName(entry);
+  if (!table_entry_name.has_value()) {
+    return absl::nullopt;
+  }
+  return std::string(absl::StripSuffix(table_entry_name.value(), "_entry"));
 }
 
 std::string UpdateStatusToString(const sai::UpdateStatus& status) {

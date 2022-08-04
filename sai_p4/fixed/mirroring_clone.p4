@@ -13,6 +13,9 @@ control mirroring_clone(inout headers_t headers,
                         inout standard_metadata_t standard_metadata) {
   port_id_t mirror_port;
   bit<32> pre_session;
+  // TODO: Remove when <table>.apply.hit is supported.
+  bool mirror_session_table_hit = false;
+  bool mirror_port_to_pre_session_table_hit = false;
 
   // Sets
   // SAI_MIRROR_SESSION_ATTR_TYPE to ENHANCED_REMOTE,
@@ -42,6 +45,8 @@ control mirroring_clone(inout headers_t headers,
     local_metadata.mirroring_dst_mac = dst_mac;
     local_metadata.mirroring_ttl = ttl;
     local_metadata.mirroring_tos = tos;
+
+    mirror_session_table_hit = true;
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_MIRRORING)
@@ -62,6 +67,8 @@ control mirroring_clone(inout headers_t headers,
   @id(MIRRORING_SET_PRE_SESSION_ACTION_ID)
   action set_pre_session(bit<32> id) {
     pre_session = id;
+
+    mirror_port_to_pre_session_table_hit = true;
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_PACKET_REPLICATION_ENGINE)
@@ -80,9 +87,14 @@ control mirroring_clone(inout headers_t headers,
   apply {
     if (local_metadata.mirror_session_id_valid) {
       // Map mirror session id to mirroring data.
-      if (mirror_session_table.apply().hit) {
+      mirror_session_table.apply();
+      // TODO: Use mirror_session_table.apply().hit when supported.
+      if (mirror_session_table_hit) {
         // Map mirror port to Packet Replication Engine session.
-        if (mirror_port_to_pre_session_table.apply().hit) {
+        mirror_port_to_pre_session_table.apply();
+        // TODO: Use mirror_port_to_pre_session_table.apply().hit
+        // when supported.
+        if (mirror_port_to_pre_session_table_hit) {
           clone_preserving_field_list(CloneType.I2E, pre_session,
                                       (bit<8>)PreservedFieldList.CLONE_I2E);
         }
