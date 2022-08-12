@@ -35,6 +35,9 @@ struct SflowTestParams {
   thinkit::SSHClient* ssh_client;
   std::string gnmi_config;
   p4::config::v1::P4Info p4_info;
+  // For sampling size tests.
+  int packet_size;
+  int sample_size;
 };
 
 // Structure represents a link between SUT and Ixia.
@@ -63,6 +66,8 @@ class SflowTestFixture : public testing::TestWithParam<SflowTestParams> {
 
   std::vector<IxiaLink> ready_links_;
 };
+
+class SampleSizeTest : public SflowTestFixture {};
 
 }  // namespace pins
 
