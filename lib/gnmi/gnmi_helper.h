@@ -342,5 +342,16 @@ absl::Status SetPortMtu(int port_mtu, const std::string& interface_name,
 absl::Status SetPortLoopbackMode(bool port_loopback,
                                  absl::string_view interface_name,
                                  gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Appends sFlow config to `gnmi_config` and returns modified config if success.
+// The modified config would sort collector IPs and interface names by string
+// order. This function would return original `gnmi_config` if sFlow config is
+// already present in `gnmi_config`. Returns an FailedPreconditionError if
+// `agent_addr_ipv6` or `sflow_enabled_interfaces` is empty.
+absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
+    absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
+    const absl::flat_hash_map<std::string, int>& collector_address_to_port,
+    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
+    const int sampling_rate, const int sampling_header_size);
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_
