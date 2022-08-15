@@ -393,12 +393,12 @@ TEST(SetForwardingPipelineConfigTest, BothVersionsProduceSameRequest) {
       .Times(2);
 
   // Ensures that both versions of the function send the same proto.
-  ASSERT_OK(SetForwardingPipelineConfig(p4rt_session.get(),
-                                        kForwardingPipelineAction, p4info));
+  ASSERT_OK(SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session.get(), kForwardingPipelineAction, p4info));
   p4::v1::ForwardingPipelineConfig config;
   *config.mutable_p4info() = p4info;
-  ASSERT_OK(SetForwardingPipelineConfig(p4rt_session.get(),
-                                        kForwardingPipelineAction, config));
+  ASSERT_OK(SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session.get(), kForwardingPipelineAction, config));
 
   std::string p4_device_config = "some_json_device_config";
   // Mocks two `SetForwardingPipelineConfig` calls with a `p4_device_config`.
@@ -411,11 +411,11 @@ TEST(SetForwardingPipelineConfigTest, BothVersionsProduceSameRequest) {
       .Times(2);
 
   // Ensures that both versions of the function send the same proto.
-  ASSERT_OK(SetForwardingPipelineConfig(
+  ASSERT_OK(SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session.get(), kForwardingPipelineAction, p4info, p4_device_config));
   *config.mutable_p4_device_config() = p4_device_config;
-  ASSERT_OK(SetForwardingPipelineConfig(p4rt_session.get(),
-                                        kForwardingPipelineAction, config));
+  ASSERT_OK(SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session.get(), kForwardingPipelineAction, config));
 }
 
 }  // namespace
