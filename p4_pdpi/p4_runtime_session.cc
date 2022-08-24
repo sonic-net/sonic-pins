@@ -21,6 +21,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
+#include "glog/logging.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_field.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -189,6 +190,17 @@ P4RuntimeSession::GetForwardingPipelineConfig(
 
 absl::Status P4RuntimeSession::Finish() {
   stream_channel_->WritesDone();
+
+  // Finish will block if there are unread messages in the channel. Therefore,
+  // we read any outstanding messages and log their existence before calling it.
+  // Multiple threads reading at once should be ok as it only causes an
+  // undefined ordering of responses.
+  p4::v1::StreamMessageResponse response;
+  while (stream_channel_->Read(&response)) {
+    LOG(WARNING) << "dropping unread message from switch on stream channel "
+                    "when trying to Finish P4RuntimeSession: "
+                 << response.DebugString();
+  }
 
   // WritesDone() or TryCancel() can close the stream with a CANCELLED status.
   // Because this case is expected we treat CANCELED as OKAY.
