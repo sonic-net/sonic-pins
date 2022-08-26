@@ -15,6 +15,7 @@
 #include "tests/sflow/sflow_util.h"
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "gutil/status.h"
@@ -28,11 +29,21 @@ namespace {
 
 constexpr absl::string_view kSflowGnmiConfigSampleSizePath =
     "/sampling/sflow/config/sample-size";
+constexpr absl::string_view kSflowGnmiConfigEnablePath =
+    "/sampling/sflow/config/enabled";
+constexpr absl::string_view kSflowGnmiConfigInterfaceSampleRatePath =
+    "/sampling/sflow/interfaces/interface[name=$0]/config/"
+    "ingress-sampling-rate";
 
 // --- Sflow gnmi state paths ---
 
 constexpr absl::string_view kSflowGnmiStateSampleSizePath =
     "/sampling/sflow/state/sample-size";
+constexpr absl::string_view kSflowGnmiStateEnablePath =
+    "/sampling/sflow/state/enabled";
+constexpr absl::string_view kSflowGnmiStateInterfaceSampleRatePath =
+    "/sampling/sflow/interfaces/interface[name=$0]/state/"
+    "ingress-sampling-rate";
 
 }  // namespace
 
@@ -60,5 +71,36 @@ absl::Status SetSflowSamplingSize(gnmi::gNMI::StubInterface* gnmi_stub,
   return pins_test::WaitForCondition(VerifyGnmiStateConverged, timeout,
                                      gnmi_stub, kSflowGnmiStateSampleSizePath,
                                      ops_val);
+}
+
+absl::Status SetSflowConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
+                                   bool enabled, absl::Duration timeout) {
+  std::string ops_val = absl::StrCat("{\"openconfig-sampling-sflow:enabled\":",
+                                     (enabled ? "true" : "false"), "}");
+  RETURN_IF_ERROR(SetGnmiConfigPath(gnmi_stub, kSflowGnmiConfigEnablePath,
+                                    pins_test::GnmiSetType::kUpdate, ops_val));
+
+  return pins_test::WaitForCondition(VerifyGnmiStateConverged, timeout,
+                                     gnmi_stub, kSflowGnmiStateEnablePath,
+                                     ops_val);
+}
+
+absl::Status SetSflowIngressSamplingRate(gnmi::gNMI::StubInterface* gnmi_stub,
+                                         absl::string_view interface,
+                                         int sampling_rate,
+                                         absl::Duration timeout) {
+  std::string ops_val = absl::StrCat(
+      "{\"openconfig-sampling-sflow:ingress-sampling-rate\":", sampling_rate,
+      "}");
+
+  RETURN_IF_ERROR(SetGnmiConfigPath(
+      gnmi_stub,
+      absl::Substitute(kSflowGnmiConfigInterfaceSampleRatePath, interface),
+      pins_test::GnmiSetType::kUpdate, ops_val));
+
+  return pins_test::WaitForCondition(
+      VerifyGnmiStateConverged, timeout, gnmi_stub,
+      absl::Substitute(kSflowGnmiStateInterfaceSampleRatePath, interface),
+      ops_val);
 }
 }  // namespace pins
