@@ -35,5 +35,18 @@ absl::Status SetSflowSamplingSize(gnmi::gNMI::StubInterface* gnmi_stub,
                                   int sampling_size,
                                   absl::Duration timeout = absl::Seconds(5));
 
+// Sets sFlow config to `enabled` and checks if it's applied to state path in
+// `timeout`. Returns error if failed.
+absl::Status SetSflowConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
+                                   bool enabled,
+                                   absl::Duration timeout = absl::Seconds(5));
+
+// Sets sFlow ingress sampling rate of `interface` to `sampling_rate` and checks
+// if it's applied to corresponding state path in `timeout`. Returns error if
+// failed.
+absl::Status SetSflowIngressSamplingRate(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
+    int sampling_rate, absl::Duration timeout = absl::Seconds(5));
+
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_

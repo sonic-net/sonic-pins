@@ -97,7 +97,6 @@ constexpr auto kDstMac = netaddr::MacAddress(02, 02, 02, 02, 02, 03);
 constexpr auto kSourceMac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
 constexpr auto kIpV4Dst = netaddr::Ipv4Address(192, 168, 10, 1);
 
-// TODO: Parse the sampling rate from config or state path.
 constexpr int kSamplingRateInterval = 4000;
 
 // Buffering and software bottlenecks can cause some amount of variance in rate
@@ -715,20 +714,32 @@ void SflowTestFixture::SetUp() {
       testbed_,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
-  const std::string& gnmi_config = GetParam().gnmi_config;
-  ASSERT_OK_AND_ASSIGN(auto gnmi_config_with_sflow,
-                       GenerateSflowConfig(testbed_.get(), gnmi_config));
-  ASSERT_OK(testbed_->Environment().StoreTestArtifact(
-      "gnmi_config_without_sflow.txt", gnmi_config));
-  ASSERT_OK(testbed_->Environment().StoreTestArtifact(
-      "gnmi_config_with_sflow.txt",
-      json_yang::FormatJsonBestEffort(gnmi_config_with_sflow)));
+  std::string gnmi_config = GetParam().gnmi_config;
+  ASSERT_OK_AND_ASSIGN(auto gnmi_config_json,
+                       json_yang::ParseJson(gnmi_config));
+  if (gnmi_config_json.find("openconfig-sampling:sampling") !=
+          gnmi_config_json.end() &&
+      gnmi_config_json["openconfig-sampling:sampling"]
+                      ["openconfig-sampling-sflow:sflow"]["config"]
+                      ["enabled"]) {
+    sflow_enabled_by_config_ = true;
+    ASSERT_OK(testbed_->Environment().StoreTestArtifact("gnmi_config.txt",
+                                                        gnmi_config));
+  } else {
+    sflow_enabled_by_config_ = false;
+    ASSERT_OK(testbed_->Environment().StoreTestArtifact(
+        "gnmi_config_without_sflow.txt", gnmi_config));
+    ASSERT_OK_AND_ASSIGN(gnmi_config,
+                         GenerateSflowConfig(testbed_.get(), gnmi_config));
+    ASSERT_OK(testbed_->Environment().StoreTestArtifact(
+        "gnmi_config_with_sflow.txt",
+        json_yang::FormatJsonBestEffort(gnmi_config)));
+  }
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
       "p4info.pb.txt", GetP4Info().DebugString()));
-  ASSERT_OK_AND_ASSIGN(
-      sut_p4_session_,
-      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed_->Sut(), gnmi_config_with_sflow, GetP4Info()));
+  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           testbed_->Sut(), gnmi_config, GetP4Info()));
   ASSERT_OK_AND_ASSIGN(ir_p4_info_, pdpi::CreateIrP4Info(GetP4Info()));
 
   ASSERT_OK_AND_ASSIGN(gnmi_stub_, testbed_->Sut().CreateGnmiStub());
@@ -794,8 +805,14 @@ void SflowTestFixture::SetUp() {
 }
 
 void SflowTestFixture::TearDown() {
-  // Clear table entries and stop RPC sessions.
   LOG(INFO) << "\n------ TearDown START ------\n";
+
+  // Clear table entries, restore gNMI config and stop RPC sessions.
+  ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session_.get()));
+  if (!sflow_enabled_by_config_) {
+    ASSERT_OK(SetSflowConfigEnabled(gnmi_stub_.get(), /*enabled=*/false));
+  }
+  ASSERT_OK(pins_test::PushGnmiConfig(testbed_->Sut(), GetParam().gnmi_config));
   if (sut_p4_session_ != nullptr) {
     EXPECT_OK(sut_p4_session_->Finish());
   }
@@ -1108,6 +1125,71 @@ TEST_P(SampleSizeTest, VerifySamplingSizeWorks) {
       IsOkAndHolds(std::min(
           sample_size,
           packet_size - 4)));  // sFlow would strip some bytes from each packet.
+}
+
+// Verifies sampling rate could work:
+// send traffic to two interfaces with different sampling rate and verifies
+// samples count.
+TEST_P(SampleRateTest, VerifySamplingRateWorks) {
+  const IxiaLink& ingress_link = ready_links_[0];
+  const int sample_rate = GetParam().sample_rate;
+  ASSERT_GT(sample_rate, 0);
+  const int traffic_rate = sample_rate * 4;
+  const int packets_num = sample_rate * 40;
+
+  ASSERT_OK(SetSflowIngressSamplingRate(
+      gnmi_stub_.get(), ingress_link.sut_interface, sample_rate));
+
+  // ixia_ref_pair would include the traffic reference and topology reference
+  // which could be used to send traffic later.
+  std::pair<std::vector<std::string>, std::string> ixia_ref_pair;
+  // Set up Ixia traffic.
+  ASSERT_OK_AND_ASSIGN(ixia_ref_pair,
+                       SetUpIxiaTraffic({ingress_link}, *testbed_, packets_num,
+                                        traffic_rate, /*frame_size=*/500));
+
+  // Start sflowtool on SUT.
+  std::string sflow_result;
+  ASSERT_OK_AND_ASSIGN(
+      std::thread sflow_tool_thread,
+      StartSflowCollector(ssh_client_, testbed_->Sut().ChassisName(),
+                          kSflowtoolLineFormatTemplate,
+                          /*sflowtool_runtime=*/packets_num / traffic_rate + 10,
+                          sflow_result));
+
+  // Send packets from Ixia to SUT.
+  ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                             {ingress_link}, *testbed_, gnmi_stub_.get(),
+                             packets_num, traffic_rate));
+
+  // Wait for sflowtool to finish.
+  if (sflow_tool_thread.joinable()) {
+    sflow_tool_thread.join();
+  }
+  EXPECT_OK(testbed_->Environment().StoreTestArtifact(
+      absl::Substitute("sflow_result_sampling_rate_$0_result.txt", sample_rate),
+      sflow_result));
+
+  // Verify sflowtool result. Since we use port id to generate packets, we use
+  // port id to filter sFlow packets.
+  const int sample_count =
+      GetSflowSamplesOnSut(sflow_result, ingress_link.port_id);
+  const double expected_count =
+      static_cast<double>(packets_num) / static_cast<double>(sample_rate);
+  SflowResult result = SflowResult{
+      .sut_interface = ingress_link.sut_interface,
+      .packets = packets_num,
+      .sampling_rate = sample_rate,
+      .expected_samples = static_cast<int>(expected_count),
+      .actual_samples = sample_count,
+  };
+  LOG(INFO) << "------ Test result ------\n" << result.DebugString();
+
+  // TODO: tune the tolerance rate of sampling rate test
+  // since sample count seems like to be more deviated when the sample rate
+  // is high.
+  EXPECT_GE(sample_count, expected_count * (1 - kTolerance));
+  EXPECT_LE(sample_count, expected_count * (1 + kTolerance));
 }
 
 }  // namespace pins
