@@ -20,6 +20,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
 #include "google/protobuf/descriptor.h"
@@ -75,7 +76,7 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
   arbitration->set_device_id(device_id);
   arbitration->mutable_role()->set_name(metadata.role);
   *arbitration->mutable_election_id() = session->election_id_;
-  if (!session->stream_channel_->Write(request)) {
+  if (!session->StreamChannelWrite(request)) {
     return gutil::UnavailableErrorBuilder()
            << "Unable to initiate P4RT connection to device ID " << device_id
            << "; gRPC stream channel closed.";
@@ -83,7 +84,7 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
 
   // Wait for arbitration response.
   p4::v1::StreamMessageResponse response;
-  if (!session->stream_channel_->Read(&response)) {
+  if (!session->StreamChannelRead(response)) {
     return gutil::InternalErrorBuilder()
            << "P4RT stream closed while awaiting arbitration response: "
            << gutil::GrpcStatusToAbslStatus(session->stream_channel_->Finish());
@@ -188,7 +189,20 @@ P4RuntimeSession::GetForwardingPipelineConfig(
   return response;
 }
 
+bool P4RuntimeSession::StreamChannelRead(
+    p4::v1::StreamMessageResponse& response) {
+  absl::MutexLock lock(&stream_read_lock_);
+  return stream_channel_->Read(&response);
+}
+
+bool P4RuntimeSession::StreamChannelWrite(
+    const p4::v1::StreamMessageRequest& request) {
+  absl::MutexLock lock(&stream_write_lock_);
+  return stream_channel_->Write(request);
+}
+
 absl::Status P4RuntimeSession::Finish() {
+  absl::MutexLock write_lock(&stream_write_lock_);
   stream_channel_->WritesDone();
 
   // Finish will block if there are unread messages in the channel. Therefore,
@@ -196,15 +210,18 @@ absl::Status P4RuntimeSession::Finish() {
   // Multiple threads reading at once should be ok as it only causes an
   // undefined ordering of responses.
   p4::v1::StreamMessageResponse response;
+  absl::MutexLock read_lock(&stream_read_lock_);
   while (stream_channel_->Read(&response)) {
     LOG(WARNING) << "dropping unread message from switch on stream channel "
                     "when trying to Finish P4RuntimeSession: "
                  << response.DebugString();
   }
 
+  grpc::Status finish = stream_channel_->Finish();
   // WritesDone() or TryCancel() can close the stream with a CANCELLED status.
   // Because this case is expected we treat CANCELED as OKAY.
-  grpc::Status finish = stream_channel_->Finish();
+  // TODO: Stop treating CANCELLED as an acceptable error after
+  // migrating tests away from using it as such.
   if (finish.error_code() == grpc::StatusCode::CANCELLED) {
     return absl::OkStatus();
   }
