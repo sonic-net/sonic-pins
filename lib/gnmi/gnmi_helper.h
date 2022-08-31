@@ -270,6 +270,9 @@ absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
     gnmi::gNMI::StubInterface& stub, gnmi::GetRequest::DataType type,
     absl::Duration timeout = absl::Seconds(60));
 
+// Gets gNMIConfig for the entire switch.
+absl::StatusOr<std::string> GetGnmiConfig(gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Gets interfaces satisfying `predicate` from the switch and returns them as a
 // proto.
 absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(
@@ -408,6 +411,20 @@ absl::Status SetPortSpeedInBitsPerSecond(const std::string& port_speed,
                                          const std::string& interface_name,
                                          gnmi::gNMI::StubInterface& gnmi_stub);
 
+enum class PortSpeed : int64_t {
+  kSpeed100G = 100000000000,
+  kSpeed200G = 200000000000,
+  kSpeed400G = 400000000000
+};
+
+// Set port speed using gNMI.
+// Currently following speed sets are supported:
+// 100 Gbps, 200 Gbps, 400 Gbps.
+// Function will return InvalidArgumentError for other speeds.
+absl::Status SetPortSpeedInBitsPerSecond(PortSpeed port_speed,
+                                         const std::string& interface_name,
+                                         gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Get configured port speed.
 absl::StatusOr<int64_t> GetPortSpeedInBitsPerSecond(
     const std::string& interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
@@ -420,17 +437,6 @@ absl::Status SetPortMtu(int port_mtu, const std::string& interface_name,
 absl::Status SetPortLoopbackMode(bool port_loopback,
                                  absl::string_view interface_name,
                                  gnmi::gNMI::StubInterface& gnmi_stub);
-
-// Appends sFlow config to `gnmi_config` and returns modified config if success.
-// The modified config would sort collector IPs and interface names by string
-// order. This function would return original `gnmi_config` if sFlow config is
-// already present in `gnmi_config`. Returns an FailedPreconditionError if
-// `agent_addr_ipv6` or `sflow_enabled_interfaces` is empty.
-absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
-    absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
-    const absl::flat_hash_map<std::string, int>& collector_address_to_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
-    const int sampling_rate, const int sampling_header_size);
 
 // Gets counters for all interfaces.
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
