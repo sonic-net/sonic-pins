@@ -75,14 +75,9 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   LOG(INFO) << "Using port " << port_info.port_name
             << " with current breakout mode " << port_info.curr_breakout_mode;
   // Verify that all ports for the selected port are operationally up.
-  auto resp_parse_str = "openconfig-interfaces:oper-status";
   for (const auto& p : orig_breakout_info) {
-    auto if_state_path = absl::StrCat("interfaces/interface[name=", p.first,
-                                      "]/state/oper-status");
-    ASSERT_OK_AND_ASSIGN(
-        auto state_path_response,
-        GetGnmiStatePathInfo(sut_gnmi_stub, if_state_path, resp_parse_str));
-    EXPECT_THAT(state_path_response, HasSubstr(kStateUp));
+    EXPECT_OK(pins_test::CheckInterfaceOperStateOverGnmi(*sut_gnmi_stub,
+                                                         kStateUp, {p.first}));
   }
 
   // Determine port to install router interface on.
@@ -176,11 +171,16 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   ASSERT_EQ(status.ok(), true);
 
   // Wait for breakout config to go through.
-  absl::SleepFor(absl::Seconds(30));
+  // TODO: Investigate changing to polling loop.
+  absl::SleepFor(absl::Seconds(60));
 
   // Verify that the config is successfully applied now.
   non_existing_port_list = GetNonExistingPortsAfterBreakout(
       orig_breakout_info, new_breakout_info, true);
+  // Oper-status is expected to be down as breakout is applied on one side only.
+  for (auto& port : new_breakout_info) {
+    port.second.oper_status = kStateDown;
+  }
   ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, new_breakout_info,
                                   non_existing_port_list));
 
@@ -194,6 +194,7 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
             << port_info.port_name << " on DUT";
   grpc::ClientContext context3;
   ASSERT_OK(sut_gnmi_stub->Set(&context3, req, &resp));
+  // TODO: Investigate changing to polling loop.
   absl::SleepFor(absl::Seconds(60));
 
   // Verify that the config is successfully applied.

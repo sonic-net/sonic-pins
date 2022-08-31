@@ -333,9 +333,9 @@ absl::StatusOr<SutToControlLink> PickSutToControlDeviceLinkThatsUp(
     thinkit::MirrorTestbed &testbed) {
   // TODO: Pick dynamically instead of hard-coding.
   return SutToControlLink{
-      .sut_port_gnmi_name = "Ethernet0",
+      .sut_port_gnmi_name = "Ethernet1/1/1",
       .sut_port_p4rt_name = "1",
-      .control_device_port_gnmi_name = "Ethernet0",
+      .control_device_port_gnmi_name = "Ethernet1/1/1",
       .control_device_port_p4rt_name = "1",
   };
 }
@@ -714,6 +714,181 @@ TEST_P(CpuQosTestWithoutIxia,
     EXPECT_THAT(cpu_queue_state, EqualsProto(initial_cpu_queue_state))
         << "for injected test packet: " << packet.DebugString();
     initial_cpu_queue_state = cpu_queue_state;
+  }
+  LOG(INFO) << "-- END OF TEST -----------------------------------------------";
+}
+
+// Purpose: Verify that VLAN tagged packets are received as expected.
+TEST_P(CpuQosTestWithoutIxia, PuntToCpuWithVlanTag) {
+  LOG(INFO) << "-- START OF TEST ---------------------------------------------";
+
+  // Setup: the testbed consists of a SUT connected to a control device
+  // that allows us to send and receive packets to/from the SUT.
+  thinkit::Switch &sut = Testbed().Sut();
+  thinkit::Switch &control_device = Testbed().ControlSwitch();
+  const P4Info &p4info = GetParam().p4info;
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(p4info));
+
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      control_p4rt_session;
+
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session, control_p4rt_session),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          sut, control_device, absl::nullopt, p4info));
+
+  // Pick a link to be used for packet injection.
+  ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
+                       PickSutToControlDeviceLinkThatsUp(Testbed()));
+  LOG(INFO) << "Link used to inject test packets: "
+            << link_used_for_test_packets;
+  std::vector<packetlib::Packet> test_packets;
+  // Test packet.
+  ASSERT_OK_AND_ASSIGN(packetlib::Packet ipv4_packet,
+                       gutil::ParseTextProto<packetlib::Packet>(R"pb(
+        headers {
+          ethernet_header {
+            ethernet_destination: "00:01:02:02:02:02"
+            ethernet_source: "00:01:02:03:04:05"
+            ethertype: "0x8100"
+          }
+        }
+        headers {
+          vlan_header {
+            priority_code_point: "0x0"
+            drop_eligible_indicator: "0x1"
+            vlan_identifier: "0x123"
+            ethertype: "0x0800"
+          }
+        }
+        headers {
+          ipv4_header {
+            version: "0x4"
+            ihl: "0x5"
+            dscp: "0x00"
+            ecn: "0x0"
+            identification: "0xa3cd"
+            flags: "0x0"
+            fragment_offset: "0x0000"
+            ttl: "0x10"
+            protocol: "0x11"
+            ipv4_source: "10.0.0.2"
+            ipv4_destination: "10.0.0.3"
+          }
+        }
+        headers {
+          udp_header { source_port: "0x0000" destination_port: "0x0000" }
+        }
+        payload: "IPv4 test packet with VLAN tag"
+      )pb"));
+
+  test_packets.push_back(ipv4_packet);
+
+  ASSERT_OK_AND_ASSIGN(packetlib::Packet ipv6_packet,
+                       gutil::ParseTextProto<packetlib::Packet>(R"pb(
+        headers {
+          ethernet_header {
+            ethernet_destination: "00:01:02:02:02:02"
+            ethernet_source: "00:01:02:03:04:05"
+            ethertype: "0x8100"
+          }
+        }
+        headers {
+          vlan_header {
+            priority_code_point: "0x0"
+            drop_eligible_indicator: "0x1"
+            vlan_identifier: "0x123"
+            ethertype: "0x86dd"
+          }
+        }
+        headers {
+          ipv6_header {
+            dscp: "0x00"
+            ecn: "0x0"
+            flow_label: "0x00000"
+            next_header: "0x11"
+            hop_limit: "0x40"
+            ipv6_source: "2001:db8:0:12::1"
+            ipv6_destination: "2001:db8:0:12::2"
+          }
+        }
+        headers {
+          udp_header { source_port: "0x0000" destination_port: "0x0000" }
+        }
+        payload: "IPv6 test packet with VLAN tag"
+      )pb"));
+
+  test_packets.push_back(ipv6_packet);
+
+  // Install ACL table entry to be hit with a test packet.
+  ASSERT_OK_AND_ASSIGN(const sai::TableEntry pd_acl_entry,
+                       gutil::ParseTextProto<sai::TableEntry>(R"pb(
+        acl_ingress_table_entry {
+          priority: 1
+          match {
+            dst_mac { value: "00:01:02:02:02:02" mask: "ff:ff:ff:ff:ff:ff" }
+          }
+          action { acl_trap { qos_queue: "0x3" } }
+        }
+      )pb"));
+
+  ASSERT_OK_AND_ASSIGN(
+      const p4::v1::TableEntry pi_acl_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_acl_entry));
+  ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_acl_entry));
+
+  struct VlanTestPacketCounters {
+    absl::Mutex mutex;
+    int num_vlan_packets_received ABSL_GUARDED_BY(mutex) = 0;
+  };
+
+  VlanTestPacketCounters packet_receive_info;
+  PacketInReceiver sut_packet_receiver(
+      *sut_p4rt_session, [&](const p4::v1::StreamMessageResponse pi_response) {
+        sai::StreamMessageResponse pd_response;
+        ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
+                                                    &pd_response))
+            << " packet in PI to PD failed: " << pi_response.DebugString();
+        ASSERT_TRUE(pd_response.has_packet())
+            << " received unexpected stream message for packet in: "
+            << pd_response.DebugString();
+        packetlib::Packet packet =
+            packetlib::ParsePacket(pd_response.packet().payload());
+        EXPECT_EQ(packet.headers(1).vlan_header().vlan_identifier(),
+                  ipv4_packet.headers(1).vlan_header().vlan_identifier());
+        absl::MutexLock lock(&packet_receive_info.mutex);
+        packet_receive_info.num_vlan_packets_received++;
+      });
+
+  for (auto test_packet : test_packets) {
+    {
+      absl::MutexLock lock(&packet_receive_info.mutex);
+      packet_receive_info.num_vlan_packets_received = 0;
+    }
+
+    ASSERT_OK_AND_ASSIGN(const std::string raw_packet,
+                         packetlib::SerializePacket(test_packet));
+
+    const int kPacketCount = 10;
+    for (int iter = 0; iter < kPacketCount; iter++) {
+      ASSERT_OK(pins::InjectEgressPacket(
+          /*port=*/link_used_for_test_packets.control_device_port_p4rt_name,
+          /*packet=*/raw_packet, ir_p4info, control_p4rt_session.get(),
+          /*packet_delay=*/std::nullopt));
+    }
+
+    ASSERT_OK(pins::TryUpToNTimes(10, /*delay=*/absl::Seconds(1), [&] {
+      absl::MutexLock lock(&packet_receive_info.mutex);
+      if (packet_receive_info.num_vlan_packets_received == kPacketCount) {
+        return absl::OkStatus();
+      }
+      return absl::InternalError(absl::StrCat(
+          "Received packets: ", packet_receive_info.num_vlan_packets_received,
+          "Expected packets", kPacketCount));
+    }));
   }
   LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }

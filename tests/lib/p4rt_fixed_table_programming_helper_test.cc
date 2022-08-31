@@ -13,6 +13,8 @@
 // limitations under the License.
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 
+#include <utility>
+
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -27,6 +29,7 @@ namespace {
 
 using ::gutil::StatusIs;
 using ::testing::HasSubstr;
+using ::testing::StrEq;
 
 MATCHER_P(HasExactMatch, value, "") {
   for (const auto& match_field : arg.entity().table_entry().match()) {
@@ -145,7 +148,7 @@ TEST_P(L3RouteProgrammingTest, VrfTableAddFailsWithEmptyId) {
       StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST_P(L3RouteProgrammingTest, Ipv4TableDoesNotRequireAnAction) {
+TEST_P(L3RouteProgrammingTest, IpTableDoesNotRequireAnAction) {
   // The helper class will assume a default (e.g. drop).
   ASSERT_OK_AND_ASSIGN(
       p4::v1::Update pi_update,
@@ -155,7 +158,7 @@ TEST_P(L3RouteProgrammingTest, Ipv4TableDoesNotRequireAnAction) {
   EXPECT_THAT(pi_update, HasExactMatch("vrf-0"));
 }
 
-TEST_P(L3RouteProgrammingTest, Ipv4TableWithSetNexthopAction) {
+TEST_P(L3RouteProgrammingTest, IpTableWithSetNexthopAction) {
   ASSERT_OK_AND_ASSIGN(
       p4::v1::Update pi_update,
       pins::Ipv4TableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
@@ -171,7 +174,7 @@ TEST_P(L3RouteProgrammingTest, Ipv4TableWithSetNexthopAction) {
   EXPECT_THAT(pi_update, HasActionParam("nexthop-0"));
 }
 
-TEST_P(L3RouteProgrammingTest, Ipv4TableEntryFailsWihInvalidParameters) {
+TEST_P(L3RouteProgrammingTest, IpTableEntryFailsWihInvalidParameters) {
   EXPECT_THAT(
       pins::Ipv4TableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
                       pins::IpTableOptions{
@@ -181,6 +184,26 @@ TEST_P(L3RouteProgrammingTest, Ipv4TableEntryFailsWihInvalidParameters) {
                       }),
       StatusIs(absl::StatusCode::kInvalidArgument,
                HasSubstr("Expected 0 parameters")));
+}
+
+TEST_P(L3RouteProgrammingTest, Ipv4TableEntryCannotHaveIPv6Address) {
+  EXPECT_THAT(Ipv4TableUpdate(sai::GetIrP4Info(GetParam()),
+                              p4::v1::Update::INSERT,
+                              IpTableOptions{
+                                  .dst_addr_lpm = std::make_pair("FE80::1", 32),
+                              }),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Invalid IPv4 address")));
+}
+
+TEST_P(L3RouteProgrammingTest, Ipv6TableEntryCannotHaveIPv4Address) {
+  EXPECT_THAT(
+      Ipv6TableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
+                      IpTableOptions{
+                          .dst_addr_lpm = std::make_pair("10.1.1.1", 32),
+                      }),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("invalid IPv6 address")));
 }
 
 TEST_P(L3RouteProgrammingTest, L3AdmitTableWithoutInPort) {
@@ -195,6 +218,13 @@ TEST_P(L3RouteProgrammingTest, L3AdmitTableWithoutInPort) {
 
   EXPECT_THAT(pi_update, HasTernaryMatch("\001\002\003\004\005\006",
                                          "\377\377\377\377\377\377"));
+}
+
+TEST_P(L3RouteProgrammingTest, L3AdmitTableAllPacketsDoesNotSetAMatchKey) {
+  ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                       L3AdmitAllTableUpdate(sai::GetIrP4Info(GetParam()),
+                                             p4::v1::Update::INSERT));
+  EXPECT_TRUE(pi_update.entity().table_entry().match().empty());
 }
 
 TEST_P(L3RouteProgrammingTest, L3AdmitTableWithInPort) {
@@ -222,6 +252,57 @@ TEST_P(L3RouteProgrammingTest, L3AdmitTableMustSetPriority) {
                          }),
       StatusIs(absl::StatusCode::kInvalidArgument,
                HasSubstr("require a positive non-zero priority")));
+}
+
+TEST_P(L3RouteProgrammingTest, WcmpGroupCanHaveMultipleNextHops) {
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::Update pi_update,
+      WcmpGroupTableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
+                           /*wcmp_group_id=*/"group-1",
+                           {WcmpAction{.nexthop_id = "nh-2", .weight = 1},
+                            WcmpAction{.nexthop_id = "nh-3", .weight = 2}}));
+
+  EXPECT_THAT(pi_update, HasExactMatch("group-1"));
+  EXPECT_EQ(pi_update.entity()
+                .table_entry()
+                .action()
+                .action_profile_action_set()
+                .action_profile_actions_size(),
+            2);
+}
+
+TEST_P(L3RouteProgrammingTest, WcmpGroupActionCannotHaveWeightZero) {
+  EXPECT_THAT(
+      WcmpGroupTableUpdate(sai::GetIrP4Info(GetParam()), p4::v1::Update::INSERT,
+                           /*wcmp_group_id=*/"group-1",
+                           {WcmpAction{.nexthop_id = "nh-3", .weight = 0}}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Expected positive action set weight")));
+}
+
+TEST_P(L3RouteProgrammingTest, WcmpGroupActionCanSetWatchPort) {
+  ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                       WcmpGroupTableUpdate(sai::GetIrP4Info(GetParam()),
+                                            p4::v1::Update::INSERT,
+                                            /*wcmp_group_id=*/"group-1",
+                                            {WcmpAction{
+                                                .nexthop_id = "nh-3",
+                                                .weight = 2,
+                                                .watch_port = "1",
+                                            }}));
+  ASSERT_EQ(pi_update.entity()
+                .table_entry()
+                .action()
+                .action_profile_action_set()
+                .action_profile_actions_size(),
+            1);
+  EXPECT_THAT(pi_update.entity()
+                  .table_entry()
+                  .action()
+                  .action_profile_action_set()
+                  .action_profile_actions(0)
+                  .watch_port(),
+              StrEq("1"));
 }
 
 INSTANTIATE_TEST_SUITE_P(
