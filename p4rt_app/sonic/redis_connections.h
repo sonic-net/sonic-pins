@@ -31,7 +31,7 @@ namespace sonic {
 //   * Read P4RT_TABLE entries out out of the AppStateDb and CountersDb.
 struct P4rtTable {
   std::unique_ptr<NotificationProducerAdapter> notification_producer;
-  std::unique_ptr<ConsumerNotifierAdapter> notifier;
+  std::unique_ptr<ConsumerNotifierAdapter> notification_consumer;
   std::unique_ptr<TableAdapter> app_state_db;
   std::unique_ptr<TableAdapter> counter_db;
 };
@@ -43,7 +43,7 @@ struct P4rtTable {
 //   * Support state verification between the AppDb and AppStateDb.
 struct VrfTable {
   std::unique_ptr<ProducerStateTableAdapter> producer_state;
-  std::unique_ptr<ConsumerNotifierAdapter> notifier;
+  std::unique_ptr<ConsumerNotifierAdapter> notification_consumer;
   std::unique_ptr<TableAdapter> app_db;
   std::unique_ptr<TableAdapter> app_state_db;
 };
@@ -54,7 +54,7 @@ struct VrfTable {
 //   * Support state verification between the AppDb and AppStateDb.
 struct HashTable {
   std::unique_ptr<ProducerStateTableAdapter> producer_state;
-  std::unique_ptr<ConsumerNotifierAdapter> notifier;
+  std::unique_ptr<ConsumerNotifierAdapter> notification_consumer;
   std::unique_ptr<TableAdapter> app_db;
   std::unique_ptr<TableAdapter> app_state_db;
 };
@@ -65,7 +65,7 @@ struct HashTable {
 //   * Support state verification between the AppDb and AppStateDb.
 struct SwitchTable {
   std::unique_ptr<ProducerStateTableAdapter> producer_state;
-  std::unique_ptr<ConsumerNotifierAdapter> notifier;
+  std::unique_ptr<ConsumerNotifierAdapter> notification_consumer;
   std::unique_ptr<TableAdapter> app_db;
   std::unique_ptr<TableAdapter> app_state_db;
 };
