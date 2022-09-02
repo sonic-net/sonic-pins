@@ -1071,13 +1071,39 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       ASSIGN_OR_RETURN(
           pdpi::IrUpdateStatus status,
           sonic::GetAndProcessResponseNotificationWithoutRevertingState(
-              *p4rt_table_.notifier, acl_key));
+              *p4rt_table_.notification_consumer, acl_key));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.
       if (status.code() != google::rpc::OK) {
         return gutil::InvalidArgumentErrorBuilder() << status.message();
       }
+    } else if (table_type == table::Type::kExt) {
+      // Add table definition
+      // For now send only Extension tables.In future when required, Fixed table
+      //   definitions also can be inserted here
+      LOG(INFO) << "Add Table Definition for " << table_name;
+      sonic::AppendExtTableDefinition(ext_tables_json, table);
+    }
+  }
+  if (!ext_tables_json.dump().empty()) {
+     // Publish all tables at once and get one success/failure response for them
+    ASSIGN_OR_RETURN(
+          std::string acl_key,
+          sonic::PublishExtTablesDefinitionToAppDb(ext_tables_json, (uint64_t)0,
+                     p4rt_table_),
+          _ << "Could not publish Table Definition Set to APPDB");
+
+    ASSIGN_OR_RETURN(
+          pdpi::IrUpdateStatus status,
+          sonic::GetAndProcessResponseNotificationWithoutRevertingState(
+               *p4rt_table_.notification_consumer, acl_key));
+
+   // Any issue with the forwarding config should be sent back to the
+    // controller as an INVALID_ARGUMENT.
+    if (status.code() != google::rpc::OK) {
+      return gutil::InvalidArgumentErrorBuilder() << status.message();
+    }
   }
 }
   return absl::OkStatus();
