@@ -60,7 +60,7 @@ class VrfEntryTranslationTest : public ::testing::Test {
 
     vrf_table_ = VrfTable{
         .producer_state = std::move(vrf_producer_state),
-        .notifier = std::move(vrf_notifier),
+        .notification_consumer = std::move(vrf_notifier),
         .app_db = std::move(vrf_app_db),
         .app_state_db = std::move(vrf_app_state_db),
     };

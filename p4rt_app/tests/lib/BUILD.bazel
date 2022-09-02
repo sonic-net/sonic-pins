@@ -64,7 +64,6 @@ cc_library(
     srcs = ["p4runtime_grpc_service.cc"],
     hdrs = ["p4runtime_grpc_service.h"],
     deps = [
-        "//gutil:status_matchers",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic:fake_packetio_interface",
         "//p4rt_app/sonic:redis_connections",
@@ -80,7 +79,6 @@ cc_library(
         "@com_google_absl//absl/random:distributions",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 

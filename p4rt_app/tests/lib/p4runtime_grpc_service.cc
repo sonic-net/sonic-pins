@@ -20,13 +20,11 @@
 #include "absl/memory/memory.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
-#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "glog/logging.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
-#include "gutil/status_matchers.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_notification_producer_adapter.h"
@@ -35,9 +33,8 @@
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
-#include "swss/consumerstatetable.h"
-#include "swss/dbconnector.h"
-#include "swss/notificationproducer.h"
+// #include "swss/fakes/fake_component_state_helper.h"
+// #include "swss/fakes/fake_system_state_helper.h"
 
 namespace p4rt_app {
 namespace test_lib {
@@ -68,8 +65,9 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       .notification_producer =
           std::make_unique<sonic::FakeNotificationProducerAdapter>(
               &fake_p4rt_table_),
-      .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
-          &fake_p4rt_table_),
+      .notification_consumer =
+          absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+              &fake_p4rt_table_),
       .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
           &fake_p4rt_state_table_, kP4rtTableName),
       .counter_db = absl::make_unique<sonic::FakeTableAdapter>(
@@ -80,33 +78,39 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
   sonic::VrfTable vrf_table{
       .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
           &fake_vrf_table_),
-      .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
-          &fake_vrf_table_),
-      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_vrf_table_, kVrfTableName),
-      .app_state_db =
-          absl::make_unique<sonic::FakeTableAdapter>(&fake_vrf_state_table_, kVrfTableName),
+      .notification_consumer =
+          absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+              &fake_vrf_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_vrf_table_,
+                                                           kVrfTableName),
+      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_vrf_state_table_, kVrfTableName),
   };
 
   // Create interfaces to access HASH_TABLE entries.
   sonic::HashTable hash_table{
       .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
           &fake_hash_table_),
-      .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
-          &fake_hash_table_),
-      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_hash_table_, kHashTableName),
-      .app_state_db =
-          absl::make_unique<sonic::FakeTableAdapter>(&fake_hash_state_table_, kHashTableName),
+      .notification_consumer =
+          absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+              &fake_hash_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_hash_table_,
+                                                           kHashTableName),
+      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_hash_state_table_, kHashTableName),
   };
 
   // Create interfaces to access SWITCH_TABLE entries.
   sonic::SwitchTable switch_table{
       .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
           &fake_switch_table_),
-      .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
-          &fake_switch_table_),
-      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_switch_table_, kSwitchTableName),
-      .app_state_db =
-          absl::make_unique<sonic::FakeTableAdapter>(&fake_switch_state_table_, kSwitchTableName),
+      .notification_consumer =
+          absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+              &fake_switch_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_switch_table_,
+                                                           kSwitchTableName),
+      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_switch_state_table_, kSwitchTableName),
   };
 
   // Create FakePacketIoInterface and save the pointer.
