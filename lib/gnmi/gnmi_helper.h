@@ -32,6 +32,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "github.com/openconfig/gnoi/types/types.pb.h"
+#include "lib/gnmi/openconfig.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
@@ -224,6 +225,18 @@ GetAllInterfaceNameToPortId(absl::string_view gnmi_config);
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub);
 
+// Gets interfaces from the switch and returns them as a proto.
+absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
+    gnmi::gNMI::StubInterface& stub, gnmi::GetRequest::DataType type,
+    absl::Duration timeout = absl::Seconds(60));
+
+// Gets interfaces satisfying `predicate` from the switch and returns them as a
+// proto.
+absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(
+    gnmi::gNMI::StubInterface& stub, gnmi::GetRequest::DataType type,
+    std::function<bool(const openconfig::Interfaces::Interface&)> predicate,
+    absl::Duration timeout = absl::Seconds(60));
+
 // Reads the gNMI config from the switch and returns a map of all enabled
 // interfaces to their p4rt port id.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
@@ -249,6 +262,24 @@ absl::StatusOr<std::string> GetAnyUpInterfacePortId(
 absl::StatusOr<std::vector<std::string>> GetNUpInterfacePortIds(
     gnmi::gNMI::StubInterface& stub, int num_interfaces,
     absl::Duration timeout = absl::Seconds(60));
+
+// Deterministically modifies the config of `gnmi_stub` to map all
+// `desired_p4rt_ids` to interfaces on the switch that match the given
+// `predicate`. If too few interfaces match the `predicate` to map all
+// `desired_p4rt_ids`, the function will fail. Any matching interface already
+// mapping a desired P4RT ID will be left unchanged. Any non-matching
+// interface that maps a desired P4RT ID will have the mapping removed.
+absl::Status MapP4rtIdsToMatchingInterfaces(
+    gnmi::gNMI::StubInterface& gnmi_stub,
+    const absl::btree_set<int>& desired_p4rt_ids,
+    std::function<bool(const openconfig::Interfaces::Interface&)> predicate,
+    absl::Duration timeout = absl::Seconds(60));
+
+// Uses `gnmi_stub` to set the P4RT IDs of `interfaces`, deleting any of those
+// P4RT IDs previously mapped on the switch a P4RT ID can't be mapped to
+// multiple interfaces.
+absl::Status SetInterfaceP4rtIds(gnmi::gNMI::StubInterface& gnmi_stub,
+                                 const openconfig::Interfaces& interfaces);
 
 // Returns the ordered set of all port ids mapped by the given gNMI config.
 absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(

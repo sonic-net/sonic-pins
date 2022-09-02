@@ -39,6 +39,7 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "include/nlohmann/json.hpp"
+#include "lib/gnmi/openconfig.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "proto/gnmi/gnmi_mock.grpc.pb.h"
 
@@ -46,6 +47,7 @@ namespace pins_test {
 namespace {
 
 using ::gutil::EqualsProto;
+using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::_;
@@ -54,8 +56,10 @@ using ::testing::DoAll;
 using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::HasSubstr;
+using ::testing::InSequence;
 using ::testing::IsEmpty;
 using ::testing::IsSubsetOf;
+using ::testing::Not;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::StrEq;
@@ -794,6 +798,54 @@ TEST(ConstructedOpenConfig, CreatesACorrectConfig) {
                 /*interfaces=*/{{.port_name = "Ethernet0", .port_id = 2},
                                 {.port_name = "Ethernet1", .port_id = 3}})),
             nlohmann::json::parse(reference_config_with_two_interfaces));
+}
+
+bool IsEnabledEthernetInterface(
+    const openconfig::Interfaces::Interface &interface) {
+  return interface.config().enabled() &&
+         absl::StartsWith(interface.name(), /*prefix=*/"Ethernet");
+}
+
+TEST(MapP4rtIdsToMatchingInterfaces, FailsOnTooFewMatchingInterfaces) {
+  gnmi::MockgNMIStub stub;
+  std::string reference_config =
+      R"json({
+      "openconfig-interfaces:interfaces":{
+        "interface":[
+          {
+            "name":"Loopback0",
+            "config":{
+              "enabled":true,
+              "openconfig-p4rt:id":1
+            }
+          },
+          {
+            "name":"EthernetEnabled0",
+            "config":{
+              "enabled":true,
+              "openconfig-p4rt:id":2
+            }
+          },
+          {
+            "name":"EthernetDisabled0",
+            "config":{
+              "enabled":false,
+              "openconfig-p4rt:id":3
+            }
+          }
+        ]
+      }
+    })json";
+
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                                            /*oc_path=*/"interfaces",
+                                            /*gnmi_config=*/reference_config)),
+                                        Return(grpc::Status::OK)));
+
+  ASSERT_THAT(
+      MapP4rtIdsToMatchingInterfaces(stub, /*desired_p4rt_port_ids=*/{4, 5},
+                                     /*predicate=*/IsEnabledEthernetInterface),
+      Not(IsOk()));
 }
 
 TEST(GetInterfacePortIdMap, ReturnsOnlyEnabledInterfaces) {
