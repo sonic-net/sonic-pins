@@ -76,7 +76,7 @@ class AppDbManagerTest : public ::testing::Test {
     mock_p4rt_table_ = P4rtTable{
         .notification_producer = std::move(p4rt_notification_producer),
         .notification_consumer = std::move(p4rt_notifier),
-        .app_db = std::move(p4rt_app_db),
+        .app_state_db = std::move(p4rt_app_state_db),
         .counter_db = std::move(p4rt_counter_db),
     };
 
