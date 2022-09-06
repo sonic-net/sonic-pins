@@ -90,6 +90,10 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfaces(
 absl::StatusOr<std::vector<InterfaceLink>> GetUpLinks(
     decltype(GetAllControlLinks) get_links, thinkit::GenericTestbed& testbed);
 
+// Checks whether all connected ports of SUT and connected Control Switch
+// interfaces are up.
+absl::Status ValidateTestbedPortsUp(thinkit::GenericTestbed& testbed);
+
 // Returns a speed enum to set in the OTG layer 1 config for a given speed in
 // bits per second.
 absl::StatusOr<otg::Layer1::Speed::Enum> GetLayer1SpeedFromBitsPerSecond(

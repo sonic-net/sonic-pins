@@ -60,6 +60,7 @@ cc_test(
 
 cc_library(
     name = "basic_traffic",
+    testonly = True,
     srcs = ["basic_traffic.cc"],
     hdrs = ["basic_traffic.h"],
     deps = [

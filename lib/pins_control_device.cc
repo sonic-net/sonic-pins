@@ -286,6 +286,11 @@ absl::StatusOr<absl::flat_hash_set<std::string>> PinsControlDevice::GetUpLinks(
 
 absl::Status PinsControlDevice::CheckUp() { return SwitchReady(*sut_); }
 
+absl::Status PinsControlDevice::ValidatePortsUp(
+    absl::Span<const std::string> interfaces) {
+      return PortsUp(*sut_, interfaces);
+}
+
 absl::StatusOr<std::vector<std::string>>
 PinsControlDevice::FilterCollateralDownOnAdminDownInterfaces(
     absl::Span<const std::string> interfaces) {
