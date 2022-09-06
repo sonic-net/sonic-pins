@@ -22,7 +22,6 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -37,10 +36,7 @@
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
-#include "swss/json.h"
-#include <nlohmann/json.hpp>
 #include "swss/rediscommand.h"
-#include "swss/schema.h"
 #include "swss/table.h"
 
 namespace p4rt_app {
@@ -92,7 +88,7 @@ absl::StatusOr<std::string> CreateEntryForDelete(
     const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_deletes) {
-  VLOG(1) << "Delete PDPI IR entry: " << entry.ShortDebugString();
+  VLOG(2) << "Delete PDPI IR entry: " << entry.ShortDebugString();
 
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
 
@@ -116,7 +112,7 @@ absl::StatusOr<std::string> CreateEntryForDelete(
                    AppDbKeyAndValuesToIrTableEntry(
                        p4_info, key, p4rt_table.app_state_db->get(key)));
 
-  LOG(INFO) << "Delete AppDb entry: " << key;
+  VLOG(1) << "Delete AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
   kfvOp(key_value) = "DEL";
@@ -132,7 +128,7 @@ absl::StatusOr<std::string> CreateEntryForInsert(
     const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts) {
-  VLOG(1) << "Insert PDPI IR entry: " << entry.ShortDebugString();
+  VLOG(2) << "Insert PDPI IR entry: " << entry.ShortDebugString();
 
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
 
@@ -150,7 +146,7 @@ absl::StatusOr<std::string> CreateEntryForInsert(
            << entry.table_name() << "'.";
   }
 
-  LOG(INFO) << "Insert AppDb entry: " << key;
+  VLOG(1) << "Insert AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
   kfvOp(key_value) = "SET";
@@ -168,7 +164,7 @@ absl::StatusOr<std::string> CreateEntryForModify(
     const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies) {
-  VLOG(1) << "Modify PDPI IR entry: " << entry.ShortDebugString();
+  VLOG(2) << "Modify PDPI IR entry: " << entry.ShortDebugString();
 
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
 
@@ -186,7 +182,7 @@ absl::StatusOr<std::string> CreateEntryForModify(
            << entry.table_name() << "'.";
   }
 
-  LOG(INFO) << "Modify AppDb entry: " << key;
+  VLOG(1) << "Modify AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
   kfvOp(key_value) = "SET";

@@ -209,7 +209,7 @@ absl::StatusOr<p4::v1::ReadResponse> DoRead(
     const boost::bimap<std::string, std::string>& port_translation_map) {
   p4::v1::ReadResponse response;
   for (const auto& entity : request.entities()) {
-    LOG(INFO) << "Read request: " << entity.ShortDebugString();
+    VLOG(1) << "Read request: " << entity.ShortDebugString();
     switch (entity.entity_case()) {
       case p4::v1::Entity::kTableEntry: {
         RETURN_IF_ERROR(SupportedTableEntryRequest(entity.table_entry()));
