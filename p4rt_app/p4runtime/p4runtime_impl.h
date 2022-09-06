@@ -25,6 +25,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "boost/bimap.hpp"
 #include "grpcpp/grpcpp.h"
@@ -39,6 +40,9 @@
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "p4rt_app/utils/event_data_tracker.h"
+//#include "swss/component_state_helper_interface.h"
+//#include "swss/intf_translator.h"
 
 namespace p4rt_app {
 
@@ -46,6 +50,34 @@ struct P4RuntimeImplOptions {
   bool use_genetlink = false;
   bool translate_port_ids = true;
   absl::optional<std::string> forwarding_config_full_path;
+};
+
+struct FlowProgrammingStatistics {
+  // Total number of batch write requests sent to the switch. The value should
+  // be equal to the number of time Write() is called.
+  int write_batch_count;
+
+  // Total number of indivindual updates sent to the switch. Because each
+  // Write() can have multiple update (i.e. batched together) this value can
+  // differ from the total number of times Write() is called.
+  int write_requests_count;
+
+  // Total time the switch spent handling Write() all requests. Note this
+  // includes P4RT App parsing the data, sending it to the OA, waiting for a
+  // response, and handling that response.
+  absl::Duration write_time;
+
+  // Time the longest request took to be handled. Notice that this does not take
+  // into account batch size.
+  absl::Duration max_write_time;
+
+  // Total number of Read() calls handled by the switc.
+  int read_request_count;
+
+  // Total time the switch spent handing all Read() requests. Note that P4RT
+  // reads everything it needs from the RedisDB layer, and the OA or other
+  // layers are not involved in these requests.
+  absl::Duration read_time;
 };
 
 class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
@@ -121,6 +153,12 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   // NOTE: We do not verify ownership of table entries today. Therefore, shared
   // tables (e.g. VRF_TABLE) could cause false positives.
   virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  // Returns performance statistics relating to the P4Runtime flow programming
+  // API. Data will be reset to zero on reading(i.e. results are not
+  // cumulative).
+  absl::StatusOr<FlowProgrammingStatistics> GetFlowProgrammingStatistics()
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
  protected:
   // Simple constructor that should only be used for testing purposes.
@@ -248,12 +286,28 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // Some switch enviornments cannot rely on the SONiC port names, and can
   // instead choose to use port ID's configured through gNMI.
-  const bool translate_port_ids_ ABSL_GUARDED_BY(server_state_lock_);
+  const bool translate_port_ids_;
 
   // Reading a large number of entries from Redis is costly. To improve the
   // read performance we cache table entries in software.
   absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>
       table_entry_cache_ ABSL_GUARDED_BY(server_state_lock_);
+
+  // Performance statistics for P4RT Write().
+  EventDataTracker<int> write_batch_requests_
+      ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};
+  EventDataTracker<int> write_total_requests_
+      ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};
+  EventDataTracker<absl::Duration> write_execution_time_
+      ABSL_GUARDED_BY(server_state_lock_){
+          EventDataTracker<absl::Duration>(absl::ZeroDuration())};
+
+  // Performance statistics for P4RT Read().
+  EventDataTracker<int> read_total_requests_
+      ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};
+  EventDataTracker<absl::Duration> read_execution_time_
+      ABSL_GUARDED_BY(server_state_lock_){
+          EventDataTracker<absl::Duration>(absl::ZeroDuration())};
 };
 
 }  // namespace p4rt_app
