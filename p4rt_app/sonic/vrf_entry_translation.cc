@@ -19,11 +19,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/match.h"
-#include "absl/strings/str_join.h"
-#include "absl/strings/str_split.h"
 #include "glog/logging.h"
-#include "google/rpc/code.pb.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -124,11 +120,10 @@ absl::Status UpdateAppDbVrfTable(VrfTable& vrf_table,
   }
 
   if (update_key.ok()) {
-    ASSIGN_OR_RETURN(
-        *response.mutable_statuses(rpc_index),
-        GetAndProcessResponseNotification(
-            *vrf_table.notification_consumer, *vrf_table.app_db,
-            *vrf_table.app_state_db, *update_key, ResponseTimeMonitor::kNone));
+    ASSIGN_OR_RETURN(*response.mutable_statuses(rpc_index),
+                     GetAndProcessResponseNotification(
+                         *vrf_table.notification_consumer, *vrf_table.app_db,
+                         *vrf_table.app_state_db, *update_key));
   } else {
     LOG(WARNING) << "Could not update in AppDb: " << update_key.status();
     *response.mutable_statuses(rpc_index) =
