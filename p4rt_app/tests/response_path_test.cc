@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <memory>
+#include <ostream>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -19,36 +20,48 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
-#include "grpcpp/security/credentials.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace p4rt_app {
+
+// Helper method to improve gTest matcher outputs. Try to keep the fields order
+// matching the struct.
+void PrintTo(const FlowProgrammingStatistics& stats, std::ostream* os) {
+  *os << "write_batch_count:" << stats.write_batch_count
+      << ", write_requests_count:" << stats.write_requests_count
+      << ", write_time:" << stats.write_time
+      << ", read_request_count:" << stats.read_request_count
+      << ", read_time:" << stats.read_time;
+}
+
 namespace {
 
 using ::gutil::EqualsProto;
+using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
+using ::testing::_;
 using ::testing::AllOf;
+using ::testing::FieldsAre;
 using ::testing::HasSubstr;
+using ::testing::Not;
 using ::testing::UnorderedElementsAre;
 using ::testing::UnorderedElementsAreArray;
 
@@ -645,6 +658,137 @@ TEST_F(ResponsePathTest, ReadingIgnoresRedisDbValues) {
       p4::v1::ReadResponse read_response,
       pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
   EXPECT_EQ(read_response.entities_size(), 0);
+}
+
+TEST_F(ResponsePathTest, WriteRequestsUpdateStatistics) {
+  // A sample P4 write request.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Statistics should monitor INSERT, MODIFY, and DELETE requests. It should
+  // also include time for requests that fail.
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                     write_request),
+              Not(IsOk()));
+
+  write_request.mutable_updates(0)->set_type(p4::v1::Update::MODIFY);
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  write_request.mutable_updates(0)->set_type(p4::v1::Update::DELETE);
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  // Runtime can be unpredictible so we simply verify that it is no longer 0s
+  // for writes.
+  ASSERT_OK_AND_ASSIGN(
+      FlowProgrammingStatistics flow_stats,
+      p4rt_service_.GetP4rtServer().GetFlowProgrammingStatistics());
+  EXPECT_THAT(
+      flow_stats,
+      FieldsAre(/*write_batches=*/4, /*write_requests=*/4,
+                /*write_time=*/Not(absl::ZeroDuration()),
+                /*max_write_time=*/Not(absl::ZeroDuration()),
+                /*read_requests=*/0, /*read_time=*/absl::ZeroDuration()));
+
+  // Reading stats should reset values to zero.
+  ASSERT_OK_AND_ASSIGN(
+      flow_stats, p4rt_service_.GetP4rtServer().GetFlowProgrammingStatistics());
+  EXPECT_THAT(flow_stats,
+              FieldsAre(0, 0, absl::ZeroDuration(), absl::ZeroDuration(), 0,
+                        absl::ZeroDuration()));
+}
+
+TEST_F(ResponsePathTest, ReadRequestsUpdateStatistics) {
+  p4::v1::ReadRequest read_request;
+  read_request.add_entities()->mutable_table_entry();
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+
+  // Runtime can be unpredictible so we simply verify that it is no longer 0s
+  // for reads.
+  ASSERT_OK_AND_ASSIGN(
+      FlowProgrammingStatistics flow_stats,
+      p4rt_service_.GetP4rtServer().GetFlowProgrammingStatistics());
+  EXPECT_THAT(flow_stats, FieldsAre(/*write_batches=*/0, /*write_requests=*/0,
+                                    /*write_time=*/absl::ZeroDuration(),
+                                    /*max_write_time=*/absl::ZeroDuration(),
+                                    /*read_requests=*/2,
+                                    /*read_time=*/Not(absl::ZeroDuration())));
+
+  // Reading stats should reset values to zero.
+  ASSERT_OK_AND_ASSIGN(
+      flow_stats, p4rt_service_.GetP4rtServer().GetFlowProgrammingStatistics());
+  EXPECT_THAT(flow_stats,
+              FieldsAre(0, 0, absl::ZeroDuration(), absl::ZeroDuration(), 0,
+                        absl::ZeroDuration()));
+}
+
+TEST_F(ResponsePathTest, WriteRequestsStatisticsHandleBatchRequests) {
+  // A sample P4 write request.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c115::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Statistics should monitor INSERT, MODIFY, and DELETE requests. It should
+  // also include time for requests that fail.
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  ASSERT_OK_AND_ASSIGN(
+      FlowProgrammingStatistics flow_stats,
+      p4rt_service_.GetP4rtServer().GetFlowProgrammingStatistics());
+  EXPECT_THAT(flow_stats,
+              FieldsAre(/*write_batches=*/1, /*write_requests=*/2,
+                        /*write_time=*/Not(absl::ZeroDuration()),
+                        /*max_write_time=*/Not(absl::ZeroDuration()), _, _));
 }
 
 }  // namespace
