@@ -79,3 +79,18 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "event_data_tracker",
+    hdrs = ["event_data_tracker.h"],
+)
+
+cc_test(
+    name = "event_data_tracker_test",
+    srcs = ["event_data_tracker_test.cc"],
+    deps = [
+        ":event_data_tracker",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
