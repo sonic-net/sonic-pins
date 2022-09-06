@@ -24,16 +24,12 @@
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
-#include "absl/time/clock.h"
-#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
-#include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
-#include "p4rt_app/utils/event_execution_time_monitor.h"
 #include "swss/rediscommand.h"
 #include "swss/status_code_util.h"
 #include "swss/table.h"
@@ -70,20 +66,6 @@ google::rpc::Code SwssToP4RTErrorCode(const std::string& status_str) {
     case swss::StatusCode::SWSS_RC_UNAVAIL:
       return google::rpc::Code::UNAVAILABLE;
   }
-}
-
-EventExecutionTimeMonitor* GetEventMonitor(ResponseTimeMonitor monitor) {
-  static EventExecutionTimeMonitor* const kP4rtMonitor =
-      new EventExecutionTimeMonitor("sonic::AppDbResponses(P4RT_TABLE)",
-                                    /*log_threshold=*/10000);
-
-  switch (monitor) {
-    case ResponseTimeMonitor::kP4rtTableWrite:
-      return kP4rtMonitor;
-    default:
-      return nullptr;
-  }
-  return nullptr;
 }
 
 // Get expected responses from the notification channel.
@@ -243,39 +225,23 @@ absl::Status UpdateResponsesAndRestoreState(
 absl::Status GetAndProcessResponseNotification(
     ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
     TableAdapter& state_db_table,
-    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map,
-    ResponseTimeMonitor event_monitor) {
-  absl::Time start = absl::Now();
+    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map) {
   ASSIGN_OR_RETURN(
       auto response_status_map,
       GetAppDbResponses(key_to_status_map.size(), notification_interface));
-  absl::Duration response_time = absl::Now() - start;
-
-  // Get the event monitor and increment it if present.
-  EventExecutionTimeMonitor* execution_time_monitor =
-      GetEventMonitor(event_monitor);
-  if (execution_time_monitor) {
-    absl::Status status =
-        execution_time_monitor->IncrementEventCountWithDuration(
-            key_to_status_map.size(), response_time);
-    LOG_IF(WARNING, !status.ok()) << status;
-  }
-
   return UpdateResponsesAndRestoreState(key_to_status_map, response_status_map,
                                         &app_db_table, &state_db_table);
 }
 
 absl::StatusOr<pdpi::IrUpdateStatus> GetAndProcessResponseNotification(
     ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
-    TableAdapter& state_db_table, const std::string& key,
-    ResponseTimeMonitor event_monitor) {
+    TableAdapter& state_db_table, const std::string& key) {
   pdpi::IrUpdateStatus local_status;
   absl::btree_map<std::string, pdpi::IrUpdateStatus*> key_to_status_map;
   key_to_status_map[key] = &local_status;
 
   RETURN_IF_ERROR(GetAndProcessResponseNotification(
-      notification_interface, app_db_table, state_db_table, key_to_status_map,
-      event_monitor));
+      notification_interface, app_db_table, state_db_table, key_to_status_map));
 
   return local_status;
 }

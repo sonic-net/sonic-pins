@@ -23,6 +23,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
+#include "absl/synchronization/notification.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "gflags/gflags.h"
@@ -264,6 +266,37 @@ void WaitForPortInitDone() {
   }
 }
 
+void LogStatsEveryMinute(absl::Notification* stop,
+                         p4rt_app::P4RuntimeImpl* p4runtime) {
+  while (!stop->HasBeenNotified()) {
+    absl::SleepFor(absl::Minutes(1));
+
+    auto stats = p4runtime->GetFlowProgrammingStatistics();
+    if (!stats.ok()) {
+      LOG(ERROR) << "Failed to get P4Runtime statistics: " << stats.status();
+      continue;
+    }
+
+    // Reads and writes happen independently, but the controller will read every
+    // few seconds to verify correctness. To avoid being spammy we will only log
+    // performance when changes are made to the swtich (i.e. when we see a
+    // write).
+    if (stats->write_batch_count > 0) {
+      LOG(INFO) << absl::StreamFormat(
+          "Handled %d write requests from %d batches in: %dus (max: %dus)",
+          stats->write_requests_count, stats->write_batch_count,
+          absl::ToInt64Microseconds(stats->write_time),
+          absl::ToInt64Microseconds(stats->max_write_time));
+
+      if (stats->read_request_count > 0) {
+        LOG(INFO) << absl::StreamFormat(
+            "Handled %d read requests in: %dus", stats->read_request_count,
+            absl::ToInt64Microseconds(stats->read_time));
+      }
+    }
+  }
+}
+
 }  // namespace
 }  // namespace p4rt_app
 
@@ -419,6 +452,11 @@ int main(int argc, char** argv) {
       state_verification_table_adapter);
   state_verification_event_monitor.Start();
 
+  // Report performance statistics every minute.
+  absl::Notification stop_stats_logging;
+  std::thread stats_logging_loop(p4rt_app::LogStatsEveryMinute,
+                                 &stop_stats_logging, &p4runtime_server);
+
   // Start a P4 runtime server
   ServerBuilder builder;
   auto server_cred = BuildServerCredentials();
@@ -450,8 +488,10 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Stopping the P4RT service.";
   monitor_app_state_db_events = false;
   monitor_config_db_events = false;
+  stop_stats_logging.Notify();
   app_state_db_event_loop.join();
   config_db_event_loop.join();
+  stats_logging_loop.join();
 
   return 0;
 }
