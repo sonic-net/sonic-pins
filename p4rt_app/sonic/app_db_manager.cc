@@ -99,18 +99,18 @@ absl::StatusOr<std::string> CreateEntryForDelete(
   }
 
   // Check that key exists in the table.
-  if (!p4rt_table.app_state_db->exists(key)) {
+  if (!p4rt_table.app_db->exists(key)) {
     LOG(WARNING) << "Could not delete missing entry: " << key;
     return gutil::NotFoundErrorBuilder()
            << "[P4RT App] Table entry with the given key does not exist in '"
            << entry.table_name() << "'.";
   }
 
-  // Get table entry from the AppStateDB (before delete) instead of the one from
-  // the request.
+  // Get table entry from the AppDB (before delete) instead of the one from the
+  // request.
   ASSIGN_OR_RETURN(auto ir_table_entry,
                    AppDbKeyAndValuesToIrTableEntry(
-                       p4_info, key, p4rt_table.app_state_db->get(key)));
+                       p4_info, key, p4rt_table.app_db->get(key)));
 
   VLOG(1) << "Delete AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
@@ -139,7 +139,7 @@ absl::StatusOr<std::string> CreateEntryForInsert(
   }
 
   // Check that key does not already exist in the table.
-  if (p4rt_table.app_state_db->exists(key)) {
+  if (p4rt_table.app_db->exists(key)) {
     LOG(WARNING) << "Could not insert duplicate entry: " << key;
     return gutil::AlreadyExistsErrorBuilder()
            << "[P4RT App] Table entry with the given key already exist in '"
@@ -175,7 +175,7 @@ absl::StatusOr<std::string> CreateEntryForModify(
   }
 
   // Check that key already exist in the table.
-  if (!p4rt_table.app_state_db->exists(key)) {
+  if (!p4rt_table.app_db->exists(key)) {
     LOG(WARNING) << "Could not modify missing entry: " << key;
     return gutil::NotFoundErrorBuilder()
            << "[P4RT App] Table entry with the given key does not exist in '"
@@ -417,12 +417,12 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
   VLOG(1) << "Read AppDb entry: " << key;
   ASSIGN_OR_RETURN(pdpi::IrTableEntry table_entry,
                    AppDbKeyAndValuesToIrTableEntry(
-                       p4info, key, p4rt_table.app_state_db->get(key)));
+                       p4info, key, p4rt_table.app_db->get(key)));
 
   // CounterDb entries will include the full AppDb entry key.
   RETURN_IF_ERROR(AppendCounterData(
       table_entry, p4rt_table.counter_db->get(absl::StrCat(
-                       p4rt_table.app_state_db->getTablePrefix(), key))));
+                       p4rt_table.app_db->getTablePrefix(), key))));
   return table_entry;
 }
 
@@ -432,13 +432,13 @@ absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(ir_table_entry, p4info));
   return AppendCounterData(ir_table_entry,
                            p4rt_table.counter_db->get(absl::StrCat(
-                               p4rt_table.app_state_db->getTablePrefix(), key)));
+                               p4rt_table.app_db->getTablePrefix(), key)));
 }
 
 std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
   std::vector<std::string> p4rt_keys;
 
-  for (const auto& key : p4rt_table.app_state_db->keys()) {
+  for (const auto& key : p4rt_table.app_db->keys()) {
     const std::vector<std::string> split = absl::StrSplit(key, ':');
 
     // The DEFINITION sub-table does not hold any P4RT_TABLE entries, and should
