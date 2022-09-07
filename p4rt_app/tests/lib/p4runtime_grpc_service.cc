@@ -40,11 +40,10 @@ namespace p4rt_app {
 namespace test_lib {
 
 P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
-    : fake_p4rt_state_table_("AppStateDb:P4RT_TABLE"),
-      fake_vrf_state_table_("AppStateDb:VRF_TABLE"),
+    : fake_vrf_state_table_("AppStateDb:VRF_TABLE"),
       fake_hash_state_table_("AppStateDb:HASH_TABLE"),
       fake_switch_state_table_("AppStateDb:SWITCH_TABLE"),
-      fake_p4rt_table_("AppDb:P4RT_TABLE", &fake_p4rt_state_table_),
+      fake_p4rt_table_("AppDb:P4RT_TABLE"),
       fake_vrf_table_("AppDb:VRF_TABLE", &fake_vrf_state_table_),
       fake_hash_table_("AppDb:HASH_TABLE", &fake_hash_state_table_),
       fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_) {
@@ -68,8 +67,8 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       .notification_consumer =
           absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
               &fake_p4rt_table_),
-      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
-          &fake_p4rt_state_table_, kP4rtTableName),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_p4rt_table_,
+                                                           kP4rtTableName),
       .counter_db = absl::make_unique<sonic::FakeTableAdapter>(
           &fake_p4rt_counters_table_, kP4rtTableName),
   };
@@ -168,10 +167,6 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetSwitchAppDbTable() {
 
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppDbTable() {
   return fake_port_table_;
-}
-
-sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtAppStateDbTable() {
-  return fake_p4rt_state_table_;
 }
 
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVrfAppStateDbTable() {

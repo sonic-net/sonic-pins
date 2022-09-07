@@ -16,9 +16,7 @@
 
 #include <memory>
 
-#include "absl/status/status.h"
 #include "grpcpp/server.h"
-#include "grpcpp/server_builder.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
@@ -45,7 +43,6 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable& GetPortAppDbTable();
 
   // Accessors for AppStateDb tables.
-  sonic::FakeSonicDbTable& GetP4rtAppStateDbTable();
   sonic::FakeSonicDbTable& GetVrfAppStateDbTable();
   sonic::FakeSonicDbTable& GetHashAppStateDbTable();
   sonic::FakeSonicDbTable& GetSwitchAppStateDbTable();
