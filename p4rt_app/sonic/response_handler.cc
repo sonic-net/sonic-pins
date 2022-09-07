@@ -246,18 +246,6 @@ absl::StatusOr<pdpi::IrUpdateStatus> GetAndProcessResponseNotification(
   return local_status;
 }
 
-absl::Status GetAndProcessResponseNotificationWithoutRevertingState(
-    ConsumerNotifierAdapter& notification_interface,
-    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map) {
-  ASSIGN_OR_RETURN(
-      auto response_status_map,
-      GetAppDbResponses(key_to_status_map.size(), notification_interface));
-
-  return UpdateResponsesAndRestoreState(key_to_status_map, response_status_map,
-                                        /*app_db_table=*/nullptr,
-                                        /*state_db_table=*/nullptr);
-}
-
 absl::StatusOr<pdpi::IrUpdateStatus>
 GetAndProcessResponseNotificationWithoutRevertingState(
     ConsumerNotifierAdapter& notification_interface, const std::string& key) {
@@ -280,18 +268,6 @@ absl::Status GetAndProcessResponseNotificationWithoutRevertingState(
   return UpdateResponsesAndRestoreState(key_to_status_map, response_status_map,
                                         /*app_db_table=*/nullptr,
                                         /*state_db_table=*/nullptr);
-}
-
-absl::StatusOr<pdpi::IrUpdateStatus>
-GetAndProcessResponseNotificationWithoutRevertingState(
-    ConsumerNotifierAdapter& notification_interface, const std::string& key) {
-  pdpi::IrUpdateStatus local_status;
-  absl::btree_map<std::string, pdpi::IrUpdateStatus*> key_to_status_map;
-  key_to_status_map[key] = &local_status;
-
-  RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
-      notification_interface, key_to_status_map));
-  return local_status;
 }
 
 }  // namespace sonic

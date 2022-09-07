@@ -1136,6 +1136,7 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       return gutil::InvalidArgumentErrorBuilder() << status.message();
     }
   }
+}
   return absl::OkStatus();
 }
 
@@ -1203,5 +1204,4 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
   // Spawn the receiver thread.
   return packetio_impl_->StartReceive(SendPacketInToController, use_genetlink);
 }
-
 }  // namespace p4rt_app

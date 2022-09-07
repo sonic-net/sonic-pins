@@ -56,14 +56,14 @@ void FakeSonicDbTable::SetResponseForKey(const std::string &key,
   responses_[key] = ResponseInfo{.code = code, .message = message};
 }
 
-void FakeSonicDbTable::PushNotification(const std::string &key) {
+bool FakeSonicDbTable::PushNotification(const std::string &key) {
   VLOG(1) << absl::StreamFormat("'%s' push notification: %s", debug_table_name_,
                                 key);
   notifications_.push(key);
   if (!UpdateAppStateDb(key)) {
     VLOG(2) << absl::StreamFormat("'%s' will not update StateDB entry for '%s'",
                                   debug_table_name_, key);
-    return;
+    return false;
   }
 
   // If the key exists Insert into the StateDb, otherwise delete.
@@ -73,9 +73,10 @@ void FakeSonicDbTable::PushNotification(const std::string &key) {
   } else {
     DeleteStateDbTableEntry(key);
   }
+  return true;
 }
 
-void FakeSonicDbTable::PushNotification(const std::string &key,
+bool FakeSonicDbTable::PushNotification(const std::string &key,
                                         const std::string &op,
                                         const SonicDbEntryMap &values) {
   VLOG(1) << absl::StreamFormat("'%s' push notification: %s, %s",
@@ -84,7 +85,7 @@ void FakeSonicDbTable::PushNotification(const std::string &key,
   if (!UpdateAppStateDb(key)) {
     VLOG(2) << absl::StreamFormat("'%s' will not update StateDB entry for '%s'",
                                   debug_table_name_, key);
-    return;
+    return false;
   }
 
   if (op == "SET") {
@@ -92,6 +93,7 @@ void FakeSonicDbTable::PushNotification(const std::string &key,
   } else {
     DeleteStateDbTableEntry(key);
   }
+  return true;
 }
 
 void FakeSonicDbTable::GetNextNotification(std::string &op, std::string &data,

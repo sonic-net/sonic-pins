@@ -179,7 +179,6 @@ namespace p4rt_app {
 namespace {
 
 sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
-                                 swss::DBConnector* app_state_db,
                                  swss::DBConnector* counters_db) {
   const std::string kP4rtResponseChannel =
       std::string("APPL_DB_") + APP_P4RT_TABLE_NAME + "_RESPONSE_CHANNEL";
@@ -191,8 +190,8 @@ sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
       .notification_consumer =
           absl::make_unique<sonic::ConsumerNotifierAdapter>(
               kP4rtResponseChannel, app_db),
-      .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
-          app_state_db, APP_P4RT_TABLE_NAME),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_db, APP_P4RT_TABLE_NAME),
       .counter_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
           counters_db, COUNTERS_TABLE),
   };
@@ -313,7 +312,7 @@ int main(int argc, char** argv) {
 
   // Create interfaces to interact with the P4RT_TABLE entries.
   p4rt_app::sonic::P4rtTable p4rt_table =
-      p4rt_app::CreateP4rtTable(&app_db, &app_state_db, &counters_db);
+      p4rt_app::CreateP4rtTable(&app_db, &counters_db);
   p4rt_app::sonic::VrfTable vrf_table =
       p4rt_app::CreateVrfTable(&app_db, &app_state_db);
   p4rt_app::sonic::HashTable hash_table =

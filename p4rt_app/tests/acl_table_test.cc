@@ -205,7 +205,7 @@ TEST_F(FbrAclTableTest, VrfClassificationCanMatchOnDstMac) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(acl_entry.GetKey()),
+      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(acl_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(acl_entry.GetValueMap())));
 }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "p4rt_app/sonic/adapters/fake_notification_producer_adapter.h"
 
+#include <utility>
 #include <vector>
 
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
@@ -28,12 +29,24 @@ FakeNotificationProducerAdapter::FakeNotificationProducerAdapter(
 
 void FakeNotificationProducerAdapter::send(
     const std::vector<swss::KeyOpFieldsValuesTuple>& updates) {
-   for (const auto& kfv : updates) {
-    SonicDbEntryMap values;
+  for (const auto& kfv : updates) {
+    SonicDbEntryMap entry_map;
+    SonicDbEntryList entry_list;
     for (const auto& [field, value] : kfvFieldsValues(kfv)) {
-      values[field] = value;
+      entry_map[field] = value;
+      entry_list.push_back(std::make_pair(field, value));
     }
-    sonic_db_table_.PushNotification(kfvKey(kfv), kfvOp(kfv), values);
+
+    // Only if the request succeeds should we update AppDb state.
+    if (sonic_db_table_.PushNotification(kfvKey(kfv), kfvOp(kfv), entry_map)) {
+      // Notifications to the OA can only "SET" or "DEL" an entry. So "SET" is
+      // used for both inserting and modifying an entry. Therefore, we always
+      // delete the current entry and only then re-insert it on "SET".
+      sonic_db_table_.DeleteTableEntry(kfvKey(kfv));
+      if (kfvOp(kfv) == "SET") {
+        sonic_db_table_.InsertTableEntry(kfvKey(kfv), entry_list);
+      }
+    }
   }
 }
 
