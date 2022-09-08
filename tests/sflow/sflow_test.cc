@@ -73,7 +73,7 @@ constexpr int kPacketsPerSecond = 16000;
 
 // The maximum number of bytes that should be copied from a sampled packet to
 // the sFlow datagram.
-constexpr int kSampleSize = 128;
+constexpr int kSampleSize = 512;
 
 // Once accumulated data reaches kMaxPacketSize, sFlow would generate an sFlow
 // datagram.
@@ -617,8 +617,12 @@ struct SflowResult {
   }
 };
 
-absl::StatusOr<std::string> GenerateSflowConfig(
-    thinkit::GenericTestbed* testbed, const std::string& gnmi_config) {
+// Populates `agent_addr_ipv6` from gNMI config, `sflow_interface_names` from
+// testbed.
+absl::Status GetSflowInfoFromSut(
+    thinkit::GenericTestbed* testbed, const std::string& gnmi_config,
+    std::string* agent_addr_ipv6,
+    absl::flat_hash_set<std::string>* sflow_interface_names) {
   ASSIGN_OR_RETURN(auto loopback_ipv6,
                    pins_test::ParseLoopbackIpv6s(gnmi_config));
 
@@ -626,17 +630,17 @@ absl::StatusOr<std::string> GenerateSflowConfig(
     return absl::FailedPreconditionError(absl::Substitute(
         "No loopback IP found for $0 testbed.", testbed->Sut().ChassisName()));
   }
+  *agent_addr_ipv6 = loopback_ipv6[0].ToString();
 
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       testbed->GetSutInterfaceInfo();
-  absl::flat_hash_set<std::string> sflow_interface_names;
+  sflow_interface_names->clear();
   for (const auto& [interface, info] : interface_info) {
     if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE) ||
         info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      sflow_interface_names.insert(interface);
+      sflow_interface_names->insert(interface);
     }
   }
-
   return absl::OkStatus();
 }
 
@@ -715,7 +719,7 @@ void SflowTestFixture::SetUp() {
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
   std::string gnmi_config = GetParam().gnmi_config;
-  ASSERT_OK_AND_ASSIGN(auto gnmi_config_json,
+  ASSERT_OK_AND_ASSIGN(nlohmann::json gnmi_config_json,
                        json_yang::ParseJson(gnmi_config));
   if (gnmi_config_json.find("openconfig-sampling:sampling") !=
           gnmi_config_json.end() &&
@@ -723,26 +727,41 @@ void SflowTestFixture::SetUp() {
                       ["openconfig-sampling-sflow:sflow"]["config"]
                       ["enabled"]) {
     sflow_enabled_by_config_ = true;
-    ASSERT_OK(testbed_->Environment().StoreTestArtifact("gnmi_config.txt",
-                                                        gnmi_config));
-  } else {
-    sflow_enabled_by_config_ = false;
-    ASSERT_OK(testbed_->Environment().StoreTestArtifact(
-        "gnmi_config_without_sflow.txt", gnmi_config));
-    ASSERT_OK_AND_ASSIGN(gnmi_config,
-                         GenerateSflowConfig(testbed_.get(), gnmi_config));
-    ASSERT_OK(testbed_->Environment().StoreTestArtifact(
-        "gnmi_config_with_sflow.txt",
-        json_yang::FormatJsonBestEffort(gnmi_config)));
   }
+  int sampling_size, sampling_rate;
+  std::string agent_addr_ipv6;
+  absl::flat_hash_set<std::string> sflow_enabled_interfaces;
+  std::vector<std::pair<std::string, int>> collector_address_and_port;
+  ASSERT_OK(
+      testbed_->Environment().StoreTestArtifact("gnmi_config", gnmi_config));
+  sampling_size = kSampleSize;
+  sampling_rate = kSamplingRateInterval;
+
+  // Set to loopback ip by default.
+  collector_address_and_port.push_back({"127.0.0.1", 6343});
+  ASSERT_OK(GetSflowInfoFromSut(testbed_.get(), gnmi_config, &agent_addr_ipv6,
+                                &sflow_enabled_interfaces));
+  ASSERT_OK_AND_ASSIGN(
+      gnmi_config, AppendSflowConfig(
+                       gnmi_config, agent_addr_ipv6, collector_address_and_port,
+                       sflow_enabled_interfaces, sampling_rate, sampling_size));
+  ASSERT_OK(testbed_->Environment().StoreTestArtifact(
+      "gnmi_config_with_sflow.txt",
+      json_yang::FormatJsonBestEffort(gnmi_config)));
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
       "p4info.pb.txt", GetP4Info().DebugString()));
   ASSERT_OK_AND_ASSIGN(sut_p4_session_,
                        pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
                            testbed_->Sut(), gnmi_config, GetP4Info()));
   ASSERT_OK_AND_ASSIGN(ir_p4_info_, pdpi::CreateIrP4Info(GetP4Info()));
-
   ASSERT_OK_AND_ASSIGN(gnmi_stub_, testbed_->Sut().CreateGnmiStub());
+
+  // Wait until all sFLow gNMI states are converged.
+  ASSERT_OK(pins_test::WaitForCondition(
+      VerifySflowStatesConverged, absl::Seconds(30), gnmi_stub_.get(),
+      agent_addr_ipv6, sampling_rate, sampling_size, collector_address_and_port,
+      sflow_enabled_interfaces));
+
   // TODO: Remove unused set speed in sFlow test.
   // Go through all the ports that connect to the Ixia and set them
   // first to 200GB.
@@ -1112,7 +1131,7 @@ TEST_P(SampleSizeTest, VerifySamplingSizeWorks) {
   if (sflow_tool_thread.joinable()) {
     sflow_tool_thread.join();
   }
-  LOG(INFO) << "sFlow samples with sampling size " << kSampleSize << ":\n"
+  LOG(INFO) << "sFlow samples with sampling size " << sample_size << ":\n"
             << sflow_result;
   EXPECT_OK(testbed_->Environment().StoreTestArtifact("sflow_result.txt",
                                                       sflow_result));
