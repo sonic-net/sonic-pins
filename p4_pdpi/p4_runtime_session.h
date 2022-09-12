@@ -73,12 +73,15 @@ inline grpc::ChannelArguments GrpcChannelArgumentsForP4rt() {
   return args;
 }
 
-// Returns the gRPC ChannelArguments for P4Runtime by setting
-// `GRPC_ARG_KEEPALIVE_TIME_MS` to 1s to avoid connection problems and serve as
-// reverse path signalling.
-// `GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA` to 0 to allow KeepAlive ping without
-// traffic in the transport.
-// `GRPC_ARG_MAX_METADATA_SIZE` to P4GRPCMaxMetadataSize because P4RT returns
+// Returns the gRPC ChannelArguments for P4Runtime by setting the following:
+// - `GRPC_ARG_KEEPALIVE_TIME_MS` to 1s to avoid connection problems and serve
+// as reverse path signalling.
+// - `GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA` to 0 to allow KeepAlive ping
+// without traffic in the transport,
+// - `GRPC_ARG_KEEPALIVE_TIMEOUT_MS` to 10s,
+// - `GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS` to 1 to allow keepalive on
+// grpc::Channel without ongoing RPCs,
+// - `GRPC_ARG_MAX_METADATA_SIZE` to P4GRPCMaxMetadataSize because P4RT returns
 // batch element status in the grpc::Status, which can require a large metadata
 // size.
 inline grpc::ChannelArguments
@@ -87,7 +90,9 @@ GrpcChannelArgumentsForP4rtWithAggressiveKeepAlive() {
   args.SetInt(GRPC_ARG_MAX_METADATA_SIZE, P4GRPCMaxMetadataSize());
   // Allows grpc::channel to send keepalive ping without on-going traffic.
   args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
-  args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1000 /*1 second*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 10'000 /*10 seconds*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1'000 /*1 second*/);
   return args;
 }
 
@@ -180,10 +185,16 @@ class P4RuntimeSession {
   // WARNING: This is not thread-safe.
   // TODO: Remove once clients have migrated to using Finish.
   void TryCancel() { stream_channel_context_->TryCancel(); }
+
   // Closes the RPC connection by telling the server it is done writing, then
   // reads and logs any outstanding messages from the server. Once the server
   // finishes handling all outstanding writes it will close.
   absl::Status Finish()
+      ABSL_LOCKS_EXCLUDED(stream_write_lock_, stream_read_lock_);
+
+  // Like `Finish`, but returns any outstanding message from the server.
+  absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+  ReadStreamChannelResponsesAndFinish()
       ABSL_LOCKS_EXCLUDED(stream_write_lock_, stream_read_lock_);
 
  private:
