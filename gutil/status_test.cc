@@ -20,6 +20,7 @@
 #include <tuple>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "util/task/error_space.h"
@@ -80,6 +81,13 @@ absl::Status ReturnStatusWithOverriddenError(std::string status_message,
                .SetCode(code)
            << streamed_message;
   }
+}
+
+TEST(StatusTest, TestStableStatusToString) {
+  std::string status_message = "Message";
+  absl::Status status =
+      util::StatusBuilder(absl::InvalidArgumentError(status_message));
+  EXPECT_EQ(StableStatusToString(status), "INVALID_ARGUMENT: Message\n");
 }
 
 TEST(StatusTest, TestPrependMessage) {
