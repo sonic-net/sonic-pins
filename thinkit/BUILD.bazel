@@ -308,7 +308,6 @@ cc_library(
     hdrs = ["control_device.h"],
     deps = [
         ":packet_generation_finalizer",
-        "@com_github_gnoi//diag:diag_cc_grpc_proto",
         "@com_github_gnoi//diag:diag_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/container:flat_hash_set",
