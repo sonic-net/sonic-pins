@@ -56,11 +56,12 @@ cc_test(
 
 cc_library(
     name = "generic_testbed_utils",
+    testonly = True,
     srcs = ["generic_testbed_utils.cc"],
     hdrs = ["generic_testbed_utils.h"],
     deps = [
-        "//gutil:status",
         "//lib/gnmi:gnmi_helper",
+        "//lib/validator:validator_lib",
         "//thinkit:generic_testbed",
         "//thinkit:switch",
         "//thinkit/proto:generic_testbed_cc_proto",
@@ -80,6 +81,7 @@ cc_test(
         "//gutil:status_matchers",
         "//gutil:testing",
         "//thinkit:generic_testbed",
+        "//thinkit:mock_control_device",
         "//thinkit:mock_generic_testbed",
         "//thinkit:mock_switch",
         "//thinkit/proto:generic_testbed_cc_proto",
