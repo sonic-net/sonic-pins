@@ -1,0 +1,45 @@
+=== Test: AclIngressRequiresIPMatchFieldWhenUsingEcnMatchField ===
+--- INPUT: WriteRequest ------------------------------------
+updates {
+  type: INSERT
+  table_entry {
+    table_name: "acl_ingress_table"
+    matches {
+      name: "dst_mac"
+      ternary {
+        value {
+          mac: "02:02:02:02:02:02"
+        }
+        mask {
+          mac: "ff:ff:ff:ff:ff:ff"
+        }
+      }
+    }
+    matches {
+      name: "ecn"
+      ternary {
+        value {
+          hex_str: "0x3"
+        }
+        mask {
+          hex_str: "0x3"
+        }
+      }
+    }
+    priority: 1
+    action {
+      name: "acl_copy"
+      params {
+        name: "qos_queue"
+        value {
+          str: "2"
+        }
+      }
+    }
+  }
+}
+--- OUTPUT: WriteResponse ----------------------------------
+UNKNOWN: Batch failed, individual results:
+#1: INVALID_ARGUMENT: Does not meet constraints required for the table entry.
+
+
