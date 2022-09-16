@@ -41,13 +41,6 @@ def pins_infra_deps():
             strip_prefix = "googletest-release-1.11.0",
             sha256 = "b4870bf121ff7795ba20d20bcdd8627b8e088f2d1dab299a031c1034eddc93d5",
         )
-    if not native.existing_rule("com_google_benchmark"):
-        http_archive(
-            name = "com_google_benchmark",
-            urls = ["https://github.com/google/benchmark/archive/v1.5.4.tar.gz"],
-            strip_prefix = "benchmark-1.5.4",
-            sha256 = "e3adf8c98bb38a198822725c0fc6c0ae4711f16fbbf6aeb311d5ad11e5a081b5",
-        )
     if not native.existing_rule("com_google_protobuf"):
         http_archive(
             name = "com_google_protobuf",
@@ -85,23 +78,6 @@ def pins_infra_deps():
             url = "https://github.com/gflags/gflags/archive/v2.2.2.tar.gz",
             strip_prefix = "gflags-2.2.2",
             sha256 = "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf",
-        )
-    if not native.existing_rule("com_github_gnmi"):
-        http_archive(
-            name = "com_github_gnmi",
-            # Newest commit on main on 2020-09-10.
-            # TODO: Upstream changes from this private repo to official gnmi repo.
-            url = "https://github.com/vamsipunati/gnmi/archive/ffcc8725208e76d19981e71d22006b779819ae0a.zip",
-            strip_prefix = "gnmi-ffcc8725208e76d19981e71d22006b779819ae0a",
-            sha256 = "6e16b99d0ccb1d46703ccdc659d1e59e958df24fe82c8f07d451f3ffe042da5b",
-        )
-    if not native.existing_rule("com_github_gnoi"):
-        http_archive(
-            name = "com_github_gnoi",
-            # Newest commit on main on 2021-11-08.
-            url = "https://github.com/openconfig/gnoi/archive/1ece8ed91a0d5d283219a99eb4dc6c7eadb8f287.zip",
-            strip_prefix = "gnoi-1ece8ed91a0d5d283219a99eb4dc6c7eadb8f287",
-            sha256 = "991ff13a0b28f2cdc2ccb123261e7554d9bcd95c00a127411939a3a8c8a9cc62",
         )
     if not native.existing_rule("com_github_p4lang_p4c"):
         http_archive(
