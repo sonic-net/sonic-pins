@@ -43,14 +43,13 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/packetlib/packetlib.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
-#include "include/nlohmann/json.hpp"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "system/system.grpc.pb.h"
 #include "system/system.pb.h"
@@ -286,5 +285,10 @@ absl::StatusOr<absl::flat_hash_set<std::string>> PinsControlDevice::GetUpLinks(
 }
 
 absl::Status PinsControlDevice::CheckUp() { return SwitchReady(*sut_); }
+
+absl::Status PinsControlDevice::ValidatePortsUp(
+    absl::Span<const std::string> interfaces) {
+  return PortsUp(*sut_, interfaces);
+}
 
 }  // namespace pins_test

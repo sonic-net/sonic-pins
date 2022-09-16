@@ -81,6 +81,9 @@ class PinsControlDevice : public thinkit::ControlDevice {
 
   absl::Status CheckUp() override;
 
+  absl::Status ValidatePortsUp(
+      absl::Span<const std::string> interfaces) override;
+
  private:
   std::unique_ptr<thinkit::Switch> sut_;
   sai::Instantiation instantiation_;

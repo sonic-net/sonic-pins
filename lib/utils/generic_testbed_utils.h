@@ -88,6 +88,10 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfaces(
 absl::StatusOr<std::vector<InterfaceLink>> GetUpLinks(
     decltype(GetAllControlLinks) get_links, thinkit::GenericTestbed& testbed);
 
+// Checks whether all connected ports of SUT and connected Control Switch
+// interfaces are up.
+absl::Status ValidateTestbedPortsUp(thinkit::GenericTestbed& testbed);
+
 }  // namespace pins_test
 
 #endif  // GOOGLE_LIB_UTILS_GENERIC_TESTBED_UTILS_H_
