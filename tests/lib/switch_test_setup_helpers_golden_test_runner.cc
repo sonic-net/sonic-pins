@@ -438,34 +438,10 @@ int main(int argc, char** argv) {
               exact { str: "mirror-session-201326593" }
             }
             action {
-              name: "mirror_as_ipv4_erspan"
+              name: "mirror_with_psamp_encapsulation"
               params {
-                name: "port"
+                name: "monitor_port"
                 value { str: "6" }
-              }
-              params {
-                name: "src_ip"
-                value { ipv4: "10.206.196.0" }
-              }
-              params {
-                name: "dst_ip"
-                value { ipv4: "172.20.0.202" }
-              }
-              params {
-                name: "src_mac"
-                value { mac: "00:02:03:04:05:06" }
-              }
-              params {
-                name: "dst_mac"
-                value { mac: "00:1a:11:17:5f:80" }
-              }
-              params {
-                name: "ttl"
-                value { hex_str: "0x40" }
-              }
-              params {
-                name: "tos"
-                value { hex_str: "0x00" }
               }
             }
           )pb",

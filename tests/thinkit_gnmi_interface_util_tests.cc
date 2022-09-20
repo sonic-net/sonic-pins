@@ -1141,6 +1141,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_OK(breakout_info.status());
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].physical_channels,
             "[0,1,2,3,4,5,6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "400G");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1155,6 +1156,8 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
             "[0,1,2,3]");
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].physical_channels,
             "[4,5,6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "200G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].breakout_speed, "200G");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1169,6 +1172,9 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
             "[0,1,2,3]");
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].physical_channels, "[4,5]");
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/7"].physical_channels, "[6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "200G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].breakout_speed, "100G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/7"].breakout_speed, "100G");
 }
 
 TEST_F(
@@ -1183,6 +1189,9 @@ TEST_F(
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/3"].physical_channels, "[2,3]");
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].physical_channels,
             "[4,5,6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "100G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/3"].breakout_speed, "100G");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/5"].breakout_speed, "200G");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1194,6 +1203,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   ASSERT_OK(breakout_info.status());
   EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].physical_channels,
             "[0,1,2,3,4,5,6,7]");
+  EXPECT_EQ(breakout_info.value()["Ethernet1/1/1"].breakout_speed, "400G");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -1216,6 +1226,17 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       pins_test::GetExpectedPortInfoForBreakoutMode(port, breakout_mode),
       StatusIs(absl::StatusCode::kInternal,
                HasSubstr("Failed to convert string (X) to integer")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetExpectedPortInfoForBreakoutModeInvalidModeFailure) {
+  const std::string port = "Ethernet1/1/1";
+  absl::string_view breakout_mode = "1";
+
+  EXPECT_THAT(
+      pins_test::GetExpectedPortInfoForBreakoutMode(port, breakout_mode),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Invalid breakout mode found: 1")));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
