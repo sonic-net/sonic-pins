@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -22,9 +23,16 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/numeric/int128.h"
+#include "absl/random/distributions.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
@@ -44,10 +52,13 @@
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "tests/lib/p4rt_fixed_table_programming_helper.h"
 
 // The test can be run over a unix socket or TCP connection. In general (i.e.
 // verify for your own enviornment) the socket will be unsecured while the TCP
@@ -79,6 +90,14 @@ DEFINE_string(host_name, "",
 DEFINE_int64(election_id, -1, "Election id to be used");
 DEFINE_uint64(p4rt_device_id, 1, "P4RT device ID");
 
+// The test will create and install a random set of routes (i.e. RIFs, VRFs, and
+// NextHops) that the IPv4 flows can be programmed against. The time needed to
+// install these flows is not included in the reported latency.
+DEFINE_string(port_ids, "1", "A comma separated list of usable ports.");
+DEFINE_int32(vrfs, 64, "The number of VRFs to install.");
+DEFINE_int32(rifs, 64, "The number of router interfaces to install.");
+DEFINE_int32(next_hops, 512, "The number of next-hop entries to install.");
+
 // A run will automatically generate `number_batches` write requests each with
 // `batch_size` updates (i.e. number_batches x batch_size total flows). Runtime
 // only includes the P4RT Write() time, and not the generation.
@@ -88,113 +107,48 @@ DEFINE_int32(batch_size, 1000, "Number of entries in each batch");
 namespace p4rt_app {
 namespace {
 
-static constexpr absl::string_view router_interface = R"pb(
-  updates {
-    type: INSERT
-    entity {
-      table_entry {
-        table_id: 33554497
-        match {
-          field_id: 1
-          exact { value: "1" }
-        }
-        action {
-          action {
-            action_id: 16777218
-            params { param_id: 1 value: "1" }
-            params { param_id: 2 value: "\000\002\003\004\005\005" }
-          }
-        }
-      }
-    }
-  }
-)pb";
+using P4RTUpdateByNameMap = absl::flat_hash_map<std::string, p4::v1::Update>;
 
-static constexpr absl::string_view neighbor_entry = R"pb(
-  updates {
-    type: INSERT
-    entity {
-      table_entry {
-        table_id: 33554496
-        match {
-          field_id: 1
-          exact { value: "1" }
-        }
-        match {
-          field_id: 2
-          exact { value: "10.0.0.1" }
-        }
-        action {
-          action {
-            action_id: 16777217
-            params { param_id: 1 value: "\000\032\021\027_\200" }
-          }
-        }
-      }
-    }
-  }
-)pb";
+template <typename T>
+absl::StatusOr<absl::flat_hash_set<T>> RandomSetOfValues(absl::BitGen& bitgen,
+                                                         const T& min_value,
+                                                         const T& max_value,
+                                                         int size) {
+  // We use the max strikes count to prevent infinite loops.
+  const int max_strikes = 2 * size;
+  int strikes = 0;
 
-static constexpr absl::string_view nexthop_entry = R"pb(
-  updates {
-    type: INSERT
-    entity {
-      table_entry {
-        table_id: 33554498
-        match {
-          field_id: 1
-          exact { value: "8" }
-        }
-        action {
-          action {
-            action_id: 16777236
-            params { param_id: 1 value: "1" }
-            params { param_id: 2 value: "10.0.0.1" }
-          }
-        }
-      }
+  absl::flat_hash_set<T> result;
+  while (result.size() < size) {
+    if (!result.insert(absl::Uniform<T>(bitgen, min_value, max_value)).second) {
+      strikes++;
+    }
+    if (strikes > max_strikes) {
+      return absl::UnknownError(
+          absl::StrCat("Could not generate ", size, " random values."));
     }
   }
-)pb";
+  return result;
+}
 
-static constexpr absl::string_view vrf_entry = R"pb(
-  updates {
-    type: INSERT
-    entity {
-      table_entry {
-        table_id: 33554506
-        match {
-          field_id: 1
-          exact { value: "12" }
-        }
-        action { action { action_id: 24742814 } }
-      }
-    }
+absl::StatusOr<std::vector<std::string>> GetKeys(
+    const P4RTUpdateByNameMap& updates) {
+  if (updates.empty()) {
+    return absl::InvalidArgumentError("no updates were created");
   }
-)pb";
+  std::vector<std::string> result;
+  for (const auto& [name, _] : updates) {
+    result.push_back(name);
+  }
+  return result;
+}
 
-static constexpr absl::string_view ip4table_entry = R"pb(
-  type: $0
-  entity {
-    table_entry {
-      table_id: 33554500
-      match {
-        field_id: 1
-        exact { value: "12" }
-      }
-      match {
-        field_id: 2
-        lpm { value: "" prefix_len: 32 }
-      }
-      action {
-        action {
-          action_id: 16777221
-          params { param_id: 1 value: "8" }
-        }
-      }
-    }
+void AppendUpdatesToWriteRequest(p4::v1::WriteRequest& request,
+                                 const P4RTUpdateByNameMap& updates_by_name) {
+  for (const auto& [_, update] : updates_by_name) {
+    *request.add_updates() = update;
   }
-)pb";
+}
 
 std::string ReadFileOrEmpty(const std::string& path) {
   auto file = gutil::ReadFile(path);
@@ -264,12 +218,6 @@ class P4rtRouteTest : public testing::Test {
 
     // Clear the current table entries, if any.
     ASSERT_OK(pdpi::ClearTableEntries(p4rt_session_.get()));
-
-    // Create a default route for the IPv4 entries.
-    ASSERT_OK(ProgramRequest(router_interface, p4::v1::Update::INSERT));
-    ASSERT_OK(ProgramRequest(neighbor_entry, p4::v1::Update::INSERT));
-    ASSERT_OK(ProgramRequest(nexthop_entry, p4::v1::Update::INSERT));
-    ASSERT_OK(ProgramRequest(vrf_entry, p4::v1::Update::INSERT));
   }
 
   void TearDown() override {
@@ -279,16 +227,13 @@ class P4rtRouteTest : public testing::Test {
     }
   }
 
-  absl::Status ProgramRequest(absl::string_view request_str,
-                              p4::v1::Update::Type type) {
-    p4::v1::WriteRequest request;
-    RETURN_IF_ERROR(
-        gutil::ReadProtoFromString(std::string{request_str}, &request));
-    request.mutable_updates(0)->set_type(type);
-    RETURN_IF_ERROR(
-        pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request))
-        << "Failed to program the request: " << request.ShortDebugString();
-    return absl::OkStatus();
+  // Set connection & switch IDs so the request will not be rejected.
+  void UpdateRequestMetadata(std::vector<p4::v1::WriteRequest>& requests) {
+    for (auto& request : requests) {
+      request.set_device_id(p4rt_session_->DeviceId());
+      request.set_role(p4rt_session_->Role());
+      *request.mutable_election_id() = p4rt_session_->ElectionId();
+    }
   }
 
   absl::StatusOr<absl::Duration> SendBatchRequest(
@@ -311,65 +256,194 @@ class P4rtRouteTest : public testing::Test {
   pdpi::IrP4Info ir_p4info_;
 };
 
-absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeWriteRequests(
-    uint32_t number_batches, uint32_t batch_size, uint64_t device_id,
-    p4::v1::Uint128 election_id, const std::string& role) {
-  constexpr absl::string_view update_type = "INSERT";
-  std::vector<p4::v1::WriteRequest> requests(number_batches);
+// When testing we randomly generate routes to program. RouteEntryInfo acts as a
+// cache of table entries subsiquent flows can build upon. This also makes the
+// order this object is built important! For example we should have a list of
+// usable port IDs before creating RIFs which rely on port IDs. Similarly for
+// NextHops which requires RIFs.
+struct RouteEntryInfo {
+  std::vector<int32_t> port_ids;
+  P4RTUpdateByNameMap vrfs_by_name;
+  P4RTUpdateByNameMap router_interfaces_by_name;
+  P4RTUpdateByNameMap neighbors_by_name;
+  P4RTUpdateByNameMap next_hops_by_name;
+};
 
-  uint32_t ip_prefix = 0x14000000;
-  uint32_t subnet0, subnet1, subnet2, subnet3;
-  for (uint32_t i = 0; i < number_batches; i++) {
-    // Set connection & switch IDs so the request will not be rejected by the
-    // switch.
-    requests[i].set_device_id(device_id);
-    requests[i].set_role(role);
-    *requests[i].mutable_election_id() = election_id;
-
-    for (uint32_t j = 0; j < batch_size; j++) {
-      subnet3 = ip_prefix & 0xff;
-      subnet2 = (ip_prefix >> 8) & 0xff;
-      subnet1 = (ip_prefix >> 16) & 0xff;
-      subnet0 = (ip_prefix >> 24);
-      const std::string ip_str =
-          absl::Substitute("$0.$1.$2.$3", subnet0, subnet1, subnet2, subnet3);
-      ASSIGN_OR_RETURN(const auto ip_address,
-                       netaddr::Ipv4Address::OfString(ip_str));
-      const auto ip_byte_str = ip_address.ToP4RuntimeByteString();
-      auto* ptr = requests[i].add_updates();
-      if (!google::protobuf::TextFormat::ParseFromString(
-              absl::Substitute(ip4table_entry, update_type), ptr)) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Could not parse text as P4 Update for Ip address: "
-               << ip_byte_str;
-      }
-      ptr->mutable_entity()
-          ->mutable_table_entry()
-          ->mutable_match(1)
-          ->mutable_lpm()
-          ->set_value(ip_byte_str);
-      ip_prefix++;
+absl::StatusOr<std::vector<int32_t>> ParsePortIds(
+    absl::string_view available_port_ids) {
+  std::vector<int32_t> port_ids;
+  for (const auto& str : absl::StrSplit(available_port_ids, ',')) {
+    int32_t id = 0;
+    if (!absl::SimpleAtoi(str, &id)) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Could not translate '", str, "' to an int."));
     }
+
+    if (id == 0) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Port ID 0 is invalid: ", str));
+    }
+    port_ids.push_back(id);
+  }
+  return port_ids;
+}
+
+absl::Status GenerateRandomVrfs(absl::BitGen& bitgen, RouteEntryInfo& routes,
+                                const pdpi::IrP4Info& ir_p4info,
+                                int32_t count) {
+  ASSIGN_OR_RETURN(auto vrfs,
+                   RandomSetOfValues<int16_t>(bitgen, /*min_value=*/1,
+                                              /*max_value=*/0x00FF, count));
+  for (const auto& vrf : vrfs) {
+    std::string name = absl::StrCat("vrf-", vrf);
+    ASSIGN_OR_RETURN(
+        routes.vrfs_by_name[name],
+        gpins::VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, name));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status GenerateRandomRIFs(absl::BitGen& bitgen, RouteEntryInfo& routes,
+                                const pdpi::IrP4Info& ir_p4info,
+                                int32_t count) {
+  if (routes.port_ids.empty()) {
+    return absl::InvalidArgumentError(
+        "Port IDs need to be created before RIFs");
   }
 
+  ASSIGN_OR_RETURN(
+      auto addresses,
+      RandomSetOfValues<int64_t>(bitgen, /*min_value=*/0,
+                                 /*max_value=*/0x00'FF'FF'FF'FF'FF, count));
+  for (const auto& address : addresses) {
+    netaddr::MacAddress mac(0x10'00'00'00'00'00 + address);
+    std::string name = absl::StrCat("rif-", mac.ToString());
+
+    size_t port = absl::Uniform<size_t>(bitgen, 0, routes.port_ids.size());
+    ASSIGN_OR_RETURN(routes.router_interfaces_by_name[name],
+                     gpins::RouterInterfaceTableUpdate(
+                         ir_p4info, p4::v1::Update::INSERT, name,
+                         absl::StrCat(routes.port_ids[port]), mac.ToString()));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status GenerateRandomNextHops(absl::BitGen& bitgen,
+                                    RouteEntryInfo& routes,
+                                    const pdpi::IrP4Info& ir_p4info,
+                                    int32_t count) {
+  ASSIGN_OR_RETURN(std::vector<std::string> rifs,
+                   GetKeys(routes.router_interfaces_by_name),
+                   _ << "RIFs need to be created before next hops");
+  ASSIGN_OR_RETURN(
+      auto addresses,
+      RandomSetOfValues<int64_t>(bitgen, /*min_value=*/0,
+                                 /*max_value=*/0x00'FF'FF'FF'FF'FF, count));
+  for (const auto& address : addresses) {
+    netaddr::MacAddress mac(0x20'00'00'00'00'00 + address);
+    std::string neighbor_name = mac.ToLinkLocalIpv6Address().ToString();
+    std::string nexthop_name = absl::StrCat("nh-", mac.ToString());
+    std::string rif = rifs[absl::Uniform<size_t>(bitgen, 0, rifs.size())];
+
+    ASSIGN_OR_RETURN(
+        routes.neighbors_by_name[neighbor_name],
+        gpins::NeighborTableUpdate(ir_p4info, p4::v1::Update::INSERT, rif,
+                                   neighbor_name, mac.ToString()));
+    ASSIGN_OR_RETURN(
+        routes.next_hops_by_name[nexthop_name],
+        gpins::NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                  nexthop_name, rif, neighbor_name));
+  }
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv4WriteRequests(
+    absl::BitGen& bitgen, const RouteEntryInfo& routes,
+    const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
+    uint32_t batch_size) {
+  ASSIGN_OR_RETURN(std::vector<std::string> vrfs, GetKeys(routes.vrfs_by_name),
+                   _ << "VRFs need to be created before IPv4");
+  ASSIGN_OR_RETURN(std::vector<std::string> nexthops,
+                   GetKeys(routes.next_hops_by_name),
+                   _ << "Next hops need to be created before IPv4");
+  ASSIGN_OR_RETURN(auto addresses,
+                   RandomSetOfValues<int32_t>(bitgen, /*min_value=*/0x0100'0000,
+                                              /*max_value=*/0x1FFF'FFFF,
+                                              number_batches * batch_size));
+
+  std::vector<p4::v1::WriteRequest> requests;
+  for (const int32_t address : addresses) {
+    if (requests.empty() || requests.back().updates_size() == batch_size) {
+      requests.push_back(p4::v1::WriteRequest{});
+    }
+
+    netaddr::Ipv4Address ip(address);
+    std::string vrf = vrfs[absl::Uniform<size_t>(bitgen, 0, vrfs.size())];
+    std::string nexthop =
+        nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
+    ASSIGN_OR_RETURN(
+        *requests.back().add_updates(),
+        gpins::Ipv4TableUpdate(
+            ir_p4info, p4::v1::Update::INSERT,
+            gpins::IpTableOptions{
+                .vrf_id = vrf,
+                .dst_addr_lpm = std::make_pair(ip.ToString(), 32),
+                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .nexthop_id = nexthop,
+            }));
+  }
+
+  // Sanity checks.
+  if (requests.size() != number_batches) {
+    return absl::UnknownError(
+        absl::StrCat("Failed to generate enough batches: want=", number_batches,
+                     " got=", requests.size()));
+  }
   return requests;
 }
 
-TEST_F(P4rtRouteTest, ProgramIp4RouteEntries) {
+TEST_F(P4rtRouteTest, MeasureWriteLatency) {
   int32_t number_of_batches = FLAGS_number_batches;
   int32_t requests_per_batch = FLAGS_batch_size;
+  std::string available_port_ids = FLAGS_port_ids;
+  int32_t number_of_vrfs = FLAGS_vrfs;
+  int32_t number_of_rifs = FLAGS_rifs;
+  int32_t number_of_nexthops = FLAGS_next_hops;
 
-  // Pre-compute all requests so they can be sent as quickly as possible to the
-  // switch under test.
+  // Randomly generate the routes that will be used by these tests.
+  absl::BitGen bitgen;
+  RouteEntryInfo routes;
+  ASSERT_OK_AND_ASSIGN(routes.port_ids, ParsePortIds(available_port_ids));
+  ASSERT_OK(GenerateRandomVrfs(bitgen, routes, ir_p4info_, number_of_vrfs));
+  ASSERT_OK(GenerateRandomRIFs(bitgen, routes, ir_p4info_, number_of_rifs));
+  ASSERT_OK(
+      GenerateRandomNextHops(bitgen, routes, ir_p4info_, number_of_nexthops));
+
+  // Install the route entries that are needed by the IPv4 flows.
+  std::vector<p4::v1::WriteRequest> premeasurement_requests;
+  AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                              routes.vrfs_by_name);
+  AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                              routes.router_interfaces_by_name);
+  AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                              routes.neighbors_by_name);
+  AppendUpdatesToWriteRequest(premeasurement_requests.emplace_back(),
+                              routes.next_hops_by_name);
+  UpdateRequestMetadata(premeasurement_requests);
+  ASSERT_OK(SendBatchRequest(premeasurement_requests).status());
+
+  // Pre-compute all the IPv4 requests so they can be sent as quickly as
+  // possible to the switch under test.
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::WriteRequest> requests,
-      ComputeWriteRequests(number_of_batches, requests_per_batch,
-                           p4rt_session_->DeviceId(),
-                           p4rt_session_->ElectionId(), p4rt_session_->Role()));
+      ComputeIpv4WriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
+                               requests_per_batch));
+  UpdateRequestMetadata(requests);
+
+  // Measure the execution time and write to stdout so that callers can parse
+  // the output.
   ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
                        SendBatchRequest(requests));
-
-  // Write to stdout so that callers can parse the output.
   std::cout << "Successfully wrote IpTable entries to the switch, time: "
             << ToInt64Milliseconds(execution_time) << "(msecs)" << std::endl;
 }
