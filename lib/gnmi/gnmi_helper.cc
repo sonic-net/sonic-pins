@@ -940,22 +940,40 @@ absl::Status MapP4rtIdsToMatchingInterfaces(
 }
 
 // Sets the P4RT IDs of `interfaces` by:
-// 1. Deleting them from any existing interfaces on the switch (since a P4RT ID
-//    can only be mapped to a single interface).
-// 2. Setting the P4RT ID of every given interface that has one.
+// 1. Determining which interfaces are already correctly set.
+// 2. Deleting the rest of the P4RT IDs from any existing interfaces on the
+//    switch (since a P4RT ID can only be mapped to a single interface).
+// 3. Setting the P4RT ID of the remaining interfaces that have one.
 absl::Status SetInterfaceP4rtIds(gnmi::gNMI::StubInterface& gnmi_stub,
                                  const openconfig::Interfaces& interfaces) {
+  // Determine which interfaces need remapping.
+  ASSIGN_OR_RETURN(const openconfig::Interfaces& existing_interfaces,
+                   GetInterfacesAsProto(gnmi_stub, gnmi::GetRequest::CONFIG));
+  std::vector<openconfig::Interfaces::Interface> interfaces_to_modify;
+
+  for (const auto& interface : interfaces.interfaces()) {
+    // If the interface is not already correctly mapped in
+    // `existing_interfaces`, we add it to `interfaces_to_modify`.
+    if (absl::c_none_of(existing_interfaces.interfaces(),
+                        [&interface](const auto& existing_interface) {
+                          return interface.name() ==
+                                     existing_interface.name() &&
+                                 interface.config().p4rt_id() ==
+                                     existing_interface.config().p4rt_id();
+                        })) {
+      interfaces_to_modify.push_back(interface);
+    }
+  }
+
   // Get the set of P4RT IDs to map.
   absl::btree_set<int> desired_p4rt_ids;
-  for (const auto& interface : interfaces.interfaces()) {
+  for (const auto& interface : interfaces_to_modify) {
     if (interface.config().has_p4rt_id()) {
       desired_p4rt_ids.insert(interface.config().p4rt_id());
     }
   }
 
   // Delete `desired_p4rt_ids` from existing interfaces.
-  ASSIGN_OR_RETURN(const openconfig::Interfaces& existing_interfaces,
-                   GetInterfacesAsProto(gnmi_stub, gnmi::GetRequest::CONFIG));
   for (const auto& interface : existing_interfaces.interfaces()) {
     if (desired_p4rt_ids.contains(interface.config().p4rt_id())) {
       RETURN_IF_ERROR(DeleteInterfaceP4rtId(gnmi_stub, interface))
@@ -964,7 +982,7 @@ absl::Status SetInterfaceP4rtIds(gnmi::gNMI::StubInterface& gnmi_stub,
   }
 
   // Then, set the P4RT IDs for all given `interfaces`.
-  for (const auto& interface : interfaces.interfaces()) {
+  for (const auto& interface : interfaces_to_modify) {
     if (interface.config().has_p4rt_id()) {
       RETURN_IF_ERROR(ModifyInterfaceP4rtId(gnmi_stub, interface))
           << "failed to delete, then set interface " << interface.name()
@@ -1165,10 +1183,14 @@ GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub) {
     ASSIGN_OR_RETURN(json vendor,
                      GetField(state, "openconfig-platform-ext:vendor-name"));
     ASSIGN_OR_RETURN(json part_number, GetField(state, "part-no"));
+    ASSIGN_OR_RETURN(json manufactuer_name, GetField(state, "mfg-name"));
+    ASSIGN_OR_RETURN(json serial_number, GetField(state, "serial-no"));
     ASSIGN_OR_RETURN(json rev, GetField(state, "firmware-version"));
     part_information[name.get<std::string>()] = TransceiverPart{
         .vendor = vendor.get<std::string>(),
         .part_number = part_number.get<std::string>(),
+        .manufacturer_name = manufactuer_name.get<std::string>(),
+        .serial_number = serial_number.get<std::string>(),
         .rev = rev.get<std::string>(),
     };
   }
