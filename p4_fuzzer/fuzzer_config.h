@@ -14,8 +14,12 @@
 #ifndef GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
 #define GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
 
+#include <optional>
+
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_set.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_fuzzer/table_entry_key.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
@@ -45,8 +49,16 @@ struct FuzzerConfig {
   absl::flat_hash_set<std::string> disabled_fully_qualified_names;
   // The P4RT role the fuzzer should use.
   std::string role;
+  // The probability of performing a mutation on a given table entry.
+  float mutate_update_probability;
+  // A function for masking inequalities (due to known bugs) between entries
+  // with the same TableEntryKey on the switch and in the fuzzer.
+  std::optional<
+      std::function<bool(const pdpi::IrTableEntry&, const pdpi::IrTableEntry&)>>
+      TreatAsEqualDuringReadDueToKnownBug;
   // Controls whether empty ActionProfile one-shots should be generated.
   bool no_empty_action_profile_groups = false;
+
 };
 
 }  // namespace p4_fuzzer
