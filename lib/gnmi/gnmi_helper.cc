@@ -15,7 +15,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 
 #include <cstdint>
-#include <iterator>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
@@ -31,6 +32,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -44,8 +46,7 @@
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "glog/logging.h"
 #include "google/protobuf/any.pb.h"
-#include "google/protobuf/map.h"
-#include "grpcpp/impl/codegen/client_context.h"
+#include "grpcpp/client_context.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -146,6 +147,29 @@ absl::StatusOr<json> AccessJsonValue(const json& json_value,
     ASSIGN_OR_RETURN(json_result, GetField(json_result, current_path));
   }
   return json_result;
+}
+
+absl::StatusOr<uint64_t> ParseJsonValueAsUint(
+    const json& json_value, absl::Span<const absl::string_view> path) {
+  ASSIGN_OR_RETURN(json value, AccessJsonValue(json_value, path));
+  if (uint64_t int_value;
+      absl::SimpleAtoi(value.get<std::string>(), &int_value)) {
+    return int_value;
+  }
+  return absl::InvalidArgumentError(absl::StrCat(
+      json_yang::DumpJson(value), " could not be parsed as an uint64."));
+}
+
+absl::StatusOr<json> GetElement(const json& array, int index) {
+  if (!array.is_array()) {
+    return absl::InvalidArgumentError("Passed in json was not an array.");
+  }
+  if (index < 0 || index >= array.size()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Index ", index, " is out of range (array is size ",
+                     array.size(), ")."));
+  }
+  return json(array[index]);
 }
 
 absl::StatusOr<json> GetBreakoutConfigWithIndex(const json& json_array,
@@ -265,6 +289,97 @@ absl::Status ModifyInterfaceP4rtId(
       &gnmi_stub, ops_config_path, GnmiSetType::kDelete, /*value=*/""));
   return pins_test::SetGnmiConfigPath(&gnmi_stub, ops_config_path,
                                       GnmiSetType::kUpdate, ops_val);
+}
+
+absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
+  Counters counters;
+  ASSIGN_OR_RETURN(
+      counters.in_pkts,
+      ParseJsonValueAsUint(interface_json, {"state", "counters", "in-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.out_pkts,
+      ParseJsonValueAsUint(interface_json, {"state", "counters", "out-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.in_octets,
+      ParseJsonValueAsUint(interface_json, {"state", "counters", "in-octets"}));
+  ASSIGN_OR_RETURN(counters.out_octets,
+                   ParseJsonValueAsUint(interface_json,
+                                        {"state", "counters", "out-octets"}));
+  ASSIGN_OR_RETURN(counters.in_unicast_pkts,
+                   ParseJsonValueAsUint(interface_json, {"state", "counters",
+                                                         "in-unicast-pkts"}));
+  ASSIGN_OR_RETURN(counters.out_unicast_pkts,
+                   ParseJsonValueAsUint(interface_json, {"state", "counters",
+                                                         "out-unicast-pkts"}));
+  ASSIGN_OR_RETURN(counters.in_multicast_pkts,
+                   ParseJsonValueAsUint(interface_json, {"state", "counters",
+                                                         "in-multicast-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.out_multicast_pkts,
+      ParseJsonValueAsUint(interface_json,
+                           {"state", "counters", "out-multicast-pkts"}));
+  ASSIGN_OR_RETURN(counters.in_broadcast_pkts,
+                   ParseJsonValueAsUint(interface_json, {"state", "counters",
+                                                         "in-broadcast-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.out_broadcast_pkts,
+      ParseJsonValueAsUint(interface_json,
+                           {"state", "counters", "out-broadcast-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.in_errors,
+      ParseJsonValueAsUint(interface_json, {"state", "counters", "in-errors"}));
+  ASSIGN_OR_RETURN(counters.out_errors,
+                   ParseJsonValueAsUint(interface_json,
+                                        {"state", "counters", "out-errors"}));
+  ASSIGN_OR_RETURN(counters.in_discards,
+                   ParseJsonValueAsUint(interface_json,
+                                        {"state", "counters", "in-discards"}));
+  ASSIGN_OR_RETURN(counters.out_discards,
+                   ParseJsonValueAsUint(interface_json,
+                                        {"state", "counters", "out-discards"}));
+  ASSIGN_OR_RETURN(
+      counters.in_buffer_discards,
+      ParseJsonValueAsUint(
+          interface_json,
+          {"state", "counters", "google-pins-interfaces:in-buffer-discards"}));
+  ASSIGN_OR_RETURN(
+      counters.in_maxsize_exceeded,
+      ParseJsonValueAsUint(interface_json,
+                           {"openconfig-if-ethernet:ethernet", "state",
+                            "counters", "in-maxsize-exceeded"}));
+  ASSIGN_OR_RETURN(counters.in_fcs_errors,
+                   ParseJsonValueAsUint(
+                       interface_json, {"state", "counters", "in-fcs-errors"}));
+
+  ASSIGN_OR_RETURN(
+      json subinterfaces,
+      AccessJsonValue(interface_json, {"subinterfaces", "subinterface"}));
+  ASSIGN_OR_RETURN(json subinterface, GetElement(subinterfaces, 0));
+  ASSIGN_OR_RETURN(
+      counters.in_ipv4_pkts,
+      ParseJsonValueAsUint(subinterface, {"openconfig-if-ip:ipv4", "state",
+                                          "counters", "in-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.out_ipv4_pkts,
+      ParseJsonValueAsUint(subinterface, {"openconfig-if-ip:ipv4", "state",
+                                          "counters", "out-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.in_ipv6_pkts,
+      ParseJsonValueAsUint(subinterface, {"openconfig-if-ip:ipv6", "state",
+                                          "counters", "in-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.out_ipv6_pkts,
+      ParseJsonValueAsUint(subinterface, {"openconfig-if-ip:ipv6", "state",
+                                          "counters", "out-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.in_ipv6_discarded_pkts,
+      ParseJsonValueAsUint(subinterface, {"openconfig-if-ip:ipv6", "state",
+                                          "counters", "in-discarded-pkts"}));
+  ASSIGN_OR_RETURN(
+      counters.out_ipv6_discarded_pkts,
+      ParseJsonValueAsUint(subinterface, {"openconfig-if-ip:ipv6", "state",
+                                          "counters", "out-discarded-pkts"}));
+  return counters;
 }
 
 }  // namespace
@@ -401,7 +516,7 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
 absl::StatusOr<std::string> ParseJsonResponse(absl::string_view val,
                                               absl::string_view match_tag) {
   if (match_tag.empty()) return std::string(val);
-  const auto resp_json = json::parse(val);
+  ASSIGN_OR_RETURN(const auto resp_json, json_yang::ParseJson(val));
   const auto match_tag_json = resp_json.find(match_tag);
   if (match_tag_json == resp_json.end()) {
     return gutil::InternalErrorBuilder().LogError()
@@ -536,6 +651,17 @@ absl::Status WaitForGnmiPortIdConvergence(thinkit::Switch& chassis,
                                           const absl::Duration& timeout) {
   ASSIGN_OR_RETURN(auto stub, chassis.CreateGnmiStub());
   return WaitForGnmiPortIdConvergence(*stub, gnmi_config, timeout);
+}
+
+absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
+                                          const absl::Duration& timeout) {
+  ASSIGN_OR_RETURN(gnmi::GetRequest request,
+                   BuildGnmiGetRequest("interfaces", gnmi::GetRequest::CONFIG));
+  ASSIGN_OR_RETURN(gnmi::GetResponse interface_response,
+                   SendGnmiGetRequest(&stub, request, timeout));
+  return WaitForGnmiPortIdConvergence(
+      stub, interface_response.notification(0).update(0).val().json_ietf_val(),
+      timeout);
 }
 
 absl::Status CanGetAllInterfaceOverGnmi(gnmi::gNMI::StubInterface& stub,
@@ -803,6 +929,22 @@ absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(
       RepeatedFieldBackInserter(matching_interfaces.mutable_interfaces()),
       predicate);
   return matching_interfaces;
+}
+
+absl::StatusOr<std::vector<int>> GetEnabledP4rtPortIds(
+    gnmi::gNMI::StubInterface& stub) {
+  ASSIGN_OR_RETURN(
+      const pins_test::openconfig::Interfaces interfaces,
+      pins_test::GetInterfacesAsProto(stub, gnmi::GetRequest::STATE));
+
+  std::vector<int> ports;
+  for (const auto& interface : interfaces.interfaces()) {
+    if (interface.state().enabled() && interface.state().has_p4rt_id()) {
+      ports.push_back(interface.state().p4rt_id());
+    }
+  }
+  absl::c_sort(ports);
+  return ports;
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
@@ -1547,6 +1689,24 @@ absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
                         .push_back(sflow_interface_config);
   }
   return gnmi_config_json.dump();
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
+GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(std::string interface_info,
+                   GetGnmiStatePathInfo(&gnmi_stub, "interfaces/interface",
+                                        "openconfig-interfaces:interface"));
+  ASSIGN_OR_RETURN(json interfaces, json_yang::ParseJson(interface_info));
+  absl::flat_hash_map<std::string, Counters> counters;
+  for (const json& interface : interfaces) {
+    ASSIGN_OR_RETURN(json name, GetField(interface, "name"));
+    if (!absl::StrContains(name.get<std::string>(), "Ethernet")) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(counters[name.get<std::string>()],
+                     GetCountersForInterface(interface));
+  }
+  return counters;
 }
 
 }  // namespace pins_test
