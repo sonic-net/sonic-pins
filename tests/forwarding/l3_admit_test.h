@@ -19,10 +19,13 @@
 #include <tuple>
 
 #include "gutil/status_matchers.h"
+#include "lib/gnmi/gnmi_helper.h"
+#include "lib/gnmi/openconfig.pb.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "gmock/gmock.h"
 
@@ -39,14 +42,33 @@ protected:
   void SetUp() override {
     GetParam().testbed_interface->SetUp();
 
+    thinkit::MirrorTestbed& testbed =
+        GetParam().testbed_interface->GetMirrorTestbed();
+
     // Initialize the connection and clear table entries for the SUT and Control
     // switch.
     ASSERT_OK_AND_ASSIGN(
         std::tie(sut_p4rt_session_, control_switch_p4rt_session_),
         pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
-            GetParam().testbed_interface->GetMirrorTestbed().Sut(),
-            GetParam().testbed_interface->GetMirrorTestbed().ControlSwitch(),
+            testbed.Sut(), testbed.ControlSwitch(),
             /*gnmi_config=*/std::nullopt, GetParam().p4info));
+
+    // The L3Admit tests assume identical P4RT port IDs are used between the SUT
+    // and control switch. So sending a packet from a given port ID on the
+    // control switch means it will arrive on the same port ID on the SUT. To
+    // achieve this, we mirror the SUTs OpenConfig interfaces <-> P4RT Port ID
+    // mapping to the control switch.
+    ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
+        testbed.Sut().CreateGnmiStub());
+    ASSERT_OK_AND_ASSIGN(const pins_test::openconfig::Interfaces sut_interfaces,
+                         pins_test::GetInterfacesAsProto(
+                             *sut_gnmi_stub, gnmi::GetRequest::CONFIG));
+    ASSERT_OK_AND_ASSIGN(
+        std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub,
+        testbed.ControlSwitch().CreateGnmiStub());
+    ASSERT_OK(
+        pins_test::SetInterfaceP4rtIds(*control_gnmi_stub, sut_interfaces));
 
     ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(GetParam().p4info));
   }

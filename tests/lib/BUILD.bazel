@@ -95,6 +95,7 @@ cc_library(
         "//tests:thinkit_sanity_tests",
         "//thinkit:mirror_testbed",
         "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
