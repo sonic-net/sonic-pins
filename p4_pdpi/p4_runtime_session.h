@@ -184,10 +184,16 @@ class P4RuntimeSession {
   // WARNING: This is not thread-safe.
   // TODO: Remove once clients have migrated to using Finish.
   void TryCancel() { stream_channel_context_->TryCancel(); }
+
   // Closes the RPC connection by telling the server it is done writing, then
   // reads and logs any outstanding messages from the server. Once the server
   // finishes handling all outstanding writes it will close.
   absl::Status Finish()
+      ABSL_LOCKS_EXCLUDED(stream_write_lock_, stream_read_lock_);
+
+  // Like `Finish`, but returns any outstanding message from the server.
+  absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+  ReadStreamChannelResponsesAndFinish()
       ABSL_LOCKS_EXCLUDED(stream_write_lock_, stream_read_lock_);
 
  private:
