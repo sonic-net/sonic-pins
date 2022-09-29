@@ -26,11 +26,18 @@
 
 namespace pins {
 
+// Returns true iff
+// ["openconfig-sampling:sampling"]["openconfig-sampling-sflow:sflow"]["config"]["enabled"]
+// exists and equals true. Returns a InvalidArgumentError if failed to parse
+// config.
+absl::StatusOr<bool> IsSflowConfigEnabled(absl::string_view gnmi_config);
+
 // Reads value from `state_path` and verifies it is the same with
 // `expected_value`. Returns a FailedPreconditionError if not matched.
 absl::Status VerifyGnmiStateConverged(gnmi::gNMI::StubInterface* gnmi_stub,
                                       absl::string_view state_path,
-                                      absl::string_view expected_value);
+                                      absl::string_view expected_value,
+                                      absl::string_view resp_parse_str = "");
 
 // Sets sFLow sampling size to `sampling_size` and checks if it's applied to
 // corresponding state path in `timeout`. Returns error if failed.
@@ -84,6 +91,12 @@ absl::StatusOr<absl::flat_hash_map<std::string, int>>
 GetSflowSamplingRateForInterfaces(
     gnmi::gNMI::StubInterface* gnmi_stub,
     const absl::flat_hash_set<std::string>& interfaces);
+
+// Verifies that cpu_scheduler limit for `queue_sequence` is set to
+// `expected_queue_limit`.
+absl::Status VerifySflowQueueLimitState(
+    gnmi::gNMI::StubInterface* gnmi_stub, int queue_number,
+    int expected_queue_limit, absl::Duration timeout = absl::Seconds(5));
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
