@@ -15,6 +15,7 @@
 #include "p4_pdpi/p4_runtime_session.h"
 
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -202,30 +203,40 @@ bool P4RuntimeSession::StreamChannelWrite(
 }
 
 absl::Status P4RuntimeSession::Finish() {
+  ASSIGN_OR_RETURN(std::vector<p4::v1::StreamMessageResponse> responses,
+                   ReadStreamChannelResponsesAndFinish());
+  for (auto& response : responses) {
+    LOG(WARNING) << "dropping unread message from switch on stream channel "
+                    "when trying to Finish P4RuntimeSession: "
+                 << response.DebugString();
+  }
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+P4RuntimeSession::ReadStreamChannelResponsesAndFinish() {
+  std::vector<p4::v1::StreamMessageResponse> responses;
+
+  // Signal server to close down the connection.
   absl::MutexLock write_lock(&stream_write_lock_);
   stream_channel_->WritesDone();
 
   // Finish will block if there are unread messages in the channel. Therefore,
   // we read any outstanding messages and log their existence before calling it.
-  // Multiple threads reading at once should be ok as it only causes an
-  // undefined ordering of responses.
-  p4::v1::StreamMessageResponse response;
   absl::MutexLock read_lock(&stream_read_lock_);
-  while (stream_channel_->Read(&response)) {
-    LOG(WARNING) << "dropping unread message from switch on stream channel "
-                    "when trying to Finish P4RuntimeSession: "
-                 << response.DebugString();
+  while (stream_channel_->Read(&responses.emplace_back())) {
   }
 
-  grpc::Status finish = stream_channel_->Finish();
-  // WritesDone() or TryCancel() can close the stream with a CANCELLED status.
-  // Because this case is expected we treat CANCELED as OKAY.
-  // TODO: Stop treating CANCELLED as an acceptable error after
-  // migrating tests away from using it as such.
-  if (finish.error_code() == grpc::StatusCode::CANCELLED) {
-    return absl::OkStatus();
+  absl::Status finish =
+      gutil::GrpcStatusToAbslStatus(stream_channel_->Finish());
+  if (!finish.ok()) {
+    // TryCancel() can close the stream with a CANCELLED status.
+    // Because this case is expected we treat CANCELLED as OKAY.
+    // TODO: Stop treating CANCELLED as an acceptable error after
+    // migrating tests away from using it as such.
+    if (!absl::IsCancelled(finish)) return finish;
   }
-  return gutil::GrpcStatusToAbslStatus(finish);
+  return responses;
 }
 
 std::vector<Update> CreatePiUpdates(absl::Span<const TableEntry> pi_entries,
