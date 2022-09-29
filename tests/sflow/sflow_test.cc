@@ -25,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
@@ -60,6 +61,7 @@
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/gnmi_parsers.h"
+#include "tests/qos/qos_test_util.h"
 #include "tests/sflow/sflow_util.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mirror_testbed.h"
@@ -116,6 +118,8 @@ constexpr absl::string_view kVrfIdPrefix = "vrf-";
 
 // Used for sFLow collector.
 constexpr char kLocalLoopbackIpv6[] = "::1";
+
+constexpr absl::string_view kSflowQueueName = "BE1";
 
 // Returns IP address in dot-decimal notation, e.g. "192.168.2.1".
 std::string GetSrcIpv4AddrByPortId(const int port_id) {
@@ -467,6 +471,10 @@ absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
   LOG(INFO) << "Read initial packet counters.";
   ASSIGN_OR_RETURN(std::vector<Counters> initial_in_counters,
                    GetIxiaInterfaceCounters(ixia_links, gnmi_stub));
+  ASSIGN_OR_RETURN(
+      auto initial_queue_counter,
+      pins_test::GetGnmiQueueCounters("CPU", kSflowQueueName, *gnmi_stub));
+  absl::Time start_time = absl::Now();
 
   RETURN_IF_ERROR(SendNPacketsToSut(
       traffic_refs, topology_ref,
@@ -487,11 +495,18 @@ absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
         << ". Interface: " << ixia_links[i].sut_interface << ". Sent "
         << pkt_count << ". Received " << delta.in_pkts << ".";
   }
+  ASSIGN_OR_RETURN(
+      auto final_queue_counter,
+      pins_test::GetGnmiQueueCounters("CPU", kSflowQueueName, *gnmi_stub));
+
   // Show CPU counter data.
   auto delta =
       DeltaCounters(initial_in_counters.back(), final_in_counters.back());
   LOG(INFO) << "\nIngress Deltas (\"CPU\"):\n";
   ShowCounters(delta);
+  LOG(INFO) << "CPU " << kSflowQueueName << " queue counter delta:\n"
+            << final_queue_counter - initial_queue_counter
+            << " \n total time: " << (absl::Now() - start_time);
   return absl::OkStatus();
 }
 
@@ -858,6 +873,8 @@ void SflowTestFixture::TearDown() {
 // 2. Collect sFlow samples via sflowtool on SUT.
 // 3. Validate the result is as expected.
 TEST_P(SflowTestFixture, VerifyIngressSamplingForNoMatchPackets) {
+  testbed_->Environment().SetTestCaseID("6c980337-c187-4f19-99a9-e03b6dcf24b5");
+
   const IxiaLink& ingress_link = ready_links_[0];
   Port ingress_port = Port{
       .interface_name = ingress_link.sut_interface,
@@ -873,25 +890,30 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForNoMatchPackets) {
                        SetUpIxiaTraffic({ingress_link}, *testbed_, kPacketsNum,
                                         kPacketsPerSecond, pkt_size));
 
-  // Start sflowtool on SUT.
   std::string sflow_result;
-  ASSERT_OK_AND_ASSIGN(
-      std::thread sflow_tool_thread,
-      StartSflowCollector(
-          ssh_client_, testbed_->Sut().ChassisName(),
-          kSflowtoolLineFormatTemplate,
-          /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 30,
-          sflow_result));
+  {
+    // Start sflowtool on SUT.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        StartSflowCollector(
+            ssh_client_, testbed_->Sut().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 30,
+            sflow_result));
 
-  // Send packets from Ixia to SUT.
-  ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                             {ingress_link}, *testbed_, gnmi_stub_.get(),
-                             kPacketsNum, kPacketsPerSecond));
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
 
-  // Wait for sflowtool to finish.
-  if (sflow_tool_thread.joinable()) {
-    sflow_tool_thread.join();
+    // Send packets from Ixia to SUT.
+    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                               {ingress_link}, *testbed_, gnmi_stub_.get(),
+                               kPacketsNum, kPacketsPerSecond));
   }
+
   LOG(INFO) << "sFlow samples:\n" << sflow_result;
   VerifySflowResult(
       sflow_result, kSourceMac.ToHexString(), kDstMac.ToHexString(),
@@ -952,25 +974,30 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForForwardedPackets) {
                        SetUpIxiaTraffic({ingress_link}, *testbed_, kPacketsNum,
                                         kPacketsPerSecond, pkt_size));
 
-  // Start sflowtool on SUT.
   std::string sflow_result;
-  ASSERT_OK_AND_ASSIGN(
-      std::thread sflow_tool_thread,
-      StartSflowCollector(
-          ssh_client_, testbed_->Sut().ChassisName(),
-          kSflowtoolLineFormatTemplate,
-          /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 10,
-          sflow_result));
+  {
+    // Start sflowtool on SUT.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        StartSflowCollector(
+            ssh_client_, testbed_->Sut().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 30,
+            sflow_result));
 
-  // Send packets via Ixia.
-  ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                             {ingress_link}, *testbed_, gnmi_stub_.get(),
-                             kPacketsNum, kPacketsPerSecond));
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
 
-  // Wait for sflowtool to finish.
-  if (sflow_tool_thread.joinable()) {
-    sflow_tool_thread.join();
+    // Send packets from Ixia to SUT.
+    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                               {ingress_link}, *testbed_, gnmi_stub_.get(),
+                               kPacketsNum, kPacketsPerSecond));
   }
+
   LOG(INFO) << "sFlow samples:\n" << sflow_result;
   EXPECT_OK(testbed_->Environment().StoreTestArtifact("sflow_result.txt",
                                                       sflow_result));
@@ -1015,25 +1042,30 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForDropPackets) {
                        SetUpIxiaTraffic({ingress_link}, *testbed_, kPacketsNum,
                                         kPacketsPerSecond, pkt_size));
 
-  // Start sflowtool on SUT.
   std::string sflow_result;
-  ASSERT_OK_AND_ASSIGN(
-      std::thread sflow_tool_thread,
-      StartSflowCollector(
-          ssh_client_, testbed_->Sut().ChassisName(),
-          kSflowtoolLineFormatTemplate,
-          /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 10,
-          sflow_result));
+  {
+    // Start sflowtool on SUT.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        StartSflowCollector(
+            ssh_client_, testbed_->Sut().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 30,
+            sflow_result));
 
-  // Send packets via Ixia.
-  ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                             {ingress_link}, *testbed_, gnmi_stub_.get(),
-                             kPacketsNum, kPacketsPerSecond));
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
 
-  // Wait for sflowtool to finish.
-  if (sflow_tool_thread.joinable()) {
-    sflow_tool_thread.join();
+    // Send packets from Ixia to SUT.
+    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                               {ingress_link}, *testbed_, gnmi_stub_.get(),
+                               kPacketsNum, kPacketsPerSecond));
   }
+
   LOG(INFO) << "sFlow samples:\n" << sflow_result;
   VerifySflowResult(
       sflow_result, kSourceMac.ToHexString(), kDstMac.ToHexString(),
@@ -1079,24 +1111,30 @@ TEST_P(SflowTestFixture, DISABLED_VerifyIngressSamplesForP4rtPuntTraffic) {
                        SetUpIxiaTraffic({ingress_link}, *testbed_, kPacketsNum,
                                         kPacketsPerSecond, pkt_size));
 
-  // Start sflowtool on SUT.
   std::string sflow_result;
-  ASSERT_OK_AND_ASSIGN(
-      std::thread sflow_tool_thread,
-      StartSflowCollector(
-          ssh_client_, testbed_->Sut().ChassisName(),
-          kSflowtoolLineFormatTemplate,
-          /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 10,
-          sflow_result));
+  {
+    // Start sflowtool on SUT.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        StartSflowCollector(
+            ssh_client_, testbed_->Sut().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 30,
+            sflow_result));
 
-  // Send packets via Ixia.
-  ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                             {ingress_link}, *testbed_, gnmi_stub_.get(),
-                             kPacketsNum, kPacketsPerSecond));
-  // Wait for sflowtool to finish.
-  if (sflow_tool_thread.joinable()) {
-    sflow_tool_thread.join();
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
+
+    // Send packets from Ixia to SUT.
+    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                               {ingress_link}, *testbed_, gnmi_stub_.get(),
+                               kPacketsNum, kPacketsPerSecond));
   }
+
   LOG(INFO) << "sFlow samples:\n" << sflow_result;
   VerifySflowResult(
       sflow_result, kSourceMac.ToHexString(), kDstMac.ToHexString(),
@@ -1143,23 +1181,29 @@ TEST_P(SampleSizeTest, VerifySamplingSizeWorks) {
 
   // Start sflowtool on SUT.
   std::string sflow_result;
-  ASSERT_OK_AND_ASSIGN(
-      std::thread sflow_tool_thread,
-      StartSflowCollector(
-          ssh_client_, testbed_->Sut().ChassisName(),
-          kSflowtoolFullFormatTemplate,
-          /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 10,
-          sflow_result));
+  {
+    // Start sflowtool on SUT.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        StartSflowCollector(
+            ssh_client_, testbed_->Sut().ChassisName(),
+            kSflowtoolFullFormatTemplate,
+            /*sflowtool_runtime=*/kPacketsNum / kPacketsPerSecond + 30,
+            sflow_result));
 
-  // Send packets with kPacketSize from Ixia to SUT.
-  ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                             {ingress_link}, *testbed_, gnmi_stub_.get(),
-                             kPacketsNum, kPacketsPerSecond));
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
 
-  // Wait for sflowtool to finish.
-  if (sflow_tool_thread.joinable()) {
-    sflow_tool_thread.join();
+    // Send packets from Ixia to SUT.
+    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                               {ingress_link}, *testbed_, gnmi_stub_.get(),
+                               kPacketsNum, kPacketsPerSecond));
   }
+
   LOG(INFO) << "sFlow samples with sampling size " << sample_size << ":\n"
             << sflow_result;
   EXPECT_OK(testbed_->Environment().StoreTestArtifact("sflow_result.txt",
@@ -1197,24 +1241,30 @@ TEST_P(SampleRateTest, VerifySamplingRateWorks) {
                        SetUpIxiaTraffic({ingress_link}, *testbed_, packets_num,
                                         traffic_rate, pkt_size));
 
-  // Start sflowtool on SUT.
   std::string sflow_result;
-  ASSERT_OK_AND_ASSIGN(
-      std::thread sflow_tool_thread,
-      StartSflowCollector(ssh_client_, testbed_->Sut().ChassisName(),
-                          kSflowtoolLineFormatTemplate,
-                          /*sflowtool_runtime=*/packets_num / traffic_rate + 10,
-                          sflow_result));
+  {
+    // Start sflowtool on SUT.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        StartSflowCollector(
+            ssh_client_, testbed_->Sut().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/packets_num / traffic_rate + 30,
+            sflow_result));
 
-  // Send packets from Ixia to SUT.
-  ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
-                             {ingress_link}, *testbed_, gnmi_stub_.get(),
-                             packets_num, traffic_rate));
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
 
-  // Wait for sflowtool to finish.
-  if (sflow_tool_thread.joinable()) {
-    sflow_tool_thread.join();
+    // Send packets from Ixia to SUT.
+    ASSERT_OK(SendSflowTraffic(ixia_ref_pair.first, ixia_ref_pair.second,
+                               {ingress_link}, *testbed_, gnmi_stub_.get(),
+                               packets_num, traffic_rate));
   }
+
   EXPECT_OK(testbed_->Environment().StoreTestArtifact(
       absl::Substitute("sflow_result_sampling_rate_$0_result.txt", sample_rate),
       sflow_result));
@@ -1526,25 +1576,30 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
   ASSERT_OK(ProgramRoutesForIpv6(*sut_p4_session_, GetIrP4Info(), vrf_id,
                                  collector_ipv6, next_hop_id));
 
-  // Start sflowtool on control switch.
   std::string sflow_result;
-  ASSERT_OK_AND_ASSIGN(
-      std::thread sflow_tool_thread,
-      StartSflowCollector(
-          GetParam().ssh_client, testbed.ControlSwitch().ChassisName(),
-          kSflowtoolLineFormatTemplate,
-          /*sflowtool_runtime=*/packets_num / kInbandTrafficPps + 20,
-          sflow_result));
+  {
+    // Start sflowtool on control switch.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        StartSflowCollector(
+            GetParam().ssh_client, testbed.ControlSwitch().ChassisName(),
+            kSflowtoolLineFormatTemplate,
+            /*sflowtool_runtime=*/packets_num / kInbandTrafficPps + 30,
+            sflow_result));
 
-  // Send packets from  control switch.
-  ASSERT_OK(SendNPacketsFromSwitch(packets_num, traffic_port.port_id,
-                                   GetIrP4Info(), *control_p4_session_,
-                                   testbed.Environment()));
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
 
-  // Wait for sflowtool to finish and check sFlow result.
-  if (sflow_tool_thread.joinable()) {
-    sflow_tool_thread.join();
+    // Send packets from control switch.
+    ASSERT_OK(SendNPacketsFromSwitch(packets_num, traffic_port.port_id,
+                                     GetIrP4Info(), *control_p4_session_,
+                                     testbed.Environment()));
   }
+
   EXPECT_OK(testbed.Environment().StoreTestArtifact("sflow_result.txt",
                                                     sflow_result));
   ASSERT_FALSE(sflow_result.empty());
@@ -1589,30 +1644,35 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksOnAllInterfaces) {
 
   // Start sflowtool on peer switch.
   std::string sflow_result;
-  ASSERT_OK_AND_ASSIGN(
-      std::thread sflow_tool_thread,
-      StartSflowCollector(
-          GetParam().ssh_client, testbed.Sut().ChassisName(),
-          kSflowtoolLineFormatTemplate,
-          /*sflowtool_runtime=*/
-          (packets_num / kInbandTrafficPps + 3) * port_id_per_port_name.size() +
-              20,
-          sflow_result));
+  {
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        StartSflowCollector(GetParam().ssh_client, testbed.Sut().ChassisName(),
+                            kSflowtoolLineFormatTemplate,
+                            /*sflowtool_runtime=*/
+                            (packets_num / kInbandTrafficPps + 3) *
+                                    port_id_per_port_name.size() +
+                                20,
+                            sflow_result));
 
-  // Send packets from control switch on all UP interfaces.
-  for (const auto& [unused, port_id_str] : port_id_per_port_name) {
-    int port_id;
-    ASSERT_TRUE(absl::SimpleAtoi(port_id_str, &port_id))
-        << port_id_str << " is not a valid port id.";
-    ASSERT_OK(SendNPacketsFromSwitch(packets_num, port_id, GetIrP4Info(),
-                                     *control_p4_session_,
-                                     testbed.Environment()));
+    // Wait for sflowtool to finish.
+    absl::Cleanup clean_up([&sflow_tool_thread] {
+      if (sflow_tool_thread.joinable()) {
+        sflow_tool_thread.join();
+      }
+    });
+
+    // Send packets from control switch on all UP interfaces.
+    for (const auto& [unused, port_id_str] : port_id_per_port_name) {
+      int port_id;
+      ASSERT_TRUE(absl::SimpleAtoi(port_id_str, &port_id))
+          << port_id_str << " is not a valid port id.";
+      ASSERT_OK(SendNPacketsFromSwitch(packets_num, port_id, GetIrP4Info(),
+                                       *control_p4_session_,
+                                       testbed.Environment()));
+    }
   }
 
-  // Wait for sflowtool to finish and check sFlow result.
-  if (sflow_tool_thread.joinable()) {
-    sflow_tool_thread.join();
-  }
   for (const auto& [interface_name, port_id_str] : port_id_per_port_name) {
     int port_id;
     ASSERT_TRUE(absl::SimpleAtoi(port_id_str, &port_id))
