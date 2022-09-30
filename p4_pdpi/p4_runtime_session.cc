@@ -224,7 +224,9 @@ P4RuntimeSession::ReadStreamChannelResponsesAndFinish() {
   // Finish will block if there are unread messages in the channel. Therefore,
   // we read any outstanding messages and log their existence before calling it.
   absl::MutexLock read_lock(&stream_read_lock_);
-  while (stream_channel_->Read(&responses.emplace_back())) {
+  p4::v1::StreamMessageResponse response;
+  while (stream_channel_->Read(&response)) {
+    responses.push_back(std::move(response));
   }
 
   absl::Status finish =
