@@ -144,4 +144,3 @@ $ HexStringToUint64("0x0ffffffffffffffff")
 
 $ HexStringToUint64("0x1ffffffffffffffff")
 -> error: INVALID_ARGUMENT: hex string '0x1ffffffffffffffff' has bit #65 set to 1; conversion to 64 bits would lose information
-
