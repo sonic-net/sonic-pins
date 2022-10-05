@@ -181,11 +181,6 @@ class P4RuntimeSession {
       const p4::v1::StreamMessageRequest& request)
       ABSL_LOCKS_EXCLUDED(stream_write_lock_);
 
-  // Cancels the RPC. It is done in a best-effort fashion.
-  // WARNING: This is not thread-safe.
-  // TODO: Remove once clients have migrated to using Finish.
-  void TryCancel() { stream_channel_context_->TryCancel(); }
-
   // Closes the RPC connection by telling the server it is done writing, then
   // reads and logs any outstanding messages from the server. Once the server
   // finishes handling all outstanding writes it will close.
@@ -230,6 +225,11 @@ class P4RuntimeSession {
   // must be acquired before read lock in cases where both locks are acquired.
   absl::Mutex stream_read_lock_;
   absl::Mutex stream_write_lock_ ABSL_ACQUIRED_BEFORE(stream_read_lock_);
+
+  // Indicates that `WritesDone` and `Finish` have previously been called on the
+  // stream channel. We track this since precisely a single call to these
+  // methods is allowed.
+  bool is_finished_ ABSL_GUARDED_BY(stream_write_lock_) = false;
 };
 
 // Create P4Runtime stub.
