@@ -220,25 +220,21 @@ P4RuntimeSession::ReadStreamChannelResponsesAndFinish() {
 
   // Signal server to close down the connection.
   absl::MutexLock write_lock(&stream_write_lock_);
+  // Prevent `GRPC_CALL_ERROR_TOO_MANY_OPERATIONS` by returning early if stream
+  // is already finished.
+  if (is_finished_) return responses;
+  is_finished_ = true;
   stream_channel_->WritesDone();
 
   // Finish will block if there are unread messages in the channel. Therefore,
-  // we read any outstanding messages and log their existence before calling it.
+  // we read any outstanding messages before calling it.
   absl::MutexLock read_lock(&stream_read_lock_);
   p4::v1::StreamMessageResponse response;
   while (stream_channel_->Read(&response)) {
     responses.push_back(std::move(response));
   }
 
-  absl::Status finish =
-      gutil::GrpcStatusToAbslStatus(stream_channel_->Finish());
-  if (!finish.ok()) {
-    // TryCancel() can close the stream with a CANCELLED status.
-    // Because this case is expected we treat CANCELLED as OKAY.
-    // TODO: Stop treating CANCELLED as an acceptable error after
-    // migrating tests away from using it as such.
-    if (!absl::IsCancelled(finish)) return finish;
-  }
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(stream_channel_->Finish()));
   return responses;
 }
 
