@@ -32,6 +32,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -103,6 +104,22 @@ DEFINE_int32(next_hops, 512, "The number of next-hop entries to install.");
 // only includes the P4RT Write() time, and not the generation.
 DEFINE_int32(number_batches, 10, "Number of batches");
 DEFINE_int32(batch_size, 1000, "Number of entries in each batch");
+
+// By default we only run the IPv4 tests. However, because the tested tables
+// don't overlap users can run multiple, and they will happen sequentially.
+// Users should be careful when running multiple tests since the batch sizes are
+// reused.
+DEFINE_bool(run_ipv4, true, "Run IPv4 route latency tests.");
+DEFINE_bool(run_wcmp, false, "Run IPv4 route latency tests.");
+
+// Extra configs that affect WCMP batch sizes and flows.
+DEFINE_int32(wcmp_members_per_group, 2,
+             "Number of members in each WCMP group.");
+DEFINE_int32(wcmp_total_group_weight, 2,
+             "Total accumulated weight for all members in a WCMP group.");
+DEFINE_bool(wcmp_increasing_weights, false,
+            "Force the weight of a member to be >= the weight of the member "
+            "that came before it.");
 
 namespace p4rt_app {
 namespace {
@@ -206,6 +223,37 @@ absl::StatusOr<pdpi::IrP4Info> GetExistingP4InfoOrSetDefault(
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(default_instance)));
   return sai::GetIrP4Info(default_instance);
+}
+
+absl::Status VerifyP4WcmpWriteSizes(
+    const std::vector<p4::v1::WriteRequest>& requests, int expected_members,
+    int expected_weight) {
+  int total_members = 0;
+  int total_weight = 0;
+  for (const auto& request : requests) {
+    for (const auto& update : request.updates()) {
+      for (const auto& action : update.entity()
+                                    .table_entry()
+                                    .action()
+                                    .action_profile_action_set()
+                                    .action_profile_actions()) {
+        total_members++;
+        total_weight += action.weight();
+      }
+    }
+  }
+
+  if (total_members != expected_members) {
+    return absl::UnknownError(
+        absl::StrFormat("Failed to generate enough members: want=%d got=%d",
+                        expected_members, total_members));
+  }
+  if (total_weight != expected_weight) {
+    return absl::UnknownError(absl::StrFormat(
+        "Failed to generate enough member weight: want=%d got=%d",
+        expected_weight, total_weight));
+  }
+  return absl::OkStatus();
 }
 
 class P4rtRouteTest : public testing::Test {
@@ -402,6 +450,68 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv4WriteRequests(
   return requests;
 }
 
+absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeWcmpWriteRequests(
+    absl::BitGen& bitgen, const RouteEntryInfo& routes,
+    const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
+    uint32_t batch_size, int members_per_group, int total_group_weight) {
+  ASSIGN_OR_RETURN(std::vector<std::string> nexthops,
+                   GetKeys(routes.next_hops_by_name),
+                   _ << "Next hops need to be created before WCMP");
+
+  std::vector<p4::v1::WriteRequest> requests(number_batches);
+  int group_id = 0;
+  for (int batch_num = 0; batch_num < number_batches; ++batch_num) {
+    for (int entry_num = 0; entry_num < batch_size; ++entry_num) {
+      // Create a random group of actions with a weight of 1.
+      std::vector<gpins::WcmpAction> actions(members_per_group);
+
+      // Get a random set of next hops, but don't allow duplicates.
+      ASSIGN_OR_RETURN(auto nexthop_indices,
+                       RandomSetOfValues<size_t>(bitgen, 0, nexthops.size(),
+                                                 members_per_group));
+      for (int action_num = 0; action_num < members_per_group; ++action_num) {
+        actions[action_num].nexthop_id = nexthops[action_num];
+      }
+
+      // All actions need at least a weight of 1 to be functionally correct.
+      int remaining_weight = total_group_weight;
+      std::vector<int> weights(actions.size(), 1);
+      remaining_weight -= actions.size();
+
+      // If there is any weights remaining then we assign them randomly across
+      // the actions.
+      while (remaining_weight > 0) {
+        --remaining_weight;
+        weights[absl::Uniform<size_t>(bitgen, 0, weights.size())]++;
+      }
+
+      // Switches can preallocate weights as members are added. The worst case
+      // is when weights get larger and larger with the members. Users can set a
+      // flag to force this behavior (i.e. get worst case performance).
+      if (FLAGS_wcmp_increasing_weights) {
+        std::sort(weights.begin(), weights.end());
+      }
+
+      for (size_t i = 0; i < actions.size(); ++i) {
+        actions[i].weight = weights[i];
+      }
+      ASSIGN_OR_RETURN(*requests[batch_num].add_updates(),
+                       gpins::WcmpGroupTableUpdate(
+                           ir_p4info, p4::v1::Update::INSERT,
+                           absl::StrCat("group-", ++group_id), actions));
+    }
+  }
+
+  // Verify that we generated the correct number of members and their weights.
+  // We do not verify that those values make sense (i.e. we could generate more
+  // weights than a device supports).
+  RETURN_IF_ERROR(VerifyP4WcmpWriteSizes(
+      requests,
+      /*expected_members=*/number_batches * batch_size * members_per_group,
+      /*expected_weight=*/number_batches * batch_size * total_group_weight));
+  return requests;
+}
+
 TEST_F(P4rtRouteTest, MeasureWriteLatency) {
   int32_t number_of_batches = FLAGS_number_batches;
   int32_t requests_per_batch = FLAGS_batch_size;
@@ -432,20 +542,51 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
   UpdateRequestMetadata(premeasurement_requests);
   ASSERT_OK(SendBatchRequest(premeasurement_requests).status());
 
-  // Pre-compute all the IPv4 requests so they can be sent as quickly as
-  // possible to the switch under test.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::WriteRequest> requests,
-      ComputeIpv4WriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
-                               requests_per_batch));
-  UpdateRequestMetadata(requests);
+  if (FLAGS_run_ipv4) {
+    // Pre-compute all the IPv4 requests so they can be sent as quickly as
+    // possible to the switch under test.
+    ASSERT_OK_AND_ASSIGN(
+        std::vector<p4::v1::WriteRequest> requests,
+        ComputeIpv4WriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
+                                 requests_per_batch));
+    UpdateRequestMetadata(requests);
 
-  // Measure the execution time and write to stdout so that callers can parse
-  // the output.
-  ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
-                       SendBatchRequest(requests));
-  std::cout << "Successfully wrote IpTable entries to the switch, time: "
-            << ToInt64Milliseconds(execution_time) << "(msecs)" << std::endl;
+    // Measure the execution time and write to stdout so that callers can parse
+    // the output.
+    ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
+                         SendBatchRequest(requests));
+    std::cout << "Successfully wrote IpTable entries to the switch, time: "
+              << ToInt64Milliseconds(execution_time) << "(msecs)" << std::endl;
+  }
+
+  if (FLAGS_run_wcmp) {
+    int members_per_group = FLAGS_wcmp_members_per_group;
+    int total_group_weight = FLAGS_wcmp_total_group_weight;
+
+    // Pre-compute all the WCMP requests so they can be sent as quickly as
+    // possible to the switch under test.
+    ASSERT_OK_AND_ASSIGN(
+        std::vector<p4::v1::WriteRequest> requests,
+        ComputeWcmpWriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
+                                 requests_per_batch, members_per_group,
+                                 total_group_weight));
+    UpdateRequestMetadata(requests);
+    ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
+                         SendBatchRequest(requests));
+
+    // Write the results to stdout so that callers can parse the output.
+    int64_t total_groups = number_of_batches * requests_per_batch;
+    int64_t total_members = total_groups * members_per_group;
+    int64_t total_weight = total_groups * total_group_weight;
+    std::cout
+        << absl::StreamFormat(
+               "wcmp_insert_requests=%d wcmp_insert_groups_total=%lld "
+               "wcmp_insert_members_total=%lld wcmp_insert_weight_total=%lld "
+               "wcmp_insert_time=%lld(msecs)",
+               number_of_batches, total_groups, total_members, total_weight,
+               absl::ToInt64Milliseconds(execution_time))
+        << std::endl;
+  }
 }
 
 }  // namespace
