@@ -23,7 +23,6 @@ cc_library(
     deps = [
         ":state_event_monitor",
         "//p4rt_app/p4runtime:p4runtime_impl",
-        "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@sonic_swss_common//:common",
@@ -39,6 +38,34 @@ cc_test(
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "app_state_db_send_to_ingress_port_table_event",
+    srcs = ["app_state_db_send_to_ingress_port_table_event.cc"],
+    hdrs = ["app_state_db_send_to_ingress_port_table_event.h"],
+    deps = [
+        ":state_event_monitor",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/p4runtime:packetio_helpers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@sonic_swss_common//:common",
+    ],
+)
+
+cc_test(
+    name = "app_state_db_send_to_ingress_port_table_event_test",
+    srcs = ["app_state_db_send_to_ingress_port_table_event_test.cc"],
+    deps = [
+        ":app_state_db_send_to_ingress_port_table_event",
+        "//gutil:status_matchers",
+        "//p4rt_app/p4runtime:mock_p4runtime_impl",
+        "//p4rt_app/p4runtime:packetio_helpers",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:common",
     ],
 )
 
