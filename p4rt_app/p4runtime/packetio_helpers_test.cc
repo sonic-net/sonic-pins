@@ -31,6 +31,7 @@
 #include "p4rt_app/sonic/packetio_port.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "swss/schema.h"
 
 namespace p4rt_app {
 namespace {
@@ -41,6 +42,8 @@ using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgPointee;
+
+constexpr absl::string_view kSubmitToIngress = SEND_TO_INGRESS;
 
 MATCHER_P(IfrNameEq, name, "") {
   if (arg != nullptr) {
@@ -189,7 +192,7 @@ TEST_F(PacketIoHelpersTest, SendPacketOutIngressInjectOk) {
   EXPECT_CALL(*mock_call_adapter_, if_nametoindex).WillOnce(Return(1));
 
   boost::bimap<std::string, std::string> port_maps;
-  ASSERT_OK(packetio_impl_->AddPacketIoPort(sonic::kSubmitToIngress));
+  ASSERT_OK(packetio_impl_->AddPacketIoPort(kSubmitToIngress));
   EXPECT_OK(SendPacketOut(ir_p4_info_, kTranslatePortId, port_maps,
                           packetio_impl_.get(), packet));
 }
@@ -252,7 +255,7 @@ TEST_F(PacketIoHelpersTest, SendPacketOutMultipleValidValues) {
   EXPECT_CALL(*mock_call_adapter_, if_nametoindex).WillOnce(Return(1));
 
   boost::bimap<std::string, std::string> port_maps;
-  ASSERT_OK(packetio_impl_->AddPacketIoPort(sonic::kSubmitToIngress));
+  ASSERT_OK(packetio_impl_->AddPacketIoPort(kSubmitToIngress));
   ASSERT_OK(SendPacketOut(ir_p4_info_, kTranslatePortId, port_maps,
                           packetio_impl_.get(), packet));
 }

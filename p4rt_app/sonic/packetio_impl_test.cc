@@ -95,6 +95,8 @@ TEST(PacketIoImplTest, AddAndRemovePacketIoPortWithoutNetdevTranslation) {
 }
 
 TEST(PacketIoImplTest, AddAndRemoveSubmitToIngressPortWithNetdevTranslation) {
+  constexpr absl::string_view kSubmitToIngress = "send_to_ingress";
+
   auto mock_call_adapter = absl::make_unique<sonic::MockSystemCallAdapter>();
   PipeFd fd;
 
@@ -147,27 +149,9 @@ TEST(PacketIoImplTest, AddingDuplicatePacketIoPortsIsANoop) {
   EXPECT_TRUE(packetio_impl.IsValidPortForReceive("Ethernet1/1"));
 }
 
-TEST(PacketIoImplTest, NoActionOnAddingNonSdnPacketIoPorts) {
-  auto mock_call_adapter = absl::make_unique<sonic::MockSystemCallAdapter>();
-
-  // We should not create any sockets since the port is ignored.
-  EXPECT_CALL(*mock_call_adapter, socket).Times(0);
-  EXPECT_CALL(*mock_call_adapter, setsockopt).Times(0);
-  EXPECT_CALL(*mock_call_adapter, if_nametoindex).Times(0);
-  EXPECT_CALL(*mock_call_adapter, bind).Times(0);
-
-  PacketIoImpl packetio_impl(std::move(mock_call_adapter),
-                             PacketIoOptions{
-                                 .callback_function = EmptyPacketInCallback,
-                             });
-  ASSERT_OK(packetio_impl.AddPacketIoPort("loopback0"));
-
-  // Checks that ports are not valid for transmit and receive.
-  EXPECT_FALSE(packetio_impl.IsValidPortForTransmit("loopback0"));
-  EXPECT_FALSE(packetio_impl.IsValidPortForReceive("loopback0"));
-}
-
 TEST(PacketIoImplTest, AddAndRemoveMultiplePacketIoPorts) {
+  constexpr absl::string_view kSubmitToIngress = "send_to_ingress";
+
   auto mock_call_adapter = absl::make_unique<sonic::MockSystemCallAdapter>();
 
   // Open 2 different sockets. One for each PacketIO port.
@@ -251,21 +235,9 @@ TEST(PacketIoImplTest, FailOnRemoveDuplicatePacketIoPort) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(PacketIoImplTest, NoActionOnRemovingNonSdnPacketIoPort) {
-  auto mock_call_adapter = absl::make_unique<sonic::MockSystemCallAdapter>();
-
-  EXPECT_CALL(*mock_call_adapter, close).Times(0);
-  PacketIoImpl packetio_impl(std::move(mock_call_adapter),
-                             PacketIoOptions{
-                                 .callback_function = EmptyPacketInCallback,
-                             });
-
-  ASSERT_OK(packetio_impl.RemovePacketIoPort("loopback0"));
-  EXPECT_FALSE(packetio_impl.IsValidPortForReceive("loopback0"));
-  EXPECT_FALSE(packetio_impl.IsValidPortForTransmit("loopback0"));
-}
-
 TEST(PacketIoImplTest, AddAndRemovePacketIoPortWithGenetlink) {
+  constexpr absl::string_view kSubmitToIngress = "send_to_ingress";
+
   auto mock_call_adapter = absl::make_unique<sonic::MockSystemCallAdapter>();
   PipeFd fd;
 

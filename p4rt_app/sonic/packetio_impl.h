@@ -31,9 +31,6 @@
 namespace p4rt_app {
 namespace sonic {
 
-// Prefix for submit to ingress.
-inline constexpr absl::string_view kSubmitToIngress = "send_to_ingress";
-
 struct PacketIoOptions {
   packet_metadata::ReceiveCallbackFunction callback_function = nullptr;
   bool use_genetlink = false;
