@@ -34,7 +34,7 @@
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4/v1/p4runtime_mock.grpc.pb.h"
+#include "p4_pdpi/p4_runtime_session_mocking.h"
 #include "p4_pdpi/testing/test_p4info.h"
 
 namespace pdpi {
@@ -48,236 +48,56 @@ using ::testing::EqualsProto;
 using ::testing::InSequence;
 using ::testing::Return;
 
-// One of the tables and actions from
-// http://google3/blaze-out/genfiles/third_party/pins_infra/p4_pdpi/testing/test_p4info_embed.cc?l=13
-// These need to correspond to the values in our p4info because it is checked
-// when sequencing updates to clear tables on the switch.
-constexpr uint32_t kTableId = 33554433;
-constexpr uint32_t kActionId = 16777217;
-
-// Any constant is fine here.
-constexpr uint32_t kDeviceId = 100;
-
 // This is the only action that will work everywhere.
 constexpr p4::v1::SetForwardingPipelineConfigRequest::Action
     kForwardingPipelineAction =
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT;
 
-p4::v1::Uint128 ConstructElectionId(
-    const P4RuntimeSessionOptionalArgs& metadata) {
-  p4::v1::Uint128 election_id;
-  election_id.set_high(absl::Uint128High64(metadata.election_id));
-  election_id.set_low(absl::Uint128Low64(metadata.election_id));
-  return election_id;
-}
+// Tests that CreateWithP4InfoAndClearTables creates a P4RuntimeSession,
+// clears all table entries currently on the switch (mocked to be one), and
+// pushes a new p4info.
+TEST(P4RuntimeSessionTest, CreateWithP4InfoAndClearTables) {
+  const p4::config::v1::P4Info& p4info = GetTestP4Info();
+  const P4RuntimeSessionOptionalArgs metadata;
+  thinkit::MockSwitch mock_switch;
 
-p4::v1::MasterArbitrationUpdate ConstructMasterArbitrationUpdate(
-    const P4RuntimeSessionOptionalArgs& metadata) {
-  p4::v1::MasterArbitrationUpdate master_arbitration_update;
-  *master_arbitration_update.mutable_election_id() =
-      ConstructElectionId(metadata);
-  master_arbitration_update.set_device_id(kDeviceId);
-  master_arbitration_update.mutable_role()->set_name(metadata.role);
-  return master_arbitration_update;
-}
-
-// Configures the given `MockP4RuntimeStub` such that the given sequence of
-// table entries will be returned for the next P4RT Read request.
-void SetNextReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
-                         std::vector<p4::v1::TableEntry> read_entries) {
-  EXPECT_CALL(mock_p4rt_stub, ReadRaw)
-      .WillOnce([read_entries = std::move(read_entries)](auto*, auto&) {
-        auto* reader =
-            new grpc::testing::MockClientReader<p4::v1::ReadResponse>();
-        InSequence s;
-        for (const auto& entry : read_entries) {
-          EXPECT_CALL(*reader, Read)
-              .WillOnce([=](p4::v1::ReadResponse* response) -> bool {
-                *response->add_entities()->mutable_table_entry() = entry;
-                return true;
-              });
-        }
-        EXPECT_CALL(*reader, Read).WillOnce(Return(false));
-        EXPECT_CALL(*reader, Finish).WillOnce(Return(grpc::Status::OK));
-        return reader;
-      });
-}
-
-// Configures the given `MockP4RuntimeStub` such that the given sequence of
-// table entries will be returned for any P4RT Read request by default.
-void SetDefaultReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
-                            std::vector<p4::v1::TableEntry> read_entries) {
-  ON_CALL(mock_p4rt_stub, ReadRaw)
-      .WillByDefault([read_entries = std::move(read_entries)](auto*, auto&) {
-        auto* reader =
-            new grpc::testing::MockClientReader<p4::v1::ReadResponse>();
-        InSequence s;
-        for (const auto& entry : read_entries) {
-          EXPECT_CALL(*reader, Read)
-              .WillOnce([&](p4::v1::ReadResponse* response) -> bool {
-                *response->add_entities()->mutable_table_entry() = entry;
-                return true;
-              });
-        }
-        EXPECT_CALL(*reader, Read).WillOnce(Return(false));
-        EXPECT_CALL(*reader, Finish).WillOnce(Return(grpc::Status::OK));
-        return reader;
-      });
-}
-
-// Mocks a P4RuntimeSession::Create call with a stub by constructing a
-// ReaderWriter mock stream and mocking an arbitration handshake. This function
-// does not perform any of these operations, it only sets up expectations.
-void MockP4RuntimeSessionCreate(p4::v1::MockP4RuntimeStub& stub,
-                                const P4RuntimeSessionOptionalArgs& metadata) {
-  // The ReaderWriter stream constructed from the stub. This needs to be
-  // malloced as it is automatically freed when the unique pointer that it will
-  // be wrapped in is freed. The stream is wrapped in StreamChannel, which is
-  // the method of the stub that calls StreamChannelRaw, but is not itself
-  // mocked.
-  auto* stream = new grpc::testing::MockClientReaderWriter<
-      p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse>();
-  EXPECT_CALL(stub, StreamChannelRaw).WillOnce(Return(stream));
-
-  // A valid MasterArbitrationUpdate sent as request and response.
-  auto master_arbitration_update = ConstructMasterArbitrationUpdate(metadata);
-
-  // Ensures that we write some sort of arbitration request...
-  p4::v1::StreamMessageRequest arbitration_request;
-  *arbitration_request.mutable_arbitration() = master_arbitration_update;
-  EXPECT_CALL(*stream, Write(EqualsProto(arbitration_request), _))
-      .WillOnce(Return(true));
-
-  // ... and return a valid response.
-  EXPECT_CALL(*stream, Read(_))
-      .WillOnce([=](p4::v1::StreamMessageResponse* arbitration_response) {
-        *arbitration_response->mutable_arbitration() =
-            master_arbitration_update;
-        return true;
-      });
-}
-
-// Constructs a table entry using the predefined table id, kTableId, and action
-// id, kActionId.
-p4::v1::TableEntry ConstructTableEntry() {
-  p4::v1::TableEntry table_entry;
-  table_entry.set_table_id(kTableId);
-  table_entry.mutable_action()->mutable_action()->set_action_id(kActionId);
-  return table_entry;
-}
-
-// Sets up a write request to delete the given table entry.
-p4::v1::WriteRequest ConstructDeleteRequest(
-    const P4RuntimeSessionOptionalArgs& metadata,
-    const p4::v1::TableEntry& table_entry) {
-  p4::v1::Update delete_update;
-  delete_update.set_type(p4::v1::Update::DELETE);
-  *delete_update.mutable_entity()->mutable_table_entry() = table_entry;
-
-  p4::v1::WriteRequest delete_request;
-  *delete_request.add_updates() = delete_update;
-  delete_request.set_device_id(kDeviceId);
-  delete_request.set_role(metadata.role);
-  *delete_request.mutable_election_id() = ConstructElectionId(metadata);
-  return delete_request;
-}
-
-// Mocks a `CheckNoEntries` call using the stub in a previously
-// mocked P4RuntimeSession.
-// Ensures that there are no table entries remaining.
-void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
-                        const p4::config::v1::P4Info& p4info) {
-  // We need to return a valid p4info to get to the stage where we read tables.
-  EXPECT_CALL(stub, GetForwardingPipelineConfig)
-      .WillOnce([&](auto, auto,
-                    p4::v1::GetForwardingPipelineConfigResponse*
-                        get_pipeline_response) {
-        *get_pipeline_response->mutable_config()->mutable_p4info() = p4info;
-        return grpc::Status::OK;
-      });
-
-  SetNextReadResponse(stub, {});
-}
-
-// Mocks a ClearTableEntries call using the stub and p4info in a previously
-// mocked P4RuntimeSession.
-// Pulls the p4info from the switch, then reads a table entry, deletes it, and
-// reads again ensuring that there are no table entries remaining.
-void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
-                           const p4::config::v1::P4Info& p4info,
-                           const P4RuntimeSessionOptionalArgs& metadata) {
-  // We need to return a valid p4info to get to the stage where we read tables.
-  EXPECT_CALL(stub, GetForwardingPipelineConfig)
-      .WillOnce([&](auto, auto,
-                    p4::v1::GetForwardingPipelineConfigResponse*
-                        get_pipeline_response) {
-        *get_pipeline_response->mutable_config()->mutable_p4info() = p4info;
-        return grpc::Status::OK;
-      });
-
+  // The stub that will be returned when CreateP4RuntimeStub is called on
+  // mock_switch.
+  auto stub = absl::make_unique<p4::v1::MockP4RuntimeStub>();
+  ASSERT_NE(stub, nullptr);
   {
     InSequence s;
-    p4::v1::TableEntry table_entry = ConstructTableEntry();
+    // Mocks a P4RuntimeSession `Create` call.
+    // Constructs a ReaderWriter mock stream and completes an arbitration
+    // handshake.
+    MockP4RuntimeSessionCreate(*stub, metadata);
 
-    // We return a table entry so that the function exercises the deletion
-    // portion of clearing table entries.
-    SetNextReadResponse(stub, {table_entry});
+    // Mocks a `ClearTableEntries` call.
+    // Pulls the p4info from the switch, then reads a table entry, deletes it,
+    // and reads again ensuring that there are no table entries remaining.
+    MockClearTableEntries(*stub, p4info, metadata);
 
-    // Mocks the call to delete table entry that we have created.
-    EXPECT_CALL(
-        stub,
-        Write(_, EqualsProto(ConstructDeleteRequest(metadata, table_entry)), _))
+    // Mocks a `SetForwardingPipelineConfig` call.
+    EXPECT_CALL(*stub, SetForwardingPipelineConfig(
+                           _,
+                           EqualsProto(ConstructForwardingPipelineConfigRequest(
+                               metadata, p4info, kForwardingPipelineAction)),
+                           _))
         .Times(1);
 
-    // Mocks a `CheckNoEntries` call, ensuring that the tables are really
-    // cleared.
-    MockCheckNoEntries(stub, p4info);
+    // Mocks a `CheckNoEntries` call.
+    MockCheckNoEntries(*stub, p4info);
   }
-}
 
-// Constructs a valid forwarding pipeline config request with the given p4info
-// and metadata.
-p4::v1::SetForwardingPipelineConfigRequest
-ConstructForwardingPipelineConfigRequest(
-    const P4RuntimeSessionOptionalArgs& metadata,
-    const p4::config::v1::P4Info& p4info,
-    absl::optional<absl::string_view> p4_device_config = absl::nullopt) {
-  p4::v1::SetForwardingPipelineConfigRequest request;
-  request.set_device_id(kDeviceId);
-  request.set_role(metadata.role);
-  *request.mutable_election_id() = ConstructElectionId(metadata);
-  request.set_action(kForwardingPipelineAction);
-  *request.mutable_config()->mutable_p4info() = p4info;
-  if (p4_device_config.has_value()) {
-    *request.mutable_config()->mutable_p4_device_config() = *p4_device_config;
-  }
-  return request;
-}
+  // Mocks the first part of a P4RuntimeSession `Create` call.
+  EXPECT_CALL(mock_switch, CreateP4RuntimeStub())
+      .WillOnce(Return(ByMove(std::move(stub))));
+  EXPECT_CALL(mock_switch, DeviceId).WillOnce(Return(kDeviceId));
 
-// An initialized `P4RuntimeSession` together with a `MockP4RuntimeStub` that
-// the session is connected to. Useful for testing methods/free functions
-// of/on `P4RuntimeSession`.
-struct P4SessionWithMockStub {
-  std::unique_ptr<P4RuntimeSession> p4rt_session;
-  // Owned by the `p4rt_session`.
-  p4::v1::MockP4RuntimeStub& mock_p4rt_stub;
-};
-
-// Creates a `P4RuntimeSession` based on a mocked `P4RuntimeStub`. Useful for
-// testing methods/free functions of/on `P4RuntimeSession`.
-absl::StatusOr<P4SessionWithMockStub> MakeP4SessionWithMockStub(
-    P4RuntimeSessionOptionalArgs metadata) {
-  // No leak: P4RuntimeSession will take ownerhsip.
-  auto* mock_p4rt_stub = new testing::NiceMock<p4::v1::MockP4RuntimeStub>();
-  MockP4RuntimeSessionCreate(*mock_p4rt_stub, metadata);
-  ASSIGN_OR_RETURN(std::unique_ptr<P4RuntimeSession> p4rt_session,
-                   P4RuntimeSession::Create(absl::WrapUnique(mock_p4rt_stub),
-                                            kDeviceId, metadata));
-  testing::Mock::VerifyAndClearExpectations(mock_p4rt_stub);
-  return P4SessionWithMockStub{
-      .p4rt_session = std::move(p4rt_session),
-      .mock_p4rt_stub = *mock_p4rt_stub,
-  };
+  // The main function call through which everything else should happen.
+  ASSERT_OK_AND_ASSIGN(auto session,
+                       P4RuntimeSession::CreateWithP4InfoAndClearTables(
+                           mock_switch, p4info, metadata));
 }
 
 TEST(ReadPiCounterDataTest, ReturnsNotFoundWhenNoEntriesPresent) {
@@ -387,8 +207,8 @@ TEST(SetForwardingPipelineConfigTest, BothVersionsProduceSameRequest) {
   EXPECT_CALL(mock_p4rt_stub,
               SetForwardingPipelineConfig(
                   _,
-                  EqualsProto(ConstructForwardingPipelineConfigRequest(metadata,
-                                                                       p4info)),
+                  EqualsProto(ConstructForwardingPipelineConfigRequest(
+                      metadata, p4info, kForwardingPipelineAction)),
                   _))
       .Times(2);
 
@@ -402,12 +222,13 @@ TEST(SetForwardingPipelineConfigTest, BothVersionsProduceSameRequest) {
 
   std::string p4_device_config = "some_json_device_config";
   // Mocks two `SetForwardingPipelineConfig` calls with a `p4_device_config`.
-  EXPECT_CALL(mock_p4rt_stub,
-              SetForwardingPipelineConfig(
-                  _,
-                  EqualsProto(ConstructForwardingPipelineConfigRequest(
-                      metadata, p4info, p4_device_config)),
-                  _))
+  EXPECT_CALL(
+      mock_p4rt_stub,
+      SetForwardingPipelineConfig(
+          _,
+          EqualsProto(ConstructForwardingPipelineConfigRequest(
+              metadata, p4info, kForwardingPipelineAction, p4_device_config)),
+          _))
       .Times(2);
 
   // Ensures that both versions of the function send the same proto.
