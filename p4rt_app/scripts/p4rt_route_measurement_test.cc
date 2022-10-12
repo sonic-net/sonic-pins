@@ -119,6 +119,10 @@ DEFINE_int32(wcmp_members_per_group, 2,
              "Number of members in each WCMP group.");
 DEFINE_int32(wcmp_total_group_weight, 2,
              "Total accumulated weight for all members in a WCMP group.");
+DEFINE_bool(wcmp_update_weights_when_modifying, true,
+            "Change weight values when modifying WCMP groups.");
+DEFINE_bool(wcmp_update_nexthops_when_modifying, false,
+            "Change nexthop values when modifying WCMP groups.");
 DEFINE_bool(wcmp_increasing_weights, false,
             "Force the weight of a member to be >= the weight of the member "
             "that came before it.");
@@ -227,6 +231,66 @@ absl::StatusOr<pdpi::IrP4Info> GetExistingP4InfoOrSetDefault(
   return sai::GetIrP4Info(default_instance);
 }
 
+// For each test we want to measure the INSERT, MODIFY, and DELETE performance.
+struct P4WriteRequests {
+  std::vector<p4::v1::WriteRequest> inserts;
+  std::vector<p4::v1::WriteRequest> modifies;
+  std::vector<p4::v1::WriteRequest> deletes;
+};
+
+// Sanity checks that we are generating the correct number of batch requests,
+// and each request has the correct number of entries.
+absl::Status VerifyP4WriteReuqestSizes(const P4WriteRequests& requests,
+                                       uint32_t expected_batches,
+                                       uint32_t expected_requests_per_batch) {
+  if (requests.inserts.size() != expected_batches) {
+    return absl::UnknownError(absl::StrFormat(
+        "Failed to generate enough insert batches: want=%d got=%d",
+        expected_batches, requests.inserts.size()));
+  }
+  for (int i = 0; i < requests.inserts.size(); ++i) {
+    int got = requests.inserts[i].updates_size();
+    if (got != expected_requests_per_batch) {
+      return absl::UnknownError(
+          absl::StrFormat("Failed to generate enough insert requests in batch "
+                          "%d: want=%d got=%d",
+                          i, expected_requests_per_batch, got));
+    }
+  }
+
+  if (requests.modifies.size() != expected_batches) {
+    return absl::UnknownError(absl::StrFormat(
+        "Failed to generate enough modify batches: want=%d got=%d",
+        expected_batches, requests.modifies.size()));
+  }
+  for (int i = 0; i < requests.modifies.size(); ++i) {
+    int got = requests.modifies[i].updates_size();
+    if (got != expected_requests_per_batch) {
+      return absl::UnknownError(
+          absl::StrFormat("Failed to generate enough modify requests in batch "
+                          "%d: want=%d got=%d",
+                          i, expected_requests_per_batch, got));
+    }
+  }
+
+  if (requests.deletes.size() != expected_batches) {
+    return absl::UnknownError(absl::StrFormat(
+        "Failed to generate enough delete batches: want=%d got=%d",
+        expected_batches, requests.deletes.size()));
+  }
+  for (int i = 0; i < requests.deletes.size(); ++i) {
+    int got = requests.deletes[i].updates_size();
+    if (got != expected_requests_per_batch) {
+      return absl::UnknownError(
+          absl::StrFormat("Failed to generate enough delete requests in batch "
+                          "%d: want=%d got=%d",
+                          i, expected_requests_per_batch, got));
+    }
+  }
+
+  return absl::OkStatus();
+}
+
 absl::Status VerifyP4WcmpWriteSizes(
     const std::vector<p4::v1::WriteRequest>& requests, int expected_members,
     int expected_weight) {
@@ -284,6 +348,12 @@ class P4rtRouteTest : public testing::Test {
       request.set_role(p4rt_session_->Role());
       *request.mutable_election_id() = p4rt_session_->ElectionId();
     }
+  }
+
+  void UpdateRequestMetadata(P4WriteRequests& requests) {
+    UpdateRequestMetadata(requests.inserts);
+    UpdateRequestMetadata(requests.modifies);
+    UpdateRequestMetadata(requests.deletes);
   }
 
   absl::StatusOr<absl::Duration> SendBatchRequest(
@@ -407,7 +477,7 @@ absl::Status GenerateRandomNextHops(absl::BitGen& bitgen,
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv4WriteRequests(
+absl::StatusOr<P4WriteRequests> ComputeIpv4WriteRequests(
     absl::BitGen& bitgen, const RouteEntryInfo& routes,
     const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
     uint32_t batch_size) {
@@ -421,18 +491,22 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv4WriteRequests(
                                               /*max_value=*/0x1FFF'FFFF,
                                               number_batches * batch_size));
 
-  std::vector<p4::v1::WriteRequest> requests;
+  P4WriteRequests requests;
   for (const int32_t address : addresses) {
-    if (requests.empty() || requests.back().updates_size() == batch_size) {
-      requests.push_back(p4::v1::WriteRequest{});
+    if (requests.inserts.empty() ||
+        requests.inserts.back().updates_size() == batch_size) {
+      requests.inserts.push_back(p4::v1::WriteRequest{});
+      requests.modifies.push_back(p4::v1::WriteRequest{});
+      requests.deletes.push_back(p4::v1::WriteRequest{});
     }
 
+    // The initial INSERT request.
     netaddr::Ipv4Address ip(address);
     std::string vrf = vrfs[absl::Uniform<size_t>(bitgen, 0, vrfs.size())];
     std::string nexthop =
         nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
     ASSIGN_OR_RETURN(
-        *requests.back().add_updates(),
+        *requests.inserts.back().add_updates(),
         gpins::Ipv4TableUpdate(
             ir_p4info, p4::v1::Update::INSERT,
             gpins::IpTableOptions{
@@ -441,30 +515,92 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv4WriteRequests(
                 .action = gpins::IpTableOptions::Action::kSetNextHopId,
                 .nexthop_id = nexthop,
             }));
+
+    // MODIFY the nexthop action.
+    nexthop = nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
+    ASSIGN_OR_RETURN(
+        *requests.modifies.back().add_updates(),
+        gpins::Ipv4TableUpdate(
+            ir_p4info, p4::v1::Update::MODIFY,
+            gpins::IpTableOptions{
+                .vrf_id = vrf,
+                .dst_addr_lpm = std::make_pair(ip.ToString(), 32),
+                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .nexthop_id = nexthop,
+            }));
+
+    // DELETE the entry.
+    ASSIGN_OR_RETURN(
+        *requests.deletes.back().add_updates(),
+        gpins::Ipv4TableUpdate(
+            ir_p4info, p4::v1::Update::DELETE,
+            gpins::IpTableOptions{
+                .vrf_id = vrf,
+                .dst_addr_lpm = std::make_pair(ip.ToString(), 32),
+                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .nexthop_id = nexthop,
+            }));
   }
 
-  // Sanity checks.
-  if (requests.size() != number_batches) {
-    return absl::UnknownError(
-        absl::StrCat("Failed to generate enough batches: want=", number_batches,
-                     " got=", requests.size()));
-  }
+  RETURN_IF_ERROR(
+      VerifyP4WriteReuqestSizes(requests, number_batches, batch_size));
   return requests;
 }
 
-absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeWcmpWriteRequests(
+// WCMP entries are required to have a positive weight. This method will assign
+// a weight of 1 to all members (i.e. even if the `total_group_weight` is less
+// than the `size`). Then it will assign any remaining weight randomly.
+std::vector<int> RandmizeWeights(absl::BitGen& bitgen, int size,
+                                 int total_group_weight) {
+  // All actions need at least a weight of 1 to be functionally correct.
+  std::vector<int> weights(size, 1);
+  int remaining_weight = total_group_weight - size;
+
+  // If there is any weights remaining then we assign them randomly across
+  // the actions.
+  while (remaining_weight > 0) {
+    --remaining_weight;
+    weights[absl::Uniform<size_t>(bitgen, 0, weights.size())]++;
+  }
+
+  // Switches can preallocate weights as members are added. The worst case
+  // is when weights get larger and larger with the members. Users can set a
+  // flag to force this behavior (i.e. get worst case performance).
+  if (FLAGS_wcmp_increasing_weights) {
+    std::sort(weights.begin(), weights.end());
+  }
+
+  return weights;
+}
+
+absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
     absl::BitGen& bitgen, const RouteEntryInfo& routes,
     const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
     uint32_t batch_size, int members_per_group, int total_group_weight) {
+  bool change_weights_on_modify = FLAGS_wcmp_update_weights_when_modifying;
+  bool change_nexthops_on_modify = FLAGS_wcmp_update_nexthops_when_modifying;
+  // If both these flags are false then modify will have no affect. Report a
+  // warning incase of user error.
+  if (!change_weights_on_modify && !change_nexthops_on_modify) {
+    LOG(WARNING) << "We are not changing the weights or the nexthops on modify "
+                    "so all requests will match the inserts.";
+  }
+
+  // WCMP requests will reference next hops so they need to be created first.
   ASSIGN_OR_RETURN(std::vector<std::string> nexthops,
                    GetKeys(routes.next_hops_by_name),
                    _ << "Next hops need to be created before WCMP");
 
-  std::vector<p4::v1::WriteRequest> requests(number_batches);
+  P4WriteRequests requests;
+  requests.inserts.resize(number_batches);
+  requests.modifies.resize(number_batches);
+  requests.deletes.resize(number_batches);
   int group_id = 0;
   for (int batch_num = 0; batch_num < number_batches; ++batch_num) {
     for (int entry_num = 0; entry_num < batch_size; ++entry_num) {
-      // Create a random group of actions with a weight of 1.
+      std::string group_name = absl::StrCat("group-", ++group_id);
+
+      // The initial INSERT request.
       std::vector<gpins::WcmpAction> actions(members_per_group);
 
       // Get a random set of next hops, but don't allow duplicates.
@@ -474,47 +610,59 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeWcmpWriteRequests(
       for (int action_num = 0; action_num < members_per_group; ++action_num) {
         actions[action_num].nexthop_id = nexthops[action_num];
       }
-
-      // All actions need at least a weight of 1 to be functionally correct.
-      int remaining_weight = total_group_weight;
-      std::vector<int> weights(actions.size(), 1);
-      remaining_weight -= actions.size();
-
-      // If there is any weights remaining then we assign them randomly across
-      // the actions.
-      while (remaining_weight > 0) {
-        --remaining_weight;
-        weights[absl::Uniform<size_t>(bitgen, 0, weights.size())]++;
-      }
-
-      // Switches can preallocate weights as members are added. The worst case
-      // is when weights get larger and larger with the members. Users can set a
-      // flag to force this behavior (i.e. get worst case performance).
-      if (FLAGS_wcmp_increasing_weights) {
-        std::sort(weights.begin(), weights.end());
-      }
-
+      std::vector<int> weights =
+          RandmizeWeights(bitgen, actions.size(), total_group_weight);
       for (size_t i = 0; i < actions.size(); ++i) {
         actions[i].weight = weights[i];
       }
-      ASSIGN_OR_RETURN(*requests[batch_num].add_updates(),
-                       gpins::WcmpGroupTableUpdate(
-                           ir_p4info, p4::v1::Update::INSERT,
-                           absl::StrCat("group-", ++group_id), actions));
+      ASSIGN_OR_RETURN(
+          *requests.inserts[batch_num].add_updates(),
+          gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                      group_name, actions));
+
+      // MODIFY the nexthop actions and/or weights depending on FLAGs.
+      if (change_nexthops_on_modify) {
+        ASSIGN_OR_RETURN(nexthop_indices,
+                         RandomSetOfValues<size_t>(bitgen, 0, nexthops.size(),
+                                                   members_per_group));
+        for (int action_num = 0; action_num < members_per_group; ++action_num) {
+          actions[action_num].nexthop_id = nexthops[action_num];
+        }
+      }
+      if (change_weights_on_modify) {
+        weights = RandmizeWeights(bitgen, actions.size(), total_group_weight);
+        for (size_t i = 0; i < actions.size(); ++i) {
+          actions[i].weight = weights[i];
+        }
+      }
+      ASSIGN_OR_RETURN(
+          *requests.modifies[batch_num].add_updates(),
+          gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::MODIFY,
+                                      group_name, actions));
+
+      // DELETE the entries.
+      ASSIGN_OR_RETURN(
+          *requests.deletes[batch_num].add_updates(),
+          gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::DELETE,
+                                      group_name, actions));
     }
   }
 
   // Verify that we generated the correct number of members and their weights.
   // We do not verify that those values make sense (i.e. we could generate more
-  // weights than a device supports).
-  RETURN_IF_ERROR(VerifyP4WcmpWriteSizes(
-      requests,
-      /*expected_members=*/number_batches * batch_size * members_per_group,
-      /*expected_weight=*/number_batches * batch_size * total_group_weight));
+  // weights than a device supports)
+  int expected_members = number_batches * batch_size * members_per_group;
+  int expected_weight = number_batches * batch_size * total_group_weight;
+  RETURN_IF_ERROR(VerifyP4WcmpWriteSizes(requests.inserts, expected_members,
+                                         expected_weight));
+  RETURN_IF_ERROR(VerifyP4WcmpWriteSizes(requests.modifies, expected_members,
+                                         expected_weight));
+  RETURN_IF_ERROR(
+      VerifyP4WriteReuqestSizes(requests, number_batches, batch_size));
   return requests;
 }
 
-absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv6WriteRequests(
+absl::StatusOr<P4WriteRequests> ComputeIpv6WriteRequests(
     absl::BitGen& bitgen, const RouteEntryInfo& routes,
     const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
     uint32_t batch_size) {
@@ -529,18 +677,22 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv6WriteRequests(
                                  /*max_value=*/0x1FFF'FFFF'FFFF'FFFF,
                                  number_batches * batch_size));
 
-  std::vector<p4::v1::WriteRequest> requests;
+  P4WriteRequests requests;
   for (const int64_t address : addresses) {
-    if (requests.empty() || requests.back().updates_size() == batch_size) {
-      requests.push_back(p4::v1::WriteRequest{});
+    if (requests.inserts.empty() ||
+        requests.inserts.back().updates_size() == batch_size) {
+      requests.inserts.push_back(p4::v1::WriteRequest{});
+      requests.modifies.push_back(p4::v1::WriteRequest{});
+      requests.deletes.push_back(p4::v1::WriteRequest{});
     }
 
+    // The initial INSERT request.
     netaddr::Ipv6Address ip(absl::MakeUint128(address, /*low=*/0));
     std::string vrf = vrfs[absl::Uniform<size_t>(bitgen, 0, vrfs.size())];
     std::string nexthop =
         nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
     ASSIGN_OR_RETURN(
-        *requests.back().add_updates(),
+        *requests.inserts.back().add_updates(),
         gpins::Ipv6TableUpdate(
             ir_p4info, p4::v1::Update::INSERT,
             gpins::IpTableOptions{
@@ -549,14 +701,35 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv6WriteRequests(
                 .action = gpins::IpTableOptions::Action::kSetNextHopId,
                 .nexthop_id = nexthop,
             }));
+
+    // MODIFY the nexthop action.
+    nexthop = nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
+    ASSIGN_OR_RETURN(
+        *requests.modifies.back().add_updates(),
+        gpins::Ipv6TableUpdate(
+            ir_p4info, p4::v1::Update::MODIFY,
+            gpins::IpTableOptions{
+                .vrf_id = vrf,
+                .dst_addr_lpm = std::make_pair(ip.ToString(), 64),
+                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .nexthop_id = nexthop,
+            }));
+
+    // DELETE the entry.
+    ASSIGN_OR_RETURN(
+        *requests.deletes.back().add_updates(),
+        gpins::Ipv6TableUpdate(
+            ir_p4info, p4::v1::Update::DELETE,
+            gpins::IpTableOptions{
+                .vrf_id = vrf,
+                .dst_addr_lpm = std::make_pair(ip.ToString(), 64),
+                .action = gpins::IpTableOptions::Action::kSetNextHopId,
+                .nexthop_id = nexthop,
+            }));
   }
 
-  // Sanity checks.
-  if (requests.size() != number_batches) {
-    return absl::UnknownError(
-        absl::StrCat("Failed to generate enough batches: want=", number_batches,
-                     " got=", requests.size()));
-  }
+  RETURN_IF_ERROR(
+      VerifyP4WriteReuqestSizes(requests, number_batches, batch_size));
   return requests;
 }
 
@@ -594,38 +767,63 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
     // Pre-compute all the IPv4 requests so they can be sent as quickly as
     // possible to the switch under test.
     ASSERT_OK_AND_ASSIGN(
-        std::vector<p4::v1::WriteRequest> requests,
+        P4WriteRequests requests,
         ComputeIpv4WriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
                                  requests_per_batch));
     UpdateRequestMetadata(requests);
+    ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
+                         SendBatchRequest(requests.inserts));
+    ASSERT_OK_AND_ASSIGN(absl::Duration modify_time,
+                         SendBatchRequest(requests.modifies));
+    ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
+                         SendBatchRequest(requests.deletes));
 
-    // Measure the execution time and write to stdout so that callers can parse
-    // the output.
-    ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
-                         SendBatchRequest(requests));
+    // Write the results to stdout so that the callers can parse the output.
+    int64_t total_entries = number_of_batches * requests_per_batch;
+    std::cout
+        << absl::StreamFormat(
+               "ipv4_requests=%d ipv4_entry_total=%lld "
+               "ipv4_insert_time=%lld(msecs) ipv4_modify_time=%lld(msecs) "
+               "ipv4_delete_time=%lld(msecs)",
+               number_of_batches, total_entries,
+               absl::ToInt64Milliseconds(insert_time),
+               absl::ToInt64Milliseconds(modify_time),
+               absl::ToInt64Milliseconds(delete_time))
+        << std::endl;
+
+    // TODO: remove once we migrate the Perfkit dashboard to the
+    // new tags.
     std::cout << "Successfully wrote IpTable entries to the switch, time: "
-              << ToInt64Milliseconds(execution_time) << "(msecs)" << std::endl;
+              << ToInt64Milliseconds(insert_time) << "(msecs)" << std::endl;
   }
 
   if (FLAGS_run_ipv6) {
     // Pre-compute all the IPv6 requests so they can be sent as quickly as
     // possible to the switch under test.
     ASSERT_OK_AND_ASSIGN(
-        std::vector<p4::v1::WriteRequest> requests,
+        P4WriteRequests requests,
         ComputeIpv6WriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
                                  requests_per_batch));
     UpdateRequestMetadata(requests);
-    ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
-                         SendBatchRequest(requests));
+    ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
+                         SendBatchRequest(requests.inserts));
+    ASSERT_OK_AND_ASSIGN(absl::Duration modify_time,
+                         SendBatchRequest(requests.modifies));
+    ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
+                         SendBatchRequest(requests.deletes));
 
     // Write the results to stdout so that the callers can parse the output.
     int64_t total_entries = number_of_batches * requests_per_batch;
-    std::cout << absl::StreamFormat(
-                     "ipv6_insert_requests=%d ipv6_insert_entry_total=%lld "
-                     "ipv6_insert_time=%lld(msecs)",
-                     number_of_batches, total_entries,
-                     absl::ToInt64Milliseconds(execution_time))
-              << std::endl;
+    std::cout
+        << absl::StreamFormat(
+               "ipv6_requests=%d ipv6_entry_total=%lld "
+               "ipv6_insert_time=%lld(msecs) ipv6_modify_time=%lld(msecs) "
+               "ipv6_delete_time=%lld(msecs)",
+               number_of_batches, total_entries,
+               absl::ToInt64Milliseconds(insert_time),
+               absl::ToInt64Milliseconds(modify_time),
+               absl::ToInt64Milliseconds(delete_time))
+        << std::endl;
   }
 
   if (FLAGS_run_wcmp) {
@@ -635,13 +833,17 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
     // Pre-compute all the WCMP requests so they can be sent as quickly as
     // possible to the switch under test.
     ASSERT_OK_AND_ASSIGN(
-        std::vector<p4::v1::WriteRequest> requests,
+        P4WriteRequests requests,
         ComputeWcmpWriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
                                  requests_per_batch, members_per_group,
                                  total_group_weight));
     UpdateRequestMetadata(requests);
-    ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
-                         SendBatchRequest(requests));
+    ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
+                         SendBatchRequest(requests.inserts));
+    ASSERT_OK_AND_ASSIGN(absl::Duration modify_time,
+                         SendBatchRequest(requests.modifies));
+    ASSERT_OK_AND_ASSIGN(absl::Duration delete_time,
+                         SendBatchRequest(requests.deletes));
 
     // Write the results to stdout so that callers can parse the output.
     int64_t total_groups = number_of_batches * requests_per_batch;
@@ -649,11 +851,14 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
     int64_t total_weight = total_groups * total_group_weight;
     std::cout
         << absl::StreamFormat(
-               "wcmp_insert_requests=%d wcmp_insert_groups_total=%lld "
-               "wcmp_insert_members_total=%lld wcmp_insert_weight_total=%lld "
-               "wcmp_insert_time=%lld(msecs)",
+               "wcmp_requests=%d wcmp_groups_total=%lld "
+               "wcmp_members_total=%lld wcmp_weight_total=%lld "
+               "wcmp_insert_time=%lld(msecs) wcmp_modify_time=%lld(msecs) "
+               "wcmp_delete_time=%lld(msecs)",
                number_of_batches, total_groups, total_members, total_weight,
-               absl::ToInt64Milliseconds(execution_time))
+               absl::ToInt64Milliseconds(insert_time),
+               absl::ToInt64Milliseconds(modify_time),
+               absl::ToInt64Milliseconds(delete_time))
         << std::endl;
   }
 }
