@@ -23,8 +23,8 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/btree_map.h"
+#include "absl/container/btree_set.h"
 #include "absl/numeric/int128.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
@@ -33,6 +33,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -103,8 +104,10 @@ DEFINE_int32(next_hops, 512, "The number of next-hop entries to install.");
 // A run will automatically generate `number_batches` write requests each with
 // `batch_size` updates (i.e. number_batches x batch_size total flows). Runtime
 // only includes the P4RT Write() time, and not the generation.
-DEFINE_int32(number_batches, 10, "Number of batches");
-DEFINE_int32(batch_size, 1000, "Number of entries in each batch");
+DEFINE_int32(number_batches, 10,
+             "Total number of gRPC write calls made to the switch.");
+DEFINE_int32(batch_size, 100,
+             "Total number of table entries in each gRPC write.");
 
 // By default we only run the IPv4 tests. However, because the tested tables
 // don't overlap users can run multiple, and they will happen sequentially.
@@ -127,21 +130,54 @@ DEFINE_bool(wcmp_increasing_weights, false,
             "Force the weight of a member to be >= the weight of the member "
             "that came before it.");
 
+// Pass a comma separated list of digits to reproduce a specific test.
+DEFINE_string(seed_seq, "",
+              "Force a specific seed_seq value to repeat a test.");
+
 namespace p4rt_app {
 namespace {
 
-using P4RTUpdateByNameMap = absl::flat_hash_map<std::string, p4::v1::Update>;
+// To make runs reproducible we intentionally use a absl::btree_map.
+using P4RTUpdateByNameMap = absl::btree_map<std::string, p4::v1::Update>;
 
+// Uses the seed sequence passed by the `--seed_seq` flag. If no sequence is set
+// then it will choose a random one.
+std::seed_seq GetSeedSeq() {
+  std::string forced_seq = FLAGS_seed_seq;
+  std::vector<int> seq;
+  if (forced_seq.empty()) {
+    absl::BitGen bitgen;
+    seq.resize(32);
+    for (int& s : seq) {
+      s = absl::Uniform<int>(bitgen, 1, 10);
+    }
+  } else {
+    for (const auto& s : absl::StrSplit(forced_seq, ',')) {
+      int value;
+      if (!absl::SimpleAtoi(s, &value)) {
+        std::cout << "--seed_seq is invalid: " << forced_seq << std::endl;
+      } else {
+        seq.push_back(value);
+      }
+    }
+  }
+
+  std::cout << "--seed_seq=" << absl::StrJoin(seq, ",", absl::StreamFormatter())
+            << std::endl;
+  return std::seed_seq(seq.begin(), seq.end());
+}
+
+// To make runs reproducible we intentionally return a absl::btree_set.
 template <typename T>
-absl::StatusOr<absl::flat_hash_set<T>> RandomSetOfValues(absl::BitGen& bitgen,
-                                                         const T& min_value,
-                                                         const T& max_value,
-                                                         int size) {
+absl::StatusOr<absl::btree_set<T>> RandomSetOfValues(absl::BitGen& bitgen,
+                                                     const T& min_value,
+                                                     const T& max_value,
+                                                     int size) {
   // We use the max strikes count to prevent infinite loops.
   const int max_strikes = 2 * size;
   int strikes = 0;
 
-  absl::flat_hash_set<T> result;
+  absl::btree_set<T> result;
   while (result.size() < size) {
     if (!result.insert(absl::Uniform<T>(bitgen, min_value, max_value)).second) {
       strikes++;
@@ -742,7 +778,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
   int32_t number_of_nexthops = FLAGS_next_hops;
 
   // Randomly generate the routes that will be used by these tests.
-  absl::BitGen bitgen;
+  absl::BitGen bitgen(GetSeedSeq());
   RouteEntryInfo routes;
   ASSERT_OK_AND_ASSIGN(routes.port_ids, ParsePortIds(available_port_ids));
   ASSERT_OK(GenerateRandomVrfs(bitgen, routes, ir_p4info_, number_of_vrfs));
