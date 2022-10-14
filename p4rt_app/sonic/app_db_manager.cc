@@ -22,6 +22,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -388,10 +389,13 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
                    AppDbKeyAndValuesToIrTableEntry(
                        p4info, key, p4rt_table.app_db->get(key)));
 
-  // CounterDb entries will include the full AppDb entry key.
-  RETURN_IF_ERROR(AppendCounterData(
-      table_entry, p4rt_table.counter_db->get(absl::StrCat(
-                       p4rt_table.app_db->getTablePrefix(), key))));
+  // Counters should only exist for ACL table entries.
+  if (absl::StartsWith(key, table::TypeName(table::Type::kAcl))) {
+    // CounterDb entries will include the full AppDb entry key.
+    RETURN_IF_ERROR(AppendCounterData(
+        table_entry, p4rt_table.counter_db->get(absl::StrCat(
+                         p4rt_table.app_db->getTablePrefix(), key))));
+  }
   return table_entry;
 }
 
