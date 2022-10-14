@@ -624,5 +624,49 @@ TEST(SflowUtilTest, UpdateQueueLimitSucceed) {
                                        /*expected_queue_limit=*/120));
 }
 
+TEST(SflowDscpTest, ParseTcpdumpResultA1Success) {
+  const std::string tcpdump_result =
+      R"(tcpdump: listening on lo, link-type EN10MB (Ethernet), capture size "
+      "262144 bytes 18:10:50.401908 00:00:00:00:00:00 (oui Ethernet) > "
+      "00:00:00:00:00:00 (oui Ethernet), ethertype IPv6 (0x86dd), length 230: "
+      "(class 0xa1, flowlabel 0x20016, hlim 127, next-header UDP (17) payload "
+      "length: 176) localhost.56223 > localhost.6343: [bad udp cksum 0x00c3 -> "
+      "0x6a10!] sFlowv5, IPv6 agent 38.7.248.176, agent-id 2157511939, seqnum "
+      "0, uptime 0, samples 100000, length 168 flow sample (1), length "
+      "50018,[|SFLOW] 0x0000:  6802 0016 00b0 117f 0000 0000 0000 0000  "
+      "h...............)";
+  ASSERT_THAT(ExtractTosFromTcpdumpResult(tcpdump_result), IsOkAndHolds(161));
+}
+
+TEST(SflowDscpTest, ParseTcpdumpResultFFSuccess) {
+  const std::string tcpdump_result =
+      R"(tcpdump: listening on lo, link-type EN10MB (Ethernet), capture size "
+      "262144 bytes 18:10:50.401908 00:00:00:00:00:00 (oui Ethernet) > "
+      "00:00:00:00:00:00 (oui Ethernet), ethertype IPv6 (0x86dd), length 230: "
+      "(class 0xff, flowlabel 0x20016, hlim 127, next-header UDP (17) payload "
+      "length: 176) localhost.56223 > localhost.6343: [bad udp cksum 0x00c3 -> "
+      "0x6a10!] sFlowv5, IPv6 agent 38.7.248.176, agent-id 2157511939, seqnum "
+      "0, uptime 0, samples 100000, length 168 flow sample (1), length "
+      "50018,[|SFLOW] 0x0000:  6802 0016 00b0 117f 0000 0000 0000 0000  "
+      "h...............)";
+  ASSERT_THAT(ExtractTosFromTcpdumpResult(tcpdump_result), IsOkAndHolds(255));
+}
+
+TEST(SflowDscpTest, ParseTcpdumpResultFailure) {
+  const std::string tcpdump_result =
+      R"(tcpdump: listening on lo, link-type EN10MB (Ethernet), capture size "
+      "262144 bytes 18:10:50.401908 00:00:00:00:00:00 (oui Ethernet) > "
+      "00:00:00:00:00:00 (oui Ethernet), ethertype IPv6 (0x86dd), length 230: "
+      "(flowlabel 0x20016, hlim 127, next-header UDP (17) payload length: 176) "
+      "localhost.56223 > localhost.6343: [bad udp cksum 0x00c3 -> 0x6a10!] "
+      "sFlowv5, IPv6 agent 38.7.248.176, agent-id 2157511939, seqnum 0, uptime "
+      "0, samples 100000, length 168 flow sample (1), length 50018,[|SFLOW] "
+      "0x0000:  6802 0016 00b0 117f 0000 0000 0000 0000  h...............)";
+  ASSERT_THAT(
+      ExtractTosFromTcpdumpResult(tcpdump_result),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Failed to find ToS value in tcpdump result.")));
+}
+
 }  // namespace
 }  // namespace pins
