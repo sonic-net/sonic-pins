@@ -98,5 +98,10 @@ absl::Status VerifySflowQueueLimitState(
     gnmi::gNMI::StubInterface* gnmi_stub, int queue_number,
     int expected_queue_limit, absl::Duration timeout = absl::Seconds(5));
 
+// Extracts ToS value from `tcpdump_result`. Returns InvalidArgument error if
+// failed to find ToS value in `tcpdump_result`.
+absl::StatusOr<int> ExtractTosFromTcpdumpResult(
+    absl::string_view tcpdump_result);
+
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
