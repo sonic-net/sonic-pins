@@ -6,6 +6,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -54,6 +55,13 @@ struct TestCase {
   std::vector<IrTableEntry> fuzzer_entries;
   std::string mask_function_description;
   std::optional<std::function<bool(IrTableEntry, IrTableEntry)>> mask_function;
+};
+
+struct SwitchStateTestCase {
+  std::string description;
+  std::string info;
+  IrP4Info ir_info;
+  std::vector<IrTableEntry> entries;
 };
 
 std::vector<TestCase> TestCases() {
@@ -167,18 +175,111 @@ std::vector<TestCase> TestCases() {
   return test_cases;
 }
 
-void PrintEntries(absl::Span<const IrTableEntry> entries) {
-  for (const auto& entry : entries) {
-    std::cout << gutil::PrintTextProto(entry);
+std::vector<SwitchStateTestCase> SwitchStateTestCases() {
+  std::vector<SwitchStateTestCase> test_cases;
+
+  {
+    test_cases.emplace_back(
+        SwitchStateTestCase{.description = "State Summary With No Max",
+                            .info = "A single entry added to lpm1 table.",
+                            .ir_info = pdpi::GetTestIrP4Info(),
+                            .entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+                                R"pb(table_name: "lpm1_table"
+                                     matches {
+                                       name: "ipv4"
+                                       lpm {
+                                         value { ipv4: "10.43.12.0" }
+                                         prefix_length: 24
+                                       }
+                                     }
+                                     action { name: "NoAction" }
+                                )pb")}});
   }
-  std::cout << "\n";
+
+  // Exceeding max capacities for WCMP tables with SUM_OF_WEIGHTS and
+  // SUM_OF_MEMBERS size semantics.
+  {
+    IrP4Info ir_info_sum_of_weights = pdpi::GetTestIrP4Info();
+    IrP4Info ir_info_sum_of_members = pdpi::GetTestIrP4Info();
+    for (auto& [_, action_profile] :
+         *ir_info_sum_of_members.mutable_action_profiles_by_id()) {
+            action_profile.mutable_action_profile()->mutable_sum_of_members()->set_max_member_weight(4096);
+    }
+
+    // Relevant constants.
+    const uint32_t kWcmpTableId = 33554438;
+    uint32_t wcmp_table_size =
+        gutil::FindOrDie(ir_info_sum_of_weights.tables_by_id(), kWcmpTableId)
+            .size();
+    int32_t per_action_weight = 10;  // > 0
+
+    std::vector<IrTableEntry> excessive_entries;
+    excessive_entries.reserve(wcmp_table_size);
+    // Construct suffciently many unique WCMP table entries.
+    for (int i = 0; i < wcmp_table_size + 1; i++) {
+      excessive_entries.push_back(
+          gutil::ParseProtoOrDie<IrTableEntry>(absl::Substitute(
+              R"pb(
+                table_name: "wcmp_table"
+                matches {
+                  name: "ipv4"
+                  lpm {
+                    value { ipv4: "$0.$1.$2.$3" }
+                    prefix_length: 32
+                  }
+                }
+                action_set {
+                  actions {
+                    action {
+                      name: "do_thing_1"
+                      params {
+                        name: "arg2"
+                        value { hex_str: "0x00307831" }
+                      }
+                      params {
+                        name: "arg1"
+                        value { hex_str: "0x00307832" }
+                      }
+                    }
+                    weight: $4
+                  }
+                }
+              )pb",
+              absl::StrCat((i >> 24) % (1 << 8)),
+              absl::StrCat((i >> 16) % (1 << 8)),
+              absl::StrCat((i >> 8) % (1 << 8)), absl::StrCat(i % (1 << 8)),
+              absl::StrCat(per_action_weight))));
+    }
+
+    test_cases.emplace_back(SwitchStateTestCase{
+        .description = "State Summary With Max and Sum Of Weights Semantics",
+        .info = "Excessive entries added to wcmp table.",
+        .ir_info = ir_info_sum_of_weights,
+        .entries = excessive_entries});
+
+    test_cases.emplace_back(SwitchStateTestCase{
+        .description = "State Summary With Max and Sum Of Members Semantics",
+        .info = "Excessive entries added to wcmp table.",
+        .ir_info = ir_info_sum_of_members,
+        .entries = excessive_entries});
+  }
+
+  return test_cases;
 }
 
-absl::StatusOr<std::vector<p4::v1::TableEntry>> IrToPiVector(
+std::string EntriesToString(absl::Span<const IrTableEntry> entries) {
+  std::string result = "";
+  for (const auto& entry : entries) {
+    absl::StrAppend(&result, gutil::PrintTextProto(entry));
+  }
+  return result;
+}
+
+absl::StatusOr<std::vector<TableEntry>> IrToPiVector(
     absl::Span<const IrTableEntry> ir_entries, const IrP4Info& ir_info) {
-  std::vector<p4::v1::TableEntry> pi_entries;
+  std::vector<TableEntry> pi_entries;
   for (const auto& ir_entry : ir_entries) {
-    ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
+    ASSIGN_OR_RETURN(TableEntry pi_entry,
                      pdpi::IrTableEntryToPi(ir_info, ir_entry));
     pi_entries.push_back(pi_entry);
   }
@@ -188,14 +289,13 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> IrToPiVector(
 absl::Status main() {
   IrP4Info ir_info = GetIrP4Info();
   SwitchState state(ir_info);
-  absl::Status status;
 
   for (const auto& test : TestCases()) {
     state.ClearTableEntries();
 
-    ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> pi_fuzzer_entries,
+    ASSIGN_OR_RETURN(std::vector<TableEntry> pi_fuzzer_entries,
                      IrToPiVector(test.fuzzer_entries, ir_info));
-    ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> pi_switch_entries,
+    ASSIGN_OR_RETURN(std::vector<TableEntry> pi_switch_entries,
                      IrToPiVector(test.switch_entries, ir_info));
 
     RETURN_IF_ERROR(state.SetTableEntries(pi_fuzzer_entries));
@@ -204,21 +304,36 @@ absl::Status main() {
     std::cout << "#########################################################\n"
               << "### Test Case: " << test.description << "\n"
               << "#########################################################\n\n"
-              << "=== Switch Entries ===\n";
-    PrintEntries(test.switch_entries);
-    std::cout << "=== Fuzzer Entries ===\n";
-    PrintEntries(test.fuzzer_entries);
-    std::cout << "=== Mask Function ===\n";
-    if (test.mask_function.has_value()) {
-      std::cout << test.mask_function_description << "\n\n";
-    } else {
-      std::cout << "No mask function was used\n\n";
-    }
-    std::cout << "=== Test Output ===\n"
+              << "=== Switch Entries ===\n"
+              << EntriesToString(test.switch_entries) << "\n"
+              << "=== Fuzzer Entries ===\n"
+              << EntriesToString(test.fuzzer_entries) << "\n"
+              << "=== Mask Function ===\n"
+              << (test.mask_function.has_value()
+                      ? test.mask_function_description
+                      : "No mask function was used")
+              << "\n\n"
+              << "=== Test Output ===\n"
               << gutil::StableStatusToString(state.AssertEntriesAreEqualToState(
                      pi_switch_entries, test.mask_function))
               << "\n";
   }
+
+  for (const auto& test : SwitchStateTestCases()) {
+    state = SwitchState(test.ir_info);
+    ASSIGN_OR_RETURN(std::vector<TableEntry> pi_entries,
+                     IrToPiVector(test.entries, test.ir_info));
+    RETURN_IF_ERROR(state.SetTableEntries(pi_entries));
+    RETURN_IF_ERROR(state.CheckConsistency());
+
+    std::cout << "#########################################################\n"
+              << "### Test Case: " << test.description << "\n"
+              << "### info: " << test.info << "\n"
+              << "#########################################################\n\n"
+              << "=== Switch State Summary ===\n"
+              << state.SwitchStateSummary() << "\n\n";
+  }
+
   return absl::OkStatus();
 }
 

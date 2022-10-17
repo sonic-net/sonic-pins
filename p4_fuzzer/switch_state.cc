@@ -83,7 +83,7 @@ SwitchState::SwitchState(IrP4Info ir_p4info)
     : ir_p4info_(std::move(ir_p4info)) {
   for (auto& [table_id, table] : ir_p4info_.tables_by_id()) {
     tables_[table_id] = TableEntries();
-    canonical_tables_[table_id] = TableEntries();
+    canonical_tables_[table_id] = CanonicalTableEntries();
   }
 }
 
@@ -174,7 +174,8 @@ std::optional<TableEntry> SwitchState::GetTableEntry(
 
 std::optional<TableEntry> SwitchState::GetCanonicalTableEntry(
     const TableEntry& entry) const {
-  const TableEntries& table = FindOrDie(canonical_tables_, entry.table_id());
+  const CanonicalTableEntries& table =
+      FindOrDie(canonical_tables_, entry.table_id());
 
   if (auto table_iter = table.find(pdpi::TableEntryKey(entry));
       table_iter != table.end()) {
@@ -424,7 +425,8 @@ absl::Status SwitchState::CheckConsistency() const {
           "`canonical_tables_` is missing table with id '%d'", table_id));
     }
 
-    const TableEntries& canonical_table = canonical_tables_.at(table_id);
+    const CanonicalTableEntries& canonical_table =
+        canonical_tables_.at(table_id);
 
     if (canonical_table.size() != table.size()) {
       return absl::InternalError(absl::StrFormat(
@@ -481,12 +483,20 @@ absl::Status SwitchState::AssertEntriesAreEqualToState(
   // Message differencer for PI Table Entries.
   google::protobuf::util::MessageDifferencer differ;
   differ.TreatAsSet(
-      p4::v1::TableEntry().GetDescriptor()->FindFieldByName("match"));
+      p4::v1::TableEntry::GetDescriptor()->FindFieldByName("match"));
+  differ.TreatAsSet(p4::v1::Action::GetDescriptor()->FindFieldByName("params"));
+  differ.TreatAsSet(
+      p4::v1::ActionProfileActionSet::GetDescriptor()->FindFieldByName(
+          "action_profile_actions"));
 
   // Message differencer for IR Table Entries.
   google::protobuf::util::MessageDifferencer ir_differ;
   ir_differ.TreatAsSet(
-      IrTableEntry().GetDescriptor()->FindFieldByName("matches"));
+      IrTableEntry::GetDescriptor()->FindFieldByName("matches"));
+  ir_differ.TreatAsSet(
+      pdpi::IrActionInvocation::GetDescriptor()->FindFieldByName("params"));
+  ir_differ.TreatAsSet(
+      pdpi::IrActionSet::GetDescriptor()->FindFieldByName("actions"));
 
   std::optional<p4::v1::TableEntry> fuzzer_entry;
   for (const auto& switch_entry : switch_entries) {
@@ -552,7 +562,7 @@ absl::Status SwitchState::AssertEntriesAreEqualToState(
 
   // Are there entries in the Fuzzer that do not exist on the switch?
   if (switch_entries.size() != GetNumTableEntries() || entry_unique_to_switch) {
-    absl::flat_hash_map<int, TableEntries> fuzzer_state_copy =
+    absl::flat_hash_map<int, CanonicalTableEntries> fuzzer_state_copy =
         canonical_tables_;
 
     // Removes all entries from the `fuzzer_state_copy` that exist on the
