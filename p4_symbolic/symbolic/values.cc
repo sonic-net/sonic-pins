@@ -140,7 +140,11 @@ absl::StatusOr<std::string> TranslateValueToP4RT(
 
   // Turn the value from a string to an int.
   uint64_t int_value = Z3ValueStringToInt(value);
-  return allocator.IdToString(int_value);
+  ASSIGN_OR_RETURN(std::string p4rt_value, allocator.IdToString(int_value),
+                   _.SetPrepend()
+                       << "failed to translate dataplane value of field '"
+                       << field_name << "' to P4Runtime representation: ");
+  return p4rt_value;
 }
 
 // IdAllocator Implementation.

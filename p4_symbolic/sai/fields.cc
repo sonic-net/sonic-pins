@@ -46,8 +46,13 @@ absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
 
   auto error = gutil::InternalErrorBuilder()
                << "unable to disambiguate metadata field '" << field << "': ";
-  if (mangled_candidates.empty())
-    return error << "no matching fields found in config";
+  if (mangled_candidates.empty()) {
+    return error << "no matching fields found in config: "
+                 << absl::StrJoin(state, "\n  - ",
+                                  [](std::string* out, const auto& key_value) {
+                                    absl::StrAppend(out, key_value.first);
+                                  });
+  }
   return error << "several mangled fields in the config match:\n- "
                << absl::StrJoin(mangled_candidates, "\n- ");
 }
