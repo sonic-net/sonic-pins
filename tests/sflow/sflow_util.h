@@ -99,7 +99,7 @@ absl::Status VerifySflowQueueLimitState(
     int expected_queue_limit, absl::Duration timeout = absl::Seconds(5));
 
 // Extracts ToS value from `tcpdump_result`. Returns InvalidArgument error if
-// failed to find ToS value in `tcpdump_result`.
+// ToS value are not identical or failed to find ToS value in `tcpdump_result`.
 absl::StatusOr<int> ExtractTosFromTcpdumpResult(
     absl::string_view tcpdump_result);
 
