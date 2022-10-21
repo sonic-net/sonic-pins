@@ -1,10 +1,10 @@
-# General build options
 build --cxxopt='-std=c++17'
 build --host_cxxopt='-std=c++17'
+run --cxxopt='-std=c++17'
+run --host_cxxopt='-std=c++17'
 
 # To allow loops with int and comparison against a .size() that's size_t.
 build --copt='-Wno-error=sign-compare'
 build --host_copt='-Wno-error=sign-compare'
-
-# General test options
-test --test_output=errors
+run --copt='-Wno-error=sign-compare'
+run --host_copt='-Wno-error=sign-compare'

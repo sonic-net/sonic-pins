@@ -41,7 +41,12 @@ absl::Status gutil::StatusBuilder::GetStatusAndLog() const {
   if (log_error_ && status_.code() != absl::StatusCode::kOk) {
     std::cout << message << std::endl;
   }
-  return absl::Status(status_.code(), message);
+  absl::Status new_status(status_.code(), message);
+  status_.ForEachPayload(
+      [&new_status](absl::string_view url, const absl::Cord& cord) {
+        new_status.SetPayload(url, cord);
+      });
+  return new_status;
 }
 
 grpc::Status AbslStatusToGrpcStatus(const absl::Status& status) {

@@ -29,6 +29,10 @@
 
 namespace gutil {
 
+bool IsEmptyProto(const google::protobuf::Message &message) {
+  return message.ByteSizeLong() == 0;
+}
+
 absl::Status ReadProtoFromFile(absl::string_view filename,
                                google::protobuf::Message *message) {
   // Verifies that the version of the library that we linked against is
@@ -66,6 +70,46 @@ absl::Status ReadProtoFromString(absl::string_view proto_string,
   return absl::OkStatus();
 }
 
+absl::Status SaveProtoToFile(absl::string_view filename,
+                             const google::protobuf::Message &message) {
+  // Verifies that the version of the library that we linked against is
+  // compatible with the version of the headers we compiled against.
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+  int fd = open(std::string(filename).c_str(), O_WRONLY | O_CREAT, 0644);
+  if (fd < 0) {
+    return InvalidArgumentErrorBuilder()
+           << "Error opening the file " << filename;
+  }
+
+  google::protobuf::io::FileOutputStream file_stream(fd);
+  file_stream.SetCloseOnDelete(true);
+
+  if (!google::protobuf::TextFormat::Print(message, &file_stream)) {
+    return InvalidArgumentErrorBuilder()
+           << "Failed to print proto to file " << filename;
+  }
+
+  file_stream.Flush();
+  return absl::OkStatus();
+}
+
+absl::StatusOr<std::string> ProtoDiff(
+    const google::protobuf::Message &message1,
+    const google::protobuf::Message &message2,
+    google::protobuf::util::MessageDifferencer differ) {
+  if (message1.GetDescriptor() != message2.GetDescriptor()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "cannot compute diff for messages of incompatible descriptors `"
+           << message1.GetDescriptor()->full_name() << "' vs '"
+           << message2.GetDescriptor()->full_name() << "'";
+  }
+
+  std::string diff;
+  differ.ReportDifferencesToString(&diff);
+  differ.Compare(message1, message2);
+  return diff;
+}
+
 absl::StatusOr<std::string> GetOneOfFieldName(
     const google::protobuf::Message &message, const std::string &oneof_name) {
   const auto *oneof_descriptor =
@@ -78,4 +122,41 @@ absl::StatusOr<std::string> GetOneOfFieldName(
   }
   return field->name();
 }
+
+std::string PrintTextProto(const google::protobuf::Message &message) {
+  std::string message_text;
+
+  google::protobuf::TextFormat::Printer printer;
+  printer.SetExpandAny(true);
+
+  printer.PrintToString(message, &message_text);
+
+  return message_text;
+}
+
+// Print proto in TextFormat with single line mode enabled.
+std::string PrintShortTextProto(const google::protobuf::Message &message) {
+  std::string message_short_text;
+
+  google::protobuf::TextFormat::Printer printer;
+  printer.SetSingleLineMode(true);
+  printer.SetExpandAny(true);
+
+  printer.PrintToString(message, &message_short_text);
+  // Single line mode currently might have an extra space at the end.
+  if (!message_short_text.empty() && message_short_text.back() == ' ') {
+    message_short_text.pop_back();
+  }
+
+  return message_short_text;
+}
+
+absl::StatusOr<std::string> SerializeProtoAsJson(
+    const google::protobuf::Message &proto) {
+  std::string json;
+  RETURN_IF_ERROR(gutil::ToAbslStatus(
+      google::protobuf::util::MessageToJsonString(proto, &json)));
+  return json;
+}
+
 }  // namespace gutil
