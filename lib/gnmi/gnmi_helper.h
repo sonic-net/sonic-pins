@@ -93,29 +93,30 @@ struct TransceiverPart {
 
 // Interface counters exposed by gNMI.
 struct Counters {
-  uint64_t in_pkts;
-  uint64_t out_pkts;
-  uint64_t in_octets;
-  uint64_t out_octets;
-  uint64_t in_unicast_pkts;
-  uint64_t out_unicast_pkts;
-  uint64_t in_multicast_pkts;
-  uint64_t out_multicast_pkts;
-  uint64_t in_broadcast_pkts;
-  uint64_t out_broadcast_pkts;
-  uint64_t in_errors;
-  uint64_t out_errors;
-  uint64_t in_discards;
-  uint64_t out_discards;
-  uint64_t in_buffer_discards;
-  uint64_t in_maxsize_exceeded;
-  uint64_t in_fcs_errors;
-  uint64_t in_ipv4_pkts;
-  uint64_t out_ipv4_pkts;
-  uint64_t in_ipv6_pkts;
-  uint64_t out_ipv6_pkts;
-  uint64_t in_ipv6_discarded_pkts;
-  uint64_t out_ipv6_discarded_pkts;
+  uint64_t in_pkts = 0;
+  uint64_t out_pkts = 0;
+  uint64_t in_octets = 0;
+  uint64_t out_octets = 0;
+  uint64_t in_unicast_pkts = 0;
+  uint64_t out_unicast_pkts = 0;
+  uint64_t in_multicast_pkts = 0;
+  uint64_t out_multicast_pkts = 0;
+  uint64_t in_broadcast_pkts = 0;
+  uint64_t out_broadcast_pkts = 0;
+  uint64_t in_errors = 0;
+  uint64_t out_errors = 0;
+  uint64_t in_discards = 0;
+  uint64_t out_discards = 0;
+  uint64_t in_buffer_discards = 0;
+  uint64_t in_maxsize_exceeded = 0;
+  uint64_t in_fcs_errors = 0;
+  uint64_t in_ipv4_pkts = 0;
+  uint64_t out_ipv4_pkts = 0;
+  uint64_t in_ipv6_pkts = 0;
+  uint64_t out_ipv6_pkts = 0;
+  uint64_t in_ipv6_discarded_pkts = 0;
+  uint64_t out_ipv6_discarded_pkts = 0;
+  uint64_t timestamp_ns = 0;
 };
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type);
