@@ -1693,9 +1693,16 @@ absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
 
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
-  ASSIGN_OR_RETURN(std::string interface_info,
-                   GetGnmiStatePathInfo(&gnmi_stub, "interfaces/interface",
-                                        "openconfig-interfaces:interface"));
+  ASSIGN_OR_RETURN(
+      gnmi::GetRequest request,
+      BuildGnmiGetRequest("interfaces/interface", gnmi::GetRequest::STATE));
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(&gnmi_stub, request, /*timeout=*/std::nullopt));
+  ASSIGN_OR_RETURN(
+      std::string interface_info,
+      ParseGnmiGetResponse(response, "openconfig-interfaces:interface"));
+  uint64_t timestamp = response.notification(0).timestamp();
   ASSIGN_OR_RETURN(json interfaces, json_yang::ParseJson(interface_info));
   absl::flat_hash_map<std::string, Counters> counters;
   for (const json& interface : interfaces) {
@@ -1703,8 +1710,9 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
     if (!absl::StrContains(name.get<std::string>(), "Ethernet")) {
       continue;
     }
-    ASSIGN_OR_RETURN(counters[name.get<std::string>()],
-                     GetCountersForInterface(interface));
+    Counters& port_counters = counters[name.get<std::string>()];
+    ASSIGN_OR_RETURN(port_counters, GetCountersForInterface(interface));
+    port_counters.timestamp_ns = timestamp;
   }
   return counters;
 }
