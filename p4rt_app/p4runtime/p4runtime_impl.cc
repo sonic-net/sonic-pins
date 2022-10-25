@@ -1064,6 +1064,7 @@ absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
   return gutil::WriteFile(debug_str, path + "/packet_io_counters");
 }
 
+//TODO(PINS): To handle Component State in November release.
 //absl::Status P4RuntimeImpl::VerifyState(bool update_component_state) {
 absl::Status P4RuntimeImpl::VerifyState() {
   absl::MutexLock l(&server_state_lock_);
@@ -1098,6 +1099,14 @@ absl::Status P4RuntimeImpl::VerifyState() {
   }
 
   if (failures.size() > 1) {
+    // Reports a MINOR alarm to indicate state verification failure.
+    // We do not report CRITICAL alarm here because that will stop further
+    // programming.
+    //TODO(PINS): To handle Component state in November release.
+    //if (update_component_state) {
+    //  component_state_.ReportComponentState(swss::ComponentState::kMinor,
+    //                                        absl::StrJoin(failures, "\n  "));
+    //}
     return gutil::UnknownErrorBuilder() << absl::StrJoin(failures, "\n  ");
   }
   return absl::OkStatus();

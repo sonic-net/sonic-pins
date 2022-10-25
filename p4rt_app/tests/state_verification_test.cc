@@ -64,7 +64,9 @@ TEST_F(StateVerificationTest, VerifyEntriesInP4rtAndVrfTables) {
       /*key=*/"switch_match",
       /*values=*/{{"action", "action0"}});
 
-  EXPECT_OK(p4rt_service_.VerifyState());
+  EXPECT_OK(p4rt_service_.GetP4rtServer().VerifyState());
+  //TODO(PINS): To handle Component State in November Release.
+  //      /*update_component_state=*/true));
 
 }
 
@@ -74,8 +76,10 @@ TEST_F(StateVerificationTest, EntryDoesNotExistInAppDbFails) {
   p4rt_service_.GetVrfAppStateDbTable().InsertTableEntry(/*key=*/"bar",
                                                          /*values=*/{});
   EXPECT_THAT(
-      p4rt_service_.VerifyState(),
+      p4rt_service_.GetP4rtServer().VerifyState(),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("AppDb is missing key")));
+  //TODO(PINS): To handle Component State in November Release.
+  //          /*update_component_state=*/true),
 }
 
 TEST_F(StateVerificationTest, EntryDoesNotExistInAppStateDbFails) {
@@ -83,9 +87,11 @@ TEST_F(StateVerificationTest, EntryDoesNotExistInAppStateDbFails) {
                                                      /*values=*/{});
   p4rt_service_.GetSwitchAppDbTable().InsertTableEntry(/*key=*/"bar",
                                                        /*values=*/{});
-  EXPECT_THAT(p4rt_service_.VerifyState(),
+  EXPECT_THAT(p4rt_service_.GetP4rtServer().VerifyState(),
               StatusIs(absl::StatusCode::kUnknown,
                        HasSubstr("AppStateDb is missing key")));
+  //TODO(PINS): To handle Component State in November Release.
+  //                  /*update_component_state=*/true),
 }
 
 TEST_F(StateVerificationTest, EntryValuesAreDifferentFails) {
@@ -96,8 +102,10 @@ TEST_F(StateVerificationTest, EntryValuesAreDifferentFails) {
       /*key=*/"hash_match",
       /*values=*/{{"action", "different_action"}});
 
-  EXPECT_THAT(p4rt_service_.VerifyState(),
+  EXPECT_THAT(p4rt_service_.GetP4rtServer().VerifyState(),
               StatusIs(absl::StatusCode::kUnknown, HasSubstr("do not match")));
+  //TODO(PINS): To handle Component State in November Release.
+  //                  /*update_component_state=*/true),
 }
 
 TEST_F(StateVerificationTest, StateVerificationFailureRaisesAlarm) {
@@ -106,8 +114,25 @@ TEST_F(StateVerificationTest, StateVerificationFailureRaisesAlarm) {
   p4rt_service_.GetVrfAppStateDbTable().InsertTableEntry(/*key=*/"bar",
                                                          /*values=*/{});
   EXPECT_THAT(
-      p4rt_service_.VerifyState(),
+      p4rt_service_.GetP4rtServer().VerifyState(),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("AppDb is missing key")));
+  //TODO(PINS): To handle Component State in November Release.
+  //          /*update_component_state=*/true),
+}
+
+TEST_F(StateVerificationTest, StateVerificationFailureNoAlarm) {
+  p4rt_service_.GetP4rtAppDbTable().InsertTableEntry(/*key=*/"foo",
+                                                     /*values=*/{});
+  p4rt_service_.GetVrfAppStateDbTable().InsertTableEntry(/*key=*/"bar",
+                                                         /*values=*/{});
+  EXPECT_THAT(
+      p4rt_service_.GetP4rtServer().VerifyState(),
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("AppDb is missing key")));
+  //TODO(PINS): To handle Component State in November Release.
+  //          /*update_component_state=*/false),
+  // Component state should not change when update_component_state is false.
+  //  EXPECT_EQ(p4rt_service_.GetComponentStateHelper().StateInfo().state,
+  //            swss::ComponentState::kUp);
 }
 
 }  // namespace

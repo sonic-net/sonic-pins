@@ -173,14 +173,19 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Verifies state for the P4RT App. These are checks like:
-  //  * Do P4RT table entries match in AppStateDb and AppDb.
   //  * Do VRF_TABLE entries match in AppStateDb and AppDb.
   //  * Do HASH_TABLE entries match in AppStateDb and AppDb.
   //  * Do SWITCH_TABLE entries match in AppStateDb and AppDb.
+  // When update_component_state is true we log and report back any issues to
+  // the component state. When it's false the issues are only logged.
   //
   // NOTE: We do not verify ownership of table entries today. Therefore, shared
   // tables (e.g. VRF_TABLE) could cause false positives.
-  virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  //TODO(PINS): To handle Component state in November release.
+  //virtual absl::Status VerifyState(bool update_component_state)
+  virtual absl::Status VerifyState()
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Dump various debug data for the P4RT App, including:
   // * PacketIO counters.

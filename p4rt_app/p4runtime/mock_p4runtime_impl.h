@@ -66,7 +66,7 @@ class MockP4RuntimeImpl : public P4RuntimeImpl {
   MOCK_METHOD(absl::Status, RemovePortTranslation,
               (const std::string& port_name), (override));
 
-/* TODO
+/* TODO(PINS): To handle Component State later in November release. 
   MOCK_METHOD(absl::Status, VerifyState, (bool update_component_state),
               (override)); */
   MOCK_METHOD(absl::Status, VerifyState, (), (override));
@@ -75,7 +75,7 @@ class MockP4RuntimeImpl : public P4RuntimeImpl {
               (const std::string& path, const std::string& log_level),
               (override));
 
-/* TODO
+/* TODO(PINS): To handle Component, System & Interface Translator in November release.
  private:
   swss::MockComponentStateHelper mock_component_state_helper_;
   swss::MockSystemStateHelper mock_system_state_helper_; */
