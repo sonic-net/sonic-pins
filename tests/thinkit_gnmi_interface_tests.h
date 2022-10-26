@@ -39,13 +39,19 @@ void TestGNMIChildPortInUseDuringBreakout(
     const p4::config::v1::P4Info& p4_info =
         sai::GetP4Info(sai::Instantiation::kMiddleblock));
 
+// Test port breakout on a port while other master port is in use.
+void TestGNMIOtherMasterPortInUseDuringBreakout(
+    thinkit::Switch &sut, std::string &platform_json_contents,
+    const p4::config::v1::P4Info &p4_info);
+
 // Helper function to test port in use.
 void BreakoutDuringPortInUse(thinkit::Switch &sut,
                              gnmi::gNMI::StubInterface *sut_gnmi_stub,
                              RandomPortBreakoutInfo port_info,
-                             const std::string& platform_json_contents,
-                             bool test_child_port_in_use,
-                             const p4::config::v1::P4Info& p4_info);
+                             absl::string_view platform_json_contents,
+                             absl::string_view port_in_use,
+                             const p4::config::v1::P4Info &p4_info,
+                             const bool expect_breakout_failure);
 
 // Test port breakout during parent port in use.
 void TestGNMIParentPortInUseDuringBreakout(thinkit::Switch &sut,

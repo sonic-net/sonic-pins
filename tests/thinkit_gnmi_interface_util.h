@@ -151,7 +151,7 @@ ValidateBreakoutState(gnmi::gNMI::StubInterface *sut_gnmi_stub,
                       const std::vector<std::string> &non_existing_ports_list);
 
 absl::StatusOr<std::string>
-GetPortIndex(const std::string &platform_json_contents, absl::string_view port);
+GetPortIndex(absl::string_view platform_json_contents, absl::string_view port);
 
 std::string ConstructSupportedBreakoutMode(absl::string_view num_breakouts,
                                            absl::string_view breakout_speed);
