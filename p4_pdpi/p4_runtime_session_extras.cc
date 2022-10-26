@@ -34,4 +34,23 @@ absl::Status InstallPdTableEntry(
   return InstallPiTableEntry(&p4rt, pi_entry);
 }
 
+absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntries(
+    P4RuntimeSession& p4rt) {
+  ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> entries,
+                   ReadPiTableEntries(&p4rt));
+
+  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
+                   GetForwardingPipelineConfig(&p4rt));
+  ASSIGN_OR_RETURN(IrP4Info ir_info,
+                   CreateIrP4Info(response.config().p4info()));
+
+  std::vector<IrTableEntry> ir_table_entries;
+  for (const auto& entry : entries) {
+    ASSIGN_OR_RETURN(IrTableEntry ir_entry, PiTableEntryToIr(ir_info, entry));
+    ir_table_entries.push_back(ir_entry);
+  }
+
+  return ir_table_entries;
+}
+
 }  // namespace pdpi
