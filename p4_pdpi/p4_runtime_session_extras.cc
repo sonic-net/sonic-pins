@@ -21,16 +21,50 @@ absl::Status InstallPdTableEntries(
   // Install entries.
   return InstallPiTableEntries(&p4rt, info, pi_entries);
 }
+
 absl::Status InstallPdTableEntry(
     P4RuntimeSession& p4rt, const google::protobuf::Message& pd_table_entry) {
-  // Convert entries to PI representation.
+  // Convert entry to PI representation.
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
   ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
                    PdTableEntryToPi(info, pd_table_entry));
 
+  // Install entry.
+  return InstallPiTableEntry(&p4rt, pi_entry);
+}
+
+absl::Status InstallIrTableEntries(
+    pdpi::P4RuntimeSession& p4rt,
+    absl::Span<const pdpi::IrTableEntry> ir_table_entries) {
+  // Get P4Info from switch.
+  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
+                   GetForwardingPipelineConfig(&p4rt));
+  ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
+
+  // Convert entries to PI representation.
+  std::vector<p4::v1::TableEntry> pi_entries;
+  for (const pdpi::IrTableEntry& entry : ir_table_entries) {
+    ASSIGN_OR_RETURN(pi_entries.emplace_back(), IrTableEntryToPi(info, entry));
+  }
+
   // Install entries.
+  return InstallPiTableEntries(&p4rt, info, pi_entries);
+}
+
+absl::Status InstallIrTableEntry(pdpi::P4RuntimeSession& p4rt,
+                                 const pdpi::IrTableEntry& ir_table_entry) {
+  // Get P4Info from switch.
+  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
+                   GetForwardingPipelineConfig(&p4rt));
+  ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
+
+  // Convert entry to PI representation.
+  ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
+                   IrTableEntryToPi(info, ir_table_entry));
+
+  // Install entry.
   return InstallPiTableEntry(&p4rt, pi_entry);
 }
 

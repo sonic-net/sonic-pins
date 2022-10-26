@@ -41,7 +41,8 @@ namespace pdpi {
 //
 // Assumes `pd_table_entries` is a `TableEntries` message whose schema is
 // defined in a .proto file produced by PD generator. Assumes that the switch is
-// pre-configured with a `P4Info` that supports the given entries.
+// pre-configured with a `P4Info` that supports the given entries. The `P4Info`
+// is read from the switch.
 absl::Status InstallPdTableEntries(
     P4RuntimeSession& p4rt, const google::protobuf::Message& pd_table_entries);
 
@@ -65,6 +66,16 @@ absl::Status InstallPdTableEntry(
 template <typename T>
 absl::Status InstallPdTableEntry(P4RuntimeSession& p4rt,
                                  absl::string_view pd_table_entry);
+
+// Like `InstallPdTableEntries`, but for IR table entries. Reads the P4Info used
+// in translation from the switch.
+absl::Status InstallIrTableEntries(
+    pdpi::P4RuntimeSession& p4rt,
+    absl::Span<const pdpi::IrTableEntry> ir_table_entries);
+
+// Like `InstallIrTableEntries`, but for a single entry.
+absl::Status InstallIrTableEntry(pdpi::P4RuntimeSession& p4rt,
+                                 const pdpi::IrTableEntry& ir_table_entry);
 
 // Reads table entries from the switch using `p4rt` and returns them in IR
 // representation. Reads the P4Info used in translation from the switch.
