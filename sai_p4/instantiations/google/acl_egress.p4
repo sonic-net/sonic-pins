@@ -28,8 +28,7 @@ control acl_egress(in headers_t headers,
     ether_type != 0x0800 && ether_type != 0x86dd;
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow IP field matches for IP packets.
-    // TODO: Enable once p4-constraints bug is fixed.
-    // ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow l4_dst_port matches for TCP/UDP packets.
     l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     // Forbid illegal combinations of IP_TYPE fields.
