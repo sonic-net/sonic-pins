@@ -39,11 +39,14 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_p4info_fetcher.h"
+//TODO(PINS): Add Component State Helper
+//#include "swss/component_state_helper_interface.h"
 
 namespace p4rt_app {
 namespace {
@@ -322,26 +325,71 @@ TEST_F(VerifyAndCommitTest, CannotClearForwardingState) {
 using CommitTest = ForwardingPipelineConfigTest;
 
 TEST_F(CommitTest, LoadsLastSavedConfig) {
-  // First we need to save the config.
+  // First we need to save the config, and a few P4RT_TABLE and VRF_TABLE
+  // entries.
   p4::v1::ForwardingPipelineConfig expected_config;
   *expected_config.mutable_p4info() =
       sai::GetP4Info(sai::Instantiation::kMiddleblock);
   ASSERT_OK(SaveConfigFile(expected_config));
+  auto p4rt_entry =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_NEIGHBOR_TABLE")
+          .AddMatchField("neighbor_id", "fe80::21a:11ff:fe17:5f80")
+          .AddMatchField("router_interface_id", "1")
+          .SetAction("set_dst_mac")
+          .AddActionParam("dst_mac", "00:1a:11:17:5f:80");
+  p4rt_service_->GetP4rtAppDbTable().InsertTableEntry(
+      p4rt_entry.GetKey(), p4rt_entry.GetValueList());
+  p4rt_service_->GetVrfAppDbTable().InsertTableEntry("vrf-0", {});
 
   // Then we'll load the saved config with the COMMIT action.
   SetForwardingPipelineConfigRequest load_request = GetBasicForwardingRequest();
   load_request.set_action(SetForwardingPipelineConfigRequest::COMMIT);
-
-  // Finally we'll verify we can read back the saved request.
-  GetForwardingPipelineConfigRequest get_request;
-  get_request.set_device_id(p4rt_session_->DeviceId());
-
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(load_request));
 
+  // Finally, we verify we can read back the saved request, and the table
+  // entries.
+  GetForwardingPipelineConfigRequest get_request;
+  get_request.set_device_id(p4rt_session_->DeviceId());
   ASSERT_OK_AND_ASSIGN(GetForwardingPipelineConfigResponse get_response,
                        p4rt_session_->GetForwardingPipelineConfig(get_request));
   EXPECT_THAT(get_response.config(), EqualsProto(expected_config));
+
+  p4::v1::ReadRequest read_request;
+  read_request.set_device_id(p4rt_session_->DeviceId());
+  read_request.add_entities()->mutable_table_entry();
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
+                       p4rt_session_->Read(read_request));
+  EXPECT_EQ(read_response.entities_size(), 2);
 }
+
+/* TODO(PINS): To handle GoesCriticalIfReadingCacheFails test in November release.
+TEST_F(CommitTest, GoesCriticalIfReadingCacheFails) {
+  // First we need to save the config, and a few P4RT_TABLE and VRF_TABLE
+  // entries.
+  p4::v1::ForwardingPipelineConfig expected_config;
+  *expected_config.mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK(SaveConfigFile(expected_config));
+  auto p4rt_entry =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("INVALID_TABLE_NAME")
+          .AddMatchField("neighbor_id", "fe80::21a:11ff:fe17:5f80")
+          .AddMatchField("router_interface_id", "1")
+          .SetAction("set_dst_mac")
+          .AddActionParam("dst_mac", "00:1a:11:17:5f:80");
+  p4rt_service_->GetP4rtAppDbTable().InsertTableEntry(
+      p4rt_entry.GetKey(), p4rt_entry.GetValueList());
+
+  // The config gets loaded, but 'INVALID_TABLE_NAME' cannot be translated to
+  // PI. So we expect the switch to go critical..
+  SetForwardingPipelineConfigRequest load_request = GetBasicForwardingRequest();
+  load_request.set_action(SetForwardingPipelineConfigRequest::COMMIT);
+  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(load_request),
+              StatusIs(absl::StatusCode::kInternal));
+   EXPECT_THAT(p4rt_service_->GetComponentStateHelper().StateInfo().state,
+              swss::ComponentState::kError); 
+}*/
 
 TEST_F(CommitTest, FailsIfNoConfigHasBeenSaved) {
   // If the file exists before this test for any reason then this test is
