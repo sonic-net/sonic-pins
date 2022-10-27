@@ -56,6 +56,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
+#include "p4rt_app/p4runtime/p4runtime_read.h"
 #include "p4rt_app/p4runtime/packetio_helpers.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
@@ -82,17 +83,6 @@ grpc::Status EnterCriticalState(const std::string& message) {
   // TODO: report critical state somewhere an don't crash the process.
   LOG(FATAL) << "Entering critical state: " << message;
   return grpc::Status::OK;
-}
-
-absl::Status SupportedTableEntryRequest(const p4::v1::TableEntry& table_entry) {
-  if (table_entry.table_id() != 0 || !table_entry.match().empty() ||
-      table_entry.priority() != 0 || !table_entry.metadata().empty() ||
-      table_entry.has_action() || table_entry.is_default_action() != false) {
-    return gutil::UnimplementedErrorBuilder()
-           << "Read request for table entry: "
-           << table_entry.ShortDebugString();
-  }
-  return absl::OkStatus();
 }
 
 absl::Status AllowRoleAccessToTable(const std::string& role_name,
@@ -133,97 +123,6 @@ sonic::AppDbTableType GetAppDbTableType(
   {
   	return sonic::AppDbTableType::P4RT;
   }
-}
-
-absl::Status AppendAclCounterData(
-    p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
-    bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::P4rtTable& p4rt_table) {
-  ASSIGN_OR_RETURN(
-      pdpi::IrTableEntry ir_table_entry,
-      TranslatePiTableEntryForOrchAgent(
-          pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
-          /*translate_key_only=*/false));
-
-  RETURN_IF_ERROR(sonic::AppendCounterDataForTableEntry(
-      ir_table_entry, p4rt_table, ir_p4_info));
-  if (ir_table_entry.has_counter_data()) {
-    *pi_table_entry.mutable_counter_data() = ir_table_entry.counter_data();
-  }
-
-  return absl::OkStatus();
-}
-
-absl::Status AppendTableEntryReads(
-    p4::v1::ReadResponse& response, const p4::v1::TableEntry& cached_entry,
-    const std::string& role_name, const pdpi::IrP4Info& ir_p4_info,
-    bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
-  // Fetch the table defintion since it will inform how we process the read
-  // request.
-  auto table_def = ir_p4_info.tables_by_id().find(cached_entry.table_id());
-  if (table_def == ir_p4_info.tables_by_id().end()) {
-    return gutil::InternalErrorBuilder() << absl::StreamFormat(
-               "Could not find table ID %u when checking role access. Did an "
-               "IR translation fail somewhere?",
-               cached_entry.table_id());
-  }
-
-  // Multiple roles can be connected to a switch so we need to ensure the
-  // reader has access to the table. Otherwise, we just ignore reporting it.
-  if (!role_name.empty() && table_def->second.role() != role_name) {
-    VLOG(2) << absl::StreamFormat(
-        "Role '%s' is not allowed access to table '%s'.", role_name,
-        table_def->second.preamble().name());
-    return absl::OkStatus();
-  }
-
-  // Update the response to include the table entry.
-  p4::v1::TableEntry* response_entry =
-      response.add_entities()->mutable_table_entry();
-  *response_entry = cached_entry;
-
-  // For ACL tables we need to check for counter/meter data, and append it as
-  // needed.
-  ASSIGN_OR_RETURN(table::Type table_type, GetTableType(table_def->second),
-                   _ << "Could not determine table type for table '"
-                     << table_def->second.preamble().name() << "'.");
-  if (table_type == table::Type::kAcl) {
-    RETURN_IF_ERROR(AppendAclCounterData(*response_entry, ir_p4_info,
-                                         translate_port_ids,
-                                         port_translation_map, p4rt_table));
-  }
-
-  return absl::OkStatus();
-}
-
-absl::StatusOr<p4::v1::ReadResponse> DoRead(
-    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table,
-    const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
-    const TableEntryMap& table_entry_cache, bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map) {
-  p4::v1::ReadResponse response;
-  for (const auto& entity : request.entities()) {
-    VLOG(1) << "Read request: " << entity.ShortDebugString();
-    switch (entity.entity_case()) {
-      case p4::v1::Entity::kTableEntry: {
-        RETURN_IF_ERROR(SupportedTableEntryRequest(entity.table_entry()));
-        for (const auto& [_, entry] : table_entry_cache) {
-          RETURN_IF_ERROR(AppendTableEntryReads(
-              response, entry, request.role(), ir_p4_info, translate_port_ids,
-              port_translation_map, p4rt_table, vrf_table));
-        }
-        break;
-      }
-      default:
-        return gutil::UnimplementedErrorBuilder()
-               << "Read has not been implemented for: "
-               << entity.ShortDebugString();
-    }
-  }
-  return response;
 }
 
 // Generates a StreamMessageResponse error based on an absl::Status.
@@ -646,9 +545,9 @@ grpc::Status P4RuntimeImpl::Read(
                           "ReadResponse writer cannot be a nullptr.");
     }
 
-    auto response_status =
-        DoRead(p4rt_table_, vrf_table_, *request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
-               port_translation_map_);
+    auto response_status = ReadAllTableEntries(
+        *request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
+        port_translation_map_, p4rt_table_);
     if (!response_status.ok()) {
       LOG(WARNING) << "Read failure: " << response_status.status();
       return grpc::Status(
