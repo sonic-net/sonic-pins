@@ -82,6 +82,9 @@ void SetDefaultReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
 // Mocks a P4RuntimeSession::Create call with a stub by constructing a
 // ReaderWriter mock stream and mocking an arbitration handshake. This function
 // does not perform any of these operations, it only sets up expectations.
+//
+// NOTE: Not suitable for tests that need to mock stream channel reads, since
+// this function does not expose the stream channel mock.
 void MockP4RuntimeSessionCreate(p4::v1::MockP4RuntimeStub& stub,
                                 const P4RuntimeSessionOptionalArgs& metadata);
 
@@ -89,7 +92,7 @@ void MockP4RuntimeSessionCreate(p4::v1::MockP4RuntimeStub& stub,
 // mocked P4RuntimeSession.
 // Ensures that there are no table entries remaining.
 void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
-                        const p4::config::v1::P4Info& p4info);
+                        std::optional<p4::config::v1::P4Info> p4info);
 
 // Mocks a ClearTableEntries call using the stub and p4info in a previously
 // mocked P4RuntimeSession.
