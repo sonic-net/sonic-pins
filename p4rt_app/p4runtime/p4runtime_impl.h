@@ -286,7 +286,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // Some switch enviornments cannot rely on the SONiC port names, and can
   // instead choose to use port ID's configured through gNMI.
-  const bool translate_port_ids_;
+  const bool translate_port_ids_ ABSL_GUARDED_BY(server_state_lock_);
 
   // Reading a large number of entries from Redis is costly. To improve the
   // read performance we cache table entries in software.

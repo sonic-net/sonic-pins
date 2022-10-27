@@ -83,7 +83,7 @@ absl::Status SupportedTableEntryRequest(const p4::v1::TableEntry& table_entry) {
 absl::Status AllowRoleAccessToTable(const std::string& role_name,
                                     const std::string& table_name,
                                     const pdpi::IrP4Info& p4_info) {
-  // The defulat role can access any table.
+  // The default role can access any table.
   if (role_name.empty()) return absl::OkStatus();
 
   auto table_def = p4_info.tables_by_name().find(table_name);
@@ -163,7 +163,7 @@ absl::Status AppendTableEntryReads(
     const std::string& role_name, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
+    sonic::P4rtTable& p4rt_table) {
   // Fetch the table defintion since it will inform how we process the read
   // request.
   auto table_def = ir_p4_info.tables_by_id().find(cached_entry.table_id());
@@ -203,10 +203,10 @@ absl::Status AppendTableEntryReads(
 }
 
 absl::StatusOr<p4::v1::ReadResponse> DoRead(
-    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table,
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
     const TableEntryMap& table_entry_cache, bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map) {
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    sonic::P4rtTable& p4rt_table) {
   p4::v1::ReadResponse response;
   for (const auto& entity : request.entities()) {
     VLOG(1) << "Read request: " << entity.ShortDebugString();
@@ -216,7 +216,7 @@ absl::StatusOr<p4::v1::ReadResponse> DoRead(
         for (const auto& [_, entry] : table_entry_cache) {
           RETURN_IF_ERROR(AppendTableEntryReads(
               response, entry, request.role(), ir_p4_info, translate_port_ids,
-              port_translation_map, p4rt_table, vrf_table));
+              port_translation_map, p4rt_table));
         }
         break;
       }
@@ -526,8 +526,8 @@ grpc::Status P4RuntimeImpl::Read(
     }
 
     auto response_status =
-        DoRead(p4rt_table_, vrf_table_, *request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
-               port_translation_map_);
+        DoRead(*request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
+               port_translation_map_, p4rt_table_);
     if (!response_status.ok()) {
       LOG(WARNING) << "Read failure: " << response_status.status();
       return grpc::Status(
