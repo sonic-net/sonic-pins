@@ -36,6 +36,7 @@
 #include "grpcpp/support/status.h"
 #include "grpcpp/support/sync_stream.h"
 #include "gutil/table_entry_key.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
@@ -328,7 +329,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // Some switch enviornments cannot rely on the SONiC port names, and can
   // instead choose to use port ID's configured through gNMI.
-  const bool translate_port_ids_;
+  const bool translate_port_ids_ ABSL_GUARDED_BY(server_state_lock_);
 
   // Reading a large number of entries from Redis is costly. To improve the
   // read performance we cache table entries in software.

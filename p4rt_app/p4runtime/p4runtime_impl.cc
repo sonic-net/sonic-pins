@@ -385,6 +385,44 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
   return ir_updates;
 }
 
+absl::Status CacheWriteResults(
+    absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
+    const p4::v1::WriteRequest& request, const pdpi::IrWriteResponse& results) {
+  if (request.updates_size() != results.statuses_size()) {
+    return gutil::InternalErrorBuilder()
+           << "The number of requests (" << request.updates_size()
+           << ") does not match the number of status results ("
+           << results.statuses_size() << ").";
+  }
+
+  // We only update the cache if the request passes. If it fails then the state
+  // should have been restored by the lower layers, or gone critical (i.e. the
+  // cache state doesn't really matter anymore).
+  for (int i = 0; i < request.updates_size(); ++i) {
+    if (results.statuses(i).code() != google::rpc::Code::OK) {
+      continue;
+    }
+
+    const auto& update = request.updates(i);
+    gutil::TableEntryKey key(update.entity().table_entry());
+    switch (update.type()) {
+      case p4::v1::Update::INSERT:
+      case p4::v1::Update::MODIFY:
+        cache[key] = update.entity().table_entry();
+        break;
+      case p4::v1::Update::DELETE:
+        cache.erase(key);
+        break;
+      default:
+        return gutil::InternalErrorBuilder()
+               << "Invalid Update Type: "
+               << p4::v1::Update::Type_Name(update.type());
+    }
+  }
+
+  return absl::OkStatus();
+}
+
 absl::Status UpdateCacheAndUtilizationState(
     TableEntryMap& table_cache,
     ActionProfileCapacityMap& capacity_by_action_profile_name,
@@ -551,6 +589,8 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     if (!cache_and_util_status.ok()) {
       LOG(ERROR) << "Could not update cache and utilization for write request: "
                  << cache_and_util_status;
+      //TODO(PINS): To handle component_state code later.
+      //return EnterCriticalState(cache_status.ToString(), component_state_);
       return EnterCriticalState(cache_and_util_status.ToString());
     }
 
