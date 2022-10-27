@@ -86,6 +86,13 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key);
 
+// Checks CounterDB for any counter data relating to the table entry and appends
+// it to the ir_table_entry argument. The ir_table_entry is untouched if no
+// counter data is found.
+absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
+                                            P4rtTable& p4rt_table,
+                                            const pdpi::IrP4Info& p4info);
+
 }  // namespace sonic
 }  // namespace p4rt_app
 

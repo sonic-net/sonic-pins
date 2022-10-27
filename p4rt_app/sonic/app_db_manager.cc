@@ -29,6 +29,7 @@
 #include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -440,6 +441,15 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
       table_entry, p4rt_table.counter_db->get(absl::StrCat(
                        p4rt_table.app_db->getTablePrefix(), key))));
   return table_entry;
+}
+
+absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
+                                            P4rtTable& p4rt_table,
+                                            const pdpi::IrP4Info& p4info) {
+  ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(ir_table_entry, p4info));
+  return AppendCounterData(ir_table_entry,
+                           p4rt_table.counter_db->get(absl::StrCat(
+                               p4rt_table.app_db->getTablePrefix(), key)));
 }
 
 std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
