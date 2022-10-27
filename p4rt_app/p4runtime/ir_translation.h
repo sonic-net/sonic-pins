@@ -17,6 +17,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "boost/bimap.hpp"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 

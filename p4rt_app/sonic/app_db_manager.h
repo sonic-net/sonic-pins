@@ -138,6 +138,10 @@ absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
                                             P4rtTable& p4rt_table,
                                             const pdpi::IrP4Info& p4info);
 
+// Returns the expected P4RT_TABLE key for a given IRTableEntry.
+absl::StatusOr<std::string> GetRedisP4rtTableKey(
+    const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info);
+
 }  // namespace sonic
 }  // namespace p4rt_app
 

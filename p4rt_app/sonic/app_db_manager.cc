@@ -75,6 +75,7 @@ absl::StatusOr<std::string> CreateEntryForInsert(
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts) {
   VLOG(2) << "Insert PDPI IR entry: " << entry.ShortDebugString();
   ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
+
   VLOG(1) << "Insert AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
@@ -94,6 +95,7 @@ absl::StatusOr<std::string> CreateEntryForModify(
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies) {
   VLOG(2) << "Modify PDPI IR entry: " << entry.ShortDebugString();
   ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
+
   VLOG(1) << "Modify AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
