@@ -61,7 +61,7 @@ StatusOr<std::string> GenerateSonicDbKeyFromIrTable(
            << "Table [" << table.ShortDebugString() << "] is missing an alias.";
   }
   return absl::Substitute("$0:ACL_$1",
-                          table::TypeName(table::Type::kDefinition),
+                          table::TypeName(table::Type::kAclDefinition),
                           absl::AsciiStrToUpper(table.preamble().alias()));
 }
 

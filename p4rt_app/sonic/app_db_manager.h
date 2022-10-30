@@ -29,6 +29,8 @@
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/db_connector_adapter.h"
 #include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
+#include "swss/json.h"
+#include "swss/json.hpp"
 
 namespace p4rt_app {
 namespace sonic {
@@ -56,6 +58,18 @@ struct AppDbUpdates {
   std::vector<AppDbEntry> entries;
   int total_rpc_updates = 0;
 };
+
+// Insert table definition
+absl::Status InsertTableDefinition(
+    nlohmann::json &tables,
+    const pdpi::IrTableDefinition& ir_table);
+
+// A definition set string in json format published to AppDb
+absl::StatusOr<std::string> PublishTablesDefinitionToAppDb(
+    const std::string& tables_info_s,
+    uint64_t cookie,
+    ProducerStateTableAdapter& sonic_db_producer,
+    DBConnectorAdapter& app_db_client);
 
 // Takes a list of AppDb updates (i.e. inserts, modifies, or deletes) and
 // translates them so that they are consumable by the AppDb. It will also
