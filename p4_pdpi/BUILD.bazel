@@ -267,24 +267,24 @@ cc_library(
     ],
 )
 
-# cc_test(
-#     name = "ir_tools_test",
-#     srcs = ["ir_tools_test.cc"],
-#     deps = [
-#         ":ir_cc_proto",
-#         ":ir_tools",
-#         ":pd",
-#         "//gutil:proto",
-#         "//gutil:proto_matchers",
-#         "//gutil:status_matchers",
-#         "//gutil:testing",
-#         "//p4_pdpi/testing:main_p4_pd_cc_proto",
-#         "//p4_pdpi/testing:test_p4info_cc",
-#         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
-#         "@com_google_absl//absl/container:flat_hash_set",
-#         "@com_google_absl//absl/status",
-#         "@com_google_absl//absl/status:statusor",
-#         "@com_google_absl//absl/strings",
-#         "@com_google_googletest//:gtest_main",
-#     ],
-# )
+cc_test(
+    name = "ir_tools_test",
+    srcs = ["ir_tools_test.cc"],
+    deps = [
+        ":ir_cc_proto",
+        ":ir_tools",
+        ":pd",
+        "//gutil:proto",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi/testing:main_p4_pd_cc_proto",
+        "//p4_pdpi/testing:test_p4info_cc",
+        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
