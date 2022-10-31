@@ -32,6 +32,7 @@
 ABSL_FLAG(std::string, list_of_p4infos, "",
           "Comma-separated list of P4Infos files (required)");
 
+using ::gutil::PrintTextProto;
 using ::p4::config::v1::P4Info;
 
 constexpr absl::string_view kUsage =
@@ -71,6 +72,6 @@ int main(int argc, char** argv) {
                                   p4info_union.status().message());
     return 1;
   }
-  std::cout << p4info_union->DebugString();
+  std::cout << PrintTextProto(*p4info_union);
   return 0;
 }

@@ -30,7 +30,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_COPY_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_COPY)
   action copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
-    clone3(CloneType.I2E, COPY_TO_CPU_SESSION_ID, {});
+    clone(CloneType.I2E, COPY_TO_CPU_SESSION_ID);
     acl_ingress_counter.count();
   }
 

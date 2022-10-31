@@ -18,8 +18,11 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -164,7 +167,9 @@ absl::StatusOr<bool> HasField(const google::protobuf::Message &parent_message,
                                                   field_descriptor);
 }
 
-absl::StatusOr<const google::protobuf::Message *> GetRepeatedMessage(
+// Looks up repeated field of the given name in the given message using
+// reflection, and returns non-null pointer to the element of the given index.
+absl::StatusOr<const google::protobuf::Message *> GetRepeatedFieldMessage(
     const google::protobuf::Message &parent_message,
     const std::string &fieldname, int index) {
   ASSIGN_OR_RETURN(auto *field_descriptor,
@@ -175,16 +180,51 @@ absl::StatusOr<const google::protobuf::Message *> GetRepeatedMessage(
            << parent_message.GetTypeName() << ". "
            << kPdProtoAndP4InfoOutOfSync;
   }
+  if (!field_descriptor->is_repeated()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "field '" << fieldname << "' in '" << parent_message.GetTypeName()
+           << "' is not a repeated field";
+  }
   int repeated_field_length = parent_message.GetReflection()->FieldSize(
       parent_message, field_descriptor);
-  if (parent_message.GetReflection()->FieldSize(parent_message,
-                                                field_descriptor) < index) {
+  if (index >= repeated_field_length) {
     return gutil::OutOfRangeErrorBuilder()
            << "Index out of repeated field's bound. field's length: "
            << repeated_field_length << "index: " << index;
   }
   return &parent_message.GetReflection()->GetRepeatedMessage(
       parent_message, field_descriptor, index);
+}
+
+// Looks up repeated field of the given name in the given message using
+// reflection, and returns vector of non-null pointers to the repeated field
+// elements.
+absl::StatusOr<std::vector<const google::protobuf::Message *>>
+GetRepeatedFieldMessages(const google::protobuf::Message &parent_message,
+                         const std::string &fieldname) {
+  ASSIGN_OR_RETURN(auto *field_descriptor,
+                   GetFieldDescriptor(parent_message, fieldname));
+  if (field_descriptor == nullptr) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Field " << fieldname << " missing in "
+           << parent_message.GetTypeName() << ". "
+           << kPdProtoAndP4InfoOutOfSync;
+  }
+  if (!field_descriptor->is_repeated()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "field '" << fieldname << "' in '" << parent_message.GetTypeName()
+           << "' is not a repeated field";
+  }
+
+  int size = parent_message.GetReflection()->FieldSize(parent_message,
+                                                       field_descriptor);
+  std::vector<const google::protobuf::Message *> result;
+  result.reserve(size);
+  for (int i = 0; i < size; ++i) {
+    result.push_back(&parent_message.GetReflection()->GetRepeatedMessage(
+        parent_message, field_descriptor, i));
+  }
+  return result;
 }
 
 absl::StatusOr<google::protobuf::Message *> AddRepeatedMutableMessage(
@@ -345,6 +385,181 @@ std::vector<std::string> GetAllFieldNames(
   }
   return field_names;
 }
+
+absl::Status AddIrMeterCounterDataToPdEntry(
+    const IrTableEntry &ir, const IrTableDefinition &ir_table_info,
+    google::protobuf::Message &pd_table) {
+  if (!ir_table_info.has_counter()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat(kNewBullet,
+                     "Table has no counter support but IR table entry has "
+                     "a meter counter."));
+  }
+
+  const auto &pd_meter_counter_data =
+      GetMutableMessage(&pd_table, "meter_counter_data");
+  if (!pd_meter_counter_data.ok()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat(kNewBullet, pd_meter_counter_data.status().message()));
+  }
+
+  std::vector<std::string> invalid_reasons;
+  absl::flat_hash_map<std::string, const p4::v1::CounterData>
+      ir_meter_colors_to_color_counter_data = {
+          {"green", ir.meter_counter_data().green()},
+          {"yellow", ir.meter_counter_data().yellow()},
+          {"red", ir.meter_counter_data().red()},
+      };
+  for (const auto &[color, ir_color_counter_data] :
+       ir_meter_colors_to_color_counter_data) {
+    const absl::StatusOr<google::protobuf::Message *> &pd_color_counter_data =
+        GetMutableMessage(*pd_meter_counter_data, color);
+    if (!pd_color_counter_data.ok()) {
+      invalid_reasons.push_back(absl::StrCat(
+          kNewBullet, color, pd_color_counter_data.status().message()));
+      continue;
+    }
+    // Use the same unit as counter data for meter counter data.
+    switch (ir_table_info.counter().unit()) {
+      case p4::config::v1::CounterSpec_Unit_BYTES: {
+        absl::Status byte_count_status =
+            SetInt64Field(*pd_color_counter_data, "byte_count",
+                          ir_color_counter_data.byte_count());
+        if (!byte_count_status.ok()) {
+          invalid_reasons.push_back(
+              absl::StrCat(kNewBullet, color, byte_count_status.message()));
+        }
+        break;
+      }
+      case p4::config::v1::CounterSpec_Unit_PACKETS: {
+        absl::Status packet_count_status =
+            SetInt64Field(*pd_color_counter_data, "packet_count",
+                          ir_color_counter_data.packet_count());
+        if (!packet_count_status.ok()) {
+          invalid_reasons.push_back(
+              absl::StrCat(kNewBullet, color, packet_count_status.message()));
+        }
+        break;
+      }
+      case p4::config::v1::CounterSpec_Unit_BOTH: {
+        absl::Status byte_count_status =
+            SetInt64Field(*pd_color_counter_data, "byte_count",
+                          ir_color_counter_data.byte_count());
+        if (!byte_count_status.ok()) {
+          invalid_reasons.push_back(
+              absl::StrCat(kNewBullet, color, byte_count_status.message()));
+        }
+        const auto &packet_count_status =
+            SetInt64Field(*pd_color_counter_data, "packet_count",
+                          ir_color_counter_data.packet_count());
+        if (!packet_count_status.ok()) {
+          invalid_reasons.push_back(
+              absl::StrCat(kNewBullet, color, packet_count_status.message()));
+        }
+        break;
+      }
+      default:
+        invalid_reasons.push_back(absl::StrCat(
+            kNewBullet,
+            "Invalid meter counter unit: ", ir_table_info.counter().unit()));
+    }
+  }
+
+  if (!invalid_reasons.empty()) {
+    return absl::InvalidArgumentError(absl::StrJoin(invalid_reasons, "\n  "));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status AddPdMeterCounterDataToIrEntry(
+    const google::protobuf::Message &pd_table,
+    const IrTableDefinition &ir_table_info, IrTableEntry &ir) {
+  // First check if "meter_counter_data" field exists and then get the
+  // field value.
+  std::vector<std::string> invalid_reasons;
+  const absl::StatusOr<bool> &pd_has_meter_counter_data =
+      HasField(pd_table, "meter_counter_data");
+  if (!pd_has_meter_counter_data.ok()) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, pd_has_meter_counter_data.status().message()));
+  } else if (*pd_has_meter_counter_data) {
+    const absl::StatusOr<const google::protobuf::Message *> &
+        pd_meter_counter_data = GetMessageField(pd_table, "meter_counter_data");
+    if (!pd_meter_counter_data.ok()) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet, pd_meter_counter_data.status().message()));
+    } else {
+      absl::btree_map<std::string, p4::v1::CounterData *>
+          colors_to_ir_meter_color_counter_data = {
+              {"green", ir.mutable_meter_counter_data()->mutable_green()},
+              {"yellow", ir.mutable_meter_counter_data()->mutable_yellow()},
+              {"red", ir.mutable_meter_counter_data()->mutable_red()},
+          };
+      for (const auto &[color, ir_meter_color_counter_data] :
+           colors_to_ir_meter_color_counter_data) {
+        const auto &color_counter_data =
+            GetMessageField(**pd_meter_counter_data, color);
+        if (!color_counter_data.ok()) {
+          invalid_reasons.push_back(
+              absl::StrCat(kNewBullet, color_counter_data.status().message()));
+          continue;
+        }
+        switch (ir_table_info.counter().unit()) {
+          case p4::config::v1::CounterSpec_Unit_BYTES: {
+            const absl::StatusOr<int64_t> &pd_byte_counter =
+                GetInt64Field(**color_counter_data, "byte_count");
+            if (!pd_byte_counter.ok()) {
+              invalid_reasons.push_back(
+                  absl::StrCat(kNewBullet, pd_byte_counter.status().message()));
+            } else {
+              ir_meter_color_counter_data->set_byte_count(*pd_byte_counter);
+            }
+            break;
+          }
+          case p4::config::v1::CounterSpec_Unit_PACKETS: {
+            const absl::StatusOr<int64_t> &pd_packet_counter =
+                GetInt64Field(**color_counter_data, "packet_count");
+            if (!pd_packet_counter.ok()) {
+              invalid_reasons.push_back(absl::StrCat(
+                  kNewBullet, pd_packet_counter.status().message()));
+            } else {
+              ir_meter_color_counter_data->set_packet_count(*pd_packet_counter);
+            }
+            break;
+          }
+          case p4::config::v1::CounterSpec_Unit_BOTH: {
+            const absl::StatusOr<int64_t> &pd_byte_counter =
+                GetInt64Field(**color_counter_data, "byte_count");
+            if (!pd_byte_counter.ok()) {
+              invalid_reasons.push_back(
+                  absl::StrCat(kNewBullet, pd_byte_counter.status().message()));
+            } else {
+              ir_meter_color_counter_data->set_byte_count(*pd_byte_counter);
+            }
+            const absl::StatusOr<int64_t> &pd_packet_counter =
+                GetInt64Field(**color_counter_data, "packet_count");
+            if (!pd_packet_counter.ok()) {
+              invalid_reasons.push_back(absl::StrCat(
+                  kNewBullet, pd_packet_counter.status().message()));
+            } else {
+              ir_meter_color_counter_data->set_packet_count(*pd_packet_counter);
+            }
+            break;
+          }
+          default:
+            invalid_reasons.push_back(absl::StrCat(
+                kNewBullet,
+                "Invalid counter unit: ", ir_table_info.meter().unit()));
+        }
+      }
+    }
+  }
+  if (!invalid_reasons.empty()) {
+    return absl::InvalidArgumentError(absl::StrJoin(invalid_reasons, "\n  "));
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<std::string> P4NameToProtobufMessageName(
@@ -368,6 +583,17 @@ absl::Status PiTableEntryToPd(const IrP4Info &info,
                               bool key_only /*=false*/) {
   ASSIGN_OR_RETURN(const auto ir_entry, PiTableEntryToIr(info, pi, key_only));
   return IrTableEntryToPd(info, ir_entry, pd, key_only);
+}
+
+absl::Status PiTableEntriesToPd(const IrP4Info &info,
+                                const absl::Span<const p4::v1::TableEntry> &pi,
+                                google::protobuf::Message *pd, bool key_only) {
+  for (auto const &pi_entry : pi) {
+    ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
+                     AddRepeatedMutableMessage(pd, "entries"));
+    RETURN_IF_ERROR(PiTableEntryToPd(info, pi_entry, pd_entry, key_only));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status PiPacketInToPd(const IrP4Info &info,
@@ -429,6 +655,19 @@ absl::StatusOr<p4::v1::TableEntry> PdTableEntryToPi(
     const IrP4Info &info, const google::protobuf::Message &pd, bool key_only) {
   ASSIGN_OR_RETURN(const auto ir_entry, PdTableEntryToIr(info, pd, key_only));
   return IrTableEntryToPi(info, ir_entry, key_only);
+}
+
+absl::StatusOr<std::vector<p4::v1::TableEntry>> PdTableEntriesToPi(
+    const IrP4Info &info, const google::protobuf::Message &pd, bool key_only) {
+  ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
+                   GetRepeatedFieldMessages(pd, "entries"));
+  std::vector<p4::v1::TableEntry> pi_entries;
+  pi_entries.reserve(pd_entries.size());
+  for (auto *pd_entry : pd_entries) {
+    ASSIGN_OR_RETURN(pi_entries.emplace_back(),
+                     PdTableEntryToPi(info, *pd_entry));
+  }
+  return pi_entries;
 }
 
 absl::StatusOr<p4::v1::PacketIn> PdPacketInToPi(
@@ -516,6 +755,11 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
       continue;
     }
     const auto *ir_match_info = *status_or_ir_match_info;
+    if (IsElementUnused((ir_match_info->match_field().annotations()))) {
+      invalid_match_reasons.push_back(
+          absl::StrCat(kNewBullet, "Match field has @unused annotation."));
+    }
+
     switch (ir_match_info->match_field().match_type()) {
       case MatchField::EXACT: {
         const absl::StatusOr<std::string> &pd_value =
@@ -672,6 +916,11 @@ static absl::Status IrActionInvocationToPd(
         absl::StrCat(kNewBullet, pd_action.status().message())));
   }
   std::vector<std::string> invalid_reasons;
+  if (IsElementUnused((ir_action_info->preamble().annotations()))) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Action has @unused annotation."));
+  }
+
   for (const auto &ir_param : ir_action.params()) {
     const auto &status_or_param_info = gutil::FindPtrOrStatus(
         ir_action_info->params_by_name(), ir_param.name());
@@ -787,6 +1036,12 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
 
   std::vector<std::string> invalid_reasons;
 
+  if (IsElementUnused((ir_table_info->preamble().annotations()))) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Table entry for table '", ir.table_name(),
+                     "' has @unused annotation."));
+  }
+
   const absl::StatusOr<google::protobuf::Message *> &pd_match =
       GetMutableMessage(pd_table, "match");
   if (!pd_match.ok()) {
@@ -893,6 +1148,15 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
             invalid_reasons.push_back(absl::StrCat(
                 kNewBullet,
                 "Invalid meter unit: ", ir_table_info->meter().unit()));
+        }
+      }
+
+      // Take care of meter_counter_data for the 3 colors.
+      if (ir.has_meter_counter_data()) {
+        absl::Status status =
+            AddIrMeterCounterDataToPdEntry(ir, *ir_table_info, *pd_table);
+        if (!status.ok()) {
+          invalid_reasons.push_back(std::string(status.message()));
         }
       }
     }
@@ -1298,16 +1562,30 @@ absl::Status IrWriteRpcStatusToPd(const IrWriteRpcStatus &ir_write_status,
   return absl::OkStatus();
 }
 
-// Converts all PD matches to their IR form and stores them in the matches field
-// of ir_table_entry.
+// Converts all PD matches to their IR form and stores them in the matches
+// field of ir_table_entry.
 static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
                                      const google::protobuf::Message &pd_match,
                                      IrTableEntry *ir_table_entry) {
+  // Verify that there are no matches in PD that are not supported by the
+  // P4Info provided. This could happen since if a P4Info that is a superset
+  // of P4Infos for different roles is used to generate the PD, but a role
+  // specific P4Info is passed in to PDPI.
+
   std::vector<std::pair<uint64_t, std::string>> matches;
+  absl::flat_hash_set<std::string> match_set;
   for (const auto &[id, match_field] : ir_table_info.match_fields_by_id()) {
     matches.push_back({id, match_field.match_field().name()});
+    match_set.insert(match_field.match_field().name());
   }
+
   std::vector<std::string> invalid_reasons;
+  for (const auto &field : GetAllFieldNames(pd_match)) {
+    if (!match_set.contains(field)) {
+      invalid_reasons.push_back(GenerateFormattedError(
+          MatchFieldName(field), "Match field does not exist in the P4Info."));
+    }
+  }
   std::sort(matches.begin(), matches.end());
   for (const auto &[_, pd_match_name] : matches) {
     std::vector<std::string> invalid_match_reasons;
@@ -1327,6 +1605,11 @@ static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
     if (has_field.ok() && !*has_field &&
         ir_match_info->match_field().match_type() != MatchField::EXACT) {
       continue;
+    }
+
+    if (IsElementUnused(ir_match_info->match_field().annotations())) {
+      invalid_match_reasons.push_back(
+          absl::StrCat(kNewBullet, "Match field has @unused annotation."));
     }
 
     auto *ir_match = ir_table_entry->add_matches();
@@ -1511,6 +1794,12 @@ static absl::StatusOr<IrActionInvocation> PdActionInvocationToIr(
   IrActionInvocation ir_action;
   ir_action.set_name(action_name);
   std::vector<std::string> invalid_reasons;
+
+  if (IsElementUnused((*status_or_ir_action_info)->preamble().annotations())) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Action has @unused annotation."));
+  }
+
   for (const auto &pd_arg_name : GetAllFieldNames(*pd_action)) {
     const auto &status_or_param_info = gutil::FindPtrOrStatus(
         (*status_or_ir_action_info)->params_by_name(), pd_arg_name);
@@ -1619,6 +1908,13 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
   ir.set_table_name(*p4_table_name);
 
   std::vector<std::string> invalid_reasons;
+
+  if (IsElementUnused(ir_table_info->preamble().annotations())) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Table entry for table '", *p4_table_name,
+                     "' has @unused annotation."));
+  }
+
   const auto &status_or_pd_table = GetMessageField(pd, *pd_table_field_name);
   if (!status_or_pd_table.ok()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
@@ -1796,6 +2092,14 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
                   "Invalid counter unit: ", ir_table_info->meter().unit()));
           }
         }
+      }
+    }
+
+    if (ir_table_info->has_meter() && ir_table_info->has_counter()) {
+      absl::Status status =
+          AddPdMeterCounterDataToIrEntry(*pd_table, *ir_table_info, ir);
+      if (!status.ok()) {
+        invalid_reasons.push_back(std::string(status.message()));
       }
     }
   }
@@ -2100,7 +2404,7 @@ static absl::StatusOr<IrWriteResponse> PdWriteResponseToIr(
        i++) {
     // Extract out the Pd::UpdateStatus and pass to PdUpdateStatusToIr
     ASSIGN_OR_RETURN(const auto *pd_update_status,
-                     GetRepeatedMessage(*status_message, "statuses", i));
+                     GetRepeatedFieldMessage(*status_message, "statuses", i));
     ASSIGN_OR_RETURN(const auto ir_update_status,
                      PdUpdateStatusToIr(*pd_update_status));
     *ir_write_response.add_statuses() = ir_update_status;

@@ -795,3 +795,624 @@ referring_table_entry {
   }
 }
 
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Empty input generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+<empty>
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: All root entries means no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-a"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring_table_entry {
+  match {
+    val: "0x002"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-b"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Root referring to the only entry generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-a"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Root referring to all dependencies generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-b"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+referred_table_entry {
+  match {
+    id: "key-b"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Garbage is unreachable.
+=========================================================================
+
+--- PD entries (input):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-b"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+referred_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+--- Unreachable entries from roots (output):
+referred_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Root referring to dependency and a standalone Root generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-b"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "non-exist"
+      referring_id_2: "non-exist"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: All entries are garbage.
+=========================================================================
+
+--- PD entries (input):
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+referred_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+--- Unreachable entries from roots (output):
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+referred_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Two roots referring to one dependency generates no garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-a"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring_table_entry {
+  match {
+    val: "0x002"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "key-a"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Children and grand children of the root are not garbage.
+=========================================================================
+
+--- PD entries (input):
+referring_to_referring2_table_entry {
+  match {
+    referring2_table_id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring2_table_entry {
+  match {
+    referring_id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child dependency"
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grand child Dependency"
+}
+
+--- Unreachable entries from roots (output):
+<empty>
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: NonRoot referring to other NonRoot is garbage.
+=========================================================================
+
+--- PD entries (input):
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "non-existent"
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+--- Unreachable entries from roots (output):
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "non-existent"
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: NonRoot referring to other dependency is garbage, but other dependencies that are referred by a root won't be removed.
+=========================================================================
+
+--- PD entries (input):
+referring_to_referring2_table_entry {
+  match {
+    referring2_table_id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring2_table_entry {
+  match {
+    referring_id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child dependency"
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grand child Dependency"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "non-existent"
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+--- Unreachable entries from roots (output):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "non-existent"
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Conglomeration test.
+=========================================================================
+
+--- PD entries (input):
+referring_to_referring2_table_entry {
+  match {
+    referring2_table_id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referring2_table_entry {
+  match {
+    referring_id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child dependency"
+}
+
+referred_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grand child Dependency"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "non-existent"
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+referred_table_entry {
+  match {
+    id: "key-b"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-b"
+      referring_id_2: "non-existent"
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-c"
+      referring_id_2: "non-exist"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+referred_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "non-exist"
+      referring_id_2: "non-exist"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+--- Unreachable entries from roots (output):
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-a"
+      referring_id_2: "non-existent"
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+referred_table_entry {
+  match {
+    id: "key-b"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+
+referring_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_action {
+      referring_id_1: "key-b"
+      referring_id_2: "non-existent"
+    }
+  }
+  controller_metadata: "NonRoot garbage"
+}
+

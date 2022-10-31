@@ -1,4 +1,5 @@
 pkg_info {
+  name: "Union of "
   arch: "v1model"
 }
 tables {

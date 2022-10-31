@@ -147,7 +147,9 @@ class NonMatchingAnnotationTest : public testing::TestWithParam<std::string> {
   static const std::map<std::string, std::string>& TestCases() {
     static const auto* const test_cases =
         new std::map<std::string, std::string>({
-            {"BlankLabel", "@()"},
+            {"EmptyLabel", "@"},
+            {"EmptyLabelWithEmptyBody", "@()"},
+            {"EmptyLabelWithBody", "@(arg)"},
             {"NonMatchingLabel", "@a()"},
             {"SuperstringLabel", "@labela()"},
             {"SubstringLabel", "@labe()"},
@@ -159,6 +161,17 @@ class NonMatchingAnnotationTest : public testing::TestWithParam<std::string> {
     return *test_cases;
   }
 };
+
+TEST_P(NonMatchingAnnotationTest, ParseAnnotationReturnsError) {
+  // GetAllAnnotations doesn't require a particular label, so some cases do not
+  // apply.
+  if (GetParam() == "NonMatchingLabel" || GetParam() == "SuperstringLabel" ||
+      GetParam() == "SubstringLabel") {
+    GTEST_SKIP() << "GetAllAnnotations does not perform label matching.";
+  } else {
+    EXPECT_FALSE(ParseAnnotation(TestCases().at(GetParam())).ok());
+  }
+}
 
 TEST_P(NonMatchingAnnotationTest, GetAllAnnotationsReturnsEmpty) {
   // GetAllAnnotations doesn't require a particular label, so some cases do not

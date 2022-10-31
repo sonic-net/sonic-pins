@@ -15,6 +15,7 @@
 #include "p4_pdpi/sequencing.h"
 
 #include <algorithm>
+#include <queue>
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
@@ -308,6 +309,59 @@ absl::Status SortTableEntries(const IrP4Info& info,
     }
   }
   return absl::OkStatus();
+}
+// Uses BuildDependencyGraph to build a dependency graph to help identify
+// unreachable entries.
+absl::StatusOr<std::vector<p4::v1::TableEntry>> GetEntriesUnreachableFromRoots(
+    absl::Span<const p4::v1::TableEntry> entries,
+    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::TableEntry&)>
+        is_root_entry,
+    const IrP4Info& ir_p4info) {
+  // Constructs p4::v1::Updates with DELETE ops because DELETE makes a entry
+  // that depends on other entries a parent node in the dependency graph.
+  std::vector<p4::v1::Update> updates;
+  for (const auto& entry : entries) {
+    p4::v1::Update update;
+    update.set_type(p4::v1::Update::DELETE);
+    *update.mutable_entity()->mutable_table_entry() = entry;
+    updates.push_back(update);
+  }
+  ASSIGN_OR_RETURN(Graph graph, BuildDependencyGraph(ir_p4info, updates));
+
+  // Use a hash set to keep visited vertices. It is a safe choice and scales.
+  absl::flat_hash_set<Vertex> visited_vertices;
+  std::queue<Vertex> frontier;
+  for (Vertex vertex : graph.vertex_set()) {
+    ASSIGN_OR_RETURN(bool is_root, is_root_entry(entries[vertex]));
+    if (is_root) {
+      frontier.push(vertex);
+      // Compared to pushing a vertex to the visited set only after popping it
+      // off the frontier, this ensures that we don't push duplicate vertices
+      // onto the frontier.
+      visited_vertices.insert(vertex);
+    }
+  }
+
+  while (!frontier.empty()) {
+    Vertex current_vertex = frontier.front();
+    frontier.pop();
+    for (const auto& edge : graph.out_edge_list(current_vertex)) {
+      Vertex neighbor = edge.get_target();
+      if (bool unvisited = visited_vertices.insert(neighbor).second;
+          unvisited) {
+        frontier.push(neighbor);
+        visited_vertices.insert(neighbor);
+      }
+    }
+  }
+
+  std::vector<p4::v1::TableEntry> unreachable_entries;
+  for (Vertex vertex : graph.vertex_set()) {
+    if (!visited_vertices.contains(vertex)) {
+      unreachable_entries.push_back(entries[vertex]);
+    }
+  }
+  return unreachable_entries;
 }
 
 }  // namespace pdpi

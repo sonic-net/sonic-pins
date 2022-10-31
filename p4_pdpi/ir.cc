@@ -38,6 +38,7 @@
 #include "google/rpc/code.pb.h"
 #include "google/rpc/status.pb.h"
 #include "gutil/collections.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/config/v1/p4types.pb.h"
@@ -49,6 +50,8 @@ namespace pdpi {
 
 using ::absl::StatusOr;
 using ::gutil::InvalidArgumentErrorBuilder;
+using ::gutil::PrintShortTextProto;
+using ::gutil::PrintTextProto;
 using ::gutil::UnimplementedErrorBuilder;
 using ::p4::config::v1::MatchField;
 using ::p4::config::v1::P4TypeInfo;
@@ -169,7 +172,7 @@ absl::Status ValidateMatchFieldDefinition(const IrMatchFieldDefinition &match) {
         return InvalidArgumentErrorBuilder()
                << "Only EXACT and OPTIONAL match fields can use "
                   "Format::STRING: "
-               << match.match_field().ShortDebugString();
+               << PrintShortTextProto(match.match_field());
       }
       return absl::OkStatus();
     case p4::config::v1::MatchField::EXACT:
@@ -178,7 +181,7 @@ absl::Status ValidateMatchFieldDefinition(const IrMatchFieldDefinition &match) {
     default:
       return InvalidArgumentErrorBuilder()
              << "Match field match type not supported: "
-             << match.match_field().ShortDebugString();
+             << PrintShortTextProto(match.match_field());
   }
 }
 
@@ -268,6 +271,11 @@ StatusOr<IrMatch> PiMatchFieldToIr(
   uint32_t bitwidth = match_field.bitwidth();
   absl::string_view match_name = match_field.name();
   std::vector<std::string> invalid_reasons;
+
+  if (IsElementUnused(match_field.annotations())) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Match field has @unused annotation."));
+  }
 
   switch (match_field.match_type()) {
     case MatchField::EXACT: {
@@ -458,11 +466,15 @@ StatusOr<IrActionInvocation> PiActionToIr(
   }
 
   action_entry.set_name(ir_action_definition->preamble().alias());
-  absl::string_view action_name = action_entry.name();
-  action_entry.set_name(ir_action_definition->preamble().alias());
   absl::flat_hash_set<uint32_t> used_params;
   std::vector<std::string> invalid_reasons;
   absl::flat_hash_set<std::string> actual_params;
+
+  if (IsElementUnused(ir_action_definition->preamble().annotations())) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Action has @unused annotation."));
+  }
+
   for (const auto &param : pi_action.params()) {
     const absl::Status duplicate = gutil::InsertIfUnique(
         used_params, param.param_id(),
@@ -502,7 +514,7 @@ StatusOr<IrActionInvocation> PiActionToIr(
   }
   if (!invalid_reasons.empty()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
-        ActionName(action_name), absl::StrJoin(invalid_reasons, "\n")));
+        ActionName(action_entry.name()), absl::StrJoin(invalid_reasons, "\n")));
   }
   return action_entry;
 }
@@ -634,6 +646,12 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
   absl::string_view match_name = match_field.name();
 
   std::vector<std::string> invalid_reasons;
+
+  if (IsElementUnused(match_field.annotations())) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Match field has @unused annotation."));
+  }
+
   switch (match_field.match_type()) {
     case MatchField::EXACT: {
       if (!ir_match.has_exact()) {
@@ -717,7 +735,7 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
       if (*value != *intersection) {
         invalid_reasons.push_back(absl::StrCat(
             kNewBullet, "Lpm value has masked bits that are set. Value: ",
-            ir_match.lpm().value().DebugString(),
+            PrintTextProto(ir_match.lpm().value()),
             "Prefix Length: ", prefix_len));
         break;
       }
@@ -781,8 +799,8 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
       if (*value != *intersection) {
         invalid_reasons.push_back(absl::StrCat(
             kNewBullet, "Ternary value has masked bits that are set. Value: ",
-            ir_match.ternary().value().DebugString(),
-            "Mask: ", ir_match.ternary().mask().DebugString()));
+            PrintTextProto(ir_match.ternary().value()),
+            "Mask: ", PrintTextProto(ir_match.ternary().mask())));
         break;
       }
       match_entry.mutable_ternary()->set_value(
@@ -860,6 +878,12 @@ StatusOr<p4::v1::Action> IrActionInvocationToPi(
   action.set_action_id(ir_action_definition->preamble().id());
   absl::flat_hash_set<std::string> used_params;
   std::vector<std::string> invalid_reasons;
+
+  if (IsElementUnused(ir_action_definition->preamble().annotations())) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Action has @unused annotation."));
+  }
+
   for (const auto &param : ir_table_action.params()) {
     const absl::Status &duplicate = gutil::InsertIfUnique(
         used_params, param.name(),
@@ -1368,6 +1392,12 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
   absl::string_view table_name = ir.table_name();
   std::vector<std::string> invalid_reasons;
 
+  if (IsElementUnused(table->preamble().annotations())) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Table entry for table '", table_name,
+                     "' has @unused annotation."));
+  }
+
   // Validate and translate the matches
   absl::flat_hash_set<uint32_t> used_field_ids;
   absl::flat_hash_set<std::string> mandatory_matches;
@@ -1502,6 +1532,25 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
       ir.mutable_meter_config()->set_cburst(pi.meter_config().cburst());
       ir.mutable_meter_config()->set_pir(pi.meter_config().pir());
       ir.mutable_meter_config()->set_pburst(pi.meter_config().pburst());
+    }
+
+    // Validate and translate meter counter data.
+    if (pi.has_meter_counter_data()) {
+      if (!table->has_meter()) {
+        invalid_reasons.push_back(
+            absl::StrCat(kNewBullet,
+                         "Table does not support meters, but table entry "
+                         "contained a meter counter."));
+      }
+      if (!pi.has_meter_config()) {
+        invalid_reasons.push_back(absl::StrCat(
+            kNewBullet,
+            "Pi entry does not have a meter config, but table entry "
+            "contained a meter counter."));
+      }
+      if (table->has_meter() && pi.has_meter_config()) {
+        *ir.mutable_meter_counter_data() = pi.meter_counter_data();
+      }
     }
 
     // Validate and translate counters.
@@ -1767,6 +1816,12 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
 
   std::vector<std::string> invalid_reasons;
 
+  if (IsElementUnused(table->preamble().annotations())) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, "Table entry for table '", table_name,
+                     "' has @unused annotation."));
+  }
+
   // Validate and translate the matches
   absl::flat_hash_set<std::string> used_field_names, mandatory_matches;
   for (const auto &ir_match : ir.matches()) {
@@ -1897,6 +1952,25 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
       pi.mutable_meter_config()->set_cburst(ir.meter_config().cburst());
       pi.mutable_meter_config()->set_pir(ir.meter_config().pir());
       pi.mutable_meter_config()->set_pburst(ir.meter_config().pburst());
+    }
+
+    // Validate and translate meter counter data.
+    if (ir.has_meter_counter_data()) {
+      if (!table->has_meter()) {
+        invalid_reasons.push_back(
+            absl::StrCat(kNewBullet,
+                         "Table does not support meters but IR entry "
+                         "contained a meter counter."));
+      }
+      if (!ir.has_meter_config()) {
+        invalid_reasons.push_back(
+            absl::StrCat(kNewBullet,
+                         "IR entry does not have a meter config but "
+                         "contained a meter counter."));
+      }
+      if (table->has_meter() && ir.has_meter_config()) {
+        *pi.mutable_meter_counter_data() = ir.meter_counter_data();
+      }
     }
 
     // Validate and translate counters.
@@ -2135,9 +2209,9 @@ absl::StatusOr<IrWriteRpcStatus> GrpcStatusToIrWriteRpcStatus(
     const grpc::Status &grpc_status, int number_of_updates_in_write_request) {
   IrWriteRpcStatus ir_write_status;
   if (grpc_status.ok()) {
-    // If all batch updates succeeded, `status` is ok and neither error_message
-    // nor error_details is populated. If either error_message or error_details
-    // is populated, `status` is ill-formed and should return
+    // If all batch updates succeeded, `status` is ok and neither
+    // error_message nor error_details is populated. If either error_message
+    // or error_details is populated, `status` is ill-formed and should return
     // InvalidArgumentError.
     if (!grpc_status.error_message().empty() ||
         !grpc_status.error_details().empty()) {
@@ -2190,7 +2264,8 @@ absl::StatusOr<IrWriteRpcStatus> GrpcStatusToIrWriteRpcStatus(
     for (const auto &inner_rpc_status_detail : inner_rpc_status.details()) {
       if (!inner_rpc_status_detail.UnpackTo(&p4_error)) {
         return gutil::InvalidArgumentErrorBuilder()
-               << "Can not parse google::rpc::Status contained in grpc_status";
+               << "Can not parse google::rpc::Status contained in grpc_status: "
+               << PrintTextProto(inner_rpc_status_detail);
       }
       RETURN_IF_ERROR(IsGoogleRpcCode(p4_error.canonical_code()));
       RETURN_IF_ERROR(ValidateGenericUpdateStatus(
@@ -2277,7 +2352,7 @@ absl::StatusOr<grpc::Status> IrWriteRpcStatusToGrpcStatus(
       break;
   }
   return gutil::InvalidArgumentErrorBuilder()
-         << "Invalid IrWriteRpcStatus: " << ir_write_status.DebugString();
+         << "Invalid IrWriteRpcStatus: " << PrintTextProto(ir_write_status);
 }
 
 absl::Status WriteRpcGrpcStatusToAbslStatus(
@@ -2312,7 +2387,7 @@ absl::Status WriteRpcGrpcStatusToAbslStatus(
   }
   return gutil::InternalErrorBuilder()
          << "GrpcStatusToIrWriteRpcStatus returned invalid IrWriteRpcStatus: "
-         << write_rpc_status.DebugString();
+         << PrintTextProto(write_rpc_status);
 }
 
 }  // namespace pdpi

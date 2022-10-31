@@ -16,9 +16,11 @@
 #define GOOGLE_P4_PDPI_PD_H_
 
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "google/protobuf/message.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -64,6 +66,13 @@ absl::Status PiTableEntryToPd(const IrP4Info &info,
                               google::protobuf::Message *pd,
                               bool key_only = false);
 
+// Like `PiTableEntryToPd`, but for a sequence of `pi` entries.
+// Assumes that `pd` has a `repeated TableEntry entries` field.
+absl::Status PiTableEntriesToPd(const IrP4Info &info,
+                                const absl::Span<const p4::v1::TableEntry> &pi,
+                                google::protobuf::Message *pd,
+                                bool key_only = false);
+
 absl::Status PiPacketInToPd(const IrP4Info &info,
                             const p4::v1::PacketIn &pi_packet,
                             google::protobuf::Message *pd_packet);
@@ -97,6 +106,9 @@ absl::Status PiStreamMessageResponseToPd(
 
 // -- Conversions from PD to PI ------------------------------------------------
 absl::StatusOr<p4::v1::TableEntry> PdTableEntryToPi(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    bool key_only = false);
+absl::StatusOr<std::vector<p4::v1::TableEntry>> PdTableEntriesToPi(
     const IrP4Info &info, const google::protobuf::Message &pd,
     bool key_only = false);
 

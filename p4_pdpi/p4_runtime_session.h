@@ -67,6 +67,25 @@ inline grpc::ChannelArguments GrpcChannelArgumentsForP4rt() {
   grpc::ChannelArguments args;
   args.SetInt(GRPC_ARG_MAX_METADATA_SIZE, P4GRPCMaxMetadataSize());
   args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 300000 /*5 minutes*/);
+
+  return args;
+}
+
+// Returns the gRPC ChannelArguments for P4Runtime by setting
+// `GRPC_ARG_KEEPALIVE_TIME_MS` to 1s to avoid connection problems and serve as
+// reverse path signalling.
+// `GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA` to 0 to allow KeepAlive ping without
+// traffic in the transport.
+// `GRPC_ARG_MAX_METADATA_SIZE` to P4GRPCMaxMetadataSize because P4RT returns
+// batch element status in the grpc::Status, which can require a large metadata
+// size.
+inline grpc::ChannelArguments
+GrpcChannelArgumentsForP4rtWithAggressiveKeepAlive() {
+  grpc::ChannelArguments args;
+  args.SetInt(GRPC_ARG_MAX_METADATA_SIZE, P4GRPCMaxMetadataSize());
+  // Allows grpc::channel to send keepalive ping without on-going traffic.
+  args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1000 /*1 second*/);
   return args;
 }
 
@@ -85,17 +104,20 @@ struct P4RuntimeSessionOptionalArgs {
 class P4RuntimeSession {
  public:
   // Creates a session with the switch, which lasts until the session object is
-  // destructed.
+  // destructed. Performs primary arbitration and, if `error_if_not_primary` is
+  // set, as it is by default, then if the session is not the primary switch
+  // controller:
+  // * `ALREADY_EXISTS` will be returned if there is already a primary.
+  // * `NOT_FOUND` will be returned if there is no primary.
   static absl::StatusOr<std::unique_ptr<P4RuntimeSession>> Create(
       std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
-      uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata = {});
-
-  // Creates a session with the switch, which lasts until the session object is
-  // destructed.
+      uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata = {},
+      bool error_if_not_primary = true);
   static absl::StatusOr<std::unique_ptr<P4RuntimeSession>> Create(
       const std::string& address,
       const std::shared_ptr<grpc::ChannelCredentials>& credentials,
-      uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata = {});
+      uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata = {},
+      bool error_if_not_primary = true);
 
   // Connects to the default session on the switch, which has no election_id
   // and which cannot be terminated. This should only be used for testing.
@@ -203,10 +225,22 @@ absl::Status SetMetadataAndSendPiWriteRequests(
 absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntries(
     P4RuntimeSession* session);
 
+// Reads and returns the `CounterData` for the table entry whose `table_id`,
+// `match`, and `priority` fields match `target_entry_signature`, or returns
+// NotFoundError if no such table entry exists. Note that on P4Runtime
+// standard-compliant targets, at most one matching table entry can exist.
+// Other fields of `target_entry_signature` -- e.g. the `action` -- are ignored.
+absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
+    P4RuntimeSession* session,
+    const p4::v1::TableEntry& target_entry_signature);
+
 // Removes PI (program independent) table entries on the switch.
 absl::Status RemovePiTableEntries(
     P4RuntimeSession* session, const IrP4Info& info,
     absl::Span<const p4::v1::TableEntry> pi_entries);
+
+// Checks that there are no table entries.
+absl::Status CheckNoTableEntries(P4RuntimeSession* session);
 
 // Clears the table entries.
 absl::Status ClearTableEntries(P4RuntimeSession* session);
@@ -232,11 +266,18 @@ absl::Status SetForwardingPipelineConfig(
     const p4::config::v1::P4Info& p4info,
     absl::optional<absl::string_view> p4_device_config = absl::nullopt);
 
+// Sets the forwarding pipeline to the given one.
+absl::Status SetForwardingPipelineConfig(
+    P4RuntimeSession* session,
+    p4::v1::SetForwardingPipelineConfigRequest::Action action,
+    const p4::v1::ForwardingPipelineConfig& config);
+
 // Gets the forwarding pipeline from the device.
 absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
 GetForwardingPipelineConfig(
     P4RuntimeSession* session,
-    p4::v1::GetForwardingPipelineConfigRequest::ResponseType type);
+    p4::v1::GetForwardingPipelineConfigRequest::ResponseType type =
+        p4::v1::GetForwardingPipelineConfigRequest::ALL);
 
 }  // namespace pdpi
 #endif  // GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_H_

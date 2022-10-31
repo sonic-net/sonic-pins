@@ -70,7 +70,7 @@ void RunGenericPiTest(
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- PI (Input):" << std::endl;
-  std::cout << pi.DebugString() << std::endl;
+  std::cout << ::gutil::PrintTextProto(pi) << std::endl;
 
   // Convert PI to IR.
   const auto& status_or_ir = pi_to_ir(info, pi);
@@ -97,7 +97,7 @@ void RunGenericIrTest(
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- IR (Input):" << std::endl;
-  std::cout << ir.DebugString() << std::endl;
+  std::cout << ::gutil::PrintTextProto(ir) << std::endl;
 
   // Convert IR to PI.
   const auto& status_or_pi = ir_to_pi(info, ir);
@@ -138,7 +138,7 @@ void RunGenericPdTest(
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- PD (Input):" << std::endl;
-  std::cout << pd.DebugString() << std::endl;
+  std::cout << ::gutil::PrintTextProto(pd) << std::endl;
 
   // Set-up message differencer.
   google::protobuf::util::MessageDifferencer diff;
@@ -184,7 +184,7 @@ void RunGenericPdTest(
 
   // At this point, validity == INPUT_IS_VALID
   std::cout << "--- IR:" << std::endl;
-  std::cout << ir.DebugString() << std::endl;
+  std::cout << ::gutil::PrintTextProto(ir) << std::endl;
   if (!status_or_pi.status().ok()) {
     Fail(
         "Translation from IR to PI failed even though input was marked as "
@@ -198,7 +198,7 @@ void RunGenericPdTest(
 
   const auto& pi = status_or_pi.value();
   std::cout << "--- PI:" << std::endl;
-  std::cout << pi.DebugString() << std::endl;
+  std::cout << ::gutil::PrintTextProto(pi) << std::endl;
 
   // Convert PI back to IR.
   const auto& status_or_ir2 = pi_to_ir(info, pi);
@@ -211,7 +211,7 @@ void RunGenericPdTest(
     Fail("Reverse translation from PI to IR resulted in a different IR.");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "IR (after reverse translation):" << std::endl
-              << status_or_ir2.value().DebugString() << std::endl;
+              << ::gutil::PrintTextProto(status_or_ir2.value()) << std::endl;
     return;
   }
 
@@ -227,7 +227,7 @@ void RunGenericPdTest(
     Fail("Reverse translation from IR to PD resulted in a different PD.");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "PD (after reverse translation):" << std::endl
-              << pd2.DebugString() << std::endl;
+              << ::gutil::PrintTextProto(pd2) << std::endl;
     return;
   }
 

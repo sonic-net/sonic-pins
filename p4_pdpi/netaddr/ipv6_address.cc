@@ -67,4 +67,11 @@ Ipv6Address::Ipv6Address(uint16_t hextet8, uint16_t hextet7, uint16_t hextet6,
                      (std::bitset<128>(hextet2) << 16) |
                      (std::bitset<128>(hextet1) << 0)} {};
 
+int Ipv6Address::MinimumMaskLength() const {
+  for (int i = 0; i < 128; ++i) {
+    if (bits_.test(i)) return 128 - i;
+  }
+  return 0;
+}
+
 }  // namespace netaddr

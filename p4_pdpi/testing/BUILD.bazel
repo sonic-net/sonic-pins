@@ -36,6 +36,40 @@ p4_pd_proto(
     package = "pdpi",
 )
 
+# This P4Info is to be used for tests that require PD fields that may not be
+# present in the P4Info. In practice, this can happen if a unified P4Info
+# consisting of P4Infos for different roles is used to translate entries
+# to PD.
+p4_library(
+    name = "union_main_p4info",
+    src = "//p4_pdpi/testing/testdata:main.p4",
+    extra_args = "-DPDPI_EXTRA_MATCH_FIELD",
+    p4info_out = "union-main-p4info.pb.txt",
+)
+
+p4_pd_proto(
+    name = "union_main_p4_pd",
+    src = "union-main-p4info.pb.txt",
+    out = "union_main_p4_pd.proto",
+    format = False,
+    package = "pdpi",
+)
+
+proto_library(
+    name = "union_main_p4_pd_proto",
+    srcs = ["union_main_p4_pd.proto"],
+    deps = [
+        "@com_github_p4lang_p4runtime//:p4runtime_proto",
+        "@com_google_googleapis//google/rpc:code_proto",
+        "@com_google_googleapis//google/rpc:status_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "union_main_p4_pd_cc_proto",
+    deps = [":union_main_p4_pd_proto"],
+)
+
 cc_library(
     name = "test_p4info_cc",
     srcs = ["test_p4info.cc"],
@@ -109,6 +143,7 @@ cc_test(
     deps = [
         ":main_p4_pd_cc_proto",
         ":test_helper",
+        "//gutil:proto",
         "//gutil:status",
         "//gutil:testing",
         "//p4_pdpi:ir",
@@ -143,6 +178,7 @@ cc_test(
     linkstatic = True,
     deps = [
         ":test_helper",
+        "//gutil:proto",
         "//gutil:status",
         "//gutil:testing",
         "//p4_pdpi:ir",
@@ -174,6 +210,7 @@ cc_test(
     deps = [
         ":main_p4_pd_cc_proto",
         ":test_helper",
+        "//gutil:proto",
         "//gutil:status",
         "//gutil:testing",
         "//p4_pdpi:ir",
@@ -244,8 +281,8 @@ cc_test(
     data = ["main-p4info.pb.txt"],
     linkstatic = True,
     deps = [
-        ":main_p4_pd_cc_proto",
         ":test_helper",
+        ":union_main_p4_pd_cc_proto",
         "//gutil:status",
         "//gutil:testing",
         "//p4_pdpi:ir",
@@ -284,5 +321,21 @@ cc_test(
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "table_entry_gunit_test",
+    srcs = ["table_entry_gunit_test.cc"],
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_p4info_cc",
+        "//gutil:proto",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//p4_pdpi:pd",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )

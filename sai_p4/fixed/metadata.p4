@@ -5,6 +5,14 @@
 #include "headers.p4"
 #include "bitwidths.p4"
 
+// -- Preserved Field Lists ----------------------------------------------------
+
+// The field list numbers used in @field_list annotations to identify the fields
+// that need to be preserved during clone/recirculation/etc. operations.
+enum bit<8> PreservedFieldList {
+  CLONE_I2E = 8w1
+};
+
 // -- Translated Types ---------------------------------------------------------
 
 // BMv2 does not support @p4runtime_translation.
@@ -91,11 +99,17 @@ struct local_metadata_t {
   // support passing structs in clone3.
   bool mirror_session_id_valid;
   mirror_session_id_t mirror_session_id_value;
+  @field_list(PreservedFieldList.CLONE_I2E)
   ipv4_addr_t mirroring_src_ip;
+  @field_list(PreservedFieldList.CLONE_I2E)
   ipv4_addr_t mirroring_dst_ip;
+  @field_list(PreservedFieldList.CLONE_I2E)
   ethernet_addr_t mirroring_src_mac;
+  @field_list(PreservedFieldList.CLONE_I2E)
   ethernet_addr_t mirroring_dst_mac;
+  @field_list(PreservedFieldList.CLONE_I2E)
   bit<8> mirroring_ttl;
+  @field_list(PreservedFieldList.CLONE_I2E)
   bit<8> mirroring_tos;
   // TODO: consider modeling metering beyond control plane API.
   MeterColor_t color;

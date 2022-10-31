@@ -102,7 +102,7 @@ TEST_F(RoleTest, PrimaryAndBackupConnectionsPerRole) {
                                                  .election_id = 199,
                                                  .role = kRole1,
                                              }),
-              StatusIs(absl::StatusCode::kInternal));
+              StatusIs(absl::StatusCode::kAlreadyExists));
 
   // Primary 2.
   ASSERT_OK_AND_ASSIGN(auto primary_session2,
@@ -122,7 +122,7 @@ TEST_F(RoleTest, PrimaryAndBackupConnectionsPerRole) {
                                                  .election_id = 199,
                                                  .role = kRole2,
                                              }),
-              StatusIs(absl::StatusCode::kInternal));
+              StatusIs(absl::StatusCode::kAlreadyExists));
 }
 
 // TODO: Fix and re-enable this test -- it broke when
