@@ -119,7 +119,7 @@ absl::Status AppendTableEntryReads(
     sonic::P4rtTable& p4rt_table) {
   RETURN_IF_ERROR(SupportedTableEntryRequest(pi_table_entry));
 
-  // Get all P4RT keys from the AppDb.
+  // Get all P4RT keys from the AppStateDb.
   for (const auto& app_db_key : sonic::GetAllP4TableEntryKeys(p4rt_table)) {
     // Read a single table entry out of the AppDb
     ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,

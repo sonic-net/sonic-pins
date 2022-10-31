@@ -380,22 +380,6 @@ int main(int argc, char** argv) {
 
   builder.RegisterService(&p4runtime_server);
 
-  // Disable max ping strikes behavior to allow more frequent KA.
-  builder.AddChannelArgument(GRPC_ARG_HTTP2_MAX_PING_STRIKES, 0);
-
-  // Sends KeepAlive pings to client to ensure P4RT can promptly discover
-  // disconnects and vacate the role of primary controller. Else, backup
-  // connection might not be able to connect to P4RT with the same election id.
-  builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIME_MS, 1000);
-
-  // Keepalive should fail relatively fast to let P4RT find out disconnect
-  // quickly and yield primaryship to allow other controller to connect as
-  // primary.
-  builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 4000);
-
-  // Sends KA pings even when existing streaming RPC is not active.
-  builder.AddChannelArgument(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
-
   std::unique_ptr<Server> server(builder.BuildAndStart());
   LOG(INFO) << "Server listening on " << server_addr << ".";
   server->Wait();
