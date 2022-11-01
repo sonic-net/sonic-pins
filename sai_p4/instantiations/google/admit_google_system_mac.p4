@@ -8,7 +8,7 @@ control admit_google_system_mac(in headers_t headers,
                                 inout local_metadata_t local_metadata) {
   apply {
      local_metadata.admit_to_l3 =
-      (headers.ethernet.dst_addr == 0x00_1a_11_17_5f_80);
+      (headers.ethernet.dst_addr & 0x01_00_00_00_00_00) == 0;
   }
 }  // control system_mac_admit
 
