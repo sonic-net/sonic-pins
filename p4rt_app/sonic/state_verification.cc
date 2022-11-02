@@ -25,11 +25,9 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
@@ -246,31 +244,9 @@ std::vector<std::string> VerifyAppStateDbAndAppDbEntries(
 }
 
 std::vector<std::string> VerifyP4rtTableWithCacheTableEntries(
-    TableAdapter& app_db,
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
-        table_entry_cache,
-    const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map) {
+    TableAdapter& app_db, std::vector<pdpi::IrTableEntry> ir_entries,
+    const pdpi::IrP4Info& ir_p4_info) {
   std::vector<std::string> failures;
-
-  // Translate the Table cache into IR entries for comparison.
-  std::vector<pdpi::IrTableEntry> ir_entries;
-  int p4rt_translation_failures = 0;
-  for (const auto& [_, pi_table_entry] : table_entry_cache) {
-    auto ir_table_entry = TranslatePiTableEntryForOrchAgent(
-        pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
-        /*translate_key_only=*/false);
-    if (ir_table_entry.ok()) {
-      ir_entries.push_back(*std::move(ir_table_entry));
-    } else {
-      p4rt_translation_failures++;
-    }
-  }
-  if (p4rt_translation_failures > 0) {
-    failures.push_back(absl::StrCat("Failed to translate ",
-                                    p4rt_translation_failures,
-                                    " entries from the table entry cache."));
-  }
 
   RedisTable redis_db_entries = ReadAllEntriesFromRedisTable(app_db, "AppDb");
 
