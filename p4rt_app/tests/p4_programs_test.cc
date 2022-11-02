@@ -11,8 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <cstdint>
 #include <vector>
 
+#include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
 #include "grpcpp/security/credentials.h"
@@ -20,10 +22,10 @@
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/utils/annotation_parser.h"
+#include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -66,17 +68,19 @@ bool IsCompositeUdfMatchField(
 class P4ProgramsTest : public testing::TestWithParam<sai::Instantiation> {
  protected:
   void SetUp() override {
+    uint64_t device_id = 100402;
+    ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id));
+
     // Create a P4RT session, and connect.
     std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());
     auto stub =
         pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-    ASSERT_OK_AND_ASSIGN(
-        p4rt_session_, pdpi::P4RuntimeSession::Create(std::move(stub),
-                                                      /*device_id=*/183807201));
+    ASSERT_OK_AND_ASSIGN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+                                            std::move(stub), device_id));
   }
 
   test_lib::P4RuntimeGrpcService p4rt_service_ =
-      test_lib::P4RuntimeGrpcService(test_lib::P4RuntimeGrpcServiceOptions{});
+      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
 };
 
@@ -115,7 +119,7 @@ TEST_P(P4ProgramsTest, CompositeUdfFieldsShouldAlwaysUseHexStrings) {
 
       LOG(INFO) << "Found composite UDF: " << match_field_def.DebugString();
       composite_udf_fields.push_back({
-          .table_name = absl::StrCat(absl::StrCat(APP_P4RT_ACL_TABLE_DEFINITION_NAME, ":", "ACL_"),
+          .table_name = absl::StrCat("DEFINITION:ACL_",
                                      absl::AsciiStrToUpper(table_name)),
           .field_name = absl::StrCat("match/", match_field_name),
       });

@@ -13,52 +13,60 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 
-#include <endian.h>
-
-#include <iomanip>
-#include <iostream>
-#include <sstream>
+#include <memory>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
+#include <vector>
 
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/substitute.h"
+#include "absl/strings/str_format.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
+#include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/impl/codegen/status.h"
-#include "gutil/collections.h"
+#include "grpcpp/support/status.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_constraints/backend/interpreter.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/utils/annotation_parser.h"
-#include "p4_pdpi/utils/ir.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
-#include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/db_connector_adapter.h"
-#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
+#include "p4rt_app/p4runtime/packetio_helpers.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
-#include "p4rt_app/sonic/packetio_port.h"
+#include "p4rt_app/sonic/packetio_interface.h"
+#include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
+#include "p4rt_app/sonic/state_verification.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
-#include "sai_p4/fixed/ids.h"
-#include "sai_p4/fixed/roles.h"
 
 namespace p4rt_app {
 namespace {
 
-using ::google::protobuf::util::MessageDifferencer;
+grpc::Status EnterCriticalState(const std::string& message) {
+  // TODO: report critical state somewhere an don't crash the process.
+  LOG(FATAL) << "Entering critical state: " << message;
+  return grpc::Status::OK;
+}
+
+EventExecutionTimeMonitor& GetWriteTimeMonitor() {
+  static EventExecutionTimeMonitor* const kMonitor =
+      new EventExecutionTimeMonitor("p4rt_app::Write()",
+                                    /*log_threshold=*/10000);
+  return *kMonitor;
+}
 
 absl::Status SupportedTableEntryRequest(const p4::v1::TableEntry& table_entry) {
   if (table_entry.table_id() != 0 || !table_entry.match().empty() ||
@@ -87,7 +95,7 @@ absl::Status AllowRoleAccessToTable(const std::string& role_name,
 
   if (table_def->second.role() != role_name) {
     return gutil::PermissionDeniedErrorBuilder()
-           << "Role '" << role_name << "' is not allowd access to table '"
+           << "Role '" << role_name << "' is not allowed access to table '"
            << table_name << "'.";
   }
 
@@ -96,29 +104,26 @@ absl::Status AllowRoleAccessToTable(const std::string& role_name,
 
 sonic::AppDbTableType GetAppDbTableType(
     const pdpi::IrTableEntry& ir_table_entry) {
+
   // By default we assume and AppDb P4RT entry.
   return sonic::AppDbTableType::P4RT;
 }
 
-// Read P4Runtime table entries out of the AppDb, and append them to the read
-// response.
+// Read P4Runtime table entries out of the AppStateDb, and append them to the
+// read response.
 absl::Status AppendTableEntryReads(
     p4::v1::ReadResponse& response, const p4::v1::TableEntry& pi_table_entry,
     const pdpi::IrP4Info& p4_info, const std::string& role_name,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::DBConnectorAdapter& app_db_client,
-    sonic::DBConnectorAdapter& counters_db_client) {
+    sonic::P4rtTable& p4rt_table) {
   RETURN_IF_ERROR(SupportedTableEntryRequest(pi_table_entry));
 
-  // Get all P4RT keys from the AppDb.
-  for (const auto& app_db_key :
-       sonic::GetAllAppDbP4TableEntryKeys(app_db_client)) {
+  // Get all P4RT keys from the AppStateDb.
+  for (const auto& app_db_key : sonic::GetAllP4TableEntryKeys(p4rt_table)) {
     // Read a single table entry out of the AppDb
-    ASSIGN_OR_RETURN(
-        pdpi::IrTableEntry ir_table_entry,
-        sonic::ReadAppDbP4TableEntry(p4_info, app_db_client, counters_db_client,
-                                     app_db_key));
+    ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,
+                     sonic::ReadP4TableEntry(p4rt_table, p4_info, app_db_key));
 
     // Only attach the entry if the role expects it.
     auto allow_access =
@@ -139,7 +144,7 @@ absl::Status AppendTableEntryReads(
     auto translate_status = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
     if (!translate_status.ok()) {
       LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
-                 << ir_table_entry.DebugString();
+                 << ir_table_entry.ShortDebugString();
       return gutil::StatusBuilder(translate_status.status().code())
              << "[P4RT/PDPI] " << translate_status.status().message();
     }
@@ -150,11 +155,10 @@ absl::Status AppendTableEntryReads(
 }
 
 absl::StatusOr<p4::v1::ReadResponse> DoRead(
+    sonic::P4rtTable& p4rt_table,
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info p4_info,
     bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::DBConnectorAdapter& app_db_client,
-    sonic::DBConnectorAdapter& counters_db_client) {
+    const boost::bimap<std::string, std::string>& port_translation_map) {
   p4::v1::ReadResponse response;
   for (const auto& entity : request.entities()) {
     LOG(INFO) << "Read request: " << entity.ShortDebugString();
@@ -162,8 +166,7 @@ absl::StatusOr<p4::v1::ReadResponse> DoRead(
       case p4::v1::Entity::kTableEntry: {
         RETURN_IF_ERROR(AppendTableEntryReads(
             response, entity.table_entry(), p4_info, request.role(),
-            translate_port_ids, port_translation_map, app_db_client,
-            counters_db_client));
+            translate_port_ids, port_translation_map, p4rt_table));
         break;
       }
       default:
@@ -219,23 +222,39 @@ absl::StatusOr<pdpi::IrTableEntry> DoPiTableEntryToIr(
       pdpi::PiTableEntryToIr(p4_info, pi_table_entry, translate_key_only);
   if (!translate_status.ok()) {
     LOG(WARNING) << "PDPI could not translate PI table entry to IR: "
-                 << pi_table_entry.DebugString();
+                 << translate_status.status();
     return gutil::StatusBuilder(translate_status.status().code())
            << "[P4RT/PDPI] " << translate_status.status().message();
   }
+
   pdpi::IrTableEntry ir_table_entry = *translate_status;
 
-  // Verify the table entry can be written to the table.
-  RETURN_IF_ERROR(
-      AllowRoleAccessToTable(role_name, ir_table_entry.table_name(), p4_info));
+  // TODO: Remove this when P4Info uses 64-bit IPv6 ACL matchess.
+  // We don't allow overwriting of the p4info, so static is ok here.
+  Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
 
-  RETURN_IF_ERROR(TranslateTableEntry(
+  // Verify the table entry can be written to the table.
+  absl::Status role_access =
+      AllowRoleAccessToTable(role_name, ir_table_entry.table_name(), p4_info);
+  if (!role_access.ok()) {
+    LOG(WARNING) << role_access
+                 << " IR Table Entry: " << ir_table_entry.ShortDebugString();
+    return role_access;
+  }
+
+  absl::Status translate_for_orchagent = TranslateTableEntry(
       TranslateTableEntryOptions{
           .direction = TranslationDirection::kForOrchAgent,
           .ir_p4_info = p4_info,
           .translate_port_ids = translate_port_ids,
           .port_map = port_translation_map},
-      ir_table_entry));
+      ir_table_entry);
+  if (!translate_for_orchagent.ok()) {
+    LOG(WARNING) << "Failed to translate IR Table Entry for OrchAgent. "
+                 << translate_for_orchagent
+                 << " IR Table Entry: " << ir_table_entry.ShortDebugString();
+    return translate_for_orchagent;
+  }
   return ir_table_entry;
 }
 
@@ -260,14 +279,14 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
       // A status failure implies that the TableEntry was not formatted
       // correctly. So we could not check the constraints.
       LOG(WARNING) << "Could not verify P4 constraint: "
-                   << update.entity().table_entry().DebugString();
+                   << update.entity().table_entry().ShortDebugString();
       *entry_status = GetIrUpdateStatus(meets_constraint.status());
       continue;
     }
     if (*meets_constraint == false) {
       // A false result implies the constraints were not met.
       LOG(WARNING) << "Entry does not meet P4 constraint: "
-                   << update.entity().table_entry().DebugString();
+                   << update.entity().table_entry().ShortDebugString();
       *entry_status = GetIrUpdateStatus(
           gutil::InvalidArgumentErrorBuilder()
           << "Does not meet constraints required for the table entry.");
@@ -284,8 +303,8 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
         update.type() == p4::v1::Update::DELETE);
     *entry_status = GetIrUpdateStatus(ir_table_entry.status());
     if (!ir_table_entry.ok()) {
-      LOG(WARNING) << "Could not translate PI to IR: "
-                   << update.entity().table_entry().DebugString();
+      LOG(WARNING) << "Failed to translate table entry. Entry: "
+                   << update.entity().table_entry().ShortDebugString();
       continue;
     }
 
@@ -303,115 +322,26 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
 }  // namespace
 
 P4RuntimeImpl::P4RuntimeImpl(
-    std::unique_ptr<sonic::DBConnectorAdapter> app_db_client,
-    std::unique_ptr<sonic::DBConnectorAdapter> app_state_db_client,
-    std::unique_ptr<sonic::DBConnectorAdapter> counter_db_client,
-    std::unique_ptr<sonic::ProducerStateTableAdapter> app_db_table_p4rt,
-    std::unique_ptr<sonic::ConsumerNotifierAdapter> app_db_notifier_p4rt,
-    std::unique_ptr<sonic::PacketIoInterface> packetio_impl, bool use_genetlink,
-    bool translate_port_ids)
-    : app_db_client_(std::move(app_db_client)),
-      app_state_db_client_(std::move(app_state_db_client)),
-      counter_db_client_(std::move(counter_db_client)),
-      app_db_table_p4rt_(std::move(app_db_table_p4rt)),
-      app_db_notifier_p4rt_(std::move(app_db_notifier_p4rt)),
+    sonic::P4rtTable p4rt_table,
+    std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
+    const P4RuntimeImplOptions& p4rt_options)
+    : p4rt_table_(std::move(p4rt_table)),
+      forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
-      translate_port_ids_(translate_port_ids) {
+      translate_port_ids_(p4rt_options.translate_port_ids) {
   absl::optional<std::string> init_failure;
 
   // Start the controller manager.
   controller_manager_ = absl::make_unique<SdnControllerManager>();
 
   // Spawn the receiver thread to receive In packets.
-  auto status_or = StartReceive(use_genetlink);
+  auto status_or = StartReceive(p4rt_options.use_genetlink);
   if (status_or.ok()) {
     receive_thread_ = std::move(*status_or);
   } else {
     init_failure = absl::StrCat("Failed to spawn Receive thread, error: ",
                                 status_or.status().ToString());
   }
-}
-
-absl::Status SendPacketOut(
-    const pdpi::IrP4Info& p4_info, bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::PacketIoInterface* const packetio_impl,
-    const p4::v1::PacketOut& packet) {
-  // Convert to IR to check validity of PacketOut message (e.g. duplicate or
-  // missing metadata fields).
-  auto translate_status = pdpi::PiPacketOutToIr(p4_info, packet);
-  if (!translate_status.ok()) {
-    LOG(WARNING) << "PDPI PacketOutToIr failure: " << translate_status.status();
-    LOG(WARNING) << "PDPI could not translate PacketOut packet: "
-                 << packet.DebugString();
-    return gutil::StatusBuilder(translate_status.status().code())
-           << "[P4RT/PDPI] " << translate_status.status().message();
-  }
-  auto ir = *translate_status;
-
-  std::string egress_port_id;
-  int submit_to_ingress = 0;
-  // Parse the packet metadata to get the value of different attributes,
-  for (const auto& meta : packet.metadata()) {
-    switch (meta.metadata_id()) {
-      case PACKET_OUT_EGRESS_PORT_ID: {
-        egress_port_id = meta.value();
-        break;
-      }
-      case PACKET_OUT_SUBMIT_TO_INGRESS_ID: {
-        ASSIGN_OR_RETURN(
-            submit_to_ingress,
-            pdpi::ArbitraryByteStringToUint(meta.value(), /*bitwidth=*/1),
-            _ << "Unable to get inject_ingress from the packet metadata");
-        break;
-      }
-      case PACKET_OUT_UNUSED_PAD_ID: {
-        // Nothing to do.
-        break;
-      }
-      default:
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Unexpected Packet Out metadata id " << meta.metadata_id();
-    }
-  }
-
-  std::string sonic_port_name;
-  if (submit_to_ingress == 1) {
-    // Use submit_to_ingress attribute value netdev port.
-    sonic_port_name = std::string(sonic::kSubmitToIngress);
-  } else {
-    // Use egress_port_id attribute value.
-    if (translate_port_ids) {
-      ASSIGN_OR_RETURN(sonic_port_name,
-                       TranslatePort(TranslationDirection::kForOrchAgent,
-                                     port_translation_map, egress_port_id));
-    } else {
-      sonic_port_name = egress_port_id;
-    }
-  }
-
-  // Send packet out via the socket.
-  RETURN_IF_ERROR(
-      packetio_impl->SendPacketOut(sonic_port_name, packet.payload()));
-
-  return absl::OkStatus();
-}
-
-// Adds the given metadata to the PacketIn.
-absl::StatusOr<p4::v1::PacketIn> CreatePacketInMessage(
-    const std::string& source_port_id, const std::string& target_port_id) {
-  p4::v1::PacketIn packet;
-  p4::v1::PacketMetadata* metadata = packet.add_metadata();
-  // Add Ingress port id.
-  metadata->set_metadata_id(PACKET_IN_INGRESS_PORT_ID);
-  metadata->set_value(source_port_id);
-
-  // Add target egress port id.
-  metadata = packet.add_metadata();
-  metadata->set_metadata_id(PACKET_IN_TARGET_EGRESS_PORT_ID);
-  metadata->set_value(target_port_id);
-
-  return packet;
 }
 
 grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
@@ -421,6 +351,7 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
   try {
 #endif
     absl::MutexLock l(&server_state_lock_);
+    absl::Time write_start_time = absl::Now();
 
     // Verify the request comes from the primary connection.
     auto connection_status = controller_manager_->AllowRequest(*request);
@@ -442,22 +373,34 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     // Any AppDb update failures should be appended to the `rpc_response`. If
     // UpdateAppDb fails we should go critical.
-    auto app_db_write_status =
-        sonic::UpdateAppDb(app_db_updates, *ir_p4info_, *app_db_table_p4rt_,
-                           *app_db_notifier_p4rt_, *app_db_client_,
-                           *app_state_db_client_, rpc_response);
+    auto app_db_write_status = sonic::UpdateAppDb(
+        p4rt_table_, app_db_updates, *ir_p4info_, rpc_response);
+    if (!app_db_write_status.ok()) {
+      return EnterCriticalState(
+          absl::StrCat("Unexpected error calling UpdateAppDb: ",
+                       app_db_write_status.ToString()));
+    }
 
     auto grpc_status = pdpi::IrWriteRpcStatusToGrpcStatus(rpc_status);
     if (!grpc_status.ok()) {
       LOG(ERROR) << "PDPI failed to translate RPC status to gRPC status: "
-                 << rpc_status.DebugString();
+                 << rpc_status.ShortDebugString();
+      return EnterCriticalState(grpc_status.status().ToString());
     }
+
+    absl::Duration write_execution_time = absl::Now() - write_start_time;
+    absl::Status monitor_status =
+        GetWriteTimeMonitor().IncrementEventCountWithDuration(
+            app_db_updates.total_rpc_updates, write_execution_time);
+    LOG_IF(ERROR, !monitor_status.ok()) << monitor_status;
     return *grpc_status;
 #ifdef __EXCEPTIONS
   } catch (const std::exception& e) {
-    LOG(FATAL) << "Exception caught in " << __func__ << ", error:" << e.what();
+    return EnterCriticalState(
+        absl::StrCat("Exception caught in ", __func__, ", error:", e.what()));
   } catch (...) {
-    LOG(FATAL) << "Unknown exception caught in " << __func__ << ".";
+    return EnterCriticalState(
+        absl::StrCat("Unknown exception caught in ", __func__, "."));
   }
 #endif
 }
@@ -469,6 +412,11 @@ grpc::Status P4RuntimeImpl::Read(
 #ifdef __EXCEPTIONS
   try {
 #endif
+    auto connection_status = controller_manager_->AllowRequest(*request);
+    if (!connection_status.ok()) {
+      return connection_status;
+    }
+
     if (!ir_p4info_.has_value()) {
       return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
                           "Switch has no ForwardingPipelineConfig.");
@@ -483,8 +431,8 @@ grpc::Status P4RuntimeImpl::Read(
     }
 
     auto response_status =
-        DoRead(*request, ir_p4info_.value(), translate_port_ids_,
-               port_translation_map_, *app_db_client_, *counter_db_client_);
+        DoRead(p4rt_table_, *request, ir_p4info_.value(),
+               translate_port_ids_, port_translation_map_);
     if (!response_status.ok()) {
       LOG(WARNING) << "Read failure: " << response_status.status();
       return grpc::Status(
@@ -496,9 +444,11 @@ grpc::Status P4RuntimeImpl::Read(
     return grpc::Status::OK;
 #ifdef __EXCEPTIONS
   } catch (const std::exception& e) {
-    LOG(FATAL) << "Exception caught in " << __func__ << ", error:" << e.what();
+    return EnterCriticalState(
+        absl::StrCat("Exception caught in ", __func__, ", error:", e.what()));
   } catch (...) {
-    LOG(FATAL) << "Unknown exception caught in " << __func__ << ".";
+    return EnterCriticalState(
+        absl::StrCat("Unknown exception caught in ", __func__, "."));
   }
 #endif
 }
@@ -510,8 +460,15 @@ grpc::Status P4RuntimeImpl::StreamChannel(
 #ifdef __EXCEPTIONS
   try {
 #endif
+    if (context == nullptr) {
+      LOG(WARNING) << "StreamChannel context is a nullptr.";
+      return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                          "Context cannot be nullptr.");
+    }
+
     // We create a unique SDN connection object for every active connection.
     auto sdn_connection = absl::make_unique<SdnConnection>(context, stream);
+    LOG(INFO) << "StreamChannel is open with peer '" << context->peer() << "'.";
 
     // While the connection is active we can receive and send requests.
     p4::v1::StreamMessageRequest request;
@@ -520,76 +477,78 @@ grpc::Status P4RuntimeImpl::StreamChannel(
 
       switch (request.update_case()) {
         case p4::v1::StreamMessageRequest::kArbitration: {
-          LOG(INFO) << "Received arbitration request: "
-                    << request.ShortDebugString();
+          LOG(INFO) << "Received arbitration request from '" << context->peer()
+                    << "': " << request.ShortDebugString();
 
           auto status = controller_manager_->HandleArbitrationUpdate(
               request.arbitration(), sdn_connection.get());
           if (!status.ok()) {
-            LOG(WARNING) << "Failed arbitration request: "
-                         << status.error_message();
+            LOG(WARNING) << "Failed arbitration request for '"
+                         << context->peer() << "': " << status.error_message();
             controller_manager_->Disconnect(sdn_connection.get());
             return status;
           }
           break;
         }
         case p4::v1::StreamMessageRequest::kPacket: {
-          // Returns with an error if the write request was not received from a
-          // primary connection
-          bool is_primary = controller_manager_
-                                ->AllowRequest(sdn_connection->GetRoleName(),
-                                               sdn_connection->GetElectionId())
-                                .ok();
-          if (!is_primary) {
-            sdn_connection->SendStreamMessageResponse(GenerateErrorResponse(
-                gutil::PermissionDeniedErrorBuilder()
-                    << "Cannot process request. Only the primary connection "
-                       "can send PacketOuts.",
-                request.packet()));
-          } else {
-            if (!ir_p4info_.has_value()) {
-              sdn_connection->SendStreamMessageResponse(GenerateErrorResponse(
-                  gutil::FailedPreconditionErrorBuilder()
-                  << "Cannot send packet out. Switch has no "
-                     "ForwardingPipelineConfig."));
-            } else {
-              auto status =
-                  SendPacketOut(ir_p4info_.value(), translate_port_ids_,
-                                port_translation_map_, packetio_impl_.get(),
-                                request.packet());
-              if (!status.ok()) {
-                // Get the primary streamchannel and write into the stream.
-                controller_manager_->SendStreamMessageToPrimary(
-                    sdn_connection->GetRoleName(),
-                    GenerateErrorResponse(gutil::StatusBuilder(status)
-                                              << "Failed to send packet out.",
-                                          request.packet()));
-              }
+          if (controller_manager_
+                  ->AllowMutableRequest(controller_manager_->GetDeviceId(),
+                                        sdn_connection->GetRoleName(),
+                                        sdn_connection->GetElectionId())
+                  .ok()) {
+            // If we're the primary connection we can try to handle the
+            // PacketOut request.
+            absl::Status packet_out_status =
+                HandlePacketOutRequest(request.packet());
+            if (!packet_out_status.ok()) {
+              LOG(WARNING) << "Could not handle PacketOut request: "
+                           << packet_out_status;
+              sdn_connection->SendStreamMessageResponse(
+                  GenerateErrorResponse(packet_out_status, request.packet()));
             }
+          } else {
+            // Otherwise, if it's not the primary connection trying to send a
+            // message so we return a PERMISSION_DENIED error.
+            LOG(WARNING) << "Non-primary controller '" << context->peer()
+                         << "' is trying to send PacketOut requests.";
+            sdn_connection->SendStreamMessageResponse(
+                GenerateErrorResponse(gutil::PermissionDeniedErrorBuilder()
+                                          << "Only the primary connection can "
+                                             "send PacketOut requests.",
+                                      request.packet()));
           }
           break;
         }
-        case p4::v1::StreamMessageRequest::kDigestAck:
-        case p4::v1::StreamMessageRequest::kOther:
         default:
+          LOG(WARNING) << "Stream Channel '" << context->peer()
+                       << "' has sent a request that was unhandled: "
+                       << request.ShortDebugString();
           sdn_connection->SendStreamMessageResponse(
               GenerateErrorResponse(gutil::UnimplementedErrorBuilder()
                                     << "Stream update type is not supported."));
-          LOG(ERROR) << "Received unhandled stream channel message: "
-                     << request.DebugString();
       }
     }
 
+    // Disconnect the controller from the list of available connections, and
+    // inform any other connections about arbitration changes.
     {
       absl::MutexLock l(&server_state_lock_);
       controller_manager_->Disconnect(sdn_connection.get());
     }
+
+    LOG(INFO) << "Closing stream to peer '" << context->peer() << "'.";
+    if (context->IsCancelled()) {
+      LOG(WARNING)
+          << "Stream was canceled and the peer may not have been informed.";
+    }
     return grpc::Status::OK;
 #ifdef __EXCEPTIONS
   } catch (const std::exception& e) {
-    LOG(FATAL) << "Exception caught in " << __func__ << ", error:" << e.what();
+    return EnterCriticalState(
+        absl::StrCat("Exception caught in ", __func__, ", error:", e.what()));
   } catch (...) {
-    LOG(FATAL) << "Unknown exception caught in " << __func__ << ".";
+    return EnterCriticalState(
+        absl::StrCat("Unknown exception caught in ", __func__, "."));
   }
 #endif
 }
@@ -605,100 +564,71 @@ grpc::Status P4RuntimeImpl::SetForwardingPipelineConfig(
     LOG(INFO)
         << "Received SetForwardingPipelineConfig request from election id: "
         << request->election_id().ShortDebugString();
+
+    // Verify this connection is allowed to set the P4Info.
     auto connection_status = controller_manager_->AllowRequest(*request);
     if (!connection_status.ok()) {
       return connection_status;
     }
 
-    if (request->action() !=
-            p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT &&
-        request->action() !=
-            p4::v1::SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT) {
-      return AbslStatusToGrpcStatus(
-          gutil::UnimplementedErrorBuilder().LogError()
-          << "Only Action RECONCILE_AND_COMMIT or VERIFY_AND_COMMIT is "
-             "supported for "
-          << "SetForwardingPipelineConfig.");
-    }
-
-    {
-      absl::Status validate_result = ValidateP4Info(request->config().p4info());
-      if (!validate_result.ok()) {
-        // TODO (b/181241450): Re-enable verification checks before SB400 DVT
-        // end.
-        LOG(WARNING) << "P4Info is not valid. Details: " << validate_result;
-        /*
-        return gutil::AbslStatusToGrpcStatus(
-            gutil::StatusBuilder(validate_result.code()).LogError()
-            << "P4Info is not valid. Details: " << validate_result.message());
-        */
+    // P4Runtime allows for the controller to configure the switch in multiple
+    // ways. The expectations are outlined here:
+    //
+    // https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-setforwardingpipelineconfig-rpc
+    grpc::Status action_status;
+    VLOG(1) << "Request action: " << request->Action_Name(request->action());
+    switch (request->action()) {
+      case p4::v1::SetForwardingPipelineConfigRequest::VERIFY:
+        action_status = VerifyPipelineConfig(*request);
+        break;
+      case p4::v1::SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT:
+        action_status = VerifyAndCommitPipelineConfig(*request);
+        break;
+      case p4::v1::SetForwardingPipelineConfigRequest::COMMIT:
+        action_status = CommitPipelineConfig(*request);
+        break;
+      case p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT: {
+        action_status = ReconcileAndCommitPipelineConfig(*request);
+        break;
+      }
+      default: {
+        LOG(WARNING) << "Received SetForwardingPipelineConfigRequest with an "
+                        "unsupported action: "
+                     << request->Action_Name(request->action());
+        return grpc::Status(
+            grpc::StatusCode::UNIMPLEMENTED,
+            absl::StrFormat(
+                "SetForwardingPipelineConfig action '%s' is unsupported.",
+                request->Action_Name(request->action())));
       }
     }
 
-    // Fail if the new forwarding pipeline is different from the current one.
-    std::string diff_report;
-    if (forwarding_pipeline_config_.has_value() &&
-        !P4InfoEquals(forwarding_pipeline_config_->p4info(),
-                      request->config().p4info(), &diff_report)) {
-      return gutil::AbslStatusToGrpcStatus(
-          gutil::UnimplementedErrorBuilder().LogError()
-          << "Modifying a configured forwarding pipeline is not currently "
-             "supported. Please reboot the device. Configuration "
-             "differences:\n"
-          << diff_report);
+    if (action_status.error_code() == grpc::StatusCode::INTERNAL) {
+      LOG(ERROR) << "Critically failed to apply ForwardingPipelineConfig: "
+                 << action_status.error_message();
+      return EnterCriticalState(action_status.error_message());
+    } else if (!action_status.ok()) {
+      LOG(WARNING) << "SetForwardingPipelineConfig failed: "
+                   << action_status.error_message();
+      return action_status;
     }
 
-    // Collect any P4RT constraints from the P4Info.
-    auto constraint_info =
-        p4_constraints::P4ToConstraintInfo(request->config().p4info());
-    if (!constraint_info.ok()) {
-      LOG(WARNING) << "Could not get constraint info from P4Info: "
-                   << constraint_info.status();
-      return gutil::AbslStatusToGrpcStatus(
-          absl::Status(constraint_info.status().code(),
-                       absl::StrCat("[P4 Constraint] ",
-                                    constraint_info.status().message())));
-    }
-    p4_constraint_info_ = *std::move(constraint_info);
-
-    auto ir_p4info_result = pdpi::CreateIrP4Info(request->config().p4info());
-    if (!ir_p4info_result.ok())
-      return gutil::AbslStatusToGrpcStatus(ir_p4info_result.status());
-    pdpi::IrP4Info new_ir_p4info = std::move(ir_p4info_result.value());
-    TranslateIrP4InfoForOrchAgent(new_ir_p4info);
-
-    if (!ir_p4info_.has_value()) {
-      // Apply a config if we don't currently have one.
-      absl::Status config_result = ApplyForwardingPipelineConfig(new_ir_p4info);
-      if (!config_result.ok()) {
-        // TODO: cleanup P4RT table definitions.
-        LOG(FATAL) << "Failed to apply ForwardingPipelineConfig: "
-                   << config_result;
-      }
-      ir_p4info_ = std::move(new_ir_p4info);
-    }
-    forwarding_pipeline_config_ = request->config();
-    LOG(INFO) << "SetForwardingPipelineConfig completed successfully.";
-
-    // Collect any port ID to port name translations;
-    if (translate_port_ids_) {
-      auto port_map_result = sonic::GetPortIdTranslationMap(*app_db_client_);
-      if (!port_map_result.ok()) {
-        return gutil::AbslStatusToGrpcStatus(port_map_result.status());
-      }
-      port_translation_map_ = *port_map_result;
-      LOG(INFO) << "Collected port ID to port name mappings.";
-    }
+    LOG(INFO) << absl::StreamFormat(
+        "SetForwardingPipelineConfig completed '%s' successfully.",
+        p4::v1::SetForwardingPipelineConfigRequest::Action_Name(
+            request->action()));
 
 #ifdef __EXCEPTIONS
   } catch (const std::exception& e) {
-    LOG(FATAL) << "Exception caught in " << __func__ << ", error:" << e.what();
+    return EnterCriticalState(
+        absl::StrCat("Exception caught in ", __func__, ", error:", e.what()));
   } catch (...) {
-    LOG(FATAL) << "Unknown exception caught in " << __func__ << ".";
+    return EnterCriticalState(
+        absl::StrCat("Unknown exception caught in ", __func__, "."));
   }
 #endif
 
-  return grpc::Status(grpc::StatusCode::OK, "");
+  return grpc::Status::OK;
 }
 
 grpc::Status P4RuntimeImpl::GetForwardingPipelineConfig(
@@ -709,28 +639,315 @@ grpc::Status P4RuntimeImpl::GetForwardingPipelineConfig(
 #ifdef __EXCEPTIONS
   try {
 #endif
-    if (ir_p4info_.has_value()) {
-      switch (request->response_type()) {
-        case p4::v1::GetForwardingPipelineConfigRequest::COOKIE_ONLY:
-          *response->mutable_config()->mutable_cookie() =
-              forwarding_pipeline_config_.value().cookie();
-          break;
-        default:
-          *response->mutable_config() = forwarding_pipeline_config_.value();
-          break;
-      }
+    auto connection_status = controller_manager_->AllowRequest(*request);
+    if (!connection_status.ok()) {
+      return connection_status;
     }
-    return grpc::Status(grpc::StatusCode::OK, "");
+
+    // If we have not set the forwarding pipeline. Then we don't return
+    // anything on a get request.
+    if (!forwarding_pipeline_config_.has_value()) {
+      return grpc::Status(grpc::StatusCode::OK, "");
+    }
+
+    // Otherwise only return what the caller asks for.
+    switch (request->response_type()) {
+      case p4::v1::GetForwardingPipelineConfigRequest::ALL:
+        *response->mutable_config() = *forwarding_pipeline_config_;
+        break;
+      case p4::v1::GetForwardingPipelineConfigRequest::COOKIE_ONLY:
+        *response->mutable_config()->mutable_cookie() =
+            forwarding_pipeline_config_->cookie();
+        break;
+      case p4::v1::GetForwardingPipelineConfigRequest::P4INFO_AND_COOKIE:
+        *response->mutable_config()->mutable_p4info() =
+            forwarding_pipeline_config_->p4info();
+        *response->mutable_config()->mutable_cookie() =
+            forwarding_pipeline_config_->cookie();
+        break;
+      case p4::v1::GetForwardingPipelineConfigRequest::DEVICE_CONFIG_AND_COOKIE:
+        *response->mutable_config()->mutable_p4_device_config() =
+            forwarding_pipeline_config_->p4_device_config();
+        *response->mutable_config()->mutable_cookie() =
+            forwarding_pipeline_config_->cookie();
+        break;
+      default:
+        const std::string& response_type_name =
+            p4::v1::GetForwardingPipelineConfigRequest::ResponseType_Name(
+                request->response_type());
+        LOG(WARNING) << "Unknown get forwarding config request type: "
+                     << response_type_name;
+        return grpc::Status(
+            grpc::StatusCode::UNIMPLEMENTED,
+            absl::StrFormat("No support provided for request type '%s'.",
+                            response_type_name));
+    }
+
 #ifdef __EXCEPTIONS
   } catch (const std::exception& e) {
-    LOG(FATAL) << "Exception caught in " << __func__ << ", error:" << e.what();
+    return EnterCriticalState(
+        absl::StrCat("Exception caught in ", __func__, ", error:", e.what()));
   } catch (...) {
-    LOG(FATAL) << "Unknown exception caught in " << __func__ << ".";
+    return EnterCriticalState(
+        absl::StrCat("Unknown exception caught in ", __func__, "."));
   }
 #endif
+
+  return grpc::Status(grpc::StatusCode::OK, "");
 }
 
-absl::Status P4RuntimeImpl::ApplyForwardingPipelineConfig(
+absl::Status P4RuntimeImpl::UpdateDeviceId(uint64_t device_id) {
+  absl::MutexLock l(&server_state_lock_);
+  return controller_manager_->SetDeviceId(device_id);
+}
+
+absl::Status P4RuntimeImpl::AddPacketIoPort(const std::string& port_name) {
+  absl::MutexLock l(&server_state_lock_);
+  return packetio_impl_->AddPacketIoPort(port_name);
+}
+
+absl::Status P4RuntimeImpl::RemovePacketIoPort(const std::string& port_name) {
+  absl::MutexLock l(&server_state_lock_);
+  return packetio_impl_->RemovePacketIoPort(port_name);
+}
+
+absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
+                                               const std::string& port_id) {
+  absl::MutexLock l(&server_state_lock_);
+
+  // Do not allow empty strings.
+  if (port_name.empty()) {
+    return absl::InvalidArgumentError(
+        "Cannot add port translation without the port name.");
+  } else if (port_id.empty()) {
+    return absl::InvalidArgumentError(
+        "Cannot add port translation without the port ID.");
+  }
+
+  // If the Port Name/ID pair already exists then the operation is a no-op.
+  if (const auto iter = port_translation_map_.left.find(port_name);
+      iter != port_translation_map_.left.end() && iter->second == port_id) {
+    return absl::OkStatus();
+  }
+
+  // However, we do not accept reuse of existing values.
+  if (const auto& [_, success] =
+          port_translation_map_.insert({port_name, port_id});
+      !success) {
+    return gutil::AlreadyExistsErrorBuilder()
+           << "Could not add port '" << port_name << "' with ID '" << port_id
+           << "' because an entry already exists.";
+  }
+  LOG(INFO) << "Adding translation for '" << port_name << "' with ID '"
+            << port_id << "'.";
+  return absl::OkStatus();
+}
+
+absl::Status P4RuntimeImpl::RemovePortTranslation(
+    const std::string& port_name) {
+  absl::MutexLock l(&server_state_lock_);
+
+  // Do not allow empty strings.
+  if (port_name.empty()) {
+    return absl::InvalidArgumentError(
+        "Cannot remove port translation without the port name.");
+  }
+
+  if (auto port = port_translation_map_.left.find(port_name);
+      port != port_translation_map_.left.end()) {
+    LOG(INFO) << "Removing translation for '" << port->first << "' with ID '"
+              << port->second << "'.";
+    port_translation_map_.left.erase(port);
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status P4RuntimeImpl::VerifyState() {
+  absl::MutexLock l(&server_state_lock_);
+
+  std::vector<std::string> failures = {"P4RT App State Verification failures:"};
+
+  // Verify the P4RT entries.
+  std::vector<std::string> p4rt_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*p4rt_table_.app_state_db,
+                                             *p4rt_table_.app_db);
+  if (!p4rt_table_failures.empty()) {
+    failures.insert(failures.end(), p4rt_table_failures.begin(),
+                    p4rt_table_failures.end());
+  }
+
+  if (failures.size() > 1) {
+    return gutil::UnknownErrorBuilder() << absl::StrJoin(failures, "\n  ");
+  }
+  return absl::OkStatus();
+}
+
+absl::Status P4RuntimeImpl::HandlePacketOutRequest(
+    const p4::v1::PacketOut& packet_out) {
+  if (!ir_p4info_.has_value()) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "Switch has not configured the forwarding pipeline.";
+  }
+  return SendPacketOut(*ir_p4info_, translate_port_ids_, port_translation_map_,
+                       packetio_impl_.get(), packet_out);
+}
+
+grpc::Status P4RuntimeImpl::VerifyPipelineConfig(
+    const p4::v1::SetForwardingPipelineConfigRequest& request) const {
+  // In all cases where we need to verify a config the spec requires a config to
+  // be set.
+  if (!request.has_config()) {
+    LOG(WARNING) << "ForwardingPipelineConfig is missing the config field.";
+    return grpc::Status(
+        grpc::StatusCode::INVALID_ARGUMENT,
+        "ForwardingPipelineConfig is missing the config field.");
+  }
+
+  absl::Status validate_p4info = ValidateP4Info(request.config().p4info());
+  if (!validate_p4info.ok()) {
+    // Any failure to validate indicates an invalid P4Info.
+    std::string library_prefix = LibraryPrefix(validate_p4info);
+    LOG(WARNING) << library_prefix << "Failed to validate P4Info. "
+                 << validate_p4info;
+    return gutil::AbslStatusToGrpcStatus(
+        gutil::StatusBuilder(absl::StatusCode::kInvalidArgument)
+        << library_prefix
+        << "Failed to validate P4Info. Details: " << validate_p4info.message());
+  }
+  return grpc::Status::OK;
+}
+
+grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
+    const p4::v1::SetForwardingPipelineConfigRequest& request) {
+  // Today we do not clear any forwarding state so if we detect any we return an
+  // UNIMPLEMENTED error.
+  if (forwarding_pipeline_config_.has_value()) {
+    return grpc::Status(
+        grpc::StatusCode::UNIMPLEMENTED,
+        "Clearing existing forwarding state is not supported. Try using "
+        "RECONCILE_AND_COMMIT instead.");
+  }
+
+  // Since we cannot have any state today we can use the same code path from
+  // RECONCILE_AND_COMMIT to apply the forwarding config.
+  return ReconcileAndCommitPipelineConfig(request);
+}
+
+grpc::Status P4RuntimeImpl::CommitPipelineConfig(
+    const p4::v1::SetForwardingPipelineConfigRequest& request) {
+  if (request.has_config()) {
+    return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                        "The config field cannot be set when using the COMMIT "
+                        "action. It can only be loaded from from a previously "
+                        "saved file (e.g. VERIFY_AND_SAVE).");
+  }
+
+  if (!forwarding_config_full_path_.has_value()) {
+    return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                        "P4RT App has not been configured to save forwarding "
+                        "configs. The COMMIT action cannot be used.");
+  }
+
+  p4::v1::SetForwardingPipelineConfigRequest saved_config;
+  absl::Status read_status = gutil::ReadProtoFromFile(
+      *forwarding_config_full_path_, saved_config.mutable_config());
+  if (!read_status.ok()) {
+    LOG(WARNING) << "Could not read saved config: " << read_status;
+    return gutil::AbslStatusToGrpcStatus(read_status);
+  }
+
+  return VerifyAndCommitPipelineConfig(saved_config);
+}
+
+grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
+    const p4::v1::SetForwardingPipelineConfigRequest& request) {
+  grpc::Status verified = VerifyPipelineConfig(request);
+  if (!verified.ok()) return verified;
+
+  // We cannot reconcile any config today so if we see that the new forwarding
+  // config is different from the current one we just return an error.
+  std::string diff_report;
+  if (forwarding_pipeline_config_.has_value() &&
+      !P4InfoEquals(forwarding_pipeline_config_->p4info(),
+                    request.config().p4info(), &diff_report)) {
+    LOG(WARNING) << "Cannot modify P4Info once it has been configured.";
+    return grpc::Status(
+        grpc::StatusCode::UNIMPLEMENTED,
+        absl::StrCat(
+            "Modifying a configured forwarding pipeline is not currently "
+            "supported. Please reboot the device. Configuration "
+            "differences:\n",
+            diff_report));
+  }
+
+  // If the IrP4Info hasn't been set then we need to configure the lower layers.
+  if (!ir_p4info_.has_value()) {
+    // Collect any P4RT constraints from the P4Info.
+    auto constraint_info =
+        p4_constraints::P4ToConstraintInfo(request.config().p4info());
+    if (!constraint_info.ok()) {
+      LOG(WARNING) << "Could not get constraint info from P4Info: "
+                   << constraint_info.status();
+      return gutil::AbslStatusToGrpcStatus(
+          absl::Status(constraint_info.status().code(),
+                       absl::StrCat("[P4 Constraint] ",
+                                    constraint_info.status().message())));
+    }
+
+    // Convert the P4Info into an IrP4Info.
+    auto ir_p4info = pdpi::CreateIrP4Info(request.config().p4info());
+    if (!ir_p4info.ok()) {
+      LOG(WARNING) << "Could not convert P4Info into IrP4Info: "
+                   << ir_p4info.status();
+      return gutil::AbslStatusToGrpcStatus(absl::Status(
+          ir_p4info.status().code(),
+          absl::StrCat("[P4RT/PDPI] ", ir_p4info.status().message())));
+    }
+    TranslateIrP4InfoForOrchAgent(*ir_p4info);
+
+    // Apply a config if we don't currently have one.
+    absl::Status config_result = ConfigureAppDbTables(*ir_p4info);
+    if (!config_result.ok()) {
+      LOG(ERROR) << "Failed to apply ForwardingPipelineConfig: "
+                 << config_result;
+      // TODO: cleanup P4RT table definitions instead of going
+      // critical.
+      return grpc::Status(grpc::StatusCode::INTERNAL, config_result.ToString());
+    }
+
+    // Update P4RuntimeImpl's state only if we succeed.
+    p4_constraint_info_ = *std::move(constraint_info);
+    ir_p4info_ = *std::move(ir_p4info);
+  }
+
+  // The ForwardingPipelineConfig is still updated incase the cookie value has
+  // been changed.
+  forwarding_pipeline_config_ = request.config();
+
+  grpc::Status saved = SavePipelineConfig(*forwarding_pipeline_config_);
+  if (!saved.ok()) {
+    LOG(ERROR) << "Successfully applied, but could not save the "
+               << "ForwardingPipelineConfig: " << saved.error_message();
+    return saved;
+  }
+
+  return grpc::Status::OK;
+}
+
+grpc::Status P4RuntimeImpl::SavePipelineConfig(
+    const p4::v1::ForwardingPipelineConfig& config) const {
+  // If the save path is not set then there is nothing to do.
+  if (!forwarding_config_full_path_.has_value()) {
+    LOG(WARNING) << "Cannot save ForwardingPipelineConfig because the file "
+                    "path was not set.";
+    return grpc::Status::OK;
+  }
+  return gutil::AbslStatusToGrpcStatus(
+      gutil::SaveProtoToFile(*forwarding_config_full_path_, config));
+}
+
+absl::Status P4RuntimeImpl::ConfigureAppDbTables(
     const pdpi::IrP4Info& ir_p4info) {
   // Setup definitions for each each P4 ACL table.
   for (const auto& pair : ir_p4info.tables_by_name()) {
@@ -742,18 +959,17 @@ absl::Status P4RuntimeImpl::ApplyForwardingPipelineConfig(
     // Add ACL table definition to AppDb (if applicable).
     if (table_type == table::Type::kAcl) {
       LOG(INFO) << "Configuring ACL table: " << table_name;
-      ASSIGN_OR_RETURN(
-          std::string acl_key,
-          sonic::InsertAclTableDefinition(*app_db_table_p4rt_, table),
-          _ << "Failed to add ACL table definition [" << table_name
-            << "] to AppDb.");
+      ASSIGN_OR_RETURN(std::string acl_key,
+                       sonic::InsertAclTableDefinition(p4rt_table_, table),
+                       _ << "Failed to add ACL table definition '" << table_name
+                         << "' to AppDb.");
 
       // Wait for OA to confirm it can realize the table updates.
-      ASSIGN_OR_RETURN(
-          pdpi::IrUpdateStatus status,
-          sonic::GetAndProcessResponseNotification(
-              app_db_table_p4rt_->get_table_name(), *app_db_notifier_p4rt_,
-              *app_db_client_, *app_state_db_client_, acl_key));
+      ASSIGN_OR_RETURN(pdpi::IrUpdateStatus status,
+                       sonic::GetAndProcessResponseNotification(
+                           *p4rt_table_.notifier, *p4rt_table_.app_db,
+                           *p4rt_table_.app_state_db, acl_key,
+                           sonic::ResponseTimeMonitor::kNone));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.
@@ -766,39 +982,47 @@ absl::Status P4RuntimeImpl::ApplyForwardingPipelineConfig(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(bool use_genetlink) {
+absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
+    const bool use_genetlink) {
   // Define the lambda function for the callback to be executed for every
   // receive packet.
   auto SendPacketInToController =
-      [this](const std::string& source_port_name,
-             const std::string& target_port_name,
+      [this](const std::string& netdev_source_port_name,
+             const std::string& netdev_target_port_name,
              const std::string& payload) -> absl::Status {
     absl::MutexLock l(&server_state_lock_);
 
-    // Convert Sonic port name to controller port number.
+    // The callback will have Linux netdev interfaces. So we first need to
+    // convert it into a SONiC port name then if needed into the controller port
+    // number.
+    std::string sonic_source_port_name = netdev_source_port_name;
+    std::string sonic_target_port_name = netdev_target_port_name;
+
     std::string source_port_id;
     if (translate_port_ids_) {
-      ASSIGN_OR_RETURN(source_port_id,
-                       TranslatePort(TranslationDirection::kForController,
-                                     port_translation_map_, source_port_name),
-                       _.SetCode(absl::StatusCode::kInternal).LogError()
-                           << "Failed to parse source port");
+      ASSIGN_OR_RETURN(
+          source_port_id,
+          TranslatePort(TranslationDirection::kForController,
+                        port_translation_map_, sonic_source_port_name),
+          _ << "Could not send PacketIn request because of bad source port "
+               "name.");
     } else {
-      source_port_id = source_port_name;
+      source_port_id = sonic_source_port_name;
     }
 
     // TODO: Until string port names are supported, re-assign empty
     // target egress port names to match the ingress port.
     std::string target_port_id = source_port_id;
-    if (!target_port_name.empty()) {
+    if (!sonic_target_port_name.empty()) {
       if (translate_port_ids_) {
-        ASSIGN_OR_RETURN(target_port_id,
-                         TranslatePort(TranslationDirection::kForController,
-                                       port_translation_map_, target_port_name),
-                         _.SetCode(absl::StatusCode::kInternal).LogError()
-                             << "Failed to parse target port");
+        ASSIGN_OR_RETURN(
+            target_port_id,
+            TranslatePort(TranslationDirection::kForController,
+                          port_translation_map_, sonic_target_port_name),
+            _ << "Could not send PacketIn request because of bad target port "
+                 "name.");
       } else {
-        target_port_id = target_port_name;
+        target_port_id = sonic_target_port_name;
       }
     }
 
@@ -809,15 +1033,17 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(bool use_genetlink) {
     p4::v1::StreamMessageResponse response;
     *response.mutable_packet() = packet_in;
     *response.mutable_packet()->mutable_payload() = payload;
+
     // Get the primary streamchannel and write into the stream.
-    controller_manager_->SendStreamMessageToPrimary(
-        P4RUNTIME_ROLE_SDN_CONTROLLER, response);
-    return absl::OkStatus();
+    return controller_manager_->SendPacketInToPrimary(response);
   };
 
   absl::MutexLock l(&server_state_lock_);
-  // Now that all packet io ports have been discovered, start the receive thread
-  // that will wait for in packets.
+  if (packetio_impl_ == nullptr) {
+    return absl::InvalidArgumentError("PacketIoImpl is a required object");
+  }
+
+  // Spawn the receiver thread.
   return packetio_impl_->StartReceive(SendPacketInToController, use_genetlink);
 }
 

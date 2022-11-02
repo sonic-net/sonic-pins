@@ -27,20 +27,29 @@ cc_binary(
     srcs = ["p4rt.cc"],
     deps = [
         "//gutil:status",
+        "//p4rt_app/event_monitoring:app_state_db_port_table_event",
+        "//p4rt_app/event_monitoring:config_db_node_cfg_table_event",
+        "//p4rt_app/event_monitoring:config_db_port_table_event",
+        "//p4rt_app/event_monitoring:state_event_monitor",
+        "//p4rt_app/event_monitoring:state_verification_events",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic:packetio_impl",
+        "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
-        "//p4rt_app/sonic/adapters:db_connector_adapter",
         "//p4rt_app/sonic/adapters:producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:system_call_adapter",
+        "//p4rt_app/sonic/adapters:table_adapter",
         "@com_github_gflags_gflags//:gflags",
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++",
+        "@com_github_grpc_grpc//:grpc++_authorization_provider",
+        "@com_github_grpc_grpc//:grpc_codegen",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
         "@sonic_swss_common//:libswsscommon",
     ],
@@ -48,8 +57,14 @@ cc_binary(
 
 pkg_tar(
     name = "p4rt_binaries",
+    testonly = True,  # requred for p4rt_route_measurement_test
     srcs = [
         ":p4rt",  # TODO explore p4rt.stripped
+        "//p4rt_app/scripts:p4rt_program_table",
+        "//p4rt_app/scripts:p4rt_read",
+        "//p4rt_app/scripts:p4rt_route_measurement_test",
+        "//p4rt_app/scripts:p4rt_set_forwarding_pipeline",
+        "//p4rt_app/scripts:p4rt_write",
     ],
     extension = "tar.bz2",
     mode = "0755",
@@ -81,6 +96,7 @@ pkg_tar(
 #
 pkg_deb(
     name = "p4rt_deb",
+    testonly = True,  # requred for p4rt_route_measurement_test
     architecture = "amd64",
     data = ":p4rt_binaries",
     depends = [
@@ -97,9 +113,6 @@ pkg_deb(
     name = "p4rt_dbg_deb",
     architecture = "amd64",
     data = ":p4rt_debug",
-    depends = [
-        "sonic-p4rt",
-    ],
     description = "P4RT service debug symbols",
     maintainer = p4rt_maintainer,
     package = "sonic-p4rt-dbgsym",

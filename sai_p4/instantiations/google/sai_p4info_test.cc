@@ -18,8 +18,8 @@ namespace {
 
 class InstantiationTest : public testing::TestWithParam<Instantiation> {};
 
-// GetP4Info contains a CHECK; ensure it doesn't fail.
 TEST_P(InstantiationTest, GetP4InfoDoesNotCrashAndP4ConstraintsAreParsable) {
+  // GetP4Info contains a CHECK; ensure it doesn't fail.
   auto info = GetP4Info(GetParam());
   ASSERT_OK_AND_ASSIGN(p4_constraints::ConstraintInfo constraint_info,
                        p4_constraints::P4ToConstraintInfo(info));

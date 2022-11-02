@@ -33,6 +33,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
@@ -57,8 +58,7 @@ class ResponsePathTest : public test_lib::P4RuntimeComponentTestFixture {
  protected:
   ResponsePathTest()
       : test_lib::P4RuntimeComponentTestFixture(
-            sai::Instantiation::kMiddleblock,
-            /*gnmi_ports=*/{}) {}
+            sai::Instantiation::kMiddleblock) {}
 };
 
 TEST_F(ResponsePathTest, TableEntryInsertReadAndRemove) {
@@ -84,7 +84,7 @@ TEST_F(ResponsePathTest, TableEntryInsertReadAndRemove) {
 
   // Expected P4RT AppDb entry.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
-                            .SetTableName(APP_P4RT_IPV6_TABLE_NAME)
+                            .SetTableName("FIXED_IPV6_TABLE")
                             .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
                             .AddMatchField("vrf_id", "80")
                             .SetAction("set_nexthop_id")
@@ -154,7 +154,7 @@ TEST_F(ResponsePathTest, TableEntryModify) {
 
   // Expected P4RT AppDb entry.
   auto expected_entry = test_lib::AppDbEntryBuilder{}
-                            .SetTableName(APP_P4RT_IPV6_TABLE_NAME)
+                            .SetTableName("FIXED_IPV6_TABLE")
                             .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
                             .AddMatchField("vrf_id", "80");
 
@@ -259,6 +259,63 @@ TEST_F(ResponsePathTest, InsertRequestFails) {
                  }
                  match {
                    field_id: 2
+                   exact {
+                     value: "\376\200\000\000\000\000\000\000\002\032\021\377\376\027\000\200"
+                   }
+                 }
+                 action {
+                   action {
+                     action_id: 16777217
+                     params { param_id: 1 value: "\000\032\021\027_\200" }
+                   }
+                 }
+               }
+             }
+           })pb",
+      &request));
+
+  auto neighbor_entry =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_NEIGHBOR_TABLE")
+          .AddMatchField("neighbor_id", "fe80::21a:11ff:fe17:80")
+          .AddMatchField("router_interface_id", "1");
+
+  // Assume the Orchagent fails with an invalid parameter.
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      neighbor_entry.GetKey(), "SWSS_RC_INVALID_PARAM", "my error message");
+
+  // We expect the invalid argument error to be propagated all the way back to
+  // the gRPC response.
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(absl::StatusCode::kUnknown,
+               HasSubstr("#1: INVALID_ARGUMENT: my error message")));
+}
+
+TEST_F(ResponsePathTest, ErrorResponseHandlesNonPrintableCharacters) {
+  // The P4RT spec's error message are encoded as a string. However, not all
+  // P4RT objects are not required to be string (e.g. they can be arbitrary
+  // bytes). This can cause issues if a non UTF-8 object fails, and we report
+  // that value back as an error message. P4RT app should escape any bytes.
+
+  // UTF-8 characters fall in the range of 0x00 to 0x7F, and non UTF-8
+  // characters fall in the range of 0x80 to 0x8F.
+  std::vector<char> non_utf8_error;
+  for (int i = 0x00; i < 0x8F; ++i) non_utf8_error.emplace_back(i);
+
+  p4::v1::WriteRequest request;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(updates {
+             type: INSERT
+             entity {
+               table_entry {
+                 table_id: 33554496
+                 match {
+                   field_id: 1
+                   exact { value: "1" }
+                 }
+                 match {
+                   field_id: 2
                    exact { value: "fe80::021a:11ff:fe17:5f80" }
                  }
                  action {
@@ -274,20 +331,22 @@ TEST_F(ResponsePathTest, InsertRequestFails) {
 
   auto neighbor_entry =
       test_lib::AppDbEntryBuilder{}
-          .SetTableName(APP_P4RT_NEIGHBOR_TABLE_NAME)
+          .SetTableName("FIXED_NEIGHBOR_TABLE")
           .AddMatchField("neighbor_id", "fe80::021a:11ff:fe17:5f80")
           .AddMatchField("router_interface_id", "1");
 
-  // Assume the Orchagent fails with an invalid parameter.
+  // The Orchagent fails with an invalid parameter, and a message with non UTF-8
+  // characters in it.
   p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
-      neighbor_entry.GetKey(), "SWSS_RC_INVALID_PARAM", "my error message");
+      neighbor_entry.GetKey(), "SWSS_RC_INVALID_PARAM",
+      std::string(non_utf8_error.begin(), non_utf8_error.end()));
 
-  // We expect the invalid argument error to be propagated all the way back to
-  // the gRPC response.
+  // We expect the error message to be converted to some printable string. Today
+  // it's done with absl::CHexEscape so we verify some of those characters exist
+  // in the response.
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
-      StatusIs(absl::StatusCode::kUnknown,
-               HasSubstr("#1: INVALID_ARGUMENT: my error message")));
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("\0x80\0x81\0x82")));
 }
 
 TEST_F(ResponsePathTest, ModifyRequestFails) {
@@ -301,7 +360,7 @@ TEST_F(ResponsePathTest, ModifyRequestFails) {
                                  acl_ingress_table_entry {
                                    match { is_ip { value: "0x1" } }
                                    priority: 10
-                                   action { forward {} }
+                                   action { acl_forward {} }
                                  }
                                }
                              }
@@ -325,20 +384,21 @@ TEST_F(ResponsePathTest, ModifyRequestFails) {
       expected_entry.GetKey(), "SWSS_RC_INVALID_PARAM", "my error message");
 
   // Try to modify the existing request, and fail as intended..
-  ASSERT_OK_AND_ASSIGN(request, test_lib::PdWriteRequestToPi(
-                                    R"pb(
-                                      updates {
-                                        type: MODIFY
-                                        table_entry {
-                                          acl_ingress_table_entry {
-                                            match { is_ip { value: "0x1" } }
-                                            priority: 10
-                                            action { copy { qos_queue: "0x3" } }
-                                          }
-                                        }
-                                      }
-                                    )pb",
-                                    ir_p4_info_));
+  ASSERT_OK_AND_ASSIGN(request,
+                       test_lib::PdWriteRequestToPi(
+                           R"pb(
+                             updates {
+                               type: MODIFY
+                               table_entry {
+                                 acl_ingress_table_entry {
+                                   match { is_ip { value: "0x1" } }
+                                   priority: 10
+                                   action { acl_copy { qos_queue: "0x3" } }
+                                 }
+                               }
+                             }
+                           )pb",
+                           ir_p4_info_));
 
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
@@ -361,7 +421,7 @@ TEST_F(ResponsePathTest, DeleteRequestFails) {
                                  acl_ingress_table_entry {
                                    match { is_ip { value: "0x1" } }
                                    priority: 10
-                                   action { copy { qos_queue: "0x1" } }
+                                   action { acl_copy { qos_queue: "0x1" } }
                                  }
                                }
                              }
@@ -385,20 +445,21 @@ TEST_F(ResponsePathTest, DeleteRequestFails) {
       expected_entry.GetKey(), "SWSS_RC_INVALID_PARAM", "my error message");
 
   // Try to delete the existing request, and fail as intended..
-  ASSERT_OK_AND_ASSIGN(request, test_lib::PdWriteRequestToPi(
-                                    R"pb(
-                                      updates {
-                                        type: DELETE
-                                        table_entry {
-                                          acl_ingress_table_entry {
-                                            match { is_ip { value: "0x1" } }
-                                            priority: 10
-                                            action { copy { qos_queue: "0x1" } }
-                                          }
-                                        }
-                                      }
-                                    )pb",
-                                    ir_p4_info_));
+  ASSERT_OK_AND_ASSIGN(request,
+                       test_lib::PdWriteRequestToPi(
+                           R"pb(
+                             updates {
+                               type: DELETE
+                               table_entry {
+                                 acl_ingress_table_entry {
+                                   match { is_ip { value: "0x1" } }
+                                   priority: 10
+                                   action { acl_copy { qos_queue: "0x1" } }
+                                 }
+                               }
+                             }
+                           )pb",
+                           ir_p4_info_));
 
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
@@ -446,7 +507,7 @@ TEST_F(ResponsePathTest, OneOfManyInsertRequestFails) {
                  }
                  action {
                    action {
-                     action_id: 16777219
+                     action_id: 16777236
                      params { param_id: 1 value: "8" }
                      params { param_id: 2 value: "1" }
                    }
@@ -457,7 +518,7 @@ TEST_F(ResponsePathTest, OneOfManyInsertRequestFails) {
       &request));
 
   auto nexthop_entry = test_lib::AppDbEntryBuilder{}
-                           .SetTableName(APP_P4RT_NEXTHOP_TABLE_NAME)
+                           .SetTableName("FIXED_NEXTHOP_TABLE")
                            .AddMatchField("nexthop_id", "8");
 
   // Assume the Orchagent fails for one request with an invalid parameter.
@@ -533,7 +594,7 @@ TEST_F(ResponsePathTest, RequestWithDuplicateKeysFails) {
 
 TEST_F(ResponsePathTest, ReadingUnexpectedValueFails) {
   // Force the response path to return an unexpected notification key.
-  p4rt_service_.GetP4rtAppDbTable().InsertTableEntry(
+  p4rt_service_.GetP4rtAppStateDbTable().InsertTableEntry(
       /*key=*/"out_of_order", /*values=*/{{"action", "invalid_action_name"}});
 
   // The P4RT App should be the only writer to the P4RT table. Therefore, if we

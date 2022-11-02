@@ -28,6 +28,10 @@ namespace sonic {
 class PacketIoInterface {
  public:
   virtual ~PacketIoInterface() = default;
+  // Add a new port to Packet I/O.
+  virtual absl::Status AddPacketIoPort(absl::string_view port_name) = 0;
+  // Remove an existing port from Packet I/O.
+  virtual absl::Status RemovePacketIoPort(absl::string_view port_name) = 0;
   ABSL_MUST_USE_RESULT virtual absl::StatusOr<std::thread> StartReceive(
       packet_metadata::ReceiveCallbackFunction callback_function,
       bool use_genetlink) = 0;

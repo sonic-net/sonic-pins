@@ -18,6 +18,9 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
+#include "absl/random/distributions.h"
+#include "absl/random/random.h"
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "glog/logging.h"
 #include "grpcpp/security/server_credentials.h"
@@ -26,46 +29,43 @@
 #include "gutil/status_matchers.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/fake_db_connector_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_producer_state_table_adapter.h"
+#include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
+#include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
+#include "p4rt_app/sonic/redis_connections.h"
+#include "swss/consumerstatetable.h"
+#include "swss/dbconnector.h"
+#include "swss/notificationproducer.h"
 
 namespace p4rt_app {
 namespace test_lib {
 
-P4RuntimeGrpcService::P4RuntimeGrpcService(
-    const P4RuntimeGrpcServiceOptions& options) {
+P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
+    : fake_p4rt_state_table_("AppStateDb:P4RT_TABLE"),
+      fake_p4rt_table_("AppDb:P4RT_TABLE", &fake_p4rt_state_table_) {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
-  const std::string kP4rtTableName = APP_P4RT_TABLE_NAME;
-  const std::string kPortTableName = APP_PORT_TABLE_NAME;
-  const std::string kCountersTableName = COUNTERS_TABLE;
+  const std::string kP4rtTableName = "P4RT_TABLE";
+  const std::string kPortTableName = "PORT_TABLE";
 
-  // Connect SONiC AppDB tables with their equivelant AppStateDB tables.
-  fake_p4rt_table_ = sonic::FakeSonicDbTable(&fake_p4rt_state_table_);
+  // Choose a random gRPC port. While not strictly necessary each test brings up
+  // a new gRPC service, and randomly choosing a TCP port will minimize issues.
+  absl::BitGen gen;
+  grpc_port_ = absl::Uniform<int>(gen, 49152, 65535);
 
-  // Create AppDb interfaces used by the P4RT App.
-  auto fake_app_db_client = absl::make_unique<sonic::FakeDBConnectorAdapter>();
-  fake_app_db_client->AddSonicDbTable(kP4rtTableName, &fake_p4rt_table_);
-  fake_app_db_client->AddSonicDbTable(kPortTableName, &fake_port_table_);
-
-  // P4RT table.
-  auto fake_app_db_table_p4rt =
-      absl::make_unique<sonic::FakeProducerStateTableAdapter>(
-          kP4rtTableName, &fake_p4rt_table_);
-  auto fake_notify_p4rt =
-      absl::make_unique<sonic::FakeConsumerNotifierAdapter>(&fake_p4rt_table_);
-
-  // Create StateDb interfaces used by the P4RT App.
-  auto fake_state_db_client =
-      absl::make_unique<sonic::FakeDBConnectorAdapter>();
-  fake_state_db_client->AddSonicDbTable(kP4rtTableName,
-                                        &fake_p4rt_state_table_);
-
-  // Create CounterDb interfaces used by the P4RT App.
-  auto fake_counter_db_client =
-      absl::make_unique<sonic::FakeDBConnectorAdapter>();
-  fake_counter_db_client->AddSonicDbTable(kCountersTableName,
-                                          &fake_p4rt_counters_table_);
+  // Create interfaces to access P4RT_TABLE entries.
+  sonic::P4rtTable p4rt_table{
+      .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
+          &fake_p4rt_table_),
+      .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+          &fake_p4rt_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_p4rt_table_,
+                                                           kP4rtTableName),
+      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_p4rt_state_table_, kP4rtTableName),
+      .counter_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_p4rt_counters_table_, kP4rtTableName),
+  };
 
   // Create FakePacketIoInterface and save the pointer.
   auto fake_packetio_interface =
@@ -74,10 +74,8 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(
 
   // Create the P4RT server.
   p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
-      std::move(fake_app_db_client), std::move(fake_state_db_client),
-      std::move(fake_counter_db_client), std::move(fake_app_db_table_p4rt),
-      std::move(fake_notify_p4rt), std::move(fake_packetio_interface),
-      options.use_genetlink, options.translate_port_ids);
+      std::move(p4rt_table), std::move(fake_packetio_interface),
+      options);
 
   // Component tests will use an insecure connection for the service.
   std::string server_address = absl::StrCat("localhost:", GrpcPort());
@@ -99,7 +97,7 @@ P4RuntimeGrpcService::~P4RuntimeGrpcService() {
   if (server_) server_->Shutdown();
 }
 
-int P4RuntimeGrpcService::GrpcPort() const { return 9999; }
+int P4RuntimeGrpcService::GrpcPort() const { return grpc_port_; }
 
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtAppDbTable() {
   return fake_p4rt_table_;
@@ -109,12 +107,20 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppDbTable() {
   return fake_port_table_;
 }
 
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtAppStateDbTable() {
+  return fake_p4rt_state_table_;
+}
+
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtCountersDbTable() {
   return fake_p4rt_counters_table_;
 }
 
 sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
   return *fake_packetio_interface_;
+}
+
+P4RuntimeImpl& P4RuntimeGrpcService::GetP4rtServer() {
+  return *p4runtime_server_;
 }
 
 }  // namespace test_lib

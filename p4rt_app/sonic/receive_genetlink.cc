@@ -72,6 +72,15 @@ absl::Status PrepareNetlinkSocket(struct nl_sock** nlsock) {
            << "Unable to connect to generic netlink, error: " << error;
   }
 
+  // Increase Netlink receive buffer allocation from 32K(default) to 1.2MiB,
+  // to handle receive packet bursts of upto 16000 pps.
+  error = nl_socket_set_buffer_size(*nlsock, 1214400, 0);
+  if (error < 0) {
+    LOG(WARNING) << "Unable to increase Netlink socket receive buffer size "
+                    "from 32K to 1.2MiB, failed with error: "
+                 << error;
+  }
+
   // Resolve the generic netlink family id.
   int family_id = genl_ctrl_resolve(*nlsock, kGenericNetlinkFamilyName);
   if (family_id < 0) {

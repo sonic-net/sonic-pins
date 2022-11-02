@@ -24,6 +24,7 @@ filegroup(
         "headers.p4",
         "ids.h",
         "ipv4_checksum.p4",
+        "l3_admit.p4",
         "metadata.p4",
         "minimum_guaranteed_sizes.p4",
         "mirroring_clone.p4",

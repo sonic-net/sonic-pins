@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,12 +29,6 @@ ProducerStateTableAdapter::ProducerStateTableAdapter(
     swss::DBConnector* db, const std::string& table_name)
     : producer_state_table_(
           std::make_unique<swss::ProducerStateTable>(db, table_name)) {}
-
-std::string ProducerStateTableAdapter::get_table_name() const {
-  LOG_IF(FATAL, producer_state_table_ == nullptr)
-      << "producer_state_table_ cannot be nullptr.";
-  return producer_state_table_->getTableName();
-}
 
 void ProducerStateTableAdapter::set(
     const std::string& key, const std::vector<swss::FieldValueTuple>& values) {

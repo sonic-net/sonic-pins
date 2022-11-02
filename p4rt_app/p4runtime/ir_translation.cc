@@ -25,6 +25,7 @@
 #include "p4/config/v1/p4types.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 
 namespace p4rt_app {
@@ -95,7 +96,7 @@ absl::Status TranslateActionSet(const TranslateTableEntryOptions& options,
     RETURN_IF_ERROR(
         TranslateAction(options, table_def, *action.mutable_action()));
 
-    if (!action.watch_port().empty()) {
+    if (options.translate_port_ids && !action.watch_port().empty()) {
       ASSIGN_OR_RETURN(*action.mutable_watch_port(),
                        TranslatePort(options.direction, options.port_map,
                                      action.watch_port()));
@@ -195,7 +196,7 @@ absl::StatusOr<std::string> TranslatePort(
         return gutil::InvalidArgumentErrorBuilder()
                << "[P4RT App] Cannot translate port '"
                << absl::CHexEscape(port_key)
-               << " to P4RT ID. Has the port been configured with an ID?";
+               << "' to P4RT ID. Has the port been configured with an ID?";
       }
       return value->second;
     }
@@ -205,7 +206,7 @@ absl::StatusOr<std::string> TranslatePort(
         return gutil::InvalidArgumentErrorBuilder()
                << "[P4RT App] Cannot translate port '"
                << absl::CHexEscape(port_key)
-               << " to SONiC name. Has the port been configured with an ID?";
+               << "' to SONiC name. Has the port been configured with an ID?";
       }
       return value->second;
     }
@@ -248,6 +249,43 @@ void TranslateIrP4InfoForOrchAgent(pdpi::IrP4Info& p4_info) {
   }
   for (auto& [table_id, table_def] : *p4_info.mutable_tables_by_name()) {
     TranslateIrTableDefForOrchAgent(table_def);
+  }
+}
+
+// TODO: Remove this when P4Info uses 64-bit IPv6 ACL match fields.
+void Convert64BitIpv6AclMatchFieldsTo128Bit(
+    pdpi::IrTableEntry& ir_table_entry) {
+  for (pdpi::IrMatch& match : *ir_table_entry.mutable_matches()) {
+    if (!match.has_ternary()) continue;
+    if (match.ternary().value().format_case() !=
+        pdpi::IrValue::FormatCase::kIpv6) {
+      continue;
+    }
+
+    const std::string& value = match.ternary().value().ipv6();
+    auto value_address = netaddr::Ipv6Address::OfString(value);
+    if (!value_address.ok()) {
+      LOG(WARNING) << "Unexpected unconvertable IPv6 value: " << value;
+      continue;
+    }
+    const std::string& mask = match.ternary().mask().ipv6();
+    auto mask_address = netaddr::Ipv6Address::OfString(mask);
+    if (!mask_address.ok()) {
+      LOG(WARNING) << "Unexpected unconvertable IPv6 mask: " << mask;
+      continue;
+    }
+    // If none of the upper 64-bits are set, we assume that the address has
+    // mistakenly been shifted rightward by 64-bits. Shift the address left
+    // 64-bit to correct. This logic supports controller/switch mismatch when
+    // transitioning to 64-bit IPv6 match fields at the expense of being able to
+    // create lower 64-bit matches.
+    if (*mask_address ==
+        (*mask_address & ~netaddr::Ipv6Address::Upper64BitMask())) {
+      match.mutable_ternary()->mutable_value()->set_ipv6(
+          (*value_address << 64).ToString());
+      match.mutable_ternary()->mutable_mask()->set_ipv6(
+          (*mask_address << 64).ToString());
+    }
   }
 }
 

@@ -13,160 +13,93 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/p4info_verification.h"
 
+#include "absl/status/status.h"
+#include "absl/strings/match.h"
+#include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
+#include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/utils/ir.h"
+#include "p4rt_app/utils/status_utility.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace p4rt_app {
 namespace {
 
-using ::google::protobuf::TextFormat;
+using ::gutil::EqualsProto;
+using ::gutil::StatusIs;
+using ::testing::Eq;
+using ::testing::HasSubstr;
+using ::testing::Not;
+using ::testing::Optional;
 
-class P4InfoVerificationTest : public testing::Test {
- protected:
-  absl::StatusOr<p4::config::v1::P4TypeInfo> GetExpectedTypes() {
-    // constexpr absl::string_view kExpectedTypes =
-    constexpr char kExpectedTypes[] =
-        R"pb(new_types {
-               key: "neighbor_id_t"
-               value { translated_type { sdn_string {} } }
-             }
-             new_types {
-               key: "nexthop_id_t"
-               value { translated_type { sdn_string {} } }
-             }
-             new_types {
-               key: "port_id_t"
-               value { translated_type { sdn_string {} } }
-             }
-             new_types {
-               key: "router_interface_id_t"
-               value { translated_type { sdn_string {} } }
-             }
-             new_types {
-               key: "vrf_id_t"
-               value { translated_type { sdn_string {} } }
-             }
-             new_types {
-               key: "wcmp_group_id_t"
-               value { translated_type { sdn_string {} } }
-             })pb";
+class InstantiationTest : public testing::TestWithParam<sai::Instantiation> {};
+TEST_P(InstantiationTest, SaiP4InfoIsOk) {
+  EXPECT_OK(ValidateP4Info(sai::GetP4Info(GetParam())));
+}
 
-    p4::config::v1::P4TypeInfo type_info;
-    if (!google::protobuf::TextFormat::ParseFromString(kExpectedTypes,
-                                                       &type_info)) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Could not parse expected types.";
-    }
-    return type_info;
-  }
+INSTANTIATE_TEST_SUITE_P(P4InfoVerificationTest, InstantiationTest,
+                         testing::ValuesIn(sai::AllInstantiations()),
+                         [](testing::TestParamInfo<sai::Instantiation> info) {
+                           return sai::InstantiationToString(info.param);
+                         });
 
-  absl::StatusOr<p4::config::v1::ControllerPacketMetadata>
-  GetExpectedPacketInMetadata() {
-    constexpr char kPacketInMetadata[] =
-        R"pb(preamble {
-               id: 81826293
-               name: "packet_in"
-               alias: "packet_in"
-               annotations: "@controller_header(\"packet_in\")"
-             }
-             metadata {
-               id: 2
-               name: "target_egress_port"
-               type_name { name: "port_id_t" }
-             }
-             metadata {
-               id: 1
-               name: "ingress_port"
-               type_name { name: "port_id_t" }
-             })pb";
+TEST(P4InfoVerificationTest, MissingPacketIoMetadata) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
 
-    p4::config::v1::ControllerPacketMetadata metadata;
-    if (!google::protobuf::TextFormat::ParseFromString(kPacketInMetadata,
-                                                       &metadata)) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Could not parse packet in metadata.";
-    }
-    return metadata;
-  }
+  // Use the expected packet in/out metadata, but remove the first metadata
+  // field.
+  auto& metadata =
+      *p4info.mutable_controller_packet_metadata(0)->mutable_metadata();
+  metadata.erase(metadata.begin());
 
-  absl::StatusOr<p4::config::v1::ControllerPacketMetadata>
-  GetExpectedPacketOutMetadata() {
-    constexpr char kPacketInMetadata[] = R"pb(
-      preamble {
-        id: 76689799
-        name: "packet_out"
-        alias: "packet_out"
-        annotations: "@controller_header(\"packet_out\")"
+  EXPECT_THAT(ValidateP4Info(p4info),
+              gutil::StatusIs(absl::StatusCode::kInvalidArgument,
+                              HasSubstr("PacketIO")));
+}
+
+TEST(P4InfoVerificationTest, ReturnsErrorWhenIrParsingFails) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  p4info.mutable_actions()->erase(p4info.mutable_actions()->begin());
+  auto validate_p4info_status = ValidateP4Info(p4info);
+  EXPECT_FALSE(validate_p4info_status.ok());
+  EXPECT_THAT(validate_p4info_status.GetPayload(kLibraryUrl),
+              Optional(Eq("PDPI")))
+      << "Error was not from the PDPI call as expected.";
+}
+
+TEST(P4InfoVerificationTest, ReturnsErrorWhenSchemaVerificationFails) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  // Change the match type of amatch field from a fixed routing table.
+  for (auto& table : *p4info.mutable_tables()) {
+    if (absl::StartsWith(table.preamble().name(), "ingress.routing")) {
+      for (auto& match_field : *table.mutable_match_fields()) {
+        if (match_field.match_type() == match_field.LPM) {
+          match_field.set_match_type(match_field.EXACT);
+          break;
+        }
       }
-      metadata { id: 3 name: "unused_pad" bitwidth: 7 }
-      metadata { id: 2 name: "submit_to_ingress" bitwidth: 1 }
-      metadata {
-        id: 1
-        name: "egress_port"
-        type_name { name: "port_id_t" }
-      })pb";
-
-    p4::config::v1::ControllerPacketMetadata metadata;
-    if (!google::protobuf::TextFormat::ParseFromString(kPacketInMetadata,
-                                                       &metadata)) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Could not parse packet out metadata.";
     }
-    return metadata;
   }
-};
+  ASSERT_THAT(
+      p4info,
+      Not(EqualsProto(sai::GetP4Info(sai::Instantiation::kMiddleblock))))
+      << "Failed to find candidate LPM match field to modify for the test.";
 
-TEST_F(P4InfoVerificationTest, SaiP4InfoIsOk) {
-  EXPECT_OK(ValidateP4Info(sai::GetP4Info(sai::Instantiation::kMiddleblock)));
-}
-
-TEST_F(P4InfoVerificationTest, ExpectedP4InfoValues) {
-  p4::config::v1::P4Info p4_info;
-  ASSERT_OK_AND_ASSIGN(*p4_info.add_controller_packet_metadata(),
-                       GetExpectedPacketInMetadata());
-  ASSERT_OK_AND_ASSIGN(*p4_info.add_controller_packet_metadata(),
-                       GetExpectedPacketOutMetadata());
-  ASSERT_OK_AND_ASSIGN(*p4_info.mutable_type_info(), GetExpectedTypes());
-  EXPECT_OK(ValidateP4Info(p4_info));
-}
-
-TEST_F(P4InfoVerificationTest, MissingPacketIoMetadata) {
-  p4::config::v1::P4Info p4_info;
-  ASSERT_OK_AND_ASSIGN(*p4_info.add_controller_packet_metadata(),
-                       GetExpectedPacketInMetadata());
-  ASSERT_OK_AND_ASSIGN(*p4_info.mutable_type_info(), GetExpectedTypes());
-
-  // Use the expected packet out metadata, but remove the first metadata field.
-  ASSERT_OK_AND_ASSIGN(auto packet_out_metadata,
-                       GetExpectedPacketOutMetadata());
-  ASSERT_GT(packet_out_metadata.metadata_size(), 0);
-  packet_out_metadata.mutable_metadata()->erase(
-      packet_out_metadata.metadata().begin());
-  *p4_info.add_controller_packet_metadata() = packet_out_metadata;
-
-  EXPECT_THAT(ValidateP4Info(p4_info),
-              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
-}
-
-TEST_F(P4InfoVerificationTest, MissingExpectedTypes) {
-  p4::config::v1::P4Info p4_info;
-  ASSERT_OK_AND_ASSIGN(*p4_info.add_controller_packet_metadata(),
-                       GetExpectedPacketInMetadata());
-  ASSERT_OK_AND_ASSIGN(*p4_info.add_controller_packet_metadata(),
-                       GetExpectedPacketOutMetadata());
-
-  // Use the expected types fields, but remove the first type.
-  ASSERT_OK_AND_ASSIGN(*p4_info.mutable_type_info(), GetExpectedTypes());
-  ASSERT_GT(p4_info.type_info().new_types_size(), 0);
-  p4_info.mutable_type_info()->mutable_new_types()->erase("neighbor_id_t");
-
-  EXPECT_THAT(ValidateP4Info(p4_info),
-              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(
+      ValidateP4Info(p4info),
+      gutil::StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("LPM")));
 }
 
 }  // namespace

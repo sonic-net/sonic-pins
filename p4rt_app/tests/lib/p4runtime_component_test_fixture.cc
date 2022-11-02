@@ -17,6 +17,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 
@@ -24,21 +25,22 @@ namespace p4rt_app {
 namespace test_lib {
 
 P4RuntimeComponentTestFixture::P4RuntimeComponentTestFixture(
-    sai::Instantiation sai_instantiation,
-    std::vector<FakeGnmiPortConfig> gnmi_ports)
+    sai::Instantiation sai_instantiation)
     : p4_info_(sai::GetP4Info(sai_instantiation)),
-      ir_p4_info_(sai::GetIrP4Info(sai_instantiation)),
-      gnmi_ports_(gnmi_ports) {
+      ir_p4_info_(sai::GetIrP4Info(sai_instantiation)) {
+  // do nothing.
+}
+
+P4RuntimeComponentTestFixture::P4RuntimeComponentTestFixture(
+    p4::config::v1::P4Info p4info)
+    : p4_info_(std::move(p4info)),
+      ir_p4_info_(*pdpi::CreateIrP4Info(p4_info_)) {
   // do nothing.
 }
 
 void P4RuntimeComponentTestFixture::SetUp() {
-  // Fake any gNMI configurations first.
-  // Configure any ethernet ports for the tests.
-  for (const auto& port : gnmi_ports_) {
-    p4rt_service_.GetPortAppDbTable().InsertTableEntry(port.port_name,
-                                                       {{"id", port.port_id}});
-  }
+  // Configure the Device ID on the P4Runtime Server.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id_));
 
   // Open a P4RT client connection to the gRPC server.
   std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());

@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "glog/logging.h"
 
 namespace p4rt_app {
@@ -31,7 +33,8 @@ namespace sonic {
 
 void FakeSonicDbTable::InsertTableEntry(const std::string &key,
                                         const SonicDbEntryList &values) {
-  VLOG(1) << "Insert table entry: " << key;
+  VLOG(1) << absl::StreamFormat("'%s' insert table entry: %s",
+                                debug_table_name_, key);
   auto &entry = entries_[key];
   for (const auto &[field, data] : values) {
     entry.insert_or_assign(field, data);
@@ -39,7 +42,8 @@ void FakeSonicDbTable::InsertTableEntry(const std::string &key,
 }
 
 void FakeSonicDbTable::DeleteTableEntry(const std::string &key) {
-  VLOG(1) << "Delete table entry: " << key;
+  VLOG(1) << absl::StreamFormat("'%s' delete table entry: %s",
+                                debug_table_name_, key);
   if (auto iter = entries_.find(key); iter != entries_.end()) {
     entries_.erase(iter);
   }
@@ -48,12 +52,14 @@ void FakeSonicDbTable::DeleteTableEntry(const std::string &key) {
 void FakeSonicDbTable::SetResponseForKey(const std::string &key,
                                          const std::string &code,
                                          const std::string &message) {
-  VLOG(1) << "Setting response for: " << key;
+  VLOG(1) << absl::StreamFormat("'%s' set response for key '%s': %s:%s",
+                                debug_table_name_, key, code, message);
   responses_[key] = ResponseInfo{.code = code, .message = message};
 }
 
 void FakeSonicDbTable::PushNotification(const std::string &key) {
-  VLOG(1) << "Pushing notification: " << key;
+  VLOG(1) << absl::StreamFormat("'%s' push notification: %s", debug_table_name_,
+                                key);
   notifications_.push(key);
 
   // If the user has overwritten the default response with a custom failure
@@ -61,7 +67,8 @@ void FakeSonicDbTable::PushNotification(const std::string &key) {
   auto response_iter = responses_.find(key);
   if (response_iter != responses_.end() &&
       response_iter->second.code != "SWSS_RC_SUCCESS") {
-    VLOG(2) << "Will not update StateDB entry because user set error code.";
+    VLOG(2) << absl::StreamFormat("'%s' will not update StateDB entry for '%s'",
+                                  debug_table_name_, key);
     return;
   }
 
@@ -82,7 +89,8 @@ void FakeSonicDbTable::GetNextNotification(std::string &op, std::string &data,
     LOG(FATAL) << "Could not find a notification.";
   }
 
-  VLOG(1) << "Reading next notification: " << notifications_.front();
+  VLOG(1) << absl::StreamFormat("'%s' get notification: %s", debug_table_name_,
+                                notifications_.front());
   data = notifications_.front();
   notifications_.pop();
 
@@ -100,7 +108,8 @@ void FakeSonicDbTable::GetNextNotification(std::string &op, std::string &data,
 
 absl::StatusOr<SonicDbEntryMap> FakeSonicDbTable::ReadTableEntry(
     const std::string &key) const {
-  VLOG(1) << "Read table entry: " << key;
+  VLOG(1) << absl::StreamFormat("'%s' read table entry: %s", debug_table_name_,
+                                key);
   if (auto entry = entries_.find(key); entry != entries_.end()) {
     return entry->second;
   }
@@ -110,10 +119,12 @@ absl::StatusOr<SonicDbEntryMap> FakeSonicDbTable::ReadTableEntry(
 
 std::vector<std::string> FakeSonicDbTable::GetAllKeys() const {
   std::vector<std::string> result;
-  VLOG(1) << "Get all table entry keys";
+  VLOG(1) << absl::StreamFormat("'%s' get all keys.", debug_table_name_);
   for (const auto &entry : entries_) {
     result.push_back(entry.first);
   }
+  VLOG(2) << absl::StreamFormat("'%s' found  keys: %s", debug_table_name_,
+                                absl::StrJoin(result, ", "));
   return result;
 }
 
