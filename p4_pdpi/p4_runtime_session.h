@@ -18,6 +18,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -272,16 +273,14 @@ absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
     P4RuntimeSession* session,
     const p4::v1::TableEntry& target_entry_signature);
 
-// Removes PI (program independent) table entries on the switch.
-absl::Status RemovePiTableEntries(
-    P4RuntimeSession* session, const IrP4Info& info,
-    absl::Span<const p4::v1::TableEntry> pi_entries);
-
 // Checks that there are no table entries.
 absl::Status CheckNoTableEntries(P4RuntimeSession* session);
 
-// Clears the table entries.
-absl::Status ClearTableEntries(P4RuntimeSession* session);
+// Clears the table entries. Optionally, `max_batch_size` can be used to limit
+// the number of updates in a single write request.
+absl::Status ClearTableEntries(
+    P4RuntimeSession* session,
+    std::optional<int> max_batch_size = std::nullopt);
 
 // Installs the given PI (program independent) table entry on the switch.
 absl::Status InstallPiTableEntry(P4RuntimeSession* session,
