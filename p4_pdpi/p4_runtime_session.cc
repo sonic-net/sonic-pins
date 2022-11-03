@@ -14,8 +14,10 @@
 
 #include "p4_pdpi/p4_runtime_session.h"
 
+#include <memory>
 #include <optional>
 #include <string>
+#include <thread>  // NOLINT: third_party code.
 #include <vector>
 
 #include "absl/status/status.h"
@@ -88,8 +90,7 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
   p4::v1::StreamMessageResponse response;
   if (!session->StreamChannelRead(response)) {
     return gutil::InternalErrorBuilder()
-           << "P4RT stream closed while awaiting arbitration response: "
-           << gutil::GrpcStatusToAbslStatus(session->stream_channel_->Finish());
+           << "P4RT stream closed while awaiting arbitration response.";
   }
   if (response.update_case() != p4::v1::StreamMessageResponse::kArbitration) {
     return gutil::InternalErrorBuilder()
@@ -146,6 +147,31 @@ std::unique_ptr<P4RuntimeSession> P4RuntimeSession::Default(
       new P4RuntimeSession(device_id, std::move(stub), device_id, role));
 }
 
+P4RuntimeSession::P4RuntimeSession(
+    uint32_t device_id, std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
+    absl::uint128 election_id, const std::string& role)
+    : device_id_(device_id),
+      role_(role),
+      stub_(std::move(stub)),
+      stream_channel_context_(std::make_unique<grpc::ClientContext>()),
+      stream_channel_(stub_->StreamChannel(stream_channel_context_.get())) {
+  election_id_.set_high(absl::Uint128High64(election_id));
+  election_id_.set_low(absl::Uint128Low64(election_id));
+
+  // The stream_read_thread_ relies on the stream_channel_ so it must be
+  // created after it.
+  set_is_stream_up(true);
+  stream_read_thread_ =
+      std::thread(&P4RuntimeSession::CollectStreamReadMessages, this);
+}
+
+P4RuntimeSession::~P4RuntimeSession() {
+  absl::Status final_status = Finish();
+  if (!final_status.ok()) {
+    LOG(WARNING) << "P4RuntimeSession did not close cleanly: " << final_status;
+  }
+}
+
 absl::Status P4RuntimeSession::Write(const p4::v1::WriteRequest& request) {
   return WriteRpcGrpcStatusToAbslStatus(WriteAndReturnGrpcStatus(request),
                                         request.updates_size());
@@ -194,12 +220,27 @@ P4RuntimeSession::GetForwardingPipelineConfig(
 bool P4RuntimeSession::StreamChannelRead(
     p4::v1::StreamMessageResponse& response) {
   absl::MutexLock lock(&stream_read_lock_);
-  return stream_channel_->Read(&response);
+  auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
+    return !stream_messages_.empty() || !is_stream_up_;
+  };
+  stream_read_lock_.Await(absl::Condition(&cond));
+
+  if (!stream_messages_.empty()) {
+    response = stream_messages_.front();
+    stream_messages_.pop();
+    return true;
+  }
+  return false;
 }
 
 bool P4RuntimeSession::StreamChannelWrite(
     const p4::v1::StreamMessageRequest& request) {
   absl::MutexLock lock(&stream_write_lock_);
+  if (is_finished_) {
+    LOG(WARNING) << "Cannot write to a stream channel after WritesDone() has "
+                    "been called.";
+    return false;
+  }
   return stream_channel_->Write(request);
 }
 
@@ -226,16 +267,42 @@ P4RuntimeSession::ReadStreamChannelResponsesAndFinish() {
   is_finished_ = true;
   stream_channel_->WritesDone();
 
+  // Join the read stream so that we can collect any outstanding messages.
+  if (stream_read_thread_.joinable()) {
+    stream_read_thread_.join();
+  }
+
   // Finish will block if there are unread messages in the channel. Therefore,
   // we read any outstanding messages before calling it.
   absl::MutexLock read_lock(&stream_read_lock_);
   p4::v1::StreamMessageResponse response;
-  while (stream_channel_->Read(&response)) {
-    responses.push_back(std::move(response));
+  while (!stream_messages_.empty()) {
+    responses.push_back(std::move(stream_messages_.front()));
+    stream_messages_.pop();
   }
 
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(stream_channel_->Finish()));
   return responses;
+}
+
+void P4RuntimeSession::set_is_stream_up(bool value) {
+  if (is_stream_up_ && !value) {
+    LOG(INFO) << "P4RT stream is now inactive.";
+  } else if (!is_stream_up_ && value) {
+    LOG(INFO) << "P4RT stream is now active.";
+  }
+  is_stream_up_ = value;
+}
+
+void P4RuntimeSession::CollectStreamReadMessages() {
+  p4::v1::StreamMessageResponse response;
+  while (stream_channel_->Read(&response)) {
+    absl::MutexLock mu(&stream_read_lock_);
+    stream_messages_.push(response);
+  }
+
+  absl::MutexLock mu(&stream_read_lock_);
+  set_is_stream_up(false);
 }
 
 std::vector<Update> CreatePiUpdates(absl::Span<const TableEntry> pi_entries,
