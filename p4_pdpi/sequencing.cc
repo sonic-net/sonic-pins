@@ -15,6 +15,7 @@
 #include "p4_pdpi/sequencing.h"
 
 #include <algorithm>
+#include <optional>
 #include <queue>
 
 #include "absl/container/btree_set.h"
@@ -236,12 +237,25 @@ absl::StatusOr<Graph> BuildDependencyGraph(const IrP4Info& info,
 
 absl::StatusOr<std::vector<p4::v1::WriteRequest>>
 SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
-                                   absl::Span<const Update> updates) {
+                                   absl::Span<const Update> updates,
+                                   std::optional<int> max_batch_size) {
+  if (max_batch_size.has_value() && *max_batch_size <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Max batch size must be > 0. Max batch size: " << *max_batch_size;
+  }
+
   std::vector<WriteRequest> requests;
   ASSIGN_OR_RETURN(const auto batches, SequencePiUpdatesInPlace(info, updates));
   for (const std::vector<int>& batch : batches) {
     WriteRequest request;
-    for (int i : batch) *request.add_updates() = updates[i];
+    for (int index : batch) {
+      if (max_batch_size.has_value() &&
+          request.updates_size() >= *max_batch_size) {
+        requests.push_back(std::move(request));
+        request = WriteRequest();
+      }
+      *request.add_updates() = updates[index];
+    }
     requests.push_back(std::move(request));
   }
   return requests;

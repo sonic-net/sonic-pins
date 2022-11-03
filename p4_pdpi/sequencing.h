@@ -16,6 +16,7 @@
 #define GOOGLE_P4_PDPI_SEQUENCING_H_
 
 #include <functional>
+#include <optional>
 #include <vector>
 
 #include "absl/functional/function_ref.h"
@@ -33,10 +34,12 @@ namespace pdpi {
 
 // Returns a list of write requests, such that updates are sequenced correctly
 // when the write requests are sent in order. Order within a write request is
-// stable, i.e. the same as in the input.
+// stable, i.e. the same as in the input. Optionally, `max_batch_size` can be
+// used to limit the number of updates in a single write request.
 absl::StatusOr<std::vector<p4::v1::WriteRequest>>
-SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
-                                   absl::Span<const p4::v1::Update> updates);
+SequencePiUpdatesIntoWriteRequests(
+    const IrP4Info& info, absl::Span<const p4::v1::Update> updates,
+    std::optional<int> max_batch_size = std::nullopt);
 
 // Returns a vector of batches, where each batch is given by a vector of indices
 // into the input vector, such that updates are sequenced correctly when sent
