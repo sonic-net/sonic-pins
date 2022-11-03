@@ -328,7 +328,7 @@ std::string SwitchState::SwitchStateSummary() const {
     int max_size = table_def.size();
     int current_size = table.size();
 
-    absl::StrAppendFormat(&res, "\n % 12d% 12d    %s", current_size, max_size,
+    absl::StrAppendFormat(&res, "\n % 12d% 18d    %s", current_size, max_size,
                           table_name);
 
     // Mark tables where we have exceeded their resource limits.
@@ -344,6 +344,9 @@ std::string SwitchState::SwitchStateSummary() const {
       int max_weight = 0;
       int total_weight = 0;
       int total_actions = 0;
+      int max_weight_per_group = 0;
+      int total_members = 0;
+      int max_members_per_group = 0;
       for (auto& [_, table_entry] : table) {
         int this_entry_weight = 0;
         for (const p4::v1::ActionProfileAction& action :
@@ -364,28 +367,50 @@ std::string SwitchState::SwitchStateSummary() const {
                     table_def.action_profile_id())
               .action_profile();
 
-      absl::StrAppendFormat(&res, "\n % 12d% 12d    %s.total_weight",
-                            total_weight, action_profile.size(), table_name);
-      // Mark if we have exceeded the total weight.
-      if (total_weight > action_profile.size()) {
+      bool uses_weight_semantics = !action_profile.has_sum_of_members();
+      absl::StrAppendFormat(
+          &res, "\n % 12d% 18d    %s.total_weight", total_weight,
+          uses_weight_semantics ? action_profile.size() : 0, table_name);
+      // Mark if we have exceeded the total weight and use weight semantics.
+      if (uses_weight_semantics && total_weight > action_profile.size()) {
+        absl::StrAppend(&res, "*");
+      }
+      absl::StrAppendFormat(
+          &res, "\n % 12d% 18d    %s.max_group_weight", max_weight_per_group,
+          uses_weight_semantics ? action_profile.max_group_size() : 0,
+          table_name);
+      // Mark if we have exceeded the max weight for a group and use weight
+      // semantics.
+      if (uses_weight_semantics &&
+          max_weight_per_group > action_profile.max_group_size()) {
         absl::StrAppend(&res, "*");
       }
 
-      absl::StrAppendFormat(&res, "\n % 12d% 12s    %s.total_actions",
-                            total_actions, "N/A", table_name);
-
-      absl::StrAppendFormat(&res, "\n % 12d% 12d    %s.max_weight", max_weight,
-                            action_profile.max_group_size(), table_name);
-      // Mark if we have exceeded the max weight for a given group.
-      if (max_weight > action_profile.max_group_size()) {
+      bool uses_member_semantics = action_profile.has_sum_of_members();
+      absl::StrAppendFormat(
+          &res, "\n % 12d% 18d    %s.total_members", total_members,
+          uses_member_semantics ? action_profile.size() : 0, table_name);
+      // Mark if we have exceeded the total members and use member semantics.
+      if (uses_member_semantics && total_members > action_profile.size()) {
+        absl::StrAppend(&res, "*");
+      }
+      absl::StrAppendFormat(
+          &res, "\n % 12d% 18d    %s.max_members_per_group",
+          max_members_per_group,
+          uses_member_semantics ? action_profile.max_group_size() : 0,
+          table_name);
+      // Mark if we have exceeded the max members for a group and use member
+      // semantics.
+      if (uses_member_semantics &&
+          max_members_per_group > action_profile.max_group_size()) {
         absl::StrAppend(&res, "*");
       }
     }
   }
   return absl::StrFormat(
-      "State(\n % 12s% 12s    table_name\n % 12d% 12s    total number of "
-      "flows%s\n * marks tables where max size > current size.\n)",
-      "current size", "max size", GetNumTableEntries(), "N/A", res);
+      "State(\n % 12s% 18s    table_name\n % 12d% 18s    total number of table "
+      "entries%s\n * marks tables where current size > guaranteed size.\n)",
+      "current size", "guaranteed size", GetNumTableEntries(), "N/A", res);
 }
 
 absl::btree_set<std::string> SwitchState::GetIdsForMatchField(
