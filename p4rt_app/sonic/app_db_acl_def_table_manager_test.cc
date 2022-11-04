@@ -168,7 +168,7 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
       {"size", "512"},
       {"meter/unit", "BYTES"},
       {"counter/unit", "BOTH"}};
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(UnorderedElementsAreArray(expected_values)));
 }
 
@@ -206,7 +206,7 @@ TEST(InsertAclTableDefinition, InsertsUdfMatchField) {
                             R"JSON([{"action": "SAI_PACKET_ACTION_DROP"}])JSON")
                             .dump()},
       {"size", "512"}};
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(UnorderedElementsAreArray(expected_values)));
 }
 
@@ -252,7 +252,7 @@ TEST(InsertAclTableDefinition, InsertsCompositeMatchField) {
                             R"JSON([{"action": "SAI_PACKET_ACTION_DROP"}])JSON")
                             .dump()},
       {"size", "512"}};
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(UnorderedElementsAreArray(expected_values)));
 }
 
@@ -300,7 +300,7 @@ TEST(InsertAclTableDefinition, InsertsCompositeUdfMatchField) {
            [{"action": "SAI_PACKET_ACTION_DROP"}])JSON")
                             .dump()},
       {"size", "512"}};
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(UnorderedElementsAreArray(expected_values)));
 }
 
@@ -326,7 +326,7 @@ TEST(InsertAclTableDefinition, InsertsMeterUnitBytes) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Contains(Pair("meter/unit", "BYTES"))));
 }
 
@@ -338,7 +338,7 @@ TEST(InsertAclTableDefinition, InsertsMeterUnitPackets) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Contains(Pair("meter/unit", "PACKETS"))));
 }
 
@@ -350,7 +350,7 @@ TEST(InsertAclTableDefinition, SkipsMeterUnitUnspecified) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Not(Contains(Key("meter/unit")))));
 }
 
@@ -361,7 +361,7 @@ TEST(InsertAclTableDefinition, SkipsMeterUnitWithNoMeter) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Not(Contains(Key("meter/unit")))));
 }
 
@@ -373,7 +373,7 @@ TEST(InsertAclTableDefinition, InsertsCounterUnitBytes) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Contains(Pair("counter/unit", "BYTES"))));
 }
 
@@ -385,7 +385,7 @@ TEST(InsertAclTableDefinition, InsertsCounterUnitPackets) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Contains(Pair("counter/unit", "PACKETS"))));
 }
 
@@ -397,7 +397,7 @@ TEST(InsertAclTableDefinition, InsertsCounterUnitBoth) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Contains(Pair("counter/unit", "BOTH"))));
 }
 
@@ -409,7 +409,7 @@ TEST(InsertAclTableDefinition, SkipsCounterUnitUnspecified) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Not(Contains(Key("counter/unit")))));
 }
 
@@ -420,7 +420,7 @@ TEST(InsertAclTableDefinition, SkipsCounterUnitWithNoCounter) {
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   ASSERT_OK(VerifyAclTableDefinition(table));
   ASSERT_OK(InsertAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(Not(Contains(Key("counter/unit")))));
 }
 
@@ -468,7 +468,7 @@ TEST(InsertAclTableDefinition, UdfComponentsAreUnordered) {
   ASSERT_OK(InsertAclTableDefinition(length_offset_base_db,
                                      length_offset_base_table));
 
-  const std::string entry_key = "DEFINITION:ACL_TABLE";
+  const std::string entry_key = "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE";
   ASSERT_OK_AND_ASSIGN(const auto base_offset_length_values,
                        fake_base_offset_length_table.ReadTableEntry(entry_key));
   ASSERT_OK_AND_ASSIGN(const auto length_offset_base_values,
@@ -514,7 +514,7 @@ class WhitespaceTestBase : public ::testing::Test {
     ASSERT_OK(VerifyAclTableDefinition(padded));
     ASSERT_OK(InsertAclTableDefinition(padded_string_db, padded));
 
-    const std::string entry_key = "DEFINITION:ACL_TABLE";
+    const std::string entry_key = "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE";
     ASSERT_OK_AND_ASSIGN(const auto raw_values,
                          raw_string_table.ReadTableEntry(entry_key));
     ASSERT_OK_AND_ASSIGN(const auto padded_values,
@@ -987,14 +987,14 @@ TEST(InsertAclTableDefinition, IgnoresNoActionConstDefaultAction) {
   EXPECT_OK(VerifyAclTableDefinition(control_table));
   EXPECT_OK(InsertAclTableDefinition(fake_expected_db, control_table));
   ASSERT_OK_AND_ASSIGN(auto expected_values, fake_expected_table.ReadTableEntry(
-                                                 "DEFINITION:ACL_TABLE"));
+                                                 "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
 
   FakeSonicDbTable fake_table;
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   EXPECT_OK(VerifyAclTableDefinition(table));
   EXPECT_OK(InsertAclTableDefinition(fake_db, table));
   ASSERT_OK_AND_ASSIGN(auto actual_values,
-                       fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"));
+                       fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
 
   EXPECT_THAT(actual_values, UnorderedElementsAreArray(expected_values));
 }
@@ -1032,14 +1032,14 @@ TEST(InsertAclTableDefinition, SkipsDefaultOnlyActions) {
   EXPECT_OK(VerifyAclTableDefinition(control_table));
   EXPECT_OK(InsertAclTableDefinition(fake_expected_db, control_table));
   ASSERT_OK_AND_ASSIGN(auto expected_values, fake_expected_table.ReadTableEntry(
-                                                 "DEFINITION:ACL_TABLE"));
+                                                 "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
 
   FakeSonicDbTable fake_table;
   P4rtTable fake_db = MakeP4rtTable(fake_table);
   EXPECT_OK(VerifyAclTableDefinition(table));
   EXPECT_OK(InsertAclTableDefinition(fake_db, table));
   ASSERT_OK_AND_ASSIGN(auto actual_values,
-                       fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"));
+                       fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
 
   EXPECT_THAT(actual_values, UnorderedElementsAreArray(expected_values));
 }
@@ -1470,10 +1470,10 @@ TEST(AppDbAclTableManagerTest, Insert_ConsistentActionOrder) {
 
   ASSERT_OK_AND_ASSIGN(
       auto incremental_result,
-      incremental_db_table.ReadTableEntry("DEFINITION:ACL_TABLE"));
+      incremental_db_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
   ASSERT_OK_AND_ASSIGN(
       auto decremental_result,
-      decremental_db_table.ReadTableEntry("DEFINITION:ACL_TABLE"));
+      decremental_db_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
   EXPECT_THAT(decremental_result,
               UnorderedElementsAreArray(incremental_result));
 }
@@ -1484,9 +1484,9 @@ TEST(AppDbAclTableManagerTest, Remove) {
 
   FakeSonicDbTable fake_table;
   P4rtTable fake_db = MakeP4rtTable(fake_table);
-  fake_table.InsertTableEntry("DEFINITION:ACL_TABLE", {{"a", "a"}});
+  fake_table.InsertTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE", {{"a", "a"}});
   ASSERT_OK(RemoveAclTableDefinition(fake_db, table));
-  EXPECT_THAT(fake_table.ReadTableEntry("DEFINITION:ACL_TABLE"),
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               StatusIs(absl::StatusCode::kNotFound));
 }
 

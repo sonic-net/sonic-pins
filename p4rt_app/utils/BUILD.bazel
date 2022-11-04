@@ -26,6 +26,7 @@ cc_library(
         "//p4_pdpi/utils:annotation_parser",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 

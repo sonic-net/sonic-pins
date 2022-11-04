@@ -16,6 +16,7 @@
 #include "absl/status/status.h"
 #include "gutil/status.h"
 #include "p4_pdpi/utils/annotation_parser.h"
+#include "swss/schema.h"
 
 namespace p4rt_app {
 namespace table {
@@ -27,7 +28,7 @@ std::string TypeName(Type type) {
     case Type::kFixed:
       return "FIXED";
     case Type::kDefinition:
-      return "DEFINITION";
+      return APP_P4RT_ACL_TABLE_DEFINITION_NAME;
   }
   // TODO: return status failure.
 }
@@ -35,7 +36,7 @@ std::string TypeName(Type type) {
 absl::StatusOr<Type> TypeParse(absl::string_view type_name) {
   if (type_name == "ACL") return Type::kAcl;
   if (type_name == "FIXED") return Type::kFixed;
-  if (type_name == "DEFINITION") return Type::kDefinition;
+  if (type_name == APP_P4RT_ACL_TABLE_DEFINITION_NAME) return Type::kDefinition;
   return gutil::InvalidArgumentErrorBuilder()
          << "\"" << type_name << "\" does not name a valid table::Type.";
 }
