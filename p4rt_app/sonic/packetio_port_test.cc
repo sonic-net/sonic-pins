@@ -44,6 +44,7 @@ static constexpr int kifIndexValidValue = 1;
 static constexpr int kifIndexInvalidValue = 0;
 
 using ::gutil::StatusIs;
+using ::testing::_;
 using ::testing::DoAll;
 using ::testing::HasSubstr;
 using ::testing::Return;
@@ -113,6 +114,46 @@ TEST(PacketIoTest, SendPacketOutWriteError) {
                             std::string(kTestPacket, sizeof(kTestPacket))),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Failed to send packet")));
+}
+
+TEST(PacketIoTest, SendPacketOutFailsOnGetSockOptError) {
+  MockSystemCallAdapter mock_call_adapter;
+  struct ifreq if_resp { /*ifr_name=*/
+    {""}, /*ifr_flags=*/{
+      { IFF_UP | IFF_RUNNING }
+    }
+  };
+  EXPECT_CALL(mock_call_adapter, ioctl)
+      .WillOnce(DoAll(SetArgPointee<2>(if_resp), Return(0)));
+  EXPECT_CALL(mock_call_adapter, getsockopt).WillOnce(Return(-1));
+
+  int fd[2];
+  EXPECT_GE(pipe(fd), 0);
+  EXPECT_THAT(SendPacketOut(mock_call_adapter, fd[kTransmit], kEthernet0,
+                            std::string(kTestPacket, sizeof(kTestPacket))),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Unable to read socket pending error")));
+}
+
+TEST(PacketIoTest, SendPacketOutOkWithClearPendingError) {
+  MockSystemCallAdapter mock_call_adapter;
+  struct ifreq if_resp { /*ifr_name=*/
+    {""}, /*ifr_flags=*/{
+      { IFF_UP | IFF_RUNNING }
+    }
+  };
+  EXPECT_CALL(mock_call_adapter, ioctl)
+      .WillOnce(DoAll(SetArgPointee<2>(if_resp), Return(0)));
+  int optval = 100;
+  // void *val = &optval;
+  EXPECT_CALL(mock_call_adapter, getsockopt(_, _, SO_ERROR, _, _))
+      .WillOnce(DoAll(SetArgPointee<3>(optval), Return(0)));
+  EXPECT_CALL(mock_call_adapter, write).WillOnce(Return(sizeof(kTestPacket)));
+
+  int fd[2];
+  EXPECT_GE(pipe(fd), 0);
+  EXPECT_OK(SendPacketOut(mock_call_adapter, fd[kTransmit], kEthernet0,
+                          std::string(kTestPacket, sizeof(kTestPacket))));
 }
 
 TEST(PacketIoTest, SendPacketOutSplitWrite) {

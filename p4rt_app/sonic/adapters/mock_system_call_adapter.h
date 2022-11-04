@@ -41,6 +41,8 @@ class MockSystemCallAdapter final : public SystemCallAdapter {
   MOCK_METHOD(int, close, (int), (const, override));
   MOCK_METHOD(int, getifaddrs, (struct ifaddrs**), (const, override));
   MOCK_METHOD(void, freeifaddrs, (struct ifaddrs*), (const, override));
+  MOCK_METHOD(int, getsockopt, (int, int, int, int*, socklen_t*),
+              (const, override));
 };
 
 }  // namespace sonic

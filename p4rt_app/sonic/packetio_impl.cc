@@ -158,10 +158,6 @@ absl::StatusOr<std::thread> PacketIoImpl::StartReceive(
   callback_function_ = std::move(callback_function);
   use_genetlink_ = use_genetlink;
 
-  // Add the SubmitToIngerss port explicitly, if present.
-  if (IsValidSystemPort(*system_call_adapter_, kSubmitToIngress)) {
-    RETURN_IF_ERROR(AddPacketIoPort(kSubmitToIngress));
-  }
   if (use_genetlink_) {
     return packet_metadata::StartReceive(callback_function_);
   } else {
