@@ -37,6 +37,7 @@
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
 #include "swss/json.hpp"
+#include "swss/schema.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -267,7 +268,7 @@ std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
 
     // The DEFINITION sub-table does not hold any P4RT_TABLE entries, and should
     // be ignored.
-    if (split.size() > 1 && split[0] == "DEFINITION") {
+    if (split.size() > 1 && split[0] == APP_P4RT_ACL_TABLE_DEFINITION_NAME) {
       continue;
     }
 

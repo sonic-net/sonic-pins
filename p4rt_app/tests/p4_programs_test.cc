@@ -119,7 +119,7 @@ TEST_P(P4ProgramsTest, CompositeUdfFieldsShouldAlwaysUseHexStrings) {
 
       LOG(INFO) << "Found composite UDF: " << match_field_def.DebugString();
       composite_udf_fields.push_back({
-          .table_name = absl::StrCat("DEFINITION:ACL_",
+          .table_name = absl::StrCat("ACL_TABLE_DEFINITION_TABLE:ACL_",
                                      absl::AsciiStrToUpper(table_name)),
           .field_name = absl::StrCat("match/", match_field_name),
       });
