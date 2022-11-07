@@ -18,6 +18,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "glog/logging.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -25,18 +26,19 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/testing/test_helper.h"
 
+using ::gutil::PrintTextProto;
 using ::p4::config::v1::P4Info;
 
 static void RunP4InfoTest(const std::string& test_name, const P4Info& p4info) {
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "P4Info input:" << std::endl;
-  std::cout << p4info.DebugString() << std::endl;
+  std::cout << PrintTextProto(p4info) << std::endl;
   absl::StatusOr<pdpi::IrP4Info> status_or_info = pdpi::CreateIrP4Info(p4info);
   std::cout << "pdpi::CreateIrP4Info() result:" << std::endl;
   if (!status_or_info.ok()) {
     std::cout << TestStatusToString(status_or_info.status()) << std::endl;
   } else {
-    std::cout << status_or_info.value().DebugString() << std::endl;
+    std::cout << PrintTextProto(status_or_info.value()) << std::endl;
   }
   std::cout << std::endl;
 }

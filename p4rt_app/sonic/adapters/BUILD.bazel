@@ -50,44 +50,6 @@ cc_library(
 )
 
 cc_library(
-    name = "db_connector_adapter",
-    srcs = ["db_connector_adapter.cc"],
-    hdrs = ["db_connector_adapter.h"],
-    deps = [
-        "@com_github_google_glog//:glog",
-        "@sonic_swss_common//:libswsscommon",
-    ],
-)
-
-cc_library(
-    name = "fake_db_connector_adapter",
-    testonly = True,
-    srcs = ["fake_db_connector_adapter.cc"],
-    hdrs = ["fake_db_connector_adapter.h"],
-    deps = [
-        ":db_connector_adapter",
-        ":fake_sonic_db_table",
-        "@com_github_google_glog//:glog",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/meta:type_traits",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@sonic_swss_common//:libswsscommon",
-    ],
-)
-
-cc_library(
-    name = "mock_db_connector_adapter",
-    testonly = True,
-    hdrs = ["mock_db_connector_adapter.h"],
-    deps = [
-        ":db_connector_adapter",
-        "@com_google_googletest//:gtest",
-    ],
-)
-
-cc_library(
     name = "producer_state_table_adapter",
     srcs = ["producer_state_table_adapter.cc"],
     hdrs = ["producer_state_table_adapter.h"],
@@ -109,6 +71,19 @@ cc_library(
 )
 
 cc_library(
+    name = "fake_producer_state_table_adapter",
+    testonly = True,
+    srcs = ["fake_producer_state_table_adapter.cc"],
+    hdrs = ["fake_producer_state_table_adapter.h"],
+    deps = [
+        ":fake_sonic_db_table",
+        ":producer_state_table_adapter",
+        "@com_github_google_glog//:glog",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_library(
     name = "system_call_adapter",
     srcs = ["system_call_adapter.cc"],
     hdrs = ["system_call_adapter.h"],
@@ -125,6 +100,39 @@ cc_library(
 )
 
 cc_library(
+    name = "table_adapter",
+    srcs = ["table_adapter.cc"],
+    hdrs = ["table_adapter.h"],
+    deps = [
+        "@com_google_absl//absl/strings",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_library(
+    name = "mock_table_adapter",
+    testonly = True,
+    hdrs = ["mock_table_adapter.h"],
+    deps = [
+        ":table_adapter",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
+    name = "fake_table_adapter",
+    testonly = True,
+    srcs = ["fake_table_adapter.cc"],
+    hdrs = ["fake_table_adapter.h"],
+    deps = [
+        ":fake_sonic_db_table",
+        ":table_adapter",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
     name = "fake_sonic_db_table",
     testonly = True,
     srcs = ["fake_sonic_db_table.cc"],
@@ -136,19 +144,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-    ],
-)
-
-cc_library(
-    name = "fake_producer_state_table_adapter",
-    testonly = True,
-    srcs = ["fake_producer_state_table_adapter.cc"],
-    hdrs = ["fake_producer_state_table_adapter.h"],
-    deps = [
-        ":fake_sonic_db_table",
-        ":producer_state_table_adapter",
-        "@com_github_google_glog//:glog",
-        "@sonic_swss_common//:libswsscommon",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 

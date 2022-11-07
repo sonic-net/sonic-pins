@@ -16,6 +16,9 @@ namespace sai {
 // and returns an empty P4Info.
 const p4::config::v1::P4Info& GetP4Info(Instantiation instantiation);
 
+// TODO: Remove this function in favor of the sai_p4info_builder
+// library.
+//
 // Similar to GetP4Info, but replaces any @sai_hash_seed() annotation with value
 // 0 to the provided seed.
 // Non-zero seed values are not modified since it is assumed that they have an

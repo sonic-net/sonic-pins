@@ -65,6 +65,10 @@ action do_thing_3(@id(1) bit<32> arg1, @id(2) bit<32> arg2) {
 action do_thing_4() {
 }
 
+@id(7) @unused
+action unused_action() {
+}
+
 
 control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
 
@@ -108,10 +112,16 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
       meta.normal : ternary @id(1) @name("normal");
       meta.ipv4 : ternary @id(2) @format(IPV4_ADDRESS) @name("ipv4");
       meta.ipv6 : ternary @id(3) @format(IPV6_ADDRESS) @name("ipv6");
+      meta.ipv6[127:64] :
+          ternary @id(6) @format(IPV6_ADDRESS) @name("ipv6_upper_64_bits");
+      meta.ipv6[127:65] :
+          ternary @id(7) @format(IPV6_ADDRESS) @name("ipv6_upper_63_bits");
       meta.mac : ternary @id(4) @format(MAC_ADDRESS) @name("mac");
+      meta.val : ternary @id(5) @name("unused_field") @unused;
     }
     actions = {
       @proto_id(1) do_thing_3;
+      @proto_id(2) unused_action;
       @defaultonly NoAction();
     }
     const default_action = NoAction();
@@ -211,6 +221,9 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
           meta.ipv4 : optional @id(2) @format(IPV4_ADDRESS) @name("ipv4");
           meta.ipv6 : optional @id(1) @format(IPV6_ADDRESS) @name("ipv6");
           meta.str : optional @id(3) @name("str");
+          #ifdef PDPI_EXTRA_MATCH_FIELD
+          meta.mac : optional @id(4) @name("mac");
+          #endif
       }
       actions = {
         @proto_id(1) do_thing_1;
@@ -273,6 +286,95 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     }
   }
 
+  // Table that refers to referring2_table.
+  @id(14)
+  table referring_to_referring2_table {
+      key = {
+          meta.str : exact @id(1) @name("referring2_table_id")
+          @refers_to(referring2_table, referring_id);
+      }
+      actions = {
+        @proto_id(1) do_thing_4;
+        @defaultonly NoAction();
+      }
+      const default_action = NoAction();
+  }
+
+  // Unused table
+  @id(15) @unused
+  table unused_table {
+      key = {
+        meta.ipv4 : exact @id(2) @format(IPV4_ADDRESS) @name("ipv4");
+        meta.ipv6 : exact @id(1) @format(IPV6_ADDRESS) @name("ipv6");
+      }
+      actions = {
+        @defaultonly NoAction();
+      }
+      const default_action = NoAction();
+  }
+
+  // Packet only counter
+  @id(16)
+  direct_counter(CounterType.packets) my_packets_counter;
+
+  @id(17)
+  direct_meter<MeterColor_t>(MeterType.bytes) my_meter2;
+
+  // Packet only count action
+  @id(18)
+  @name("packet_count_and_meter")
+  action packet_count_and_meter() {
+    my_meter2.read(meta.color);
+    my_packets_counter.count();
+  }
+
+  // metered and packet only counted table
+  @id(19)
+  @weight_proto_id(1)
+  table packet_count_and_meter_table {
+    key = {
+      meta.ipv4 : lpm @id(1) @format(IPV4_ADDRESS) @name("ipv4");
+    }
+    actions = {
+      @proto_id(1) packet_count_and_meter;
+      @defaultonly NoAction();
+    }
+    meters = my_meter2;
+    counters = my_packets_counter;
+    const default_action = NoAction();
+  }
+
+  // Bytes only counter
+  @id(20)
+  direct_counter(CounterType.bytes) my_bytes_counter;
+
+  @id(21)
+  direct_meter<MeterColor_t>(MeterType.bytes) my_meter3;
+
+  // Bytes only count action
+  @id(22)
+  @name("byte_count_and_meter")
+  action byte_count_and_meter() {
+    my_meter3.read(meta.color);
+    my_bytes_counter.count();
+  }
+
+  // metered and bytes only counted table
+  @id(23)
+  @weight_proto_id(1)
+  table byte_count_and_meter_table {
+    key = {
+      meta.ipv4 : lpm @id(1) @format(IPV4_ADDRESS) @name("ipv4");
+    }
+    actions = {
+      @proto_id(1) byte_count_and_meter;
+      @defaultonly NoAction();
+    }
+    meters = my_meter3;
+    counters = my_bytes_counter;
+    const default_action = NoAction();
+  }
+
   apply {
     id_test_table.apply();
     exact_table.apply();
@@ -287,6 +389,10 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     referring_table.apply();
     referring2_table.apply();
     no_action_table.apply();
+    referring_to_referring2_table.apply();
+    unused_table.apply();
+    packet_count_and_meter_table.apply();
+    byte_count_and_meter_table.apply();
   }
 }
 

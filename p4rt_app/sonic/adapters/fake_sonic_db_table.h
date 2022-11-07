@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,12 +45,14 @@ using SonicDbEntryMap = std::unordered_map<std::string, std::string>;
 // This class is NOT thread-safe.
 class FakeSonicDbTable {
  public:
-  FakeSonicDbTable() : state_db_(nullptr) {}
+  FakeSonicDbTable(const std::string &table_name = "SonicDb:TABLE")
+      : debug_table_name_(table_name), state_db_(nullptr) {}
 
   // The state_db can be recursivly called. It is the responsibility of the
   // end-user to ensure not loops are created when constructing
   // FakeSonicDbTables.
-  FakeSonicDbTable(FakeSonicDbTable *state_db) : state_db_(state_db) {}
+  FakeSonicDbTable(const std::string &table_name, FakeSonicDbTable *state_db)
+      : debug_table_name_(table_name), state_db_(state_db) {}
 
   void InsertTableEntry(const std::string &key, const SonicDbEntryList &values);
   void DeleteTableEntry(const std::string &key);
@@ -79,6 +81,9 @@ class FakeSonicDbTable {
                                const SonicDbEntryMap &values);
   void DeleteStateDbTableEntry(const std::string &key);
 
+  // Debug table name is used in log messages to help distinguish messages.
+  std::string debug_table_name_;
+
   // Current list of DB entries stored in the table.
   absl::flat_hash_map<std::string, SonicDbEntryMap> entries_;
 
@@ -92,7 +97,7 @@ class FakeSonicDbTable {
 
   // If a StateDb is set then entries will automatically be added on
   // successful inserts, and removed on successful deletes.
-  FakeSonicDbTable *state_db_;
+  FakeSonicDbTable *state_db_;  // Not owned
 };
 
 }  // namespace sonic

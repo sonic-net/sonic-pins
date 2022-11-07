@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -143,7 +143,7 @@ TEST(FakeSonicDbTest, SetNotificationResponseForKey) {
 
 TEST(FakeSonicDbTest, StateDbUpdatedOnInsertSuccess) {
   FakeSonicDbTable state_table;
-  FakeSonicDbTable table(&state_table);
+  FakeSonicDbTable table("AppDb:TABLE", &state_table);
 
   table.InsertTableEntry("entry", /*values=*/{{"key", "value"}});
   table.PushNotification("entry");
@@ -158,7 +158,7 @@ TEST(FakeSonicDbTest, StateDbUpdatedOnInsertSuccess) {
 
 TEST(FakeSonicDbTest, StateDbUpdatedOnDeleteSuccess) {
   FakeSonicDbTable state_table;
-  FakeSonicDbTable table(&state_table);
+  FakeSonicDbTable table("AppDb:TABLE", &state_table);
 
   // First insert
   table.InsertTableEntry("entry", /*values=*/{{"key", "value"}});
@@ -175,7 +175,7 @@ TEST(FakeSonicDbTest, StateDbUpdatedOnDeleteSuccess) {
 
 TEST(FakeSonicDbTest, StateDbUpdatedOnModifySuccess) {
   FakeSonicDbTable state_table;
-  FakeSonicDbTable table(&state_table);
+  FakeSonicDbTable table("AppDb:TABLE", &state_table);
 
   // First insert.
   table.InsertTableEntry("entry", /*values=*/{{"key", "value"}});
@@ -204,7 +204,7 @@ TEST(FakeSonicDbTest, StateDbUpdatedOnModifySuccess) {
 
 TEST(FakeSonicDbTest, StateDbDoesNotUpdatedOnInsertFailure) {
   FakeSonicDbTable state_table;
-  FakeSonicDbTable table(&state_table);
+  FakeSonicDbTable table("AppDb:TABLE", &state_table);
 
   table.SetResponseForKey(/*key=*/"entry", /*code=*/"SWSS_RC_UNKNOWN",
                           /*message=*/"my error message");
@@ -223,7 +223,7 @@ TEST(FakeSonicDbTest, StateDbDoesNotUpdatedOnInsertFailure) {
 
 TEST(FakeSonicDbTest, StateDbDoesNotUpdatedOnDeleteFailure) {
   FakeSonicDbTable state_table;
-  FakeSonicDbTable table(&state_table);
+  FakeSonicDbTable table("AppDb:TABLE", &state_table);
 
   // First insert
   table.InsertTableEntry("entry", /*values=*/{{"key", "value"}});
@@ -247,7 +247,7 @@ TEST(FakeSonicDbTest, StateDbDoesNotUpdatedOnDeleteFailure) {
 
 TEST(FakeSonicDbTest, StateDbDoesNotUpdatedOnModifyFailure) {
   FakeSonicDbTable state_table;
-  FakeSonicDbTable table(&state_table);
+  FakeSonicDbTable table("AppDb:TABLE", &state_table);
 
   // First insert.
   table.InsertTableEntry("entry", /*values=*/{{"key", "value"}});

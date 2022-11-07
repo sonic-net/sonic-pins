@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@ class ProducerStateTableAdapter {
   explicit ProducerStateTableAdapter(swss::DBConnector* db,
                                      const std::string& table_name);
   virtual ~ProducerStateTableAdapter() = default;
-
-  virtual std::string get_table_name() const;
 
   virtual void set(const std::string& key,
                    const std::vector<swss::FieldValueTuple>& values);

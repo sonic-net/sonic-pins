@@ -16,7 +16,10 @@
 #ifndef GOOGLE_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_
 #define GOOGLE_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_
 
+#include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -24,15 +27,9 @@
 #include "absl/strings/string_view.h"
 #include "p4_pdpi/ir.pb.h"
 #include "swss/rediscommand.h"
-#include "swss/schema.h"
 
 namespace p4rt_app {
 namespace sonic {
-
-// The P4RT tables in the AppDb are identified by the P4Info table alias and
-// this prefix. For example if P4Info defines a table called "router_interface"
-// the relevant AppDb table would be called "P4RT_ROUTER_INTERFACE".
-constexpr absl::string_view kP4rtTablePrefix = APP_P4RT_TABLE_NAME;
 
 // Given a PDPI IrTableEntry will generate the SONiC AppDb key for a P4RT table.
 absl::StatusOr<std::string> IrTableEntryToAppDbKey(
@@ -47,7 +44,7 @@ absl::StatusOr<std::vector<swss::FieldValueTuple>> IrTableEntryToAppDbValues(
 // IrTableEntry.
 absl::StatusOr<pdpi::IrTableEntry> AppDbKeyAndValuesToIrTableEntry(
     const pdpi::IrP4Info &ir_p4_info, absl::string_view app_db_key,
-    const std::unordered_map<std::string, std::string> &app_db_values);
+    const std::vector<std::pair<std::string, std::string>> &app_db_values);
 
 }  // namespace sonic
 }  // namespace p4rt_app

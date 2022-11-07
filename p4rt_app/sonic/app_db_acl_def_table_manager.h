@@ -18,30 +18,24 @@
 #include "absl/strings/ascii.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
+#include "p4rt_app/sonic/redis_connections.h"
 
 namespace p4rt_app {
 namespace sonic {
 
+// Verify an ACL table definition can be inserted into the AppDB ACL Table
+// Definition Table.
+absl::Status VerifyAclTableDefinition(const pdpi::IrTableDefinition& ir_table);
+
 // Insert an ACL table definition entry into the AppDB ACL Table Definition
 // Table, returns the key that was used.
 absl::StatusOr<std::string> InsertAclTableDefinition(
-    ProducerStateTableAdapter& sonic_db_producer,
-    const pdpi::IrTableDefinition& ir_table);
+    P4rtTable& p4rt_table, const pdpi::IrTableDefinition& ir_table);
 
 // Remove an ACL table definition entry from the AppDB ACL Table Definition
 // Table.
-absl::Status RemoveAclTableDefinition(
-    ProducerStateTableAdapter& sonic_db_producer,
-    const pdpi::IrTableDefinition& ir_table);
-
-// Read an ACL table definition entry from the AppDB ACL Table Definition Table.
-inline absl::StatusOr<pdpi::IrTableDefinition> ReadAclTableDefinition(
-    ProducerStateTableAdapter& sonic_db_producer,
-    absl::string_view table_name) {
-  return gutil::UnimplementedErrorBuilder()
-         << "ReadAclTableDefinition is not implemented.";
-}
+absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
+                                      const pdpi::IrTableDefinition& ir_table);
 
 }  // namespace sonic
 }  // namespace p4rt_app

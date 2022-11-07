@@ -15,8 +15,10 @@
 #ifndef GOOGLE_P4_PDPI_SEQUENCING_H_
 #define GOOGLE_P4_PDPI_SEQUENCING_H_
 
+#include <functional>
 #include <vector>
 
+#include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
@@ -47,6 +49,17 @@ absl::StatusOr<std::vector<std::vector<int>>> SequencePiUpdatesInPlace(
 // That is, two entries x and y where x refers to y will be sorted as [y, x].
 absl::Status SortTableEntries(const IrP4Info& info,
                               std::vector<p4::v1::TableEntry>& entries);
+
+// Returns the subset of TableEntry in `entries` that is not reachable from any
+// root entry in `entries`, where a root entry is determined by the
+// `is_root_entry` function. An entry `e` is reachable from a root entry `r`
+// if and only if `r` refers to `e`, directly or transitively. The reference
+// graph is computed based on `ir_p4info`.
+absl::StatusOr<std::vector<p4::v1::TableEntry>> GetEntriesUnreachableFromRoots(
+    absl::Span<const p4::v1::TableEntry> entries,
+    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::TableEntry&)>
+        is_root_entry,
+    const IrP4Info& ir_p4info);
 
 }  // namespace pdpi
 

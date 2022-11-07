@@ -16,12 +16,17 @@
 #ifndef GOOGLE_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
 #define GOOGLE_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
 
+#include <string>
 #include <thread>  //NOLINT
+#include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 
 namespace p4rt_app {
@@ -43,19 +48,25 @@ class FakePacketIoInterface final : public PacketIoInterface {
 
   // Return the packets sent for the specified port.
   absl::StatusOr<std::vector<std::string>> VerifyPacketOut(
-      absl::string_view port_name);
+      absl::string_view port_name) ABSL_LOCKS_EXCLUDED(packet_lock_);
 
   // Faked methods.
   absl::StatusOr<std::thread> StartReceive(
       packet_metadata::ReceiveCallbackFunction callback_function,
-      bool use_genetlink = false);
+      bool use_genetlink) override;
   absl::Status SendPacketOut(absl::string_view port_name,
-                             const std::string& packet);
+                             const std::string& packet)
+      ABSL_LOCKS_EXCLUDED(packet_lock_) override;
+  absl::Status AddPacketIoPort(absl::string_view port_name) override;
+  absl::Status RemovePacketIoPort(absl::string_view port_name) override;
 
  private:
   // Used for fake implementation.
   packet_metadata::ReceiveCallbackFunction callback_function_;
-  absl::flat_hash_map<std::string, std::vector<std::string>> transmit_packets_;
+  absl::flat_hash_set<std::string> valid_ports_;
+  absl::Mutex packet_lock_;
+  absl::flat_hash_map<std::string, std::vector<std::string>> transmit_packets_
+      ABSL_GUARDED_BY(packet_lock_);
 };
 
 }  // namespace sonic

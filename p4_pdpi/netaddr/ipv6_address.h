@@ -39,7 +39,7 @@ class Ipv6Address : public NetworkAddress<128, Ipv6Address> {
                        uint16_t hextet4 = 0, uint16_t hextet3 = 0,
                        uint16_t hextet2 = 0, uint16_t hextet1 = 0);
 
-  // Constructs an Ipv6Addres from uint128.
+  // Constructs an Ipv6Address from uint128.
   explicit Ipv6Address(absl::uint128 ipv6_128)
       : Ipv6Address(std::bitset<128>(absl::Uint128High64(ipv6_128)) << 64 |
                     std::bitset<128>(absl::Uint128Low64(ipv6_128))) {}
@@ -50,6 +50,19 @@ class Ipv6Address : public NetworkAddress<128, Ipv6Address> {
 
   // Returns address in IPv6 address notation, e.g. "2001:0db8:85a3::7334".
   std::string ToString() const;
+
+  // Returns the IP address corresponding to an upper-64-bit IPv6 mask.
+  // (ffff:ffff:ffff:ffff::)
+  static Ipv6Address Upper64BitMask() { return Ipv6Address::AllOnes() << 64; }
+
+  // Returns true if the IPv6 address only uses the upper 64-bits.
+  bool IsUpper64BitAddress() const { return (bits_ << 64).none(); }
+
+  // Returns the minimum mask length of the IPv6 address.
+  // The mask length is the number of bits required to capture all non-zero bits
+  // starting from the most-significant-bit in the IPv6 address (left-to-right
+  // in the string format).
+  int MinimumMaskLength() const;
 };
 
 }  // namespace netaddr

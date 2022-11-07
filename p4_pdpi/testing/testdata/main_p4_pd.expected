@@ -44,7 +44,7 @@ message Optional {
 
 message IdTestTableEntry {
   message Match {
-    string ipv6 = 1; // exact match / Format::IPV6
+    string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
     string ipv4 = 2; // exact match / Format::IPV4
   }
   Match match = 1;
@@ -62,7 +62,7 @@ message ExactTableEntry {
   message Match {
     string normal = 1; // exact match / Format::HEX_STRING / 10 bits
     string ipv4 = 2; // exact match / Format::IPV4
-    string ipv6 = 3; // exact match / Format::IPV6
+    string ipv6 = 3; // exact match / Format::IPV6 / 128 bits
     string mac = 4; // exact match / Format::MAC
     string str = 5; // exact match / Format::STRING
   }
@@ -78,12 +78,18 @@ message TernaryTableEntry {
   message Match {
     Ternary normal = 1; // ternary match / Format::HEX_STRING / 10 bits
     Ternary ipv4 = 2; // ternary match / Format::IPV4
-    Ternary ipv6 = 3; // ternary match / Format::IPV6
+    Ternary ipv6 = 3; // ternary match / Format::IPV6 / 128 bits
     Ternary mac = 4; // ternary match / Format::MAC
+    Ternary unused_field = 5; // ternary match / Format::HEX_STRING / 1 bits
+    Ternary ipv6_upper_64_bits = 6; // ternary match / Format::IPV6 / upper 64 bits
+    Ternary ipv6_upper_63_bits = 7; // ternary match / Format::IPV6 / upper 63 bits
   }
   Match match = 1;
   message Action {
+  oneof action {
     DoThing3Action do_thing_3 = 1;
+    UnusedAction unused_action = 2;
+  }
   }
   Action action = 2;
   int32 priority = 3;
@@ -104,7 +110,7 @@ message Lpm1TableEntry {
 
 message Lpm2TableEntry {
   message Match {
-    Lpm ipv6 = 1; // lpm match / Format::IPV6
+    Lpm ipv6 = 1; // lpm match / Format::IPV6 / 128 bits
   }
   Match match = 1;
   message Action {
@@ -142,6 +148,7 @@ message CountAndMeterTableEntry {
   Action action = 2;
   BytesMeterConfig meter_config = 4;
   BytesAndPacketsCounterData counter_data = 6;
+  MeterBytesAndPacketsCounterData meter_counter_data = 9;
   bytes controller_metadata = 8;
 }
 
@@ -167,7 +174,7 @@ message Wcmp2TableEntry {
 
 message OptionalTableEntry {
   message Match {
-    Optional ipv6 = 1; // optional match / Format::IPV6
+    Optional ipv6 = 1; // optional match / Format::IPV6 / 128 bits
     Optional ipv4 = 2; // optional match / Format::IPV4
     Optional str = 3; // optional match / Format::STRING
   }
@@ -219,13 +226,68 @@ message Referring2TableEntry {
 
 message NoActionTableEntry {
   message Match {
-    string ipv6 = 1; // exact match / Format::IPV6
+    string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
     string ipv4 = 2; // exact match / Format::IPV4
   }
   Match match = 1;
   message Action {
   }
   Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message ReferringToReferring2TableEntry {
+  message Match {
+    // Refers to 'referring2_table.referring_id'.
+    string referring2_table_id = 1; // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message UnusedTableEntry {
+  message Match {
+    string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
+    string ipv4 = 2; // exact match / Format::IPV4
+  }
+  Match match = 1;
+  message Action {
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message PacketCountAndMeterTableEntry {
+  message Match {
+    Lpm ipv4 = 1; // lpm match / Format::IPV4
+  }
+  Match match = 1;
+  message Action {
+    PacketCountAndMeterAction packet_count_and_meter = 1;
+  }
+  Action action = 2;
+  BytesMeterConfig meter_config = 4;
+  PacketsCounterData counter_data = 6;
+  MeterPacketsCounterData meter_counter_data = 9;
+  bytes controller_metadata = 8;
+}
+
+message ByteCountAndMeterTableEntry {
+  message Match {
+    Lpm ipv4 = 1; // lpm match / Format::IPV4
+  }
+  Match match = 1;
+  message Action {
+    ByteCountAndMeterAction byte_count_and_meter = 1;
+  }
+  Action action = 2;
+  BytesMeterConfig meter_config = 4;
+  BytesCounterData counter_data = 6;
+  MeterBytesCounterData meter_counter_data = 9;
   bytes controller_metadata = 8;
 }
 
@@ -240,7 +302,7 @@ message DoThing1Action {
 message DoThing2Action {
   string normal = 1; // Format::HEX_STRING / 10 bits
   string ipv4 = 2; // Format::IPV4
-  string ipv6 = 3; // Format::IPV6
+  string ipv6 = 3; // Format::IPV6 / 128 bits
   string mac = 4; // Format::MAC
   string str = 5; // Format::STRING
 }
@@ -261,6 +323,15 @@ message ReferringAction {
   string referring_id_1 = 1; // Format::STRING
   // Refers to 'referred_table.id'.
   string referring_id_2 = 2; // Format::STRING
+}
+
+message UnusedAction {
+}
+
+message PacketCountAndMeterAction {
+}
+
+message ByteCountAndMeterAction {
 }
 
 message NoAction {
@@ -284,6 +355,10 @@ message TableEntry {
     ReferringTableEntry referring_table_entry = 11;
     Referring2TableEntry referring2_table_entry = 12;
     NoActionTableEntry no_action_table_entry = 13;
+    ReferringToReferring2TableEntry referring_to_referring2_table_entry = 14;
+    UnusedTableEntry unused_table_entry = 15;
+    PacketCountAndMeterTableEntry packet_count_and_meter_table_entry = 19;
+    ByteCountAndMeterTableEntry byte_count_and_meter_table_entry = 23;
   }
 }
 
@@ -347,6 +422,29 @@ message BytesAndPacketsCounterData {
   int64 byte_count = 1;
   // Number of packets.
   int64 packet_count = 2;
+}
+
+// -- Meter counter data -------------------------------------------------------
+
+message MeterBytesCounterData {
+  // Number of bytes per color.
+  BytesCounterData green = 1;
+  BytesCounterData yellow = 2;
+  BytesCounterData red = 3;
+}
+
+message MeterPacketsCounterData {
+  // Number of packets per color.
+  PacketsCounterData green = 1;
+  PacketsCounterData yellow = 2;
+  PacketsCounterData red = 3;
+}
+
+message MeterBytesAndPacketsCounterData {
+  // Number of bytes and packets per color.
+  BytesAndPacketsCounterData green = 1;
+  BytesAndPacketsCounterData yellow = 2;
+  BytesAndPacketsCounterData red = 3;
 }
 
 // -- RPC messages -------------------------------------------------------------

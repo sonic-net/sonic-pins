@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -184,9 +185,9 @@ absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
     return gutil::InvalidArgumentErrorBuilder()
            << "Only 32 bit values can be formatted as an IPv4 address.";
   }
-  if (format == Format::IPV6 && bitwidth != kNumBitsInIpv6) {
+  if (format == Format::IPV6 && bitwidth > kNumBitsInIpv6) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "Only 128 bit values can be formatted as an IPv6 address.";
+           << "IPv6 address cannot be larger than 128 bits.";
   }
   return format;
 }
@@ -197,17 +198,23 @@ absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
   IrValue result;
   switch (format) {
     case Format::MAC: {
-      ASSIGN_OR_RETURN(auto mac, MacAddress::OfByteString(bytes));
+      ASSIGN_OR_RETURN(MacAddress mac, MacAddress::OfByteString(bytes));
       result.set_mac(mac.ToString());
       return result;
     }
     case Format::IPV4: {
-      ASSIGN_OR_RETURN(auto ipv4, Ipv4Address::OfByteString(bytes));
+      ASSIGN_OR_RETURN(Ipv4Address ipv4, Ipv4Address::OfByteString(bytes));
       result.set_ipv4(ipv4.ToString());
       return result;
     }
     case Format::IPV6: {
-      ASSIGN_OR_RETURN(auto ipv6, Ipv6Address::OfByteString(bytes));
+      ASSIGN_OR_RETURN(Ipv6Address ipv6, Ipv6Address::OfByteString(bytes));
+      if ((ipv6 >> bitwidth).ToBitset().any()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "IPv6 address '0x" << absl::BytesToHexString(bytes)
+               << "' does not fit within the upper " << bitwidth << " bits.";
+      }
+      ipv6 <<= (kNumBitsInIpv6 - bitwidth);
       result.set_ipv6(ipv6.ToString());
       return result;
     }
@@ -301,15 +308,24 @@ absl::StatusOr<std::string> IrValueToNormalizedByteString(
     const IrValue &ir_value, const int bitwidth) {
   switch (ir_value.format_case()) {
     case IrValue::kMac: {
-      ASSIGN_OR_RETURN(auto mac, MacAddress::OfString(ir_value.mac()));
+      ASSIGN_OR_RETURN(MacAddress mac, MacAddress::OfString(ir_value.mac()));
       return mac.ToPaddedByteString();
     }
     case IrValue::kIpv4: {
-      ASSIGN_OR_RETURN(auto ipv4, Ipv4Address::OfString(ir_value.ipv4()));
+      ASSIGN_OR_RETURN(Ipv4Address ipv4,
+                       Ipv4Address::OfString(ir_value.ipv4()));
       return ipv4.ToPaddedByteString();
     }
     case IrValue::kIpv6: {
-      ASSIGN_OR_RETURN(auto ipv6, Ipv6Address::OfString(ir_value.ipv6()));
+      ASSIGN_OR_RETURN(Ipv6Address ipv6,
+                       Ipv6Address::OfString(ir_value.ipv6()));
+      if (ipv6.MinimumMaskLength() > bitwidth) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "IPv6 address '" << ir_value.ipv6()
+               << "' does not fit within the required prefix length '"
+               << bitwidth << "' (defined by bitwidth).";
+      }
+      ipv6 >>= kNumBitsInIpv6 - bitwidth;
       return ipv6.ToPaddedByteString();
     }
     case IrValue::kStr:
@@ -531,6 +547,20 @@ std::string ParamName(absl::string_view param_name) {
 }
 std::string MetadataName(absl::string_view metadata_name) {
   return absl::StrCat("Metadata '", metadata_name, "'");
+}
+
+bool IsElementUnused(
+    const google::protobuf::RepeatedPtrField<std::string> &annotations) {
+  return absl::c_any_of(annotations, [](absl::string_view annotation) {
+    return annotation == "@unused";
+  });
+}
+
+bool IsElementDeprecated(
+    const google::protobuf::RepeatedPtrField<std::string> &annotations) {
+  return absl::c_any_of(annotations, [](absl::string_view annotation) {
+    return absl::StartsWith(annotation, "@deprecated");
+  });
 }
 
 }  // namespace pdpi

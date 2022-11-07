@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "p4rt_app/sonic/packetio_port.h"
 
+#include <cstddef>
 #include <memory>
 
 #include "glog/logging.h"
@@ -134,7 +135,7 @@ TEST(PacketIoTest, SendPacketOutSplitWrite) {
                           std::string(kTestPacket, sizeof(kTestPacket))));
 }
 
-TEST(PacketIoTest, DiscoverPacketIoPortsOK) {
+TEST(PacketIoTest, AddPacketIoPortOK) {
   // Prepare mocks for CreateAndBindSocket.
   MockSystemCallAdapter mock_call_adapter;
   EXPECT_CALL(mock_call_adapter, socket)
@@ -151,71 +152,27 @@ TEST(PacketIoTest, DiscoverPacketIoPortsOK) {
       .Times(1)
       .WillOnce(Return(kSocketCallsValidValue));
 
-  // Prepare mocks for DiscoverPacketIo.
-  struct sockaddr eth0_sockaddr {
-    AF_PACKET
-  };
-  char port_name[sizeof(kEthernet0) + 1];
-  strncpy(port_name, kEthernet0, sizeof(kEthernet0));
-  struct ifaddrs eth0_ifaddrs {
-    nullptr, port_name, 0, &eth0_sockaddr
-  };
-  EXPECT_CALL(mock_call_adapter, getifaddrs)
-      .WillOnce(DoAll(SetArgPointee<0>(&eth0_ifaddrs), Return(0)));
-  EXPECT_CALL(mock_call_adapter, freeifaddrs).Times(1);
-  ASSERT_OK_AND_ASSIGN(auto port_sockets,
-                       DiscoverPacketIoPorts(mock_call_adapter));
-  EXPECT_EQ(port_sockets.size(), 1);
-  EXPECT_EQ(port_sockets[0]->port_name, kEthernet0);
-}
-
-TEST(PacketIoTest, DiscoverPacketIoPortsFail) {
-  MockSystemCallAdapter mock_call_adapter;
-  EXPECT_CALL(mock_call_adapter, getifaddrs).WillOnce(Return(-1));
-  EXPECT_THAT(DiscoverPacketIoPorts(mock_call_adapter),
-              StatusIs(absl::StatusCode::kInternal,
-                       HasSubstr("Failed to get interface list")));
+  ASSERT_OK_AND_ASSIGN(auto port_params,
+                       AddPacketIoPort(mock_call_adapter, kEthernet0,
+                                       /*callback_function=*/nullptr));
+  EXPECT_GE(port_params->socket, 0);
+  EXPECT_NE(port_params->packet_in_selectable, nullptr);
 }
 
 TEST(PacketIoTest, CreateAndBindSocketFail) {
-  struct sockaddr eth0_sockaddr {
-    AF_PACKET
-  };
-  char port_name[sizeof(kEthernet0) + 1];
-  strncpy(port_name, kEthernet0, sizeof(kEthernet0));
-  struct ifaddrs eth0_ifaddrs {
-    nullptr, port_name, 0, &eth0_sockaddr
-  };
   MockSystemCallAdapter mock_call_adapter;
-  EXPECT_CALL(mock_call_adapter, getifaddrs)
-      .WillOnce(DoAll(SetArgPointee<0>(&eth0_ifaddrs), Return(0)));
-  EXPECT_CALL(mock_call_adapter, freeifaddrs).Times(1);
-
   // Set expectations for the CreateAndBindSockets.
   EXPECT_CALL(mock_call_adapter, socket)
       .Times(1)
       .WillOnce(Return(kSocketCallsInvalidValue));  // error in socket call.
 
-  ASSERT_OK_AND_ASSIGN(auto port_sockets,
-                       DiscoverPacketIoPorts(mock_call_adapter));
-  // Verify no port sockets were called.
-  EXPECT_EQ(port_sockets.size(), 0);
+  EXPECT_THAT(AddPacketIoPort(mock_call_adapter, kEthernet0,
+                              /*callbacl_function=*/nullptr),
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(PacketIoTest, CreateAndBindSetSockOptFail) {
-  struct sockaddr eth0_sockaddr {
-    AF_PACKET
-  };
-  char port_name[sizeof(kEthernet0) + 1];
-  strncpy(port_name, kEthernet0, sizeof(kEthernet0));
-  struct ifaddrs eth0_ifaddrs {
-    nullptr, port_name, 0, &eth0_sockaddr
-  };
   MockSystemCallAdapter mock_call_adapter;
-  EXPECT_CALL(mock_call_adapter, getifaddrs)
-      .WillOnce(DoAll(SetArgPointee<0>(&eth0_ifaddrs), Return(0)));
-  EXPECT_CALL(mock_call_adapter, freeifaddrs).Times(1);
-
   // Set expectations for the CreateAndBindSockets.
   EXPECT_CALL(mock_call_adapter, socket)
       .Times(1)
@@ -225,26 +182,14 @@ TEST(PacketIoTest, CreateAndBindSetSockOptFail) {
       .WillOnce(Return(kSocketCallsInvalidValue));  // error in setsockopt call.
   EXPECT_CALL(mock_call_adapter, close).Times(1);
 
-  ASSERT_OK_AND_ASSIGN(auto port_sockets,
-                       DiscoverPacketIoPorts(mock_call_adapter));
-  EXPECT_EQ(port_sockets.size(), 0);
+  EXPECT_THAT(AddPacketIoPort(mock_call_adapter, kEthernet0,
+                              /*callback_function=*/nullptr),
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(PacketIoTest, CreateAndBindifIndexFail) {
-  struct sockaddr eth0_sockaddr {
-    AF_PACKET
-  };
-  char port_name[sizeof(kEthernet0) + 1];
-  strncpy(port_name, kEthernet0, sizeof(kEthernet0));
-  struct ifaddrs eth0_ifaddrs {
-    nullptr, port_name, 0, &eth0_sockaddr
-  };
-  MockSystemCallAdapter mock_call_adapter;
-  EXPECT_CALL(mock_call_adapter, getifaddrs)
-      .WillOnce(DoAll(SetArgPointee<0>(&eth0_ifaddrs), Return(0)));
-  EXPECT_CALL(mock_call_adapter, freeifaddrs).Times(1);
-
   // Set expectations for the CreateAndBindSockets.
+  MockSystemCallAdapter mock_call_adapter;
   EXPECT_CALL(mock_call_adapter, socket)
       .Times(1)
       .WillOnce(Return(kSocketCallsValidValue));
@@ -256,25 +201,13 @@ TEST(PacketIoTest, CreateAndBindifIndexFail) {
       .WillOnce(Return(kifIndexInvalidValue));  // error in ifindex value.
   EXPECT_CALL(mock_call_adapter, close).Times(1);
 
-  ASSERT_OK_AND_ASSIGN(auto port_sockets,
-                       DiscoverPacketIoPorts(mock_call_adapter));
-  EXPECT_EQ(port_sockets.size(), 0);
+  EXPECT_THAT(AddPacketIoPort(mock_call_adapter, kEthernet0,
+                              /*callback_function=*/nullptr),
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(PacketIoTest, CreateAndBindFail) {
-  struct sockaddr eth0_sockaddr {
-    AF_PACKET
-  };
-  char port_name[sizeof(kEthernet0) + 1];
-  strncpy(port_name, kEthernet0, sizeof(kEthernet0));
-  struct ifaddrs eth0_ifaddrs {
-    nullptr, port_name, 0, &eth0_sockaddr
-  };
   MockSystemCallAdapter mock_call_adapter;
-  EXPECT_CALL(mock_call_adapter, getifaddrs)
-      .WillOnce(DoAll(SetArgPointee<0>(&eth0_ifaddrs), Return(0)));
-  EXPECT_CALL(mock_call_adapter, freeifaddrs).Times(1);
-
   // Set expectations for the CreateAndBindSockets.
   EXPECT_CALL(mock_call_adapter, socket)
       .Times(1)
@@ -290,9 +223,9 @@ TEST(PacketIoTest, CreateAndBindFail) {
       .WillOnce(Return(kSocketCallsInvalidValue));  // error in bind call.
   EXPECT_CALL(mock_call_adapter, close).Times(1);
 
-  ASSERT_OK_AND_ASSIGN(auto port_sockets,
-                       DiscoverPacketIoPorts(mock_call_adapter));
-  EXPECT_EQ(port_sockets.size(), 0);
+  EXPECT_THAT(AddPacketIoPort(mock_call_adapter, kEthernet0,
+                              /*callback_function=*/nullptr),
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 }  // namespace

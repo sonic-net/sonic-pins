@@ -24,8 +24,8 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
-#include "p4_pdpi/testing/main_p4_pd.pb.h"
 #include "p4_pdpi/testing/test_helper.h"
+#include "p4_pdpi/testing/union_main_p4_pd.pb.h"
 
 using ::p4::config::v1::P4Info;
 
@@ -201,7 +201,30 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         }
                         priority: 32
                       )pb"));
-
+  RunPiTableEntryTest(info, "ternary IPv6 64-bit value too long",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554435
+                        match {
+                          field_id: 6
+                          ternary {
+                            value: "\x01\x00\x00\x00\x00\x00\x00\x00\x00"
+                            mask: "\x01\xff\xff\xff\xff\xff\xff\xff\xff"
+                          }
+                        }
+                        priority: 32
+                      )pb"));
+  RunPiTableEntryTest(info, "ternary IPv6 63-bit value too long",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554435
+                        match {
+                          field_id: 7
+                          ternary {
+                            value: "\x80\x00\x00\x00\x00\x00\x00\x00"
+                            mask: "\xff\xff\xff\xff\xff\xff\xff\xff"
+                          }
+                        }
+                        priority: 32
+                      )pb"));
   RunPiTableEntryTest(info, "ternary value and mask too long",
                       gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
                         table_id: 33554435
@@ -541,7 +564,105 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         }
                         action { action_profile_member_id: 12 }
                       )pb"));
-}
+
+  RunPiTableEntryTest(info, "unused table used",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554447
+                        match {
+                          field_id: 1
+                          exact { value: "\xff\x22" }
+                        }
+                        match {
+                          field_id: 2
+                          exact { value: "\x10\x24\x32\x52" }
+                        }
+                      )pb"));
+
+  RunPiTableEntryTest(info, "ternary table - unused action used",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554435
+                        match {
+                          field_id: 1
+                          ternary { value: "\xd0" mask: "\x00\xff" }
+                        }
+                        action { action { action_id: 16777223 } }
+                        priority: 32
+                      )pb"));
+
+  RunPiTableEntryTest(info, "ternary table - unused match field used",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554435
+                        match {
+                          field_id: 1
+                          ternary { value: "\xd0" mask: "\x00\xff" }
+                        }
+                        match {
+                          field_id: 5
+                          ternary { value: "0" }
+                        }
+                        priority: 32
+                      )pb"));
+
+  RunPiTableEntryTest(
+      info, "meter counter data but missing color counter",
+      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+        table_id: 33554439
+        match {
+          field_id: 1
+          lpm { value: "\020$2\000" prefix_len: 24 }
+        }
+        action { action { action_id: 16777220 } }
+        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
+        counter_data { byte_count: 567 packet_count: 789 }
+        meter_counter_data {
+          yellow { byte_count: 569 packet_count: 791 }
+          red { byte_count: 570 packet_count: 792 }
+        }
+      )pb"));
+
+  RunPiTableEntryTest(
+      info, "meter counter data but no color counter",
+      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+        table_id: 33554439
+        match {
+          field_id: 1
+          lpm { value: "\020$2\000" prefix_len: 24 }
+        }
+        action { action { action_id: 16777220 } }
+        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
+        counter_data { byte_count: 567 packet_count: 789 }
+        meter_counter_data {}
+      )pb"));
+
+  RunPiTableEntryTest(info, "meter counter data but missing meter config",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554439
+                        match {
+                          field_id: 1
+                          lpm { value: "\020$2\000" prefix_len: 24 }
+                        }
+                        action { action { action_id: 16777220 } }
+                        counter_data { byte_count: 567 packet_count: 789 }
+                        meter_counter_data {
+                          green { byte_count: 568 packet_count: 790 }
+                          yellow { byte_count: 569 packet_count: 791 }
+                          red { byte_count: 570 packet_count: 792 }
+                        }
+                      )pb"));
+  RunPiTableEntryTest(
+      info, "meter counter data in a table with no meters",
+      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+        table_id: 33554440
+        match {
+          field_id: 1
+          lpm { value: "\020$2\000" prefix_len: 24 }
+        }
+        action { action { action_id: 16777220 } }
+        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
+        counter_data { byte_count: 567 packet_count: 789 }
+        meter_counter_data {}
+      )pb"));
+}  // NOLINT(readability/fn_size)
 
 static void RunIrNoActionTableTests(const pdpi::IrP4Info& info) {
   // This function is defined separately and called from RunIrTests
@@ -564,6 +685,168 @@ static void RunIrNoActionTableTests(const pdpi::IrP4Info& info) {
                             value { hex_str: "0x01234567" }
                           }
                         })pb"));
+}
+
+static void RunIrTernaryTableTests(const pdpi::IrP4Info info) {
+  RunIrTableEntryTest(info, "unused table used",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "unused_table"
+                        matches {
+                          name: "ipv4"
+                          exact { ipv4: "10.10.10.10" }
+                        }
+                        matches {
+                          name: "ipv6"
+                          exact { ipv6: "::ff22" }
+                        }
+                      )pb"));
+  RunIrTableEntryTest(info, "ternary table - unused action used",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "ternary_table"
+                        matches {
+                          name: "normal"
+                          ternary { value { hex_str: "0x00" } }
+                        }
+                        action { name: "unused_action" }
+                        priority: 32
+                      )pb"));
+  RunIrTableEntryTest(info, "ternary table - unused match field used",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "ternary_table"
+                        matches {
+                          name: "unused_field"
+                          ternary { value { hex_str: "0x00" } }
+                        }
+                        priority: 32
+                      )pb"));
+}
+
+static void RunIrMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
+  RunIrTableEntryTest(info, "meter counter data in a table with no counters",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "wcmp_table"
+                        matches {
+                          name: "ipv4"
+                          lpm {
+                            value { ipv4: "0.0.255.0" }
+                            prefix_length: 24
+                          }
+                        }
+                        action_set {
+                          actions {
+                            action {
+                              name: "do_thing_1"
+                              params {
+                                name: "arg2"
+                                value { hex_str: "0x00000008" }
+                              }
+                              params {
+                                name: "arg1"
+                                value { hex_str: "0x00000009" }
+                              }
+                            }
+                            weight: 24
+                          }
+                        }
+                        meter_counter_data {
+                          green { byte_count: 568 packet_count: 790 }
+                          yellow { byte_count: 569 packet_count: 791 }
+                          red { byte_count: 570 packet_count: 792 }
+                        }
+                      )pb"));
+  RunIrTableEntryTest(
+      info, "meter counter data with byte color counters",
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "count_and_meter_table"
+        matches {
+          name: "ipv4"
+          lpm {
+            value { ipv4: "16.36.50.0" }
+            prefix_length: 24
+          }
+        }
+        action { name: "count_and_meter" }
+        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
+        counter_data { byte_count: 567 }
+        meter_counter_data {
+          green { byte_count: 568 }
+          yellow { byte_count: 569 }
+          red { byte_count: 570 }
+        }
+      )pb"));
+  RunIrTableEntryTest(
+      info, "meter counter data with packet color counters",
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "count_and_meter_table"
+        matches {
+          name: "ipv4"
+          lpm {
+            value { ipv4: "16.36.50.0" }
+            prefix_length: 24
+          }
+        }
+        action { name: "count_and_meter" }
+        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
+        counter_data { packet_count: 789 }
+        meter_counter_data {
+          green { packet_count: 790 }
+          yellow { packet_count: 791 }
+          red { packet_count: 792 }
+        }
+      )pb"));
+  RunIrTableEntryTest(
+      info, "meter counter data but missing color counters",
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "count_and_meter_table"
+        matches {
+          name: "ipv4"
+          lpm {
+            value { ipv4: "16.36.50.0" }
+            prefix_length: 24
+          }
+        }
+        action { name: "count_and_meter" }
+        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
+        counter_data { byte_count: 567 packet_count: 789 }
+        meter_counter_data {
+          green { byte_count: 568 packet_count: 790 }
+          yellow { byte_count: 569 packet_count: 791 }
+        }
+      )pb"));
+  RunIrTableEntryTest(
+      info, "meter counter data but no color counters",
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "count_and_meter_table"
+        matches {
+          name: "ipv4"
+          lpm {
+            value { ipv4: "16.36.50.0" }
+            prefix_length: 24
+          }
+        }
+        action { name: "count_and_meter" }
+        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
+        counter_data { byte_count: 567 packet_count: 789 }
+        meter_counter_data {}
+      )pb"));
+  RunIrTableEntryTest(info, "meter counter data but missing meter config",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "count_and_meter_table"
+                        matches {
+                          name: "ipv4"
+                          lpm {
+                            value { ipv4: "16.36.50.0" }
+                            prefix_length: 24
+                          }
+                        }
+                        action { name: "count_and_meter" }
+                        counter_data { byte_count: 567 packet_count: 789 }
+                        meter_counter_data {
+                          green { byte_count: 568 packet_count: 790 }
+                          yellow { byte_count: 569 packet_count: 791 }
+                          red { byte_count: 570 packet_count: 792 }
+                        }
+                      )pb"));
 }
 
 static void RunIrTests(const pdpi::IrP4Info info) {
@@ -625,6 +908,34 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                         priority: 32
                       )pb"));
+
+  RunIrTableEntryTest(
+      info, "invalid value - address not in bounds for upper 64 bits of ipv6",
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "ternary_table"
+        matches {
+          name: "ipv6_upper_64_bits"
+          ternary {
+            value { ipv6: "::ff22" }
+            mask { ipv6: "::ffff" }
+          }
+        }
+        priority: 32
+      )pb"));
+
+  RunIrTableEntryTest(
+      info, "invalid value - address not in bounds for upper 63 bits of ipv6",
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "ternary_table"
+        matches {
+          name: "ipv6_upper_63_bits"
+          ternary {
+            value { ipv6: "ff::" }
+            mask { ipv6: "ffff:ffff:ffff:ffff::" }
+          }
+        }
+        priority: 32
+      )pb"));
 
   RunIrTableEntryTest(info, "invalid match field name",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1088,6 +1399,106 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         counter_data { byte_count: 4213 }
                       )pb"));
   RunIrNoActionTableTests(info);
+  RunIrTernaryTableTests(info);
+  RunIrMeterCounterTableEntryTests(info);
+}  // NOLINT(readability/fn_size)
+
+static void RunPdMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
+  RunPdTableEntryTest(
+      info, "table entry with a meter counter data (packet counter)",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        packet_count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { packet_count_and_meter {} }
+          meter_config { bytes_per_second: 123 burst_bytes: 345 }
+          counter_data { packet_count: 789 }
+          meter_counter_data {
+            green { packet_count: 790 }
+            yellow { packet_count: 791 }
+            red { packet_count: 792 }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
+
+  RunPdTableEntryTest(
+      info, "table entry with a meter counter data (byte counter)",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        byte_count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { byte_count_and_meter {} }
+          meter_config { bytes_per_second: 123 burst_bytes: 345 }
+          counter_data { byte_count: 567 }
+          meter_counter_data {
+            green { byte_count: 568 }
+            yellow { byte_count: 569 }
+            red { byte_count: 570 }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
+
+  RunPdTableEntryTest(
+      info, "table entry with counters, meters and meter counter data",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { count_and_meter {} }
+          meter_config { bytes_per_second: 123 burst_bytes: 345 }
+          counter_data { byte_count: 567 packet_count: 789 }
+          meter_counter_data {
+            green { byte_count: 568 packet_count: 790 }
+            yellow { byte_count: 569 packet_count: 791 }
+            red { byte_count: 570 packet_count: 792 }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
+
+  RunPdTableEntryTest(
+      info, "table entry with counters, meter counter data but no meter config",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { count_and_meter {} }
+          counter_data { byte_count: 567 packet_count: 789 }
+          meter_counter_data {
+            green { byte_count: 568 packet_count: 790 }
+            yellow { byte_count: 569 packet_count: 791 }
+            red { byte_count: 570 packet_count: 792 }
+          }
+        }
+      )pb"),
+      INPUT_IS_INVALID);
+
+  RunPdTableEntryTest(
+      info, "table entry with meter counter data but no color counters",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { count_and_meter {} }
+          meter_config { bytes_per_second: 123 burst_bytes: 345 }
+          counter_data { byte_count: 567 packet_count: 789 }
+          meter_counter_data {}
+        }
+      )pb"),
+      INPUT_IS_VALID);
+
+  RunPdTableEntryTest(
+      info, "table entry with meter counter data but missing some colors",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { count_and_meter {} }
+          meter_config { bytes_per_second: 123 burst_bytes: 345 }
+          counter_data { byte_count: 567 packet_count: 789 }
+          meter_counter_data {
+            green { byte_count: 568 packet_count: 790 }
+            red { byte_count: 570 packet_count: 792 }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
 }
 
 static void RunPdTests(const pdpi::IrP4Info info) {
@@ -1391,6 +1802,14 @@ static void RunPdTests(const pdpi::IrP4Info info) {
             normal { value: "0x052" mask: "0x273" }
             ipv4 { value: "10.43.12.4" mask: "10.43.12.5" }
             ipv6 { value: "::ee66" mask: "::ff77" }
+            ipv6_upper_64_bits {
+              value: "0:1fff:ee66:aabb::"
+              mask: "0:ffff:ffff:ffff::"
+            }
+            ipv6_upper_63_bits {
+              value: "0:1fff:ee66:aafe::"
+              mask: "0:ffff:ffff:fffe::"
+            }
             mac { value: "11:22:33:44:55:66" mask: "33:66:77:66:77:77" }
           }
           priority: 32
@@ -1580,6 +1999,18 @@ static void RunPdTests(const pdpi::IrP4Info info) {
                           match { ipv6: "::ff22" ipv4: "16.36.50.82" }
                         })pb"),
                       INPUT_IS_VALID);
+
+  RunPdTableEntryTest(info, "unsupported field in pd",
+                      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+                        optional_table_entry {
+                          match {
+                            mac { value: "00:11:22:33:44:55" }
+                            ipv4 { value: "16.36.50.82" }
+                          }
+                        })pb"),
+                      INPUT_IS_INVALID);
+
+  RunPdMeterCounterTableEntryTests(info);
 }
 
 static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
@@ -1603,6 +2034,32 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
         }
       )pb"),
       INPUT_IS_INVALID, /*key_only=*/true);
+
+  RunPdTableEntryTest(
+      info, "unused table used", gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        unused_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
+      )pb"),
+      INPUT_IS_INVALID);
+
+  RunPdTableEntryTest(info, "ternary table - unused action used",
+                      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+                        ternary_table_entry {
+                          match { normal { value: "0x052" mask: "0x273" } }
+                          priority: 32
+                          action { unused_action {} }
+                        }
+                      )pb"),
+                      INPUT_IS_INVALID);
+
+  RunPdTableEntryTest(info, "ternary table - unused match field used",
+                      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+                        ternary_table_entry {
+                          match { unused_field { value: "0x052" } }
+                          priority: 32
+                          action { do_thing_3 { arg1: "0x23" arg2: "0x0251" } }
+                        }
+                      )pb"),
+                      INPUT_IS_INVALID);
 
   RunPdTableEntryTest(
       info, "ipv4 LPM table with key_only=true",

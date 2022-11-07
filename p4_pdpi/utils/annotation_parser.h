@@ -61,16 +61,12 @@ struct AnnotationComponents {
   std::string label;
   std::string body;
 };
+}  // namespace annotation
 
-namespace internal {
-// Structure to hold the useful components of an annotation.
 // Parses an annotation into the AnnotationComponents.
 // Returns an InvalidArgument error if parsing failed.
-absl::StatusOr<AnnotationComponents> ParseAnnotation(
+absl::StatusOr<annotation::AnnotationComponents> ParseAnnotation(
     const std::string& annotation);
-
-}  // namespace internal
-}  // namespace annotation
 
 // Returns a list of all annotations split into label & body.
 // Skips annotations that do not follow the expected @<label>(<body>) format.
@@ -79,7 +75,7 @@ std::vector<annotation::AnnotationComponents> GetAllAnnotations(
     const Container& annotations) {
   std::vector<annotation::AnnotationComponents> components;
   for (const auto& annotation : annotations) {
-    auto parser_result = annotation::internal::ParseAnnotation(annotation);
+    auto parser_result = ParseAnnotation(annotation);
     if (parser_result.ok()) {
       components.push_back(std::move(*parser_result));
     }
@@ -102,7 +98,7 @@ absl::StatusOr<std::vector<T>> GetAllParsedAnnotations(
     annotation::BodyParser<T> parser) {
   std::vector<T> values;
   for (const auto& annotation : annotations) {
-    auto parser_result = annotation::internal::ParseAnnotation(annotation);
+    auto parser_result = ParseAnnotation(annotation);
     if (!parser_result.ok()) continue;  // Skip unknown labels.
 
     const annotation::AnnotationComponents& parsed_annotation =

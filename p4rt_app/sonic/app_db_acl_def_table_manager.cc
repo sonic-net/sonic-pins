@@ -28,8 +28,8 @@
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
+#include "gutil/status.h"
 #include "p4_pdpi/utils/annotation_parser.h"
-#include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
 #include "swss/json.hpp"
@@ -46,12 +46,28 @@ constexpr absl::string_view kUdfMatchAnnotationLabel = "sai_udf";
 constexpr absl::string_view kActionAnnotationLabel = "sai_action";
 constexpr absl::string_view kActionParamAnnotationLabel = "sai_action_param";
 
+using ::absl::Status;
 using ::absl::StatusOr;
 using ::gutil::InvalidArgumentErrorBuilder;
 using ::pdpi::IrActionDefinition;
 using ::pdpi::IrActionReference;
 using ::pdpi::IrMatchFieldDefinition;
 using ::pdpi::IrTableDefinition;
+
+swss::acl::Stage GetStage(const std::string& name) {
+  if (name == "PRE_INGRESS") return swss::acl::Stage::kLookup;
+  return swss::acl::StageFromName(name);
+}
+
+std::string GetStageName(swss::acl::Stage stage) {
+  if (stage == swss::acl::Stage::kLookup) return "PRE_INGRESS";
+  return swss::acl::StageName(stage);
+}
+
+bool IsValidColor(absl::string_view color) {
+  return color == "SAI_PACKET_COLOR_GREEN" ||
+         color == "SAI_PACKET_COLOR_YELLOW" | color == "SAI_PACKET_COLOR_RED";
+}
 
 // Generates the AppDB DEFINITION:ACL_* Entry key for an ACL table.
 StatusOr<std::string> GenerateSonicDbKeyFromIrTable(
@@ -86,6 +102,46 @@ StatusOr<swss::FieldValueTuple> StageTuple(const IrTableDefinition& ir_table) {
   return swss::FieldValueTuple({"stage", result.value()[0]});
 }
 
+absl::Status VerifyMatchFieldAgainstSchema(
+    swss::acl::Stage stage, const IrMatchFieldDefinition& match_field,
+    const std::string& sai_field) {
+  swss::acl::MatchFieldSchema schema;
+  try {
+    schema = swss::acl::MatchFieldSchemaByName(sai_field);
+  } catch (...) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Match field references unknown SAI field '" << sai_field << "'.";
+  }
+
+  if (schema.stages.count(stage) <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Sai field '" << sai_field << "' is not supported in ACL stage '"
+           << GetStageName(stage) << "'.";
+  }
+
+  int bitwidth = match_field.match_field().bitwidth();
+  std::string format = pdpi::Format_Name(match_field.format());
+  if (match_field.format() != pdpi::STRING && bitwidth == 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Match field format '" << format
+           << "' requires a bitwidth but none was provided for '" << sai_field
+           << "'.";
+  }
+  if (match_field.format() != pdpi::STRING && bitwidth > schema.bitwidth) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Bitwidth '" << bitwidth << "' is larger than the SAI bitwidth '"
+           << schema.bitwidth << "' for '" << sai_field << "'.";
+  }
+  if (format != swss::acl::FormatName(schema.format)) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Match field format '" << format
+           << "' does not match the schema format '"
+           << swss::acl::FormatName(schema.format) << "' for '" << sai_field
+           << "'.";
+  }
+  return absl::OkStatus();
+}
+
 // Generate the AppDB json format of an IrMatchField with a sai_field
 // annotation.
 //
@@ -100,16 +156,25 @@ StatusOr<swss::FieldValueTuple> StageTuple(const IrTableDefinition& ir_table) {
 //              "sai_field": "SaiMatch",
 //            }
 //          }
-nlohmann::json GenerateBasicMatchJson(
-    const IrMatchFieldDefinition& match_field,
+absl::StatusOr<nlohmann::json> GenerateBasicMatchJson(
+    swss::acl::Stage stage, const IrMatchFieldDefinition& match_field,
     const pdpi::annotation::AnnotationComponents& annotation) {
+  std::string sai_field = absl::StrReplaceAll(annotation.body, {{" ", ""}});
+  if (sai_field.empty()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << kBasicMatchAnnotationLabel
+           << " annotation was found but is empty.";
+  }
+  // RETURN_IF_ERROR(VerifyMatchFieldAgainstSchema(stage, match_field, sai_field));
+
   nlohmann::json json;
   json["kind"] = "sai_field";
   json["format"] = pdpi::Format_Name(match_field.format());
   if (match_field.format() != pdpi::STRING) {
     json["bitwidth"] = match_field.match_field().bitwidth();
   }
-  json["sai_field"] = absl::StrReplaceAll(annotation.body, {{" ", ""}});
+  json["sai_field"] = sai_field;
+
   return json;
 }
 
@@ -281,7 +346,7 @@ StatusOr<nlohmann::json> GenerateUdfMatchFieldJson(
 //    }]
 //  },
 StatusOr<nlohmann::json> GenerateCompositeMatchFieldJson(
-    const IrMatchFieldDefinition& match_field,
+    swss::acl::Stage stage, const IrMatchFieldDefinition& match_field,
     const pdpi::annotation::AnnotationComponents annotation) {
   nlohmann::json json;
   json["kind"] = "composite";
@@ -309,20 +374,40 @@ StatusOr<nlohmann::json> GenerateCompositeMatchFieldJson(
       IrMatchFieldDefinition element_match_field;
       const std::string element_match_field_name =
           absl::StrReplaceAll(element_annotation.body, {{" ", ""}});
+      if (element_match_field_name.empty()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << kBasicMatchAnnotationLabel << " within an @"
+               << kCompositeMatchAnnotationLabel << " annotion is empty.";
+      }
       try {
+        // Fill in unspecified values with data from the schema.
         const swss::acl::MatchFieldSchema& element_schema =
             swss::acl::MatchFieldSchemaByName(element_match_field_name);
         element_match_field.mutable_match_field()->set_bitwidth(
             element_schema.bitwidth);
-        element_match_field.set_format(pdpi::Format::HEX_STRING);
+        pdpi::Format format;
+        if (!pdpi::Format_Parse(swss::acl::FormatName(element_schema.format),
+                                &format)) {
+          return gutil::InternalErrorBuilder()
+                 << "Failed to match schema format '"
+                 << swss::acl::FormatName(element_schema.format)
+                 << " with any pdpi::Format. This indicates a bug in the "
+                 << "switch ACL schema.";
+        }
+        element_match_field.set_format(format);
       } catch (...) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Unknown SAI Match Field (" << element_match_field_name
                << ") in annotation @" << annotation.label << "("
                << annotation.body << ")";
       }
-      element_json =
-          GenerateBasicMatchJson(element_match_field, element_annotation);
+      ASSIGN_OR_RETURN(element_json,
+                       GenerateBasicMatchJson(stage, element_match_field,
+                                              element_annotation),
+                       _.SetPrepend()
+                           << "Failed within composite match annotation @"
+                           << annotation.label << "(" << annotation.body
+                           << "). ");
       element_json.erase("format");  // Format isn't needed for elements.
     } else if (element_annotation.label == kUdfMatchAnnotationLabel) {
       IrMatchFieldDefinition element_match_field;
@@ -375,7 +460,7 @@ StatusOr<nlohmann::json> GenerateCompositeMatchFieldJson(
 //            }
 //          }
 StatusOr<swss::FieldValueTuple> MatchTuple(
-    const IrMatchFieldDefinition& match_field) {
+    swss::acl::Stage stage, const IrMatchFieldDefinition& match_field) {
   static const auto* const kAnnotationCountError = new std::string(absl::StrCat(
       "Exactly one of the following annotations "
       "must be applied to a match field: (@",
@@ -398,14 +483,15 @@ StatusOr<swss::FieldValueTuple> MatchTuple(
       if (label_already_processed) {
         return InvalidArgumentErrorBuilder() << *kAnnotationCountError;
       }
-      json = GenerateBasicMatchJson(match_field, annotation);
+      ASSIGN_OR_RETURN(json,
+                       GenerateBasicMatchJson(stage, match_field, annotation));
       label_already_processed = true;
     } else if (annotation.label == kCompositeMatchAnnotationLabel) {
       if (label_already_processed) {
         return InvalidArgumentErrorBuilder() << *kAnnotationCountError;
       }
-      ASSIGN_OR_RETURN(
-          json, GenerateCompositeMatchFieldJson(match_field, annotation));
+      ASSIGN_OR_RETURN(json, GenerateCompositeMatchFieldJson(stage, match_field,
+                                                             annotation));
       label_already_processed = true;
     } else if (annotation.label == kUdfMatchAnnotationLabel) {
       if (label_already_processed) {
@@ -451,11 +537,17 @@ StatusOr<IrActionInfo::SaiAction> ExtractActionAndColor(
   if (arg_list.size() > 2) {
     return InvalidArgumentErrorBuilder()
            << "ACL action annotation has too many arguments. "
-           << "Expected (action[, color])";
+           << "Expected (action[, color]).";
   }
   sai_action.action = arg_list[0];
   if (arg_list.size() > 1) {
     sai_action.color = arg_list[1];
+    if (!IsValidColor(sai_action.color)) {
+      return InvalidArgumentErrorBuilder()
+             << "Annotation argument '" << sai_action.color
+             << "' is not a valid color value. "
+             << "Annotation format: (action[, color]).";
+    }
   }
 
   return sai_action;
@@ -481,6 +573,11 @@ StatusOr<IrActionInfo::SaiAction> ParseActionParam(
                    ExtractActionAndColor(annotation_args_result.value()),
                    _ << " Failed to process action parameter ["
                      << param.ShortDebugString() << "].");
+  if (!sai_action.color.empty()) {
+    return InvalidArgumentErrorBuilder()
+           << "Action parameter [" << param.ShortDebugString()
+           << "] specifies a color. Action parameters may not include a color.";
+  }
   if (param.param().name().empty()) {
     return InvalidArgumentErrorBuilder()
            << "ACL action parameter [" << param.ShortDebugString()
@@ -490,35 +587,100 @@ StatusOr<IrActionInfo::SaiAction> ParseActionParam(
   return sai_action;
 }
 
+absl::Status VerifyActionAgainstSchema(absl::string_view action_name,
+                                       IrActionInfo::SaiAction sai_action) {
+  swss::acl::ActionSchema schema;
+  try {
+    schema = swss::acl::ActionSchemaByName(sai_action.action);
+  } catch (...) {
+    return InvalidArgumentErrorBuilder() << absl::Substitute(
+               "Action '$0' references unknown SAI action '$1'.", action_name,
+               sai_action.action);
+  }
+  if (schema.format != swss::acl::Format::kNone) {
+    return InvalidArgumentErrorBuilder() << absl::Substitute(
+               "SAI action '$1' referenced in annotation for Action '$0' may "
+               "only be applied to an action parameter.",
+               action_name, sai_action.action);
+  }
+  return absl::OkStatus();
+}
+
+absl::Status VerifyActionParamAgainstSchema(
+    absl::string_view action_name,
+    const IrActionDefinition::IrActionParamDefinition& ir_param,
+    const IrActionInfo::SaiAction& sai_param) {
+  swss::acl::ActionSchema schema;
+  const auto& param_name = ir_param.param().name();
+  try {
+    schema = swss::acl::ActionSchemaByName(sai_param.action);
+  } catch (...) {
+    return InvalidArgumentErrorBuilder() << absl::Substitute(
+               "Action '$0' Param '$1' references unknown SAI field '$2'.",
+               action_name, param_name, sai_param.action);
+  }
+  if (schema.format == swss::acl::Format::kNone) {
+    return InvalidArgumentErrorBuilder() << absl::Substitute(
+               "SAI action '$2' mapped to Action '$0' Param '$1' may not be "
+               "applied to an action parameter.",
+               action_name, param_name, sai_param.action);
+  }
+  std::string ir_format = pdpi::Format_Name(ir_param.format());
+  std::string schema_format = swss::acl::FormatName(schema.format);
+  if (ir_format != schema_format) {
+    return InvalidArgumentErrorBuilder() << absl::Substitute(
+               "Unsupported format '$2' declared for Action '$0' Param '$1'. "
+               "Expected '$3'.",
+               action_name, param_name, ir_format, schema_format);
+  }
+  if (schema.bitwidth > 0 && ir_param.param().bitwidth() == 0) {
+    return gutil::InvalidArgumentErrorBuilder() << absl::Substitute(
+               "Action format '$2' declared for Action '$0' Param '$1' "
+               "requires a bitwidth but none was provided.",
+               action_name, param_name, ir_format);
+  }
+  if (schema.bitwidth > 0 && ir_param.param().bitwidth() > schema.bitwidth) {
+    return InvalidArgumentErrorBuilder() << absl::Substitute(
+               "Bitwidth '$2' declared for Action '$0' Param '$1' is larger "
+               "than the SAI bitwidth '$3'.",
+               action_name, param_name, ir_param.param().bitwidth(),
+               schema.bitwidth);
+  }
+  return absl::OkStatus();
+}
+
 // Generates an IrActionInfo from a given IrActionDefinition.
 StatusOr<IrActionInfo> ParseAction(const IrActionDefinition& action) {
   IrActionInfo action_info;
   action_info.name = action.preamble().alias();
   if (action_info.name.empty()) {
     return InvalidArgumentErrorBuilder()
-           << "Action [" << action.ShortDebugString()
-           << "] is missing an alias.";
+           << "Action '" << action.ShortDebugString()
+           << "' is missing an alias.";
   }
-
   auto result = pdpi::GetAllAnnotationsAsArgList(
       kActionAnnotationLabel, action.preamble().annotations());
   if (result.ok()) {
     for (const std::vector<std::string>& annotation_args : result.value()) {
       ASSIGN_OR_RETURN(IrActionInfo::SaiAction sai_action,
                        ExtractActionAndColor(annotation_args));
+      // RETURN_IF_ERROR(VerifyActionAgainstSchema(action_info.name, sai_action));
       action_info.sai_actions.push_back(sai_action);
     }
   }
 
   // Sort the SaiActions to maintain consistency in the resulting JSON.
   std::map<uint32_t, IrActionInfo::SaiAction> sorted_sai_actions;
-  for (const auto& pair : action.params_by_id()) {
-    ASSIGN_OR_RETURN(IrActionInfo::SaiAction parameter,
-                     ParseActionParam(pair.second));
-    sorted_sai_actions[pair.first] = parameter;
+  for (const auto& [id, ir_param] : action.params_by_id()) {
+    ASSIGN_OR_RETURN(IrActionInfo::SaiAction sai_param,
+                     ParseActionParam(ir_param),
+                     _ << "In action '" << action_info.name << "'.");
+    // RETURN_IF_ERROR(
+    //     VerifyActionParamAgainstSchema(action_info.name, ir_param, sai_param));
+    sorted_sai_actions[id] = sai_param;
   }
-  for (const auto& pair : sorted_sai_actions) {
-    action_info.sai_actions.push_back(pair.second);
+  for (const auto& [id, sai_action] : sorted_sai_actions) {
+    action_info.sai_actions.push_back(sai_action);
   }
   return action_info;
 }
@@ -526,9 +688,9 @@ StatusOr<IrActionInfo> ParseAction(const IrActionDefinition& action) {
 // Formats an IrActionInfo::SaiAction as a JSON.
 //
 // Examples:
-//   {"action": "SAI_PACKET_ACTION_SET_TC", "param": "tc", "color": "RED"}
-//   {"action": "SAI_PACKET_ACTION_DROP", "color": "RED"}
-//   {"action": "SAI_PACKET_ACTION_COPY"}
+//  {"action": "SAI_PACKET_ACTION_SET_TC", "param": "tc"}
+//  {"action": "SAI_PACKET_ACTION_DROP", "packet_color": "RED"}
+//  {"action": "SAI_PACKET_ACTION_COPY"}
 nlohmann::json CreateSaiActionJson(const IrActionInfo::SaiAction& parameter) {
   nlohmann::json json;
   json["action"] = parameter.action;
@@ -536,7 +698,7 @@ nlohmann::json CreateSaiActionJson(const IrActionInfo::SaiAction& parameter) {
     json["param"] = parameter.parameter;
   }
   if (!parameter.color.empty()) {
-    json["color"] = parameter.color;
+    json["packet_color"] = parameter.color;
   }
 
   return json;
@@ -614,16 +776,26 @@ StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
     const IrTableDefinition& ir_table) {
   std::vector<swss::FieldValueTuple> values;
 
-  ASSIGN_OR_RETURN(swss::FieldValueTuple stage, StageTuple(ir_table));
-  values.push_back(stage);
+  ASSIGN_OR_RETURN(swss::FieldValueTuple stage_tuple, StageTuple(ir_table));
+  swss::acl::Stage stage;
+  try {
+    stage = GetStage(stage_tuple.second);
+  } catch (...) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "ACL table references unknown stage '" << stage_tuple.second
+           << "'.";
+  }
+  values.push_back(stage_tuple);
 
   if (ir_table.match_fields_by_id().empty()) {
     return InvalidArgumentErrorBuilder()
            << "ACL table requires at least one match field.";
   }
-  for (const auto& pair : ir_table.match_fields_by_id()) {
-    ASSIGN_OR_RETURN(swss::FieldValueTuple match_tuple,
-                     MatchTuple(pair.second));
+  for (const auto& [id, match_field] : ir_table.match_fields_by_id()) {
+    ASSIGN_OR_RETURN(
+        swss::FieldValueTuple match_tuple, MatchTuple(stage, match_field),
+        _.SetPrepend() << "Failed to process match field '"
+                       << match_field.match_field().name() << "'. ");
     values.push_back(match_tuple);
   }
 
@@ -642,7 +814,7 @@ StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
     values.push_back(action_tuple);
   }
 
-  RETURN_IF_ERROR(VerifyConstDefaultActionInIrTable(ir_table));
+  // RETURN_IF_ERROR(VerifyConstDefaultActionInIrTable(ir_table));
 
   if (ir_table.size() > 0) {
     values.push_back({"size", absl::StrCat(ir_table.size())});
@@ -665,21 +837,24 @@ StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
 
 }  // namespace
 
+Status VerifyAclTableDefinition(const IrTableDefinition& ir_table) {
+  RETURN_IF_ERROR(GenerateSonicDbKeyFromIrTable(ir_table).status());
+  return GenerateSonicDbValuesFromIrTable(ir_table).status();
+}
+
 StatusOr<std::string> InsertAclTableDefinition(
-    ProducerStateTableAdapter& sonic_db_producer,
-    const IrTableDefinition& ir_table) {
+    P4rtTable& p4rt_table, const IrTableDefinition& ir_table) {
   ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
   ASSIGN_OR_RETURN(std::vector<swss::FieldValueTuple> values,
                    GenerateSonicDbValuesFromIrTable(ir_table));
-  sonic_db_producer.set(key, values);
+  p4rt_table.producer_state->set(key, values);
   return key;
 }
 
-absl::Status RemoveAclTableDefinition(
-    ProducerStateTableAdapter& sonic_db_producer,
-    const IrTableDefinition& ir_table) {
+absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
+                                      const IrTableDefinition& ir_table) {
   ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
-  sonic_db_producer.del(key);
+  p4rt_table.producer_state->del(key);
   return absl::OkStatus();
 }
 

@@ -2,8 +2,12 @@
 
 The SONiC P4RT App is a gRPC service supporting the
 [P4Runtime](https://github.com/p4lang/p4runtime) interface for switches running
-the SONiC operating system. This project is intended to be built and used by
-[sonic-buildimage](https://github.com/Azure/sonic-buildimage)
+the SONiC operating system. This project is intended to be build and used by
+[sonic-buildimage](https://github.com/pins/sonic-buildimage/tree/pins/202012_20210206/src/sonic-p4rt)
+
+This is not an officially supported Google product.
+
+This code is still a work in progress.
 
 ## System Dependencies
 

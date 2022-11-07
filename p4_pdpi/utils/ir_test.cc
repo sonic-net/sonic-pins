@@ -22,16 +22,23 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/substitute.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
 
 namespace pdpi {
+namespace {
 
 using ::google::protobuf::util::MessageDifferencer;
+using ::gutil::EqualsProto;
+using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
 
 TEST(StringToIrValueTest, Okay) {
   std::vector<std::tuple<std::string, Format, std::string>> testcases = {
@@ -184,18 +191,23 @@ TEST(GetFormatTest, Ipv4AnnotationInvalidBitwidth) {
 }
 
 TEST(GetFormatTest, Ipv6AnnotationPass) {
-  std::vector<std::string> annotations = {"@format(IPV6_ADDRESS)"};
-  ASSERT_OK_AND_ASSIGN(auto format, GetFormat(annotations, kNumBitsInIpv6,
-                                              /*is_sdn_string=*/false));
-  EXPECT_EQ(format, Format::IPV6);
+  EXPECT_THAT(GetFormat({"@format(IPV6_ADDRESS)"}, /*bitwidth=*/kNumBitsInIpv6,
+                        /*is_sdn_string=*/false),
+              IsOkAndHolds(Format::IPV6));
+}
+
+TEST(GetFormatTest, Ipv6AnnotationShortBitwidthPass) {
+  EXPECT_THAT(
+      GetFormat({"@format(IPV6_ADDRESS)"}, /*bitwidth=*/kNumBitsInIpv6 - 1,
+                /*is_sdn_string=*/false),
+      IsOkAndHolds(Format::IPV6));
 }
 
 TEST(GetFormatTest, Ipv6AnnotationInvalidBitwidth) {
-  std::vector<std::string> annotations = {"@format(IPV6_ADDRESS)"};
-  auto status_or_format =
-      GetFormat(annotations, /*bitwidth=*/65, /*is_sdn_string=*/false);
-  EXPECT_EQ(status_or_format.status().code(),
-            absl::StatusCode::kInvalidArgument);
+  EXPECT_THAT(
+      GetFormat({"@format(IPV6_ADDRESS)"}, /*bitwidth=*/kNumBitsInIpv6 + 1,
+                /*is_sdn_string=*/false),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(GetFormatTest, ConflictingAnnotations) {
@@ -281,4 +293,109 @@ TEST(PrefixLenToMaskTest, GenericValueTest) {
   EXPECT_EQ(result, expected);
 }
 
+TEST(ArbitraryByteStringToIrValueTest, Ipv6FullBitwidthTest) {
+  constexpr absl::string_view kIp = "0:aaaa:bbbb:cccc:dddd:eeee:ffff:0";
+  ASSERT_OK_AND_ASSIGN(netaddr::Ipv6Address ipv6_address,
+                       netaddr::Ipv6Address::OfString(kIp));
+  EXPECT_THAT(
+      ArbitraryByteStringToIrValue(Format::IPV6, /*bitwidth=*/kNumBitsInIpv6,
+                                   /*bytes=*/ipv6_address.ToPaddedByteString()),
+      IsOkAndHolds(EqualsProto(absl::Substitute(R"pb(ipv6: "$0")pb", kIp))));
+}
+
+class Ipv6BitwidthTest : public testing::TestWithParam<int> {};
+
+TEST_P(Ipv6BitwidthTest, ArbitraryByteStringToIrValueReturnsIp) {
+  const int bitwidth = GetParam();
+  ASSERT_OK_AND_ASSIGN(
+      netaddr::Ipv6Address ipv6_address,
+      netaddr::Ipv6Address::OfString("0:aaaa:bbbb:cccc:dddd:eeee:ffff:0"));
+  ASSERT_OK_AND_ASSIGN(ipv6_address,
+                       ipv6_address.MaskForPrefixLength(bitwidth));
+  SCOPED_TRACE(absl::Substitute("Expected IP: $0", ipv6_address.ToString()));
+
+  EXPECT_THAT(
+      ArbitraryByteStringToIrValue(
+          Format::IPV6, /*bitwidth=*/bitwidth,
+          /*bytes=*/
+          (ipv6_address >> (kNumBitsInIpv6 - bitwidth)).ToPaddedByteString()),
+      IsOkAndHolds(EqualsProto(
+          absl::Substitute(R"pb(ipv6: "$0")pb", ipv6_address.ToString()))));
+}
+
+TEST_P(Ipv6BitwidthTest, IrValueToNormalizedByteString) {
+  const int bitwidth = GetParam();
+  ASSERT_OK_AND_ASSIGN(
+      netaddr::Ipv6Address ipv6_address,
+      netaddr::Ipv6Address::OfString("0:aaaa:bbbb:cccc:dddd:eeee:ffff:0"));
+  ASSERT_OK_AND_ASSIGN(ipv6_address,
+                       ipv6_address.MaskForPrefixLength(bitwidth));
+  SCOPED_TRACE(absl::Substitute("IP Address: $0", ipv6_address.ToString()));
+  IrValue ir_value;
+  ir_value.set_ipv6(ipv6_address.ToString());
+  ipv6_address >>= (kNumBitsInIpv6 - bitwidth);
+
+  EXPECT_THAT(IrValueToNormalizedByteString(ir_value, bitwidth),
+              IsOkAndHolds(ipv6_address.ToPaddedByteString()));
+}
+
+TEST_P(Ipv6BitwidthTest, IrValueToNormalizedByteStringBitwidthTooLargeFails) {
+  const int bitwidth = GetParam();
+  if (bitwidth == kNumBitsInIpv6) return;
+  netaddr::Ipv6Address ipv6_address = netaddr::Ipv6Address::AllOnes();
+  ASSERT_OK_AND_ASSIGN(ipv6_address,
+                       ipv6_address.MaskForPrefixLength(bitwidth + 1));
+  SCOPED_TRACE(absl::Substitute("IP Address: $0", ipv6_address.ToString()));
+  IrValue ir_value;
+  ir_value.set_ipv6(ipv6_address.ToString());
+
+  EXPECT_THAT(IrValueToNormalizedByteString(ir_value, bitwidth),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_P(Ipv6BitwidthTest, ArbitraryByteStringToIrValueBitwidthTooLargeFails) {
+  const int bitwidth = GetParam();
+  if (bitwidth == kNumBitsInIpv6) return;
+
+  netaddr::Ipv6Address ipv6_address = netaddr::Ipv6Address::AllOnes();
+  ipv6_address >>= kNumBitsInIpv6 - bitwidth - 1;
+
+  EXPECT_THAT(ArbitraryByteStringToIrValue(Format::IPV6, bitwidth,
+                                           ipv6_address.ToPaddedByteString()),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+INSTANTIATE_TEST_SUITE_P(PerBitwidth, Ipv6BitwidthTest,
+                         testing::Values(63, 64, 65, 128),
+                         testing::PrintToStringParamName());
+
+TEST(AnnotationTests, IsElementUnusedTest) {
+  std::vector<std::string> annotations_with_unused = {"@irrelevant", "@unused",
+                                                      "@irrelevant2"};
+  EXPECT_TRUE(IsElementUnused(google::protobuf::RepeatedPtrField<std::string>(
+      annotations_with_unused.begin(), annotations_with_unused.end())));
+
+  std::vector<std::string> annotations_without_unused = {
+      "@irrelevant", "@deprecated", "@irrelevant2"};
+  EXPECT_FALSE(IsElementUnused(google::protobuf::RepeatedPtrField<std::string>(
+      annotations_without_unused.begin(), annotations_without_unused.end())));
+}
+
+TEST(AnnotationTests, IsElementDeprecatedTest) {
+  std::vector<std::string> annotations_with_deprecated = {
+      "@irrelevant", "@deprecated", "@irrelevant2"};
+  EXPECT_TRUE(
+      IsElementDeprecated(google::protobuf::RepeatedPtrField<std::string>(
+          annotations_with_deprecated.begin(),
+          annotations_with_deprecated.end())));
+
+  std::vector<std::string> annotations_without_deprecated = {
+      "@irrelevant", "@unused", "@irrelevant2"};
+  EXPECT_FALSE(
+      IsElementDeprecated(google::protobuf::RepeatedPtrField<std::string>(
+          annotations_without_deprecated.begin(),
+          annotations_without_deprecated.end())));
+}
+
+}  // namespace
 }  // namespace pdpi

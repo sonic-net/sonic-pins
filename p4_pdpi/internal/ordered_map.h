@@ -16,25 +16,15 @@
 #define GOOGLE_P4_PDPI_INTERNAL_ORDERED_MAP_H_
 
 #include "absl/container/btree_map.h"
-#include "absl/container/flat_hash_map.h"
-#include "google/protobuf/map.h"
 
-// Ordered view of an unordered protobuf Map. Useful for iterating over the map
+// Ordered view of an unordered Map. Useful for iterating over the map
 // in deterministic fashion. Note that the original map and its contents must
 // remain live (i.e. allocated) or else this will cause dangling references.
-template <class Key, class Value>
-absl::btree_map<Key, const Value&> Ordered(
-    const google::protobuf::Map<Key, Value>& proto_map) {
-  return absl::btree_map<Key, const Value&>(proto_map.begin(), proto_map.end());
-}
-
-// Ordered view of an unordered flat hash map. Useful for iterating over the map
-// in deterministic fashion. Note that the original map and its contents must
-// remain live (i.e. allocated) or else this will cause dangling references.
-template <class Key, class Value>
-absl::btree_map<Key, const Value&> Ordered(
-    const absl::flat_hash_map<Key, Value>& map) {
-  return absl::btree_map<Key, const Value&>(map.begin(), map.end());
+template <typename M>
+absl::btree_map<typename M::key_type, const typename M::mapped_type&> Ordered(
+    const M& map) {
+  return absl::btree_map<typename M::key_type, const typename M::mapped_type&>(
+      map.begin(), map.end());
 }
 
 #endif  // GOOGLE_P4_PDPI_INTERNAL_ORDERED_MAP_H_

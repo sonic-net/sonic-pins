@@ -32,6 +32,7 @@
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 
 namespace p4rt_app {
@@ -69,6 +70,8 @@ absl::StatusOr<p4::v1::StreamMessageResponse> SendStreamRequest(
 class ArbitrationTest : public testing::Test {
  protected:
   void SetUp() override {
+    ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(GetDeviceId()));
+
     std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());
     auto channel =
         grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
@@ -79,12 +82,27 @@ class ArbitrationTest : public testing::Test {
   int GetDeviceId() const { return 183807201; }
 
   test_lib::P4RuntimeGrpcService p4rt_service_ =
-      test_lib::P4RuntimeGrpcService(test_lib::P4RuntimeGrpcServiceOptions{});
+      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
   std::unique_ptr<p4::v1::P4Runtime::Stub> stub_;
 };
 
-// TODO: arbitration should fail with invalid device id.
-TEST_F(ArbitrationTest, DISABLED_DeviceIdMustMatch) {
+TEST_F(ArbitrationTest, DeviceIdMustBeSet) {
+  // Remove the device ID by setting it to zero.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(0));
+
+  grpc::ClientContext context;
+  std::unique_ptr<P4RuntimeStream> stream = stub_->StreamChannel(&context);
+
+  p4::v1::StreamMessageResponse response;
+  p4::v1::StreamMessageRequest request;
+  request.mutable_arbitration()->set_device_id(GetDeviceId());
+  request.mutable_arbitration()->mutable_election_id()->set_high(2);
+  stream->Write(request);
+  EXPECT_EQ(stream->Finish().error_code(),
+            grpc::StatusCode::FAILED_PRECONDITION);
+}
+
+TEST_F(ArbitrationTest, DeviceIdMustMatch) {
   grpc::ClientContext context;
   std::unique_ptr<P4RuntimeStream> stream = stub_->StreamChannel(&context);
 
@@ -96,8 +114,7 @@ TEST_F(ArbitrationTest, DISABLED_DeviceIdMustMatch) {
   EXPECT_EQ(stream->Finish().error_code(), grpc::StatusCode::NOT_FOUND);
 }
 
-// TODO: arbitration should fail with invalid device id.
-TEST_F(ArbitrationTest, DISABLED_DeviceIdCannotChange) {
+TEST_F(ArbitrationTest, DeviceIdCannotChangeAtController) {
   grpc::ClientContext context;
   std::unique_ptr<P4RuntimeStream> stream = stub_->StreamChannel(&context);
 
@@ -112,6 +129,59 @@ TEST_F(ArbitrationTest, DISABLED_DeviceIdCannotChange) {
   stream->Write(request);
   EXPECT_EQ(stream->Finish().error_code(),
             grpc::StatusCode::FAILED_PRECONDITION);
+}
+
+TEST_F(ArbitrationTest, DeviceIdCannotChangeAtSwitchWithActiveConnection) {
+  grpc::ClientContext context;
+  std::unique_ptr<P4RuntimeStream> stream = stub_->StreamChannel(&context);
+
+  // Simply connecting to the gRPC stream not enough to be considered active. We
+  // also need to send an arbitration request.
+  p4::v1::StreamMessageRequest request;
+  request.mutable_arbitration()->set_device_id(GetDeviceId());
+  ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
+                       SendStreamRequest(*stream, request));
+
+  EXPECT_THAT(p4rt_service_.GetP4rtServer().UpdateDeviceId(0),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST_F(ArbitrationTest, DeviceIdCanChangeAtSwitchWithNoActiveConnection) {
+  // Simply connecting to the gRPC stream not enough to be considered active. We
+  // also need to send an arbitration request.
+  grpc::ClientContext context;
+  std::unique_ptr<P4RuntimeStream> stream = stub_->StreamChannel(&context);
+
+  EXPECT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(0));
+}
+
+TEST_F(ArbitrationTest, DeviceIdChangesWillIgnoreNoopWithActiveConnection) {
+  grpc::ClientContext context;
+  std::unique_ptr<P4RuntimeStream> stream = stub_->StreamChannel(&context);
+
+  p4::v1::StreamMessageRequest request;
+  request.mutable_arbitration()->set_device_id(GetDeviceId());
+  ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
+                       SendStreamRequest(*stream, request));
+
+  EXPECT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(GetDeviceId()));
+}
+
+TEST_F(ArbitrationTest, DeviceIdCanBeChangedAfterActiveConnectionCloses) {
+  grpc::ClientContext context;
+  std::unique_ptr<P4RuntimeStream> stream = stub_->StreamChannel(&context);
+
+  // Make the connection active by sending an arbitration request.
+  p4::v1::StreamMessageRequest request;
+  request.mutable_arbitration()->set_device_id(GetDeviceId());
+  ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
+                       SendStreamRequest(*stream, request));
+
+  // Then close it.
+  stream->WritesDone();
+  EXPECT_OK(stream->Finish());
+
+  EXPECT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(GetDeviceId() + 1));
 }
 
 TEST_F(ArbitrationTest, PrimaryConnectionWithElectionId) {
@@ -453,7 +523,50 @@ TEST_F(ArbitrationTest, PrimaryConnectionCanReestablishAfterBecomingBackup) {
             grpc::StatusCode::ALREADY_EXISTS);
 }
 
-TEST_F(ArbitrationTest, PrimaryMustUseElectionIdHigherThanAllPastConnections) {
+TEST_F(ArbitrationTest, BackupCanReuseElectionIdWhenPrimaryDisconnects) {
+  grpc::ClientContext primary_context;
+  std::unique_ptr<P4RuntimeStream> primary =
+      stub_->StreamChannel(&primary_context);
+
+  grpc::ClientContext backup_context;
+  std::unique_ptr<P4RuntimeStream> backup =
+      stub_->StreamChannel(&backup_context);
+
+  // Send the first arbitration request, and because it's the first request it
+  // will default to the primary connection.
+  p4::v1::StreamMessageRequest primary_request;
+  primary_request.mutable_arbitration()->set_device_id(GetDeviceId());
+  *primary_request.mutable_arbitration()->mutable_election_id() =
+      GetElectionId(2);
+  ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response,
+                       SendStreamRequest(*primary, primary_request));
+  EXPECT_EQ(response.arbitration().status().code(), grpc::StatusCode::OK);
+
+  // Send the second arbitration request without an election ID which will
+  // force it to be a backup connection.
+  p4::v1::StreamMessageRequest backup_request;
+  backup_request.mutable_arbitration()->set_device_id(GetDeviceId());
+  ASSERT_OK_AND_ASSIGN(response, SendStreamRequest(*backup, backup_request));
+  EXPECT_NE(response.arbitration().status().code(), grpc::StatusCode::OK);
+
+  // Close the primary stream to flush the connection on the P4RT service.
+  primary->WritesDone();
+  EXPECT_OK(primary->Finish());
+
+  // Because the primary connection went down we expect all the backup
+  // connections to be notififed.
+  ASSERT_OK_AND_ASSIGN(response, GetStreamResponse(*backup));
+  EXPECT_EQ(response.arbitration().status().code(),
+            grpc::StatusCode::NOT_FOUND);
+
+  // The backup connection should be able to become primary reusing the same
+  // election ID as the old primary channel.
+  ASSERT_OK_AND_ASSIGN(p4::v1::StreamMessageResponse response2,
+                       SendStreamRequest(*backup, primary_request));
+  EXPECT_EQ(response2.arbitration().status().code(), grpc::StatusCode::OK);
+}
+
+TEST_F(ArbitrationTest, ConnectionCannotBecomePrimaryWithLowerElectionId) {
   grpc::ClientContext context;
   std::unique_ptr<P4RuntimeStream> stream = stub_->StreamChannel(&context);
 
@@ -597,6 +710,60 @@ TEST_F(ArbitrationTest, ConnectionCannotChangeItsRoleId) {
   stream->Write(request);
   EXPECT_EQ(stream->Finish().error_code(),
             grpc::StatusCode::FAILED_PRECONDITION);
+}
+
+TEST_F(ArbitrationTest, CannotSendRequestsAfterDisconnecting) {
+  grpc::ClientContext stream0_context;
+  std::unique_ptr<P4RuntimeStream> stream0 =
+      stub_->StreamChannel(&stream0_context);
+
+  // Send arbitration request to establish the connection.
+  p4::v1::StreamMessageResponse stream_response;
+  p4::v1::StreamMessageRequest stream_request;
+  stream_request.mutable_arbitration()->set_device_id(GetDeviceId());
+  stream_request.mutable_arbitration()->mutable_election_id()->set_high(2);
+  ASSERT_OK_AND_ASSIGN(stream_response,
+                       SendStreamRequest(*stream0, stream_request));
+  ASSERT_EQ(stream_response.arbitration().status().code(),
+            grpc::StatusCode::OK);
+
+  // Close the stream to flush the connection for the P4RT service.
+  stream0->WritesDone();
+  EXPECT_OK(stream0->Finish());
+
+  // The write request should fail because we don't have an active connection.
+  p4::v1::WriteRequest request;
+  request.set_device_id(GetDeviceId());
+  request.mutable_election_id()->set_high(2);
+  p4::v1::WriteResponse response;
+  grpc::ClientContext context;
+  EXPECT_EQ(stub_->Write(&context, request, &response).error_code(),
+            grpc::StatusCode::PERMISSION_DENIED);
+}
+
+TEST_F(ArbitrationTest, SendingAnInvalidPacketWillNotCloseTheStream) {
+  grpc::ClientContext stream0_context;
+  std::unique_ptr<P4RuntimeStream> stream0 =
+      stub_->StreamChannel(&stream0_context);
+
+  // Send an empty request.
+  p4::v1::StreamMessageResponse stream_response;
+  p4::v1::StreamMessageRequest stream_request;
+  ASSERT_OK_AND_ASSIGN(stream_response,
+                       SendStreamRequest(*stream0, stream_request));
+
+  // Results in an error response, but will not close the stream.
+  EXPECT_EQ(stream_response.error().canonical_code(),
+            grpc::StatusCode::UNIMPLEMENTED);
+
+  // So when we send the correct  arbitration request it is accepted.
+  stream_request.mutable_arbitration()->set_device_id(GetDeviceId());
+  *stream_request.mutable_arbitration()->mutable_election_id() =
+      GetElectionId(1);
+  ASSERT_OK_AND_ASSIGN(stream_response,
+                       SendStreamRequest(*stream0, stream_request));
+  EXPECT_EQ(stream_response.arbitration().status().code(),
+            grpc::StatusCode::OK);
 }
 
 }  // namespace

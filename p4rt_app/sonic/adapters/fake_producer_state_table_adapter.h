@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,8 +27,7 @@ namespace sonic {
 // Fake the OrchAgent write path behavior for table entries in a SONiC DB.
 class FakeProducerStateTableAdapter final : public ProducerStateTableAdapter {
  public:
-  FakeProducerStateTableAdapter(const std::string &table_name,
-                                FakeSonicDbTable *sonic_db_table);
+  explicit FakeProducerStateTableAdapter(FakeSonicDbTable *sonic_db_table);
 
   // Not copyable or moveable.
   FakeProducerStateTableAdapter(const FakeProducerStateTableAdapter &) = delete;
@@ -41,8 +40,6 @@ class FakeProducerStateTableAdapter final : public ProducerStateTableAdapter {
   void del(const std::string &key) override;
   void batch_set(const std::vector<swss::KeyOpFieldsValuesTuple> &values);
   void batch_del(const std::vector<std::string> &keys);
-
-  std::string get_table_name() const override { return table_name_; }
 
  private:
   const std::string table_name_;

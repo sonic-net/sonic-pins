@@ -10,11 +10,8 @@ parser packet_parser(packet_in packet, out headers_t headers,
                      inout standard_metadata_t standard_metadata) {
   state start {
     // Initialize local metadata fields.
-    // TODO: Currently, all packets are admitted to L3 pipeline.
-    // local_metadata.admit_to_l3 = false;
-    local_metadata.admit_to_l3 = true;
-
-    local_metadata.vrf_id = 0;
+    local_metadata.admit_to_l3 = false;
+    local_metadata.vrf_id = kDefaultVrf;
     local_metadata.packet_rewrites.src_mac = 0;
     local_metadata.packet_rewrites.dst_mac = 0;
     local_metadata.l4_src_port = 0;
@@ -23,6 +20,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.mirror_session_id_valid = false;
     local_metadata.color = MeterColor_t.GREEN;
     local_metadata.ingress_port = (port_id_t)standard_metadata.ingress_port;
+    local_metadata.route_metadata = 0;
 
     transition parse_ethernet;
   }
@@ -91,6 +89,8 @@ control packet_deparser(packet_out packet, in headers_t headers) {
     packet.emit(headers.erspan_ipv4);
     packet.emit(headers.erspan_gre);
     packet.emit(headers.ethernet);
+    packet.emit(headers.tunnel_encap_ipv6);
+    packet.emit(headers.tunnel_encap_gre);
     packet.emit(headers.ipv4);
     packet.emit(headers.ipv6);
     packet.emit(headers.arp);
