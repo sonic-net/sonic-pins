@@ -245,6 +245,184 @@ void WriteBatchToAppDb(
 
 }  // namespace
 
+// Generates the table definition in json format
+//
+//{
+//  "tables": [
+//      {
+//        "id": <value>,
+//        "name": "table-name 1",
+//        "alias": "table-alias 1",
+//        "matchfields": [
+//          {
+//              "id": <value>,
+//              "name": "match-field 1",
+//              "bitwidth": <value>,
+//              "format": <value>,
+//              "references": [
+//                  {
+//                      "table": "reference table",
+//                      "match": "reference match"
+//                  }
+//              ]
+//          },
+//          {
+//              "id": <value>,
+//              "name": "match-field 2",
+//              ....
+//              ....
+//          }
+//        ],
+//        "actions": [
+//          {
+//              "id": <value>,
+//              "name": "action-name 1",
+//              "alias": "action-alias 1",
+//              "params": [
+//                  {
+//                      "id": <value>,
+//                      "name": "param-name 1",
+//                      "bitwidth": <value>,
+//                      "format": <value>,
+//                      "references": [
+//                          {
+//                              "table": "reference table",
+//                              "match": "reference match"
+//                          }
+//                      ]
+//                  },
+//                  {
+//                      "id": <value>,
+//                      "name": "param-name 2",
+//                      ....
+//                      ....
+//                  }
+//              ]
+//          },
+//          {
+//              "id": <value>,
+//              "name": "action-name 2",
+//              "alias": "action-alias 2",
+//              ....
+//              ....
+//          }
+//        ],
+//        "counter/unit": <value>
+//      },
+//      {
+//        "id": <value>,
+//        "name": "table-name 2",
+//        "alias": "table-alias 2",
+//        ....
+//        ....
+//      }
+//  ]
+//}
+//
+//
+absl::Status InsertTableDefinition(
+    nlohmann::json &tables,
+    const pdpi::IrTableDefinition& ir_table) {
+
+  nlohmann::json table_json = nlohmann::json({});
+
+  table_json["id"] = ir_table.preamble().id();
+  table_json["name"] = ir_table.preamble().name();
+  table_json["alias"] = ir_table.preamble().alias();
+
+  nlohmann::json matchfields_json = {};
+  for (const auto& match_pair : ir_table.match_fields_by_name()) {
+    nlohmann::json match_json = nlohmann::json({});
+    pdpi::IrMatchFieldDefinition ir_match = match_pair.second;
+
+    match_json["id"] = ir_match.match_field().id();
+    match_json["name"] = ir_match.match_field().name();
+    match_json["bitwidth"] = ir_match.match_field().bitwidth();
+    match_json["format"] = pdpi::Format_Name(ir_match.format());
+    nlohmann::json references_json = {};
+    for (const auto& ref_pair : ir_match.references()) {
+      nlohmann::json ref_json = nlohmann::json({});
+      ref_json["table"] = ref_pair.table();
+      ref_json["match"] = ref_pair.match_field();
+      references_json.push_back(ref_json);
+    }
+    match_json.push_back(
+         nlohmann::json::object_t::value_type("references", references_json));
+    matchfields_json.push_back(match_json);
+  }
+  table_json.push_back(
+       nlohmann::json::object_t::value_type("matchFields", matchfields_json));
+
+  nlohmann::json actions_json = {};
+  for (const auto& action : ir_table.entry_actions()) {
+    nlohmann::json action_json = nlohmann::json({});
+    pdpi::IrActionDefinition ir_action = action.action();
+
+    action_json["id"] = ir_action.preamble().id();
+    action_json["name"] = ir_action.preamble().name();
+    action_json["alias"] = ir_action.preamble().alias();
+    nlohmann::json params_json = {};
+    for (const auto& param : ir_action.params_by_name()) {
+      nlohmann::json param_json = nlohmann::json({});
+      pdpi::IrActionDefinition::IrActionParamDefinition ir_param = param.second;
+
+      param_json["id"] = ir_param.param().id();
+      param_json["name"] = ir_param.param().name();
+      param_json["bitwidth"] = ir_param.param().bitwidth();
+      param_json["format"] = pdpi::Format_Name(ir_param.format());
+      nlohmann::json references_json = {};
+      for (const auto& ref_pair : ir_param.references()) {
+        nlohmann::json ref_json = nlohmann::json({});
+        ref_json["table"] = ref_pair.table();
+        ref_json["match"] = ref_pair.match_field();
+        references_json.push_back(ref_json);
+      }
+      param_json.push_back(
+           nlohmann::json::object_t::value_type("references", references_json));
+      params_json.push_back(param_json);
+    }
+    action_json.push_back(
+          nlohmann::json::object_t::value_type("params", params_json));
+    actions_json.push_back(action_json);
+  }
+  table_json.push_back(
+       nlohmann::json::object_t::value_type("actions", actions_json));
+
+  if (ir_table.counter().unit() != p4::config::v1::CounterSpec::UNSPECIFIED) {
+    // Counter units: BYTES, PACKETS, BOTH
+    table_json.push_back(nlohmann::json::object_t::value_type("counter/unit",
+         p4::config::v1::CounterSpec::Unit_Name(ir_table.counter().unit())));
+  }
+
+  tables.push_back(table_json);
+
+  return absl::OkStatus();
+}
+
+// Publish set of tables in json formatted string to AppDb
+absl::StatusOr<std::string> PublishTablesDefinitionToAppDb(
+    const std::string& tables_info_s,
+    uint64_t cookie,
+    P4rtTable& p4rt_table) {
+
+  nlohmann::json json_key;
+  std::ostringstream oss;
+  oss << cookie;
+
+  json_key["context"] = oss.str();
+
+  std::string key = absl::Substitute("$0:$1",
+                          table::TypeName(table::Type::kTblsDefinitionSet),
+                          json_key.dump());
+
+  std::vector<swss::FieldValueTuple> values;
+  values.push_back(std::make_pair("info", tables_info_s));
+
+  p4rt_table.producer_state->set(key, values);
+
+  return key;
+}
+
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key) {
@@ -268,7 +446,9 @@ std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
 
     // The DEFINITION sub-table does not hold any P4RT_TABLE entries, and should
     // be ignored.
-    if (split.size() > 1 && split[0] == APP_P4RT_ACL_TABLE_DEFINITION_NAME) {
+    if (split.size() > 1 &&
+                ((split[0] == APP_P4RT_ACL_TABLE_DEFINITION_NAME) ||
+                 (split[0] == APP_P4RT_TABLES_DEFINITION_TABLE_NAME))) {
       continue;
     }
 

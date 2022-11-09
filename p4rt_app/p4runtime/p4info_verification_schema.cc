@@ -264,7 +264,8 @@ absl::StatusOr<P4InfoVerificationSchema> ConvertToSchema(
     ASSIGN_OR_RETURN(table::Type table_type, GetTableType(table),
                      _.SetPrepend()
                          << "Failed to process table '" << table_name << "': ");
-    if (table_type != table::Type::kFixed) continue;
+    if ((table_type != table::Type::kFixed) &&
+                    (table_type != table::Type::kExt)) continue;
 
     ASSIGN_OR_RETURN(*schema.add_tables(), ToTableSchema(table_name, table),
                      _.SetPrepend()

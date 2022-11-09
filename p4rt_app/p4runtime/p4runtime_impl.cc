@@ -28,6 +28,7 @@
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "google/protobuf/descriptor.h"
+#include "google/protobuf/util/json_util.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/impl/codegen/status.h"
@@ -51,6 +52,8 @@
 #include "p4rt_app/sonic/state_verification.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
+#include "swss/json.h"
+#include "swss/json.hpp"
 
 namespace p4rt_app {
 namespace {
@@ -949,6 +952,9 @@ grpc::Status P4RuntimeImpl::SavePipelineConfig(
 
 absl::Status P4RuntimeImpl::ConfigureAppDbTables(
     const pdpi::IrP4Info& ir_p4info) {
+  bool publish_definition_set = false;
+  nlohmann::json tables_json = {};
+
   // Setup definitions for each each P4 ACL table.
   for (const auto& pair : ir_p4info.tables_by_name()) {
     std::string table_name = pair.first;
@@ -976,6 +982,41 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       if (status.code() != google::rpc::OK) {
         return gutil::InvalidArgumentErrorBuilder() << status.message();
       }
+    } else if (table_type == table::Type::kExt) {
+      // Add table definition
+      /**
+       * For now send only Extension tables.In future when required, Fixed table
+       * definitions also can be inserted here
+       */
+      LOG(INFO) << "Add Table Definition for " << table_name;
+      sonic::InsertTableDefinition(tables_json, table);
+
+      publish_definition_set = true;
+    }
+  }
+
+  if (publish_definition_set) {
+     // Publish all tables at once and get one success/failure response for them
+    nlohmann::json info_json = nlohmann::json({});
+    info_json.push_back(
+        nlohmann::json::object_t::value_type("tables", tables_json));
+    ASSIGN_OR_RETURN(
+          std::string key,
+          sonic::PublishTablesDefinitionToAppDb(info_json.dump(), (uint64_t)0,
+                     p4rt_table_),
+          _ << "Could not publish Table Definition Set to APPDB");
+
+    ASSIGN_OR_RETURN(
+          pdpi::IrUpdateStatus status,
+          sonic::GetAndProcessResponseNotification(
+                           *p4rt_table_.notifier, *p4rt_table_.app_db,
+                           *p4rt_table_.app_state_db, key,
+                           sonic::ResponseTimeMonitor::kNone));
+
+    // Any issue with the forwarding config should be sent back to the
+    // controller as an INVALID_ARGUMENT.
+    if (status.code() != google::rpc::OK) {
+      return gutil::InvalidArgumentErrorBuilder() << status.message();
     }
   }
 

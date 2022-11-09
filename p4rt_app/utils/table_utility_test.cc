@@ -35,6 +35,8 @@ TEST(GetTableType, ReturnsAclForSaiAclAnnotation) {
 
 TEST(GetTableType, ReturnsFixedForNoAnnotation) {
   pdpi::IrTableDefinition ir_table;
+  google::protobuf::TextFormat::ParseFromString(
+        R"pb(preamble { alias: "ipv4_table"})pb", &ir_table);
   auto get_table_type_result = GetTableType(ir_table);
 
   ASSERT_TRUE(get_table_type_result.ok())
@@ -45,12 +47,21 @@ TEST(GetTableType, ReturnsFixedForNoAnnotation) {
 TEST(GetTableType, ReturnsFixedForNoSpecialAnnotation) {
   pdpi::IrTableDefinition ir_table;
   google::protobuf::TextFormat::ParseFromString(
-      R"pb(preamble { annotations: "@random()" })pb", &ir_table);
+      R"pb(preamble { alias: "ipv6_table" annotations: "@random()" })pb", &ir_table);
 
   auto get_table_type_result = GetTableType(ir_table);
   ASSERT_TRUE(get_table_type_result.ok())
       << "Actual status is " << get_table_type_result.status();
   EXPECT_EQ(get_table_type_result.value(), table::Type::kFixed);
+}
+
+TEST(GetTableType, ReturnsExtForNoAnnotation) {
+  pdpi::IrTableDefinition ir_table;
+  auto get_table_type_result = GetTableType(ir_table);
+
+  ASSERT_TRUE(get_table_type_result.ok())
+      << "Actual status is " << get_table_type_result.status();
+  EXPECT_EQ(get_table_type_result.value(), table::Type::kExt);
 }
 
 TEST(GetTableType, ReturnsErrorForAnnotationParseFailure) {
@@ -83,7 +94,7 @@ TEST_P(TypeTest, TypeNameMatchesTypeParse) {
 INSTANTIATE_TEST_SUITE_P(
     Type, TypeTest,
     testing::Values(table::Type::kAcl, table::Type::kFixed,
-                    table::Type::kDefinition),
+                    table::Type::kAclDefinition),
     [](const testing::TestParamInfo<TypeTest::ParamType>& info) {
       return table::TypeName(info.param);
     });
