@@ -350,7 +350,8 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
 
 absl::Status CacheWriteResults(
     absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
-    const p4::v1::WriteRequest& request, const pdpi::IrWriteResponse& results) {
+    const pdpi::IrP4Info& ir_p4finfo, const p4::v1::WriteRequest& request,
+    const pdpi::IrWriteResponse& results) {
   if (request.updates_size() != results.statuses_size()) {
     return gutil::InternalErrorBuilder()
            << "The number of requests (" << request.updates_size()
@@ -367,7 +368,17 @@ absl::Status CacheWriteResults(
     }
 
     const auto& update = request.updates(i);
-    gutil::TableEntryKey key(update.entity().table_entry());
+
+    // Get the canonical form of the key by converting it to an IR and back.
+    ASSIGN_OR_RETURN(
+        auto ir_table_entry,
+        pdpi::PiTableEntryToIr(ir_p4finfo, update.entity().table_entry(),
+                               /*key_only=*/true));
+    ASSIGN_OR_RETURN(
+        auto pi_table_entry,
+        pdpi::IrTableEntryToPi(ir_p4finfo, ir_table_entry, /*key_only=*/true));
+    gutil::TableEntryKey key(pi_table_entry);
+
     switch (update.type()) {
       case p4::v1::Update::INSERT:
       case p4::v1::Update::MODIFY:
@@ -460,8 +471,8 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
       return EnterCriticalState(grpc_status.status().ToString());
     }
 
-    absl::Status cache_status =
-        CacheWriteResults(table_entry_cache_, *request, *rpc_response);
+    absl::Status cache_status = CacheWriteResults(
+        table_entry_cache_, *ir_p4info_, *request, *rpc_response);
     if (!cache_status.ok()) {
       LOG(ERROR) << "Could not caching write results: " << cache_status;
       return EnterCriticalState(cache_status.ToString());
