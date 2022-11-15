@@ -42,6 +42,8 @@ constexpr absl::string_view kSflowGnmiConfigSampleSizePath =
     "/sampling/sflow/config/sample-size";
 constexpr absl::string_view kSflowGnmiConfigEnablePath =
     "/sampling/sflow/config/enabled";
+constexpr absl::string_view kSflowGnmiConfigInterfacePath =
+    "/sampling/sflow/interfaces/interface[name=$0]/config/";
 constexpr absl::string_view kSflowGnmiConfigInterfaceSampleRatePath =
     "/sampling/sflow/interfaces/interface[name=$0]/config/"
     "ingress-sampling-rate";
@@ -54,6 +56,8 @@ constexpr absl::string_view kSflowGnmiStateEnablePath =
     "/sampling/sflow/state/enabled";
 constexpr absl::string_view kSflowGnmiStateAgentIpPath =
     "/sampling/sflow/state/agent-id-ipv6";
+constexpr absl::string_view kSflowGnmiStateInterfacePath =
+    "/sampling/sflow/interfaces/interface[name=$0]/state/";
 constexpr absl::string_view kSflowGnmiStateInterfaceSampleRatePath =
     "/sampling/sflow/interfaces/interface[name=$0]/state/"
     "ingress-sampling-rate";
@@ -138,11 +142,32 @@ absl::Status SetSflowIngressSamplingRate(gnmi::gNMI::StubInterface* gnmi_stub,
       ops_val, /*resp_parse_str=*/"");
 }
 
+absl::Status SetSflowInterfaceConfig(gnmi::gNMI::StubInterface* gnmi_stub,
+                                     absl::string_view interface, bool enabled,
+                                     int samping_rate, absl::Duration timeout) {
+  const std::string ops_val = absl::Substitute(
+      "{\"openconfig-sampling-sflow:config\":{\"enabled\":$0,\"ingress-"
+      "sampling-rate\":$1,\"name\":\"$2\"}}",
+      (enabled ? "true" : "false"), samping_rate, interface);
+  RETURN_IF_ERROR(SetGnmiConfigPath(
+      gnmi_stub, absl::Substitute(kSflowGnmiConfigInterfacePath, interface),
+      pins_test::GnmiSetType::kUpdate, ops_val));
+
+  const std::string state_val = absl::Substitute(
+      "{\"openconfig-sampling-sflow:state\":{\"enabled\":$0,\"ingress-"
+      "sampling-rate\":$1,\"name\":\"$2\"}}",
+      (enabled ? "true" : "false"), samping_rate, interface);
+  return pins_test::WaitForCondition(
+      VerifyGnmiStateConverged, timeout, gnmi_stub,
+      absl::Substitute(kSflowGnmiStateInterfacePath, interface), state_val,
+      /*resp_parse_str=*/"");
+}
+
 absl::Status VerifySflowStatesConverged(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view agent_addr_ipv6,
     const int sampling_rate, const int sampling_header_size,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces) {
+    const absl::flat_hash_map<std::string, bool>& sflow_interfaces) {
   // Verify sFlow global states.
   RETURN_IF_ERROR(VerifyGnmiStateConverged(
       gnmi_stub, kSflowGnmiStateEnablePath,
@@ -177,14 +202,16 @@ absl::Status VerifySflowStatesConverged(
   }
 
   // Verify sFlow interface states.
-  for (const auto& interface_name : sflow_enabled_interfaces) {
-    const std::string state_enable_path = absl::Substitute(
-        kSflowGnmiStateInterfaceEnablePath, interface_name, sampling_rate);
+  for (const auto& [interface_name, enabled] : sflow_interfaces) {
+    const std::string state_enable_path =
+        absl::Substitute(kSflowGnmiStateInterfaceEnablePath, interface_name);
     const std::string state_sampling_rate_path = absl::Substitute(
         kSflowGnmiStateInterfaceSampleRatePath, interface_name, sampling_rate);
     RETURN_IF_ERROR(VerifyGnmiStateConverged(
         gnmi_stub, state_enable_path,
-        /*expected_value=*/R"({"openconfig-sampling-sflow:enabled":true})"));
+        /*expected_value=*/
+        absl::Substitute(R"({"openconfig-sampling-sflow:enabled":$0})",
+                         (enabled ? "true" : "false"))));
     RETURN_IF_ERROR(VerifyGnmiStateConverged(
         gnmi_stub, state_sampling_rate_path,
         /*expected_value=*/
@@ -198,16 +225,12 @@ absl::Status VerifySflowStatesConverged(
 absl::StatusOr<std::string> UpdateSflowConfig(
     absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
+    const absl::flat_hash_map<std::string, bool>& sflow_interfaces,
     const int sampling_rate, const int sampling_header_size) {
   ASSIGN_OR_RETURN(auto gnmi_config_json, json_yang::ParseJson(gnmi_config));
   if (agent_addr_ipv6.empty()) {
     return absl::InvalidArgumentError(
         "agent_addr_ipv6 parameter cannot be empty.");
-  }
-  if (sflow_enabled_interfaces.empty()) {
-    return absl::InvalidArgumentError(
-        "sflow_enabled_interfaces parameter cannot be empty.");
   }
   gnmi_config_json["openconfig-sampling:sampling"]
                   ["openconfig-sampling-sflow:sflow"]["config"]["enabled"] =
@@ -262,10 +285,10 @@ absl::StatusOr<std::string> UpdateSflowConfig(
   }
 
   absl::btree_map<std::string, nlohmann::json> interface_name_to_config_json;
-  for (const auto& interface_name : sflow_enabled_interfaces) {
+  for (const auto& [interface_name, enabled] : sflow_interfaces) {
     nlohmann::basic_json<> sflow_interface_config;
     sflow_interface_config["name"] = interface_name;
-    sflow_interface_config["enabled"] = true;
+    sflow_interface_config["enabled"] = enabled;
     sflow_interface_config["ingress-sampling-rate"] = sampling_rate;
     interface_name_to_config_json[interface_name] = sflow_interface_config;
   }
@@ -298,7 +321,6 @@ absl::StatusOr<std::string> UpdateSflowConfig(
     sflow_interface_json["config"] = interface_config_json;
     interface_json_array.push_back(sflow_interface_json);
   }
-
   return json_yang::DumpJson(gnmi_config_json);
 }
 

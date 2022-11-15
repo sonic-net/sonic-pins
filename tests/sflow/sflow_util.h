@@ -58,24 +58,31 @@ absl::Status SetSflowIngressSamplingRate(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
     int sampling_rate, absl::Duration timeout = absl::Seconds(5));
 
+// Sets sFlow interface config and waits until it's converged in state path.
+// `interface` must be present.
+absl::Status SetSflowInterfaceConfig(gnmi::gNMI::StubInterface* gnmi_stub,
+                                     absl::string_view interface, bool enabled,
+                                     int samping_rate,
+                                     absl::Duration timeout = absl::Seconds(5));
+
 // Verifies all sFlow-related config is consumed by switch by reading
 // corresponding gNMI state paths. Returns an FailedPreconditionError if
-// `agent_addr_ipv6` or `sflow_enabled_interfaces` is empty.
+// `agent_addr_ipv6` is empty.
 absl::Status VerifySflowStatesConverged(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view agent_addr_ipv6,
     const int sampling_rate, const int sampling_header_size,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces);
+    const absl::flat_hash_map<std::string, bool>& sflow_interfaces);
 
 // Updates `gnmi_config` with sFlow-related config and returns modified config
 // if success. The modified config would sort collector IPs and interface names
-// by string order. Returns an FailedPreconditionError if `agent_addr_ipv6` or
-// `sflow_enabled_interfaces` is empty.
+// by string order. Returns an FailedPreconditionError if `agent_addr_ipv6` is
+// empty.
 absl::StatusOr<std::string> UpdateSflowConfig(
 
     absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
     const std::vector<std::pair<std::string, int>>& collector_address_and_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
+    const absl::flat_hash_map<std::string, bool>& sflow_interfaces,
     const int sampling_rate, const int sampling_header_size);
 
 // Updates `gnmi_config` queue limit of `queue_name` to `queue_limit` and
