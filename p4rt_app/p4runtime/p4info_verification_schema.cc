@@ -299,8 +299,8 @@ absl::Status IsSupportedBySchema(
     const auto* supported_table =
         gutil::FindOrNull(supported_schema_map.tables, table_name);
     if (supported_table == nullptr) {
-      return gutil::NotFoundErrorBuilder()
-             << "Table '" << table_name << "' is not a known table.";
+      // Bypass further checks for extension tables
+      continue;
     }
 
     // The match field list should be a subset of the known table match fields.
