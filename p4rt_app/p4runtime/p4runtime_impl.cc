@@ -292,10 +292,20 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     pdpi::IrWriteResponse* response) {
+  bool fail_on_first_error = false;
   sonic::AppDbUpdates ir_updates;
   for (const auto& update : request.updates()) {
     // An RPC response should be created for every updater.
     auto entry_status = response->add_statuses();
+
+    // Just update the statuses as not attempted if any entry in the batch
+    // failed earlier.
+    if (fail_on_first_error) {
+      *entry_status =
+          GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+      continue;
+    }
+
     ++ir_updates.total_rpc_updates;
 
     // If the constraints are not met then we should just report an error (i.e.
@@ -310,6 +320,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
                    << update.entity().table_entry().ShortDebugString();
       *entry_status =
           GetIrUpdateStatus(reason_entry_violates_constraint.status());
+      fail_on_first_error = true;
       continue;
     }
     if (!reason_entry_violates_constraint->empty()) {
@@ -319,6 +330,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
                    << update.entity().table_entry().ShortDebugString();
       *entry_status = GetIrUpdateStatus(gutil::InvalidArgumentErrorBuilder()
                                         << *reason_entry_violates_constraint);
+      fail_on_first_error = true;
       continue;
     }
 
@@ -334,6 +346,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     if (!ir_table_entry.ok()) {
       LOG(WARNING) << "Failed to translate table entry. Entry: "
                    << update.entity().table_entry().ShortDebugString();
+      fail_on_first_error = true;
       continue;
     }
 
