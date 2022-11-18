@@ -390,12 +390,12 @@ tables {
     table_implementation {
       default_action: "MyIngress.drop"
       action_to_next_control {
-        key: "__HIT__"
-        value: "MyIngress.t_2"
+        key: "MyIngress.drop"
+        value: "MyIngress.t_3"
       }
       action_to_next_control {
-        key: "__MISS__"
-        value: "__END_OF_PIPELINE__"
+        key: "MyIngress.forward"
+        value: "MyIngress.t_3"
       }
       match_name_to_field {
         key: "hdr.ethernet.ether_type"
@@ -512,11 +512,11 @@ tables {
       default_action: "MyIngress.drop"
       action_to_next_control {
         key: "MyIngress.drop"
-        value: "__END_OF_PIPELINE__"
+        value: "MyIngress.t_3"
       }
       action_to_next_control {
         key: "MyIngress.forward"
-        value: "__END_OF_PIPELINE__"
+        value: "MyIngress.t_3"
       }
       match_name_to_field {
         key: "hdr.ethernet.src_addr"
@@ -526,6 +526,153 @@ tables {
         }
       }
     }
+  }
+}
+tables {
+  key: "MyIngress.t_3"
+  value {
+    table_definition {
+      preamble {
+        id: 44506558
+        name: "MyIngress.t_3"
+        alias: "t_3"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.ethernet.dst_addr"
+            bitwidth: 48
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.ethernet.dst_addr"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.ethernet.dst_addr"
+            bitwidth: 48
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 25652968
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 25652968
+            name: "MyIngress.drop"
+            alias: "drop"
+          }
+        }
+        proto_id: 1
+      }
+      entry_actions {
+        ref {
+          id: 29683729
+          annotations: "@proto_id(2)"
+        }
+        action {
+          preamble {
+            id: 29683729
+            name: "MyIngress.forward"
+            alias: "forward"
+          }
+          params_by_id {
+            key: 1
+            value {
+              param {
+                id: 1
+                name: "dst_addr"
+                bitwidth: 48
+              }
+            }
+          }
+          params_by_id {
+            key: 2
+            value {
+              param {
+                id: 2
+                name: "port"
+                bitwidth: 9
+              }
+            }
+          }
+          params_by_name {
+            key: "dst_addr"
+            value {
+              param {
+                id: 1
+                name: "dst_addr"
+                bitwidth: 48
+              }
+            }
+          }
+          params_by_name {
+            key: "port"
+            value {
+              param {
+                id: 2
+                name: "port"
+                bitwidth: 9
+              }
+            }
+          }
+        }
+        proto_id: 2
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "MyIngress.drop"
+      action_to_next_control {
+        key: "MyIngress.drop"
+        value: "__END_OF_PIPELINE__"
+      }
+      action_to_next_control {
+        key: "MyIngress.forward"
+        value: "__END_OF_PIPELINE__"
+      }
+      match_name_to_field {
+        key: "hdr.ethernet.dst_addr"
+        value {
+          header_name: "ethernet"
+          field_name: "dst_addr"
+        }
+      }
+    }
+  }
+}
+conditionals {
+  key: "node_2"
+  value {
+    name: "node_2"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: EQUALS
+          left {
+            field_value {
+              header_name: "ethernet"
+              field_name: "ether_type"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x0000"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "MyIngress.t_1"
+    else_branch: "MyIngress.t_2"
   }
 }
 pipeline {
@@ -539,7 +686,7 @@ pipeline {
   key: "ingress"
   value {
     name: "ingress"
-    initial_control: "MyIngress.t_1"
+    initial_control: "node_2"
   }
 }
 
