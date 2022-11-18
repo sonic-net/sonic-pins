@@ -66,7 +66,7 @@ DEFINE_int32(p4rt_grpc_port, 9559, "gRPC port for the P4Runtime Server");
 // Optionally, the P4RT App can be run on a unix socket, but the connection will
 // be insecure.
 DEFINE_string(
-    p4rt_unix_socket, "/sock/p4rt.sock",
+    p4rt_unix_socket, "",
     "Unix socket file for internal insecure connections. Disabled if empty.");
 
 // Runtime flags to configure any server credentials for secure conections.
@@ -226,7 +226,6 @@ int main(int argc, char** argv) {
       p4rt_app::CreateP4rtTable(&app_db, &app_state_db, &counters_db);
 
   // Create PacketIoImpl for Packet I/O.
-  swss::DBConnector packetio_config_db("CONFIG_DB", /*timeout=*/0);
   auto packetio_impl = std::make_unique<p4rt_app::sonic::PacketIoImpl>(
       std::make_unique<p4rt_app::sonic::SystemCallAdapter>(),
       p4rt_app::sonic::PacketIoOptions{});
