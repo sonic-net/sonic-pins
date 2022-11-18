@@ -94,7 +94,7 @@ GrpcChannelArgumentsForP4rtWithAggressiveKeepAlive() {
   // Allows grpc::channel to send keepalive ping without on-going traffic.
   args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
   args.SetInt(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
-  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 10'000 /*10 seconds*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 4'000 /*4 seconds*/);
   args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1'000 /*1 second*/);
   return args;
 }
