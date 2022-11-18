@@ -404,6 +404,10 @@ tables {
           field_name: "ether_type"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
+        continue_to_merge_point: true
+      }
     }
   }
 }
@@ -524,6 +528,9 @@ tables {
           header_name: "ethernet"
           field_name: "src_addr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
       }
     }
   }

@@ -177,6 +177,10 @@ tables {
         key: "reflector54"
         value: "__END_OF_PIPELINE__"
       }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
+        continue_to_merge_point: true
+      }
     }
   }
 }
