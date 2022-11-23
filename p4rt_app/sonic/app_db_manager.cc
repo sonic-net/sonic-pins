@@ -401,7 +401,7 @@ absl::Status InsertTableDefinition(
 
 // Publish set of tables in json formatted string to AppDb
 absl::StatusOr<std::string> PublishTablesDefinitionToAppDb(
-    const std::string& tables_info_s,
+    const nlohmann::json &tables_json,
     uint64_t cookie,
     P4rtTable& p4rt_table) {
 
@@ -415,8 +415,12 @@ absl::StatusOr<std::string> PublishTablesDefinitionToAppDb(
                           table::TypeName(table::Type::kTblsDefinitionSet),
                           json_key.dump());
 
+  nlohmann::json info_json = nlohmann::json({});
+  info_json.push_back(
+        nlohmann::json::object_t::value_type("tables", tables_json));
+
   std::vector<swss::FieldValueTuple> values;
-  values.push_back(std::make_pair("info", tables_info_s));
+  values.push_back(std::make_pair("info", info_json.dump()));
 
   p4rt_table.producer_state->set(key, values);
 

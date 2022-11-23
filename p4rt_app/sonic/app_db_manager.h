@@ -63,7 +63,7 @@ absl::Status InsertTableDefinition(
 
 // A definition set string in json format published to AppDb
 absl::StatusOr<std::string> PublishTablesDefinitionToAppDb(
-    const std::string& tables_info_s,
+    const nlohmann::json &tables_json,
     uint64_t cookie,
     P4rtTable& p4rt_table);
 
