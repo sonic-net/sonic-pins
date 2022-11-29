@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/base/log_severity.h"
 #include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
@@ -50,7 +51,6 @@
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "include/nlohmann/json.hpp"
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/utils/json_utils.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -158,6 +158,14 @@ absl::StatusOr<uint64_t> ParseJsonValueAsUint(
   }
   return absl::InvalidArgumentError(absl::StrCat(
       json_yang::DumpJson(value), " could not be parsed as an uint64."));
+}
+
+std::optional<uint64_t> ParseJsonValueAsOptionalUint(
+    const json& json_value, absl::Span<const absl::string_view> path) {
+  auto parsedValue = ParseJsonValueAsUint(json_value, path);
+
+  if (parsedValue.ok()) return *parsedValue;
+  return std::nullopt;
 }
 
 absl::StatusOr<json> GetElement(const json& array, int index) {
@@ -350,7 +358,8 @@ absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
   ASSIGN_OR_RETURN(counters.in_fcs_errors,
                    ParseJsonValueAsUint(
                        interface_json, {"state", "counters", "in-fcs-errors"}));
-
+  counters.carrier_transitions = ParseJsonValueAsOptionalUint(
+      interface_json, {"state", "counters", "carrier-transitions"});
   ASSIGN_OR_RETURN(
       json subinterfaces,
       AccessJsonValue(interface_json, {"subinterfaces", "subinterface"}));
@@ -760,9 +769,9 @@ absl::Status CheckInterfaceOperStateOverGnmi(
       continue;
     }
     if (!matching_interfaces.contains(interface)) {
-      LOG(INFO) << "Interface "
-                << interface << " not found in interfaces that are "
-                << interface_oper_state;
+      LOG(WARNING) << "Interface "
+                   << interface << " not found in interfaces that are "
+                   << interface_oper_state;
       unavailable_interfaces.push_back(interface);
     }
   }
@@ -1109,10 +1118,22 @@ absl::Status SetInterfaceP4rtIds(gnmi::gNMI::StubInterface& gnmi_stub,
 
   // Get the set of P4RT IDs to map.
   absl::btree_set<int> desired_p4rt_ids;
+  absl::flat_hash_set<absl::string_view> interface_names;
   for (const auto& interface : interfaces_to_modify) {
     if (interface.config().has_p4rt_id()) {
       desired_p4rt_ids.insert(interface.config().p4rt_id());
+      interface_names.insert(interface.name());
     }
+  }
+
+  // Ensure all interfaces that are being set exist.
+  for (const auto& interface : existing_interfaces.interfaces()) {
+    interface_names.erase(interface.name());
+  }
+  if (!interface_names.empty()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "expected only interfaces that exist on switch, but also got: "
+           << absl::StrJoin(interface_names, ", ") << ".";
   }
 
   // Delete `desired_p4rt_ids` from existing interfaces.
