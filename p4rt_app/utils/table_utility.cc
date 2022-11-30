@@ -25,10 +25,8 @@ namespace table {
 // This is what orch agent understands as fixed tables
 std::vector<std::string> FixedTables {
   // Table names get added here runtime (based on schema for fixed tables)
-  // Additionally initialize these tables now so existing build time tests pass
-  APP_P4RT_ROUTER_INTERFACE_TABLE_NAME,
-  APP_P4RT_IPV4_TABLE_NAME,
-  APP_P4RT_IPV6_TABLE_NAME
+  // Additionally initialize this table now so existing build time tests pass
+  APP_P4RT_ROUTER_INTERFACE_TABLE_NAME
 };
 
 std::string TypeName(Type type) {

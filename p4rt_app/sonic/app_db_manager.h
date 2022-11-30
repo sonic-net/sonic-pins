@@ -57,12 +57,12 @@ struct AppDbUpdates {
 };
 
 // Insert table definition
-absl::Status InsertTableDefinition(
+absl::Status AppendExtTableDefinition(
     nlohmann::json &tables,
     const pdpi::IrTableDefinition& ir_table);
 
 // A definition set string in json format published to AppDb
-absl::StatusOr<std::string> PublishTablesDefinitionToAppDb(
+absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
     const nlohmann::json &tables_json,
     uint64_t cookie,
     P4rtTable& p4rt_table);

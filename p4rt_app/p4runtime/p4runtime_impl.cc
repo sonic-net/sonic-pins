@@ -952,7 +952,7 @@ grpc::Status P4RuntimeImpl::SavePipelineConfig(
 
 absl::Status P4RuntimeImpl::ConfigureAppDbTables(
     const pdpi::IrP4Info& ir_p4info) {
-  nlohmann::json tables_json = {};
+  nlohmann::json ext_tables_json = {};
 
   // Setup definitions for each each P4 ACL table.
   for (const auto& pair : ir_p4info.tables_by_name()) {
@@ -986,15 +986,15 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       // For now send only Extension tables.In future when required, Fixed table
       //   definitions also can be inserted here
       LOG(INFO) << "Add Table Definition for " << table_name;
-      sonic::InsertTableDefinition(tables_json, table);
+      sonic::AppendExtTableDefinition(ext_tables_json, table);
     }
   }
 
-  if (!tables_json.dump().empty()) {
+  if (!ext_tables_json.dump().empty()) {
      // Publish all tables at once and get one success/failure response for them
     ASSIGN_OR_RETURN(
           std::string key,
-          sonic::PublishTablesDefinitionToAppDb(tables_json, (uint64_t)0,
+          sonic::PublishExtTablesDefinitionToAppDb(ext_tables_json, (uint64_t)0,
                      p4rt_table_),
           _ << "Could not publish Table Definition Set to APPDB");
 

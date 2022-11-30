@@ -36,7 +36,7 @@ TEST(GetTableType, ReturnsAclForSaiAclAnnotation) {
 TEST(GetTableType, ReturnsFixedForNoAnnotation) {
   pdpi::IrTableDefinition ir_table;
   google::protobuf::TextFormat::ParseFromString(
-        R"pb(preamble { alias: "ipv4_table"})pb", &ir_table);
+        R"pb(preamble { alias: "router_interface_table"})pb", &ir_table);
   auto get_table_type_result = GetTableType(ir_table);
 
   ASSERT_TRUE(get_table_type_result.ok())
@@ -47,7 +47,7 @@ TEST(GetTableType, ReturnsFixedForNoAnnotation) {
 TEST(GetTableType, ReturnsFixedForNoSpecialAnnotation) {
   pdpi::IrTableDefinition ir_table;
   google::protobuf::TextFormat::ParseFromString(
-      R"pb(preamble { alias: "ipv6_table" annotations: "@random()" })pb", &ir_table);
+      R"pb(preamble { alias: "router_interface_table" annotations: "@random()" })pb", &ir_table);
 
   auto get_table_type_result = GetTableType(ir_table);
   ASSERT_TRUE(get_table_type_result.ok())

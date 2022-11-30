@@ -320,7 +320,7 @@ void WriteBatchToAppDb(
 //}
 //
 //
-absl::Status InsertTableDefinition(
+absl::Status AppendExtTableDefinition(
     nlohmann::json &tables,
     const pdpi::IrTableDefinition& ir_table) {
 
@@ -400,7 +400,7 @@ absl::Status InsertTableDefinition(
 }
 
 // Publish set of tables in json formatted string to AppDb
-absl::StatusOr<std::string> PublishTablesDefinitionToAppDb(
+absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
     const nlohmann::json &tables_json,
     uint64_t cookie,
     P4rtTable& p4rt_table) {
