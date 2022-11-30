@@ -24,15 +24,11 @@ namespace table {
 
 // This is what orch agent understands as fixed tables
 std::vector<std::string> FixedTables {
+  // Table names get added here runtime (based on schema for fixed tables)
+  // Additionally initialize these tables now so existing build time tests pass
   APP_P4RT_ROUTER_INTERFACE_TABLE_NAME,
-  APP_P4RT_NEIGHBOR_TABLE_NAME,
-  APP_P4RT_NEXTHOP_TABLE_NAME,
-  APP_P4RT_WCMP_GROUP_TABLE_NAME,
   APP_P4RT_IPV4_TABLE_NAME,
-  APP_P4RT_IPV6_TABLE_NAME,
-  APP_P4RT_MIRROR_SESSION_TABLE_NAME,
-  APP_P4RT_L3_ADMIT_TABLE_NAME,
-  APP_P4RT_TUNNEL_TABLE_NAME
+  APP_P4RT_IPV6_TABLE_NAME
 };
 
 std::string TypeName(Type type) {
@@ -66,6 +62,18 @@ absl::StatusOr<Type> TypeParse(absl::string_view type_name) {
 }
 
 }  // namespace table
+
+void addSchemaSupportedTable(std::string table_name)
+{
+  absl::AsciiStrToUpper(&table_name);
+  table_name = "FIXED_" + table_name;
+
+  if (std::find(p4rt_app::table::FixedTables.begin(),
+                p4rt_app::table::FixedTables.end(),
+                table_name) == p4rt_app::table::FixedTables.end()) {
+    p4rt_app::table::FixedTables.push_back(table_name);
+  }
+}
 
 absl::StatusOr<table::Type> GetTableType(
     const pdpi::IrTableDefinition& ir_table) {

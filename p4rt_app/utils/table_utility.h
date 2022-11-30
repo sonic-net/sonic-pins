@@ -44,6 +44,8 @@ absl::StatusOr<Type> TypeParse(absl::string_view type_name);
 
 }  // namespace table
 
+void addSchemaSupportedTable(std::string table_name);
+
 // Returns the table type of the provided table.
 absl::StatusOr<table::Type> GetTableType(
     const pdpi::IrTableDefinition& ir_table);
