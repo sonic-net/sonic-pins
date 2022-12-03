@@ -24,7 +24,7 @@
 namespace p4rt_app {
 namespace sonic {
 
-class MockProducerStateTableAdapter final : public ProducerStateTableAdapter {
+class MockProducerStateTableAdapter : public ProducerStateTableAdapter {
  public:
   MOCK_METHOD(void, set,
               (const std::string& key,
