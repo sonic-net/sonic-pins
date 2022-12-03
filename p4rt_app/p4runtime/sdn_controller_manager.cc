@@ -538,9 +538,9 @@ absl::Status SdnControllerManager::SendStreamMessageToPrimary(
   }
 
   if (!found_at_least_one_primary) {
-    LOG(WARNING) << "Cannot send stream message response because there is no "
-                 << "active primary connection: "
-                 << response.ShortDebugString();
+    LOG_EVERY_T(WARNING, 30)
+        << "Cannot send stream message response because there is no "
+        << "active primary connection: " << response.ShortDebugString();
     return gutil::FailedPreconditionErrorBuilder()
            << "No active role has a primary connection configured to receive "
               "PacketIn messages.";

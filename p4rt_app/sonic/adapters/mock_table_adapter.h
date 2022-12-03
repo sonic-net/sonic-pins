@@ -24,7 +24,7 @@
 namespace p4rt_app {
 namespace sonic {
 
-class MockTableAdapter final : public TableAdapter {
+class MockTableAdapter : public TableAdapter {
  public:
   MOCK_METHOD(bool, exists, (const std::string& key), (override));
 

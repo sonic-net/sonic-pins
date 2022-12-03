@@ -386,3 +386,48 @@ cc_test(
         "@com_google_protobuf//:protobuf",
     ],
 )
+
+cc_library(
+    name = "hashing",
+    srcs = ["hashing.cc"],
+    hdrs = ["hashing.h"],
+    deps = [
+        ":redis_connections",
+        ":response_handler",
+        "//gutil:collections",
+        "//gutil:status",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/utils:annotation_parser",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "hashing_test",
+    srcs = ["hashing_test.cc"],
+    deps = [
+        ":hashing",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:mock_notification_producer_adapter",
+        "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
+        "//p4rt_app/sonic/adapters:mock_table_adapter",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
+)

@@ -19,8 +19,10 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/table.h"
 
@@ -30,6 +32,13 @@ namespace sonic {
 struct EcmpHashEntry {
   std::string hash_key;
   std::vector<swss::FieldValueTuple> hash_value;
+  // String conversion for debug.
+  // E.g. compute_ecmp_hash_ipv4 { hash_field_list: ["src_ip","dst_ip"] }
+  static void AbslFormatter(std::string* out, const EcmpHashEntry& entry) {
+    absl::StrAppendFormat(
+        out, "%s { %s }", entry.hash_key,
+        absl::StrJoin(entry.hash_value, "; ", absl::PairFormatter(": ")));
+  }
 };
 
 // Returns true for Ipv4 hash key.
