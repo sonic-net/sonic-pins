@@ -1270,7 +1270,8 @@ controller_packet_metadata {
   metadata {
     id: 3
     name: "unused_pad"
-    bitwidth: 7
+    annotations: "@padding"
+    bitwidth: 6
   }
 }
 type_info {
