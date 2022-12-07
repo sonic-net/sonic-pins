@@ -632,6 +632,28 @@ TEST(IsSupportedBySchemaTest, ReturnsOkWithActionSubset) {
   EXPECT_OK(IsSupportedBySchema(schema_p4info, kSupportedSchema));
 }
 
+TEST(IsSupportedBySchemaTest, ReturnsErrorForUnknownTable) {
+  const P4InfoVerificationSchema kSupportedSchema =
+      gutil::ParseProtoOrDie<P4InfoVerificationSchema>(R"pb(
+        tables {
+          name: "Table1"
+          match_fields { name: "match1" format: STRING type: EXACT }
+          actions { name: "action1" }
+        }
+        tables {
+          name: "Table2"
+          match_fields { name: "match1" format: STRING type: EXACT }
+          actions { name: "action2" }
+        }
+      )pb");
+  auto schema = kSupportedSchema;
+  schema.mutable_tables(1)->set_name("not_a_table");
+
+  pdpi::IrP4Info schema_p4info = IrP4InfoFromSchema(schema);
+  EXPECT_THAT(IsSupportedBySchema(schema_p4info, kSupportedSchema),
+              StatusIs(absl::StatusCode::kNotFound, HasSubstr("not_a_table")));
+}
+
 TEST(IsSupportedBySchemaTest, ReturnsErrorForUnknownMatchField) {
   const P4InfoVerificationSchema kSupportedSchema =
       gutil::ParseProtoOrDie<P4InfoVerificationSchema>(R"pb(

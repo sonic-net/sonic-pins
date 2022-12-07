@@ -57,6 +57,9 @@ TEST(GetTableType, ReturnsFixedForNoSpecialAnnotation) {
 
 TEST(GetTableType, ReturnsExtForNoAnnotation) {
   pdpi::IrTableDefinition ir_table;
+  google::protobuf::TextFormat::ParseFromString(
+      R"pb(preamble { id: 0x03000001 })pb", &ir_table);
+
   auto get_table_type_result = GetTableType(ir_table);
 
   ASSERT_TRUE(get_table_type_result.ok())

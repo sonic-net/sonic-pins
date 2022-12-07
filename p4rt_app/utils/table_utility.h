@@ -23,6 +23,9 @@
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 
+#define CONDITIONAL_kExt(ir_table) ((ir_table.preamble().id() > 0x03000000) ? \
+                                       (table::Type::kExt) : (table::Type::kFixed))
+
 namespace p4rt_app {
 namespace table {
 

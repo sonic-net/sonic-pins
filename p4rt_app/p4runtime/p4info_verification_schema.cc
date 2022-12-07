@@ -296,11 +296,26 @@ absl::Status IsSupportedBySchema(
 
   // The table list should be a subset of the known table tables.
   for (const auto& [table_name, candidate_table] : schema_map.tables) {
+    const pdpi::IrTableDefinition *ir_table_def =
+      gutil::FindOrNull(ir_p4info.tables_by_name(), table_name);
+    if (ir_table_def == nullptr) {
+      return gutil::NotFoundErrorBuilder()
+             << "Table '" << table_name << "' can not be verified";
+    }
+
+    ASSIGN_OR_RETURN(table::Type table_type, GetTableType(*ir_table_def),
+                     _ << "Failed to get table type for " << table_name << ".");
+    if (table_type == table::Type::kExt) {
+      // Bypass further checks for extension tables
+      continue;
+    }
+
     const auto* supported_table =
         gutil::FindOrNull(supported_schema_map.tables, table_name);
     if (supported_table == nullptr) {
-      // Bypass further checks for extension tables
-      continue;
+      return gutil::NotFoundErrorBuilder()
+             << "Table '" << table_name << "' is not a known table."
+             << "If this is extension table, use table-id > 0x03000000";
     }
 
     // The match field list should be a subset of the known table match fields.

@@ -90,7 +90,11 @@ absl::StatusOr<table::Type> GetTableType(
                     table_name) != p4rt_app::table::FixedTables.end()) {
         return table::Type::kFixed;
       }
-      return table::Type::kExt;
+
+      // Return kExt table-type conditionally, until extension tables
+      //     validation is in place. Once that is in place,
+      //     return kExt table-type unconditionally
+      return CONDITIONAL_kExt(ir_table);
     default:
       return gutil::InvalidArgumentErrorBuilder()
              << "Failed to determine table type: " << result.status();
