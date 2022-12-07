@@ -24,8 +24,9 @@
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
 #include "admit_google_system_mac.p4"
-#include "hashing.p4"
+//#include "hashing.p4"
 #include "ids.h"
+#include "versions.h"
 
 control ingress(inout headers_t headers,
                 inout local_metadata_t local_metadata,
@@ -36,7 +37,7 @@ control ingress(inout headers_t headers,
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
-      hashing.apply(headers, local_metadata, standard_metadata);
+//    hashing.apply(headers, local_metadata, standard_metadata);
       routing.apply(headers, local_metadata, standard_metadata);
       drop_martians.apply(headers, local_metadata, standard_metadata);
       acl_ingress.apply(headers, local_metadata, standard_metadata);
@@ -62,8 +63,9 @@ control egress(inout headers_t headers,
 #endif
 @pkginfo(
   name = PKG_INFO_NAME,
-  organization = "Google",
-  version = SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT
+  organization = "Google"
+  // TODO(PINS): 
+  // version = SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT
 )
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;

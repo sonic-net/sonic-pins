@@ -2,8 +2,6 @@
 
 #include <optional>
 
-#include "absl/status/status.h"
-#include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -12,9 +10,9 @@
 #include "sai_p4/instantiations/google/fabric_border_router_p4info_embed.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/middleblock_p4info_embed.h"
+#include "sai_p4/instantiations/google/tor_p4info_embed.h"
 #include "sai_p4/instantiations/google/unioned_p4info_embed.h"
 #include "sai_p4/instantiations/google/wbb_p4info_embed.h"
-#include "sai_p4/tools/p4info_tools.h"
 
 namespace sai {
 namespace {
@@ -76,6 +74,9 @@ P4Info FetchP4Info(Instantiation instantiation,
       break;
     case Instantiation::kFabricBorderRouter:
       p4info = FabricBorderRouterP4Info(stage);
+      break;
+    case Instantiation::kTor:
+      p4info = FileTocToP4Info(tor_p4info_embed_create());
       break;
     case Instantiation::kWbb:
       p4info = FileTocToP4Info(wbb_p4info_embed_create());
