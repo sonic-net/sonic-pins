@@ -353,8 +353,6 @@ absl::Status IsSupportedBySchema(
           << absl::Substitute("Table '$0' configuration is invalid: ",
                               table_name);
     }
-
-    addSchemaSupportedTable(table_name);
   }
   return absl::OkStatus();
 }

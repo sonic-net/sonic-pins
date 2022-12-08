@@ -24,9 +24,15 @@ namespace table {
 
 // This is what orch agent understands as fixed tables
 std::vector<std::string> FixedTables {
-  // Table names get added here runtime (based on schema for fixed tables)
-  // Additionally initialize this table now so existing build time tests pass
-  APP_P4RT_ROUTER_INTERFACE_TABLE_NAME
+  APP_P4RT_ROUTER_INTERFACE_TABLE_NAME,
+  APP_P4RT_NEIGHBOR_TABLE_NAME,
+  APP_P4RT_NEXTHOP_TABLE_NAME,
+  APP_P4RT_WCMP_GROUP_TABLE_NAME,
+  APP_P4RT_IPV4_TABLE_NAME,
+  APP_P4RT_IPV6_TABLE_NAME,
+  APP_P4RT_MIRROR_SESSION_TABLE_NAME,
+  APP_P4RT_L3_ADMIT_TABLE_NAME,
+  APP_P4RT_TUNNEL_TABLE_NAME
 };
 
 std::string TypeName(Type type) {
@@ -61,16 +67,13 @@ absl::StatusOr<Type> TypeParse(absl::string_view type_name) {
 
 }  // namespace table
 
-void addSchemaSupportedTable(std::string table_name)
+table::Type conditional_kExt(const pdpi::IrTableDefinition& ir_table)
 {
-  absl::AsciiStrToUpper(&table_name);
-  table_name = "FIXED_" + table_name;
-
-  if (std::find(p4rt_app::table::FixedTables.begin(),
-                p4rt_app::table::FixedTables.end(),
-                table_name) == p4rt_app::table::FixedTables.end()) {
-    p4rt_app::table::FixedTables.push_back(table_name);
-  }
+    if (ir_table.preamble().id() > 0x03000000)
+    {
+        return table::Type::kExt;
+    }
+    return table::Type::kFixed;
 }
 
 absl::StatusOr<table::Type> GetTableType(
@@ -94,7 +97,7 @@ absl::StatusOr<table::Type> GetTableType(
       // Return kExt table-type conditionally, until extension tables
       //     validation is in place. Once that is in place,
       //     return kExt table-type unconditionally
-      return CONDITIONAL_kExt(ir_table);
+      return conditional_kExt(ir_table);
     default:
       return gutil::InvalidArgumentErrorBuilder()
              << "Failed to determine table type: " << result.status();

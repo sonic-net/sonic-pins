@@ -23,8 +23,6 @@
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 
-#define CONDITIONAL_kExt(ir_table) ((ir_table.preamble().id() > 0x03000000) ? \
-                                       (table::Type::kExt) : (table::Type::kFixed))
 
 namespace p4rt_app {
 namespace table {
@@ -46,8 +44,6 @@ std::string TypeName(Type type);
 absl::StatusOr<Type> TypeParse(absl::string_view type_name);
 
 }  // namespace table
-
-void addSchemaSupportedTable(std::string table_name);
 
 // Returns the table type of the provided table.
 absl::StatusOr<table::Type> GetTableType(
