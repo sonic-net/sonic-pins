@@ -32,7 +32,6 @@
 #include "google/protobuf/util/json_util.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
-#include "grpcpp/impl/codegen/status.h"
 #include "grpcpp/support/status.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"

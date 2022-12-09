@@ -20,6 +20,7 @@
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/p4info_verification_schema.h"
@@ -84,6 +85,12 @@ absl::Status ValidatePacketIo(const p4::config::v1::P4Info& p4info) {
   // Track any differences for error reporting.
   std::string diff_str;
   diff.ReportDifferencesToString(&diff_str);
+  // Ignore metadata field annotations.
+  // Temporary workaround to allow submitting cl/493441540 without breakages.
+  // TODO: Remove this workaround once the CL has gone in.
+  diff.IgnoreField(
+      p4::config::v1::ControllerPacketMetadata::Metadata::descriptor()
+          ->FindFieldByName("annotations"));
 
   // We only want to compare the controller_packet_metadata repeated fields.
   p4::config::v1::P4Info actual_p4info;
