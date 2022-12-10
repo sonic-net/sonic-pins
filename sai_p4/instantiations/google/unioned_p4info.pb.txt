@@ -1,6 +1,6 @@
 pkg_info {
   name: "Union of fabric_border_router.p4, middleblock.p4, tor.p4, wbb.p4"
-  version: "1.6.2"
+  version: "Versions 1.6.2, 1.6.2, 1.6.2, 1.6.2"
   arch: "v1model"
   organization: "Google"
 }
@@ -28,7 +28,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 128
+  size: 126
 }
 tables {
   preamble {
@@ -404,10 +404,6 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777231
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777232
     annotations: "@proto_id(5)"
   }
@@ -456,10 +452,6 @@ tables {
   action_refs {
     id: 16777220
     annotations: "@proto_id(3)"
-  }
-  action_refs {
-    id: 16777231
-    annotations: "@proto_id(4)"
   }
   action_refs {
     id: 16777232
@@ -1670,13 +1662,6 @@ actions {
     id: 2
     name: "route_metadata"
     bitwidth: 6
-  }
-}
-actions {
-  preamble {
-    id: 16777231
-    name: "ingress.routing.trap"
-    alias: "trap"
   }
 }
 actions {

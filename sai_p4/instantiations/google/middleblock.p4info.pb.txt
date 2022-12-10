@@ -28,7 +28,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 128
+  size: 126
 }
 tables {
   preamble {
@@ -404,16 +404,16 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777231
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777232
     annotations: "@proto_id(5)"
   }
   action_refs {
     id: 16777233
     annotations: "@proto_id(6)"
+  }
+  action_refs {
+    id: 16777237
+    annotations: "@proto_id(7)"
   }
   const_default_action_id: 16777222
   size: 131072
@@ -454,16 +454,16 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777231
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777232
     annotations: "@proto_id(5)"
   }
   action_refs {
     id: 16777233
     annotations: "@proto_id(6)"
+  }
+  action_refs {
+    id: 16777237
+    annotations: "@proto_id(7)"
   }
   const_default_action_id: 16777222
   size: 17000
@@ -1103,9 +1103,14 @@ actions {
 }
 actions {
   preamble {
-    id: 16777231
-    name: "ingress.routing.trap"
-    alias: "trap"
+    id: 16777237
+    name: "ingress.routing.set_metadata_and_drop"
+    alias: "set_metadata_and_drop"
+  }
+  params {
+    id: 1
+    name: "route_metadata"
+    bitwidth: 6
   }
 }
 actions {

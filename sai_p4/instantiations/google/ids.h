@@ -76,4 +76,10 @@
 #define ACL_EGRESS_COUNTER_ID 0x13000104                // 318767364
 #define ACL_EGRESS_DHCP_TO_HOST_COUNTER_ID 0x13000108   // 318767368
 
+// --- PkgInfo versions --------------------------------------------------------
+// For use in `@pkginfo(..., version = VERSION)` annotations.
+
+// Indicates that the program has packet out support.
+#define SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT "1.0.0"
+
 #endif  // GOOGLE_SAI_IDS_H_

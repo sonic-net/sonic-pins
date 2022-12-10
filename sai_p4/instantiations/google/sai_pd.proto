@@ -123,7 +123,6 @@ message Ipv4TableEntry {
       SetWcmpGroupIdAction set_wcmp_group_id = 3;
       SetNexthopIdAction set_nexthop_id = 2;
       DropAction drop = 1;
-      TrapAction trap = 4;
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
@@ -145,7 +144,6 @@ message Ipv6TableEntry {
       SetWcmpGroupIdAction set_wcmp_group_id = 3;
       SetNexthopIdAction set_nexthop_id = 2;
       DropAction drop = 1;
-      TrapAction trap = 4;
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
@@ -743,8 +741,6 @@ message MirrorAsIpv4ErspanAction {
 }
 
 message AdmitToL3Action {}
-
-message TrapAction {}
 
 message SetNexthopIdAndMetadataAction {
   // Refers to 'nexthop_table.nexthop_id'.

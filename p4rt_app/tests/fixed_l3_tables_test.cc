@@ -392,7 +392,6 @@ const L3LpmTableTest::TestMap& L3LpmTableTest::GetTestMap() {
        {.pd_action = R"pb(set_wcmp_group_id { wcmp_group_id: "23" })pb",
         .app_db = {.action = "set_wcmp_group_id",
                    .params = {{"wcmp_group_id", "23"}}}}},
-      {"trap", {.pd_action = R"pb(trap {})pb", .app_db = {.action = "trap"}}},
       {"set_nexthop_id_and_metadata",
        {.pd_action = R"pb(set_nexthop_id_and_metadata {
                             nexthop_id: "13"
