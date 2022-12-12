@@ -92,9 +92,9 @@ void ParseStatus(const absl::Status& status,
   for (const auto& part : message_parts) {
     if (part ==
         "Some interfaces are not in the expected state UP"
-        ": ")
+        ":")
       continue;
-    if (part == "Interfaces provided: ")
+    if (part == "Interfaces provided:")
       down_interfaces_parsed = true;
     else if (!down_interfaces_parsed)
       down_interfaces.push_back(part);

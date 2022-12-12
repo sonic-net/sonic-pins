@@ -76,6 +76,8 @@ struct SendTrafficOptions {
 
   // Flag to program routes on SUT to forward traffic.
   bool program_routes = true;
+
+  int* packets_sent = nullptr;
 };
 
 // Programs the routes to forward traffic through all the interface pairs.

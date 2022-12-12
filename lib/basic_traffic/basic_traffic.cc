@@ -308,14 +308,22 @@ absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
                   std::string(control_interface), std::string(packet_string)));
             }));
 
-    absl::Time traffic_start_time = absl::Now();
     LOG(INFO) << "Starting to send traffic.";
-    while (absl::Now() - traffic_start_time < duration) {
+    absl::Time start_time = absl::Now();
+    absl::Time last_sent_time = start_time;
+    absl::Duration interpacket_time =
+        absl::Seconds(1.0f / options.packets_per_second);
+    while (absl::Now() - start_time < duration) {
       for (const auto& [key, packet] : packets_to_send) {
         RETURN_IF_ERROR(testbed.ControlDevice().SendPacket(
             packet.control_interface, packet.serialized_packet, std::nullopt));
         sent_packets[key]++;
-        absl::SleepFor(absl::Seconds(1) / options.packets_per_second);
+        if (options.packets_sent != nullptr) {
+          (*options.packets_sent)++;
+        }
+        while (absl::Now() - last_sent_time < interpacket_time) {
+        }
+        last_sent_time = absl::Now();
       }
     }
     absl::SleepFor(kPassthroughWaitTime);
