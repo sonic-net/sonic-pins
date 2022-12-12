@@ -17,8 +17,8 @@
 // These are suitable for use in switch testing and unit testing, e.g. with
 // BMv2.
 
-#ifndef GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
-#define GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
+#ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
+#define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 
 #include <optional>
 #include <string>
@@ -190,4 +190,4 @@ absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
 
 }  // namespace sai
 
-#endif  // GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
+#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
