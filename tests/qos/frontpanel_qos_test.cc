@@ -124,8 +124,7 @@ absl::StatusOr<Cleanup> ConfigureFairBufferConfigForPortUntilEndOfScope(
       buffer_config_by_queue_name;
   // TODO: Read queue names from switch instead of
   // hard-coding them here.
-  for (absl::string_view queue_name :
-       {"LLQ1", "LLQ2", "BE1", "AF1", "AF2", "AF3", "AF4", "NC1"}) {
+  for (absl::string_view queue_name : kAllQueuesNames) {
     buffer_config_by_queue_name[queue_name] = BufferParameters{
         .dedicated_buffer = 0,
         .use_shared_buffer = true,
