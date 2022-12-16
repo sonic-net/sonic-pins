@@ -1261,6 +1261,119 @@ headers {
 payload: "test packet #5: ROUTING_PINBALLL3TOGROUP_FLOW: ipv4_table_entry \t { match { vrf_id: \"vrf-210\" ipv4_dst { value: \"185.168.204.0\" prefix_length: 28 } } action { set_wcmp_group_id_and_metadata { wcmp_group_id: \"group-4294934578\" route_metadata: \"0x01\" } } }"
 
 ================================================================================
+Parsing test: SAI P4 BMv2 packet_in header (Valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# SAI P4 BMv2 packet_in header
+        ingress_port: 0b000000001
+        target_egress_port: 0b000000010
+        unused_pad: 0b000000
+        # Ethernet header
+        ethernet_destination: 0x ff ff ff ff ff ff
+        ethernet_source: 0x 00 11 22 33 44 55
+        ether_type: 0x0806
+        # ARP header
+        hardware_type: 0x0001  # Ethernet
+        protocol_type: 0x0800  # IPv4
+        hardware_length: 0x06
+        protocol_length: 0x04
+        operation: 0x0001  # Request
+        sender_hardware_address: 0x 00 11 22 33 44 55
+        sender_protocol_address: 0x 0a 00 00 01
+        target_hardware_address: 0x 00 00 00 00 00 00
+        target_protocol_address: 0x 0a 00 00 02
+        # Payload
+        payload: 0x 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "00:11:22:33:44:55"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "00:11:22:33:44:55"
+    sender_protocol_address: "10.0.0.1"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "10.0.0.2"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+================================================================================
+Parsing test: SAI P4 BMv2 packet_in header unused_pad value is not 0 (Invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# SAI P4 BMv2 packet_in header
+        ingress_port: 0b000000001
+        target_egress_port: 0b000000010
+        unused_pad: 0b000001
+        # Ethernet header
+        ethernet_destination: 0x ff ff ff ff ff ff
+        ethernet_source: 0x 00 11 22 33 44 55
+        ether_type: 0x0806
+        # ARP header
+        hardware_type: 0x0001  # Ethernet
+        protocol_type: 0x0800  # IPv4
+        hardware_length: 0x06
+        protocol_length: 0x04
+        operation: 0x0001  # Request
+        sender_hardware_address: 0x 00 11 22 33 44 55
+        sender_protocol_address: 0x 0a 00 00 01
+        target_hardware_address: 0x 00 00 00 00 00 00
+        target_protocol_address: 0x 0a 00 00 02
+        # Payload
+        payload: 0x 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0x002"
+    unused_pad: "0x01"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "00:11:22:33:44:55"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "00:11:22:33:44:55"
+    sender_protocol_address: "10.0.0.1"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "10.0.0.2"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+reasons_invalid: "in SaiP4BMv2PacketInHeader headers[0]: unused_pad: Must be 0, but was 0x01 instead."
+
+PadPacketToMinimumSize(packet) = false
+UpdateAllComputedFields(packet) = true
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: unused_pad: Must be 0, but was 0x01 instead.
+================================================================================
 Proto packet test: UDP header not preceded by other header
 ================================================================================
 -- INPUT -----------------------------------------------------------------------
@@ -2434,3 +2547,234 @@ payload: "test packet #5: ROUTING_PINBALLL3TOGROUP_FLOW: ipv4_table_entry \t { m
 ValidatePacket(packet) = OK
 
 Serialize(Packet) = OK
+
+================================================================================
+Proto packet test: SAI P4 BMv2 packet_in Header (Valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in EthernetHeader headers[1]: expected at least 46 bytes of Ethernet payload, but got only 28
+- in ArpHeader headers[2]: hardware_type: missing
+- in ArpHeader headers[2]: protocol_type: missing
+- in ArpHeader headers[2]: hardware_length: missing
+- in ArpHeader headers[2]: protocol_length: missing
+
+PadPacketToMinimumSize(packet) = true
+new payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+UpdateMissingComputedFields(packet) = true
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+ValidatePacket(packet) = OK
+
+Serialize(Packet) = OK
+
+================================================================================
+Proto packet test: SAI P4 BMv2 packet_in Header ingress_port number out of range (Invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0xf00"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: ingress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+- in EthernetHeader headers[1]: expected at least 46 bytes of Ethernet payload, but got only 28
+- in ArpHeader headers[2]: hardware_type: missing
+- in ArpHeader headers[2]: protocol_type: missing
+- in ArpHeader headers[2]: hardware_length: missing
+- in ArpHeader headers[2]: protocol_length: missing
+
+PadPacketToMinimumSize(packet) = true
+new payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+UpdateMissingComputedFields(packet) = true
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0xf00"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: ingress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: ingress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+
+================================================================================
+Proto packet test: SAI P4 BMv2 packet_in Header target_egress_port number out of range (Invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0xf00"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: target_egress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+- in EthernetHeader headers[1]: expected at least 46 bytes of Ethernet payload, but got only 28
+- in ArpHeader headers[2]: hardware_type: missing
+- in ArpHeader headers[2]: protocol_type: missing
+- in ArpHeader headers[2]: hardware_length: missing
+- in ArpHeader headers[2]: protocol_length: missing
+
+PadPacketToMinimumSize(packet) = true
+new payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+UpdateMissingComputedFields(packet) = true
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0xf00"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: target_egress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: target_egress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
