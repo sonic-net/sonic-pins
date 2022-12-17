@@ -191,6 +191,56 @@ TEST_P(SaiDeparserTest, IcmpPacketParserIntegrationTest) {
   ASSERT_THAT(packet.payload(), IsEmpty());
 }
 
+TEST_P(SaiDeparserTest, PacketInHeaderIsNeverParsedIntegrationTest) {
+  // Add parse constraints.
+  {
+    ASSERT_OK_AND_ASSIGN(auto parse_constraints,
+                         EvaluateSaiParser(state_->context.ingress_headers));
+    for (auto& constraint : parse_constraints) state_->solver->add(constraint);
+  }
+
+  // Add packet_in constraint.
+  {
+    ASSERT_OK_AND_ASSIGN(SaiFields fields,
+                         GetSaiFields(state_->context.ingress_headers));
+    // TODO: Execute the test unconditionally one we add the
+    // packet-in header to SAI P4.
+    if (!fields.headers.packet_in.has_value()) {
+      GTEST_SKIP() << "test does not apply, as program has no packet-in header";
+    }
+    state_->solver->add(fields.headers.packet_in.value().valid);
+  }
+
+  // Should be unsatisifiable, because we never parse a packet-in header.
+  ASSERT_EQ(state_->solver->check(), z3::check_result::unsat);
+}
+
+TEST_P(SaiDeparserTest, DISABLED_PacketInPacketParserIntegrationTest) {
+  // Add packet_in constraint.
+  {
+    ASSERT_OK_AND_ASSIGN(SaiFields fields,
+                         GetSaiFields(state_->context.ingress_headers));
+    // TODO: Execute the test unconditionally one we add the
+    // packet-in header to SAI P4.
+    if (!fields.headers.packet_in.has_value()) {
+      GTEST_SKIP() << "test does not apply, as program has no packet-in header";
+    }
+    state_->solver->add(fields.headers.packet_in.value().valid);
+  }
+
+  // Solve and deparse.
+  ASSERT_EQ(state_->solver->check(), z3::check_result::sat);
+  auto model = state_->solver->get_model();
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
+                       SaiDeparser(state_->context.ingress_headers, model));
+
+  // Check we indeed got a packet_in packet.
+  packetlib::Packet packet = packetlib::ParsePacket(raw_packet);
+  LOG(INFO) << "Z3-generated packet = " << packet.DebugString();
+  ASSERT_GE(packet.headers_size(), 0);
+  ASSERT_TRUE(packet.headers(0).has_sai_p4_bmv2_packet_in_header());
+}
+
 INSTANTIATE_TEST_SUITE_P(Instantiation, SaiDeparserTest,
                          testing::ValuesIn(sai::AllSaiInstantiations()));
 

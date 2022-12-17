@@ -26,6 +26,14 @@
 
 namespace p4_symbolic {
 
+// Symbolic version of `packet_in_header_t` in metadata.p4.
+struct SaiPacketIn {
+  z3::expr valid;
+  z3::expr ingress_port;
+  z3::expr target_egress_port;
+  z3::expr unused_pad;
+};
+
 // Symbolic version of `packet_out_header_t` in metadata.p4.
 struct SaiPacketOut {
   z3::expr valid;
@@ -141,6 +149,7 @@ struct SaiGre {
 struct SaiHeaders {
   // TODO: Make non-optional when we no longer need
   // backwards-compatability.
+  std::optional<SaiPacketIn> packet_in;
   std::optional<SaiPacketOut> packet_out;
 
   SaiEthernet erspan_ethernet;

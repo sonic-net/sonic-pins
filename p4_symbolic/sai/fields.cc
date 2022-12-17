@@ -117,6 +117,16 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
 
   // TODO: Make unconditional when we no longer need
   // backwards-compatability.
+  auto packet_in =
+      state.ContainsKey("packet_in_header.$valid$")
+          ? std::make_optional(SaiPacketIn{
+                .valid = get_field("packet_in_header.$valid$"),
+                .ingress_port = get_field("packet_in_header.ingress_port"),
+                .target_egress_port =
+                    get_field("packet_in_header.target_egress_port"),
+                .unused_pad = get_field("packet_in_header.unused_pad"),
+            })
+          : std::nullopt;
   auto packet_out =
       state.ContainsKey("packet_out_header.$valid$")
           ? std::make_optional(SaiPacketOut{
@@ -295,6 +305,7 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
   return SaiFields{
       .headers =
           SaiHeaders{
+              .packet_in = packet_in,
               .packet_out = packet_out,
               .erspan_ethernet = erspan_ethernet,
               .erspan_ipv4 = erspan_ipv4,
