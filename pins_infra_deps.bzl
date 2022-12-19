@@ -16,9 +16,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_bazelbuild_buildtools"):
         http_archive(
             name = "com_github_bazelbuild_buildtools",
-            sha256 = "44a6e5acc007e197d45ac3326e7f993f0160af9a58e8777ca7701e00501c0857",
-            strip_prefix = "buildtools-4.2.4",
-            url = "https://github.com/bazelbuild/buildtools/archive/4.2.4.tar.gz",
+            # sha256 = "44a6e5acc007e197d45ac3326e7f993f0160af9a58e8777ca7701e00501c0857",
+            strip_prefix = "buildtools-5.1.0",
+            url = "https://github.com/bazelbuild/buildtools/archive/refs/tags/5.1.0.tar.gz",
         )
     if "boringssl" not in native.existing_rules():
         http_archive(
