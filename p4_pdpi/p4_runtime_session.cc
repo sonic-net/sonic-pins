@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 #include <thread>  // NOLINT: third_party code.
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -42,6 +43,7 @@
 namespace pdpi {
 
 using ::p4::config::v1::P4Info;
+using ::p4::v1::Entity;
 using ::p4::v1::P4Runtime;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
@@ -465,12 +467,18 @@ absl::Status ClearTableEntries(P4RuntimeSession* session,
 }
 
 absl::Status InstallPiTableEntry(P4RuntimeSession* session,
-                                 const TableEntry& pi_entry) {
+                                 TableEntry pi_entry) {
+  Entity pi_entity;
+  *pi_entity.mutable_table_entry() = std::move(pi_entry);
+  return InstallPiEntity(session, std::move(pi_entity));
+}
+
+absl::Status InstallPiEntity(P4RuntimeSession* session,
+                             p4::v1::Entity pi_entity) {
   WriteRequest request;
   Update& update = *request.add_updates();
   update.set_type(Update::INSERT);
-  *update.mutable_entity()->mutable_table_entry() = pi_entry;
-
+  *update.mutable_entity() = std::move(pi_entity);
   return SetMetadataAndSendPiWriteRequest(session, request);
 }
 
@@ -528,6 +536,12 @@ GetForwardingPipelineConfig(
   request.set_response_type(type);
 
   return session->GetForwardingPipelineConfig(request);
+}
+
+absl::StatusOr<gutil::Version> GetPkgInfoVersion(P4RuntimeSession* session) {
+  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
+                   GetForwardingPipelineConfig(session));
+  return gutil::ParseVersion(response.config().p4info().pkg_info().version());
 }
 
 }  // namespace pdpi
