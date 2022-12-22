@@ -1051,6 +1051,9 @@ type_info {
 }
 
 pdpi::CreateIrP4Info() result:
+pkg_info {
+  arch: "v1model"
+}
 tables_by_id {
   key: 33554433
   value {
