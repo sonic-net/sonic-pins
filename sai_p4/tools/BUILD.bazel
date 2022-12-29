@@ -29,6 +29,16 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "auxiliary_entries_for_v1model_targets",
+    srcs = ["auxiliary_entries_for_v1model_targets.cc"],
+    hdrs = ["auxiliary_entries_for_v1model_targets.h"],
+    deps = [
+        "//sai_p4/fixed:p4_ids",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+    ],
+)
+
 cc_test(
     name = "p4info_tools_test",
     srcs = ["p4info_tools_test.cc"],

@@ -46,4 +46,18 @@
 #define ACL_WBB_INGRESS_COUNTER_ID 0x13000103  // 318767363
 #define ACL_EGRESS_COUNTER_ID 0x13000104       // 318767364
 
+// --- PkgInfo versions --------------------------------------------------------
+// For use in `@pkginfo(..., version = VERSION)` annotations.
+// We use semantic versioning. Version numbers must increase monotonically.
+
+// Indicates that the program has packet out support.
+#define SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT "1.0.0"
+
+// Indicates that the program has packet in support.
+#define SAI_P4_PKGINFO_VERSION_HAS_PACKET_IN_SUPPORT "1.1.0"
+
+// Macros that always points to the latest SAI P4 version.
+#define SAI_P4_PKGINFO_VERSION_LATEST \
+  SAI_P4_PKGINFO_VERSION_HAS_PACKET_IN_SUPPORT
+
 #endif  // GOOGLE_SAI_IDS_H_
