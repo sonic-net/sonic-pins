@@ -1672,18 +1672,6 @@ TEST(GetUpInterfaces, SuccessfullyGetsUpInterface) {
   EXPECT_THAT(*statusor, ContainerEq(std::vector<std::string>{"Ethernet0"}));
 }
 
-TEST(CheckParseGnmiGetResponse, FailDuetoResponseSize) {
-  gnmi::GetResponse response;
-  for (int i = 0; i < 2; i++) {
-    gnmi::Notification *notification = response.add_notification();
-    notification->set_timestamp(1620348032128305716);
-  }
-  EXPECT_THAT(
-      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
-      StatusIs(absl::StatusCode::kInternal,
-               HasSubstr("Unexpected size in response")));
-}
-
 TEST(CheckParseGnmiGetResponse, FailDuetoUpdateSize) {
   gnmi::GetResponse response;
   gnmi::Notification *notification = response.add_notification();
@@ -1714,13 +1702,35 @@ TEST(CheckParseGnmiGetResponse, UnexpectedDataFormat) {
 }
 TEST(CheckParseGnmiGetResponse, FailDuetoMissingTag) {
   gnmi::GetResponse response;
-  constexpr char kOperstatus[] =
+  constexpr char kOperstatusBad[] =
       R"({"openconfig-interfaces:status":"TESTING"})";
   gnmi::Notification *notification = response.add_notification();
   gnmi::Update *update = notification->add_update();
   *update->mutable_path() =
       ConvertOCStringToPath("interfaces/interface[name=Ethernet8]/state");
-  update->mutable_val()->set_json_ietf_val(kOperstatus);
+  update->mutable_val()->set_json_ietf_val(kOperstatusBad);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("not present in JSON response")));
+}
+TEST(CheckParseGnmiGetResponse, FailDuetoMissingTagWithTwoNotifications) {
+  gnmi::GetResponse response;
+  constexpr char kOperstatusBad[] =
+      R"({"openconfig-interfaces:status":"TESTING"})";
+  gnmi::Update *update = response.add_notification()->add_update();
+  *update->mutable_path() =
+      ConvertOCStringToPath("interfaces/interface[name=Ethernet8]/state");
+  update->mutable_val()->set_json_ietf_val(kOperstatusBad);
+
+  constexpr char kOperstatusGood[] =
+      R"({"openconfig-interfaces:oper-status":"UP"})";
+  update = response.add_notification()->add_update();
+  *update->mutable_path() =
+      ConvertOCStringToPath("interfaces/interface[name=Ethernet7]/state");
+  update->mutable_val()->set_json_ietf_val(kOperstatusGood);
+
   LOG(INFO) << "response: " << response.DebugString();
   EXPECT_THAT(
       ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
@@ -1773,6 +1783,58 @@ TEST(CheckParseGnmiGetResponse, JsonResponseSuccess) {
   EXPECT_THAT(
       ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
       IsOkAndHolds(HasSubstr("UP")));
+}
+
+TEST(CheckParseGnmiGetResponse, FailDueToMultipleSamePaths) {
+  gnmi::GetResponse response;
+  constexpr char kOperstatus[] =
+      R"({"openconfig-interfaces:oper-status":"UP"})";
+  for (int i = 0; i < 2; i++) {
+    gnmi::Notification *notification = response.add_notification();
+    gnmi::Update *update = notification->add_update();
+    *update->mutable_path() = ConvertOCStringToPath(
+        "interfaces/interface[name=Ethernet8]/state/oper-status");
+    update->mutable_val()->set_json_val(kOperstatus);
+  }
+
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("openconfig-interfaces:oper-status")));
+}
+
+TEST(CheckParseGnmiGetResponse, CombineMultipleDifferentResponses) {
+  gnmi::GetResponse response;
+  response.add_notification()->add_update()->mutable_val()->set_json_val(
+      R"({
+        "openconfig-platform:components": {
+          "component": [
+            {"integrated-circuit":
+              {"config":
+                {"openconfig-p4rt:node-id":"123456"}
+              },
+              "name":"integrated_circuit0"
+            }
+          ]
+        }
+      })");
+  response.add_notification()->add_update()->mutable_val()->set_json_ietf_val(
+      R"({
+        "openconfig-interfaces:interfaces":{
+          "interface":[
+            {"name":"CPU"},
+            {"name":"Ethernet0",
+             "state": {"oper-status":"DOWN"}
+            }
+          ]
+        }
+      })");
+
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(ParseGnmiGetResponse(response, /*match_tag=*/"", /*indent=*/2),
+              IsOkAndHolds(AllOf(HasSubstr("openconfig-interfaces:interfaces"),
+                                 HasSubstr("openconfig-platform:components"))));
 }
 
 TEST(CheckParseGnmiGetResponse, StringResponseSuccess) {
