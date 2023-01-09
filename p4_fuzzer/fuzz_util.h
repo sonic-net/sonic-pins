@@ -85,6 +85,19 @@ const T& UniformFromSpan(absl::BitGen* gen, const std::vector<T>& vec) {
   return UniformFromSpan(gen, absl::MakeConstSpan(vec));
 }
 
+template <typename T>
+const typename T::mapped_type& UniformValueFromMap(absl::BitGen* gen,
+                                                   const T& map) {
+  CHECK(!map.empty());  // Crash OK
+  int index = absl::Uniform<int>(*gen, /*lo=*/0, /*hi=*/map.size());
+  auto iter = map.begin();
+  while (index > 0) {
+    iter++;
+    index--;
+  }
+  return iter->second;
+}
+
 // Gets the action profile corresponding to the given table from the IrP4Info.
 absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
     const pdpi::IrP4Info& ir_info, int table_id);
@@ -206,6 +219,10 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
 
 // Randomly chooses an id that belongs to a table in the switch.
 int FuzzTableId(absl::BitGen* gen, const FuzzerConfig& config);
+
+// Randomly generates the table id of a non-empty table.
+int FuzzNonEmptyTableId(absl::BitGen* gen, const FuzzerConfig& config,
+                        const SwitchState& switch_state);
 
 // Randomly generates a table entry that conforms to the given table info.
 // The p4 info is used to lookup action references. See go/p4-fuzzer-design for
