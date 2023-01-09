@@ -23,6 +23,7 @@
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 
+
 namespace p4rt_app {
 namespace table {
 
@@ -30,7 +31,9 @@ namespace table {
 enum class Type {
   kAcl,        // ACL pipeline table
   kFixed,      // Fixed pipeline table
-  kDefinition  // Pipeline table definitions table (Required for ACLs)
+  kExt,        // Extended pipeline table
+  kAclDefinition,  // Pipeline table definitions table (Required for ACLs)
+  kTblsDefinitionSet,  // tables definition set table
 };
 
 // Returns a string representation of the table type.

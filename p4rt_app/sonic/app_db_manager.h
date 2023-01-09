@@ -26,6 +26,8 @@
 #include "absl/strings/substitute.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "swss/json.h"
+#include "swss/json.hpp"
 
 namespace p4rt_app {
 namespace sonic {
@@ -53,6 +55,17 @@ struct AppDbUpdates {
   std::vector<AppDbEntry> entries;
   int total_rpc_updates = 0;
 };
+
+// Insert table definition
+absl::Status AppendExtTableDefinition(
+    nlohmann::json &tables,
+    const pdpi::IrTableDefinition& ir_table);
+
+// A definition set string in json format published to AppDb
+absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
+    const nlohmann::json &tables_json,
+    uint64_t cookie,
+    P4rtTable& p4rt_table);
 
 // Takes a list of AppDb updates (i.e. inserts, modifies, or deletes) and
 // translates them so that they are consumable by the AppDb. It will also
