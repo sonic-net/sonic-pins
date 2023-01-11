@@ -22,7 +22,6 @@
 #include <string>
 #include <vector>
 
-#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
@@ -46,7 +45,7 @@
 namespace p4_fuzzer {
 
 using ::gutil::FindOrDie;
-using ::gutil::FindOrStatus;
+using ::gutil::FindPtrOrStatus;
 using ::gutil::PrintTextProto;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
@@ -394,34 +393,14 @@ std::string SwitchState::SwitchStateSummary() const {
       "current size", "guaranteed size", GetNumTableEntries(), "N/A", res);
 }
 
-absl::btree_set<std::string> SwitchState::GetIdsForMatchField(
-    const pdpi::IrMatchFieldReference& field) const {
-  absl::btree_set<std::string> result;
-  const auto& table_definition =
-      FindOrDie(ir_p4info_.tables_by_name(), field.table());
-  const auto& match_definition =
-      FindOrDie(table_definition.match_fields_by_name(), field.match_field());
-  // Loop over all table entries in this table and collect IDs.
-  for (const auto& [key, entry] :
-       FindOrDie(ordered_tables_, table_definition.preamble().id())) {
-    // Find the correct match field.
-    for (const auto& match : entry.match()) {
-      if (match.field_id() == match_definition.match_field().id()) {
-        result.insert(match.exact().value());
-        break;
-      }
-    }
-  }
-  return result;
-}
-
 absl::StatusOr<std::vector<ReferableEntry>> SwitchState::GetReferableEntries(
     absl::string_view table,
     const absl::flat_hash_set<std::string>& fields) const {
   std::vector<ReferableEntry> result;
 
-  ASSIGN_OR_RETURN(const pdpi::IrTableDefinition& table_definition,
-                   FindOrStatus(ir_p4info_.tables_by_name(), table));
+  ASSIGN_OR_RETURN(const pdpi::IrTableDefinition* table_definition,
+                   FindPtrOrStatus(ir_p4info_.tables_by_name(), table),
+                   _ << "Table '" << table << "'does not exist in p4info.");
 
   if (fields.empty()) {
     return gutil::InvalidArgumentErrorBuilder()
@@ -432,9 +411,10 @@ absl::StatusOr<std::vector<ReferableEntry>> SwitchState::GetReferableEntries(
   absl::flat_hash_map<uint32_t, std::string> field_id_to_field_name;
   for (const std::string& field : fields) {
     ASSIGN_OR_RETURN(
-        const pdpi::IrMatchFieldDefinition& field_definition,
-        FindOrStatus(table_definition.match_fields_by_name(), field));
-    p4::config::v1::MatchField match_field = field_definition.match_field();
+        const pdpi::IrMatchFieldDefinition* field_definition,
+        FindPtrOrStatus(table_definition->match_fields_by_name(), field),
+        _ << "Table '" << table << "' has no field named '" << field << "'.");
+    p4::config::v1::MatchField match_field = field_definition->match_field();
     // References must only be to fields of type exact or optional.
     if (match_field.match_type() != p4::config::v1::MatchField::EXACT &&
         match_field.match_type() != p4::config::v1::MatchField::OPTIONAL) {
@@ -448,9 +428,11 @@ absl::StatusOr<std::vector<ReferableEntry>> SwitchState::GetReferableEntries(
 
   // Loop over all table entries to construct ReferableEntries.
   ASSIGN_OR_RETURN(
-      OrderedTableEntries ordered_entries,
-      FindOrStatus(ordered_tables_, table_definition.preamble().id()));
-  for (const auto& [key, table_entry] : ordered_entries) {
+      const OrderedTableEntries* ordered_entries,
+      FindPtrOrStatus(ordered_tables_, table_definition->preamble().id()),
+      _ << "Table '" << table << "' exists in p4 info but has no ordered "
+        << "entry in switch state.");
+  for (const auto& [key, table_entry] : *ordered_entries) {
     ReferableEntry result_entry;
     // Fill out ReferableEntry mapping.
     for (const auto& match : table_entry.match()) {

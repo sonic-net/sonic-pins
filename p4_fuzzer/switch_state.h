@@ -22,7 +22,6 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
-#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
@@ -133,10 +132,6 @@ class SwitchState {
 
   // Returns a summary of the state.
   std::string SwitchStateSummary() const;
-
-  // Returns the set of used IDs for a given IrMatchFieldReference.
-  absl::btree_set<std::string> GetIdsForMatchField(
-      const pdpi::IrMatchFieldReference& field) const;
 
   // Returns a vector of `ReferableEntries` in `table`. Used when a match key or
   // action refers to a set of `fields` in `table`. Returns an error if:
