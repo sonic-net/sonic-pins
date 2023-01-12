@@ -297,8 +297,14 @@ TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
   ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry));
   ASSERT_OK_AND_ASSIGN(auto entries,
                        pdpi::ReadPiTableEntries(sut_p4rt_session.get()));
-  ASSERT_EQ(entries.size(), 1);
-  ASSERT_THAT(entries[0], gutil::EqualsProto(pi_entry));
+  EXPECT_EQ(entries.size(), 1);
+  EXPECT_THAT(entries[0], gutil::EqualsProto(pi_entry));
+
+  // An auxiliary RedisDB tool that takes a snapshot of the database has issues
+  // with reading non-UTF-8 compliant characters. This is only used for
+  // debugging in testing, so we just clear the SUT table before finishing the
+  // test to avoid the problem.
+  ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
 }
 
 TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
