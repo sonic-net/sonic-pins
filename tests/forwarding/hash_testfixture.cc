@@ -148,36 +148,11 @@ void LogPackets(thinkit::TestEnvironment &environment,
                                           packet_log));
 }
 
-// Push gNMI configuration to the SUT & control switch.
-void PushGnmiConfigToSwitches(thinkit::MirrorTestbed &testbed,
-                              const std::string &gnmi_config) {
-  EXPECT_OK(
-      testbed.Environment().StoreTestArtifact("gnmi_config.txt", gnmi_config));
-  LOG(INFO) << "Pushing gNMI config to " << testbed.Sut().ChassisName();
-  ASSERT_OK(PushGnmiConfig(testbed.Sut(), gnmi_config))
-      << "Failed to push config to " << testbed.Sut().ChassisName();
-  LOG(INFO) << "Pushing gNMI config to "
-            << testbed.ControlSwitch().ChassisName();
-  ASSERT_OK(PushGnmiConfig(testbed.ControlSwitch(), gnmi_config))
-      << "Failed to push config to " << testbed.ControlSwitch().ChassisName();
-}
-
 // Initialize the testbed for the test.
 //   Push gNMI config.
 //   Add the trap rule to the control switch.
 void InitializeTestbed(thinkit::MirrorTestbed &testbed,
-                       const std::string &gnmi_config,
                        const p4::config::v1::P4Info &p4info) {
-  PushGnmiConfigToSwitches(testbed, gnmi_config);
-  LOG(INFO) << "Waiting for gNMI port convergence.";
-  ASSERT_OK(WaitForGnmiPortIdConvergence(testbed.Sut(), gnmi_config,
-                                         /*timeout=*/absl::Minutes(3)))
-      << "Ports failed to converge on " << testbed.Sut().ChassisName();
-  ASSERT_OK(WaitForGnmiPortIdConvergence(testbed.ControlSwitch(), gnmi_config,
-                                         /*timeout=*/absl::Minutes(3)))
-      << "Ports failed to converge on "
-      << testbed.ControlSwitch().ChassisName();
-
   // Wait for ports to come up before the test. We don't need all the ports to
   // be up, but it helps with reproducibility. We're using a short timeout (1
   // minute) so the impact is small if the testbed doesn't bring up every port.
@@ -473,9 +448,6 @@ absl::Status HashTest::TestData::Log(thinkit::TestEnvironment &environment,
 
 void HashTest::SetUp() {
   MirrorTestbedFixture::SetUp();
-
-  ASSERT_NO_FATAL_FAILURE(
-      InitializeTestbed(GetMirrorTestbed(), gnmi_config(), p4_info()));
 
   ASSERT_NO_FATAL_FAILURE(
       GetPortIds(GetMirrorTestbed().Sut(), interfaces_, port_ids_));
