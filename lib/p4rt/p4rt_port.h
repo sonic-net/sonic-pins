@@ -22,6 +22,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 
 namespace pins_test {
 
@@ -40,12 +41,16 @@ class P4rtPortId {
   // Constructors.
 
   // Expects a decimal string. Else returns InvalidArgumentError.
-  static absl::StatusOr<P4rtPortId> OfP4rtEncoding(
+  static absl::StatusOr<P4rtPortId> MakeFromP4rtEncoding(
       absl::string_view p4rt_port_id);
+  static absl::StatusOr<std::vector<P4rtPortId>> MakeVectorFromP4rtEncodings(
+      absl::Span<const std::string> p4rt_port_id);
 
   // Constructs a P4rtPortId from an OpenConfig encoding, i.e. a uint32. Never
   // fails.
-  static P4rtPortId OfOpenConfigEncoding(uint32_t p4rt_port_id);
+  static P4rtPortId MakeFromOpenConfigEncoding(uint32_t p4rt_port_id);
+  static std::vector<P4rtPortId> MakeVectorFromOpenConfigEncodings(
+      absl::Span<const uint32_t> p4rt_port_id);
 
   // Getters.
   // Returns OpenConfig encoding of the port ID, e.g. the uint32 `42`.
@@ -56,6 +61,11 @@ class P4rtPortId {
 
   bool operator==(const P4rtPortId& other) const;
   bool operator<(const P4rtPortId& other) const;
+
+  template <typename H>
+  friend H AbslHashValue(H h, const P4rtPortId& port_id) {
+    return H::combine(std::move(h), port_id.p4rt_port_id_);
+  }
 
  private:
   explicit P4rtPortId(uint32_t p4rt_port_id) : p4rt_port_id_(p4rt_port_id) {}
