@@ -1,0 +1,22 @@
+diff --git a/src/core/lib/security/authorization/grpc_authorization_policy_provider.cc b/src/core/lib/security/authorization/grpc_authorization_policy_provider.cc
+index bbc69de7c2..5595dcc86d 100644
+--- a/src/core/lib/security/authorization/grpc_authorization_policy_provider.cc
++++ b/src/core/lib/security/authorization/grpc_authorization_policy_provider.cc
+@@ -104,7 +104,7 @@ FileWatcherAuthorizationPolicyProvider::FileWatcherAuthorizationPolicyProvider(
+       }
+       absl::Status status = provider->ForceUpdate();
+       if (GRPC_TRACE_FLAG_ENABLED(grpc_authz_trace) && !status.ok()) {
+-        gpr_log(GPR_ERROR,
++        gpr_log(GPR_DEBUG,
+                 "authorization policy reload status. code=%d error_details=%s",
+                 status.code(), std::string(status.message()).c_str());
+       }
+@@ -136,7 +136,7 @@ absl::Status FileWatcherAuthorizationPolicyProvider::ForceUpdate() {
+   deny_engine_ = MakeRefCounted<GrpcAuthorizationEngine>(
+       std::move(rbac_policies_or->deny_policy));
+   if (GRPC_TRACE_FLAG_ENABLED(grpc_authz_trace)) {
+-    gpr_log(GPR_INFO,
++    gpr_log(GPR_DEBUG,
+             "authorization policy reload status: successfully loaded new "
+             "policy\n%s",
+             file_contents_.c_str());
