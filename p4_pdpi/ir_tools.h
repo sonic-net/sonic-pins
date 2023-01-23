@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -47,7 +48,7 @@ absl::Status TransformValuesOfType(
 absl::Status VisitValuesOfType(
     const IrP4Info& info, const p4::config::v1::P4NamedType& target_type,
     std::vector<IrTableEntry> entries,
-    const std::function<void(absl::string_view)>& visitor);
+    const absl::AnyInvocable<absl::Status(absl::string_view) const>& visitor);
 
 }  // namespace pdpi
 
