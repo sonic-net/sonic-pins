@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2022 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,27 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_MOCK_NOTIFICATION_PRODUCER_ADAPTER_H_
-#define PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_MOCK_NOTIFICATION_PRODUCER_ADAPTER_H_
+#ifndef PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_FAKE_INTF_TRANSLATOR_H_
+#define PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_FAKE_INTF_TRANSLATOR_H_
 
-#include <vector>
-
-#include "gmock/gmock.h"
-#include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
-#include "swss/rediscommand.h"
+#include "swss/intf_translator.h"
 
 namespace p4rt_app {
 namespace sonic {
 
-class MockNotificationProducerAdapter final
-    : public NotificationProducerAdapter {
+class FakeIntfTranslator final : public swss::IntfTranslator {
  public:
-    MOCK_METHOD(void, experimental_send,
-              (const std::vector<swss::KeyOpFieldsValuesTuple>& value),
-              (override));
+  FakeIntfTranslator(bool enabled)
+      : swss::IntfTranslator(nullptr), enabled_(enabled) {}
+
+  std::string translateToLinux(const std::string& intf) const override;
+  std::string translateFromLinux(const std::string& intf) const override;
+
+ private:
+  bool enabled_;
 };
 
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_MOCK_NOTIFICATION_PRODUCER_ADAPTER_H_
+#endif  // PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_FAKE_INTF_TRANSLATOR_H_

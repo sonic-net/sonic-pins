@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_TESTS_LIB_P4RUNTIME_REQUEST_HELPERS_H_
-#define GOOGLE_P4RT_APP_TESTS_LIB_P4RUNTIME_REQUEST_HELPERS_H_
+#ifndef PINS_INFRA_P4RT_APP_TESTS_LIB_P4RUNTIME_REQUEST_HELPERS_H_
+#define PINS_INFRA_P4RT_APP_TESTS_LIB_P4RUNTIME_REQUEST_HELPERS_H_
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -35,4 +35,4 @@ absl::StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
 }  // namespace test_lib
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_TESTS_LIB_P4RUNTIME_REQUEST_HELPERS_H_
+#endif  // PINS_INFRA_P4RT_APP_TESTS_LIB_P4RUNTIME_REQUEST_HELPERS_H_

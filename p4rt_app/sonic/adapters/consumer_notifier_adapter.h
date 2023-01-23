@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_ADAPTERS_CONSUMER_NOTIFIER_ADAPTER_H_
-#define GOOGLE_P4RT_APP_SONIC_ADAPTERS_CONSUMER_NOTIFIER_ADAPTER_H_
+#ifndef PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_CONSUMER_NOTIFIER_ADAPTER_H_
+#define PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_CONSUMER_NOTIFIER_ADAPTER_H_
 
 #include <stdint.h>
 
@@ -49,4 +49,4 @@ class ConsumerNotifierAdapter {
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_CONSUMER_NOTIFIER_ADAPTER_H_
+#endif  // PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_CONSUMER_NOTIFIER_ADAPTER_H_

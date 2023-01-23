@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4_PDPI_TESTING_TEST_P4INFO_H_
-#define GOOGLE_P4_PDPI_TESTING_TEST_P4INFO_H_
+#ifndef PINS_INFRA_P4_PDPI_TESTING_TEST_P4INFO_H_
+#define PINS_INFRA_P4_PDPI_TESTING_TEST_P4INFO_H_
 
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
@@ -29,4 +29,4 @@ const pdpi::IrP4Info& GetTestIrP4Info();
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_TESTING_TEST_P4INFO_H_
+#endif  // PINS_INFRA_P4_PDPI_TESTING_TEST_P4INFO_H_

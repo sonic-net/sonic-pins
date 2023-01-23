@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_P4_PDPI_PDGENLIB_H_
-#define GOOGLE_P4_PDPI_PDGENLIB_H_
+#ifndef PINS_INFRA_P4_PDPI_PDGENLIB_H_
+#define PINS_INFRA_P4_PDPI_PDGENLIB_H_
 
 #include <string>
 
@@ -31,4 +31,4 @@ absl::StatusOr<std::string> IrP4InfoToPdProto(
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_PDGENLIB_H_
+#endif  // PINS_INFRA_P4_PDPI_PDGENLIB_H_

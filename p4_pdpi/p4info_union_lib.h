@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_P4_PDPI_P4INFO_UNION_LIB_H_
-#define GOOGLE_P4_PDPI_P4INFO_UNION_LIB_H_
+#ifndef PINS_INFRA_P4_PDPI_P4INFO_UNION_LIB_H_
+#define PINS_INFRA_P4_PDPI_P4INFO_UNION_LIB_H_
 
 #include <string>
 
@@ -37,4 +37,4 @@ absl::StatusOr<::p4::config::v1::P4Info> UnionP4info(
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_P4INFO_UNION_LIB_H_
+#endif  // PINS_INFRA_P4_PDPI_P4INFO_UNION_LIB_H_

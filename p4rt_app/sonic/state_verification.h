@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_STATE_VERIFICATION_H_
-#define GOOGLE_P4RT_APP_SONIC_STATE_VERIFICATION_H_
+#ifndef PINS_INFRA_P4RT_APP_SONIC_STATE_VERIFICATION_H_
+#define PINS_INFRA_P4RT_APP_SONIC_STATE_VERIFICATION_H_
 
 #include <vector>
 
@@ -33,4 +33,4 @@ std::vector<std::string> VerifyAppStateDbAndAppDbEntries(
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_STATE_VERIFICATION_H_
+#endif  // PINS_INFRA_P4RT_APP_SONIC_STATE_VERIFICATION_H_

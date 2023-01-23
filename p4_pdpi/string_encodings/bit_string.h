@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
-#define GOOGLE_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
+#ifndef PINS_INFRA_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
+#define PINS_INFRA_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
 
 #include <bitset>
 #include <vector>
@@ -121,4 +121,4 @@ class BitString {
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_
+#endif  // PINS_INFRA_P4_PDPI_STRING_ENCODINGS_BIT_STRING_H_

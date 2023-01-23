@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_GUTIL_OVERLOADED_H_
-#define GOOGLE_GUTIL_OVERLOADED_H_
+#ifndef PINS_INFRA_GUTIL_OVERLOADED_H_
+#define PINS_INFRA_GUTIL_OVERLOADED_H_
 
 namespace gutil {
 
@@ -27,4 +27,4 @@ Overload(Ts...) -> Overload<Ts...>;
 
 }  // namespace gutil
 
-#endif  // GOOGLE_GUTIL_OVERLOADED_H_
+#endif  // PINS_INFRA_GUTIL_OVERLOADED_H_

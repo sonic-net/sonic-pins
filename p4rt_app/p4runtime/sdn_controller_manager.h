@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_P4RUNTIME_SDN_CONTROLLER_MANAGER_H_
-#define GOOGLE_P4RT_APP_P4RUNTIME_SDN_CONTROLLER_MANAGER_H_
+#ifndef PINS_INFRA_P4RT_APP_P4RUNTIME_SDN_CONTROLLER_MANAGER_H_
+#define PINS_INFRA_P4RT_APP_P4RUNTIME_SDN_CONTROLLER_MANAGER_H_
 
 #include <cstdint>
 #include <optional>
@@ -179,4 +179,4 @@ class SdnControllerManager {
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_P4RUNTIME_SDN_CONTROLLER_MANAGER_H_
+#endif  // PINS_INFRA_P4RT_APP_P4RUNTIME_SDN_CONTROLLER_MANAGER_H_

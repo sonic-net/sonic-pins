@@ -15,8 +15,8 @@
 // This file defines conversion functions to and from decimal strings with
 // positive value such as "10" to ease working with PD protos.
 
-#ifndef GOOGLE_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
-#define GOOGLE_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
+#ifndef PINS_INFRA_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
+#define PINS_INFRA_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -43,4 +43,4 @@ absl::StatusOr<std::string> IntToDecimalString(uint32_t value);
 absl::StatusOr<std::string> IntToDecimalString(uint64_t value);
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_
+#endif  // PINS_INFRA_P4_PDPI_STRING_ENCODINGS_DECIMAL_STRING_H_

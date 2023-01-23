@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2022 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,8 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_INFRA_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_PORT_TABLE_EVENT_H_
-#define PINS_INFRA_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_PORT_TABLE_EVENT_H_
+#ifndef PINS_INFRA_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_SEND_TO_INGRESS_PORT_TABLE_EVENT_H_
+#define PINS_INFRA_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_SEND_TO_INGRESS_PORT_TABLE_EVENT_H_
+
+#include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "p4rt_app/event_monitoring/state_event_monitor.h"
@@ -20,11 +23,12 @@
 
 namespace p4rt_app {
 
-// Reacts to PORT_TABLE changes in the APP_STATE_DB:
-//  * Create/Destroy PacketIO interfaces.
-class AppStateDbPortTableEventHandler : public sonic::StateEventHandler {
+// Reacts to SEND_TO_INGRESS_PORT_TABLE changes in the APP_STATE_DB:
+//  * Create/Destroy PacketIO interface for sending to ingress.
+class AppStateDbSendToIngressPortTableEventHandler
+    : public sonic::StateEventHandler {
  public:
-  AppStateDbPortTableEventHandler(P4RuntimeImpl& p4runtime);
+  AppStateDbSendToIngressPortTableEventHandler(P4RuntimeImpl& p4runtime);
 
   absl::Status HandleEvent(
       const std::string& operation, const std::string& key,
@@ -36,4 +40,4 @@ class AppStateDbPortTableEventHandler : public sonic::StateEventHandler {
 
 }  // namespace p4rt_app
 
-#endif  // PINS_INFRA_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_PORT_TABLE_EVENT_H_
+#endif  // PINS_INFRA_P4RT_APP_EVENT_MONITORING_APP_STATE_DB_SEND_TO_INGRESS_PORT_TABLE_EVENT_H_

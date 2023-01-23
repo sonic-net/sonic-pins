@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_LIB_P4RT_PACKET_LISTENER_H_
-#define GOOGLE_LIB_P4RT_PACKET_LISTENER_H_
+#ifndef PINS_INFRA_LIB_P4RT_PACKET_LISTENER_H_
+#define PINS_INFRA_LIB_P4RT_PACKET_LISTENER_H_
 
 #include <functional>
 #include <string>
@@ -71,4 +71,4 @@ class PacketListener : public thinkit::PacketGenerationFinalizer {
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_LIB_P4RT_PACKET_LISTENERR_H_
+#endif  // PINS_INFRA_LIB_P4RT_PACKET_LISTENERR_H_

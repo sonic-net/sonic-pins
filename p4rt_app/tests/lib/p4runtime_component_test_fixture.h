@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_TESTS_LIB_P4RUNTIME_COMPONENT_TEST_FIXTURE_H_
-#define GOOGLE_P4RT_APP_TESTS_LIB_P4RUNTIME_COMPONENT_TEST_FIXTURE_H_
+#ifndef PINS_INFRA_P4RT_APP_TESTS_LIB_P4RUNTIME_COMPONENT_TEST_FIXTURE_H_
+#define PINS_INFRA_P4RT_APP_TESTS_LIB_P4RUNTIME_COMPONENT_TEST_FIXTURE_H_
 
 #include "absl/strings/str_cat.h"
 #include "grpcpp/security/credentials.h"
@@ -57,4 +57,4 @@ class P4RuntimeComponentTestFixture : public testing::Test {
 }  // namespace test_lib
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_TESTS_LIB_P4RUNTIME_COMPONENT_TEST_FIXTURE_H_
+#endif  // PINS_INFRA_P4RT_APP_TESTS_LIB_P4RUNTIME_COMPONENT_TEST_FIXTURE_H_
