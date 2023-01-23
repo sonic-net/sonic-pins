@@ -38,20 +38,19 @@
 #include "absl/types/span.h"
 #include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/collections.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "lib/validator/validator_lib.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
-#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/string_encodings/decimal_string.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "re2/re2.h"
@@ -65,6 +64,8 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 // Tests for the watchport functionality in Action Profile Group operation.
 
 namespace pins {
@@ -225,7 +226,8 @@ absl::Status SetUpControlSwitch(pdpi::P4RuntimeSession& p4_session,
 // traffic is received, since that is excluded from the traffic forwarding
 // members in the group.
 absl::StatusOr<std::vector<GroupMember>> CreateGroupMembers(
-    int group_size, absl::Span<const int> controller_port_ids) {
+    int group_size,
+    absl::Span<const pins_test::P4rtPortId> controller_port_ids) {
   if (group_size + /*input_port=*/1 > controller_port_ids.size()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Not enough members: ", controller_port_ids.size(),
@@ -237,8 +239,10 @@ absl::StatusOr<std::vector<GroupMember>> CreateGroupMembers(
        i++) {
     // Add port ids except for the default input port id.
     if (i != kDefaultInputPortIndex) {
-      members.push_back(
-          pins::GroupMember{.weight = 0, .port = controller_port_ids[i]});
+      members.push_back(pins::GroupMember{
+          .weight = 0,
+          .port = static_cast<int>(
+              controller_port_ids[i].GetOpenConfigEncoding())});
     }
   }
 
@@ -285,12 +289,12 @@ absl::Status ProgramL3Admit(pdpi::P4RuntimeSession& p4_session,
 
 // Sends N packets from the control switch to sut at a rate of 500 packets/sec.
 absl::Status SendNPacketsToSut(int num_packets,
-                               const TestConfiguration& test_config,
+                               const TestConfiguration &test_config,
                                absl::Span<const GroupMember> members,
-                               absl::Span<const int> port_ids,
-                               const pdpi::IrP4Info& ir_p4info,
-                               pdpi::P4RuntimeSession& p4_session,
-                               thinkit::TestEnvironment& test_environment) {
+                               absl::Span<const pins_test::P4rtPortId> port_ids,
+                               const pdpi::IrP4Info &ir_p4info,
+                               pdpi::P4RuntimeSession &p4_session,
+                               thinkit::TestEnvironment &test_environment) {
   const absl::Time start_time = absl::Now();
   for (int i = 0; i < num_packets; i++) {
     // Rate limit to 500 packets per second.
@@ -299,7 +303,7 @@ absl::Status SendNPacketsToSut(int num_packets,
 
     // Vary the port on which to send the packet if the hash field selected is
     // input port.
-    int port = port_ids[kDefaultInputPortIndex];
+    pins_test::P4rtPortId port = port_ids[kDefaultInputPortIndex];
     if (test_config.field == PacketField::kInputPort) {
       port = port_ids[i % members.size()];
     }
@@ -307,13 +311,12 @@ absl::Status SendNPacketsToSut(int num_packets,
     ASSIGN_OR_RETURN(packetlib::Packet packet,
                      pins::GenerateIthPacket(test_config, i));
     ASSIGN_OR_RETURN(std::string raw_packet, SerializePacket(packet));
-    ASSIGN_OR_RETURN(std::string port_string, pdpi::IntToDecimalString(port));
-    RETURN_IF_ERROR(InjectEgressPacket(port_string, raw_packet, ir_p4info,
-                                       &p4_session,
+    RETURN_IF_ERROR(InjectEgressPacket(port.GetP4rtEncoding(), raw_packet,
+                                       ir_p4info, &p4_session,
                                        /*packet_delay=*/std::nullopt));
 
     dvaas::Packet p;
-    p.set_port(port_string);
+    p.set_port(port.GetP4rtEncoding());
     *p.mutable_parsed() = packet;
     p.set_hex(absl::BytesToHexString(raw_packet));
     // Save log of packets.
@@ -605,7 +608,10 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -695,7 +701,10 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -823,7 +832,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   thinkit::MirrorTestbed& testbed = GetParam().testbed->GetMirrorTestbed();
   thinkit::TestEnvironment& environment = testbed.Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -944,7 +956,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = 1;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -1071,7 +1086,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
 
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
@@ -1199,7 +1217,11 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
 TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
-  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
