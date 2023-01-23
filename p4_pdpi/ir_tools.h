@@ -1,5 +1,5 @@
-#ifndef GOOGLE_P4_PDPI_IR_TOOLS_H_
-#define GOOGLE_P4_PDPI_IR_TOOLS_H_
+#ifndef PINS_P4_PDPI_IR_TOOLS_H_
+#define PINS_P4_PDPI_IR_TOOLS_H_
 
 #include <functional>
 #include <string>
@@ -51,4 +51,4 @@ absl::Status VisitValuesOfType(
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_IR_TOOLS_H_
+#endif  // PINS_P4_PDPI_IR_TOOLS_H_
