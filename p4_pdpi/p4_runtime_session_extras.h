@@ -77,10 +77,31 @@ absl::Status InstallIrTableEntries(
 absl::Status InstallIrTableEntry(pdpi::P4RuntimeSession& p4rt,
                                  const pdpi::IrTableEntry& ir_table_entry);
 
+// Reads table entries from the switch using `p4rt` and returns them in PI
+// representation in an order determined by gutil::TableEntryKey.
+absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
+    P4RuntimeSession& p4rt);
+
 // Reads table entries from the switch using `p4rt` and returns them in IR
 // representation. Reads the P4Info used in translation from the switch.
 absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntries(
     P4RuntimeSession& p4rt);
+
+// Reads table entries from the switch using `p4rt` and returns them in IR
+// representation in an order determined by gutil::TableEntryKey on the
+// corresponding PI representation. Reads the P4Info used in translation from
+// the switch.
+absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntriesSorted(
+    P4RuntimeSession& p4rt);
+
+// Constructs a write request with metadata from `p4rt` and sends it to the
+// switch, returning a response containing the per-update status (in the same
+// order as the input `updates`).
+absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+    P4RuntimeSession& p4rt, absl::Span<const p4::v1::Update> updates);
+absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+    P4RuntimeSession& p4rt,
+    const google::protobuf::RepeatedPtrField<p4::v1::Update>& updates);
 
 // == END OF PUBLIC INTERFACE ==================================================
 

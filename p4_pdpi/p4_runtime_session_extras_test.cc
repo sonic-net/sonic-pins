@@ -286,37 +286,120 @@ TEST(ReadIrTableEntries, PullsP4InfoFromSwitchAndReadsPdpiTranslatedEntries) {
   const IrP4Info& ir_p4info = GetTestIrP4Info();
   const P4RuntimeSessionOptionalArgs metadata;
 
-  // The PD version of the entry that we will read from the switch.
+  // The PD versions of the two entries that we will read from the switch.
+  // One has a larger-valued priority than the other and should thus be second
+  // in the sorted order.
   ASSERT_OK_AND_ASSIGN(
-      const auto kPdTableEntry, gutil::ParseTextProto<pdpi::TableEntry>(R"pb(
+      const auto kPdTableEntry1, gutil::ParseTextProto<pdpi::TableEntry>(R"pb(
         ternary_table_entry {
           match { normal { value: "0x0ff" mask: "0x0ff" } }
           action { do_thing_3 { arg1: "0xffffffff" arg2: "0xffffffff" } }
           priority: 1
         }
       )pb"));
+  ASSERT_OK_AND_ASSIGN(
+      const auto kPdTableEntry2, gutil::ParseTextProto<pdpi::TableEntry>(R"pb(
+        ternary_table_entry {
+          match { normal { value: "0x0ff" mask: "0x0ff" } }
+          action { do_thing_3 { arg1: "0xffffffff" arg2: "0xffffffff" } }
+          priority: 2
+        }
+      )pb"));
 
   ASSERT_OK_AND_ASSIGN((auto [p4rt_session, mock_p4rt_stub]),
                        MakeP4SessionWithMockStub(metadata));
 
-  // Expect function to pull P4Info from switch.
-  EXPECT_CALL(mock_p4rt_stub, GetForwardingPipelineConfig)
-      .WillOnce([&](auto, auto, GetForwardingPipelineConfigResponse* response) {
-        *response->mutable_config()->mutable_p4info() = p4info;
-        return grpc::Status::OK;
-      });
+  // The translated PI entries that we expect will be read from the switch.
+  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry kPiTableEntry1,
+                       PdTableEntryToPi(ir_p4info, kPdTableEntry1));
+  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry kPiTableEntry2,
+                       PdTableEntryToPi(ir_p4info, kPdTableEntry2));
+  // The IR conversion of the read table entries that we expect to get back.
+  ASSERT_OK_AND_ASSIGN(IrTableEntry expected_ir_table_entry1,
+                       PiTableEntryToIr(ir_p4info, kPiTableEntry1));
+  ASSERT_OK_AND_ASSIGN(IrTableEntry expected_ir_table_entry2,
+                       PiTableEntryToIr(ir_p4info, kPiTableEntry2));
 
-  // The translated PI entry that we expect will be read from the switch.
-  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry kPiTableEntry,
-                       PdTableEntryToPi(ir_p4info, kPdTableEntry));
+  // Unsorted ReadIrTableEntries.
+  {
+    // Expect function to pull P4Info from switch.
+    EXPECT_CALL(mock_p4rt_stub, GetForwardingPipelineConfig)
+        .WillOnce(
+            [&](auto, auto, GetForwardingPipelineConfigResponse* response) {
+              *response->mutable_config()->mutable_p4info() = p4info;
+              return grpc::Status::OK;
+            });
+    // Expect function to issue `Read` request that returns 2 PI entries.
+    SetNextReadResponse(mock_p4rt_stub, {kPiTableEntry2, kPiTableEntry1});
+    // Expect the call to return OK status with the IR conversion of the read
+    // table entries in read order.
+    EXPECT_THAT(
+        ReadIrTableEntries(*p4rt_session),
+        IsOkAndHolds(ElementsAre(EqualsProto(expected_ir_table_entry2),
+                                 EqualsProto(expected_ir_table_entry1))));
+  }
+
+  // Sorted ReadIrTableEntries.
+  {
+    // Expect function to pull P4Info from switch.
+    EXPECT_CALL(mock_p4rt_stub, GetForwardingPipelineConfig)
+        .WillOnce(
+            [&](auto, auto, GetForwardingPipelineConfigResponse* response) {
+              *response->mutable_config()->mutable_p4info() = p4info;
+              return grpc::Status::OK;
+            });
+    // Expect function to issue `Read` request that returns 2 PI entries.
+    SetNextReadResponse(mock_p4rt_stub, {kPiTableEntry2, kPiTableEntry1});
+    // Expect the call to return OK status with the IR conversion of the read
+    // table entries in sorted order.
+    EXPECT_THAT(
+        ReadIrTableEntriesSorted(*p4rt_session),
+        IsOkAndHolds(ElementsAre(EqualsProto(expected_ir_table_entry1),
+                                 EqualsProto(expected_ir_table_entry2))));
+  }
+}
+
+TEST(ReadPiTableEntriesSorted, GetsSortedEntries) {
+  // Constants.
+  const IrP4Info& ir_p4info = GetTestIrP4Info();
+  const P4RuntimeSessionOptionalArgs metadata;
+
+  // The PD versions of the two entries that we will read from the switch.
+  // One has a larger-valued priority than the other and should thus be second
+  // in the sorted order.
+  ASSERT_OK_AND_ASSIGN(
+      const auto kPdTableEntry1, gutil::ParseTextProto<pdpi::TableEntry>(R"pb(
+        ternary_table_entry {
+          match { normal { value: "0x0ff" mask: "0x0ff" } }
+          action { do_thing_3 { arg1: "0xffffffff" arg2: "0xffffffff" } }
+          priority: 1
+        }
+      )pb"));
+  ASSERT_OK_AND_ASSIGN(
+      const auto kPdTableEntry2, gutil::ParseTextProto<pdpi::TableEntry>(R"pb(
+        ternary_table_entry {
+          match { normal { value: "0x0ff" mask: "0x0ff" } }
+          action { do_thing_3 { arg1: "0xffffffff" arg2: "0xffffffff" } }
+          priority: 2
+        }
+      )pb"));
+
+  ASSERT_OK_AND_ASSIGN((auto [p4rt_session, mock_p4rt_stub]),
+                       MakeP4SessionWithMockStub(metadata));
+
+  // The translated PI entries that we expect will be read from the switch.
+  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry kPiTableEntry1,
+                       PdTableEntryToPi(ir_p4info, kPdTableEntry1));
+  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry kPiTableEntry2,
+                       PdTableEntryToPi(ir_p4info, kPdTableEntry2));
+
   // Expect function to issue `Read` request that returns PI entry.
-  SetNextReadResponse(mock_p4rt_stub, {kPiTableEntry});
-  // Expect the call to return OK status with the IR conversion of the read
-  // table entry.
-  ASSERT_OK_AND_ASSIGN(IrTableEntry expected_ir_table_entry,
-                       PiTableEntryToIr(ir_p4info, kPiTableEntry));
-  EXPECT_THAT(ReadIrTableEntries(*p4rt_session),
-              IsOkAndHolds(ElementsAre(EqualsProto(expected_ir_table_entry))));
+  SetNextReadResponse(mock_p4rt_stub, {kPiTableEntry2, kPiTableEntry1});
+  // Expect the call to return OK status with a sorted vector of the read
+  // table entries.
+  EXPECT_THAT(ReadPiTableEntriesSorted(*p4rt_session),
+              IsOkAndHolds(ElementsAre(EqualsProto(kPiTableEntry1),
+                                       EqualsProto(kPiTableEntry2))));
 }
 
 }  // namespace
