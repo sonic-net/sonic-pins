@@ -13,13 +13,18 @@
 // limitations under the License.
 #include "tests/forwarding/l3_admit_test.h"
 
+#include <algorithm>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
@@ -28,8 +33,11 @@
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gutil/proto.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/gnmi/openconfig.pb.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
@@ -273,16 +281,43 @@ absl::Status SendUdpPacket(pdpi::P4RuntimeSession& session,
   return absl::OkStatus();
 }
 
+bool IsNonLagEthernetInterface(
+    const pins_test::openconfig::Interfaces::Interface &interface) {
+  return interface.state().enabled() && interface.state().has_p4rt_id() &&
+         absl::StartsWith(interface.name(), "Ethernet") &&
+         interface.ethernet().state().aggregate_id().empty();
+}
+
 absl::StatusOr<std::vector<std::string>>
 GetNUpInterfaceIDs(thinkit::Switch &device, int num_interfaces) {
   // The test fixture pushes a new config during setup so we give the switch a
   // few minutes to converge before failing to report no valid ports.
-  auto stop_time = absl::Now() + absl::Minutes(3);
-  absl::StatusOr<std::vector<std::string>> result;
-  do {
+  absl::Duration time_limit = absl::Minutes(3);
+  absl::Time stop_time = absl::Now() + time_limit;
+  std::vector<pins_test::P4rtPortId> port_ids;
+  while (port_ids.size() < num_interfaces) {
+    if (absl::Now() > stop_time) {
+      return absl::FailedPreconditionError(
+          absl::StrCat("Could not find ", num_interfaces, " interfaces in ",
+                       absl::FormatDuration(time_limit), "."));
+    }
+
     ASSIGN_OR_RETURN(auto gnmi_stub, device.CreateGnmiStub());
-    result = pins_test::GetNUpInterfacePortIds(*gnmi_stub, num_interfaces);
-  } while (!result.ok() && absl::Now() < stop_time);
+    ASSIGN_OR_RETURN(port_ids, pins_test::GetMatchingP4rtPortIds(
+                                   *gnmi_stub, IsNonLagEthernetInterface));
+  }
+
+  // Get a random sample of the available ports.
+  std::vector<pins_test::P4rtPortId> random_sample;
+  std::sample(port_ids.begin(), port_ids.end(),
+              std::back_inserter(random_sample), num_interfaces,
+              absl::BitGen());
+
+  // Convert the sample into a string.
+  std::vector<std::string> result;
+  for (const auto &port_id : random_sample) {
+    result.push_back(absl::StrCat(port_id.GetOpenConfigEncoding()));
+  }
   return result;
 }
 
