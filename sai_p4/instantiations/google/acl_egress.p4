@@ -20,6 +20,9 @@ control acl_egress(in headers_t headers,
   @id(ACL_EGRESS_COUNTER_ID)
   direct_counter(CounterType.packets_and_bytes) acl_egress_counter;
 
+  @id(ACL_EGRESS_DHCP_TO_HOST_COUNTER_ID)
+  direct_counter(CounterType.packets_and_bytes) acl_egress_dhcp_to_host_counter;
+
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_EGRESS_TABLE_ID)
   @sai_acl(EGRESS)
@@ -69,6 +72,57 @@ control acl_egress(in headers_t headers,
     size = ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  @id(ACL_EGRESS_DHCP_TO_HOST_TABLE_ID)
+  @sai_acl(EGRESS)
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @entry_restriction("
+    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
+    ether_type != 0x0800 && ether_type != 0x86dd;
+    // Only allow IP field matches for IP packets.
+    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    // Only allow l4_dst_port matches for TCP/UDP packets.
+    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
+    // Forbid illegal combinations of IP_TYPE fields.
+    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+    // Forbid unsupported combinations of IP_TYPE fields.
+    is_ipv4::mask != 0 -> (is_ipv4 == 1);
+    is_ipv6::mask != 0 -> (is_ipv6 == 1);
+  ")
+  table acl_egress_dhcp_to_host_table {
+    key = {
+      headers.ipv4.isValid() || headers.ipv6.isValid() : optional
+          @id(1) @name("is_ip")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
+      headers.ipv4.isValid() : optional
+          @id(2) @name("is_ipv4")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV4ANY);
+      headers.ipv6.isValid() : optional
+          @id(3) @name("is_ipv6")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
+      headers.ethernet.ether_type : ternary
+          @id(4) @name("ether_type")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
+      ip_protocol : ternary
+          @id(5) @name("ip_protocol")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
+      local_metadata.l4_dst_port : ternary
+          @id(6) @name("l4_dst_port")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
+      (port_id_t)standard_metadata.egress_port: optional
+          @id(7) @name("out_port")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT);
+    }
+    actions = {
+      @proto_id(1) acl_drop(standard_metadata);
+      @defaultonly NoAction;
+    }
+    const default_action = NoAction;
+    counters = acl_egress_dhcp_to_host_counter;
+    size = ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
   apply {
     if (headers.ipv4.isValid()) {
       dscp = headers.ipv4.dscp;
@@ -80,7 +134,13 @@ control acl_egress(in headers_t headers,
       ip_protocol = 0;
     }
 
+#if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     acl_egress_table.apply();
+#elif defined(SAI_INSTANTIATION_TOR)
+    acl_egress_table.apply();
+    // TODO: Not enough SAI resources for the second EFP bank.
+    // acl_egress_dhcp_to_host_table.apply();
+#endif
   }
 }  // control ACL_EGRESS
 
