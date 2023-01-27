@@ -711,7 +711,7 @@ tables {
 tables {
   preamble {
     id: 33554693
-    name: "ingress.acl_pre_ingress_vlan.acl_pre_ingress_vlan_table"
+    name: "ingress.acl_pre_ingress.acl_pre_ingress_vlan_table"
     alias: "acl_pre_ingress_vlan_table"
     annotations: "@sai_acl(PRE_INGRESS)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
@@ -739,7 +739,7 @@ tables {
 tables {
   preamble {
     id: 33554694
-    name: "ingress.acl_pre_ingress_metadata.acl_pre_ingress_metadata_table"
+    name: "ingress.acl_pre_ingress.acl_pre_ingress_metadata_table"
     alias: "acl_pre_ingress_metadata_table"
     annotations: "@sai_acl(PRE_INGRESS)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
@@ -803,7 +803,7 @@ tables {
 tables {
   preamble {
     id: 33554695
-    name: "ingress.acl_ingress_qos.acl_ingress_qos_table"
+    name: "ingress.acl_ingress.acl_ingress_qos_table"
     alias: "acl_ingress_qos_table"
     annotations: "@sai_acl(INGRESS)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
@@ -1341,7 +1341,7 @@ actions {
 actions {
   preamble {
     id: 16777482
-    name: "ingress.acl_pre_ingress_vlan.set_outer_vlan_id"
+    name: "ingress.acl_pre_ingress.set_outer_vlan_id"
     alias: "set_outer_vlan_id"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
@@ -1355,7 +1355,7 @@ actions {
 actions {
   preamble {
     id: 16777483
-    name: "ingress.acl_pre_ingress_metadata.set_acl_metadata"
+    name: "ingress.acl_pre_ingress.set_acl_metadata"
     alias: "set_acl_metadata"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
@@ -1363,7 +1363,7 @@ actions {
 actions {
   preamble {
     id: 16777484
-    name: "ingress.acl_ingress_qos.acl_rate_limit_copy"
+    name: "ingress.acl_ingress.acl_rate_limit_copy"
     alias: "acl_rate_limit_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY)"
   }
@@ -1439,7 +1439,7 @@ direct_counters {
 direct_counters {
   preamble {
     id: 318767366
-    name: "ingress.acl_pre_ingress_vlan.acl_pre_ingress_vlan_counter"
+    name: "ingress.acl_pre_ingress.acl_pre_ingress_vlan_counter"
     alias: "acl_pre_ingress_vlan_counter"
   }
   spec {
@@ -1450,7 +1450,7 @@ direct_counters {
 direct_counters {
   preamble {
     id: 318767365
-    name: "ingress.acl_pre_ingress_metadata.acl_pre_ingress_metadata_counter"
+    name: "ingress.acl_pre_ingress.acl_pre_ingress_metadata_counter"
     alias: "acl_pre_ingress_metadata_counter"
   }
   spec {
@@ -1461,7 +1461,7 @@ direct_counters {
 direct_counters {
   preamble {
     id: 318767367
-    name: "ingress.acl_ingress_qos.acl_ingress_qos_counter"
+    name: "ingress.acl_ingress.acl_ingress_qos_counter"
     alias: "acl_ingress_qos_counter"
   }
   spec {
