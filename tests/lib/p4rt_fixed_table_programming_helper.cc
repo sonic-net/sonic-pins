@@ -202,6 +202,44 @@ absl::StatusOr<p4::v1::Update> NexthopTableUpdate(
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
+absl::StatusOr<p4::v1::Update> TunnelTableUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    absl::string_view tunnel_id, absl::string_view encap_dst_ip,
+    absl::string_view encap_src_ip, absl::string_view router_interface_id) {
+  pdpi::IrUpdate ir_update;
+  RETURN_IF_ERROR(gutil::ReadProtoFromString(
+      absl::Substitute(R"pb(
+                         type: $0
+                         table_entry {
+                           table_name: "tunnel_table"
+                           matches {
+                             name: "tunnel_id"
+                             exact { str: "$1" }
+                           }
+                           action {
+                             name: "mark_for_p2p_tunnel_encap"
+                             params {
+                               name: "encap_dst_ip"
+                               value { ipv6: "$2" }
+                             }
+                             params {
+                               name: "encap_src_ip"
+                               value { ipv6: "$3" }
+                             }
+                             params {
+                               name: "router_interface_id"
+                               value { str: "$4" }
+                             }
+                           }
+                         }
+                       )pb",
+                       type, tunnel_id, encap_dst_ip, encap_src_ip,
+                       router_interface_id),
+      &ir_update))
+      << "invalid pdpi::IrUpdate string.";
+  return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
+}
+
 absl::StatusOr<p4::v1::Update> VrfTableUpdate(const pdpi::IrP4Info& ir_p4_info,
                                               p4::v1::Update::Type type,
                                               absl::string_view vrf_id) {
