@@ -37,7 +37,7 @@ absl::StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info& p4_info);
 absl::StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info& info,
                                               const p4::v1::TableEntry& pi,
                                               bool key_only = false);
-absl::StatusOr<std::vector<IrTableEntry>> PiTableEntriesToIr(
+absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
     const IrP4Info& info, absl::Span<const p4::v1::TableEntry> pi,
     bool key_only = false);
 
@@ -71,6 +71,8 @@ absl::StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
 absl::StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info& info,
                                                     const IrTableEntry& ir,
                                                     bool key_only = false);
+absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
+    const IrP4Info& info, const IrTableEntries& ir, bool key_only = false);
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     const IrP4Info& info, absl::Span<const IrTableEntry> ir,
     bool key_only = false);

@@ -282,6 +282,11 @@ message IrTableEntry {
   bytes controller_metadata = 8;
 }
 
+// Describes a list of table entries.
+message IrTableEntries {
+  repeated IrTableEntry entries = 1;
+}
+
 // -- Packet IO ----------------------------------------------------------------
 
 // Describes a packet in.
