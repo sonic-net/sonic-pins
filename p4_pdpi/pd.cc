@@ -597,6 +597,16 @@ absl::Status PiTableEntriesToPd(const IrP4Info &info,
 }
 
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
+                                const IrTableEntries &ir,
+                                google::protobuf::Message *pd, bool key_only) {
+  for (const auto &ir_entry : ir.entries()) {
+    ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
+                     AddRepeatedMutableMessage(pd, "entries"));
+    RETURN_IF_ERROR(IrTableEntryToPd(ir_p4info, ir_entry, pd_entry, key_only));
+  }
+  return absl::OkStatus();
+}
+absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 absl::Span<const IrTableEntry> ir,
                                 google::protobuf::Message *pd, bool key_only) {
   for (const auto &ir_entry : ir) {
@@ -674,15 +684,14 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> PdTableEntriesToPi(
   return IrTableEntriesToPi(info, ir, key_only);
 }
 
-absl::StatusOr<std::vector<IrTableEntry>> PdTableEntriesToIr(
+absl::StatusOr<IrTableEntries> PdTableEntriesToIr(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
     bool key_only) {
   ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
                    GetRepeatedFieldMessages(pd, "entries"));
-  std::vector<IrTableEntry> ir;
-  ir.reserve(pd_entries.size());
+  IrTableEntries ir;
   for (auto *pd_entry : pd_entries) {
-    ASSIGN_OR_RETURN(ir.emplace_back(),
+    ASSIGN_OR_RETURN(*ir.add_entries(),
                      PdTableEntryToIr(ir_p4info, *pd_entry, key_only));
   }
   return ir;

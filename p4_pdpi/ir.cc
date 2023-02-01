@@ -1802,6 +1802,16 @@ StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
 }
 
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
+    const IrP4Info &info, const IrTableEntries &ir, bool key_only) {
+  std::vector<p4::v1::TableEntry> pi;
+  pi.reserve(ir.entries_size());
+  for (const IrTableEntry &ir_entry : ir.entries()) {
+    ASSIGN_OR_RETURN(pi.emplace_back(),
+                     IrTableEntryToPi(info, ir_entry, key_only));
+  }
+  return pi;
+}
+absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     const IrP4Info &info, absl::Span<const IrTableEntry> ir, bool key_only) {
   std::vector<p4::v1::TableEntry> pi;
   pi.reserve(ir.size());
@@ -1812,13 +1822,13 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
   return pi;
 }
 
-absl::StatusOr<std::vector<IrTableEntry>> PiTableEntriesToIr(
+absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
     const IrP4Info &info, absl::Span<const p4::v1::TableEntry> pi,
     bool key_only) {
-  std::vector<IrTableEntry> ir;
-  ir.reserve(pi.size());
+  IrTableEntries ir;
+  ir.mutable_entries()->Reserve(pi.size());
   for (const auto &pi_entry : pi) {
-    ASSIGN_OR_RETURN(ir.emplace_back(),
+    ASSIGN_OR_RETURN(*ir.add_entries(),
                      PiTableEntryToIr(info, pi_entry, key_only));
   }
   return ir;
