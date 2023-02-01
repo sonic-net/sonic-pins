@@ -60,14 +60,9 @@ absl::StatusOr<TableEntries> ValidPdTableEntries() {
     })pb");
 }
 
-absl::StatusOr<std::vector<pdpi::IrTableEntry>> ValidIrTableEntries() {
-  std::vector<pdpi::IrTableEntry> ir;
+absl::StatusOr<IrTableEntries> ValidIrTableEntries() {
   ASSIGN_OR_RETURN(TableEntries pd, ValidPdTableEntries());
-  for (const auto& pd_entry : pd.entries()) {
-    ASSIGN_OR_RETURN(ir.emplace_back(),
-                     PdTableEntryToIr(GetTestIrP4Info(), pd_entry));
-  }
-  return ir;
+  return PdTableEntriesToIr(GetTestIrP4Info(), pd);
 }
 
 using VectorTranslationTest = testing::TestWithParam<bool>;  // key_only?
@@ -78,7 +73,7 @@ TEST_P(VectorTranslationTest,
   const auto& info = GetTestIrP4Info();
   ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
 
-  std::vector<pdpi::IrTableEntry> ir_entries, expected_ir_entries;
+  IrTableEntries ir_entries, expected_ir_entries;
   std::vector<p4::v1::TableEntry> pi_entries_from_pd,
       expected_pi_entries_from_pd;
   std::vector<p4::v1::TableEntry> pi_entries_from_ir,
@@ -90,20 +85,21 @@ TEST_P(VectorTranslationTest,
   ASSERT_OK_AND_ASSIGN(pi_entries_from_ir,
                        IrTableEntriesToPi(info, ir_entries, key_only));
   for (const auto& pd_entry : pd_entries.entries()) {
-    ASSERT_OK_AND_ASSIGN(expected_ir_entries.emplace_back(),
+    ASSERT_OK_AND_ASSIGN(*expected_ir_entries.add_entries(),
                          PdTableEntryToIr(info, pd_entry, key_only));
     ASSERT_OK_AND_ASSIGN(expected_pi_entries_from_pd.emplace_back(),
                          PdTableEntryToPi(info, pd_entry, key_only));
   }
-  for (const auto& ir_entry : ir_entries) {
+  for (const auto& ir_entry : ir_entries.entries()) {
     ASSERT_OK_AND_ASSIGN(expected_pi_entries_from_ir.emplace_back(),
                          IrTableEntryToPi(info, ir_entry, key_only));
   }
 
   // Check pointwise equality for PD -> IR.
-  ASSERT_THAT(ir_entries, SizeIs(Eq(pd_entries.entries_size())));
-  for (int i = 0; i < ir_entries.size(); ++i) {
-    EXPECT_THAT(ir_entries[i], EqualsProto(expected_ir_entries[i]))
+  ASSERT_EQ(ir_entries.entries_size(), pd_entries.entries_size());
+  for (int i = 0; i < ir_entries.entries_size(); ++i) {
+    EXPECT_THAT(ir_entries.entries(i),
+                EqualsProto(expected_ir_entries.entries(i)))
         << "for IR entry at index " << i;
   }
 
@@ -116,7 +112,7 @@ TEST_P(VectorTranslationTest,
   }
 
   // Check pointwise equality for IR -> PI.
-  ASSERT_THAT(pi_entries_from_ir, SizeIs(Eq(ir_entries.size())));
+  ASSERT_THAT(pi_entries_from_ir, SizeIs(Eq(ir_entries.entries_size())));
   for (int i = 0; i < pi_entries_from_ir.size(); ++i) {
     EXPECT_THAT(pi_entries_from_ir[i],
                 EqualsProto(expected_pi_entries_from_ir[i]))
@@ -140,7 +136,7 @@ TEST(PdTableEntriesToIrTest, RoundTripsWithIrTableEntriesToPd) {
   ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
 
   TableEntries roundtripped_pd_entries;
-  ASSERT_OK_AND_ASSIGN(std::vector<pdpi::IrTableEntry> ir_entries,
+  ASSERT_OK_AND_ASSIGN(IrTableEntries ir_entries,
                        PdTableEntriesToIr(info, pd_entries));
   ASSERT_OK(IrTableEntriesToPd(info, ir_entries, &roundtripped_pd_entries));
   EXPECT_THAT(roundtripped_pd_entries, EqualsProto(pd_entries));
@@ -148,17 +144,17 @@ TEST(PdTableEntriesToIrTest, RoundTripsWithIrTableEntriesToPd) {
 
 TEST(IrTableEntriesToPiTest, RoundTripsWithPiTableEntriesToIr) {
   const auto& info = GetTestIrP4Info();
-  ASSERT_OK_AND_ASSIGN(std::vector<pdpi::IrTableEntry> ir_entries,
-                       ValidIrTableEntries());
+  ASSERT_OK_AND_ASSIGN(IrTableEntries ir_entries, ValidIrTableEntries());
 
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> pi_entries,
                        IrTableEntriesToPi(info, ir_entries));
-  ASSERT_OK_AND_ASSIGN(std::vector<pdpi::IrTableEntry> roundtripped_ir_entries,
+  ASSERT_OK_AND_ASSIGN(IrTableEntries roundtripped_ir_entries,
                        PiTableEntriesToIr(info, pi_entries));
 
-  ASSERT_THAT(roundtripped_ir_entries, SizeIs(Eq(ir_entries.size())));
-  for (int i = 0; i < roundtripped_ir_entries.size(); ++i) {
-    EXPECT_THAT(roundtripped_ir_entries[i], EqualsProto(ir_entries[i]));
+  ASSERT_EQ(roundtripped_ir_entries.entries_size(), ir_entries.entries_size());
+  for (int i = 0; i < roundtripped_ir_entries.entries_size(); ++i) {
+    EXPECT_THAT(roundtripped_ir_entries.entries(i),
+                EqualsProto(ir_entries.entries(i)));
   }
 }
 

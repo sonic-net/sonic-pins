@@ -34,6 +34,7 @@
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
 namespace pdpi {
@@ -72,13 +73,12 @@ absl::Status InstallPdTableEntry(P4RuntimeSession& p4rt,
 
 // Like `InstallPdTableEntries`, but for IR table entries. Reads the P4Info used
 // in translation from the switch.
-absl::Status InstallIrTableEntries(
-    pdpi::P4RuntimeSession& p4rt,
-    absl::Span<const pdpi::IrTableEntry> ir_table_entries);
+absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
+                                   const IrTableEntries& ir_table_entries);
 
 // Like `InstallIrTableEntries`, but for a single entry.
-absl::Status InstallIrTableEntry(pdpi::P4RuntimeSession& p4rt,
-                                 const pdpi::IrTableEntry& ir_table_entry);
+absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
+                                 const IrTableEntry& ir_table_entry);
 
 // Reads table entries from the switch using `p4rt` and returns them in PI
 // representation in an order determined by gutil::TableEntryKey.
@@ -87,22 +87,20 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
 
 // Reads table entries from the switch using `p4rt` and returns them in IR
 // representation. Reads the P4Info used in translation from the switch.
-absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntries(
-    P4RuntimeSession& p4rt);
+absl::StatusOr<IrTableEntries> ReadIrTableEntries(P4RuntimeSession& p4rt);
 
 // Reads table entries from the switch using `p4rt` and returns them in IR
 // representation in an order determined by gutil::TableEntryKey on the
 // corresponding PI representation. Reads the P4Info used in translation from
 // the switch.
-absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntriesSorted(
-    P4RuntimeSession& p4rt);
+absl::StatusOr<IrTableEntries> ReadIrTableEntriesSorted(P4RuntimeSession& p4rt);
 
 // Constructs a write request with metadata from `p4rt` and sends it to the
 // switch, returning a response containing the per-update status (in the same
 // order as the input `updates`).
-absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
     P4RuntimeSession& p4rt, absl::Span<const p4::v1::Update> updates);
-absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
     P4RuntimeSession& p4rt,
     const google::protobuf::RepeatedPtrField<p4::v1::Update>& updates);
 

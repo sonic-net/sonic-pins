@@ -153,6 +153,10 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
                               google::protobuf::Message *pd,
                               bool key_only = false);
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
+                                const IrTableEntries &ir,
+                                google::protobuf::Message *pd,
+                                bool key_only = false);
+absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 absl::Span<const IrTableEntry> ir,
                                 google::protobuf::Message *pd,
                                 bool key_only = false);
@@ -194,7 +198,7 @@ absl::Status IrWriteRpcStatusToPd(const IrWriteRpcStatus &ir_write_status,
 absl::StatusOr<IrTableEntry> PdTableEntryToIr(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
     bool key_only = false);
-absl::StatusOr<std::vector<IrTableEntry>> PdTableEntriesToIr(
+absl::StatusOr<IrTableEntries> PdTableEntriesToIr(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
     bool key_only = false);
 
