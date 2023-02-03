@@ -4,6 +4,7 @@
 
 // These headers have to come first, to override their fixed counterparts.
 #include "roles.h"
+#include "versions.h"
 #include "bitwidths.p4"
 #include "minimum_guaranteed_sizes.p4"
 
@@ -48,6 +49,10 @@ control compute_ipv4_checksum(inout headers_t headers,
   apply {}
 }
 
-@pkginfo(name = "wbb.p4", organization = "Google")
+@pkginfo(
+  name = "wbb.p4",
+  organization = "Google",
+  version = SAI_P4_PKGINFO_VERSION_LATEST
+)
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;

@@ -4,9 +4,9 @@
 
 // These headers have to come first, to override their fixed counterparts.
 #include "roles.h"
+#include "versions.h"
 #include "bitwidths.p4"
 #include "minimum_guaranteed_sizes.p4"
-
 #include "../../fixed/headers.p4"
 #include "../../fixed/metadata.p4"
 #include "../../fixed/parser.p4"
@@ -51,6 +51,10 @@ control egress(inout headers_t headers,
 #ifndef PKG_INFO_NAME
 #define PKG_INFO_NAME "fabric_border_router.p4"
 #endif
-@pkginfo(name = PKG_INFO_NAME, organization = "Google")
+@pkginfo(
+  name = PKG_INFO_NAME,
+  organization = "Google",
+  version = SAI_P4_PKGINFO_VERSION_LATEST
+)
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;

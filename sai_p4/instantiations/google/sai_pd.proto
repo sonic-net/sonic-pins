@@ -389,7 +389,10 @@ message AclEgressTableEntry {
   }
   Match match = 1;
   message Action {
-    AclDropAction acl_drop = 1;
+    oneof action {
+      AclDropAction acl_drop = 1;
+      AclEgressForwardAction acl_egress_forward = 2;
+    }
   }
   Action action = 2;
   int32 priority = 3;
@@ -473,11 +476,18 @@ message AclIngressQosTableEntry {
   }
   Match match = 1;
   message Action {
-    AclRateLimitCopyAction acl_rate_limit_copy = 1;
+    oneof action {
+      SetQosQueueAndCancelCopyAboveRateLimitAction
+          set_qos_queue_and_cancel_copy_above_rate_limit = 1;
+      SetQosQueueAndDenyAboveRateLimitAction
+          set_qos_queue_and_deny_above_rate_limit = 2;
+    }
   }
   Action action = 2;
   int32 priority = 3;
+  BytesMeterConfig meter_config = 4;
   BytesAndPacketsCounterData counter_data = 6;
+  MeterBytesAndPacketsCounterData meter_counter_data = 9;
   bytes controller_metadata = 8;
 }
 
@@ -596,7 +606,13 @@ message SetOuterVlanIdAction {
 
 message SetAclMetadataAction {}
 
-message AclRateLimitCopyAction {
+message SetQosQueueAndCancelCopyAboveRateLimitAction {
+  string qos_queue = 1;  // Format::STRING
+}
+
+message AclEgressForwardAction {}
+
+message SetQosQueueAndDenyAboveRateLimitAction {
   string qos_queue = 1;  // Format::STRING
 }
 
