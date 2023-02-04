@@ -23,9 +23,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
-            url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
-            strip_prefix = "grpc-1.46.0",
-            sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
+            url = "https://github.com/grpc/grpc/archive/v1.52.0.zip",
+            strip_prefix = "grpc-1.52.0",
+            sha256 = "e2b6ff55a5a1acf5c2de6fc5e977ae8f77249cae978f09a28520a7d8d8d8a750",
             patch_args = ["-p1"],
             patches = [
                 "@com_github_google_pins_infra//:bazel/patches/grpc-001-fix_file_watcher_race_condition.patch",
