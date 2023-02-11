@@ -36,7 +36,6 @@ namespace p4_fuzzer {
 enum class Milestone {
   // Tests that the switch adheres to the minimum guarantees on resources
   // currently defined in
-  // google3/third_party/pins_infra/sai_p4/instantiations/google/minimum_guaranteed_sizes.p4.
   kResourceLimits,
   kInvalidInputs,
 };
