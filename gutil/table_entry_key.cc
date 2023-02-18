@@ -87,4 +87,17 @@ bool TableEntryKey::operator<(const TableEntryKey& other) const {
   return false;
 }
 
+std::vector<std::string_view> TableEntryKey::NonKeyFieldPaths() {
+  return {
+      "p4.v1.TableEntry.action",
+      "p4.v1.TableEntry.controller_metadata",
+      "p4.v1.TableEntry.meter_config",
+      "p4.v1.TableEntry.meter_counter_data",
+      "p4.v1.TableEntry.is_default_action",
+      "p4.v1.TableEntry.idle_timeout_ns",
+      "p4.v1.TableEntry.time_since_last_hit",
+      "p4.v1.TableEntry.metadata",
+  };
+}
+
 }  // namespace gutil
