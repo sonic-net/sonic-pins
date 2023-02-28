@@ -146,6 +146,67 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
+empty bytestring in match field
+=========================================================================
+
+--- PI (Input):
+table_id: 33554441
+match {
+  field_id: 3
+  optional {
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "\001#Eg"
+    }
+    params {
+      param_id: 2
+      value: "\001#Eh"
+    }
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid: Match field 'str' is invalid: Bytestrings must have non-zero length.
+
+=========================================================================
+empty bytestring in action parameter
+=========================================================================
+
+--- PI (Input):
+table_id: 33554441
+match {
+  field_id: 3
+  optional {
+    value: "hello"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+    }
+    params {
+      param_id: 2
+    }
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Param 'arg2': Bytestrings must have non-zero length.
+    - Param 'arg1': Bytestrings must have non-zero length.
+    - Missing parameters: 'arg1'. 'arg2'. Expected 2 parameters, but found 0 instead.
+
+=========================================================================
 invalid prefix length
 =========================================================================
 
@@ -1768,6 +1829,95 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action 'do_thing_1' is invalid: It is not a valid action for this table.
 
 =========================================================================
+empty bytestring in match field
+=========================================================================
+
+--- IR (Input):
+table_name: "optional_table"
+matches {
+  name: "str"
+  optional {
+    value {
+      str: ""
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid: Match field 'str' is invalid: Bytestrings must have non-zero length.
+
+=========================================================================
+empty bytestring in action parameter
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "16.36.50.82"
+  }
+}
+action {
+  name: "do_thing_2"
+  params {
+    name: "normal"
+    value {
+      hex_str: "0x054"
+    }
+  }
+  params {
+    name: "ipv4"
+    value {
+      ipv4: "10.43.12.5"
+    }
+  }
+  params {
+    name: "ipv6"
+    value {
+      ipv6: "3242::fee2"
+    }
+  }
+  params {
+    name: "mac"
+    value {
+      mac: "00:11:22:33:44:55"
+    }
+  }
+  params {
+    name: "str"
+    value {
+      str: ""
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Param 'str': Bytestrings must have non-zero length.
+
+=========================================================================
 zero priority
 =========================================================================
 
@@ -2619,6 +2769,28 @@ wcmp_table_entry {
 
 --- PD is invalid/unsupported (detected when translating IR to PI):
 Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Expected positive action set weight, but got -1 instead.
+=========================================================================
+value with empty string for Format::STRING
+=========================================================================
+
+--- PD (Input):
+exact_table_entry {
+  match {
+    normal: "0x054"
+    ipv4: "10.43.12.5"
+    ipv6: "3242::fee2"
+    mac: "00:11:22:33:44:55"
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'exact_table' is invalid for the following reasons:
+  - Match field 'str' is invalid: Bytestrings must have non-zero length.
+  - Missing matches: 'str'. Expected 5 mandatory match conditions, but found 4 instead.
 =========================================================================
 valid wcmp table with choice of action
 =========================================================================
@@ -4076,98 +4248,6 @@ meter_config {
 counter_data {
   byte_count: 567
   packet_count: 789
-}
-
-
-=========================================================================
-exact match with empty string for Format::STRING
-=========================================================================
-
---- PD (Input):
-exact_table_entry {
-  match {
-    normal: "0x054"
-    ipv4: "10.43.12.5"
-    ipv6: "3242::fee2"
-    mac: "00:11:22:33:44:55"
-  }
-  action {
-    NoAction {
-    }
-  }
-}
-
---- IR:
-table_name: "exact_table"
-matches {
-  name: "normal"
-  exact {
-    hex_str: "0x054"
-  }
-}
-matches {
-  name: "ipv4"
-  exact {
-    ipv4: "10.43.12.5"
-  }
-}
-matches {
-  name: "ipv6"
-  exact {
-    ipv6: "3242::fee2"
-  }
-}
-matches {
-  name: "mac"
-  exact {
-    mac: "00:11:22:33:44:55"
-  }
-}
-matches {
-  name: "str"
-  exact {
-    str: ""
-  }
-}
-action {
-  name: "NoAction"
-}
-
---- PI:
-table_id: 33554434
-match {
-  field_id: 1
-  exact {
-    value: "T"
-  }
-}
-match {
-  field_id: 2
-  exact {
-    value: "\n+\014\005"
-  }
-}
-match {
-  field_id: 3
-  exact {
-    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
-  }
-}
-match {
-  field_id: 4
-  exact {
-    value: "\021\"3DU"
-  }
-}
-match {
-  field_id: 5
-  exact {
-  }
-}
-action {
-  action {
-    action_id: 21257015
-  }
 }
 
 
