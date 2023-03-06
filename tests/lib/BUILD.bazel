@@ -51,8 +51,9 @@ cc_library(
     srcs = ["p4rt_fixed_table_programming_helper.cc"],
     hdrs = ["p4rt_fixed_table_programming_helper.h"],
     deps = [
+        ":common_ir_table_entries",
+        "//gutil:proto",
         "//gutil:status",
-        "//gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -74,6 +75,17 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "common_ir_table_entries",
+    testonly = True,
+    srcs = ["common_ir_table_entries.cc"],
+    hdrs = ["common_ir_table_entries.h"],
+    deps = [
+        "//p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/strings",
     ],
 )
 
