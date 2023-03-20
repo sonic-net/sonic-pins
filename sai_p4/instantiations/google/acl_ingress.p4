@@ -33,6 +33,9 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_QOS_COUNTER_ID)
   direct_counter(CounterType.packets_and_bytes) acl_ingress_qos_counter;
 
+  @id(ACL_INGRESS_COUNTING_COUNTER_ID)
+  direct_counter(CounterType.packets_and_bytes) acl_ingress_counting_counter;
+
   // Copy the packet to the CPU, and forward the original packet.
   @id(ACL_INGRESS_COPY_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
@@ -46,7 +49,7 @@ control acl_ingress(in headers_t headers,
 
     // We model the behavior for GREEN packets only.
     // TODO: Branch on color and model behavior for all colors.
-    clone_preserving_field_list(CloneType.I2E, COPY_TO_CPU_SESSION_ID, 
+    clone_preserving_field_list(CloneType.I2E, COPY_TO_CPU_SESSION_ID,
                                 PreservedFieldList.CLONE_I2E_PACKET_IN);
   }
 
@@ -85,6 +88,13 @@ control acl_ingress(in headers_t headers,
     acl_ingress_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
+  }
+
+  // Forward the packet normally (i.e., perform no action).
+  @id(ACL_INGRESS_COUNT_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  action acl_count() {
+    acl_ingress_counting_counter.count();
   }
 
   @id(ACL_INGRESS_MIRROR_ACTION_ID)
@@ -316,6 +326,42 @@ control acl_ingress(in headers_t headers,
     size = ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(ACL_INGRESS_COUNTING_TABLE_ID)
+  @sai_acl(INGRESS)
+  @entry_restriction("
+    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    // Forbid illegal combinations of IP_TYPE fields.
+    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+    // Forbid unsupported combinations of IP_TYPE fields.
+    is_ipv4::mask != 0 -> (is_ipv4 == 1);
+    is_ipv6::mask != 0 -> (is_ipv6 == 1);
+  ")
+  table acl_ingress_counting_table {
+    key = {
+      headers.ipv4.isValid() || headers.ipv6.isValid() : optional @name("is_ip")
+          @id(1) @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
+      headers.ipv4.isValid() : optional @name("is_ipv4") @id(2)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV4ANY);
+      headers.ipv6.isValid() : optional @name("is_ipv6") @id(3)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
+      // Field for v4 and v6 DSCP bits.
+      dscp : ternary @name("dscp") @id(11)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP);
+      local_metadata.route_metadata : ternary @name("route_metadata") @id(18)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
+    }
+    actions = {
+      @proto_id(3) acl_count();
+      @defaultonly NoAction;
+    }
+    const default_action = NoAction;
+    counters = acl_ingress_counting_counter;
+    size = ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
   apply {
     if (headers.ipv4.isValid()) {
       ttl = headers.ipv4.ttl;
@@ -329,11 +375,11 @@ control acl_ingress(in headers_t headers,
       ip_protocol = headers.ipv6.next_header;
     }
 
-
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_ingress_table.apply();
 #elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     acl_ingress_table.apply();
+    acl_ingress_counting_table.apply();
 #elif defined(SAI_INSTANTIATION_TOR)
     acl_ingress_table.apply();
     acl_ingress_qos_table.apply();
