@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 <<<<<<< HEAD
+<<<<<<< HEAD
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -42,6 +43,8 @@
 
 namespace p4rt_app {
 =======
+=======
+>>>>>>> 284915cf (Increase P4RT's keepalive timeout from 4s to 7s to give more time for tcp retransmit.)
 
 #include "p4rt_app/sonic/hashing.h"
 
@@ -66,11 +69,15 @@ namespace p4rt_app {
 
 namespace p4rt_app {
 namespace sonic {
+<<<<<<< HEAD
+>>>>>>> 284915cf (Increase P4RT's keepalive timeout from 4s to 7s to give more time for tcp retransmit.)
+=======
 >>>>>>> 284915cf (Increase P4RT's keepalive timeout from 4s to 7s to give more time for tcp retransmit.)
 namespace {
 
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
+<<<<<<< HEAD
 <<<<<<< HEAD
 using ::testing::Combine;
 using ::testing::Contains;
@@ -254,6 +261,8 @@ TEST_F(HashingTest, SwitchTableInsertionFails) {
 
 }  // namespace
 =======
+=======
+>>>>>>> 284915cf (Increase P4RT's keepalive timeout from 4s to 7s to give more time for tcp retransmit.)
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Pointwise;
@@ -685,5 +694,8 @@ TEST(HashingTest, CannotGenerateAppDbEntryWithInvalidAnnotation) {
 
 }  // namespace
 }  // namespace sonic
+<<<<<<< HEAD
+>>>>>>> 284915cf (Increase P4RT's keepalive timeout from 4s to 7s to give more time for tcp retransmit.)
+=======
 >>>>>>> 284915cf (Increase P4RT's keepalive timeout from 4s to 7s to give more time for tcp retransmit.)
 }  // namespace p4rt_app
