@@ -29,7 +29,6 @@
 #include "absl/types/span.h"
 #include "glog/logging.h"
 #include "google/protobuf/descriptor.h"
-#include "google/protobuf/repeated_field.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "grpcpp/channel.h"
 #include "grpcpp/create_channel.h"
@@ -48,12 +47,10 @@ using ::p4::v1::P4Runtime;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
 using ::p4::v1::SetForwardingPipelineConfigRequest;
-using ::p4::v1::SetForwardingPipelineConfigResponse;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::p4::v1::Update_Type;
 using ::p4::v1::WriteRequest;
-using ::p4::v1::WriteResponse;
 
 // Create P4Runtime Stub.
 std::unique_ptr<P4Runtime::Stub> CreateP4RuntimeStub(
@@ -218,17 +215,12 @@ P4RuntimeSession::GetForwardingPipelineConfig(
 }
 
 bool P4RuntimeSession::StreamChannelRead(
-    p4::v1::StreamMessageResponse& response,
-    std::optional<absl::Duration> timeout) {
+    p4::v1::StreamMessageResponse& response) {
   absl::MutexLock lock(&stream_read_lock_);
   auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
     return !stream_messages_.empty() || !is_stream_up_;
   };
-  if (timeout.has_value()) {
-    stream_read_lock_.AwaitWithTimeout(absl::Condition(&cond), *timeout);
-  } else {
-    stream_read_lock_.Await(absl::Condition(&cond));
-  }
+  stream_read_lock_.Await(absl::Condition(&cond));
 
   if (!stream_messages_.empty()) {
     response = stream_messages_.front();
@@ -247,6 +239,46 @@ bool P4RuntimeSession::StreamChannelWrite(
     return false;
   }
   return stream_channel_->Write(request);
+}
+
+absl::StatusOr<p4::v1::StreamMessageResponse>
+P4RuntimeSession::GetNextStreamMessage(absl::Duration timeout) {
+  absl::MutexLock mu(&stream_read_lock_);
+
+  auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
+    return !stream_messages_.empty();
+  };
+  if (stream_read_lock_.AwaitWithTimeout(absl::Condition(&cond), timeout)) {
+    p4::v1::StreamMessageResponse message = std::move(stream_messages_.front());
+    stream_messages_.pop();
+    return message;
+  }
+
+  if (!is_stream_up_) {
+    return absl::UnavailableError(
+        "The P4RT stream has gone down unexpectedly.");
+  }
+  return absl::DeadlineExceededError(
+      absl::StrCat("PacketIn message did not arrive within ",
+                   absl::ToInt64Seconds(timeout), "s."));
+}
+
+absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+P4RuntimeSession::GetAllStreamMessageFor(absl::Duration duration) {
+  absl::SleepFor(duration);
+  absl::MutexLock mu(&stream_read_lock_);
+
+  if (!is_stream_up_) {
+    return absl::UnavailableError(
+        "The P4RT stream has gone down unexpectedly.");
+  }
+
+  std::vector<p4::v1::StreamMessageResponse> messages;
+  while (!stream_messages_.empty()) {
+    messages.push_back(stream_messages_.front());
+    stream_messages_.pop();
+  }
+  return messages;
 }
 
 absl::Status P4RuntimeSession::Finish() {
