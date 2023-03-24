@@ -26,7 +26,6 @@
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
-#include "absl/memory/memory.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -181,17 +180,39 @@ class P4RuntimeSession {
   p4::v1::Uint128 ElectionId() const { return election_id_; }
   // Returns the role of this session.
   std::string Role() const { return role_; }
+
   // Thread-safe wrapper around the stream channel's `Read` method.
-  // It blocks until the stream message queue is non-empty, the
-  // stream channel is closed, or (if specified) the `timeout` is expired .
+  //
+  // StreamChannelRead is a blocking call that only returns if a message is
+  // received or the stream is closed (i.e. Finish is called). Using this API
+  // can complicate testing logic. Consider using GetNextStreamMessage() or
+  // GetAllStreamMessagesFor() before deciding to use this API.
+  ABSL_DEPRECATED(
+      "Prefer to use GetNextStreamMessage() or GetAllStreamMessagesFor()")
   ABSL_MUST_USE_RESULT bool StreamChannelRead(
-      p4::v1::StreamMessageResponse& response,
-      std::optional<absl::Duration> timeout = std::nullopt)
+      p4::v1::StreamMessageResponse& response)
       ABSL_LOCKS_EXCLUDED(stream_read_lock_);
   // Thread-safe wrapper around the stream channel's `Write` method.
   ABSL_MUST_USE_RESULT bool StreamChannelWrite(
       const p4::v1::StreamMessageRequest& request)
       ABSL_LOCKS_EXCLUDED(stream_write_lock_);
+
+  // Thread-safe call that waits for the next stream message response from the
+  // switch (i.e. PacketIn). If no response is seen before the timeout then it
+  // will terminate with a DEADLINE_EXCEEDED error.
+  ABSL_MUST_USE_RESULT absl::StatusOr<p4::v1::StreamMessageResponse>
+  GetNextStreamMessage(absl::Duration timeout)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
+
+  // Thread-safe call that will collect all stream message responses from the
+  // switch (i.e PacketIn) over a given duration. If no responses are seen the
+  // call will still return successfully, but the vector will be empty. If the
+  // P4Runtime connection goes down while waiting for responses an UNAVAILABLE
+  // error will be returned.
+  ABSL_MUST_USE_RESULT
+  absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+  GetAllStreamMessageFor(absl::Duration duration)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
 
   // Closes the RPC connection by telling the server it is done writing, then
   // reads and logs any outstanding messages from the server. Once the server
