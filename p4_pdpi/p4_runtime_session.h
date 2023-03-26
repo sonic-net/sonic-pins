@@ -83,7 +83,7 @@ inline grpc::ChannelArguments GrpcChannelArgumentsForP4rt() {
 // as reverse path signalling.
 // - `GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA` to 0 to allow KeepAlive ping
 // without traffic in the transport,
-// - `GRPC_ARG_KEEPALIVE_TIMEOUT_MS` to 10s,
+// - `GRPC_ARG_KEEPALIVE_TIMEOUT_MS` to 20s,
 // - `GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS` to 1 to allow keepalive on
 // grpc::Channel without ongoing RPCs,
 // - `GRPC_ARG_MAX_METADATA_SIZE` to P4GRPCMaxMetadataSize because P4RT returns
@@ -96,7 +96,7 @@ GrpcChannelArgumentsForP4rtWithAggressiveKeepAlive() {
   // Allows grpc::channel to send keepalive ping without on-going traffic.
   args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
   args.SetInt(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
-  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 4'000 /*4 seconds*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 20'000 /*20 seconds*/);
   args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1'000 /*1 second*/);
   return args;
 }
