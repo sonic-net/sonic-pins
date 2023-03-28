@@ -123,34 +123,6 @@ sonic::AppDbTableType GetAppDbTableType(
   return sonic::AppDbTableType::P4RT;
 }
 
-absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
-    const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
-    bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    bool translate_key_only) {
-  auto ir_table_entry =
-      pdpi::PiTableEntryToIr(ir_p4_info, pi_table_entry, translate_key_only);
-  if (!ir_table_entry.ok()) {
-    LOG(ERROR) << "PDPI could not translate PI table entry to IR: "
-               << pi_table_entry.ShortDebugString();
-    return gutil::StatusBuilder(ir_table_entry.status().code())
-           << "[P4RT/PDPI] " << ir_table_entry.status().message();
-  }
-
-  // TODO: Remove this when P4Info uses 64-bit IPv6 ACL matchess.
-  // We don't allow overwriting of the p4info, so static is ok here.
-  Convert64BitIpv6AclMatchFieldsTo128Bit(*ir_table_entry);
-
-  RETURN_IF_ERROR(TranslateTableEntry(
-      TranslateTableEntryOptions{
-          .direction = TranslationDirection::kForOrchAgent,
-          .ir_p4_info = ir_p4_info,
-          .translate_port_ids = translate_port_ids,
-          .port_map = port_translation_map},
-      *ir_table_entry));
-  return *ir_table_entry;
-}
-
 absl::Status AppendAclCounterData(
     p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
@@ -277,6 +249,56 @@ bool P4InfoEquals(const p4::config::v1::P4Info& left,
   return differencer.Compare(left, right);
 }
 
+absl::Status VerifyTableCacheForExistence(
+    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
+    const sonic::AppDbEntry& entry) {
+  bool exists = false;
+  auto iter = cache.find(entry.table_entry_key);
+  if (iter != cache.end()) exists = true;
+
+  switch (entry.update_type) {
+    case p4::v1::Update::INSERT: {
+      if (exists) {
+        LOG(WARNING) << "Could not insert duplicate entry: "
+                     << entry.entry.ShortDebugString();
+        return gutil::AlreadyExistsErrorBuilder()
+               << "[P4RT App] Table entry with the given key already exist in '"
+               << entry.entry.table_name() << "'.";
+      }
+      break;
+    }
+    case p4::v1::Update::MODIFY: {
+      if (!exists) {
+        LOG(WARNING) << "Could not modify missing entry: "
+                     << entry.entry.ShortDebugString();
+        return gutil::NotFoundErrorBuilder()
+               << "[P4RT App] Table entry with the given key does not exist in "
+                  "'"
+               << entry.entry.table_name() << "'.";
+      }
+      break;
+    }
+    case p4::v1::Update::DELETE: {
+      if (!exists) {
+        LOG(WARNING) << "Could not delete missing entry: "
+                     << entry.entry.ShortDebugString();
+        return gutil::NotFoundErrorBuilder()
+               << "[P4RT App] Table entry with the given key does not exist in "
+                  "'"
+               << entry.entry.table_name() << "'.";
+      }
+      break;
+    }
+    default: {
+      LOG(WARNING) << "Invalid update type for "
+                   << entry.entry.ShortDebugString();
+      return gutil::InternalErrorBuilder()
+             << "Invalid Update Type: " << entry.update_type;
+    }
+  }
+  return absl::OkStatus();
+}
+
 absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
     const pdpi::IrP4Info& p4_info, const p4::v1::Update& pi_update,
     const std::string& role_name,
@@ -350,17 +372,21 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
       .entry = *ir_table_entry,
       .update_type = pi_update.type(),
       .pi_table_entry = *normalized_pi_entry,
+      .table_entry_key = gutil::TableEntryKey(*normalized_pi_entry),
       .appdb_table = GetAppDbTableType(*ir_table_entry),
   };
 }
 
 sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     const p4::v1::WriteRequest& request, const pdpi::IrP4Info& p4_info,
+    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
     const p4_constraints::ConstraintInfo& constraint_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     pdpi::IrWriteResponse* response) {
   bool fail_on_first_error = false;
+  absl::flat_hash_set<gutil::TableEntryKey> keys_in_request;
+  bool has_duplicates = false;
   sonic::AppDbUpdates ir_updates;
   for (const p4::v1::Update& pi_update : request.updates()) {
     // An RPC response should be created for every updater.
@@ -376,18 +402,52 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
 
     // If we cannot translate it then we should just report an error (i.e. do
     // not try to handle it in lower layers).
-    auto app_db_entry = PiUpdateToAppDbEntry(
+    auto app_db_entry_statusor = PiUpdateToAppDbEntry(
         p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
         port_translation_map);
-    if (!app_db_entry.ok()) {
+    if (!app_db_entry_statusor.ok()) {
       fail_on_first_error = true;
-    } else {
-      app_db_entry->rpc_index = response->statuses_size() - 1;
-      ir_updates.entries.push_back(*app_db_entry);
-      ++ir_updates.total_rpc_updates;
+      *entry_status = GetIrUpdateStatus(app_db_entry_statusor.status());
+      continue;
     }
-    *entry_status = GetIrUpdateStatus(app_db_entry.status());
+    sonic::AppDbEntry app_db_entry = *app_db_entry_statusor;
+
+    has_duplicates |= keys_in_request.contains(app_db_entry.table_entry_key);
+    keys_in_request.insert(app_db_entry.table_entry_key);
+
+    // Verify the entry exists (for MODIFY/DELETE) or not exists (for DELETE)
+    // against the cache.
+    auto cache_verify_status =
+        VerifyTableCacheForExistence(cache, app_db_entry);
+    if (!cache_verify_status.ok()) {
+      fail_on_first_error = true;
+      *entry_status = GetIrUpdateStatus(cache_verify_status);
+      continue;
+    }
+
+    app_db_entry.rpc_index = response->statuses_size() - 1;
+    ir_updates.entries.push_back(app_db_entry);
+    ++ir_updates.total_rpc_updates;
+    *entry_status = GetIrUpdateStatus(cache_verify_status);
   }
+
+  // Check if duplicate requests exist in the batch, if so, mark the
+  // first one invalid and the rest as aborted.
+  if (has_duplicates) {
+    *response->mutable_statuses(0) = GetIrUpdateStatus(
+        gutil::InvalidArgumentErrorBuilder()
+        << "[P4RT App] Found duplicated key in the same batch request.");
+
+    for (int i = 1; i < response->statuses_size(); i++) {
+      *response->mutable_statuses(i) =
+          GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+    }
+
+    // Erase all app_db entries since the whole batch is invalid.
+    ir_updates.entries.clear();
+    ir_updates.total_rpc_updates = 0;
+  }
+
   return ir_updates;
 }
 
@@ -484,8 +544,8 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     pdpi::IrWriteRpcStatus rpc_status;
     pdpi::IrWriteResponse* rpc_response = rpc_status.mutable_rpc_response();
     sonic::AppDbUpdates app_db_updates = PiTableEntryUpdatesToIr(
-        *request, *ir_p4info_, *p4_constraint_info_, translate_port_ids_,
-        port_translation_map_, rpc_response);
+        *request, *ir_p4info_, table_entry_cache_, *p4_constraint_info_,
+        translate_port_ids_, port_translation_map_, rpc_response);
 
     // Any AppDb update failures should be appended to the `rpc_response`. If
     // UpdateAppDb fails we should go critical.
