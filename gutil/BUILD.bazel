@@ -86,15 +86,23 @@ cc_test(
 cc_library(
     name = "testing",
     testonly = True,
-    hdrs = [
-        "testing.h",
-    ],
+    srcs = ["testing.cc"],
+    hdrs = ["testing.h"],
     deps = [
         ":proto",
         ":status",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "testing_test",
+    srcs = ["testing_test.cc"],
+    deps = [
+        ":testing",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
