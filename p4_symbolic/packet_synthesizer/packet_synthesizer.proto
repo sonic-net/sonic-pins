@@ -18,9 +18,8 @@ package p4_symbolic.packet_synthesizer;
 
 import "p4/v1/p4runtime.proto";
 import "p4_pdpi/packetlib/packetlib.proto";
+import "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.proto";
 
-// Protobuf equivalent of the struct in
-// third_party/pins_infra/p4_symbolic/symbolic/values.h.
 message TranslationData {
   // Static mapping between string values and ids.
   message StaticMapping {
@@ -52,8 +51,14 @@ message SynthesizedPacket {
   bool mirror_expected = 4;
 }
 
-// The output of PacketSynthesizer::SynthesizePacket
+// The output of PacketSynthesizer::SynthesizePacket.
 message PacketSynthesisResult {
   // If empty, it means the input criteria was not satifiable.
   SynthesizedPacket synthesized_packet = 1;
+}
+
+// Input and output of PacketSynthesizer::SynthesizePacket.
+message PacketSynthesisCriteriaAndResult {
+  PacketSynthesisCriteria criteria = 1;
+  PacketSynthesisResult result = 2;
 }

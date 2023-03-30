@@ -14,10 +14,83 @@
 
 #include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.h"
 
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/substitute.h"
+#include "absl/types/span.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/status.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.pb.h"
 
 namespace p4_symbolic::packet_synthesizer {
+
+namespace {
+
+// LINT.IfChange(set_criteria_variant)
+absl::Status SetCriteriaVariant(PacketSynthesisCriteria& criteria,
+                                const CriteriaVariant& criteria_variant,
+                                CriteriaVariant::CriteriaCase criteria_case) {
+  switch (criteria_case) {
+    case CriteriaVariant::kOutputCriteria:
+      if (criteria_variant.has_output_criteria()) {
+        *criteria.mutable_output_criteria() =
+            criteria_variant.output_criteria();
+      } else {
+        criteria.clear_output_criteria();
+      }
+      break;
+    case CriteriaVariant::kInputPacketHeaderCriteria:
+      if (criteria_variant.has_input_packet_header_criteria()) {
+        *criteria.mutable_input_packet_header_criteria() =
+            criteria_variant.input_packet_header_criteria();
+      } else {
+        criteria.clear_input_packet_header_criteria();
+      }
+      break;
+    case CriteriaVariant::kTableReachabilityCriteria:
+      if (criteria_variant.has_table_reachability_criteria()) {
+        *criteria.mutable_table_reachability_criteria() =
+            criteria_variant.table_reachability_criteria();
+      } else {
+        criteria.clear_table_reachability_criteria();
+      }
+      break;
+    case CriteriaVariant::kTableEntryReachabilityCriteria:
+      if (criteria_variant.has_table_entry_reachability_criteria()) {
+        *criteria.mutable_table_entry_reachability_criteria() =
+            criteria_variant.table_entry_reachability_criteria();
+      } else {
+        criteria.clear_table_entry_reachability_criteria();
+      }
+      break;
+    case CriteriaVariant::kPayloadCriteria:
+      if (criteria_variant.has_payload_criteria()) {
+        *criteria.mutable_payload_criteria() =
+            criteria_variant.payload_criteria();
+      } else {
+        criteria.clear_payload_criteria();
+      }
+      break;
+    case CriteriaVariant::kIngressPortCriteria:
+      if (criteria_variant.has_ingress_port_criteria()) {
+        *criteria.mutable_ingress_port_criteria() =
+            criteria_variant.ingress_port_criteria();
+      } else {
+        criteria.clear_ingress_port_criteria();
+      }
+      break;
+    default:
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unexpected criteria case " << criteria_case;
+  }
+
+  return absl::OkStatus();
+}
+// LINT.ThenChange()
+
+}  // namespace
 
 bool Equals(const CriteriaVariant& lhs, const CriteriaVariant& rhs) {
   return google::protobuf::util::MessageDifferencer::Equals(lhs, rhs);
@@ -79,6 +152,57 @@ absl::StatusOr<bool> HaveEqualCriteriaVariants(
   ASSIGN_OR_RETURN(const auto rhs_variant,
                    GetCriteriaVariant(rhs, criteria_case));
   return Equals(lhs_variant, rhs_variant);
+}
+
+absl::StatusOr<PacketSynthesisCriteria> MakeConjunction(
+    const PacketSynthesisCriteria& lhs, const PacketSynthesisCriteria& rhs) {
+  PacketSynthesisCriteria merged_criteria;
+  for (auto criteria_case : {
+           CriteriaVariant::kOutputCriteria,
+           CriteriaVariant::kInputPacketHeaderCriteria,
+           CriteriaVariant::kTableReachabilityCriteria,
+           CriteriaVariant::kTableEntryReachabilityCriteria,
+           CriteriaVariant::kPayloadCriteria,
+           CriteriaVariant::kIngressPortCriteria,
+       }) {
+    ASSIGN_OR_RETURN(const CriteriaVariant lhs_variant,
+                     GetCriteriaVariant(lhs, criteria_case));
+    ASSIGN_OR_RETURN(const CriteriaVariant rhs_variant,
+                     GetCriteriaVariant(rhs, criteria_case));
+
+    if (lhs_variant.criteria_case() == CriteriaVariant::CRITERIA_NOT_SET) {
+      RETURN_IF_ERROR(
+          SetCriteriaVariant(merged_criteria, rhs_variant, criteria_case));
+    } else if (rhs_variant.criteria_case() ==
+               CriteriaVariant::CRITERIA_NOT_SET) {
+      RETURN_IF_ERROR(
+          SetCriteriaVariant(merged_criteria, lhs_variant, criteria_case));
+    } else if (Equals(lhs_variant, rhs_variant)) {
+      RETURN_IF_ERROR(
+          SetCriteriaVariant(merged_criteria, lhs_variant, criteria_case));
+    } else {
+      return absl::UnimplementedError(absl::Substitute(
+          "Merging of non-empty, non-equal variants of the same type is "
+          "not supported.\nlhs: '$0' \n rhs: '$1'",
+          lhs.ShortDebugString(), rhs.ShortDebugString()));
+    }
+  }
+  return merged_criteria;
+}
+
+absl::StatusOr<std::vector<PacketSynthesisCriteria>>
+MakeCartesianProductConjunction(absl::Span<const PacketSynthesisCriteria> lhs,
+                                absl::Span<const PacketSynthesisCriteria> rhs) {
+  std::vector<PacketSynthesisCriteria> cartesian_product;
+
+  for (auto& lhs_criteria : lhs) {
+    for (auto& rhs_criteria : rhs) {
+      ASSIGN_OR_RETURN(cartesian_product.emplace_back(),
+                       MakeConjunction(lhs_criteria, rhs_criteria));
+    }
+  }
+
+  return cartesian_product;
 }
 
 }  // namespace p4_symbolic::packet_synthesizer

@@ -59,9 +59,20 @@ proto_library(
     name = "packet_synthesizer_proto",
     srcs = ["packet_synthesizer.proto"],
     deps = [
+        ":packet_synthesis_criteria_proto",
         "//p4_pdpi/packetlib:packetlib_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_proto",
     ],
+)
+
+proto_library(
+    name = "coverage_goal_proto",
+    srcs = ["coverage_goal.proto"],
+)
+
+cc_proto_library(
+    name = "coverage_goal_cc_proto",
+    deps = [":coverage_goal_proto"],
 )
 
 cc_proto_library(
@@ -76,7 +87,10 @@ cc_library(
     deps = [
         ":packet_synthesis_criteria_cc_proto",
         "//gutil:status",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -90,6 +104,7 @@ cc_test(
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//gutil:testing",
+        "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
 )
