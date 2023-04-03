@@ -21,8 +21,10 @@
 
 namespace gutil {
 namespace {
-using gutil::IsOkAndHolds;
-using testing::Eq;
+
+using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
+using ::testing::Eq;
 
 bool RoundTrips(const Version& version) {
   absl::StatusOr<Version> roundtripped_version =
@@ -39,17 +41,18 @@ TEST(ParseVersionTest, PositiveExamples) {
 
 TEST(ParseVersionTest, NegativeExamples) {
   EXPECT_THAT(ParseVersion("100"),
-              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ParseVersion("1.1"),
-              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ParseVersion("1.1.1."),
-              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ParseVersion("1.1.1.1"),
-              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ParseVersion("1.1.1,0"),
-              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(ParseVersion("hello"),
-              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(ParseVersion(""), StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(VersionTest, VersionToStringAndParseVersionRoundTrip) {
@@ -64,11 +67,6 @@ TEST(ComparisonTest, OrderingIsLexicographic) {
   EXPECT_GT((Version{2, 0, 0}), (Version{1, 255, 255}));
   EXPECT_GT((Version{0, 1, 0}), (Version{0, 0, 255}));
   EXPECT_GT((Version{10, 0, 0}), (Version{2, 0, 0}));
-}
-
-// TODO: Remove this test once all P4Infos have versions.
-TEST(ParseVersionTest, EmptyStringForBackwardsCompatibility) {
-  EXPECT_THAT(ParseVersion(""), IsOkAndHolds(Eq(Version{0, 0, 0})));
 }
 
 }  // namespace
