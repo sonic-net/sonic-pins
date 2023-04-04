@@ -25,6 +25,7 @@
 #include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/text_format.h"
+#include "gutil/proto_string_error_collector.h"
 #include "gutil/status.h"
 
 namespace gutil {
@@ -61,10 +62,16 @@ absl::Status ReadProtoFromString(absl::string_view proto_string,
   // compatible with the version of the headers we compiled against.
   GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-  if (!google::protobuf::TextFormat::ParseFromString(std::string(proto_string),
-                                                     message)) {
+  google::protobuf::TextFormat::Parser parser;
+  std::string all_errors;
+  StringErrorCollector collector(&all_errors);
+  parser.RecordErrorsTo(&collector);
+
+  if (!parser.ParseFromString(std::string(proto_string), message)) {
     return InvalidArgumentErrorBuilder()
-           << "Failed to parse string " << proto_string;
+           << "Failed to parse string:\n"
+           << proto_string << "\n\nParse errors:\n"
+           << all_errors;
   }
 
   return absl::OkStatus();
