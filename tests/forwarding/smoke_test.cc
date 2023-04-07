@@ -16,8 +16,13 @@
 
 #include <memory>
 #include <optional>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -25,25 +30,28 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
-#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/pd.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/test_data.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "thinkit/mirror_testbed.h"
+#include "thinkit/test_environment.h"
 
 namespace pins_test {
 namespace {
 
+using ::gutil::EqualsProto;
 using ::gutil::IsOk;
+using ::testing::ElementsAre;
 using ::testing::Not;
 
 TEST_P(SmokeTestFixture, CanEstablishConnections) {
@@ -301,8 +309,7 @@ TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
   ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry));
   ASSERT_OK_AND_ASSIGN(auto entries,
                        pdpi::ReadPiTableEntries(sut_p4rt_session.get()));
-  EXPECT_EQ(entries.size(), 1);
-  EXPECT_THAT(entries[0], gutil::EqualsProto(pi_entry));
+  EXPECT_THAT(entries, ElementsAre(EqualsProto(pi_entry)));
 
   // An auxiliary RedisDB tool that takes a snapshot of the database has issues
   // with reading non-UTF-8 compliant characters. This is only used for
@@ -476,9 +483,8 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
   ASSERT_OK(pins_test::PushGnmiConfig(testbed.Sut(), sut_gnmi_config));
 }
 
-// TODO: Enable when this test passes due to the bug being fixed.
-TEST_P(SmokeTestFixture, DISABLED_DeleteReferencedEntryNotOk) {
-  thinkit::MirrorTestbed &testbed =
+TEST_P(SmokeTestFixture, DeleteReferencedEntryNotOk) {
+  thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
@@ -504,18 +510,29 @@ TEST_P(SmokeTestFixture, DISABLED_DeleteReferencedEntryNotOk) {
                        pins::RouterInterfaceTableUpdate(
                            ir_p4info, p4::v1::Update::INSERT, kRifId,
                            /*port=*/"1", /*src_mac=*/"00:02:03:04:05:06"));
-  ASSERT_OK_AND_ASSIGN(
-      const p4::v1::Update tunnel_update,
-      pins::TunnelTableUpdate(
-          ir_p4info, p4::v1::Update::INSERT, /*tunnel_id=*/"tid",
-          /*encap_dst_ip=*/kNeighborId, /*encap_src_ip=*/"::2", kRifId));
 
+  // Install RIF then Neighbor entries.
   ASSERT_OK(pdpi::SendPiUpdates(
-      sut_p4rt_session.get(),
-      {insert_and_delete_neighbor_update, rif_update, tunnel_update}));
+      sut_p4rt_session.get(), {rif_update, insert_and_delete_neighbor_update}));
+
+  // Install either a tunnel or a nexthop depending on if tunnels are supported.
+  if (GetParam().does_not_support_gre_tunnels) {
+    ASSERT_OK_AND_ASSIGN(
+        const p4::v1::Update nexthop_update,
+        pins::NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                  /*nexthop_id=*/"nid", kRifId, kNeighborId));
+    ASSERT_OK(pdpi::SendPiUpdates(sut_p4rt_session.get(), {nexthop_update}));
+  } else {
+    ASSERT_OK_AND_ASSIGN(
+        const p4::v1::Update tunnel_update,
+        pins::TunnelTableUpdate(
+            ir_p4info, p4::v1::Update::INSERT, /*tunnel_id=*/"tid",
+            /*encap_dst_ip=*/kNeighborId, /*encap_src_ip=*/"::2", kRifId));
+    ASSERT_OK(pdpi::SendPiUpdates(sut_p4rt_session.get(), {tunnel_update}));
+  }
 
   // Cannot delete the neighbor table entry because it is used by the tunnel
-  // entry.
+  // entry or the nexthop entry.
   insert_and_delete_neighbor_update.set_type(p4::v1::Update::DELETE);
   EXPECT_THAT(pdpi::SendPiUpdates(sut_p4rt_session.get(),
                                   {insert_and_delete_neighbor_update}),
@@ -525,8 +542,93 @@ TEST_P(SmokeTestFixture, DISABLED_DeleteReferencedEntryNotOk) {
   // Otherwise, the switch is in a corrupted state.
   ASSERT_OK_AND_ASSIGN(const pdpi::IrTableEntries read_entries,
                        pdpi::ReadIrTableEntries(*sut_p4rt_session));
-  ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
   EXPECT_OK(pdpi::InstallIrTableEntries(*sut_p4rt_session, read_entries));
+}
+
+// Check that unicast routes with a multicast destination range are accepted by
+// the switch. We may disallow this via a p4-constraint in the future, but need
+// the capability as a temporary workaround as of 2023-12-08.
+TEST_P(SmokeTestFixture, CanInstallIpv4TableEntriesWithMulticastDstIp) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, pdpi::GetIrP4Info(*sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder().AddVrfEntry("vrf").GetDedupedPiEntities(p4info));
+  ASSERT_OK(pdpi::InstallPiEntities(sut.get(), p4info, pi_entities));
+  ASSERT_OK(pdpi::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
+    entries {
+      ipv4_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv4_dst { value: "224.0.0.0" prefix_length: 8 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv4_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv4_dst { value: "224.2.3.4" prefix_length: 32 }
+        }
+        action { drop {} }
+      }
+    }
+  )pb"));
+}
+
+// Check that unicast routes with a multicast destination range are accepted by
+// the switch. We may disallow this via a p4-constraint in the future, but need
+// the capability as a temporary workaround as of 2023-12-08.
+TEST_P(SmokeTestFixture, CanInstallIpv6TableEntriesWithMulticastDstIp) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, pdpi::GetIrP4Info(*sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder().AddVrfEntry("vrf").GetDedupedPiEntities(p4info));
+  ASSERT_OK(pdpi::InstallPiEntities(sut.get(), p4info, pi_entities));
+  // TODO: Use `sai::EntryBuilder` instead of hard-coding the entries
+  // here.
+  ASSERT_OK(pdpi::InstallPdTableEntries<sai::TableEntries>(*sut, R"pb(
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00::" prefix_length: 8 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00:1234:5678:9012::" prefix_length: 64 }
+        }
+        action { drop {} }
+      }
+    }
+    entries {
+      ipv6_table_entry {
+        match {
+          vrf_id: "vrf"
+          ipv6_dst { value: "ff00::1234" prefix_length: 128 }
+        }
+        action { drop {} }
+      }
+    }
+  )pb"));
 }
 
 }  // namespace
