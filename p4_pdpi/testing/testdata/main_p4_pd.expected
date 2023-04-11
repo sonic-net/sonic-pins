@@ -297,7 +297,9 @@ message ByteCountAndMeterTableEntry {
 // ## LPM constraint.
 //   ipv4::prefix_length != 0;
 // ## Ternary constraint with exact set.
-//   ipv6 == 0xff;
+//   field10bit == 0xff;
+// ## Large integer (most significant bit position > 64).
+//   ipv6 == 0xffffffffffffffffffffffff;
 // ## Ternary constraint with value.
 //   mac::mask != 0 -> mac::value == 10;
 // ## Implies constraint.
@@ -324,6 +326,7 @@ message ConstrainedTableEntry {
     // Refers to 'referred_table.id'.
     Optional referring_str = 6; // optional match / Format::STRING
     Optional nonreferring_str = 7; // optional match / Format::STRING
+    Ternary field10bit = 8; // ternary match / Format::HEX_STRING / 10 bits
   }
   Match match = 1;
   message Action {
