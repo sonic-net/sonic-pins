@@ -70,6 +70,13 @@ struct SwitchTable {
   std::unique_ptr<TableAdapter> app_state_db;
 };
 
+// The P4RT app needs to:
+//   * Write P4RT_PORT_ID_TABLE entries to the AppDb and AppStateDb.
+struct PortTable {
+  std::unique_ptr<TableAdapter> app_db;
+  std::unique_ptr<TableAdapter> app_state_db;
+};
+
 }  // namespace sonic
 }  // namespace p4rt_app
 
