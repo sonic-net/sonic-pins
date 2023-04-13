@@ -22,7 +22,7 @@ constexpr char kSendToIngressPort[] = SEND_TO_INGRESS_PORT_NAME;
 TEST(SendToIngressPortTableEventTest, SetEventCreatesPacketIoPort) {
   MockP4RuntimeImpl mock_p4runtime_impl;
   AppStateDbSendToIngressPortTableEventHandler port_change_events(
-      mock_p4runtime_impl);
+      &mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, AddPacketIoPort(kSendToIngressPort))
       .WillOnce(Return(absl::OkStatus()));
@@ -34,7 +34,7 @@ TEST(SendToIngressPortTableEventTest, SetEventCreatesPacketIoPort) {
 TEST(SendToIngressPortTableEventTest, DelEventRemovesPacketIoPort) {
   MockP4RuntimeImpl mock_p4runtime_impl;
   AppStateDbSendToIngressPortTableEventHandler port_change_events(
-      mock_p4runtime_impl);
+      &mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, RemovePacketIoPort(kSendToIngressPort))
       .WillOnce(Return(absl::OkStatus()));
@@ -46,7 +46,7 @@ TEST(SendToIngressPortTableEventTest, DelEventRemovesPacketIoPort) {
 TEST(SendToIngressPortTableEventTest, UnknownEventTypeFails) {
   MockP4RuntimeImpl mock_p4runtime_impl;
   AppStateDbSendToIngressPortTableEventHandler port_change_events(
-      mock_p4runtime_impl);
+      &mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, AddPacketIoPort).Times(0);
   EXPECT_CALL(mock_p4runtime_impl, RemovePacketIoPort).Times(0);
@@ -59,7 +59,7 @@ TEST(SendToIngressPortTableEventTest, UnknownEventTypeFails) {
 TEST(SendToIngressPortTableEventTest, UnexpectedPortNameIsANoop) {
   MockP4RuntimeImpl mock_p4runtime_impl;
   AppStateDbSendToIngressPortTableEventHandler port_change_events(
-      mock_p4runtime_impl);
+      &mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, AddPacketIoPort).Times(0);
   EXPECT_CALL(mock_p4runtime_impl, RemovePacketIoPort).Times(0);

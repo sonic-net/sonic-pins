@@ -20,6 +20,7 @@
 #include <thread>  // NOLINT
 
 #include "absl/flags/parse.h"
+#include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -29,8 +30,6 @@
 #include "absl/time/time.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "google/protobuf/descriptor.h"
-#include "google/protobuf/text_format.h"
 #include "grpc/impl/codegen/grpc_types.h"
 #include "grpcpp/security/authorization_policy_provider.h"
 #include "grpcpp/security/server_credentials.h"
@@ -40,7 +39,6 @@
 #include "grpcpp/server_builder.h"
 #include "grpcpp/support/channel_arguments.h"
 #include "gutil/status.h"
-#include "p4/config/v1/p4info.pb.h"
 #include "p4rt_app/event_monitoring/app_state_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_node_cfg_table_event.h"
@@ -55,6 +53,9 @@
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/packetio_impl.h"
+//TODO(PINS):
+//#include "swss/component_state_helper.h"
+//#include "swss/component_state_helper_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/dbconnector.h"
 #include "swss/schema.h"
@@ -254,6 +255,17 @@ sonic::SwitchTable CreateSwitchTable(swss::DBConnector* app_db,
   };
 }
 
+sonic::PortTable CreatePortTable(swss::DBConnector* app_db,
+                                 swss::DBConnector* app_state_db) {
+  const std::string kPortTableName = "P4RT_PORT_ID_TABLE";
+  return sonic::PortTable{
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_db, kPortTableName),
+      .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_state_db, kPortTableName),
+  };
+}
+
 void LogStatsEveryMinute(absl::Notification* stop,
                          p4rt_app::P4RuntimeImpl* p4runtime) {
   while (!stop->HasBeenNotified()) {
@@ -285,12 +297,81 @@ void LogStatsEveryMinute(absl::Notification* stop,
   }
 }
 
+// Construct and register a table handler with the given state monitor.
+template <typename T, typename... Args>
+void RegisterTableHandlerOrDie(p4rt_app::sonic::StateEventMonitor& monitor,
+                               absl::string_view table_name, Args... args) {
+  absl::Status result =
+      monitor.RegisterTableHandler(table_name, std::make_unique<T>(args...));
+  if (!result.ok()) LOG(FATAL) << result;  // Crash OK: only fails on startup.
+}
+
+void AppStateDbEventLoop(P4RuntimeImpl* p4runtime_server,
+                         bool* monitor_app_state_db_events) {
+  swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
+  p4rt_app::sonic::StateEventMonitor app_state_db_monitor(app_state_db);
+
+  RegisterTableHandlerOrDie<p4rt_app::AppStateDbPortTableEventHandler>(
+      app_state_db_monitor, "PORT_TABLE", p4runtime_server);
+  RegisterTableHandlerOrDie<
+      p4rt_app::AppStateDbSendToIngressPortTableEventHandler>(
+      app_state_db_monitor, APP_SEND_TO_INGRESS_PORT_TABLE_NAME,
+      p4runtime_server);
+
+  while (*monitor_app_state_db_events) {
+    absl::Status status = app_state_db_monitor.WaitForNextEventAndHandle();
+    if (!status.ok()) {
+      LOG(ERROR) << "APPL_STATE_DB event monitor failed waiting for an event: "
+                 << status;
+    }
+  }
+}
+
+void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
+                       bool* monitor_config_db_events) {
+  swss::DBConnector config_db("CONFIG_DB", /*timeout=*/0);
+  p4rt_app::sonic::StateEventMonitor config_db_monitor(config_db);
+
+  swss::DBConnector app_db("APPL_DB", /*timeout=*/0);
+  swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
+  p4rt_app::sonic::PortTable port_table =
+      p4rt_app::CreatePortTable(&app_db, &app_state_db);
+
+  RegisterTableHandlerOrDie<p4rt_app::ConfigDbNodeCfgTableEventHandler>(
+      config_db_monitor, "NODE_CFG", p4runtime_server);
+  RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
+      config_db_monitor, "PORT", p4runtime_server, &port_table);
+  RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
+      config_db_monitor, "PORTCHANNEL", p4runtime_server, &port_table);
+
+  while (*monitor_config_db_events) {
+    absl::Status status = config_db_monitor.WaitForNextEventAndHandle();
+    if (!status.ok()) {
+      LOG(ERROR) << "CONFIG_DB event monitor failed waiting for an event: "
+                 << status;
+    }
+  }
+}
+
 }  // namespace
 }  // namespace p4rt_app
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
+
+/* TODO(PINS):
+  // Get the P4RT component helper which can be used to put the switch into
+  // critical state.
+  swss::ComponentStateHelperInterface& component_state_singleton =
+      swss::StateHelperManager::ComponentSingleton(
+          swss::SystemComponent::kP4rt);
+
+  // Get the system state helper which will be used to verify the switch is
+  // healthy, and not in a critical state before handling P4 Runtime requests.
+  swss::SystemStateHelperInterface& system_state_singleton =
+      swss::StateHelperManager::SystemSingleton();
+*/
 
   // Open a database connection into the SONiC AppDb.
   swss::DBConnector app_db(APPL_DB, kRedisDbHost, kRedisDbPort, /*timeout=*/0);
@@ -331,7 +412,10 @@ int main(int argc, char** argv) {
   // Create the P4RT server.
   p4rt_app::P4RuntimeImpl p4runtime_server(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
-      std::move(switch_table), std::move(packetio_impl), p4rt_options);
+      std::move(switch_table), std::move(packetio_impl),
+      //TODO(PINS): To add component_state_singleton, system_state_singleton, netdev_translator
+      //component_state_singleton, system_state_singleton, netdev_translator,
+      p4rt_options);
 
   // Create a server to listen on the unix socket port.
   std::thread internal_server_thread;
@@ -353,91 +437,15 @@ int main(int argc, char** argv) {
 
   // Spawn a separate thread that can react to AppStateDb changes.
   bool monitor_app_state_db_events = true;
-  auto app_state_db_event_loop =
-      std::thread([&p4runtime_server, &monitor_app_state_db_events]() {
-        swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
-        p4rt_app::sonic::StateEventMonitor app_state_db_monitor(app_state_db);
-
-        p4rt_app::AppStateDbPortTableEventHandler port_table_handler(
-            p4runtime_server);
-        auto status = app_state_db_monitor.RegisterTableHandler(
-            "PORT_TABLE", port_table_handler);
-        if (!status.ok()) {
-          LOG(FATAL)  // Crash OK: only fails on startup.
-              << "APPL_STATE_DB event monitor could not register 'PORT_TABLE': "
-              << status;
-        }
-
-        p4rt_app::AppStateDbSendToIngressPortTableEventHandler
-            send_to_ingress_table_hander(p4runtime_server);
-        status = app_state_db_monitor.RegisterTableHandler(
-            APP_SEND_TO_INGRESS_PORT_TABLE_NAME, send_to_ingress_table_hander);
-        if (!status.ok()) {
-          LOG(FATAL)  // Crash OK: only fails on startup.
-              << "APPL_STATE_DB event monitor could not register '"
-              << APP_SEND_TO_INGRESS_PORT_TABLE_NAME << "': " << status;
-        }
-
-        while (monitor_app_state_db_events) {
-          absl::Status status =
-              app_state_db_monitor.WaitForNextEventAndHandle();
-          if (!status.ok()) {
-            LOG(ERROR)
-                << "APPL_STATE_DB event monitor failed waiting for an event: "
-                << status;
-          }
-        }
-      });
+  auto app_state_db_event_loop = std::thread(
+      absl::bind_front(&p4rt_app::AppStateDbEventLoop, &p4runtime_server,
+                       &monitor_app_state_db_events));
 
   // Spawn a separate thread that can react to ConfigDb changes.
   bool monitor_config_db_events = true;
-  auto config_db_event_loop = std::thread([&p4runtime_server,
-                                           &monitor_config_db_events]() {
-    swss::DBConnector config_db("CONFIG_DB", /*timeout=*/0);
-    p4rt_app::sonic::StateEventMonitor config_db_monitor(config_db);
-
-    p4rt_app::ConfigDbNodeCfgTableEventHandler node_table_handler(
-        &p4runtime_server);
-    auto node_table_status =
-        config_db_monitor.RegisterTableHandler("NODE_CFG", node_table_handler);
-    if (!node_table_status.ok()) {
-      LOG(FATAL)  // Crash OK: only fails on startup.
-          << "CONFIG_DB event monitor could not register 'NODE_CFG': "
-          << node_table_status;
-    }
-
-    swss::DBConnector port_events_app_db("APPL_DB", /*timeout=*/0);
-    swss::DBConnector port_events_app_state_db("APPL_STATE_DB", /*timeout=*/0);
-    p4rt_app::ConfigDbPortTableEventHandler port_table_handler(
-        &p4runtime_server,
-        std::make_unique<p4rt_app::sonic::TableAdapter>(&port_events_app_db,
-                                                        "P4RT_PORT_ID_TABLE"),
-        std::make_unique<p4rt_app::sonic::TableAdapter>(
-            &port_events_app_state_db, "P4RT_PORT_ID_TABLE"));
-    auto port_table_status =
-        config_db_monitor.RegisterTableHandler("PORT", port_table_handler);
-    if (!port_table_status.ok()) {
-      LOG(FATAL)  // Crash OK: only fails on startup.
-          << "CONFIG_DB event monitor could not register 'PORT': "
-          << port_table_status;
-    }
-
-    auto port_channel_table_status = config_db_monitor.RegisterTableHandler(
-        "PORTCHANNEL", port_table_handler);
-    if (!port_channel_table_status.ok()) {
-      LOG(FATAL)  // Crash OK: only fails on startup.
-          << "CONFIG_DB event monitor could not register 'PORTCHANNEL': "
-          << port_channel_table_status;
-    }
-
-    while (monitor_config_db_events) {
-      absl::Status status = config_db_monitor.WaitForNextEventAndHandle();
-      if (!status.ok()) {
-        LOG(ERROR) << "CONFIG_DB event monitor failed waiting for an event: "
-                   << status;
-      }
-    }
-  });
+  auto config_db_event_loop = std::thread(
+      absl::bind_front(&p4rt_app::ConfigDbEventLoop, &p4runtime_server,
+                       &monitor_config_db_events));
 
   // Start listening for state verification events, and update StateDb for P4RT.
   swss::DBConnector state_verification_db(STATE_DB, kRedisDbHost, kRedisDbPort,

@@ -81,7 +81,6 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/time",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
@@ -145,6 +144,7 @@ cc_library(
         ":state_event_monitor",
         "//gutil:status",
         "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic/adapters:table_adapter",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
@@ -160,6 +160,7 @@ cc_test(
         ":config_db_port_table_event",
         "//gutil:status_matchers",
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
+        "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
