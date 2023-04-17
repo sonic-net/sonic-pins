@@ -42,14 +42,16 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
   sonic::VrfTable dummy_vrf_table;
   sonic::HashTable dummy_hash_table;
   sonic::SwitchTable dummy_switch_table;
+  sonic::PortTable dummy_port_table;
 
   // Dummy PacketIO.
   auto packet_io = std::make_unique<sonic::FakePacketIoInterface>();
 
-  return P4RuntimeImpl(std::move(dummy_p4rt_table), std::move(dummy_vrf_table),
-                       std::move(dummy_hash_table),
-                       std::move(dummy_switch_table), std::move(packet_io),
-                       P4RuntimeImplOptions{});
+  return P4RuntimeImpl(
+      std::move(dummy_p4rt_table), std::move(dummy_vrf_table),
+      std::move(dummy_hash_table), std::move(dummy_switch_table),
+      std::move(dummy_port_table), std::move(packet_io),
+      P4RuntimeImplOptions{});
 }
 
 TEST(GrpcBehaviorTest,

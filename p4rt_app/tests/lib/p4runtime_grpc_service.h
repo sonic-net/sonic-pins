@@ -46,6 +46,7 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable& GetVrfAppStateDbTable();
   sonic::FakeSonicDbTable& GetHashAppStateDbTable();
   sonic::FakeSonicDbTable& GetSwitchAppStateDbTable();
+  sonic::FakeSonicDbTable& GetPortAppStateDbTable();
 
   // Accessors for CounterDb tables.
   sonic::FakeSonicDbTable& GetP4rtCountersDbTable();
@@ -69,6 +70,7 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable fake_vrf_state_table_;
   sonic::FakeSonicDbTable fake_hash_state_table_;
   sonic::FakeSonicDbTable fake_switch_state_table_;
+  sonic::FakeSonicDbTable fake_port_state_table_;
 
   // Faked AppDb tables.
   sonic::FakeSonicDbTable fake_p4rt_table_;

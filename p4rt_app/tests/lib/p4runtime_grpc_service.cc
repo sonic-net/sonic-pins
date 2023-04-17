@@ -43,10 +43,12 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
     : fake_vrf_state_table_("AppStateDb:VRF_TABLE"),
       fake_hash_state_table_("AppStateDb:HASH_TABLE"),
       fake_switch_state_table_("AppStateDb:SWITCH_TABLE"),
+      fake_port_state_table_("AppStateDb:PORT_TABLE"),
       fake_p4rt_table_("AppDb:P4RT_TABLE"),
       fake_vrf_table_("AppDb:VRF_TABLE", &fake_vrf_state_table_),
       fake_hash_table_("AppDb:HASH_TABLE", &fake_hash_state_table_),
-      fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_) {
+      fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_),
+      fake_port_table_("AppDb:PORT_TABLE", &fake_port_state_table_) {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
   const std::string kP4rtTableName = "P4RT_TABLE";
   const std::string kPortTableName = "PORT_TABLE";
@@ -112,6 +114,14 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
           &fake_switch_state_table_, kSwitchTableName),
   };
 
+  // Create interfaces to access SWITCH_TABLE entries.
+  sonic::PortTable port_table{
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_port_table_,
+                                                           kPortTableName),
+      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_port_state_table_, kPortTableName),
+  };
+
   // Create FakePacketIoInterface and save the pointer.
   auto fake_packetio_interface =
       absl::make_unique<sonic::FakePacketIoInterface>();
@@ -120,8 +130,8 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
   // Create the P4RT server.
   p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
-      std::move(switch_table), std::move(fake_packetio_interface),
-      options);
+      std::move(switch_table), std::move(port_table),
+      std::move(fake_packetio_interface), options);
 
   // Component tests will use an insecure connection for the service.
   std::string server_address = absl::StrCat("localhost:", GrpcPort());
@@ -181,6 +191,9 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetSwitchAppStateDbTable() {
   return fake_switch_state_table_;
 }
 
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppStateDbTable() {
+  return fake_port_state_table_;
+}
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtCountersDbTable() {
   return fake_p4rt_counters_table_;
 }
