@@ -55,16 +55,12 @@ using ::p4::v1::WriteRequest;
 // Create P4Runtime Stub.
 std::unique_ptr<P4Runtime::Stub> CreateP4RuntimeStub(
     const std::string& address,
-    const std::shared_ptr<grpc::ChannelCredentials>& credentials) {
-  return P4Runtime::NewStub(grpc::CreateCustomChannel(
-      address, credentials, GrpcChannelArgumentsForP4rt()));
-}
-std::unique_ptr<P4Runtime::Stub> CreateP4RuntimeStub(
-    const std::string& address,
     const std::shared_ptr<grpc::ChannelCredentials>& credentials,
-    const std::string& host) {
+    const std::string& host_name) {
   auto args = GrpcChannelArgumentsForP4rt();
-  args.SetString(GRPC_SSL_TARGET_NAME_OVERRIDE_ARG, host);
+  if (!host_name.empty()) {
+    args.SetString(GRPC_SSL_TARGET_NAME_OVERRIDE_ARG, host_name);
+  }
   return P4Runtime::NewStub(
       grpc::CreateCustomChannel(address, credentials, args));
 }
