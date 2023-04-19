@@ -790,7 +790,7 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
     switch (ir_match_info->match_field().match_type()) {
       case MatchField::EXACT: {
         const absl::StatusOr<std::string> &pd_value =
-            IrValueToFormattedString(ir_match.exact(), ir_match_info->format());
+            IrValueString(ir_match.exact());
         if (!pd_value.ok()) {
           invalid_match_reasons.push_back(
               absl::StrCat(kNewBullet, pd_value.status().message()));
@@ -813,8 +813,8 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
               absl::StrCat(kNewBullet, pd_lpm.status().message()));
           break;
         }
-        const absl::StatusOr<std::string> &pd_value = IrValueToFormattedString(
-            ir_match.lpm().value(), ir_match_info->format());
+        const absl::StatusOr<std::string> &pd_value =
+            IrValueString(ir_match.lpm().value());
         if (!pd_value.ok()) {
           invalid_match_reasons.push_back(
               absl::StrCat(kNewBullet, pd_value.status().message()));
@@ -843,8 +843,8 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
               absl::StrCat(kNewBullet, pd_ternary.status().message()));
           break;
         }
-        const absl::StatusOr<std::string> &pd_value = IrValueToFormattedString(
-            ir_match.ternary().value(), ir_match_info->format());
+        const absl::StatusOr<std::string> &pd_value =
+            IrValueString(ir_match.ternary().value());
         if (!pd_value.ok()) {
           invalid_match_reasons.push_back(
               absl::StrCat(kNewBullet, pd_value.status().message()));
@@ -857,8 +857,8 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
               absl::StrCat(kNewBullet, value_status.message()));
           break;
         }
-        const absl::StatusOr<std::string> &pd_mask = IrValueToFormattedString(
-            ir_match.ternary().mask(), ir_match_info->format());
+        const absl::StatusOr<std::string> &pd_mask =
+            IrValueString(ir_match.ternary().mask());
         if (!pd_mask.ok()) {
           invalid_match_reasons.push_back(
               absl::StrCat(kNewBullet, pd_mask.status().message()));
@@ -880,8 +880,8 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
               absl::StrCat(kNewBullet, pd_optional.status().message()));
           break;
         }
-        const absl::StatusOr<std::string> &pd_value = IrValueToFormattedString(
-            ir_match.optional().value(), ir_match_info->format());
+        const absl::StatusOr<std::string> &pd_value =
+            IrValueString(ir_match.optional().value());
         if (!pd_value.ok()) {
           invalid_match_reasons.push_back(
               absl::StrCat(kNewBullet, pd_value.status().message()));
@@ -949,16 +949,9 @@ static absl::Status IrActionInvocationToPd(
   }
 
   for (const auto &ir_param : ir_action.params()) {
-    const auto &status_or_param_info = gutil::FindPtrOrStatus(
-        ir_action_info->params_by_name(), ir_param.name());
     absl::string_view param_name = ir_param.name();
-    if (!status_or_param_info.ok()) {
-      invalid_reasons.push_back(GenerateReason(
-          ParamName(param_name), status_or_param_info.status().message()));
-      continue;
-    }
-    const absl::StatusOr<std::string> &pd_value = IrValueToFormattedString(
-        ir_param.value(), (*status_or_param_info)->format());
+    const absl::StatusOr<std::string> &pd_value =
+        IrValueString(ir_param.value());
     if (!pd_value.ok()) {
       invalid_reasons.push_back(
           GenerateReason(ParamName(param_name), pd_value.status().message()));
@@ -1291,8 +1284,8 @@ absl::Status IrPacketIoToPd(const IrP4Info &info, const std::string &kind,
                                              name, "' not defined."));
       continue;
     }
-    const absl::StatusOr<std::string> &raw_value = IrValueToFormattedString(
-        metadata.value(), (*status_or_metadata_definition)->format());
+    const absl::StatusOr<std::string> &raw_value =
+        IrValueString(metadata.value());
     if (!raw_value.ok()) {
       invalid_reasons.push_back(
           GenerateReason(MetadataName(name), raw_value.status().message()));

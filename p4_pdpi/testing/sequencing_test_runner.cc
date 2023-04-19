@@ -1209,6 +1209,32 @@ int main(int argc, char** argv) {
             }
           )pb",
       });
+
+  GetEntriesUnreachableFromRootsTest(
+      info,
+      "[Incorrect due to false dependency] Partially referred non-root is "
+      "unreachable.",
+      {
+          R"pb(
+            referring_by_action_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_to_two_match_fields_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "0x000"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x001" }
+              action { do_thing_4 {} }
+              controller_metadata: "NonRoot garbage"
+            }
+          )pb",
+      });
   // TODO: Add negative test (where updates and P4Info are out of
   // sync).
   return 0;

@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/btree_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -40,6 +41,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/strings/substitute.h"
 #include "google/protobuf/map.h"
 #include "google/rpc/code.pb.h"
 #include "gutil/proto.h"
@@ -393,23 +395,22 @@ absl::StatusOr<IrValue> FormattedStringToIrValue(const std::string &value,
   return result;
 }
 
-absl::StatusOr<std::string> IrValueToFormattedString(const IrValue &value,
-                                                     Format format) {
-  switch (format) {
-    case Format::MAC:
+std::string IrValueString(const IrValue &value) {
+  switch (value.format_case()) {
+    case IrValue::FormatCase::kMac:
       return value.mac();
-    case Format::IPV4:
+    case IrValue::FormatCase::kIpv4:
       return value.ipv4();
-    case Format::IPV6:
+    case IrValue::FormatCase::kIpv6:
       return value.ipv6();
-    case Format::STRING:
+    case IrValue::FormatCase::kStr:
       return value.str();
-    case Format::HEX_STRING:
+    case IrValue::FormatCase::kHexStr:
       return value.hex_str();
-    default:
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Unexpected format: " << Format_Name(format);
+    case IrValue::FormatCase::FORMAT_NOT_SET:
+      return "";
   }
+  return "";
 }
 
 bool IsAllZeros(const std::string &s) {
@@ -561,6 +562,81 @@ bool IsElementDeprecated(
   return absl::c_any_of(annotations, [](absl::string_view annotation) {
     return absl::StartsWith(annotation, "@deprecated");
   });
+}
+
+namespace {
+// Compress and return a match field into a unique, descriptive short-form
+// string.
+std::string MatchFieldShortDescription(const IrMatch &match) {
+  switch (match.match_value_case()) {
+    case IrMatch::MatchValueCase::kExact:
+      return absl::Substitute("$0=$1", match.name(),
+                              IrValueString(match.exact()));
+    case IrMatch::MatchValueCase::kOptional:
+      return absl::Substitute("$0=$1", match.name(),
+                              IrValueString(match.optional().value()));
+    case IrMatch::MatchValueCase::kLpm:
+      return absl::Substitute("$0=$1/$2", match.name(),
+                              IrValueString(match.lpm().value()),
+                              match.lpm().prefix_length());
+    case IrMatch::MatchValueCase::kTernary:
+      return absl::Substitute("$0=$1&$2", match.name(),
+                              IrValueString(match.ternary().value()),
+                              IrValueString(match.ternary().mask()));
+    case IrMatch::MatchValueCase::MATCH_VALUE_NOT_SET:
+      return absl::Substitute("$0=", match.name());
+  }
+  return "";
+}
+
+// Compress and return an action invocation into a unique, descriptive
+// short-form string.
+std::string ActionInvocationShortDescription(const IrActionInvocation &action) {
+  if (action.params().empty()) return action.name();
+  absl::btree_set<std::string> action_params;
+  for (const IrActionInvocation::IrActionParam &param : action.params()) {
+    action_params.insert(
+        absl::Substitute("$0=$1", param.name(), IrValueString(param.value())));
+  }
+  return absl::Substitute("$0($1)", action.name(),
+                          absl::StrJoin(action_params, ","));
+}
+
+// Compress and return an action set into a unique, descriptive short-form
+// string.
+std::string ActionSetShortDescription(const IrActionSet &action_set) {
+  absl::btree_set<std::string> actions;
+  for (const IrActionSetInvocation &invocation : action_set.actions()) {
+    actions.insert(absl::Substitute(
+        "$0$1[$2]",
+        invocation.watch_port().empty()
+            ? ""
+            : absl::StrCat(invocation.watch_port(), "/"),
+        invocation.weight(),
+        ActionInvocationShortDescription(invocation.action())));
+  }
+  return absl::StrJoin(actions, "");
+}
+}  // namespace
+
+std::string ShortDescription(const IrTableEntry &entry) {
+  absl::btree_set<std::string> match_fields;
+  for (const IrMatch &match : entry.matches()) {
+    match_fields.insert(MatchFieldShortDescription(match));
+  }
+
+  std::string action;
+  if (entry.has_action()) {
+    action = ActionInvocationShortDescription(entry.action());
+  } else if (entry.has_action_set()) {
+    action = ActionSetShortDescription(entry.action_set());
+  }
+
+  std::string priority =
+      entry.priority() > 0 ? absl::StrCat(entry.priority(), ":") : "";
+
+  return absl::Substitute("$0|$1matches($2):$3", entry.table_name(), priority,
+                          absl::StrJoin(match_fields, ","), action);
 }
 
 }  // namespace pdpi

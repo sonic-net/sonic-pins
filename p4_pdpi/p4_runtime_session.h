@@ -288,13 +288,11 @@ class P4RuntimeSession {
 };
 
 // Create P4Runtime stub.
-std::unique_ptr<p4::v1::P4Runtime::Stub> CreateP4RuntimeStub(
-    const std::string& address,
-    const std::shared_ptr<grpc::ChannelCredentials>& credentials);
+// Set the host_name for secure connection that needs to verify the switch.
 std::unique_ptr<p4::v1::P4Runtime::Stub> CreateP4RuntimeStub(
     const std::string& address,
     const std::shared_ptr<grpc::ChannelCredentials>& credentials,
-    const std::string& host);
+    const std::string& host_name = "");
 
 // -- Helper functions mainly used with `P4RuntimeSession` ---------------------
 
