@@ -79,10 +79,10 @@
 #define SAI_P4_PKGINFO_VERSION_HAS_PACKET_IN_SUPPORT "1.1.0"
 
 // Indicates that the program has acl_ingress_counting_table support.
-#define SAI_P4_PKGINFO_VERSION_HAS_ACL_INGRESS_COUNTING_SUPPORT "1.2.0"
+#define SAI_P4_PKGINFO_VERSION_HAS_ACL_INGRESS_COUNTING_SUPPORT "2.3.0"
 
 // Macro that always points to the latest SAI P4 version.
-#define SAI_P4_PKGINFO_VERSION_LATEST \
+ #define SAI_P4_PKGINFO_VERSION_LATEST \
   SAI_P4_PKGINFO_VERSION_HAS_ACL_INGRESS_COUNTING_SUPPORT
 
 #endif  // GOOGLE_SAI_IDS_H_
