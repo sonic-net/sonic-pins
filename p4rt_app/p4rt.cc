@@ -268,6 +268,12 @@ sonic::PortTable CreatePortTable(swss::DBConnector* app_db,
   };
 }
 
+sonic::HostStatsTable CreateHostStatsTable(swss::DBConnector* state_db) {
+  return sonic::HostStatsTable{
+      .state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          state_db, "HOST_STATS")};
+}
+
 void LogStatsEveryMinute(absl::Notification* stop,
                          p4rt_app::P4RuntimeImpl* p4runtime) {
   while (!stop->HasBeenNotified()) {
@@ -371,11 +377,10 @@ int main(int argc, char** argv) {
 */
 
   // Open a database connection into the SONiC AppDb.
-  swss::DBConnector app_db(APPL_DB, kRedisDbHost, kRedisDbPort, /*timeout=*/0);
-  swss::DBConnector app_state_db(APPL_STATE_DB, kRedisDbHost, kRedisDbPort,
-                                 /*timeout=*/0);
-  swss::DBConnector counters_db(COUNTERS_DB, kRedisDbHost, kRedisDbPort,
-                                /*timeout=*/0);
+  swss::DBConnector app_db("APPL_DB", /*timeout=*/0);
+  swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
+  swss::DBConnector counters_db("COUNTERS_DB", /*timeout=*/0);
+  swss::DBConnector state_db("STATE_DB", /*timeout=*/0);
 
   // Create interfaces to interact with the P4RT_TABLE entries.
   p4rt_app::sonic::P4rtTable p4rt_table =
@@ -388,6 +393,8 @@ int main(int argc, char** argv) {
       p4rt_app::CreateSwitchTable(&app_db, &app_state_db);
   p4rt_app::sonic::PortTable port_table =
       p4rt_app::CreatePortTable(&app_db, &app_state_db);
+  p4rt_app::sonic::HostStatsTable host_stats_table =
+      p4rt_app::CreateHostStatsTable(&state_db);
 
   // Create PacketIoImpl for Packet I/O.
   auto packetio_impl = std::make_unique<p4rt_app::sonic::PacketIoImpl>(
@@ -411,7 +418,8 @@ int main(int argc, char** argv) {
   // Create the P4RT server.
   p4rt_app::P4RuntimeImpl p4runtime_server(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
-      std::move(switch_table), std::move(port_table), std::move(packetio_impl),
+      std::move(switch_table), std::move(port_table),
+      std::move(host_stats_table), std::move(packetio_impl),
       //TODO(PINS): To add component_state_singleton, system_state_singleton, netdev_translator
       //component_state_singleton, system_state_singleton, netdev_translator,
       p4rt_options);

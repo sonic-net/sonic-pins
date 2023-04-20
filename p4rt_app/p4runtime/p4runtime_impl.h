@@ -86,6 +86,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   P4RuntimeImpl(sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
                 sonic::HashTable hash_table, sonic::SwitchTable switch_table,
                 sonic::PortTable port_table,
+                sonic::HostStatsTable host_stats_table,
                 std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
 //TODO(PINS):
 /*              swss::ComponentStateHelperInterface& component_state,
@@ -273,6 +274,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   sonic::HashTable hash_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::HostStatsTable host_stats_table_ ABSL_GUARDED_BY(server_state_lock_);
 
   // P4RT can accept multiple connections to a single switch for redundancy.
   // When there is >1 connection the switch chooses a primary which is used for

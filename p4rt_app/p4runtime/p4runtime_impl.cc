@@ -29,7 +29,6 @@
 #include "absl/time/time.h"
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
-#include "google/protobuf/descriptor.h"
 #include "google/protobuf/util/json_util.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
@@ -416,7 +415,7 @@ absl::Status CacheWriteResults(
 P4RuntimeImpl::P4RuntimeImpl(
     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
-    sonic::PortTable port_table,
+    sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
 //TODO(PINS):
 /*  swss::ComponentStateHelperInterface& component_state,
@@ -428,6 +427,7 @@ P4RuntimeImpl::P4RuntimeImpl(
       hash_table_(std::move(hash_table)),
       switch_table_(std::move(switch_table)),
       port_table_(std::move(port_table)),
+      host_stats_table_(std::move(host_stats_table)),
       forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
 //TODO(PINS):
@@ -758,6 +758,14 @@ grpc::Status P4RuntimeImpl::SetForwardingPipelineConfig(
         "SetForwardingPipelineConfig completed '%s' successfully.",
         p4::v1::SetForwardingPipelineConfigRequest::Action_Name(
             request->action()));
+
+    // Only record the time for a successful commit action.
+    if (request->action() !=
+        p4::v1::SetForwardingPipelineConfigRequest::VERIFY) {
+      host_stats_table_.state_db->set(
+          "CONFIG", {{"last-configuration-timestamp",
+                      absl::StrCat(absl::ToUnixNanos(absl::Now()))}});
+    }
 
 #ifdef __EXCEPTIONS
   } catch (const std::exception& e) {
