@@ -66,7 +66,7 @@ absl::StatusOr<std::string> GetVrfTableKey(const pdpi::IrTableEntry& entry) {
 
 absl::StatusOr<std::string> InsertVrfTableEntry(
     VrfTable& vrf_table, const pdpi::IrTableEntry& entry) {
-  LOG(INFO) << "Insert PDPI IR entry: " << entry.ShortDebugString();
+  VLOG(2) << "Insert PDPI IR entry: " << entry.ShortDebugString();
   ASSIGN_OR_RETURN(std::string key, GetVrfTableKey(entry));
 
   // Check that key does not already exist in the table.
@@ -77,14 +77,14 @@ absl::StatusOr<std::string> InsertVrfTableEntry(
            << "' already exist in '" << entry.table_name() << "'.";
   }
 
-  LOG(INFO) << "Insert VRF_TABLE entry: " << key;
+  VLOG(1) << "Insert VRF_TABLE entry: " << key;
   vrf_table.producer_state->set(key, GetVrfValues());
   return key;
 }
 
 absl::StatusOr<std::string> DeleteVrfTableEntry(
     VrfTable& vrf_table, const pdpi::IrTableEntry& entry) {
-  LOG(INFO) << "Delete PDPI IR entry: " << entry.ShortDebugString();
+  VLOG(2) << "Delete PDPI IR entry: " << entry.ShortDebugString();
   ASSIGN_OR_RETURN(std::string key, GetVrfTableKey(entry));
 
   // Check that key exists in the table.
@@ -95,7 +95,7 @@ absl::StatusOr<std::string> DeleteVrfTableEntry(
            << "' does not exist in '" << entry.table_name() << "'.";
   }
 
-  LOG(INFO) << "Delete VRF_TABLE entry: " << key;
+  VLOG(1) << "Delete VRF_TABLE entry: " << key;
   vrf_table.producer_state->del(key);
   return key;
 }
