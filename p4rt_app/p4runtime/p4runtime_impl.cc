@@ -474,14 +474,19 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     // Log a warning for any batch requests that are taking "too long" so we can
     // have an accurate time of when it happened.
-    if (write_execution_time > absl::Milliseconds(100)) {
+    if (write_execution_time > absl::Milliseconds(500)) {
       LOG(WARNING) << absl::StreamFormat(
-          "Batch request (%d entries) took >100ms: %lldms",
+          "Batch request (%d entries) took >500ms: %lldms ",
           app_db_updates.total_rpc_updates,
           absl::ToInt64Milliseconds(write_execution_time));
-      for (const auto& entry : app_db_updates.entries) {
-        LOG(WARNING) << "entry " << entry.rpc_index << ": "
-                     << entry.entry.ShortDebugString();
+      LOG_IF(WARNING, !app_db_updates.entries.empty())
+          << "First entry: "
+          << app_db_updates.entries[0].entry.ShortDebugString();
+      if (VLOG_IS_ON(1)) {
+        for (const auto& entry : app_db_updates.entries) {
+          LOG(WARNING) << "entry " << entry.rpc_index << ": "
+                       << entry.entry.ShortDebugString();
+        }
       }
     }
 
