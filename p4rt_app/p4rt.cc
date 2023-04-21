@@ -45,6 +45,7 @@
 #include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_node_cfg_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_port_table_event.h"
+#include "p4rt_app/event_monitoring/debug_data_dump_events.h"
 #include "p4rt_app/event_monitoring/state_event_monitor.h"
 #include "p4rt_app/event_monitoring/state_verification_events.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
@@ -449,6 +450,15 @@ int main(int argc, char** argv) {
       p4runtime_server, state_verification_notifier,
       state_verification_table_adapter);
   state_verification_event_monitor.Start();
+
+  // Start listening for debug data dump events.
+  p4rt_app::sonic::ConsumerNotifierAdapter debug_data_dump_notifier(
+      "DEBUG_DATA_REQ_CHANNEL", &app_db);
+  p4rt_app::sonic::NotificationProducerAdapter debug_data_dump_responder(
+      &app_db, "DEBUG_DATA_RESP_CHANNEL");
+  p4rt_app::DebugDataDumpEventHandler debug_data_dump_event_monitor(
+      p4runtime_server, debug_data_dump_notifier, debug_data_dump_responder);
+  debug_data_dump_event_monitor.Start();
 
   // Report performance statistics every minute.
   absl::Notification stop_stats_logging;

@@ -154,6 +154,15 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   // tables (e.g. VRF_TABLE) could cause false positives.
   virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  // Dump various debug data for the P4RT App, including:
+  // * PacketIO counters.
+  //
+  // TODO: Dump other artifacts(e.g. P4Info, internal cache and
+  // mappings etc.)
+  virtual absl::Status DumpDebugData(const std::string& path,
+                                     const std::string& log_level)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
   // Returns performance statistics relating to the P4Runtime flow programming
   // API. Data will be reset to zero on reading(i.e. results are not
   // cumulative).
