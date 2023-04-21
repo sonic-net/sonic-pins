@@ -13,9 +13,12 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>  // NOLINT
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -25,8 +28,11 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/optional.h"
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
@@ -35,6 +41,8 @@
 #include "grpcpp/impl/codegen/status.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
+#include "grpcpp/support/sync_stream.h"
+#include "gutil/io.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/table_entry_key.h"
@@ -47,6 +55,7 @@
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
 #include "p4rt_app/p4runtime/packetio_helpers.h"
+#include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/packetio_interface.h"
@@ -641,14 +650,18 @@ grpc::Status P4RuntimeImpl::StreamChannel(
             absl::Status packet_out_status =
                 HandlePacketOutRequest(request.packet());
             if (!packet_out_status.ok()) {
+              packetio_counters_.packet_out_errors += 1;
               LOG(WARNING) << "Could not handle PacketOut request: "
                            << packet_out_status;
               sdn_connection->SendStreamMessageResponse(
                   GenerateErrorResponse(packet_out_status, request.packet()));
+            } else {
+              packetio_counters_.packet_out_sent += 1;
             }
           } else {
             // Otherwise, if it's not the primary connection trying to send a
             // message so we return a PERMISSION_DENIED error.
+            packetio_counters_.packet_out_errors += 1;
             LOG(WARNING) << "Non-primary controller '" << context->peer()
                          << "' is trying to send PacketOut requests.";
             sdn_connection->SendStreamMessageResponse(
@@ -948,7 +961,17 @@ absl::Status P4RuntimeImpl::RemovePortTranslation(
 
 absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
                                           const std::string& log_level) {
-  return absl::OkStatus();
+  sonic::PacketIoCounters counters = GetPacketIoCounters();
+  std::string debug_str = absl::StrFormat(
+      "Timestamp: %s\n"
+      "PacketIoCounters \n"
+      "PacketOut sent: %d, errors %d \n"
+      "PacketIn received: %d, errors %d \n",
+      absl::FormatTime(absl::Now()), counters.packet_out_sent,
+      counters.packet_out_errors, counters.packet_in_received,
+      counters.packet_in_errors);
+
+  return gutil::WriteFile(debug_str, path + "/packet_io_counters");
 }
 
 //absl::Status P4RuntimeImpl::VerifyState(bool update_component_state) {
@@ -1008,6 +1031,12 @@ P4RuntimeImpl::GetFlowProgrammingStatistics() {
     stats.max_write_time = *max_write_time;
   }
   return stats;
+}
+
+sonic::PacketIoCounters P4RuntimeImpl::GetPacketIoCounters() {
+  absl::MutexLock l(&server_state_lock_);
+
+  return packetio_counters_;
 }
 
 absl::Status P4RuntimeImpl::HandlePacketOutRequest(
@@ -1246,12 +1275,17 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
 
     std::string source_port_id;
     if (translate_port_ids_) {
-      ASSIGN_OR_RETURN(
-          source_port_id,
+      auto port_id_or =
           TranslatePort(TranslationDirection::kForController,
-                        port_translation_map_, sonic_source_port_name),
-          _ << "Could not send PacketIn request because of bad source port "
-               "name.");
+                        port_translation_map_, sonic_source_port_name);
+      if (!port_id_or.ok()) {
+        packetio_counters_.packet_in_errors += 1;
+        return gutil::StatusBuilder(port_id_or.status())
+               << "Could not send PacketIn request because of bad source port "
+                  "name."
+               << port_id_or.status().message();
+      }
+      source_port_id = *port_id_or;
     } else {
       source_port_id = sonic_source_port_name;
     }
@@ -1261,12 +1295,17 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
     std::string target_port_id = source_port_id;
     if (!sonic_target_port_name.empty()) {
       if (translate_port_ids_) {
-        ASSIGN_OR_RETURN(
-            target_port_id,
+        auto port_id_or =
             TranslatePort(TranslationDirection::kForController,
-                          port_translation_map_, sonic_target_port_name),
-            _ << "Could not send PacketIn request because of bad target port "
-                 "name.");
+                          port_translation_map_, sonic_target_port_name);
+        if (!port_id_or.ok()) {
+          packetio_counters_.packet_in_errors += 1;
+          return gutil::StatusBuilder(port_id_or.status())
+                 << "Could not send PacketIn request because of bad target "
+                    "port name."
+                 << port_id_or.status().message();
+        }
+        target_port_id = *port_id_or;
       } else {
         target_port_id = sonic_target_port_name;
       }
@@ -1274,14 +1313,18 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
 
     // Form the PacketIn metadata fields before writing into the
     // stream.
-    ASSIGN_OR_RETURN(auto packet_in,
-                     CreatePacketInMessage(source_port_id, target_port_id));
+    auto packet_in = CreatePacketInMessage(source_port_id, target_port_id);
+
     p4::v1::StreamMessageResponse response;
     *response.mutable_packet() = packet_in;
     *response.mutable_packet()->mutable_payload() = payload;
 
     // Get the primary streamchannel and write into the stream.
-    return controller_manager_->SendPacketInToPrimary(response);
+    absl::Status status = controller_manager_->SendPacketInToPrimary(response);
+    status.ok() ? packetio_counters_.packet_in_received += 1
+                : packetio_counters_.packet_in_errors += 1;
+
+    return status;
   };
 
   absl::MutexLock l(&server_state_lock_);
