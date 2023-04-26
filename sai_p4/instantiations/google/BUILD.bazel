@@ -89,6 +89,11 @@ cc_library(
 )
 
 cc_library(
+    name = "p4_versions",
+    hdrs = ["versions.h"],
+)
+
+cc_library(
     name = "p4_roles",
     hdrs = ["roles.h"],
 )
