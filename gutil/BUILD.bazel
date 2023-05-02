@@ -200,3 +200,27 @@ cc_proto_library(
     name = "proto_test_cc_proto",
     deps = [":proto_test_proto"],
 )
+
+cc_library(
+    name = "table_entry_key",
+    srcs = ["table_entry_key.cc"],
+    hdrs = ["table_entry_key.h"],
+    deps = [
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/hash",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "table_entry_key_test",
+    srcs = [
+        "table_entry_key_test.cc",
+    ],
+    deps = [
+        ":table_entry_key",
+        "@com_google_absl//absl/hash:hash_testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
