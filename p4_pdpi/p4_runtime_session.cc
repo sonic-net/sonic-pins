@@ -15,22 +15,24 @@
 #include "p4_pdpi/p4_runtime_session.h"
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "grpcpp/channel.h"
 #include "grpcpp/create_channel.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
@@ -246,30 +248,56 @@ bool P4RuntimeSession::StreamChannelWrite(
   return stream_channel_->Write(request);
 }
 
-absl::StatusOr<p4::v1::StreamMessageResponse>
-P4RuntimeSession::GetNextStreamMessage(absl::Duration timeout) {
+absl::Status P4RuntimeSession::HandleNextNStreamMessages(
+    absl::AnyInvocable<
+        absl::StatusOr<bool>(const p4::v1::StreamMessageResponse& message)>
+        callback,
+    int expected_messages, absl::Duration timeout) {
   absl::MutexLock mu(&stream_read_lock_);
+  int seen_messages = 0;
+  int handled_messages = 0;
+  absl::Time deadline = absl::Now() + timeout;
 
   auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
     return !stream_messages_.empty();
   };
-  if (stream_read_lock_.AwaitWithTimeout(absl::Condition(&cond), timeout)) {
-    p4::v1::StreamMessageResponse message = std::move(stream_messages_.front());
+  while (
+      stream_read_lock_.AwaitWithDeadline(absl::Condition(&cond), deadline)) {
+    ASSIGN_OR_RETURN(bool success, callback(stream_messages_.front()));
+    if (success) {
+      ++handled_messages;
+    }
+    ++seen_messages;
     stream_messages_.pop();
-    return message;
+    if (handled_messages == expected_messages) {
+      return absl::OkStatus();
+    }
   }
-
   if (!is_stream_up_) {
     return absl::UnavailableError(
         "The P4RT stream has gone down unexpectedly.");
   }
   return absl::DeadlineExceededError(
-      absl::StrCat("PacketIn message did not arrive within ",
-                   absl::ToInt64Seconds(timeout), "s."));
+      absl::StrFormat("Expected to handle %d messages, but only handled %d of "
+                      "the %d seen in %s.",
+                      expected_messages, handled_messages, seen_messages,
+                      absl::FormatDuration(timeout)));
+}
+
+absl::StatusOr<p4::v1::StreamMessageResponse>
+P4RuntimeSession::GetNextStreamMessage(absl::Duration timeout) {
+  p4::v1::StreamMessageResponse result;
+  RETURN_IF_ERROR(HandleNextNStreamMessages(
+      [&result](const p4::v1::StreamMessageResponse& message) {
+        result = message;
+        return true;
+      },
+      /*expected_messages=*/1, timeout));
+  return result;
 }
 
 absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
-P4RuntimeSession::GetAllStreamMessageFor(absl::Duration duration) {
+P4RuntimeSession::GetAllStreamMessagesFor(absl::Duration duration) {
   absl::SleepFor(duration);
   absl::MutexLock mu(&stream_read_lock_);
 
@@ -466,8 +494,7 @@ absl::Status CheckNoTableEntries(P4RuntimeSession* session) {
   return absl::OkStatus();
 }
 
-absl::Status ClearTableEntries(P4RuntimeSession* session,
-                               std::optional<int> max_batch_size) {
+absl::Status ClearTableEntries(P4RuntimeSession* session) {
   // Get P4Info from Switch. It is needed to sequence the delete requests.
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,
@@ -491,8 +518,7 @@ absl::Status ClearTableEntries(P4RuntimeSession* session,
   std::vector<Update> pi_updates =
       CreatePiUpdates(table_entries, Update::DELETE);
   ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_clear_requests,
-                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates,
-                                                            max_batch_size));
+                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
   RETURN_IF_ERROR(
       SetMetadataAndSendPiWriteRequests(session, sequenced_clear_requests));
 
