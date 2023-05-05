@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -44,6 +45,7 @@
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
 #include "grpcpp/support/sync_stream.h"
+#include "gutil/collections.h"
 #include "gutil/io.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -58,6 +60,7 @@
 #include "p4rt_app/p4runtime/p4info_verification.h"
 #include "p4rt_app/p4runtime/p4runtime_read.h"
 #include "p4rt_app/p4runtime/packetio_helpers.h"
+#include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
@@ -78,6 +81,8 @@ namespace {
 
 using TableEntryMap =
     absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>;
+using ActionProfileCapacityMap =
+    absl::flat_hash_map<std::string, ActionProfileResourceCapacity>;
 
 grpc::Status EnterCriticalState(const std::string& message) {
   // TODO: report critical state somewhere an don't crash the process.
@@ -290,7 +295,8 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
 
 sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     const p4::v1::WriteRequest& request, const pdpi::IrP4Info& p4_info,
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
+    const TableEntryMap& table_cache,
+    const ActionProfileCapacityMap& capacity_by_action_profile_name,
     const p4_constraints::ConstraintInfo& constraint_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
@@ -299,6 +305,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
   absl::flat_hash_set<gutil::TableEntryKey> keys_in_request;
   bool has_duplicates = false;
   sonic::AppDbUpdates ir_updates;
+  absl::flat_hash_map<std::string, int64_t> resources_in_batch;
   for (const p4::v1::Update& pi_update : request.updates()) {
     // An RPC response should be created for every updater.
     auto entry_status = response->add_statuses();
@@ -328,13 +335,29 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
 
     // Verify the entry exists (for MODIFY/DELETE) or not exists (for DELETE)
     // against the cache.
-    auto cache_verify_status =
-        VerifyTableCacheForExistence(cache, app_db_entry);
+    absl::Status cache_verify_status =
+        VerifyTableCacheForExistence(table_cache, app_db_entry);
     if (!cache_verify_status.ok()) {
       fail_on_first_error = true;
       *entry_status = GetIrUpdateStatus(cache_verify_status);
       continue;
     }
+
+    auto resource_change = VerifyCapacityAndGetTableResourceChange(
+        p4_info, app_db_entry, table_cache, capacity_by_action_profile_name,
+        resources_in_batch);
+    if (!resource_change.ok()) {
+      fail_on_first_error = true;
+      *entry_status = GetIrUpdateStatus(resource_change.status());
+      continue;
+    } else if (resource_change->action_profile.has_value()) {
+      // When accounting for the total batch resources we do not assume a MODIFY
+      // or DELETE will succeed. So if a request would free resources we act as
+      // if it does not (i.e. max of 0).
+      resources_in_batch[resource_change->action_profile->name] +=
+          resource_change->action_profile->total_weight;
+    }
+    app_db_entry.resource_utilization_change = *resource_change;
 
     app_db_entry.rpc_index = response->statuses_size() - 1;
     ir_updates.entries.push_back(app_db_entry);
@@ -362,29 +385,45 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
   return ir_updates;
 }
 
-absl::Status CacheWriteResults(
-    absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
+absl::Status UpdateCacheAndUtilizationState(
+    TableEntryMap& table_cache,
+    ActionProfileCapacityMap& capacity_by_action_profile_name,
     const sonic::AppDbUpdates& app_db_updates,
     const pdpi::IrWriteResponse& results) {
   for (const sonic::AppDbEntry& app_db_entry : app_db_updates.entries) {
+    // Lower layers should rervert any state on failure so a failing request
+    // should not affect our internal state.
     if (results.statuses(app_db_entry.rpc_index).code() !=
         google::rpc::Code::OK) {
       continue;
     }
 
-    gutil::TableEntryKey key(app_db_entry.pi_table_entry);
     switch (app_db_entry.update_type) {
       case p4::v1::Update::INSERT:
       case p4::v1::Update::MODIFY:
-        cache[key] = app_db_entry.pi_table_entry;
+        table_cache[app_db_entry.table_entry_key] = app_db_entry.pi_table_entry;
         break;
       case p4::v1::Update::DELETE:
-        cache.erase(key);
+        table_cache.erase(app_db_entry.pi_table_entry);
         break;
       default:
         return gutil::InternalErrorBuilder()
                << "Invalid Update Type: "
                << p4::v1::Update::Type_Name(app_db_entry.update_type);
+    }
+
+    if (app_db_entry.resource_utilization_change.action_profile.has_value()) {
+      const std::string& profile_name =
+          app_db_entry.resource_utilization_change.action_profile->name;
+      auto* utilization =
+          gutil::FindOrNull(capacity_by_action_profile_name, profile_name);
+      if (utilization == nullptr) {
+        return gutil::InternalErrorBuilder()
+               << "Could not find action profile utilization for '"
+               << profile_name << "' which needs to be updated.";
+      }
+      utilization->current_utilization +=
+          app_db_entry.resource_utilization_change.action_profile->total_weight;
     }
   }
   return absl::OkStatus();
@@ -455,7 +494,8 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     pdpi::IrWriteRpcStatus rpc_status;
     pdpi::IrWriteResponse* rpc_response = rpc_status.mutable_rpc_response();
     sonic::AppDbUpdates app_db_updates = PiTableEntryUpdatesToIr(
-        *request, *ir_p4info_, table_entry_cache_, *p4_constraint_info_,
+        *request, *ir_p4info_, table_entry_cache_,
+        capacity_by_action_profile_name_, *p4_constraint_info_,
         translate_port_ids_, port_translation_map_, rpc_response);
 
     // Any AppDb update failures should be appended to the `rpc_response`. If
@@ -468,6 +508,36 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
                        app_db_write_status.ToString()));
     }
 
+    // We do a bit of bookkeeping, before sending our final response to the
+    // controller, so that we can ensure correct fail on first semantics. Each
+    // layer gets a chance at a "first" failure so it is possible to have
+    // multiple failures (not including the ABORTED ones) in a batch.
+    //
+    // Consider the following case where we get a batch of 10 entries:
+    //   1. P4RT App fails to translate entry 6 and thus marks entries
+    //      7-10 as ABORTED.
+    //   2. SWSS then only sees entries 1-5 for which it fails on entry 3.
+    //      Therefore, marking entries 4 and 5 as ABORTED.
+    //
+    // In the response to the controller entry 6 would have a non-ABORTED error.
+    bool found_first_failure = false;
+    for (auto& rpc_error :
+         *rpc_status.mutable_rpc_response()->mutable_statuses()) {
+      if (rpc_error.code() == google::rpc::OK) {
+        continue;
+      }
+      if (!found_first_failure) {
+        found_first_failure = true;
+        continue;
+      }
+      LOG_IF(WARNING, rpc_error.code() != google::rpc::ABORTED)
+          << "Found an error that should be marked ABORTED. This is expected "
+             "if a higher layer rejects one flow in a batch and a lower layer "
+             "rejects another: "
+          << rpc_error.message();
+      rpc_error.set_code(google::rpc::ABORTED);
+    }
+
     auto grpc_status = pdpi::IrWriteRpcStatusToGrpcStatus(rpc_status);
     if (!grpc_status.ok()) {
       LOG(ERROR) << "PDPI failed to translate RPC status to gRPC status: "
@@ -475,11 +545,13 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
       return EnterCriticalState(grpc_status.status().ToString());
     }
 
-    absl::Status cache_status =
-        CacheWriteResults(table_entry_cache_, app_db_updates, *rpc_response);
-    if (!cache_status.ok()) {
-      LOG(ERROR) << "Could not caching write results: " << cache_status;
-      return EnterCriticalState(cache_status.ToString());
+    absl::Status cache_and_util_status = UpdateCacheAndUtilizationState(
+        table_entry_cache_, capacity_by_action_profile_name_, app_db_updates,
+        *rpc_response);
+    if (!cache_and_util_status.ok()) {
+      LOG(ERROR) << "Could not update cache and utilization for write request: "
+                 << cache_and_util_status;
+      return EnterCriticalState(cache_and_util_status.ToString());
     }
 
     absl::Duration write_execution_time = absl::Now() - write_start_time;
@@ -1140,6 +1212,16 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
       // TODO: cleanup P4RT table definitions instead of going
       // critical.
       return grpc::Status(grpc::StatusCode::INTERNAL, config_result.ToString());
+    }
+
+    // Store resource utilization limits for any ActionProfiles.
+    for (const auto& [action_profile_name, action_profile_def] :
+         ir_p4info->action_profiles_by_name()) {
+      capacity_by_action_profile_name_[action_profile_name] =
+          GetActionProfileResourceCapacity(action_profile_def);
+      LOG(INFO) << "Adding action profile limits for '" << action_profile_name
+                << "': max_weights_for_all_groups="
+                << action_profile_def.action_profile().size();
     }
 
     // Update P4RuntimeImpl's state only if we succeed.
