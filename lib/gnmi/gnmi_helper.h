@@ -394,6 +394,9 @@ GetTransceiverToFormFactorMap(gnmi::gNMI::StubInterface& gnmi_stub);
 absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
                          uint32_t device_id);
 
+// Gets the device ID from Switch state Database.
+absl::StatusOr<uint64_t> GetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Takes a gNMI config in JSON format and updates the P4RT Device ID. Adding it
 // when it doesn't exist, or updating the value if it does.
 std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
@@ -460,6 +463,13 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
 // Gets counters for all interfaces.
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Removes specified characters from Json object string.
+void StripSymbolFromString(std::string& str, char symbol);
+
+// Returns the 'value' section of a packed json with format:
+//   {"field":"value"}
+absl::StatusOr<std::string> ParseJsonValue(absl::string_view json);
 
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_

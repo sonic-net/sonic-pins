@@ -14,6 +14,7 @@
 
 #include "lib/gnmi/gnmi_helper.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <functional>
@@ -454,6 +455,10 @@ absl::StatusOr<nlohmann::json> ParseGnmiNotificationAsJson(
 }
 
 }  // namespace
+
+void StripSymbolFromString(std::string& str, char symbol) {
+  str.erase(std::remove(str.begin(), str.end(), symbol), str.end());
+}
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type) {
   switch (field_type) {
@@ -1459,6 +1464,29 @@ absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
   return absl::OkStatus();
 }
 
+absl::StatusOr<uint64_t> GetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      gnmi::GetRequest request,
+      BuildGnmiGetRequest("components/component[name=integrated_circuit0]/"
+                          "integrated-circuit/state/node-id",
+                          gnmi::GetRequest::STATE));
+  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(&gnmi_stub, request, /*timeout=*/std::nullopt));
+  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  ASSIGN_OR_RETURN(
+      std::string p4rt_str,
+      pins_test::ParseGnmiGetResponse(response, "openconfig-p4rt:node-id"));
+  StripSymbolFromString(p4rt_str, '\"');
+  uint64_t p4rt_id;
+  if (absl::SimpleAtoi(p4rt_str, &p4rt_id) != true) {
+    return gutil::InternalErrorBuilder().LogError()
+           << absl::StrCat("P4RT node-id conversion failed for:", p4rt_str);
+  }
+  return p4rt_id;
+}
+
 std::string BreakoutSpeedToString(BreakoutSpeed breakout_speed) {
   switch (breakout_speed) {
     case BreakoutSpeed::k100GB:
@@ -1806,6 +1834,19 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
     port_counters.timestamp_ns = timestamp;
   }
   return counters;
+}
+
+absl::StatusOr<std::string> ParseJsonValue(absl::string_view json) {
+  nlohmann::json parsed_json = nlohmann::json::parse(json, nullptr, false);
+  if (parsed_json.is_discarded()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Invalid JSON syntax for '" << json << "'";
+  }
+  if (parsed_json.empty()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Cannot parse empty JSON '" << json << "'";
+  }
+  return parsed_json.begin().value();
 }
 
 }  // namespace pins_test

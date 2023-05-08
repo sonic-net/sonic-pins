@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -2222,6 +2223,73 @@ TEST(InterfaceToSpeed, WorksProperly) {
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
+TEST(GetGnmiStateDeviceId, DeviceIdSuccess) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1656026017779182564
+                 prefix { origin: "openconfig" }
+                 update {
+                   path {
+                     elem { name: "components" }
+                     elem {
+                       name: "component"
+                       key { key: "name" value: "integrated_circuit0" }
+                     }
+                     elem { name: "integrated-circuit" }
+                     elem { name: "state" }
+                     elem { name: "node-id" }
+                   }
+                   val {
+                     json_ietf_val: "{\"openconfig-p4rt:node-id\":\"2795437045\"}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(
+      auto result,
+      BuildGnmiGetRequest("components/component[name=integrated_circuit0]/"
+                          "integrated-circuit/state/node-id",
+                          gnmi::GetRequest::STATE));
+  ASSERT_OK_AND_ASSIGN(auto device_id, GetDeviceId(stub));
+  EXPECT_EQ(device_id, 2795437045);
+}
+
+TEST(GetGnmiStateDeviceId, DeviceIdFailTagNotFound) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(
+      DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                R"pb(notification {
+                       timestamp: 1656026017779182564
+                       prefix { origin: "openconfig" }
+                       update {
+                         path {
+                           elem { name: "components" }
+                           elem {
+                             name: "component"
+                             key { key: "name" value: "chassis" }
+                           }
+                           elem { name: "chassis" }
+                           elem { name: "state" }
+                           elem { name: "model-name" }
+                         }
+                         val { json_ietf_val: "{\"model\":\"BX\"}" }
+                       }
+                     })pb")),
+            Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(
+      auto result,
+      BuildGnmiGetRequest("components/component[name=integrated_circuit0]/"
+                          "integrated-circuit/state/node-id",
+                          gnmi::GetRequest::STATE));
+  EXPECT_THAT(
+      GetDeviceId(stub),
+      StatusIs(
+          absl::StatusCode::kInternal,
+          HasSubstr("openconfig-p4rt:node-id not present in JSON response")));
+}
+
 TEST(GetGnmiStatePathAndTimestamp, VerifyValue) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub, Get).WillOnce(DoAll(
@@ -2673,6 +2741,62 @@ TEST(GetAllInterfaceCounters, WorksWithoutOptionalValues) {
   EXPECT_EQ(counters.timestamp_ns, 1620348032128305716);
   EXPECT_EQ(counters.carrier_transitions, std::nullopt);
 }
+
+// Test with different whitespace combinations.
+TEST(ParseJsonValue, ReturnsJsonValue) {
+  EXPECT_THAT(ParseJsonValue("{\"name\":\"value\"}"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{\"name\":\"value\" }"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{\"name\": \"value\"}"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{\"name\": \"value\" }"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{\"name\" :\"value\"}"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{\"name\" :\"value\" }"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{\"name\" : \"value\"}"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{\"name\" : \"value\" }"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{ \"name\":\"value\"}"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{ \"name\":\"value\" }"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{ \"name\": \"value\"}"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{ \"name\": \"value\" }"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{ \"name\" :\"value\"}"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{ \"name\" :\"value\" }"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{ \"name\" : \"value\"}"), IsOkAndHolds("value"));
+  EXPECT_THAT(ParseJsonValue("{ \"name\" : \"value\" }"),
+              IsOkAndHolds("value"));
+}
+
+class MalformedJson : public testing::TestWithParam<std::string> {};
+
+const absl::btree_map<std::string /*name*/, std::string /*text*/> &
+MalformedJsonTests() {
+  static const auto *const kTestCases =
+      new absl::btree_map<std::string, std::string>({
+          {"UnquotedName", "{name : \"value\"}"},
+          {"HalfQuotedName", "{\"name : \"value\"}"},
+          {"UnquotedValue", "{\"name\" : value}"},
+          {"HalfQuotedValue", "{\"name\" : \"value}"},
+          {"MissingSeparator", "{\"name\"\"value\"}"},
+          {"MissingBraces", "\"name\":\"value\""},
+          {"MissingLeftBrace", "{\"name\":\"value\""},
+          {"MissingRightBrace", "\"name\":\"value\"}"},
+      });
+  return *kTestCases;
+}
+
+absl::btree_set<std::string> MalformedJsonTestNames() {
+  absl::btree_set<std::string> test_names;
+  for (const auto &[name, text] : MalformedJsonTests()) test_names.insert(name);
+  return test_names;
+}
+
+TEST_P(MalformedJson, ReturnsError) {
+  EXPECT_THAT(ParseJsonValue(MalformedJsonTests().at(GetParam())),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+INSTANTIATE_TEST_SUITE_P(ParseJsonNalue, MalformedJson,
+                         testing::ValuesIn(MalformedJsonTestNames()),
+                         [](const testing::TestParamInfo<std::string> &info) {
+                           return info.param;
+                         });
 
 }  // namespace
 }  // namespace pins_test
