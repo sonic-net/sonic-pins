@@ -112,10 +112,6 @@ absl::StatusOr<uint64_t> ArbitraryByteStringToUint(const std::string &bytes,
 absl::StatusOr<std::string> UintToNormalizedByteString(uint64_t value,
                                                        int bitwidth);
 
-// Returns the number of bits used by the PI byte string interpreted as an
-// unsigned integer.
-int GetBitwidthOfByteString(const std::string &input_string);
-
 // Returns if a (normalized) byte string is all zeros.
 bool IsAllZeros(const std::string &s);
 
