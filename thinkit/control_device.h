@@ -48,12 +48,6 @@ enum class RebootType {
   kCold,
 };
 
-// Callback when a packet is received, first parameter which is control
-// interface port it was received on and second parameter is the raw byte string
-// of the packet.
-using PacketCallback =
-    std::function<void(absl::string_view, absl::string_view)>;
-
 // A `ControlDevice` represents any device or devices that can at the very
 // least send and receive packets over their interfaces. It may be able to get
 // and set link state, as well as perform various other operations like link
@@ -62,11 +56,10 @@ class ControlDevice {
  public:
   virtual ~ControlDevice() {}
 
-  // Starts collecting packets, calling `callback` whenever a packet is
-  // received. This continues until the `PacketGenerationFinalizer` goes out of
-  // scope.
+  // Starts collecting packets. This continues until the
+  // `PacketGenerationFinalizer` goes out of scope.
   virtual absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
-  CollectPackets(PacketCallback callback) = 0;
+  CollectPackets() = 0;
 
   absl::Status SendPacket(absl::string_view interface,
                           absl::string_view packet) {

@@ -121,7 +121,7 @@ absl::StatusOr<PinsControlDevice> PinsControlDevice::Create(
 }
 
 absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
-PinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
+PinsControlDevice::CollectPackets() {
   if (control_session_ == nullptr) {
     return absl::InternalError(
         "No P4RuntimeSession exists; Likely failed to establish another "
@@ -148,19 +148,10 @@ PinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
                   }
                 })pb")));
   RETURN_IF_ERROR(context.SendWriteRequest(punt_all_request));
+
   return absl::make_unique<PacketListener>(
       control_session_.get(), std::move(context),
-      sai::Instantiation::kMiddleblock, &interface_port_id_to_name_,
-      std::move(callback), /*on_finish=*/[this]() {
-        // After the packet listener is finished and destroyed the old session,
-        // try to replace it with a new session.
-        auto session = pdpi::P4RuntimeSession::Create(*sut_);
-        if (!session.ok()) {
-          LOG(ERROR) << "Failed to establish another P4RuntimeSession:"
-                     << session.status();
-        }
-        control_session_ = std::move(session).value_or(nullptr);
-      });
+      sai::Instantiation::kMiddleblock, &interface_port_id_to_name_);
 }
 
 absl::Status PinsControlDevice::SendPacket(

@@ -16,7 +16,6 @@
 
 #include <functional>
 #include <string>
-#include <thread>  // NOLINT
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -45,28 +44,24 @@ class PacketListener : public thinkit::PacketGenerationFinalizer {
                  P4rtProgrammingContext context,
                  sai::Instantiation instantiation,
                  const absl::flat_hash_map<std::string, std::string>*
-                     interface_port_id_to_name,
-                 thinkit::PacketCallback callback,
-                 std::function<void()> on_finish);
+                     interface_port_id_to_name);
+
+  absl::Status HandlePacketsFor(absl::Duration duration,
+                                thinkit::PacketCallback callback_) override;
 
   ~PacketListener() {
     absl::Status status = context_.Revert();
     if (!status.ok()) {
       LOG(WARNING) << "Failed to revert packet listening flows: " << status;
     }
-    status = session_->Finish();
-    if (!status.ok()) {
-      LOG(WARNING) << "P4RuntimeSession finished abnormally: " << status;
-    }
-    receive_packet_thread_.join();
-    on_finish_();
   }
 
  private:
   pdpi::P4RuntimeSession* session_;
   P4rtProgrammingContext context_;
-  std::thread receive_packet_thread_;
-  std::function<void()> on_finish_;
+  sai::Instantiation instantiation_;
+  const absl::flat_hash_map<std::string, std::string>&
+      interface_port_id_to_name_;
 };
 
 }  // namespace pins_test
