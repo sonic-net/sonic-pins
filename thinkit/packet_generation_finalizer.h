@@ -16,17 +16,25 @@
 #define PINS_THINKIT_PACKET_GENERATION_FINALIZER_H_
 
 
+#include "absl/status/status.h"
+#include "absl/time/time.h"
+
 namespace thinkit {
 
+// Callback when a packet is received, first parameter which is control
+// interface port it was received on and second parameter is the raw byte string
+// of the packet.
+using PacketCallback =
+    std::function<void(absl::string_view, absl::string_view)>;
 
 // PacketGenerationFinalizer will stop listening for packets when it goes out of
 // scope.
 class PacketGenerationFinalizer {
  public:
-  virtual ~PacketGenerationFinalizer() = 0;
+  virtual absl::Status HandlePacketsFor(absl::Duration duration,
+                                        PacketCallback handler) = 0;
+  virtual ~PacketGenerationFinalizer() = default;
 };
-
-inline PacketGenerationFinalizer::~PacketGenerationFinalizer() {}
 
 }  // namespace thinkit
 #endif  // PINS_THINKIT_PACKET_GENERATION_FINALIZER_H_

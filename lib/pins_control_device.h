@@ -56,7 +56,7 @@ class PinsControlDevice : public thinkit::ControlDevice {
       absl::flat_hash_map<std::string, std::string> interface_name_to_port_id);
 
   absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
-  CollectPackets(thinkit::PacketCallback callback) override;
+  CollectPackets() override;
 
   absl::Status SendPacket(absl::string_view interface, absl::string_view packet,
                           std::optional<absl::Duration> packet_delay) override;
