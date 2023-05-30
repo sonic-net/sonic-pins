@@ -23,9 +23,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
-            url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
-            strip_prefix = "grpc-1.46.0",
-            sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
+            url = "https://github.com/grpc/grpc/archive/v1.55.0.zip",
+            strip_prefix = "grpc-1.55.0",
+            sha256 = "c1f26622796e975a50f314e54c8bc558021ab1dabac308b9d97390c863aade9d",
             patch_args = ["-p1"],
             patches = [
                 "@com_github_google_pins_infra//:bazel/patches/grpc-001-fix_file_watcher_race_condition.patch",
@@ -49,9 +49,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_google_protobuf"):
         http_archive(
             name = "com_google_protobuf",
-            url = "https://github.com/protocolbuffers/protobuf/releases/download/v3.20.1/protobuf-all-3.20.1.tar.gz",
-            strip_prefix = "protobuf-3.20.1",
-            sha256 = "3a400163728db996e8e8d21c7dfb3c239df54d0813270f086c4030addeae2fad",
+            url = "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v23.1.zip",
+            strip_prefix = "protobuf-23.1",
+            sha256 = "c0ea9f4d75b37ea8e9d78ce4c670d066bcb7cebdba190fa5fc8c57b1f00c0c2c",
         )
     if not native.existing_rule("com_googlesource_code_re2"):
         http_archive(
