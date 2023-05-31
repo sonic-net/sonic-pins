@@ -63,10 +63,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_googlesource_code_re2"):
         http_archive(
             name = "com_googlesource_code_re2",
-            # Newest commit on "absl" branch as of 2021-03-25.
-            url = "https://github.com/google/re2/archive/72f110e82ccf3a9ae1c9418bfb447c3ba1cf95c2.zip",
-            strip_prefix = "re2-72f110e82ccf3a9ae1c9418bfb447c3ba1cf95c2",
-            sha256 = "146bf2e8796317843106a90543356c1baa4b48236a572e39971b839172f6270e",
+            url = "https://github.com/google/re2/archive/refs/tags/2023-06-01.tar.gz",
+            strip_prefix = "re2-2023-06-01",
+            sha256 = "8b4a8175da7205df2ad02e405a950a02eaa3e3e0840947cd598e92dca453199b",
         )
     if not native.existing_rule("com_google_googleapis"):
         http_archive(
