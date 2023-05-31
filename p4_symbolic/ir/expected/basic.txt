@@ -643,6 +643,61 @@ pipeline {
     initial_control: "node_2"
   }
 }
+parsers {
+  key: "parser"
+  value {
+    name: "parser"
+    initial_state: "start"
+    parse_states {
+      key: "parse_ipv4"
+      value {
+        name: "parse_ipv4"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ipv4"
+            }
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "start"
+      value {
+        name: "start"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ethernet"
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "ethernet"
+            field_name: "etherType"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x0800"
+            next_state: "parse_ipv4"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+  }
+}
 
 =====MyIngress.ipv4_lpm Entries=====
 
