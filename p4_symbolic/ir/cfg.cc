@@ -14,14 +14,12 @@
 
 #include "p4_symbolic/ir/cfg.h"
 
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
 
-#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
 #include "gutil/status.h"
@@ -54,7 +52,43 @@ absl::StatusOr<absl::btree_set<std::string>> GetChildren(
     }
   } else {
     return absl::InvalidArgumentError(
-        absl::Substitute("Unrecognized control '$0'", control_name));
+        absl::Substitute("Unknown control '$0'", control_name));
+  }
+
+  return children;
+}
+
+// Returns the set of the children state names of the given `state_name` in the
+// given parser.
+absl::StatusOr<absl::btree_set<std::string>> GetChildren(
+    const Parser &parser, const std::string &state_name) {
+  absl::btree_set<std::string> children;
+
+  if (state_name == EndOfParser()) return children;
+
+  auto it = parser.parse_states().find(state_name);
+  if (it == parser.parse_states().end()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Unknown parse state: '" << state_name << "'";
+  }
+
+  const ParseState &state = it->second;
+
+  for (const auto &transition : state.transitions()) {
+    switch (transition.transition_case()) {
+      case ParserTransition::kDefaultTransition: {
+        children.insert(transition.default_transition().next_state());
+        break;
+      }
+      case ParserTransition::kHexStringTransition: {
+        children.insert(transition.hex_string_transition().next_state());
+        break;
+      }
+      default: {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Unknown transition: " << transition.ShortDebugString();
+      }
+    }
   }
 
   return children;
@@ -77,7 +111,7 @@ std::string ToString(const CfgNode &node) {
   return absl::Substitute(
       "node: $0\n\tchildren: [$1]\n\tparents: [$2]\n\tpath_from_root: "
       "$3\n\trev_path_from_leaf: $4\n\tmerge_point: $5\n\tcontinue: $6\n",
-      node.control_name, absl::StrJoin(node.children, ","),
+      node.node_name, absl::StrJoin(node.children, ","),
       absl::StrJoin(node.parents, ","),
       absl::StrJoin(node.contracted_path_from_root, "->"),
       absl::StrJoin(node.contracted_reverse_path_from_leaf, "<-"),
@@ -97,59 +131,103 @@ std::string ControlFlowGraph::ToString() {
 
 absl::StatusOr<OptimizedSymbolicExecutionInfo>
 ControlFlowGraph::GetOptimizedSymbolicExecutionInfo(
-    absl::string_view control_name) {
-  absl::StatusOr<const CfgNode *> cfg_node_ptr_or_status =
-      GetNode(control_name);
-  RETURN_IF_ERROR(cfg_node_ptr_or_status.status());
-  const CfgNode &cfg_node = **cfg_node_ptr_or_status;
+    absl::string_view node_name) {
+  ASSIGN_OR_RETURN(const CfgNode *cfg_node, GetNode(node_name));
 
-  if (!cfg_node.merge_point.has_value())
-    return absl::InvalidArgumentError(
-        absl::Substitute("Control node '$0' does not have a merge point",
-                         cfg_node.control_name));
+  if (!cfg_node->merge_point.has_value()) {
+    return absl::InvalidArgumentError(absl::Substitute(
+        "Control node '$0' does not have a merge point", cfg_node->node_name));
+  }
 
   OptimizedSymbolicExecutionInfo info;
-  info.set_merge_point(*cfg_node.merge_point);
-  info.set_continue_to_merge_point(cfg_node.continue_to_merge_point);
+  info.set_merge_point(*cfg_node->merge_point);
+  info.set_continue_to_merge_point(cfg_node->continue_to_merge_point);
   return info;
 }
 
 absl::StatusOr<const CfgNode *> ControlFlowGraph::GetNode(
-    absl::string_view control_name) {
-  return GetMutableNode(control_name);
+    absl::string_view node_name) {
+  return GetMutableNode(node_name);
 }
 
 absl::StatusOr<CfgNode *> ControlFlowGraph::GetMutableNode(
-    absl::string_view control_name) {
-  auto it = node_by_name_.find(control_name);
+    absl::string_view node_name) {
+  auto it = node_by_name_.find(node_name);
   if (it == node_by_name_.end()) {
     return absl::NotFoundError(absl::Substitute(
-        "Control name '$0' does not correspond to any node in the CFG",
-        control_name));
+        "Node name '$0' does not correspond to any node in the CFG",
+        node_name));
   }
 
   return &(it->second);
 }
 
-CfgNode &ControlFlowGraph::GetOrAddNode(absl::string_view control_name) {
-  CfgNode &node = node_by_name_[control_name];
-  node.control_name = control_name;
-  return node;
+absl::StatusOr<CfgNode *> ControlFlowGraph::GetOrAddNode(
+    absl::string_view node_name, CfgNodeType node_type) {
+  auto it = node_by_name_.find(node_name);
+
+  if (it == node_by_name_.end()) {
+    // Create a new node.
+    CfgNode cfg_node = {
+        .node_name = std::string(node_name),
+        .node_type = node_type,
+    };
+    it =
+        node_by_name_.insert(it, {std::string(node_name), std::move(cfg_node)});
+  } else if (it->second.node_type != node_type) {
+    // Existing node. Returns an error if the node has the same type.
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Nodes of different types have the same name: " << node_name;
+  }
+
+  return &(it->second);
 }
 
 absl::Status ControlFlowGraph::ConstructSubgraph(
     const P4Program &program, const std::string &control_name) {
-  CfgNode &cfg_node = GetOrAddNode(control_name);
+  // Obtain the CFG node of the control and the names of its next states.
+  ASSIGN_OR_RETURN(CfgNode * cfg_node,
+                   GetOrAddNode(control_name, CfgNodeType::kPipelineControl));
   ASSIGN_OR_RETURN(absl::btree_set<std::string> children,
                    GetChildren(program, control_name));
+
+  // Add edges between the parent and child nodes.
   for (const std::string &child_control_name : children) {
-    CfgNode &child_cfg_node = GetOrAddNode(child_control_name);
-    bool new_node = child_cfg_node.parents.empty();
-    cfg_node.children.insert(child_control_name);
-    child_cfg_node.parents.insert(control_name);
-    if (new_node) {
-      // The child_cfg_node is a new node.
+    ASSIGN_OR_RETURN(
+        CfgNode * child_cfg_node,
+        GetOrAddNode(child_control_name, CfgNodeType::kPipelineControl));
+    bool is_new_node = child_cfg_node->parents.empty();
+    cfg_node->children.insert(child_control_name);
+    child_cfg_node->parents.insert(control_name);
+
+    // If the child is a new node, recursively construct the subgraph.
+    if (is_new_node) {
       RETURN_IF_ERROR(ConstructSubgraph(program, child_control_name));
+    }
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status ControlFlowGraph::ConstructSubgraph(
+    const Parser &parser, const std::string &state_name) {
+  // Obtain the CFG node of the parse state and the names of its next states.
+  ASSIGN_OR_RETURN(CfgNode * cfg_node,
+                   GetOrAddNode(state_name, CfgNodeType::kParseState));
+  ASSIGN_OR_RETURN(absl::btree_set<std::string> children,
+                   GetChildren(parser, state_name));
+
+  // Add edges between the parent and child nodes.
+  for (const std::string &child_state_name : children) {
+    ASSIGN_OR_RETURN(CfgNode * child_cfg_node,
+                     GetOrAddNode(child_state_name, CfgNodeType::kParseState));
+    bool is_new_node = child_cfg_node->parents.empty();
+    cfg_node->children.insert(child_state_name);
+    child_cfg_node->parents.insert(state_name);
+
+    // If the child is a new node, recursively construct the subgraph.
+    if (is_new_node) {
+      RETURN_IF_ERROR(ConstructSubgraph(parser, child_state_name));
     }
   }
 
@@ -170,7 +248,7 @@ absl::Status ControlFlowGraph::SetContractedReversePathFromLeaf(
       RETURN_IF_ERROR(SetContractedReversePathFromLeaf(*child_cfg_node));
       RET_CHECK(!child_reverse_path_from_leaf.empty()) << absl::Substitute(
           "Contracted reverse path from leaf of '$0' is empty",
-          child_cfg_node->control_name);
+          child_cfg_node->node_name);
     }
 
     // Set current node's reverse path from leaf to the longest common
@@ -187,7 +265,7 @@ absl::Status ControlFlowGraph::SetContractedReversePathFromLeaf(
   }
 
   // Add self to the end of the reverse path from leaf.
-  reverse_path_from_leaf.push_back(cfg_node.control_name);
+  reverse_path_from_leaf.push_back(cfg_node.node_name);
 
   return absl::OkStatus();
 }
@@ -204,7 +282,7 @@ absl::Status ControlFlowGraph::SetContractedPathFromRoot(CfgNode &cfg_node) {
       RETURN_IF_ERROR(SetContractedPathFromRoot(*parent_cfg_node));
       RET_CHECK(!parent_path_from_root.empty())
           << absl::Substitute("Contracted path from root of '$0' is empty",
-                              parent_cfg_node->control_name);
+                              parent_cfg_node->node_name);
     }
 
     // Set current node's path from root to the longest common
@@ -218,7 +296,7 @@ absl::Status ControlFlowGraph::SetContractedPathFromRoot(CfgNode &cfg_node) {
   }
 
   // Add self to the end of the path from root.
-  path_from_root.push_back(cfg_node.control_name);
+  path_from_root.push_back(cfg_node.node_name);
 
   return absl::OkStatus();
 }
@@ -227,6 +305,17 @@ absl::StatusOr<std::unique_ptr<ControlFlowGraph>> ControlFlowGraph::Create(
     const P4Program &program) {
   // Using `new` to access a non-public constructor.
   auto cfg = absl::WrapUnique(new ControlFlowGraph());
+
+  // Make sure there is exactly one parser.
+  if (program.parsers_size() != 1) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Invalid number of parsers: ", program.parsers_size()));
+  }
+
+  // Build the basic CFG for parsers.
+  for (const auto &[_, parser] : program.parsers()) {
+    RETURN_IF_ERROR(cfg->ConstructSubgraph(parser, parser.initial_state()));
+  }
 
   // Build the basic CFG.
   for (const auto &[name, pipeline] : program.pipeline()) {
@@ -241,13 +330,13 @@ absl::StatusOr<std::unique_ptr<ControlFlowGraph>> ControlFlowGraph::Create(
       RET_CHECK(!cfg_node.contracted_reverse_path_from_leaf.empty())
           << absl::Substitute(
                  "contracted_reverse_path_from_leaf of '$0' is empty",
-                 cfg_node.control_name);
+                 cfg_node.node_name);
     }
     if (cfg_node.contracted_path_from_root.empty()) {
       RETURN_IF_ERROR(cfg->SetContractedPathFromRoot(cfg_node));
       RET_CHECK(!cfg_node.contracted_path_from_root.empty())
           << absl::Substitute("contracted_path_from_root of '$0' is empty",
-                              cfg_node.control_name);
+                              cfg_node.node_name);
     }
   }
 
@@ -288,13 +377,13 @@ absl::StatusOr<std::unique_ptr<ControlFlowGraph>> ControlFlowGraph::Create(
       std::optional<std::string> merge_point_reverse_merge_point =
           get_merge_point(merge_point_cfg_node->contracted_path_from_root);
 
-      // May continue to the merge point iff the reverse merge point (i.e. merge
-      // point in reverse direction) of the merge point (if any) of the node is
-      // the node itself (i.e. the given node is the latest node
+      // May continue to the merge point if and only if the reverse merge point
+      // (i.e. merge point in reverse direction) of the merge point (if any) of
+      // the node is the node itself (i.e. the given node is the latest node
       // prior to the merge point such that all execution paths going through
-      // the merge point also go through the current node).
-      // This is to prevent executing shared merge points more than once.
-      // For example, in the following graph
+      // the merge point also go through the current node). This is to prevent
+      // executing shared merge points more than once. For example, in the
+      // following graph
       //       c1 - implicit source
       //      /  \
       //    c2    t3
@@ -303,9 +392,9 @@ absl::StatusOr<std::unique_ptr<ControlFlowGraph>> ControlFlowGraph::Create(
       //    \ / /
       //     t4 - implicit sink
       // The merge points of c1, c2, t1, t2, t3 are t4. We must only continue to
-      // t4 from c1 because the revesrse merge point of t4 is c1.
+      // t4 from c1 because the reverse merge point of t4 is c1.
       if (merge_point_reverse_merge_point.has_value() &&
-          *merge_point_reverse_merge_point == cfg_node.control_name) {
+          *merge_point_reverse_merge_point == cfg_node.node_name) {
         cfg_node.continue_to_merge_point = true;
       }
     }

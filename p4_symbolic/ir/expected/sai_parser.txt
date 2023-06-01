@@ -1174,6 +1174,9 @@ parsers {
             next_state: "__END_OF_PARSER__"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+        }
       }
     }
     parse_states {
@@ -1191,6 +1194,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1256,6 +1262,10 @@ parsers {
             next_state: "__END_OF_PARSER__"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+          continue_to_merge_point: true
+        }
       }
     }
     parse_states {
@@ -1273,6 +1283,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1328,6 +1341,9 @@ parsers {
             next_state: "__END_OF_PARSER__"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+        }
       }
     }
     parse_states {
@@ -1382,6 +1398,9 @@ parsers {
             next_state: "__END_OF_PARSER__"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+        }
       }
     }
     parse_states {
@@ -1399,6 +1418,9 @@ parsers {
           default_transition {
             next_state: "parse_ethernet"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "parse_ethernet"
         }
       }
     }
@@ -1442,6 +1464,9 @@ parsers {
             next_state: "__END_OF_PARSER__"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+        }
       }
     }
     parse_states {
@@ -1483,6 +1508,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1619,6 +1647,10 @@ parsers {
           default_transition {
             next_state: "parse_ethernet"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "parse_ethernet"
+          continue_to_merge_point: true
         }
       }
     }

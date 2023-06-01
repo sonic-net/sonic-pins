@@ -58,8 +58,6 @@ cc_library(
         "table_entries.h",
     ],
     deps = [
-        ":ir_cc_proto",
-        "//gutil:io",
         "//gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
@@ -106,7 +104,6 @@ cc_library(
         "//gutil:status",
         "//p4_symbolic/bmv2:bmv2_cc_proto",
         "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
