@@ -21,6 +21,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/substitute.h"
+#include "glog/logging.h"
 #include "p4_pdpi/utils/ir.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/z3_util.h"
@@ -139,18 +140,12 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
     const SymbolicTableMatches &false_matches) {
   SymbolicTableMatches merged;
 
-  // Add all tables matches in true_trace.
+  // Merge all tables matches in true_trace (including ones in both traces).
   for (const auto &[name, true_match] : true_matches) {
-    // The table should not be applied in the other branch.
-    if (false_matches.contains(name)) {
-      return absl::InternalError(
-          absl::Substitute("Table '$0' was symbolically executed both in true "
-                           "and false branches, this is not expected",
-                           name));
-    }
-
-    // Get the default match for the false branch.
-    const SymbolicTableMatch false_match = DefaultTableMatch();
+    // Find match in other trace (or use default).
+    const SymbolicTableMatch false_match = false_matches.contains(name)
+                                               ? false_matches.at(name)
+                                               : DefaultTableMatch();
 
     // Merge this match.
     ASSIGN_OR_RETURN(
@@ -165,14 +160,12 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
                          }});
   }
 
-  // Add all tables matches in false_matches.
+  // Merge all tables matches in false_matches only.
   for (const auto &[name, false_match] : false_matches) {
-    // The table should not be applied in the other branch.
     if (true_matches.contains(name)) {
-      return absl::InternalError(
-          absl::Substitute("Table '$0' was symbolically executed both in true "
-                           "and false branches, this is not expected",
-                           name));
+      // Already covered.
+      LOG(WARNING) << "Table '" << name << "' is evaluated more than once.";
+      continue;
     }
 
     // Get the default match for the true branch.

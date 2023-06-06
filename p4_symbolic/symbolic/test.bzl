@@ -105,8 +105,6 @@ def end_to_end_test(
             ("--entries=$(location %s)" % table_entries if table_entries else ""),
             ("--debug=$(location %s)" % smt_output_file),
             ("--port_count=%d" % port_count),
-            # Redirect stderr to stdout, so we can capture both.
-            "2>&1",
             # Use `tee` to simultaneously capture output in file yet still print it to stdout, to
             # ease debugging.
             ("| tee $(location %s)" % test_output_file),
