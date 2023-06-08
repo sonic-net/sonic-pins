@@ -832,7 +832,19 @@ StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
                                           ir_table.counter().unit())});
   }
 
-  // TODO: Priority
+  // Process optional priority setting if it exists. Skip if it doesn't.
+  auto priority = pdpi::GetAnnotationBody("sai_acl_priority",
+                                          ir_table.preamble().annotations());
+  if (priority.ok()) {
+    int priority_value;
+    if (!absl::SimpleAtoi(*priority, &priority_value)) {
+      return InvalidArgumentErrorBuilder()
+             << "Expected integer value in @sai_acl_priority() annotation but "
+             << "got '" << *priority << "'";
+    }
+    values.push_back({"priority", *priority});
+  }
+
   return values;
 }
 
