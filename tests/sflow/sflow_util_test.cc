@@ -471,10 +471,10 @@ TEST(SflowconfigTest, UpdateSflowQueueLimitSuccess) {
                         "sequence" : 0,
                         "two-rate-three-color" : {
                            "config" : {
-                              "google-pins-qos:bc-pkts" : 0,
-                              "google-pins-qos:be-pkts" : 256,
-                              "google-pins-qos:cir-pkts" : "0",
-                              "google-pins-qos:pir-pkts" : "16000"
+                              "pins-qos:bc-pkts" : 0,
+                              "pins-qos:be-pkts" : 256,
+                              "pins-qos:cir-pkts" : "0",
+                              "pins-qos:pir-pkts" : "16000"
                            }
                         }
                      },
@@ -499,10 +499,10 @@ TEST(SflowconfigTest, UpdateSflowQueueLimitSuccess) {
                         "sequence" : 5,
                         "two-rate-three-color" : {
                            "config" : {
-                              "google-pins-qos:bc-pkts" : 0,
-                              "google-pins-qos:be-pkts" : 4,
-                              "google-pins-qos:cir-pkts" : "0",
-                              "google-pins-qos:pir-pkts" : "120"
+                              "pins-qos:bc-pkts" : 0,
+                              "pins-qos:be-pkts" : 4,
+                              "pins-qos:cir-pkts" : "0",
+                              "pins-qos:pir-pkts" : "120"
                            }
                         }
                      }
@@ -575,10 +575,10 @@ TEST(SflowconfigTest, UpdateSflowQueueLimitSuccess) {
                 "sequence": 0,
                 "two-rate-three-color": {
                   "config": {
-                    "google-pins-qos:bc-pkts": 0,
-                    "google-pins-qos:be-pkts": 256,
-                    "google-pins-qos:cir-pkts": "0",
-                    "google-pins-qos:pir-pkts": "16000"
+                    "pins-qos:bc-pkts": 0,
+                    "pins-qos:be-pkts": 256,
+                    "pins-qos:cir-pkts": "0",
+                    "pins-qos:pir-pkts": "16000"
                   }
                 }
               },
@@ -603,10 +603,10 @@ TEST(SflowconfigTest, UpdateSflowQueueLimitSuccess) {
                 "sequence": 5,
                 "two-rate-three-color": {
                   "config": {
-                    "google-pins-qos:bc-pkts": 0,
-                    "google-pins-qos:be-pkts": 4,
-                    "google-pins-qos:cir-pkts": "0",
-                    "google-pins-qos:pir-pkts": "1000"
+                    "pins-qos:bc-pkts": 0,
+                    "pins-qos:be-pkts": 4,
+                    "pins-qos:cir-pkts": "0",
+                    "pins-qos:pir-pkts": "1000"
                   }
                 }
               }
@@ -681,7 +681,7 @@ TEST(SflowUtilTest, GetActualSampleRateSuccessForAllInterfaces) {
               prefix { origin: "openconfig" }
               update {
                 val {
-                  json_ietf_val: "{\"openconfig-sampling-sflow:actual-ingress-sampling-rate\":256}"
+                  json_ietf_val: "{\"pins-sampling-sflow:actual-ingress-sampling-rate\":256}"
                 }
               }
             })pb")),
@@ -704,7 +704,7 @@ TEST(SflowUtilTest, GetActualSampleRateInvalidSampleRateFail) {
               prefix { origin: "openconfig" }
               update {
                 val {
-                  json_ietf_val: "{\"openconfig-sampling-sflow:actual-ingress-sampling-rate\":\"abc\"}"
+                  json_ietf_val: "{\"pins-sampling-sflow:actual-ingress-sampling-rate\":\"abc\"}"
                 }
               }
             })pb")),
@@ -740,13 +740,54 @@ TEST(SflowUtilTest, UpdateQueueLimitSucceed) {
                      elem { name: "state" }
                    }
                    val {
-                     json_ietf_val: "{\"openconfig-qos:state\":{\"google-pins-qos:bc-pkts\":0,\"google-pins-qos:be-pkts\":4,\"google-pins-qos:cir-pkts\":\"0\",\"google-pins-qos:pir-pkts\":\"120\"}}"
+                     json_ietf_val: "{\"openconfig-qos:state\":{\"pins-qos:bc-pkts\":0,\"pins-qos:be-pkts\":4,\"pins-qos:cir-pkts\":\"0\",\"pins-qos:pir-pkts\":\"120\"}}"
                    }
                  }
                })pb")),
       Return(grpc::Status::OK)));
   ASSERT_OK(VerifySflowQueueLimitState(&stub, kQueueNumberForBE1,
                                        /*expected_queue_limit=*/120));
+}
+
+TEST(SflowUtilTest, UpdateSflowInterfaceEnableSuccess) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Set).WillByDefault(Return(grpc::Status::OK));
+  ON_CALL(stub, Get).WillByDefault(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(
+            notification {
+              timestamp: 1664239058571609826
+              prefix { origin: "openconfig" }
+              update {
+                val {
+                  json_ietf_val: "{\"openconfig-sampling-sflow:enabled\":true}"
+                }
+              }
+            })pb")),
+      Return(grpc::Status::OK)));
+  EXPECT_OK(
+      SetSflowInterfaceConfigEnable(&stub, "Ethernet1/1/1", /*enabled=*/true));
+}
+
+TEST(SflowUtilTest, UpdateSflowInterfaceEnableNotConvergeFail) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Set).WillByDefault(Return(grpc::Status::OK));
+  ON_CALL(stub, Get).WillByDefault(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(
+            notification {
+              timestamp: 1664239058571609826
+              prefix { origin: "openconfig" }
+              update {
+                val {
+                  json_ietf_val: "{\"openconfig-sampling-sflow:enabled\":false}"
+                }
+              }
+            })pb")),
+      Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      SetSflowInterfaceConfigEnable(&stub, "Ethernet1/1/1", /*enabled=*/true),
+      StatusIs(absl::StatusCode::kDeadlineExceeded));
 }
 
 TEST(SflowDscpTest, ParseTcpdumpResultA1Success) {
