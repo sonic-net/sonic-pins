@@ -18,6 +18,27 @@ package(
 )
 
 cc_library(
+    name = "sequencing_util",
+    hdrs = ["sequencing_util.h"],
+    deps = [
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name =
+        "sequencing_util_test",
+    srcs = ["sequencing_util_test.cc"],
+    deps = [
+        "sequencing_util",
+        "@com_google_absl//absl/hash:hash_testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "sequencing",
     srcs = [
         "sequencing.cc",
