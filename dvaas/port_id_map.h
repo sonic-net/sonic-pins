@@ -21,6 +21,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 
@@ -77,6 +78,14 @@ class MirrorTestbedP4rtPortIdMap {
       absl::flat_hash_map<pins_test::P4rtPortId, pins_test::P4rtPortId>>
       control_to_sut_port_map_;
 };
+
+// Records the mapping between control and SUT ports as an artifact, noting
+// any unmapped ports in both.
+// Also, ensures that mapped ports exist.
+absl::Status CheckAndStoreMappedAndUnmappedPortIds(
+    const MirrorTestbedP4rtPortIdMap& port_id_map,
+    gnmi::gNMI::StubInterface& sut, gnmi::gNMI::StubInterface& control_switch,
+    gutil::TestArtifactWriter& writer);
 
 }  // namespace dvaas
 
