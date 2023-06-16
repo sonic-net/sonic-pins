@@ -22,6 +22,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
@@ -49,7 +50,7 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
   // Find its type, and loop over every field in it, creating a symbolic free
   // variable for every field in every header instance.
   absl::btree_map<std::string, z3::expr> symbolic_headers;
-  for (const auto &[header_name, header_type] : headers) {
+  for (const auto &[header_name, header_type] : Ordered(headers)) {
     // Pseudo fields used in P4-Symbolic indicating the state of the header.
     for (const auto &pseudo_field_name :
          {kValidPseudoField, kExtractedPseudoField}) {

@@ -757,6 +757,14 @@ errors {
     value: 3
   }
 }
+deparsers {
+  key: "deparser"
+  value {
+    name: "deparser"
+    header_order: "ethernet"
+    header_order: "ipv4"
+  }
+}
 
 =====MyIngress.ipv4_lpm Entries=====
 
