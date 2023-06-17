@@ -485,7 +485,6 @@ message AclIngressQosTableEntry {
     Ternary icmpv6_type = 9;    // ternary match / Format::HEX_STRING / 8 bits
     Ternary l4_dst_port = 10;   // ternary match / Format::HEX_STRING / 16 bits
     Optional in_port = 11;      // optional match / Format::STRING
-    Optional out_port = 12;     // optional match / Format::STRING
     Ternary acl_metadata = 13;  // ternary match / Format::HEX_STRING / 8 bits
   }
   Match match = 1;

@@ -328,9 +328,6 @@ control acl_ingress(in headers_t headers,
       local_metadata.ingress_port : optional
           @id(11) @name("in_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
-      (port_id_t)standard_metadata.egress_port: optional
-          @id(12) @name("out_port")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT);
       local_metadata.acl_metadata : ternary
           @id(13) @name("acl_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
