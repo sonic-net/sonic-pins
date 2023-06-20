@@ -17,8 +17,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
+#include "gutil/proto_test.pb.h"
 #include "gutil/testing.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace gutil {
@@ -49,44 +49,75 @@ TEST(ProtoMatcher, DescribeEqualsProto) {
     table_name: "router_interface_table"
     priority: 123
   )pb"));
-  // Plain matcher.
-  {
-    std::string desciption =
-        testing::DescribeMatcher<pdpi::IrTableEntry>(matcher);
-    EXPECT_EQ(desciption, R"(is equal to pdpi.IrTableEntry <
+
+  EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(matcher),
+            R"(is equal to pdpi.IrTableEntry <
 table_name: "router_interface_table"
 priority: 123
 >)");
-  }
-  // Negated matcher.
-  {
-    std::string desciption =
-        testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher));
-    EXPECT_EQ(desciption, R"(is not equal to pdpi.IrTableEntry <
+  EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher)),
+            R"(is not equal to pdpi.IrTableEntry <
 table_name: "router_interface_table"
 priority: 123
 >)");
-  }
 }
 
 TEST(ProtoMatcher, DescribeEqualsProtoFromText) {
   std::string text =
       R"pb(table_name: "router_interface_table" priority: 123)pb";
   auto matcher = EqualsProto(text);
-  // Plain matcher.
-  {
-    std::string desciption =
-        testing::DescribeMatcher<pdpi::IrTableEntry>(matcher);
-    EXPECT_EQ(desciption, R"(is equal to <
+
+  EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(matcher),
+            R"(is equal to <
 table_name: "router_interface_table" priority: 123>)");
-  }
-  // Negated matcher.
-  {
-    std::string desciption =
-        testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher));
-    EXPECT_EQ(desciption, R"(is not equal to <
+  EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher)),
+            R"(is not equal to <
 table_name: "router_interface_table" priority: 123>)");
-  }
+}
+
+TEST(HasOneofCaseTest, NotHasOneofCase) {
+  EXPECT_THAT(gutil::ParseProtoOrDie<TestMessageWithOneof>(R"pb()pb"),
+              Not(HasOneofCase<TestMessageWithOneof>(
+                  "foo", TestMessageWithOneof::kStringFoo)));
+  EXPECT_THAT(gutil::ParseProtoOrDie<TestMessageWithOneof>(R"pb(
+                int_foo: 42
+              )pb"),
+              Not(HasOneofCase<TestMessageWithOneof>(
+                  "foo", TestMessageWithOneof::kStringFoo)));
+  EXPECT_THAT(gutil::ParseProtoOrDie<TestMessageWithOneof>(R"pb(
+                int_foo: 42
+              )pb"),
+              Not(HasOneofCase<TestMessageWithOneof>(
+                  "foo", TestMessageWithOneof::kBoolFoo)));
+}
+
+TEST(HasOneofCaseTest, DoesHaveOneofCase) {
+  EXPECT_THAT(gutil::ParseProtoOrDie<TestMessageWithOneof>(R"pb(
+                string_foo: "hi"
+              )pb"),
+              HasOneofCase<TestMessageWithOneof>(
+                  "foo", TestMessageWithOneof::kStringFoo));
+  EXPECT_THAT(
+      gutil::ParseProtoOrDie<TestMessageWithOneof>(R"pb(
+        int_foo: 42
+      )pb"),
+      HasOneofCase<TestMessageWithOneof>("foo", TestMessageWithOneof::kIntFoo));
+  EXPECT_THAT(gutil::ParseProtoOrDie<TestMessageWithOneof>(R"pb(
+                bool_foo: false
+              )pb"),
+              HasOneofCase<TestMessageWithOneof>(
+                  "foo", TestMessageWithOneof::kBoolFoo));
+}
+
+TEST(HasOneofCaseTest, Description) {
+  auto matcher = HasOneofCase<TestMessageWithOneof>(
+      "foo", TestMessageWithOneof::kStringFoo);
+  EXPECT_EQ(testing::DescribeMatcher<TestMessageWithOneof>(matcher),
+            "is a `gutil.TestMessageWithOneof` protobuf message whose oneof "
+            "field `foo` has case `string_foo`");
+  EXPECT_EQ(testing::DescribeMatcher<TestMessageWithOneof>(Not(matcher)),
+            "is a `gutil.TestMessageWithOneof` protobuf message whose oneof "
+            "field `foo` does not have case `string_foo`");
 }
 
 }  // namespace

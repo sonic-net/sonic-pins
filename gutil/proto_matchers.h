@@ -20,12 +20,16 @@
 #include <string>
 
 #include "absl/strings/string_view.h"
+#include "glog/logging.h"
+#include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
 
 namespace gutil {
+
+// -- EqualsProto matcher ------------------------------------------------------
 
 // Implements a protobuf matcher interface that verifies 2 protobufs are equal
 // while ignoring the repeated field ordering.
@@ -131,6 +135,88 @@ inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
 inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
     absl::string_view proto_text) {
   return ::testing::MakePolymorphicMatcher(ProtobufEqMatcher(proto_text));
+}
+
+// -- HasOneofCaseMatcher matcher ----------------------------------------------
+
+template <class ProtoMessage>
+class HasOneofCaseMatcher {
+ public:
+  using is_gtest_matcher = void;
+  using OneofCase = int;
+  HasOneofCaseMatcher(absl::string_view oneof_name,
+                      OneofCase expected_oneof_case)
+      : oneof_name_{oneof_name}, expected_oneof_case_(expected_oneof_case) {}
+
+  void DescribeTo(std::ostream* os, bool negate) const {
+    if (os == nullptr) return;
+    *os << "is a `" << GetMessageDescriptor().full_name()
+        << "` protobuf message whose oneof field `" << oneof_name_ << "`";
+    if (negate) {
+      *os << " does not have case ";
+    } else {
+      *os << " has case ";
+    }
+    *os << "`" << GetOneofCaseName(expected_oneof_case_) << "`";
+  }
+  void DescribeTo(std::ostream* os) const { DescribeTo(os, false); }
+  void DescribeNegationTo(std::ostream* os) const { DescribeTo(os, true); }
+
+  bool MatchAndExplain(const ProtoMessage& message,
+                       testing::MatchResultListener* listener) const {
+    const google::protobuf::Message& m = message;
+    const google::protobuf::FieldDescriptor* set_oneof_field =
+        m.GetReflection()->GetOneofFieldDescriptor(m, GetOneofDescriptor());
+    *listener << "the oneof `" << oneof_name_ << "` is ";
+    if (set_oneof_field == nullptr) {
+      *listener << "unset";
+      return false;
+    } else {
+      *listener << "set to `" << set_oneof_field->name() << "`";
+      return set_oneof_field->number() == expected_oneof_case_;
+    }
+  }
+
+ private:
+  std::string oneof_name_;
+  OneofCase expected_oneof_case_;
+
+  const google::protobuf::Descriptor& GetMessageDescriptor() const {
+    auto* descriptor = ProtoMessage::descriptor();
+    if (descriptor == nullptr) {
+      LOG(FATAL)  // Crash ok: test
+          << "ProtoMessage::descriptor() returned null.";
+    }
+    return *descriptor;
+  }
+  const google::protobuf::OneofDescriptor* GetOneofDescriptor() const {
+    return GetMessageDescriptor().FindOneofByName(oneof_name_);
+  }
+  const google::protobuf::FieldDescriptor* GetOneofCaseDescriptor(
+      OneofCase oneof_case) const {
+    return GetMessageDescriptor().FindFieldByNumber(oneof_case);
+  }
+  std::string GetOneofCaseName(OneofCase oneof_case) const {
+    const google::protobuf::FieldDescriptor* descriptor =
+        GetOneofCaseDescriptor(oneof_case);
+    return descriptor == nullptr ? "<unknown case>" : descriptor->name();
+  }
+};
+
+// Protobuf matcher that checks if the oneof field with the given `oneof_name`
+// is set to the given `expected_oneof_case`.
+// That is, checks `proto.oneof_name_case() == expected_oneof_case`.
+//
+// Sample usage:
+// ```
+//     EXPECT_THAT(packet.headers(0),
+//                 HasOneofCase<packetlib::Header>(
+//                     "header", packetlib::Header::kIpv4Header));
+// ```
+template <class ProtoMessage>
+HasOneofCaseMatcher<ProtoMessage> HasOneofCase(absl::string_view oneof_name,
+                                               int expected_oneof_case) {
+  return HasOneofCaseMatcher<ProtoMessage>(oneof_name, expected_oneof_case);
 }
 
 }  // namespace gutil
