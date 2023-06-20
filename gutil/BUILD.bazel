@@ -41,6 +41,8 @@ cc_library(
     testonly = True,
     hdrs = ["proto_matchers.h"],
     deps = [
+        ":proto",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
         "@com_google_protobuf//:protobuf",
     ],
@@ -51,8 +53,10 @@ cc_test(
     srcs = ["proto_matchers_test.cc"],
     deps = [
         ":proto_matchers",
+        ":testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )

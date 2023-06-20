@@ -69,8 +69,8 @@ absl::Status ReadProtoFromString(absl::string_view proto_string,
 
   if (!parser.ParseFromString(std::string(proto_string), message)) {
     return InvalidArgumentErrorBuilder()
-           << "Failed to parse string:\n"
-           << proto_string << "\n\nParse errors:\n"
+           << "string <" << proto_string << "> did not parse as a"
+           << message->GetTypeName() << ":\n"
            << all_errors;
   }
 
