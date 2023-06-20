@@ -19,10 +19,11 @@
 #include <ostream>
 #include <string>
 
+#include "absl/strings/string_view.h"
 #include "google/protobuf/message.h"
-#include "google/protobuf/text_format.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
+#include "gutil/proto.h"
 
 namespace gutil {
 
@@ -67,66 +68,59 @@ namespace gutil {
 class ProtobufEqMatcher {
  public:
   ProtobufEqMatcher(const google::protobuf::Message& expected)
-      : expected_(expected.New()) {
+      : expected_(expected.New()), expected_text_(PrintTextProto(expected)) {
     expected_->CopyFrom(expected);
   }
+  ProtobufEqMatcher(absl::string_view expected_text)
+      : expected_text_{expected_text} {}
 
-  ProtobufEqMatcher(const std::string& expected_text)
-      : expected_text_(expected_text) {}
-
-  ProtobufEqMatcher(const ProtobufEqMatcher& other)
-      : expected_text_(other.expected_text_) {
-    if (other.expected_ != nullptr) {
-      expected_.reset(other.expected_->New());
-      expected_->CopyFrom(*other.expected_);
-    }
+  void DescribeTo(std::ostream* os, bool negated) const {
+    *os << "is " << (negated ? "not " : "") << "equal to "
+        << (expected_ == nullptr ? ""
+                                 : absl::StrCat(expected_->GetTypeName(), " "))
+        << "<\n"
+        << expected_text_ << ">";
   }
-
-  void DescribeTo(std::ostream* os) const {
-    if (expected_ == nullptr) {
-      *os << "\n" << expected_text_;
-    } else {
-      *os << "\n" << expected_->DebugString();
-    }
-  }
+  void DescribeTo(std::ostream* os) const { return DescribeTo(os, false); }
   void DescribeNegationTo(std::ostream* os) const {
-    *os << "not";
-    DescribeTo(os);
+    return DescribeTo(os, true);
   }
 
   template <typename ProtoType>
   bool MatchAndExplain(const ProtoType& actual,
                        ::testing::MatchResultListener* listener) const {
+    std::string diff;
+    google::protobuf::util::MessageDifferencer differ;
+    differ.ReportDifferencesToString(&diff);
     // Order does not matter for repeated fields.
-    google::protobuf::util::MessageDifferencer diff;
-    diff.set_repeated_field_comparison(
+    differ.set_repeated_field_comparison(
         google::protobuf::util::MessageDifferencer::RepeatedFieldComparison::
             AS_SET);
-
-    // TODO: remove listener
-    // output once this is resolved.
-    *listener << "\n" << actual.DebugString();
 
     // When parsing from a proto text string we must first create a temporary
     // with the same proto type as the "acutal" argument.
     if (expected_ == nullptr) {
-      ProtoType expected_proto;
-      if (!google::protobuf::TextFormat::ParseFromString(expected_text_,
-                                                         &expected_proto)) {
-        *listener << "\nCould not parse expected proto text as "
-                  << expected_proto.GetTypeName();
+      absl::StatusOr<ProtoType> expected =
+          gutil::ParseTextProto<ProtoType>(expected_text_);
+      if (expected.ok()) {
+        expected_ = std::make_shared<ProtoType>(std::move(*expected));
+      } else {
+        *listener << "where the expected proto " << expected.status().message();
         return false;
       }
-      return diff.Compare(actual, expected_proto);
     }
 
     // Otherwise we can compare directly with the passed protobuf message.
-    return diff.Compare(actual, *expected_);
+    bool equal = differ.Compare(*expected_, actual);
+    if (!equal) {
+      *listener << "with diff:\n" << diff;
+    }
+    return equal;
   }
 
  private:
-  std::unique_ptr<google::protobuf::Message> expected_ = nullptr;
-  const std::string expected_text_ = "";
+  mutable std::shared_ptr<google::protobuf::Message> expected_;
+  std::string expected_text_;
 };
 
 inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
@@ -135,7 +129,7 @@ inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
 }
 
 inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
-    const std::string& proto_text) {
+    absl::string_view proto_text) {
   return ::testing::MakePolymorphicMatcher(ProtobufEqMatcher(proto_text));
 }
 

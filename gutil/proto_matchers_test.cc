@@ -13,14 +13,18 @@
 // limitations under the License.
 #include "proto_matchers.h"
 
+#include "absl/strings/str_replace.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
+#include "gutil/testing.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace gutil {
 namespace {
+
+using ::testing::Not;
 
 TEST(ProtoMatcher, EqualsProto) {
   pdpi::IrTableEntry table_entry;
@@ -38,6 +42,51 @@ TEST(ProtoMatcher, EqualsProtoFromText) {
   EXPECT_THAT(table_entry, EqualsProto(R"pb(
                 table_name: "router_interface_table"
                 priority: 123)pb"));
+}
+
+TEST(ProtoMatcher, DescribeEqualsProto) {
+  auto matcher = EqualsProto(gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+    table_name: "router_interface_table"
+    priority: 123
+  )pb"));
+  // Plain matcher.
+  {
+    std::string desciption =
+        testing::DescribeMatcher<pdpi::IrTableEntry>(matcher);
+    EXPECT_EQ(desciption, R"(is equal to pdpi.IrTableEntry <
+table_name: "router_interface_table"
+priority: 123
+>)");
+  }
+  // Negated matcher.
+  {
+    std::string desciption =
+        testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher));
+    EXPECT_EQ(desciption, R"(is not equal to pdpi.IrTableEntry <
+table_name: "router_interface_table"
+priority: 123
+>)");
+  }
+}
+
+TEST(ProtoMatcher, DescribeEqualsProtoFromText) {
+  std::string text =
+      R"pb(table_name: "router_interface_table" priority: 123)pb";
+  auto matcher = EqualsProto(text);
+  // Plain matcher.
+  {
+    std::string desciption =
+        testing::DescribeMatcher<pdpi::IrTableEntry>(matcher);
+    EXPECT_EQ(desciption, R"(is equal to <
+table_name: "router_interface_table" priority: 123>)");
+  }
+  // Negated matcher.
+  {
+    std::string desciption =
+        testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher));
+    EXPECT_EQ(desciption, R"(is not equal to <
+table_name: "router_interface_table" priority: 123>)");
+  }
 }
 
 }  // namespace
