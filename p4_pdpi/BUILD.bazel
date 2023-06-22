@@ -358,13 +358,13 @@ cc_library(
 cc_library(
     name = "p4_runtime_matchers",
     testonly = True,
-    srcs = ["p4_runtime_matchers.cc"],
     hdrs = ["p4_runtime_matchers.h"],
     deps = [
         "//gutil:proto_matchers",
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
     ],
 )
