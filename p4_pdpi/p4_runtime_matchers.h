@@ -15,19 +15,53 @@
 #ifndef PINS_INFRA_P4_PDPI_P4_RUNTIME_MATCHERS_H_
 #define PINS_INFRA_P4_PDPI_P4_RUNTIME_MATCHERS_H_
 
-#include <ostream>
-#include <utility>
-
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace pdpi {
 
-// gMock matcher that checks if its argument, a `p4::v1::StreamMessageResponse`,
-// contains a `p4::v1::PacketIn` whose `payload` parsed as a `packetlib::Packet`
-// matches the given `inner_matcher`.
+MATCHER(HasPacketIn,
+        absl::StrCat("is a P4Runtime `StreamMessageResponse` containing ",
+                     negation ? "no" : "a", " `packet`")) {
+  auto HasPacket = gutil::HasOneofCaseMatcher<p4::v1::StreamMessageResponse>(
+      "update", p4::v1::StreamMessageResponse::kPacket);
+  return testing::ExplainMatchResult(HasPacket, arg, result_listener);
+}
+
+MATCHER_P(HasPacketIn, packet_in_matcher,
+          absl::StrCat(testing::DescribeMatcher<p4::v1::StreamMessageResponse>(
+                           HasPacketIn(), negation),
+                       negation ? ", or a `packet` that " : " that ",
+                       testing::DescribeMatcher<p4::v1::PacketIn>(
+                           packet_in_matcher, negation))) {
+  return testing::ExplainMatchResult(HasPacketIn(), arg, result_listener) &&
+         testing::ExplainMatchResult(packet_in_matcher, arg.packet(),
+                                     result_listener);
+}
+
+MATCHER_P(ParsedPayloadIs, parsed_payload_matcher,
+          absl::StrCat(
+              "contains a `payload` that (when parsed as a packetlib.Packet) ",
+              testing::DescribeMatcher<packetlib::Packet>(
+                  parsed_payload_matcher, negation))) {
+  const p4::v1::PacketIn& packet_in = arg;
+  packetlib::Packet packet = packetlib::ParsePacket(packet_in.payload());
+  *result_listener << ", whose `payload` parses to the packetlib.Packet <\n"
+                   << packet.DebugString() << ">, ";
+  return testing::ExplainMatchResult(parsed_payload_matcher, packet,
+                                     result_listener);
+}
+
+// gMock matcher that checks if its argument, a
+// `p4::v1::StreamMessageResponse`, contains a `p4::v1::PacketIn` whose
+// `payload` parsed as a `packetlib::Packet` matches the given
+// `inner_matcher`.
 //
 // Sample usage:
 // ```
@@ -35,45 +69,11 @@ namespace pdpi {
 //               IsOkAndHolds(ElementsAre(IsPacketInWhoseParsedPayloadSatisfies(
 //                   EqualsProto(expected_punt_packet)))));
 // ```
-//
-// TODO: Replace this matcher with more-granular and more-reusable
-// matchers.
-template <class InnerMatcher>
-testing::Matcher<const p4::v1::StreamMessageResponse&>
-IsPacketInWhoseParsedPayloadSatisfies(InnerMatcher&& inner_matcher);
-
-// == END OF PUBLIC API ========================================================
-// Implementation details follow.
-
-namespace internal {
-
-class IsPacketInWhoseParsedPayloadSatisfiesMatcher {
- public:
-  using is_gtest_matcher = void;
-  using InnerMatcher = testing::Matcher<const packetlib::Packet&>;
-
-  IsPacketInWhoseParsedPayloadSatisfiesMatcher(InnerMatcher&& inner_matcher)
-      : inner_matcher_(inner_matcher) {}
-
-  void DescribeTo(std::ostream* os, bool negate) const;
-  void DescribeTo(std::ostream* os) const { DescribeTo(os, false); }
-  void DescribeNegationTo(std::ostream* os) const { DescribeTo(os, true); }
-
-  bool MatchAndExplain(const p4::v1::StreamMessageResponse& response,
-                       testing::MatchResultListener* listener) const;
-
- private:
-  InnerMatcher inner_matcher_;
-};
-
-}  // namespace internal
-
 template <class InnerMatcher>
 testing::Matcher<const p4::v1::StreamMessageResponse&>
 IsPacketInWhoseParsedPayloadSatisfies(InnerMatcher&& inner_matcher) {
-  return internal::IsPacketInWhoseParsedPayloadSatisfiesMatcher(
-      testing::SafeMatcherCast<const packetlib::Packet&>(
-          std::forward<InnerMatcher>(inner_matcher)));
+  return HasPacketIn(
+      ParsedPayloadIs(std::forward<InnerMatcher>(inner_matcher)));
 }
 
 }  // namespace pdpi

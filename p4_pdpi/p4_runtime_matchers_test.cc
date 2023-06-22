@@ -25,9 +25,105 @@ namespace pdpi {
 namespace {
 
 using ::gutil::EqualsProto;
+using ::p4::v1::PacketIn;
 using ::p4::v1::StreamMessageResponse;
 using ::testing::_;
 using ::testing::Not;
+
+TEST(HasPacketTest, DoesHavePacket) {
+  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
+                packet {}
+              )pb"),
+              HasPacketIn());
+  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
+                packet {}
+              )pb"),
+              HasPacketIn(_));
+  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
+                packet { payload: "hi" }
+              )pb"),
+              HasPacketIn(EqualsProto(R"pb(payload: "hi")pb")));
+  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
+                packet { payload: "hi" }
+              )pb"),
+              HasPacketIn(Not(EqualsProto(""))));
+}
+
+TEST(HasPacketTest, DoesNotHavePacket) {
+  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(""),
+              Not(HasPacketIn()));
+  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(""),
+              Not(HasPacketIn(_)));
+  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
+                arbitration {}
+              )pb"),
+              Not(HasPacketIn()));
+  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
+                arbitration {}
+              )pb"),
+              Not(HasPacketIn(_)));
+}
+
+TEST(HasPacketTest, Describtion) {
+  auto describe = [](const auto& matcher) {
+    return testing::DescribeMatcher<const StreamMessageResponse&>(matcher);
+  };
+
+  EXPECT_EQ(describe(HasPacketIn()),
+            "is a P4Runtime `StreamMessageResponse` containing a `packet`");
+  EXPECT_EQ(describe(HasPacketIn(_)),
+            "is a P4Runtime `StreamMessageResponse` containing a `packet`"
+            " that is anything");
+
+  EXPECT_EQ(describe(Not(HasPacketIn())),
+            "is a P4Runtime `StreamMessageResponse` containing no `packet`");
+  EXPECT_EQ(describe(Not(HasPacketIn(_))),
+            "is a P4Runtime `StreamMessageResponse` containing no `packet`, or "
+            "a `packet` that never matches");
+}
+
+TEST(ParsedPayloadIsTest, PayloadIs) {
+  EXPECT_THAT(PacketIn(), ParsedPayloadIs(_));
+  EXPECT_THAT(gutil::ParseProtoOrDie<PacketIn>(R"(payload: "1234")"),
+              ParsedPayloadIs(EqualsProto(packetlib::ParsePacket("1234"))));
+  EXPECT_THAT(PacketIn(), ParsedPayloadIs(_));
+  EXPECT_THAT(
+      gutil::ParseProtoOrDie<PacketIn>(R"(payload: "1234")"),
+      ParsedPayloadIs(Not(EqualsProto(packetlib::ParsePacket("4321")))));
+}
+
+TEST(ParsedPayloadIsTest, PayloadIsNot) {
+  EXPECT_THAT(
+      PacketIn(),
+      Not(ParsedPayloadIs(EqualsProto(packetlib::ParsePacket("1234")))));
+  EXPECT_THAT(PacketIn(), Not(ParsedPayloadIs(Not(_))));
+  EXPECT_THAT(
+      gutil::ParseProtoOrDie<PacketIn>(R"(payload: "1234")"),
+      Not(ParsedPayloadIs(EqualsProto(packetlib::ParsePacket("4321")))));
+}
+
+TEST(ParsedPayloadIsTest, Description) {
+  auto describe = [](const auto& matcher) {
+    return testing::DescribeMatcher<const PacketIn&>(matcher);
+  };
+
+  EXPECT_EQ(describe(ParsedPayloadIs(_)),
+            "contains a `payload` that (when parsed as a packetlib.Packet) is "
+            "anything");
+  EXPECT_EQ(describe(ParsedPayloadIs(EqualsProto("nonsense"))),
+            "contains a `payload` that (when parsed as a packetlib.Packet) is "
+            "equal to <\nnonsense>");
+
+  EXPECT_EQ(describe(Not(ParsedPayloadIs(_))),
+            "contains a `payload` that (when parsed as a packetlib.Packet) "
+            "never matches");
+  EXPECT_EQ(describe(Not(ParsedPayloadIs(EqualsProto("nonsense")))),
+            "contains a `payload` that (when parsed as a packetlib.Packet) "
+            "is not equal to <\nnonsense>");
+  EXPECT_EQ(describe(Not(ParsedPayloadIs(Not(EqualsProto("nonsense"))))),
+            "contains a `payload` that (when parsed as a packetlib.Packet) "
+            "is equal to <\nnonsense>");
+}
 
 TEST(IsPacketInWhoseParsedPayloadSatisfiesTest, IsPacketIn) {
   EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
@@ -76,13 +172,14 @@ TEST(IsPacketInWhoseParsedPayloadSatisfiesTest, Description) {
     return testing::DescribeMatcher<const StreamMessageResponse&>(matcher);
   };
   EXPECT_EQ(describe(IsPacketInWhoseParsedPayloadSatisfies(_)),
-            "is a P4Runtime StreamMessageResponse containing a `packet` whose "
-            "`payload` parsed as a packetlib.Packet is anything");
+            "is a P4Runtime `StreamMessageResponse` containing a `packet` that "
+            "contains a `payload` that (when parsed as a packetlib.Packet) is "
+            "anything");
   EXPECT_EQ(describe(Not(IsPacketInWhoseParsedPayloadSatisfies(
                 EqualsProto(R"pb(payload: "test packet")pb")))),
-            "is not a P4Runtime StreamMessageResponse containing a `packet` "
-            "whose `payload` parsed as a packetlib.Packet is equal to <\n"
-            "payload: \"test packet\">");
+            "is a P4Runtime `StreamMessageResponse` containing no `packet`, or "
+            "a `packet` that contains a `payload` that (when parsed as a "
+            "packetlib.Packet) is not equal to <\npayload: \"test packet\">");
 }
 
 }  // namespace
