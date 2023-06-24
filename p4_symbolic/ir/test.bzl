@@ -74,7 +74,8 @@ def ir_parsing_test(name, p4_program, golden_file, table_entries = None, p4_deps
             ("--bmv2=$(location %s)" % bmv2_file),
             ("--p4info=$(location %s)" % p4info_file),
             ("--entries=$(location %s)" % table_entries if table_entries else ""),
-            "&> $(OUTS) || true",
+            ("--output=$(location %s)" % test_output_file),
+            "|| true",
             # The following line makes sure hexstrings are lowercase in the protobuf file.
             # This is needed because the hexstring representation of boost::multiprecision::cpp_int
             # seems to behave differently accross different versions of boost (although the root
