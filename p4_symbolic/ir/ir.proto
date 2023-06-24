@@ -66,6 +66,9 @@ message HeaderType {
   int32 id = 2;
   // Maps a field name to its definition.
   map<string, HeaderField> fields = 3;
+  // The ordered list of field names from the outer-most field to the inner-most
+  // field according to the P4 program.
+  repeated string ordered_fields_list = 4;
 }
 
 // A P4 header type definition.

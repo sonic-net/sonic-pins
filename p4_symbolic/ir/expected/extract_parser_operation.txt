@@ -24,6 +24,9 @@ headers {
         bitwidth: 48
       }
     }
+    ordered_fields_list: "dst_addr"
+    ordered_fields_list: "src_addr"
+    ordered_fields_list: "ether_type"
   }
 }
 headers {
@@ -156,6 +159,23 @@ headers {
         bitwidth: 3
       }
     }
+    ordered_fields_list: "ingress_port"
+    ordered_fields_list: "egress_spec"
+    ordered_fields_list: "egress_port"
+    ordered_fields_list: "instance_type"
+    ordered_fields_list: "packet_length"
+    ordered_fields_list: "enq_timestamp"
+    ordered_fields_list: "enq_qdepth"
+    ordered_fields_list: "deq_timedelta"
+    ordered_fields_list: "deq_qdepth"
+    ordered_fields_list: "ingress_global_timestamp"
+    ordered_fields_list: "egress_global_timestamp"
+    ordered_fields_list: "mcast_grp"
+    ordered_fields_list: "egress_rid"
+    ordered_fields_list: "checksum_error"
+    ordered_fields_list: "parser_error"
+    ordered_fields_list: "priority"
+    ordered_fields_list: "_padding"
   }
 }
 pipeline {
