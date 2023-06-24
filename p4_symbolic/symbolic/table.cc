@@ -349,7 +349,7 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
 }
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
-    const Dataplane &data_plane, const ir::Table &table,
+    const ir::Dataplane &data_plane, const ir::Table &table,
     const std::vector<pdpi::IrTableEntry> &entries,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {

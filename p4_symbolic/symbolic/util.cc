@@ -20,6 +20,8 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "p4_pdpi/internal/ordered_map.h"
@@ -42,6 +44,35 @@ bool Z3BooltoBool(Z3_lbool z3_bool) {
   }
 }
 
+// Extract the header field definition of a `field_ref` from the given P4
+// `program`.
+absl::StatusOr<ir::HeaderField> GetFieldDefinition(
+    const ir::P4Program &program, absl::string_view field_ref) {
+  // Split the field reference into header and field names.
+  std::vector<std::string> split = absl::StrSplit(field_ref, '.');
+  if (split.size() != 2) {
+    return absl::InvalidArgumentError(
+        absl::Substitute("Expected <header>.<field> got '$0'", field_ref));
+  }
+  const std::string &header_name = split[0];
+  const std::string &field_name = split[1];
+
+  // Extract the header definition from the program.
+  if (!program.headers().contains(header_name)) {
+    return absl::InvalidArgumentError(
+        absl::Substitute("Unexpected header instance'$0'", header_name));
+  }
+  const p4_symbolic::ir::HeaderType &header_def =
+      program.headers().at(header_name);
+
+  // Extract the field definition from the header definition.
+  if (!header_def.fields().contains(field_name)) {
+    return absl::InvalidArgumentError(absl::Substitute(
+        "Unexpected field'$0' in header '$1'", field_name, header_name));
+  }
+  return header_def.fields().at(field_name);
+}
+
 }  // namespace
 
 absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
@@ -56,6 +87,8 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
          {kValidPseudoField, kExtractedPseudoField}) {
       std::string field_name =
           absl::StrFormat("%s.%s", header_name, pseudo_field_name);
+      // TODO: Set these fields to false while removing SAI parser
+      // code.
       z3::expr free_expr = Z3Context().bool_const(field_name.c_str());
       symbolic_headers.insert({field_name, free_expr});
     }
@@ -98,10 +131,16 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
   std::string ingress_port = model.eval(context.ingress_port, true).to_string();
   std::string egress_port = model.eval(context.egress_port, true).to_string();
 
-  // Extract the ingress and egress headers.
+  // Extract the ingress, parsed, and egress headers.
   ConcretePerPacketState ingress_headers;
   for (const auto &[name, expr] : context.ingress_headers) {
     ASSIGN_OR_RETURN(ingress_headers[name],
+                     values::TranslateValueToP4RT(
+                         name, model.eval(expr, true).to_string(), translator));
+  }
+  ConcretePerPacketState parsed_headers;
+  for (const auto &[name, expr] : context.parsed_headers) {
+    ASSIGN_OR_RETURN(parsed_headers[name],
                      values::TranslateValueToP4RT(
                          name, model.eval(expr, true).to_string(), translator));
   }
@@ -130,6 +169,7 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
       .ingress_port = ingress_port,
       .egress_port = egress_port,
       .ingress_headers = ingress_headers,
+      .parsed_headers = parsed_headers,
       .egress_headers = egress_headers,
       .trace =
           ConcreteTrace{
@@ -204,6 +244,18 @@ absl::StatusOr<SymbolicTableMatches> MergeDisjointTableMatches(
     }
   }
   return merged;
+}
+
+absl::StatusOr<int> GetFieldBitwidth(absl::string_view field_name,
+                                     const ir::P4Program &program) {
+  if (absl::EndsWith(field_name, symbolic::kValidPseudoField) ||
+      absl::EndsWith(field_name, symbolic::kExtractedPseudoField)) {
+    return 1;
+  } else {
+    ASSIGN_OR_RETURN(const ir::HeaderField field_definition,
+                     GetFieldDefinition(program, field_name));
+    return field_definition.bitwidth();
+  }
 }
 
 }  // namespace util
