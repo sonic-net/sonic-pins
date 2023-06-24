@@ -169,7 +169,7 @@ message ParserTransitionKeyField {
     // Specifies a header field as part of the transition key.
     FieldValue field = 1;
     // Specifies the lookahead value as part of the transition key.
-    // It evalutes to a set of bits from the input packet without advancing the
+    // It evaluates to a set of bits from the input packet without advancing the
     // current read position.
     LookaheadValue lookahead = 2;
   }
