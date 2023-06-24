@@ -35,15 +35,6 @@ namespace util {
 
 namespace {
 
-bool Z3BooltoBool(Z3_lbool z3_bool) {
-  switch (z3_bool) {
-    case Z3_L_TRUE:
-      return true;
-    default:
-      return false;
-  }
-}
-
 // Extract the header field definition of a `field_ref` from the given P4
 // `program`.
 absl::StatusOr<ir::HeaderField> GetFieldDefinition(

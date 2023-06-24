@@ -33,7 +33,9 @@ def end_to_end_test(
         table_entries = None,
         port_count = 2,
         p4_deps = []):
-    """Macro that defines our end to end tests.
+    """
+    Macro that defines our end to end tests.
+
     Given a p4 program, this macro runs our main binary
     on the p4 program and its table entries (if they exist).
     The binary outputs a debugging dump of the underlying smt program,
@@ -49,9 +51,17 @@ def end_to_end_test(
        as given to the macro.
     Use the p4_deps list to specify dependent files that p4_program input
     file depends on (e.g. by including them).
+
+    Args:
+      name: Test name.
+      p4_program: Input P4 program.
+      output_golden_file: File containing the expected output.
+      smt_golden_file: File containing the expected SMT formulae.
+      table_entries: File containing the table entries as input in protobuf text.
+      port_count: Number of ports.
+      p4_deps: List of targets that the P4 program depends on (e.g., included files).
     """
     p4c_name = "%s_p4c" % name
-    run_name = "%s_main" % name
     p4info_file = "%s_bazel-p4c-tmp-output/p4info.pb.txt" % p4c_name
     output_test_name = "%s_output" % name
     smt_test_name = "%s_smt" % name
@@ -59,12 +69,6 @@ def end_to_end_test(
     bmv2_file = "tmp/%s.bmv2.json" % name
     p4info_file = "tmp/%s.p4info.pb.txt" % name
     test_output_file = "tmp/%s_output" % name
-
-    optional_table_entries = []
-    optional_table_entry_arg = ""
-    if table_entries:
-        optional_table_entries = [table_entries]
-        optional_table_entry_arg = "--entries=$(location %s)" % table_entries
 
     # Run p4c to get bmv2 JSON and p4info.pb.txt files.
     tmp_bmv2_file = "%s.tmp" % bmv2_file
