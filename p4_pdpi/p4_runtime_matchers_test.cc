@@ -125,58 +125,18 @@ TEST(ParsedPayloadIsTest, Description) {
             "is equal to <\nnonsense>");
 }
 
-TEST(IsPacketInWhoseParsedPayloadSatisfiesTest, IsPacketIn) {
-  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
-                packet {}
-              )pb"),
-              IsPacketInWhoseParsedPayloadSatisfies(_));
-  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
-                packet { payload: "1234" }
-              )pb"),
-              IsPacketInWhoseParsedPayloadSatisfies(_));
-}
-
-TEST(IsPacketInWhoseParsedPayloadSatisfiesTest, NotIsPacketIn) {
-  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb()pb"),
-              Not(IsPacketInWhoseParsedPayloadSatisfies(_)));
-  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
-                arbitration {}
-              )pb"),
-              Not(IsPacketInWhoseParsedPayloadSatisfies(_)));
-  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
-                digest {}
-              )pb"),
-              Not(IsPacketInWhoseParsedPayloadSatisfies(_)));
-}
-
-TEST(IsPacketInWhoseParsedPayloadSatisfiesTest, IsParticularPacketIn) {
-  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
-                packet { payload: "my amazing packet" }
-              )pb"),
-              IsPacketInWhoseParsedPayloadSatisfies(
-                  EqualsProto(packetlib::ParsePacket("my amazing packet"))));
-  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
-                packet { payload: "my amazing packet" }
-              )pb"),
-              IsPacketInWhoseParsedPayloadSatisfies(
-                  Not(EqualsProto(packetlib::ParsePacket("another packet")))));
-  EXPECT_THAT(gutil::ParseProtoOrDie<StreamMessageResponse>(R"pb(
-                packet { payload: "my amazing packet" }
-              )pb"),
-              Not(IsPacketInWhoseParsedPayloadSatisfies(
-                  EqualsProto(packetlib::ParsePacket("another packet")))));
-}
-
-TEST(IsPacketInWhoseParsedPayloadSatisfiesTest, Description) {
+// Make sure the `HasPacketIn` and `ParsedPayloadIs` matchers work well when
+// combined.
+TEST(HasPacketInParsedPayloadIsTest, Description) {
   auto describe = [](const auto& matcher) {
     return testing::DescribeMatcher<const StreamMessageResponse&>(matcher);
   };
-  EXPECT_EQ(describe(IsPacketInWhoseParsedPayloadSatisfies(_)),
+  EXPECT_EQ(describe(HasPacketIn(ParsedPayloadIs(_))),
             "is a P4Runtime `StreamMessageResponse` containing a `packet` that "
             "contains a `payload` that (when parsed as a packetlib.Packet) is "
             "anything");
-  EXPECT_EQ(describe(Not(IsPacketInWhoseParsedPayloadSatisfies(
-                EqualsProto(R"pb(payload: "test packet")pb")))),
+  EXPECT_EQ(describe(Not(HasPacketIn(ParsedPayloadIs(
+                EqualsProto(R"pb(payload: "test packet")pb"))))),
             "is a P4Runtime `StreamMessageResponse` containing no `packet`, or "
             "a `packet` that contains a `payload` that (when parsed as a "
             "packetlib.Packet) is not equal to <\npayload: \"test packet\">");
