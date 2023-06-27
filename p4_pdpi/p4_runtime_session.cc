@@ -91,11 +91,8 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
   }
 
   // Wait for arbitration response.
-  p4::v1::StreamMessageResponse response;
-  if (!session->StreamChannelRead(response)) {
-    return gutil::InternalErrorBuilder()
-           << "P4RT stream closed while awaiting arbitration response.";
-  }
+  ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
+                   session->GetNextStreamMessage(/*timeout=*/absl::Seconds(5)));
   if (response.update_case() != p4::v1::StreamMessageResponse::kArbitration) {
     return gutil::InternalErrorBuilder()
            << "No arbitration update received but received the update of "
@@ -219,22 +216,6 @@ P4RuntimeSession::GetForwardingPipelineConfig(
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
       stub_->GetForwardingPipelineConfig(&context, request, &response)));
   return response;
-}
-
-bool P4RuntimeSession::StreamChannelRead(
-    p4::v1::StreamMessageResponse& response) {
-  absl::MutexLock lock(&stream_read_lock_);
-  auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
-    return !stream_messages_.empty() || !is_stream_up_;
-  };
-  stream_read_lock_.Await(absl::Condition(&cond));
-
-  if (!stream_messages_.empty()) {
-    response = stream_messages_.front();
-    stream_messages_.pop();
-    return true;
-  }
-  return false;
 }
 
 bool P4RuntimeSession::StreamChannelWrite(
