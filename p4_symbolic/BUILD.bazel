@@ -89,6 +89,30 @@ cc_library(
 )
 
 cc_test(
+    name = "deparser_test",
+    srcs = ["deparser_test.cc"],
+    data = [
+        "//p4_symbolic/testdata:parser/sai_parser.config.json",
+        "//p4_symbolic/testdata:parser/sai_parser.p4info.pb.txt",
+    ],
+    deps = [
+        ":deparser",
+        ":parser",
+        ":z3_util",
+        "//gutil:io",
+        "//gutil:proto",
+        "//gutil:status_matchers",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//p4_symbolic/sai:fields",
+        "//p4_symbolic/symbolic",
+        "@com_github_z3prover_z3//:api",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "z3_util_test",
     srcs = ["z3_util_test.cc"],
     deps = [
