@@ -25,35 +25,15 @@ cc_binary(
         "main.cc",
     ],
     deps = [
-        ":parser",
+        ":test_util",
         "//gutil:io",
-        "//gutil:status",
-        "//p4_symbolic/bmv2",
-        "//p4_symbolic/sai:parser",
         "//p4_symbolic/symbolic",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
-    ],
-)
-
-cc_library(
-    name = "parser",
-    srcs = ["parser.cc"],
-    hdrs = ["parser.h"],
-    deps = [
-        "//gutil:io",
-        "//gutil:proto",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
-        "//p4_symbolic/bmv2",
-        "//p4_symbolic/ir",
-        "//p4_symbolic/ir:ir_cc_proto",
-        "//p4_symbolic/ir:pdpi_driver",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -88,6 +68,20 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "test_util",
+    testonly = False,
+    srcs = ["test_util.cc"],
+    hdrs = ["test_util.h"],
+    deps = [
+        "//gutil:io",
+        "//gutil:proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
 cc_test(
     name = "deparser_test",
     srcs = ["deparser_test.cc"],
@@ -97,7 +91,6 @@ cc_test(
     ],
     deps = [
         ":deparser",
-        ":parser",
         ":z3_util",
         "//gutil:io",
         "//gutil:proto",
