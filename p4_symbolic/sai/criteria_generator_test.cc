@@ -205,6 +205,29 @@ TEST(GenerateSynthesisCriteriaTest,
 }
 
 TEST(GenerateSynthesisCriteriaTest,
+     EntryCoverageGoalWithExcludeEmptyTablesExcludesEmptyTables) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(R"pb(
+            coverage_goals {
+              entry_coverage {
+                tables { patterns: [ "ingress.l3_admit.l3_admit_table" ] }
+                cover_default_actions: true
+                exclude_empty_tables: true
+              }
+            }
+          )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list, {});
+}
+
+TEST(GenerateSynthesisCriteriaTest,
      PacketFateCoverageGoalYieldsCorrectCriteriaList) {
   // Get a packet synthesizer object.
   ASSERT_OK_AND_ASSIGN(auto synthesizer,
