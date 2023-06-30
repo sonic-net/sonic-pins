@@ -17,7 +17,6 @@
 #include <stdint.h>
 
 #include <algorithm>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -26,11 +25,10 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
-#include "google/protobuf/map.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -45,6 +43,11 @@ using ::p4::config::v1::MatchField;
 namespace pdpi {
 
 namespace {
+
+std::string GetUnsupportedWarning(absl::string_view unsupported_entity) {
+  return absl::StrCat("// CAUTION: This ", unsupported_entity,
+                      " is not (yet) supported.\n");
+}
 
 // Returns a P4 object ID without the object tag.
 uint32_t IdWithoutTag(uint32_t id) { return id & 0xffffff; }
@@ -75,7 +78,6 @@ StatusOr<std::string> GetMatchFieldDeclaration(
     const IrMatchFieldDefinition& match) {
   std::string type;
   std::string match_kind;
-
   switch (match.match_field().match_type()) {
     case MatchField::TERNARY:
       type = "Ternary";
@@ -101,10 +103,16 @@ StatusOr<std::string> GetMatchFieldDeclaration(
   ASSIGN_OR_RETURN(
       const std::string field_name,
       P4NameToProtobufFieldName(match.match_field().name(), kP4MatchField));
-  return absl::StrCat(
-      type, " ", field_name, " = ", match.match_field().id(), "; // ",
+
+  std::string result;
+  if (match.is_unsupported()) {
+    absl::StrAppend(&result, GetUnsupportedWarning("match field"), "    ");
+  }
+  absl::StrAppend(
+      &result, type, " ", field_name, " = ", match.match_field().id(), "; // ",
       match_kind, " match / ",
       GetFormatComment(match.format(), match.match_field().bitwidth()));
+  return result;
 }
 
 // Returns the nested Match message for a given table.
@@ -161,6 +169,9 @@ StatusOr<std::string> GetTableActionMessage(const IrTableDefinition& table) {
                      P4NameToProtobufMessageName(name, kP4Action));
     ASSIGN_OR_RETURN(const std::string action_field_name,
                      P4NameToProtobufFieldName(name, kP4Action));
+    if (action.action().is_unsupported()) {
+      absl::StrAppend(&result, "    ", GetUnsupportedWarning("action"));
+    }
     absl::StrAppend(&result, "    ", action_message_name, " ",
                     action_field_name, " = ", action.proto_id(), ";\n");
   }
@@ -194,7 +205,11 @@ absl::optional<std::string> GetConstraint(const IrTableDefinition& table) {
 
 // Returns the message for a given table.
 StatusOr<std::string> GetTableMessage(const IrTableDefinition& table) {
-  std::string result = "";
+  std::string result;
+
+  if (table.is_unsupported()) {
+    absl::StrAppend(&result, GetUnsupportedWarning("table"));
+  }
 
   const absl::optional<std::string> constraint = GetConstraint(table);
   if (constraint.has_value()) {
@@ -309,6 +324,10 @@ StatusOr<std::string> GetTableMessage(const IrTableDefinition& table) {
 // Returns the message for the given action.
 StatusOr<std::string> GetActionMessage(const IrActionDefinition& action) {
   std::string result = "";
+
+  if (action.is_unsupported()) {
+    absl::StrAppend(&result, GetUnsupportedWarning("action"));
+  }
 
   const std::string& name = action.preamble().alias();
   ASSIGN_OR_RETURN(const std::string message_name,
@@ -494,6 +513,9 @@ message Optional {
   absl::StrAppend(&result, "message TableEntry {\n");
   absl::StrAppend(&result, "  oneof entry {\n");
   for (const auto& table : tables) {
+    if (table.is_unsupported()) {
+      absl::StrAppend(&result, "    ", GetUnsupportedWarning("table"));
+    }
     const auto& name = table.preamble().alias();
     ASSIGN_OR_RETURN(const std::string table_message_name,
                      P4NameToProtobufMessageName(name, kP4Table));
