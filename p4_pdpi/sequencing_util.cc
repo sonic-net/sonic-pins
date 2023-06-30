@@ -149,6 +149,18 @@ absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByAction(
 
 }  // namespace
 
+absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>
+CreateReferenceRelations(const IrP4Info& ir_p4info) {
+  absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>
+      reference_relations;
+  for (const IrMatchFieldReference& ir_reference : ir_p4info.references()) {
+    ReferenceRelationKey key{.referred_table_name = ir_reference.table()};
+    ReferenceRelation& reference_relation = reference_relations[key];
+    reference_relation.match_field_names.insert(ir_reference.match_field());
+  }
+  return reference_relations;
+}
+
 absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByTableEntry(
     const ::p4::v1::TableEntry& table_entry, const IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(
