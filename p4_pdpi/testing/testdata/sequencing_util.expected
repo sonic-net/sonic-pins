@@ -1,4 +1,24 @@
 =========================================================================
+CreateReferenceRelationsTest
+=========================================================================
+-- INPUT -----------------------------------------------------------------------
+-- IrP4Info's references --
+table: "two_match_fields_table"
+match_field: "id_1"
+table: "two_match_fields_table"
+match_field: "id_2"
+table: "one_match_field_table"
+match_field: "id"
+table: "referring_by_match_field_table"
+match_field: "referring_id_1"
+
+-- OUTPUT ----------------------------------------------------------------------
+-- ReferenceRelations --
+ReferenceRelationKey{referred_table_name: one_match_field_table}, ReferenceRelation{match_field_names: [id]}
+ReferenceRelationKey{referred_table_name: referring_by_match_field_table}, ReferenceRelation{match_field_names: [referring_id_1]}
+ReferenceRelationKey{referred_table_name: two_match_fields_table}, ReferenceRelation{match_field_names: [id_1, id_2]}
+
+=========================================================================
 EntriesReferredToByTableEntryTest: Referring to using an entry with 1 match field
 =========================================================================
 -- INPUT -----------------------------------------------------------------------
@@ -14,7 +34,7 @@ referring_by_match_field_table_entry {
   priority: 32
 }
 
--- OUTPUT ---------------------------------------------------------------------
+-- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
 ReferredTableEntry{table_name: two_match_fields_table, match_fields and values: [ReferredField{match_field_name: id_1,field_value: key-a}]}
 
@@ -37,7 +57,7 @@ referring_by_match_field_table_entry {
   priority: 32
 }
 
--- OUTPUT ---------------------------------------------------------------------
+-- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
 ReferredTableEntry{table_name: two_match_fields_table, match_fields and values: [ReferredField{match_field_name: id_1,field_value: key-x}, ReferredField{match_field_name: id_2,field_value: #}]}
 
@@ -57,7 +77,7 @@ referring_by_action_table_entry {
   }
 }
 
--- OUTPUT ---------------------------------------------------------------------
+-- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
 ReferredTableEntry{table_name: one_match_field_table, match_fields and values: [ReferredField{match_field_name: id,field_value: key-a}]}
 ReferredTableEntry{table_name: two_match_fields_table, match_fields and values: [ReferredField{match_field_name: id_1,field_value: key-a}]}
@@ -79,7 +99,7 @@ referring_by_action_table_entry {
   }
 }
 
--- OUTPUT ---------------------------------------------------------------------
+-- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
 ReferredTableEntry{table_name: two_match_fields_table, match_fields and values: [ReferredField{match_field_name: id_1,field_value: key-xy}, ReferredField{match_field_name: id_2,field_value: 3}]}
 
@@ -99,6 +119,6 @@ two_match_fields_table_entry {
   }
 }
 
--- OUTPUT ---------------------------------------------------------------------
+-- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
 <empty>

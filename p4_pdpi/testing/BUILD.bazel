@@ -193,8 +193,9 @@ cc_test(
         "//gutil:testing",
         "//p4_pdpi:pd",
         "//p4_pdpi:sequencing_util",
-        "@com_github_google_glog//:glog",
         "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
     ],
 )
