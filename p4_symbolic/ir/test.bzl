@@ -25,8 +25,7 @@ load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("//p4_pdpi/testing:diff_test.bzl", "diff_test")
 
 def ir_parsing_test(name, p4_program, golden_file, table_entries = None, p4_deps = []):
-    """Macro that defines exact diff IR testing rules for a given p4 program
-    with all their dependent rules.
+    """Macro that defines exact diff IR testing rules for a given p4 program.
 
     The macro defines these rules in order:
     1. A rule for producing bmv2 json and p4info files from a .p4 file using p4c.
@@ -36,6 +35,13 @@ def ir_parsing_test(name, p4_program, golden_file, table_entries = None, p4_deps
        specified expected file.
     Use the p4_deps list to specify dependent files that p4_program input fle
     depends on (e.g. by including them).
+
+    Args:
+      name: Test name.
+      p4_program: Input P4 program.
+      golden_file: File containing the expected IR output.
+      table_entries: File containing the table entries as input in protobuf text.
+      p4_deps: List of targets that the P4 program depends on (e.g., included files)
     """
     bmv2_file = "tmp/%s.bmv2.json" % name
     p4info_file = "tmp/%s.p4info.pb.txt" % name
@@ -76,10 +82,11 @@ def ir_parsing_test(name, p4_program, golden_file, table_entries = None, p4_deps
             ("--entries=$(location %s)" % table_entries if table_entries else ""),
             ("--output=$(location %s)" % test_output_file),
             "|| true",
-            # The following line makes sure hexstrings are lowercase in the protobuf file.
-            # This is needed because the hexstring representation of boost::multiprecision::cpp_int
-            # seems to behave differently accross different versions of boost (although the root
-            # cause has not been fully investigated).
+            # The following line makes sure hexstrings are lowercase in the
+            # protobuf file. This is needed because the hexstring representation
+            # of boost::multiprecision::cpp_int seems to behave differently
+            # across different versions of boost (although the root cause has
+            # not been fully investigated).
             "&& sed -i 's/0x[0-9A-F]\\+/\\L&/g' $(location %s)" % test_output_file,
         ]),
     )

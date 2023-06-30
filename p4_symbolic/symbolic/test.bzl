@@ -28,7 +28,7 @@ load("//p4_pdpi/testing:diff_test.bzl", "diff_test")
 def end_to_end_test(
         name,
         p4_program,
-        output_golden_file,
+        packets_golden_file,
         smt_golden_file,
         table_entries = None,
         port_count = 2,
@@ -55,7 +55,7 @@ def end_to_end_test(
     Args:
       name: Test name.
       p4_program: Input P4 program.
-      output_golden_file: File containing the expected output.
+      packets_golden_file: File containing the expected concrete packets.
       smt_golden_file: File containing the expected SMT formulae.
       table_entries: File containing the table entries as input in protobuf text.
       port_count: Number of ports.
@@ -63,12 +63,11 @@ def end_to_end_test(
     """
     p4c_name = "%s_p4c" % name
     p4info_file = "%s_bazel-p4c-tmp-output/p4info.pb.txt" % p4c_name
-    output_test_name = "%s_output" % name
+    packets_test_name = "%s_packets" % name
     smt_test_name = "%s_smt" % name
 
     bmv2_file = "tmp/%s.bmv2.json" % name
     p4info_file = "tmp/%s.p4info.pb.txt" % name
-    test_output_file = "tmp/%s_output" % name
 
     # Run p4c to get bmv2 JSON and p4info.pb.txt files.
     tmp_bmv2_file = "%s.tmp" % bmv2_file
@@ -91,7 +90,7 @@ def end_to_end_test(
     # Use p4_symbolic/main.cc to run our tool on the p4 program
     # and produce a debugging smt file and an output file with
     # interesting testing packets.
-    test_output_file = "generated/%s.txt" % name
+    packets_output_file = "generated/%s.txt" % name
     smt_output_file = "generated/%s.smt2" % name
     native.genrule(
         name = "%s_test_runner" % name,
@@ -99,26 +98,24 @@ def end_to_end_test(
             bmv2_file,
             p4info_file,
         ] + ([table_entries] if table_entries else []),
-        outs = [test_output_file, smt_output_file],
+        outs = [packets_output_file, smt_output_file],
         tools = ["//p4_symbolic:main"],
         cmd = " ".join([
             "$(location //p4_symbolic:main)",
             ("--bmv2=$(location %s)" % bmv2_file),
             ("--p4info=$(location %s)" % p4info_file),
             ("--entries=$(location %s)" % table_entries if table_entries else ""),
+            ("--packets=$(location %s)" % packets_output_file),
             ("--smt=$(location %s)" % smt_output_file),
             ("--port_count=%d" % port_count),
-            # Use `tee` to simultaneously capture output in file yet still print it to stdout, to
-            # ease debugging.
-            ("| tee $(location %s)" % test_output_file),
         ]),
     )
 
     # Exact diff test for the packet output file.
     diff_test(
-        name = output_test_name,
-        actual = test_output_file,
-        expected = output_golden_file,
+        name = packets_test_name,
+        actual = packets_output_file,
+        expected = packets_golden_file,
     )
 
     # Group tests into a test_suite with the given name.
@@ -126,6 +123,6 @@ def end_to_end_test(
     native.test_suite(
         name = name,
         tests = [
-            (":%s" % output_test_name),
+            (":%s" % packets_test_name),
         ],
     )
