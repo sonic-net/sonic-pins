@@ -1770,6 +1770,7 @@ tables_by_id {
           bitwidth: 1
           match_type: TERNARY
         }
+        is_unsupported: true
       }
     }
     match_fields_by_id {
@@ -1887,6 +1888,7 @@ tables_by_id {
           bitwidth: 1
           match_type: TERNARY
         }
+        is_unsupported: true
       }
     }
     entry_actions {
@@ -1955,6 +1957,7 @@ tables_by_id {
           alias: "unsupported_action"
           annotations: "@unsupported"
         }
+        is_unsupported: true
       }
       proto_id: 2
     }
@@ -2870,6 +2873,7 @@ tables_by_id {
         annotations: "@noWarn(\"unused\")"
       }
     }
+    is_unsupported: true
   }
 }
 tables_by_id {
@@ -6039,6 +6043,7 @@ tables_by_name {
           bitwidth: 1
           match_type: TERNARY
         }
+        is_unsupported: true
       }
     }
     match_fields_by_id {
@@ -6156,6 +6161,7 @@ tables_by_name {
           bitwidth: 1
           match_type: TERNARY
         }
+        is_unsupported: true
       }
     }
     entry_actions {
@@ -6224,6 +6230,7 @@ tables_by_name {
           alias: "unsupported_action"
           annotations: "@unsupported"
         }
+        is_unsupported: true
       }
       proto_id: 2
     }
@@ -6443,6 +6450,7 @@ tables_by_name {
         annotations: "@noWarn(\"unused\")"
       }
     }
+    is_unsupported: true
   }
 }
 tables_by_name {
@@ -7054,6 +7062,7 @@ actions_by_id {
       alias: "unsupported_action"
       annotations: "@unsupported"
     }
+    is_unsupported: true
   }
 }
 actions_by_id {
@@ -7651,6 +7660,7 @@ actions_by_name {
       alias: "unsupported_action"
       annotations: "@unsupported"
     }
+    is_unsupported: true
   }
 }
 packet_in_metadata_by_id {
