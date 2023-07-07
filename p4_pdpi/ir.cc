@@ -2441,4 +2441,71 @@ absl::Status WriteRpcGrpcStatusToAbslStatus(
          << PrintTextProto(write_rpc_status);
 }
 
+namespace {
+
+template <class Value>
+bool IsSupported(const Value &value) {
+  return !value.is_unsupported();
+}
+
+template <>
+bool IsSupported(const pdpi::IrActionReference &value) {
+  return !value.action().is_unsupported();
+}
+
+template <class Key, class Value>
+void RemoveUnsupportedValues(google::protobuf::Map<Key, Value> &map) {
+  google::protobuf::Map<Key, Value> tmp;
+  for (auto &[key, value] : map) {
+    if (IsSupported(value)) tmp.insert({key, std::move(value)});
+  }
+  map = std::move(tmp);
+}
+template <class Value>
+void RemoveUnsupportedValues(
+    google::protobuf::RepeatedPtrField<Value> &values) {
+  google::protobuf::RepeatedPtrField<Value> tmp;
+  for (auto &value : values) {
+    if (IsSupported(value)) tmp.Add(std::move(value));
+  }
+  values = std::move(tmp);
+}
+
+void RemoveUnsupportedTables(IrP4Info &p4_info) {
+  RemoveUnsupportedValues(*p4_info.mutable_tables_by_id());
+  RemoveUnsupportedValues(*p4_info.mutable_tables_by_name());
+}
+
+void RemoveUnsupportedActions(IrP4Info &p4_info) {
+  RemoveUnsupportedValues(*p4_info.mutable_actions_by_id());
+  RemoveUnsupportedValues(*p4_info.mutable_actions_by_name());
+  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
+    RemoveUnsupportedValues(*table.mutable_entry_actions());
+    RemoveUnsupportedValues(*table.mutable_default_only_actions());
+  }
+  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
+    RemoveUnsupportedValues(*table.mutable_entry_actions());
+    RemoveUnsupportedValues(*table.mutable_default_only_actions());
+  }
+}
+
+void RemoveUnsupportedMatchFields(IrP4Info &p4_info) {
+  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
+    RemoveUnsupportedValues(*table.mutable_match_fields_by_id());
+    RemoveUnsupportedValues(*table.mutable_match_fields_by_name());
+  }
+  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
+    RemoveUnsupportedValues(*table.mutable_match_fields_by_id());
+    RemoveUnsupportedValues(*table.mutable_match_fields_by_name());
+  }
+}
+
+}  // namespace
+
+void RemoveUnsupportedEntities(IrP4Info &p4_info) {
+  RemoveUnsupportedTables(p4_info);
+  RemoveUnsupportedActions(p4_info);
+  RemoveUnsupportedMatchFields(p4_info);
+}
+
 }  // namespace pdpi
