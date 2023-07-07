@@ -33,6 +33,10 @@ namespace pdpi {
 // Creates IrP4Info and validates that the p4_info has no errors.
 absl::StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info& p4_info);
 
+// Removes all `@unsupported` tables/match fields/actions from the given
+// `p4_info`.
+void RemoveUnsupportedEntities(IrP4Info& p4_info);
+
 // -- Conversions from PI to IR ------------------------------------------------
 absl::StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info& info,
                                               const p4::v1::TableEntry& pi,
