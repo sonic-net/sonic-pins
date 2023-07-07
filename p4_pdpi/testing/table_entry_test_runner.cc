@@ -16,6 +16,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
@@ -35,7 +36,7 @@ static void RunPiTableEntryTest(const pdpi::IrP4Info& info,
   RunGenericPiTest<pdpi::IrTableEntry, p4::v1::TableEntry>(
       info, test_name, pi,
       [](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi) {
-        return PiTableEntryToIr(info, pi, false);
+        return pdpi::PiTableEntryToIr(info, pi, false);
       });
 }
 
@@ -55,37 +56,37 @@ static void RunPdTableEntryTest(const pdpi::IrP4Info& info,
                                 InputValidity validity, bool key_only = false) {
   RunGenericPdTest<pdpi::TableEntry, pdpi::IrTableEntry, p4::v1::TableEntry>(
       info, test_name, pd,
-      [key_only](const pdpi::IrP4Info& ir_p4info,
-                 const google::protobuf::Message& pd) {
+      [&](const pdpi::IrP4Info& ir_p4info,
+          const google::protobuf::Message& pd) {
         return pdpi::PdTableEntryToIr(ir_p4info, pd, key_only);
       },
-      [key_only](const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntry& ir,
-                 google::protobuf::Message* pd) {
+      [&](const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntry& ir,
+          google::protobuf::Message* pd) {
         return pdpi::IrTableEntryToPd(ir_p4info, ir, pd, key_only);
       },
-      [key_only](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir) {
+      [&](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir) {
         return pdpi::IrTableEntryToPi(info, ir, key_only);
       },
-      [key_only](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi) {
+      [&](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi) {
         return pdpi::PiTableEntryToIr(info, pi, key_only);
       },
-      [key_only](const pdpi::IrP4Info& info,
-                 const google::protobuf::Message& pd) {
+      [&](const pdpi::IrP4Info& info, const google::protobuf::Message& pd) {
         return pdpi::PdTableEntryToPi(info, pd, key_only);
       },
-      [key_only](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi,
-                 google::protobuf::Message* pd) {
+      [&](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi,
+          google::protobuf::Message* pd) {
         return pdpi::PiTableEntryToPd(info, pi, pd, key_only);
       },
       validity,
-      [key_only](const pdpi::IrP4Info& info, const pdpi::TableEntry& pd) {
+      [&](const pdpi::IrP4Info& info, const pdpi::TableEntry& pd) {
         if (key_only) {
           pdpi::TableEntry key_only_pd;
           auto res = pdpi::PdTableEntryToOnlyKeyPd(info, pd, &key_only_pd);
           if (res.ok()) {
             return key_only_pd;
           } else {
-            Fail("Unable to extract only the key part from PD table entry");
+            Fail(test_name,
+                 "Unable to extract only the key part from PD table entry");
           }
         }
         return pd;
