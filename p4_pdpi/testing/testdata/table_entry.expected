@@ -1000,6 +1000,10 @@ meter_counter_data {
   }
 }
 
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: meter counter data but missing color counter
+FAILURE REASON: Expected PI to be invalid (valid PI should instead be tested using RunGenericPdTest.
+
 
 =========================================================================
 meter counter data but no color counter
@@ -1031,6 +1035,10 @@ counter_data {
 }
 meter_counter_data {
 }
+
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: meter counter data but no color counter
+FAILURE REASON: Expected PI to be invalid (valid PI should instead be tested using RunGenericPdTest.
 
 
 =========================================================================
@@ -2291,6 +2299,10 @@ meter_counter_data {
   }
 }
 
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: meter counter data with byte color counters
+FAILURE REASON: Expected IR to be invalid (valid IR should instead be tested using RunGenericPdTest.
+
 
 =========================================================================
 meter counter data with packet color counters
@@ -2330,6 +2342,10 @@ meter_counter_data {
     packet_count: 792
   }
 }
+
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: meter counter data with packet color counters
+FAILURE REASON: Expected IR to be invalid (valid IR should instead be tested using RunGenericPdTest.
 
 
 =========================================================================
@@ -2371,6 +2387,10 @@ meter_counter_data {
   }
 }
 
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: meter counter data but missing color counters
+FAILURE REASON: Expected IR to be invalid (valid IR should instead be tested using RunGenericPdTest.
+
 
 =========================================================================
 meter counter data but no color counters
@@ -2402,6 +2422,10 @@ counter_data {
 }
 meter_counter_data {
 }
+
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: meter counter data but no color counters
+FAILURE REASON: Expected IR to be invalid (valid IR should instead be tested using RunGenericPdTest.
 
 
 =========================================================================
@@ -5243,6 +5267,10 @@ meter_counter_data {
   }
 }
 
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: table entry with meter counter data but no color counters
+FAILURE REASON: Reverse translation from IR to PD resulted in a different PD.
+
 Differences: added: count_and_meter_table_entry.meter_counter_data.green: { }
 added: count_and_meter_table_entry.meter_counter_data.yellow: { }
 added: count_and_meter_table_entry.meter_counter_data.red: { }
@@ -5386,6 +5414,10 @@ meter_counter_data {
     packet_count: 792
   }
 }
+
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: table entry with meter counter data but missing some colors
+FAILURE REASON: Reverse translation from IR to PD resulted in a different PD.
 
 Differences: added: count_and_meter_table_entry.meter_counter_data.yellow: { }
 
