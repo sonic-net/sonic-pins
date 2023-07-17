@@ -94,7 +94,7 @@ control packet_rewrites(inout headers_t headers,
 #ifndef PLATFORM_P4SYMBOLIC
       assert(local_metadata.admit_to_l3);
 #endif
-      local_metadata.enable_ttl_rewrite = true;
+      local_metadata.enable_decrement_ttl = true;
       multicast_rewrites.apply(local_metadata, standard_metadata);
     }
 
@@ -113,7 +113,7 @@ control packet_rewrites(inout headers_t headers,
         headers.ethernet.dst_addr = local_metadata.packet_rewrites.dst_mac;
       }
       if (headers.ipv4.isValid()) {
-        if (headers.ipv4.ttl > 0 && local_metadata.enable_ttl_rewrite) {
+        if (headers.ipv4.ttl > 0 && local_metadata.enable_decrement_ttl) {
           headers.ipv4.ttl = headers.ipv4.ttl - 1;
         }
         // TODO: Verify this is accurate when TTL rewrite is
@@ -121,7 +121,7 @@ control packet_rewrites(inout headers_t headers,
         if (headers.ipv4.ttl == 0) mark_to_drop(standard_metadata);
       }
       if (headers.ipv6.isValid()) {
-        if (headers.ipv6.hop_limit > 0 && local_metadata.enable_ttl_rewrite) {
+        if (headers.ipv6.hop_limit > 0 && local_metadata.enable_decrement_ttl) {
           headers.ipv6.hop_limit = headers.ipv6.hop_limit - 1;
         }
         // TODO: Verify this is accurate when TTL rewrite is

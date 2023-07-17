@@ -47,7 +47,7 @@ enum class PuntAction {
 
 // Rewrite-related options for nexthop action generation.
 struct NexthopRewriteOptions {
-  bool disable_ttl_rewrite = false;
+  bool disable_decrement_ttl = false;
   bool disable_src_mac_rewrite = false;
   bool disable_dst_mac_rewrite = false;
   bool disable_vlan_rewrite = false;

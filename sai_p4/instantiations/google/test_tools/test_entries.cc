@@ -93,7 +93,7 @@ absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
   nexthop_table_entry.mutable_nexthop_table_entry()
       ->mutable_match()
       ->set_nexthop_id("nexthop");
-  if (!nexthop_rewrite_options.disable_ttl_rewrite &&
+  if (!nexthop_rewrite_options.disable_decrement_ttl &&
       !nexthop_rewrite_options.disable_src_mac_rewrite &&
       !nexthop_rewrite_options.disable_dst_mac_rewrite) {
     SetIpNexthopAction* action =
@@ -109,8 +109,8 @@ absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
             ->mutable_set_ip_nexthop_and_disable_rewrites();
     action->set_router_interface_id("rif");
     action->set_neighbor_id("fe80::2:2ff:fe02:202");
-    action->set_disable_ttl_rewrite(
-        nexthop_rewrite_options.disable_ttl_rewrite ? "0x1" : "0x0");
+    action->set_disable_decrement_ttl(
+        nexthop_rewrite_options.disable_decrement_ttl ? "0x1" : "0x0");
     action->set_disable_src_mac_rewrite(
         nexthop_rewrite_options.disable_src_mac_rewrite ? "0x1" : "0x0");
     action->set_disable_dst_mac_rewrite(

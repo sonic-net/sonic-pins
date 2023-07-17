@@ -332,6 +332,36 @@ absl::Status UnionFirstFieldIntoSecondAssertingIdenticalId(
   return absl::OkStatus();
 }
 
+// Specializes UnionFirstFieldIntoSecondAssertingIdenticalId for action
+// Profiles. Instead of requiring equality for all fields, it uses the max of
+// the sizes. This is to allow different roles to use different sizes.
+// Requires: GetId(action_profile) == GetId(unioned_action_profile)
+absl::Status UnionFirstFieldIntoSecondAssertingIdenticalId(
+    const p4::config::v1::ActionProfile& action_profile,
+    p4::config::v1::ActionProfile& unioned_action_profile) {
+  RETURN_IF_ERROR(
+      AssertIdsAreEqualForUnioning(action_profile, unioned_action_profile));
+
+  // For all sizes, use the max size of any action profile.
+  unioned_action_profile.set_size(
+      std::max(unioned_action_profile.size(), action_profile.size()));
+  unioned_action_profile.set_max_group_size(
+      std::max(unioned_action_profile.max_group_size(),
+               action_profile.max_group_size()));
+
+  if (auto diff_result =
+          DiffMessages(action_profile, unioned_action_profile,
+                       /*ignored_fields=*/{"size", "max_group_size"});
+      diff_result.has_value()) {
+    return absl::InvalidArgumentError(absl::Substitute(
+        "action profiles with identical id '$0' were incompatible. "
+        "Relevant differences: $1",
+        action_profile.preamble().id(), *diff_result));
+  }
+
+  return absl::OkStatus();
+}
+
 // Unions `fields` of type T into `unioned_fields` using their ids (as returned
 // by GetId) as keys to a map of the rest of their contents.
 template <class T>

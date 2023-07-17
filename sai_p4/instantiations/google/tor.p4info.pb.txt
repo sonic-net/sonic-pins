@@ -135,7 +135,7 @@ tables {
     alias: "acl_pre_ingress_vlan_table"
     annotations: "@sai_acl(PRE_INGRESS)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@entry_restriction(\"\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
     id: 1
@@ -157,6 +157,13 @@ tables {
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
     bitwidth: 1
     match_type: OPTIONAL
+  }
+  match_fields {
+    id: 4
+    name: "ether_type"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE)"
+    bitwidth: 16
+    match_type: TERNARY
   }
   action_refs {
     id: 16777482
@@ -402,7 +409,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 512
+  size: 2048
 }
 tables {
   preamble {
@@ -431,7 +438,7 @@ tables {
   }
   const_default_action_id: 21257015
   implementation_id: 299650760
-  size: 3968
+  size: 960
 }
 tables {
   preamble {
@@ -852,6 +859,10 @@ tables {
     annotations: "@proto_id(4)"
   }
   action_refs {
+    id: 16777488
+    annotations: "@proto_id(5)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1244,7 +1255,7 @@ actions {
   }
   params {
     id: 3
-    name: "disable_ttl_rewrite"
+    name: "disable_decrement_ttl"
     bitwidth: 1
   }
   params {
@@ -1512,13 +1523,31 @@ actions {
 actions {
   preamble {
     id: 16777486
-    name: "ingress.acl_ingress.set_qos_queue_and_deny_above_rate_limit"
-    alias: "set_qos_queue_and_deny_above_rate_limit"
+    name: "ingress.acl_ingress.set_cpu_queue_and_deny_above_rate_limit"
+    alias: "set_cpu_queue_and_deny_above_rate_limit"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_YELLOW)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_RED)"
+  }
+  params {
+    id: 1
+    name: "cpu_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777488
+    name: "ingress.acl_ingress.set_cpu_queue"
+    alias: "set_cpu_queue"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
   }
   params {
     id: 1
-    name: "qos_queue"
+    name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
       name: "qos_queue_t"
@@ -1614,8 +1643,8 @@ action_profiles {
   }
   table_ids: 33554499
   with_selector: true
-  size: 49152
-  max_group_size: 512
+  size: 31296
+  max_group_size: 256
 }
 direct_counters {
   preamble {

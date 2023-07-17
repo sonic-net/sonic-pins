@@ -61,15 +61,30 @@
 #define WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE 0
 #endif
 
+#ifndef WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR
+#define WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR 0
+#endif
+
 // The size semantics for WCMP group selectors. Either SUM_OF_WEIGHTS or
 // SUM_OF_MEMBERS.
 #ifndef WCMP_GROUP_SELECTOR_SIZE_SEMANTICS
 #define WCMP_GROUP_SELECTOR_SIZE_SEMANTICS "SUM_OF_WEIGHTS"
 #endif
 
+// The size semantics for WCMP group selectors. Either SUM_OF_WEIGHTS or
+// SUM_OF_MEMBERS.
+#ifndef WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_TOR
+#define WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_TOR "SUM_OF_WEIGHTS"
+#endif
+
 // The maximum sum of weights or members across all wcmp groups.
 #ifndef WCMP_GROUP_SELECTOR_SIZE
 #define WCMP_GROUP_SELECTOR_SIZE 0
+#endif
+
+// The maximum sum of weights or members across all wcmp groups.
+#ifndef WCMP_GROUP_SELECTOR_SIZE_TOR
+#define WCMP_GROUP_SELECTOR_SIZE_TOR 0
 #endif
 
 // The maximum sum of weights or members for each wcmp group.

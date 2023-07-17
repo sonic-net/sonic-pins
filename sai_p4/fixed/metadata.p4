@@ -204,7 +204,7 @@ struct local_metadata_t {
   vrf_id_t vrf_id;
 
   // Rewrite related fields.
-  bool enable_ttl_rewrite;
+  bool enable_decrement_ttl;
   bool enable_src_mac_rewrite;
   bool enable_dst_mac_rewrite;
   packet_rewrites_t packet_rewrites;

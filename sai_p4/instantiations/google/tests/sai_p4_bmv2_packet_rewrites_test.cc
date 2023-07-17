@@ -181,7 +181,7 @@ void VerifyOutputPacketIsRewritten(
       ASSERT_TRUE(input_packet.headers(1).has_ipv4_header());
       ASSERT_TRUE(output_packet.headers(1).has_ipv4_header());
 
-      if (rewrite_options.disable_ttl_rewrite) {
+      if (rewrite_options.disable_decrement_ttl) {
         EXPECT_EQ(input_packet.headers(1).ipv4_header().ttl(),
                   output_packet.headers(1).ipv4_header().ttl());
       } else {
@@ -194,7 +194,7 @@ void VerifyOutputPacketIsRewritten(
       ASSERT_TRUE(input_packet.headers(1).has_ipv6_header());
       ASSERT_TRUE(output_packet.headers(1).has_ipv6_header());
 
-      if (rewrite_options.disable_ttl_rewrite) {
+      if (rewrite_options.disable_decrement_ttl) {
         EXPECT_EQ(input_packet.headers(1).ipv6_header().hop_limit(),
                   output_packet.headers(1).ipv6_header().hop_limit());
       } else {
@@ -217,10 +217,10 @@ struct PacketRewritesTestParams {
 template <typename Sink>
 void AbslStringify(Sink& sink, const PacketRewritesTestParams& param) {
   absl::Format(&sink,
-               "[disable_ttl_rewrite: %v, disable_src_mac_rewrite: %v, "
+               "[disable_decrement_ttl: %v, disable_src_mac_rewrite: %v, "
                "disable_dst_mac_rewrite: %v, ip_version: %v, instantiation: "
                "%v]",
-               param.nexthop_rewrite_options.disable_ttl_rewrite,
+               param.nexthop_rewrite_options.disable_decrement_ttl,
                param.nexthop_rewrite_options.disable_src_mac_rewrite,
                param.nexthop_rewrite_options.disable_dst_mac_rewrite,
                param.ip_version,
@@ -232,11 +232,11 @@ void AbslStringify(Sink& sink, const PacketRewritesTestParams& param) {
 std::vector<sai::NexthopRewriteOptions>
 CartesianProductOfNexthopRewriteOptions() {
   std::vector<sai::NexthopRewriteOptions> options;
-  for (bool disable_ttl_rewrite : {false, true}) {
+  for (bool disable_decrement_ttl : {false, true}) {
     for (bool disable_src_mac_rewrite : {false, true}) {
       for (bool disable_dst_mac_rewrite : {false, true}) {
         options.push_back(sai::NexthopRewriteOptions{
-            .disable_ttl_rewrite = disable_ttl_rewrite,
+            .disable_decrement_ttl = disable_decrement_ttl,
             .disable_src_mac_rewrite = disable_src_mac_rewrite,
             .disable_dst_mac_rewrite = disable_dst_mac_rewrite,
         });
@@ -390,7 +390,7 @@ INSTANTIATE_TEST_SUITE_P(
     CartesianProductOfInstantiationsAndIpVersions, TtlRewriteTest,
     ValuesIn(
         CartesianProductOfIpVersionsAndInstantiationsAndGivenRewriteOptions(
-            {sai::NexthopRewriteOptions{.disable_ttl_rewrite = true}})));
+            {sai::NexthopRewriteOptions{.disable_decrement_ttl = true}})));
 
 class TtlRewriteAndPuntTest
     : public testing::TestWithParam<PacketRewritesTestParams> {};
@@ -442,7 +442,7 @@ INSTANTIATE_TEST_SUITE_P(
     CartesianProductOfInstantiationsAndIpVersions, TtlRewriteAndPuntTest,
     ValuesIn(
         CartesianProductOfIpVersionsAndInstantiationsAndGivenRewriteOptions(
-            {sai::NexthopRewriteOptions{.disable_ttl_rewrite = false}})));
+            {sai::NexthopRewriteOptions{.disable_decrement_ttl = false}})));
 
 }  // namespace
 }  // namespace pins

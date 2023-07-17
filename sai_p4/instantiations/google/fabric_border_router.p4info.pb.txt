@@ -314,7 +314,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 512
+  size: 2048
 }
 tables {
   preamble {
@@ -1033,7 +1033,7 @@ actions {
   }
   params {
     id: 3
-    name: "disable_ttl_rewrite"
+    name: "disable_decrement_ttl"
     bitwidth: 1
   }
   params {

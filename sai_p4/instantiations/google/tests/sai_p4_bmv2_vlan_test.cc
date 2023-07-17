@@ -239,12 +239,9 @@ TEST_P(VlanTest,
 
   // The packet must be forwarded.
   ASSERT_EQ(output_by_port.size(), 1);
-  // TODO: Add the check when the logic is implemented.
-  // // The VLAN header must be removed because default entries rewrite VLAN
-  // // to 4095.
-  // ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
-  //             ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
-  //                         HasHeaderCase(packetlib::Header::kIpv4Header)));
+  ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
+              ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
+                          HasHeaderCase(packetlib::Header::kIpv4Header)));
 }
 
 TEST_P(VlanTest, NonVlanPacketGetsFowardedWhenVlanChecksDisabled) {
