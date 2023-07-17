@@ -113,6 +113,9 @@ absl::Status ValidateP4Info(const p4::config::v1::P4Info& p4info) {
   ASSIGN_OR_RETURN(P4InfoVerificationSchema schema, SupportedSchema());
   ASSIGN_OR_RETURN(auto ir_result, pdpi::CreateIrP4Info(p4info),
                    _.SetPayload(kLibraryUrl, absl::Cord("PDPI")));
+  // We allow arbitrary `@unsupported` entities in the P4Info and reject
+  // programming those entities only at runtime.
+  pdpi::RemoveUnsupportedEntities(ir_result);
   RETURN_IF_ERROR(IsSupportedBySchema(ir_result, schema));
 
   for (const auto& [table_name, table] : ir_result.tables_by_name()) {

@@ -1268,6 +1268,8 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
           ir_p4info.status().code(),
           absl::StrCat("[P4RT/PDPI] ", ir_p4info.status().message())));
     }
+    // Remove `@unsupported` entities so their use in requests will be rejected.
+    pdpi::RemoveUnsupportedEntities(*ir_p4info);
     TranslateIrP4InfoForOrchAgent(*ir_p4info);
 
     // Apply a config if we don't currently have one.
