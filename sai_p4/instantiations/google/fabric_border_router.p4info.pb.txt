@@ -310,7 +310,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 512
+  size: 2048
 }
 tables {
   preamble {
