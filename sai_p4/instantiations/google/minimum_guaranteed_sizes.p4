@@ -1,3 +1,17 @@
+// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #ifndef GOOGLE_SAI_RESOURCE_GUARANTEES_P4_
 #define GOOGLE_SAI_RESOURCE_GUARANTEES_P4_
 
@@ -34,22 +48,26 @@
 
 #define ROUTING_IPV6_TABLE_MINIMUM_GUARANTEED_SIZE 4096
 
-#define ROUTING_TUNNEL_TABLE_MINIMUM_GUARANTEED_SIZE 512
+#define ROUTING_TUNNEL_TABLE_MINIMUM_GUARANTEED_SIZE 2048
 
 #define L3_ADMIT_TABLE_MINIMUM_GUARANTEED_SIZE 128
 
 // The maximum number of wcmp groups.
 #define WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE 3968
+#define WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR 960
 
 
 // The size semantics for WCMP group selectors.
 #define WCMP_GROUP_SELECTOR_SIZE_SEMANTICS "SUM_OF_WEIGHTS"
+#define WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_TOR "SUM_OF_WEIGHTS"
 
 // The maximum sum of members across all wcmp groups.
 #define WCMP_GROUP_SELECTOR_SIZE 49152 // 48k
+#define WCMP_GROUP_SELECTOR_SIZE_TOR 31296  // 31K
 
 // The maximum sum of weights for each wcmp group.
 #define WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE 512
+#define WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR 256
 
 // The max weight of an individual member when using the SUM_OF_MEMBERS size 
 // semantics.

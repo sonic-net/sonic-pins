@@ -308,12 +308,24 @@ control routing(in headers_t headers,
 
   // TODO: When the P4RT compiler supports the size selector
   // annotation, this should be used to specify the semantics.
+  // #if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
+  // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_TOR)
+  // #else
   // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS)
+  // #endif
   // TODO: Uncomment when supported by the P4RT compiler.
   // @max_member_weight(WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT)
+#if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
+  @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR)
+#else
   @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE)
+#endif
   action_selector(HashAlgorithm.identity,
-		  WCMP_GROUP_SELECTOR_SIZE,
+#if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
+ WCMP_GROUP_SELECTOR_SIZE_TOR,
+#else
+ WCMP_GROUP_SELECTOR_SIZE,
+#endif
                   WCMP_SELECTOR_INPUT_BITWIDTH)
       wcmp_group_selector;
 
@@ -332,7 +344,11 @@ control routing(in headers_t headers,
     const default_action = NoAction;
     @id(ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID)
         implementation = wcmp_group_selector;
+#if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
+    size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR;
+#else
     size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE;
+#endif
   }
 
   // Action that does nothing. Like `NoAction` in `core.p4`, but following
