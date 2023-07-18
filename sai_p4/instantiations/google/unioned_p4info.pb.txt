@@ -925,7 +925,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767366
-  size: 127
+  size: 125
 }
 tables {
   preamble {
@@ -982,7 +982,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767365
-  size: 127
+  size: 125
 }
 tables {
   preamble {
