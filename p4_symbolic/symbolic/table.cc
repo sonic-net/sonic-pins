@@ -36,6 +36,7 @@
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
+#include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
@@ -50,6 +51,12 @@ namespace symbolic {
 namespace table {
 
 namespace {
+
+const pdpi::IrTableEntry &GetConcreteOrSymbolicPdpiIrTableEntry(
+    const ir::TableEntry &entry) {
+  return entry.has_concrete_entry() ? entry.concrete_entry()
+                                    : entry.symbolic_entry().sketch();
+}
 
 // Finds a match field with the given match name in the given table entry.
 // Returns the index of that match field inside the matches array in entry, or
@@ -67,84 +74,102 @@ int FindMatchWithName(const pdpi::IrTableEntry &entry,
 }
 
 // Sort the given table entries by priority.
-// Priority depends on the match types.
-// If the matches contain one or more ternary matches, priority is the explicit
-// numeric priority assigned to the entry.
-// If no ternary matches exist, and there is *exactly* one lpm match, priority
-// is determined by the length of the prefix to match, such that longer
-// prefixes have higher priority.
+// The priority depends on the match types.
+// If the table matches contain at least one ternary or optional match, the
+// entries' `priority` fields must be non-zero and determine the matching
+// priority.
+// If no ternary or optional matches exist, there can be at most one lpm match,
+// and the `priority` fields must be zero (unset) and have no effect.
+// If no ternary or optional matches exist and there is an lpm match, there may
+// be zero or more exact matches, and the priority is determined by the prefix
+// length, such that longer prefixes have higher priority.
 // Finally, if the matches only contain exact matches, there is no priority.
 //
-// The function returns a vector of pairs, where the second element
-// is a table entry, and the first is its index in the old unsorted array.
-// The pairs are sorted by priority, such that the element with highest priority
-// appears first.
-// Elements with equal priority maintaing their relative ordering.
+// The function returns a vector of pairs, where the second element is the table
+// entry, and the first is its index in the old unsorted array. The pairs are
+// sorted by priority, such that the element with highest priority appears
+// first. Elements with equal priority retain their relative ordering.
 //
 // We return the old index so that Symbolic and Concrete TableMatches are
 // set up against the indices as they appear in the input table entries array,
 // and not the sorted array.
-std::vector<std::pair<int, pdpi::IrTableEntry>> SortEntries(
-    const ir::Table &table, const std::vector<pdpi::IrTableEntry> &entries) {
+//
+// References:
+// - P4~16 v1.2.3 section 14.2.1.4
+//   https://p4.org/p4-spec/docs/P4-16-v-1.2.3.html#sec-entries
+// - P4Runtime v1.3.0 section 9.1
+//   https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-table-entry
+// - BMv2 - simple_switch.md
+//   https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#table-match-kinds-supported
+//
+std::vector<std::pair<int, ir::TableEntry>> SortEntries(
+    const ir::Table &table, const std::vector<ir::TableEntry> &entries) {
   if (entries.empty()) return {};
+
   // Find which *definition* of priority we should use by looking at the
   // table's match types.
-  const pdpi::IrTableDefinition &table_definition = table.table_definition();
-  bool has_ternary = false;
-  absl::optional<std::string> lpm_key;
-  for (const auto &[name, match_field_definition] :
-       table_definition.match_fields_by_name()) {
+  bool has_ternary_or_optional = false;
+  absl::optional<std::string> lpm_match_name;
+  for (const auto &[match_name, match_field_definition] :
+       table.table_definition().match_fields_by_name()) {
     switch (match_field_definition.match_field().match_type()) {
-      case p4::config::v1::MatchField::TERNARY: {
-        has_ternary = true;
+      case p4::config::v1::MatchField::TERNARY:
+      case p4::config::v1::MatchField::OPTIONAL: {
+        has_ternary_or_optional = true;
         break;
       }
       case p4::config::v1::MatchField::LPM: {
-        lpm_key = name;
+        lpm_match_name = match_name;
         break;
       }
       default: {
         // Exact or some other unsupported type, no need to do anything here.
         // An absl error will be returned if the type is unsupported in
-        // "EvaluateSingleMatch".
+        // `EvaluateSingleMatch`.
         break;
       }
     }
   }
 
   // The output array.
-  std::vector<std::pair<int, pdpi::IrTableEntry>> sorted_entries;
+  std::vector<std::pair<int, ir::TableEntry>> sorted_entries;
+  sorted_entries.reserve(entries.size());
   for (int i = 0; i < entries.size(); i++) {
-    const pdpi::IrTableEntry &entry = entries.at(i);
-    sorted_entries.push_back(std::make_pair(i, entry));
+    sorted_entries.push_back(std::make_pair(i, entries.at(i)));
   }
 
   // The sort comparator depends on the match types.
-  std::function<bool(const std::pair<int, pdpi::IrTableEntry> &,
-                     const std::pair<int, pdpi::IrTableEntry> &)>
+  std::function<bool(const std::pair<int, ir::TableEntry> &,
+                     const std::pair<int, ir::TableEntry> &)>
       comparator;
-  if (has_ternary) {
+  if (has_ternary_or_optional) {
     // Sort by explicit priority.
-    comparator = [](const std::pair<int, pdpi::IrTableEntry> &entry1,
-                    const std::pair<int, pdpi::IrTableEntry> &entry2) {
-      return entry1.second.priority() > entry2.second.priority();
+    // Entries with numerically larger priority precede others.
+    comparator = [](const std::pair<int, ir::TableEntry> &entry1,
+                    const std::pair<int, ir::TableEntry> &entry2) {
+      return GetConcreteOrSymbolicPdpiIrTableEntry(entry1.second).priority() >
+             GetConcreteOrSymbolicPdpiIrTableEntry(entry2.second).priority();
     };
-  } else if (lpm_key.has_value()) {
+  } else if (lpm_match_name.has_value()) {
     // Sort by prefix length.
-    comparator = [lpm_key](const std::pair<int, pdpi::IrTableEntry> &entry1,
-                           const std::pair<int, pdpi::IrTableEntry> &entry2) {
-      auto is_lpm_match = [=](const pdpi::IrMatch &match) -> bool {
-        return match.name() == *lpm_key;
+    // Entries with numerically larger prefix length precede others.
+    comparator = [&lpm_match_name](
+                     const std::pair<int, ir::TableEntry> &entry1,
+                     const std::pair<int, ir::TableEntry> &entry2) {
+      auto is_lpm_match =
+          [&lpm_match_name](const pdpi::IrMatch &match) -> bool {
+        return match.name() == *lpm_match_name;
       };
-      auto matches1 = entry1.second.matches();
-      auto matches2 = entry2.second.matches();
-      auto it1 = std::find_if(matches1.begin(), matches1.end(), is_lpm_match);
-      auto it2 = std::find_if(matches2.begin(), matches2.end(), is_lpm_match);
-      int prefix_length1 =
-          it1 == matches1.end() ? 0 : it1->lpm().prefix_length();
-      int prefix_length2 =
-          it2 == matches2.end() ? 0 : it2->lpm().prefix_length();
-      return prefix_length1 > prefix_length2;
+
+      auto get_prefix_length =
+          [&is_lpm_match](const ir::TableEntry &entry) -> int {
+        auto &matches = GetConcreteOrSymbolicPdpiIrTableEntry(entry).matches();
+        auto it = std::find_if(matches.begin(), matches.end(), is_lpm_match);
+        return it == matches.end() ? 0 : it->lpm().prefix_length();
+      };
+
+      return get_prefix_length(entry1.second) >
+             get_prefix_length(entry2.second);
     };
   } else {
     return sorted_entries;
@@ -276,10 +301,8 @@ absl::StatusOr<z3::expr> EvaluateTableEntryCondition(
     ir::FieldValue match_field = match_to_fields.at(match_definition.name());
     std::string field_name = absl::StrFormat("%s.%s", match_field.header_name(),
                                              match_field.field_name());
-    action::ActionContext fake_context = {table_name, {}};
-    ASSIGN_OR_RETURN(
-        z3::expr match_field_expr,
-        action::EvaluateFieldValue(match_field, state, fake_context));
+    ASSIGN_OR_RETURN(z3::expr match_field_expr,
+                     action::EvaluateFieldValue(match_field, state));
     ASSIGN_OR_RETURN(
         z3::expr match_expression,
         EvaluateSingleMatch(Z3Context(), match_definition, field_name,
@@ -354,12 +377,11 @@ absl::Status EvaluateTableEntryAction(
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const ir::Dataplane &data_plane, const ir::Table &table,
-    const std::vector<pdpi::IrTableEntry> &entries,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard) {
+    const std::vector<ir::TableEntry> &entries, SymbolicPerPacketState *state,
+    values::P4RuntimeTranslator *translator, const z3::expr &guard) {
   const std::string &table_name = table.table_definition().preamble().name();
   // Sort entries by priority deduced from match types.
-  std::vector<std::pair<int, pdpi::IrTableEntry>> sorted_entries =
+  std::vector<std::pair<int, ir::TableEntry>> sorted_entries =
       SortEntries(table, entries);
   // The table semantically is just a bunch of if conditions, one per
   // table entry, we construct this big if-elseif-...-else symbolically.
@@ -401,11 +423,16 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   // Find all entries match conditions.
   std::vector<z3::expr> entries_matches;
   for (const auto &[_, entry] : sorted_entries) {
-    // We are passsing state by const reference here, so we do not need
+    if (!entry.has_concrete_entry()) {
+      return gutil::UnimplementedErrorBuilder()
+             << "Symbolic entries are not supported at the moment.";
+    }
+
+    // We are passing state by const reference here, so we do not need
     // any guard yet.
-    ASSIGN_OR_RETURN(
-        z3::expr entry_match,
-        EvaluateTableEntryCondition(table, entry, *state, translator));
+    ASSIGN_OR_RETURN(z3::expr entry_match,
+                     EvaluateTableEntryCondition(table, entry.concrete_entry(),
+                                                 *state, translator));
     entries_matches.push_back(entry_match);
   }
 
@@ -433,28 +460,30 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
         operators::And(default_entry_assignment_guard, accumulator_guard));
   }
 
-  // Build an IrTableEntry object for the default entry.
-  pdpi::IrTableEntry default_entry;
-  default_entry.mutable_action()->set_name(
+  // Build a TableEntry object for the default entry.
+  ir::TableEntry default_entry;
+  default_entry.mutable_concrete_entry()->mutable_action()->set_name(
       table.table_implementation().default_action());
   for (const std::string &parameter_value :
        table.table_implementation().default_action_parameters()) {
-    ASSIGN_OR_RETURN(
-        *(default_entry.mutable_action()->add_params()->mutable_value()),
-        values::ParseIrValue(parameter_value));
+    ASSIGN_OR_RETURN(*(default_entry.mutable_concrete_entry()
+                           ->mutable_action()
+                           ->add_params()
+                           ->mutable_value()),
+                     values::ParseIrValue(parameter_value));
   }
 
   // Start with the default entry
   z3::expr match_index = Z3Context().int_val(kDefaultActionEntryIndex);
-  RETURN_IF_ERROR(
-      EvaluateTableEntryAction(table, default_entry, kDefaultActionEntryIndex,
-                               data_plane.program.actions(), state, translator,
-                               default_entry_assignment_guard));
+  RETURN_IF_ERROR(EvaluateTableEntryAction(
+      table, default_entry.concrete_entry(), kDefaultActionEntryIndex,
+      data_plane.program.actions(), state, translator,
+      default_entry_assignment_guard));
 
   // Continue evaluating each table entry in reverse priority
   for (int row = sorted_entries.size() - 1; row >= 0; row--) {
     int old_index = sorted_entries.at(row).first;
-    const pdpi::IrTableEntry &entry = sorted_entries.at(row).second;
+    const ir::TableEntry &entry = sorted_entries.at(row).second;
     z3::expr row_symbol = Z3Context().int_val(old_index);
 
     // The condition used in the big if_else_then construct.
@@ -466,8 +495,8 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     // Evaluate the entry's action guarded by its complete assignment guard.
     z3::expr entry_assignment_guard = assignment_guards.at(row);
     RETURN_IF_ERROR(EvaluateTableEntryAction(
-        table, entry, old_index, data_plane.program.actions(), state,
-        translator, entry_assignment_guard));
+        table, entry.concrete_entry(), old_index, data_plane.program.actions(),
+        state, translator, entry_assignment_guard));
   }
 
   const std::string &merge_point = table.table_implementation()

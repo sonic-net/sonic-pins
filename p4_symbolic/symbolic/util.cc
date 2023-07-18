@@ -116,7 +116,7 @@ SymbolicTableMatch DefaultTableMatch() {
 }
 
 absl::StatusOr<ConcreteContext> ExtractFromModel(
-    SymbolicContext context, z3::model model,
+    const SymbolicContext &context, z3::model model,
     const values::P4RuntimeTranslator &translator) {
   // Extract ports.
   std::string ingress_port = model.eval(context.ingress_port, true).to_string();

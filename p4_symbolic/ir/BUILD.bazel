@@ -58,13 +58,14 @@ cc_library(
         "table_entries.h",
     ],
     deps = [
+        ":ir_cc_proto",
         "//gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
