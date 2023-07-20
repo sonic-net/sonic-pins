@@ -199,8 +199,6 @@ control acl_pre_ingress(in headers_t headers,
       ip_protocol = headers.ipv6.next_header;
     }
 
-    local_metadata.vrf_id = kDefaultVrf;
-
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_pre_ingress_table.apply();
 #elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)

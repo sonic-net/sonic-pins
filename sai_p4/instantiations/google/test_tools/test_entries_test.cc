@@ -171,5 +171,16 @@ TEST(PdEntryBuilder, AddPreIngressAclEntryAssigningVrfForGivenIpTypeAddsEntry) {
               SizeIs(3));
 }
 
+TEST(PdEntryBuilder,
+     AddEntryDecappingAllIpInIpv6PacketsAndSettingVrfAddsEntry) {
+  EXPECT_THAT(PdEntryBuilder()
+                  .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-1")
+                  .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-2")
+                  .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-3")
+                  .GetDedupedEntries()
+                  .entries(),
+              SizeIs(3));
+}
+
 }  // namespace
 }  // namespace sai

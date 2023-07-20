@@ -77,6 +77,8 @@ class PdEntryBuilder {
       absl::string_view vrf);
   PdEntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
+  PdEntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
+      absl::string_view vrf);
 
  private:
   sai::TableEntries entries_;
