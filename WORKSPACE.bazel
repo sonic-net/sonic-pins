@@ -24,6 +24,24 @@ load("@rules_foreign_cc//foreign_cc:repositories.bzl", "rules_foreign_cc_depende
 
 rules_foreign_cc_dependencies()
 
+# -- Load GRPC -------------------------------------------------------------
+
+load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
+
+switched_rules_by_language(
+    name = "com_google_googleapis_imports",
+    cc = True,
+    grpc = True,
+)
+
+load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
+
+grpc_deps()
+
+load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
+
+grpc_extra_deps()
+
 # -- Load Protobuf -------------------------------------------------------------
 
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
@@ -41,22 +59,6 @@ rules_proto_toolchains()
 load("@com_github_p4lang_p4runtime//:p4runtime_deps.bzl", "p4runtime_deps")
 
 p4runtime_deps()
-
-load("@com_google_googleapis//:repository_rules.bzl", "switched_rules_by_language")
-
-switched_rules_by_language(
-    name = "com_google_googleapis_imports",
-    cc = True,
-    grpc = True,
-)
-
-load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
-
-grpc_deps()
-
-load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
-
-grpc_extra_deps()
 
 # -- Load packaging rules ------------------------------------------------------
 
@@ -89,11 +91,9 @@ http_archive(
     ],
 )
 
-load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
+load("@io_bazel_rules_go//go:deps.bzl", "go_rules_dependencies")
 
 go_rules_dependencies()
-
-go_register_toolchains()
 
 http_archive(
     name = "bazel_gazelle",

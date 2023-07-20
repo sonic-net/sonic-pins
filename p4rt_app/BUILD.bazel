@@ -56,6 +56,7 @@ cc_binary(
         "//p4rt_app/sonic/adapters:producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:system_call_adapter",
         "//p4rt_app/sonic/adapters:table_adapter",
+        "//p4rt_app/utils:authz_logger",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
