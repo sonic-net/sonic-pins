@@ -193,6 +193,20 @@ message VrfTableEntry {
   bytes controller_metadata = 8;
 }
 
+// CAUTION: This table is not (yet) supported.
+message Ipv6TunnelTerminationTableEntry {
+  message Match {
+    Ternary dst_ipv6 = 1;  // ternary match / Format::IPV6 / 128 bits
+  }
+  Match match = 1;
+  message Action {
+    MarkForTunnelDecapAndSetVrfAction mark_for_tunnel_decap_and_set_vrf = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 message TunnelTableEntry {
   message Match {
     string tunnel_id = 1;  // exact match / Format::STRING
@@ -702,6 +716,10 @@ message SetMetadataAndDropAction {
   string route_metadata = 1;  // Format::HEX_STRING / 6 bits
 }
 
+message MarkForTunnelDecapAndSetVrfAction {
+  string vrf_id = 1;  // Format::STRING
+}
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -778,6 +796,8 @@ message TableEntry {
     MirrorSessionTableEntry mirror_session_table_entry = 70;
     L3AdmitTableEntry l3_admit_table_entry = 71;
     VrfTableEntry vrf_table_entry = 74;
+    // CAUTION: This table is not (yet) supported.
+    Ipv6TunnelTerminationTableEntry ipv6_tunnel_termination_table_entry = 75;
     TunnelTableEntry tunnel_table_entry = 80;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;
