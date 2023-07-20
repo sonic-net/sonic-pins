@@ -109,12 +109,12 @@ TEST_F(MetricRecorderTest, PermittedAuthzIsLoggedInDb) {
 
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|permitted");
+        return authz_table_adapter_->exists("service|rpc|permitted");
       },
       absl::Milliseconds(500)));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service|rpc|permitted"),
+  EXPECT_THAT(authz_table_adapter_->get("service|rpc|permitted"),
               Contains(Pair("count", "1")));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service|rpc|permitted"),
+  EXPECT_THAT(authz_table_adapter_->get("service|rpc|permitted"),
               Contains(Pair("timestamp", _)));
 }
 
@@ -123,12 +123,12 @@ TEST_F(MetricRecorderTest, DeniedAuthzIsLoggedInDb) {
 
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|denied");
+        return authz_table_adapter_->exists("service|rpc|denied");
       },
       absl::Milliseconds(500)));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service|rpc|denied"),
+  EXPECT_THAT(authz_table_adapter_->get("service|rpc|denied"),
               Contains(Pair("count", "1")));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service|rpc|denied"),
+  EXPECT_THAT(authz_table_adapter_->get("service|rpc|denied"),
               Contains(Pair("timestamp", _)));
 }
 
@@ -163,10 +163,9 @@ TEST_F(MetricRecorderTest, PermittedAuthzCountIncrements) {
 
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|permitted") &&
-               CheckCount(
-                   authz_table_adapter_->get("p4rt|service|rpc|permitted"),
-                   "2");
+        return authz_table_adapter_->exists("service|rpc|permitted") &&
+               CheckCount(authz_table_adapter_->get("service|rpc|permitted"),
+                          "2");
       },
       absl::Milliseconds(500)));
 }
@@ -177,9 +176,8 @@ TEST_F(MetricRecorderTest, DeniedAuthzCountIncrements) {
 
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|denied") &&
-               CheckCount(authz_table_adapter_->get("p4rt|service|rpc|denied"),
-                          "2");
+        return authz_table_adapter_->exists("service|rpc|denied") &&
+               CheckCount(authz_table_adapter_->get("service|rpc|denied"), "2");
       },
       absl::Milliseconds(500)));
 }
@@ -263,10 +261,10 @@ TEST_F(MetricRecorderTest, PermittedAuthzLastTimestamp) {
   metric_recorder_->RecordAuthz(/*permitted=*/true, "service", "rpc");
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|permitted");
+        return authz_table_adapter_->exists("service|rpc|permitted");
       },
       absl::Milliseconds(500)));
-  auto values = authz_table_adapter_->get("p4rt|service|rpc|permitted");
+  auto values = authz_table_adapter_->get("service|rpc|permitted");
   EXPECT_THAT(values, Contains(Pair("timestamp", _)));
   std::string timestamp1;
   for (const auto& value : values) {
@@ -279,13 +277,12 @@ TEST_F(MetricRecorderTest, PermittedAuthzLastTimestamp) {
   metric_recorder_->RecordAuthz(/*permitted=*/true, "service", "rpc");
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|permitted") &&
-               CheckCount(
-                   authz_table_adapter_->get("p4rt|service|rpc|permitted"),
-                   "2");
+        return authz_table_adapter_->exists("service|rpc|permitted") &&
+               CheckCount(authz_table_adapter_->get("service|rpc|permitted"),
+                          "2");
       },
       absl::Milliseconds(500)));
-  values = authz_table_adapter_->get("p4rt|service|rpc|permitted");
+  values = authz_table_adapter_->get("service|rpc|permitted");
   EXPECT_THAT(values, Contains(Pair("timestamp", _)));
   std::string timestamp2;
   for (const auto& value : values) {
@@ -302,10 +299,10 @@ TEST_F(MetricRecorderTest, DeniedAuthzLastTimestamp) {
   metric_recorder_->RecordAuthz(/*permitted=*/false, "service", "rpc");
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|denied");
+        return authz_table_adapter_->exists("service|rpc|denied");
       },
       absl::Milliseconds(500)));
-  auto values = authz_table_adapter_->get("p4rt|service|rpc|denied");
+  auto values = authz_table_adapter_->get("service|rpc|denied");
   EXPECT_THAT(values, Contains(Pair("timestamp", _)));
   std::string timestamp1;
   for (const auto& value : values) {
@@ -318,12 +315,11 @@ TEST_F(MetricRecorderTest, DeniedAuthzLastTimestamp) {
   metric_recorder_->RecordAuthz(/*permitted=*/false, "service", "rpc");
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|denied") &&
-               CheckCount(authz_table_adapter_->get("p4rt|service|rpc|denied"),
-                          "2");
+        return authz_table_adapter_->exists("service|rpc|denied") &&
+               CheckCount(authz_table_adapter_->get("service|rpc|denied"), "2");
       },
       absl::Milliseconds(500)));
-  values = authz_table_adapter_->get("p4rt|service|rpc|denied");
+  values = authz_table_adapter_->get("service|rpc|denied");
   EXPECT_THAT(values, Contains(Pair("timestamp", _)));
   std::string timestamp2;
   for (const auto& value : values) {
@@ -368,15 +364,15 @@ TEST_F(MetricRecorderTest, AuthzCacheOverflowTest) {
   metric_recorder_->RecordAuthz(/*permitted=*/true, "service1", "rpc1");
   absl::SleepFor(absl::Milliseconds(500));
 
-  ASSERT_TRUE(authz_table_adapter_->exists("p4rt|service1|rpc1|permitted"));
-  ASSERT_TRUE(authz_table_adapter_->exists("p4rt|service2|rpc1|denied"));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service1|rpc1|permitted"),
+  ASSERT_TRUE(authz_table_adapter_->exists("service1|rpc1|permitted"));
+  ASSERT_TRUE(authz_table_adapter_->exists("service2|rpc1|denied"));
+  EXPECT_THAT(authz_table_adapter_->get("service1|rpc1|permitted"),
               Contains(Pair("count", "1")));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service1|rpc1|permitted"),
+  EXPECT_THAT(authz_table_adapter_->get("service1|rpc1|permitted"),
               Contains(Pair("timestamp", _)));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service2|rpc1|denied"),
+  EXPECT_THAT(authz_table_adapter_->get("service2|rpc1|denied"),
               Contains(Pair("count", "1")));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service2|rpc1|denied"),
+  EXPECT_THAT(authz_table_adapter_->get("service2|rpc1|denied"),
               Contains(Pair("timestamp", _)));
 }
 
