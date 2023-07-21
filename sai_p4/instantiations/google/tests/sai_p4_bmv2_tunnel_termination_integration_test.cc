@@ -38,11 +38,10 @@
 #include "platforms/networking/p4/p4_infra/bmv2/bmv2.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/test_tools/set_up_bmv2.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
-#include "sai_p4/tools/auxiliary_entries_for_v1model_targets.h"
 #include "tests/forwarding/packet_at_port.h"
 
 namespace pins {
@@ -51,30 +50,12 @@ namespace {
 using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::orion::p4::test::Bmv2;
-using ::p4::v1::ForwardingPipelineConfig;
 using ::packetlib::HasHeaderCase;
 using ::pdpi::HasPacketIn;
 using ::pdpi::ParsedPayloadIs;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::StrEq;
-
-absl::StatusOr<Bmv2> SetUpBmv2(sai::Instantiation instantiation) {
-  ASSIGN_OR_RETURN(Bmv2 bmv2, Bmv2::Create(Bmv2::Args{
-                                  .cpu_port = SAI_P4_CPU_PORT,
-                              }));
-  ForwardingPipelineConfig bmv2_config =
-      sai::GetNonstandardForwardingPipelineConfig(
-          instantiation, sai::NonstandardPlatform::kBmv2);
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      &bmv2.P4RuntimeSession(),
-      p4::v1::SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT,
-      bmv2_config));
-  RETURN_IF_ERROR(pdpi::InstallPiEntity(
-      &bmv2.P4RuntimeSession(),
-      sai::MakeV1modelPacketReplicationEngineEntryRequiredForPunts()));
-  return bmv2;
-}
 
 absl::StatusOr<packetlib::Packet> GetIpv4InIpv6Packet() {
   ASSIGN_OR_RETURN(auto packet, gutil::ParseTextProto<packetlib::Packet>(R"pb(
@@ -125,7 +106,7 @@ using TunnelTerminationTest = testing::TestWithParam<sai::Instantiation>;
 TEST_P(TunnelTerminationTest, PacketGetsDecapsulatedAndForwarded) {
   const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
-  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, SetUpBmv2(kInstantiation));
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
   // Install table entries: decap & default route, so we can check that VRF
   // assignment works and observe the forwarded output packet.
@@ -189,7 +170,7 @@ TEST_P(TunnelTerminationTest,
        PreIngressAclMatchesOnUndecappedPacketAndOverridesDecapVrf) {
   const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
-  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, SetUpBmv2(kInstantiation));
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
   // Install table entries: decap & default routes, so we can check that VRF
   // assignment works as expected by observing the egress port of the forwarded
@@ -244,7 +225,7 @@ TEST_P(TunnelTerminationTest,
 TEST_P(TunnelTerminationTest, PuntedPacketIsNotDecapsulated) {
   const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
-  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, SetUpBmv2(kInstantiation));
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
   // Install table entries: decap & punt to controller, so we can check that the
   // punted packet did not get decapped.
@@ -281,7 +262,6 @@ TEST_P(TunnelTerminationTest, PuntedPacketIsNotDecapsulated) {
 
 INSTANTIATE_TEST_SUITE_P(
     TunnelTerminationTest, TunnelTerminationTest,
-    // Decap is not supported on Taygeta-based roles.
     testing::Values(sai::Instantiation::kMiddleblock,
                     sai::Instantiation::kFabricBorderRouter),
     [&](const testing::TestParamInfo<sai::Instantiation>& info) {

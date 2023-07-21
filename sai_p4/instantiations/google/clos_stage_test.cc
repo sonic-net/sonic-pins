@@ -46,5 +46,29 @@ INSTANTIATE_TEST_SUITE_P(
           sai::InstantiationToString(info.param));
     });
 
+using ClosStageFlagTestWithParam = testing::TestWithParam<ClosStage>;
+
+TEST_P(ClosStageFlagTestWithParam, ParsingUnparsedStageYieldsTheSameStage) {
+  std::string unparsed_stage = AbslUnparseFlag(GetParam());
+  ClosStage parsed_stage;
+  std::string error;
+  bool success = AbslParseFlag(unparsed_stage, &parsed_stage, &error);
+  ASSERT_TRUE(success);
+  ASSERT_EQ(parsed_stage, GetParam());
+  ASSERT_EQ(error, "");
+}
+
+INSTANTIATE_TEST_SUITE_P(ClosStageFlagTestForAllStages,
+                         ClosStageFlagTestWithParam,
+                         testing::ValuesIn(AllStages()));
+
+TEST(CloseStageFlagTest, ParsingIncorrectFlagYieldsError) {
+  ClosStage parsed_stage;
+  std::string error;
+  bool success = AbslParseFlag("DummyStage", &parsed_stage, &error);
+  ASSERT_FALSE(success);
+  ASSERT_THAT(error, testing::Not(testing::IsEmpty()));
+}
+
 }  // namespace
 }  // namespace sai
