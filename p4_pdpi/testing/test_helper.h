@@ -65,67 +65,100 @@ inline std::string TestStatusToString(absl::Status status) {
 }
 
 // Runs a generic test starting from an invalid PI and checks that it cannot be
-// translated to IR. If you want to test valid PI, instead write a generic PD
-// test.
+// translated to IR. If you want to test valid PI->IR, set 'validity' to
+// INPUT_IS_VALID or preferably, if possible, use a generic pd test which
+// provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
 template <typename IR, typename PI>
 void RunGenericPiTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const PI& pi,
     absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>
-        pi_to_ir) {
+        pi_to_ir,
+    InputValidity validity = INPUT_IS_INVALID) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- PI (Input):" << std::endl;
   std::cout << ::gutil::PrintTextProto(pi) << std::endl;
 
   // Convert PI to IR.
-  const auto& status_or_ir = pi_to_ir(info, pi);
-  if (!status_or_ir.ok()) {
-    std::cout << "--- PI is invalid/unsupported:" << std::endl;
-    std::cout << TestStatusToString(status_or_ir.status()) << std::endl;
+  const auto& ir = pi_to_ir(info, pi);
+  if (!ir.ok()) {
+    if (validity == INPUT_IS_VALID) {
+      Fail(test_name,
+           "Translation from PI to IR failed even though input was marked as "
+           "valid).");
+      std::cout << ir.status().message() << std::endl;
+    } else {
+      std::cout << "--- PI is invalid/unsupported:" << std::endl;
+      std::cout << TestStatusToString(ir.status()) << std::endl;
+    }
   } else {
-    Fail(test_name,
-         "Expected PI to be invalid (valid PI should instead be tested using "
-         "RunGenericPdTest.");
+    if (validity == INPUT_IS_INVALID) {
+      Fail(
+          test_name,
+          "Translation from PI to IR succeeded even though input was marked as "
+          "invalid");
+      return;
+    } else {
+      std::cout << "--- IR:" << std::endl;
+      std::cout << ::gutil::PrintTextProto(*ir) << std::endl;
+    }
   }
   std::cout << std::endl;
 }
 
 // Runs a generic test starting from an invalid IR and checks that it cannot be
-// translated to PI. If you want to test valid IR, instead write a
-// generic PD test.
+// translated to PI. If you want to test valid IR->PI, set 'validity' to
+// INPUT_IS_VALID or preferably, if possible, use a generic pd test which
+// provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
 template <typename IR, typename PI>
 void RunGenericIrToPiTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
     absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>
-        ir_to_pi) {
+        ir_to_pi,
+    InputValidity validity = INPUT_IS_INVALID) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- IR (Input):" << std::endl;
   std::cout << ::gutil::PrintTextProto(ir) << std::endl;
 
   // Convert IR to PI.
-  const auto& status_or_pi = ir_to_pi(info, ir);
-  if (!status_or_pi.ok()) {
-    std::cout << "--- IR (converting to PI) is invalid/unsupported:"
-              << std::endl;
-    std::cout << TestStatusToString(status_or_pi.status()) << std::endl;
+  const auto& pi = ir_to_pi(info, ir);
+  if (!pi.ok()) {
+    if (validity == INPUT_IS_VALID) {
+      Fail(test_name,
+           "Translation from IR to PI failed even though input was marked as "
+           "valid).");
+      std::cout << pi.status().message() << std::endl;
+    } else {
+      std::cout << "--- IR (converting to PI) is invalid/unsupported:"
+                << std::endl;
+      std::cout << TestStatusToString(pi.status()) << std::endl;
+    }
   } else {
-    Fail(test_name,
-         "Expected IR to be invalid (valid IR should instead be tested using "
-         "RunGenericPdTest.");
+    if (validity == INPUT_IS_INVALID) {
+      Fail(
+          test_name,
+          "Translation from IR to PI succeeded even though input was marked as "
+          "invalid");
+    } else {
+      std::cout << "--- PI:" << std::endl;
+      std::cout << ::gutil::PrintTextProto(*pi) << std::endl;
+    }
   }
   std::cout << std::endl;
 }
 
 // Runs a generic test starting from an invalid IR and checks that it cannot be
-// translated to PD. If you want to test valid IR, instead write a
-// generic PD test.
+// translated to PD. If you want to test valid IR->PD, set 'validity' to
+// INPUT_IS_VALID or preferably, if possible, use a generic pd test which
+// provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
 template <typename IR, typename PD>
 void RunGenericIrToPdTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
     absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
                                    google::protobuf::Message*)>
-        ir_to_pd) {
+        ir_to_pd,
+    InputValidity validity = INPUT_IS_INVALID) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- IR (Input):" << std::endl;
@@ -135,13 +168,26 @@ void RunGenericIrToPdTest(
   PD pd;
   const auto& status_pd = ir_to_pd(info, ir, &pd);
   if (!status_pd.ok()) {
-    std::cout << "--- IR (converting to PD) is invalid/unsupported:"
-              << std::endl;
-    std::cout << TestStatusToString(status_pd) << std::endl;
+    if (validity == INPUT_IS_VALID) {
+      Fail(test_name,
+           "Translation from IR to PD failed even though input was marked as "
+           "valid).");
+      std::cout << status_pd.message() << std::endl;
+    } else {
+      std::cout << "--- IR (converting to PD) is invalid/unsupported:"
+                << std::endl;
+      std::cout << TestStatusToString(status_pd) << std::endl;
+    }
   } else {
-    Fail(test_name,
-         "Expected IR to be invalid (valid IR should instead be tested using "
-         "RunGenericPdTest).");
+    if (validity == INPUT_IS_INVALID) {
+      Fail(
+          test_name,
+          "Translation from IR to PD succeeded even though input was marked as "
+          "invalid");
+    } else {
+      std::cout << "--- PD:" << std::endl;
+      std::cout << ::gutil::PrintTextProto(pd) << std::endl;
+    }
   }
   std::cout << std::endl;
 }

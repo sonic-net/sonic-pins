@@ -1101,6 +1101,69 @@ INVALID_ARGUMENT: Table entry for 'wcmp2_table' is invalid for the following rea
   - Table does not have a counter, but table entry contained counter data.
 
 =========================================================================
+simple valid table translation
+=========================================================================
+
+--- PI (Input):
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "\010"
+    }
+    params {
+      param_id: 2
+      value: "\t"
+    }
+  }
+}
+
+--- IR:
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "16.36.50.82"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x00000008"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x00000009"
+    }
+  }
+}
+
+
+=========================================================================
 empty IR (IR -> PI)
 =========================================================================
 
@@ -2776,6 +2839,118 @@ meter_counter_data {
 
 --- IR (converting to PI) is invalid/unsupported:
 INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid: IR entry does not have a meter config but contained a meter counter.
+
+=========================================================================
+valid table translation with INPUT_IS_VALID set (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "16.36.50.82"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x00000008"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x00000009"
+    }
+  }
+}
+
+--- PI:
+table_id: 33554433
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\020$2R"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "\010"
+    }
+    params {
+      param_id: 2
+      value: "\t"
+    }
+  }
+}
+
+
+=========================================================================
+valid table translation with INPUT_IS_VALID set (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "16.36.50.82"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x00000008"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x00000009"
+    }
+  }
+}
+
+--- PD:
+id_test_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "16.36.50.82"
+  }
+  action {
+    do_thing_1 {
+      arg2: "0x00000008"
+      arg1: "0x00000009"
+    }
+  }
+}
+
 
 =========================================================================
 empty PD
