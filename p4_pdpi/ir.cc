@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -1642,6 +1643,81 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
   return ir;
 }
 
+StatusOr<IrReplica> PiReplicaToIr(const IrP4Info &info,
+                                  const p4::v1::Replica &pi) {
+  IrReplica ir;
+  if (pi.port_kind_case() != p4::v1::Replica::kPort) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "expected `port` field to be set in Replica, but found < "
+           << gutil::PrintShortTextProto(pi) << " >";
+  }
+  ir.set_port(pi.port());
+  ir.set_instance(pi.instance());
+  return ir;
+}
+
+StatusOr<IrMulticastGroupEntry> PiMulticastGroupEntryToIr(
+    const IrP4Info &info, const p4::v1::MulticastGroupEntry &pi,
+    TranslationOptions options) {
+  IrMulticastGroupEntry ir;
+  ir.set_multicast_group_id(pi.multicast_group_id());
+
+  if (options.key_only) {
+    return ir;
+  }
+
+  absl::flat_hash_map<std::string, absl::flat_hash_set<uint32_t>>
+      instances_by_port;
+  std::vector<std::string> invalid_reasons;
+  for (const auto &replica : pi.replicas()) {
+    absl::StatusOr<IrReplica> ir_replica = PiReplicaToIr(info, replica);
+    if (!ir_replica.ok()) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet, ir_replica.status().message()));
+      continue;
+    }
+    // Check that {port, instance} pair is unique.
+    bool replica_is_unique = instances_by_port[ir_replica->port()]
+                                 .insert(ir_replica->instance())
+                                 .second;
+    if (!replica_is_unique) {
+      invalid_reasons.push_back(absl::StrCat(
+          kNewBullet,
+          "Each replica must have a unique (port, instance)-pair, but found "
+          "multiple replicas with pair ('",
+          ir_replica->port(), "', ", ir_replica->instance(), ")."));
+    }
+    *ir.add_replicas() = std::move(*ir_replica);
+  }
+
+  if (!invalid_reasons.empty()) {
+    return gutil::InvalidArgumentErrorBuilder() << GenerateFormattedError(
+               absl::StrCat("MulticastGroupEntry with group id '",
+                            pi.multicast_group_id(), "'"),
+               absl::StrJoin(invalid_reasons, "\n"));
+  }
+  return ir;
+}
+
+StatusOr<IrPacketReplicationEngineEntry> PiPacketReplicationEngineEntryToIr(
+    const IrP4Info &info, const p4::v1::PacketReplicationEngineEntry &pi,
+    TranslationOptions options) {
+  IrPacketReplicationEngineEntry ir;
+  switch (pi.type_case()) {
+    case p4::v1::PacketReplicationEngineEntry::kMulticastGroupEntry: {
+      ASSIGN_OR_RETURN(
+          *ir.mutable_multicast_group_entry(),
+          PiMulticastGroupEntryToIr(info, pi.multicast_group_entry(), options));
+      break;
+    }
+    default: {
+      return gutil::UnimplementedErrorBuilder()
+             << "Only PRE entries of type multicast group entry are supported.";
+    }
+  }
+  return ir;
+}
+
 StatusOr<IrPacketIn> PiPacketInToIr(const IrP4Info &info,
                                     const p4::v1::PacketIn &packet) {
   return PiPacketIoToIr<p4::v1::PacketIn, IrPacketIn>(info, "packet-in",
@@ -1713,7 +1789,13 @@ StatusOr<IrEntity> PiEntityToIr(const IrP4Info &info, const p4::v1::Entity &pi,
                        PiTableEntryToIr(info, pi.table_entry(), options));
       break;
     }
-    // TODO: Add PacketReplicationEngine support to IR.
+    case p4::v1::Entity::kPacketReplicationEngineEntry: {
+      ASSIGN_OR_RETURN(
+          *ir_entity.mutable_packet_replication_engine_entry(),
+          PiPacketReplicationEngineEntryToIr(
+              info, pi.packet_replication_engine_entry(), options));
+      break;
+    }
     default: {
       auto entity_name = gutil::GetOneOfFieldName(pi, "entity");
       if (!entity_name.ok()) {
@@ -2123,6 +2205,75 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
   return pi;
 }
 
+StatusOr<p4::v1::Replica> IrReplicaToPi(const IrP4Info &info,
+                                        const IrReplica &ir) {
+  p4::v1::Replica pi;
+  pi.set_port(ir.port());
+  pi.set_instance(ir.instance());
+  return pi;
+}
+
+StatusOr<p4::v1::MulticastGroupEntry> IrMulticastGroupEntryToPi(
+    const IrP4Info &info, const IrMulticastGroupEntry &ir,
+    TranslationOptions options) {
+  p4::v1::MulticastGroupEntry pi;
+  pi.set_multicast_group_id(ir.multicast_group_id());
+
+  if (options.key_only) {
+    return pi;
+  }
+
+  absl::flat_hash_map<std::string, absl::flat_hash_set<uint32_t>>
+      instances_by_port;
+  std::vector<std::string> invalid_reasons;
+  for (const auto &replica : ir.replicas()) {
+    absl::StatusOr<p4::v1::Replica> pi_replica = IrReplicaToPi(info, replica);
+    if (!pi_replica.ok()) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet, pi_replica.status().message()));
+      continue;
+    }
+    // Check that {port, instance} pair is unique.
+    bool replica_is_unique = instances_by_port[pi_replica->port()]
+                                 .insert(pi_replica->instance())
+                                 .second;
+    if (!replica_is_unique) {
+      invalid_reasons.push_back(absl::StrCat(
+          kNewBullet,
+          "Each replica must have a unique (port, instance)-pair, but found "
+          "multiple replicas with pair ('",
+          pi_replica->port(), "', ", pi_replica->instance(), ")."));
+    }
+    *pi.add_replicas() = std::move(*pi_replica);
+  }
+  if (!invalid_reasons.empty()) {
+    return gutil::InvalidArgumentErrorBuilder() << GenerateFormattedError(
+               absl::StrCat("MulticastGroupEntry with group id '",
+                            ir.multicast_group_id(), "'"),
+               absl::StrJoin(invalid_reasons, "\n"));
+  }
+  return pi;
+}
+
+StatusOr<p4::v1::PacketReplicationEngineEntry>
+IrPacketReplicationEngineEntryToPi(const IrP4Info &info,
+                                   const IrPacketReplicationEngineEntry &ir,
+                                   TranslationOptions options) {
+  p4::v1::PacketReplicationEngineEntry pi;
+  switch (ir.type_case()) {
+    case IrPacketReplicationEngineEntry::kMulticastGroupEntry: {
+      ASSIGN_OR_RETURN(
+          *pi.mutable_multicast_group_entry(),
+          IrMulticastGroupEntryToPi(info, ir.multicast_group_entry(), options));
+      break;
+    }
+    default:
+      return gutil::UnimplementedErrorBuilder()
+             << "Only PRE entries of type multicast group entry are supported.";
+  }
+  return pi;
+}
+
 StatusOr<p4::v1::PacketIn> IrPacketInToPi(const IrP4Info &info,
                                           const IrPacketIn &packet) {
   return IrPacketIoToPi<p4::v1::PacketIn, IrPacketIn>(info, "packet-in",
@@ -2160,7 +2311,13 @@ StatusOr<p4::v1::Entity> IrEntityToPi(const IrP4Info &info, const IrEntity &ir,
                        IrTableEntryToPi(info, ir.table_entry(), options));
       break;
     }
-    // TODO: Add PacketReplicationEngine support to IR.
+    case IrEntity::kPacketReplicationEngineEntry: {
+      ASSIGN_OR_RETURN(
+          *pi_entity.mutable_packet_replication_engine_entry(),
+          IrPacketReplicationEngineEntryToPi(
+              info, ir.packet_replication_engine_entry(), options));
+      break;
+    }
     default: {
       auto entity_name = gutil::GetOneOfFieldName(ir, "entity");
       if (!entity_name.ok()) {
