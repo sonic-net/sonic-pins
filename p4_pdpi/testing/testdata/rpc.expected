@@ -148,7 +148,9 @@ entities {
 }
 
 --- PI is invalid/unsupported:
-UNIMPLEMENTED: Only table entries are supported in ReadResponse.
+INVALID_ARGUMENT: Read response is invalid for the following reasons:
+  UNIMPLEMENTED: Entity is invalid: Entity 'action_profile_member' is not supported.
+  
 
 =========================================================================
 ReadResponse test: valid ternary table
@@ -174,32 +176,34 @@ table_entries {
 }
 
 --- IR:
-table_entries {
-  table_name: "ternary_table"
-  matches {
-    name: "normal"
-    ternary {
-      value {
-        hex_str: "0x052"
-      }
-      mask {
-        hex_str: "0x273"
-      }
-    }
-  }
-  priority: 32
-  action {
-    name: "do_thing_3"
-    params {
-      name: "arg1"
-      value {
-        hex_str: "0x01234567"
+entities {
+  table_entry {
+    table_name: "ternary_table"
+    matches {
+      name: "normal"
+      ternary {
+        value {
+          hex_str: "0x052"
+        }
+        mask {
+          hex_str: "0x273"
+        }
       }
     }
-    params {
-      name: "arg2"
-      value {
-        hex_str: "0x01234568"
+    priority: 32
+    action {
+      name: "do_thing_3"
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234568"
+        }
       }
     }
   }
@@ -275,62 +279,66 @@ table_entries {
 }
 
 --- IR:
-table_entries {
-  table_name: "ternary_table"
-  matches {
-    name: "normal"
-    ternary {
-      value {
-        hex_str: "0x052"
-      }
-      mask {
-        hex_str: "0x273"
-      }
-    }
-  }
-  priority: 32
-  action {
-    name: "do_thing_3"
-    params {
-      name: "arg1"
-      value {
-        hex_str: "0x01234567"
+entities {
+  table_entry {
+    table_name: "ternary_table"
+    matches {
+      name: "normal"
+      ternary {
+        value {
+          hex_str: "0x052"
+        }
+        mask {
+          hex_str: "0x273"
+        }
       }
     }
-    params {
-      name: "arg2"
-      value {
-        hex_str: "0x01234568"
+    priority: 32
+    action {
+      name: "do_thing_3"
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234568"
+        }
       }
     }
   }
 }
-table_entries {
-  table_name: "ternary_table"
-  matches {
-    name: "normal"
-    ternary {
-      value {
-        hex_str: "0x052"
-      }
-      mask {
-        hex_str: "0x273"
-      }
-    }
-  }
-  priority: 32
-  action {
-    name: "do_thing_3"
-    params {
-      name: "arg1"
-      value {
-        hex_str: "0x01234567"
+entities {
+  table_entry {
+    table_name: "ternary_table"
+    matches {
+      name: "normal"
+      ternary {
+        value {
+          hex_str: "0x052"
+        }
+        mask {
+          hex_str: "0x273"
+        }
       }
     }
-    params {
-      name: "arg2"
-      value {
-        hex_str: "0x01234568"
+    priority: 32
+    action {
+      name: "do_thing_3"
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234568"
+        }
       }
     }
   }
