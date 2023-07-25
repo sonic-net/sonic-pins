@@ -68,7 +68,8 @@ PacketSynthesisParams GetParams(
         ->mutable_match()
         ->mutable_in_port()
         ->set_value(*in_port_match);
-  const auto pi_entry = pdpi::PdTableEntryToPi(ir_p4info, pd_entry);
+  const auto pi_entry =
+      pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry);
 
   CHECK_OK(pi_entry.status());
   *params.mutable_pi_entries()->Add() = *pi_entry;
