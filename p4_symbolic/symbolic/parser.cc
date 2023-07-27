@@ -27,6 +27,7 @@
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/util.h"
+#include "p4_symbolic/symbolic/v1model.h"
 #include "z3++.h"
 
 namespace p4_symbolic::symbolic::parser {
@@ -361,7 +362,7 @@ absl::Status SetParserError(const ir::P4Program &program,
                             const z3::expr &guard) {
   ASSIGN_OR_RETURN(z3::expr error_code,
                    GetErrorCodeExpression(program, error_name, z3_context));
-  return state.Set(kParserErrorField, std::move(error_code), guard);
+  return state.Set(v1model::kParserErrorField, std::move(error_code), guard);
 }
 
 // Evaluates the parse state with the given `state_name` in the given parser.
@@ -486,7 +487,7 @@ absl::StatusOr<z3::expr> GetErrorCodeExpression(const ir::P4Program &program,
 
   // Obtain the bitwidth of the `parser_error` field
   ASSIGN_OR_RETURN(unsigned int bitwidth,
-                   util::GetFieldBitwidth(kParserErrorField, program));
+                   util::GetFieldBitwidth(v1model::kParserErrorField, program));
 
   return z3_context.bv_val(error_code, bitwidth);
 }

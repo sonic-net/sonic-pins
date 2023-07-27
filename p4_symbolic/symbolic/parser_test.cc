@@ -28,7 +28,6 @@
 #include "gutil/status_matchers.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "z3++.h"
 
@@ -86,6 +85,9 @@ constexpr absl::string_view kHeaders = R"pb(
         key: "src_addr"
         value { name: "src_addr" bitwidth: 48 }
       }
+      ordered_fields_list: "dst_addr"
+      ordered_fields_list: "src_addr"
+      ordered_fields_list: "ether_type"
     }
   }
   headers {
@@ -153,6 +155,21 @@ constexpr absl::string_view kHeaders = R"pb(
         key: "version"
         value { name: "version" bitwidth: 4 }
       }
+      ordered_fields_list: "version"
+      ordered_fields_list: "ihl"
+      ordered_fields_list: "dscp"
+      ordered_fields_list: "ecn"
+      ordered_fields_list: "total_len"
+      ordered_fields_list: "identification"
+      ordered_fields_list: "reserved"
+      ordered_fields_list: "do_not_fragment"
+      ordered_fields_list: "more_fragments"
+      ordered_fields_list: "frag_offset"
+      ordered_fields_list: "ttl"
+      ordered_fields_list: "protocol"
+      ordered_fields_list: "header_checksum"
+      ordered_fields_list: "src_addr"
+      ordered_fields_list: "dst_addr"
     }
   }
   headers {
@@ -161,9 +178,90 @@ constexpr absl::string_view kHeaders = R"pb(
       name: "standard_metadata"
       id: 1
       fields {
+        key: "_padding"
+        value { name: "_padding" bitwidth: 3 }
+      }
+      fields {
+        key: "checksum_error"
+        value { name: "checksum_error" bitwidth: 1 }
+      }
+      fields {
+        key: "deq_qdepth"
+        value { name: "deq_qdepth" bitwidth: 19 }
+      }
+      fields {
+        key: "deq_timedelta"
+        value { name: "deq_timedelta" bitwidth: 32 }
+      }
+      fields {
+        key: "egress_global_timestamp"
+        value { name: "egress_global_timestamp" bitwidth: 48 }
+      }
+      fields {
+        key: "egress_port"
+        value { name: "egress_port" bitwidth: 9 }
+      }
+      fields {
+        key: "egress_rid"
+        value { name: "egress_rid" bitwidth: 16 }
+      }
+      fields {
+        key: "egress_spec"
+        value { name: "egress_spec" bitwidth: 9 }
+      }
+      fields {
+        key: "enq_qdepth"
+        value { name: "enq_qdepth" bitwidth: 19 }
+      }
+      fields {
+        key: "enq_timestamp"
+        value { name: "enq_timestamp" bitwidth: 32 }
+      }
+      fields {
+        key: "ingress_global_timestamp"
+        value { name: "ingress_global_timestamp" bitwidth: 48 }
+      }
+      fields {
+        key: "ingress_port"
+        value { name: "ingress_port" bitwidth: 9 }
+      }
+      fields {
+        key: "instance_type"
+        value { name: "instance_type" bitwidth: 32 }
+      }
+      fields {
+        key: "mcast_grp"
+        value { name: "mcast_grp" bitwidth: 16 }
+      }
+      fields {
+        key: "packet_length"
+        value { name: "packet_length" bitwidth: 32 }
+      }
+      fields {
         key: "parser_error"
         value { name: "parser_error" bitwidth: 32 }
       }
+      fields {
+        key: "priority"
+        value { name: "priority" bitwidth: 3 }
+      }
+      ordered_fields_list: "ingress_port"
+      ordered_fields_list: "egress_spec"
+      ordered_fields_list: "egress_port"
+      ordered_fields_list: "instance_type"
+      ordered_fields_list: "packet_length"
+      ordered_fields_list: "enq_timestamp"
+      ordered_fields_list: "enq_qdepth"
+      ordered_fields_list: "deq_timedelta"
+      ordered_fields_list: "deq_qdepth"
+      ordered_fields_list: "ingress_global_timestamp"
+      ordered_fields_list: "egress_global_timestamp"
+      ordered_fields_list: "mcast_grp"
+      ordered_fields_list: "egress_rid"
+      ordered_fields_list: "checksum_error"
+      ordered_fields_list: "parser_error"
+      ordered_fields_list: "priority"
+      ordered_fields_list: "_padding"
     }
   }
 )pb";
@@ -943,7 +1041,7 @@ std::vector<ParserTestParam> GetParserTestInstances() {
                                   ctx.bv_val(0x0800, 16))},
                 {"ipv4.$extracted$", (ctx.bv_const("ethernet.ether_type", 16) ==
                                       ctx.bv_val(0x0800, 16))},
-                {std::string(kParserErrorField),
+                {std::string(v1model::kParserErrorField),
                  z3::ite((ctx.bv_const("ethernet.ether_type", 16) !=
                           ctx.bv_val(0x0800, 16)),
                          ctx.bv_val(2, 32), ctx.bv_val(0, 32))},
