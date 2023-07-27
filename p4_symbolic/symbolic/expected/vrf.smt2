@@ -26,22 +26,22 @@
 (ingress) standard_metadata.$extracted$: false
 (ingress) standard_metadata.$valid$: false
 (ingress) standard_metadata._padding: standard_metadata._padding
-(ingress) standard_metadata.checksum_error: standard_metadata.checksum_error
-(ingress) standard_metadata.deq_qdepth: standard_metadata.deq_qdepth
-(ingress) standard_metadata.deq_timedelta: standard_metadata.deq_timedelta
-(ingress) standard_metadata.egress_global_timestamp: standard_metadata.egress_global_timestamp
+(ingress) standard_metadata.checksum_error: #b0
+(ingress) standard_metadata.deq_qdepth: #b0000000000000000000
+(ingress) standard_metadata.deq_timedelta: #x00000000
+(ingress) standard_metadata.egress_global_timestamp: #x000000000000
 (ingress) standard_metadata.egress_port: standard_metadata.egress_port
-(ingress) standard_metadata.egress_rid: standard_metadata.egress_rid
-(ingress) standard_metadata.egress_spec: standard_metadata.egress_spec
-(ingress) standard_metadata.enq_qdepth: standard_metadata.enq_qdepth
-(ingress) standard_metadata.enq_timestamp: standard_metadata.enq_timestamp
-(ingress) standard_metadata.ingress_global_timestamp: standard_metadata.ingress_global_timestamp
+(ingress) standard_metadata.egress_rid: #x0000
+(ingress) standard_metadata.egress_spec: #b000000000
+(ingress) standard_metadata.enq_qdepth: #b0000000000000000000
+(ingress) standard_metadata.enq_timestamp: #x00000000
+(ingress) standard_metadata.ingress_global_timestamp: #x000000000000
 (ingress) standard_metadata.ingress_port: standard_metadata.ingress_port
-(ingress) standard_metadata.instance_type: standard_metadata.instance_type
-(ingress) standard_metadata.mcast_grp: standard_metadata.mcast_grp
+(ingress) standard_metadata.instance_type: #x00000000
+(ingress) standard_metadata.mcast_grp: #x0000
 (ingress) standard_metadata.packet_length: standard_metadata.packet_length
 (ingress) standard_metadata.parser_error: #x00000000
-(ingress) standard_metadata.priority: standard_metadata.priority
+(ingress) standard_metadata.priority: #b000
 
 (parsed) $got_cloned$: false
 (parsed) ethernet.$extracted$: (ite true true false)
@@ -71,26 +71,26 @@
 (parsed) standard_metadata.$extracted$: false
 (parsed) standard_metadata.$valid$: false
 (parsed) standard_metadata._padding: standard_metadata._padding
-(parsed) standard_metadata.checksum_error: standard_metadata.checksum_error
-(parsed) standard_metadata.deq_qdepth: standard_metadata.deq_qdepth
-(parsed) standard_metadata.deq_timedelta: standard_metadata.deq_timedelta
-(parsed) standard_metadata.egress_global_timestamp: standard_metadata.egress_global_timestamp
+(parsed) standard_metadata.checksum_error: #b0
+(parsed) standard_metadata.deq_qdepth: #b0000000000000000000
+(parsed) standard_metadata.deq_timedelta: #x00000000
+(parsed) standard_metadata.egress_global_timestamp: #x000000000000
 (parsed) standard_metadata.egress_port: standard_metadata.egress_port
-(parsed) standard_metadata.egress_rid: standard_metadata.egress_rid
-(parsed) standard_metadata.egress_spec: standard_metadata.egress_spec
-(parsed) standard_metadata.enq_qdepth: standard_metadata.enq_qdepth
-(parsed) standard_metadata.enq_timestamp: standard_metadata.enq_timestamp
-(parsed) standard_metadata.ingress_global_timestamp: standard_metadata.ingress_global_timestamp
+(parsed) standard_metadata.egress_rid: #x0000
+(parsed) standard_metadata.egress_spec: #b000000000
+(parsed) standard_metadata.enq_qdepth: #b0000000000000000000
+(parsed) standard_metadata.enq_timestamp: #x00000000
+(parsed) standard_metadata.ingress_global_timestamp: #x000000000000
 (parsed) standard_metadata.ingress_port: standard_metadata.ingress_port
-(parsed) standard_metadata.instance_type: standard_metadata.instance_type
-(parsed) standard_metadata.mcast_grp: standard_metadata.mcast_grp
+(parsed) standard_metadata.instance_type: #x00000000
+(parsed) standard_metadata.mcast_grp: #x0000
 (parsed) standard_metadata.packet_length: standard_metadata.packet_length
 (parsed) standard_metadata.parser_error: (let ((a!1 (and true (not (= (concat #x0 #x800) ethernet.eth_type)) (not true)))
       (a!2 (ite (and true (= (concat #x0 #x800) ethernet.eth_type) (not true))
                 #x00000002
                 #x00000000)))
   (ite a!1 #x00000002 a!2))
-(parsed) standard_metadata.priority: standard_metadata.priority
+(parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
 (egress) ethernet.$extracted$: (ite true true false)
@@ -296,10 +296,10 @@
 (egress) standard_metadata.$extracted$: false
 (egress) standard_metadata.$valid$: false
 (egress) standard_metadata._padding: standard_metadata._padding
-(egress) standard_metadata.checksum_error: standard_metadata.checksum_error
-(egress) standard_metadata.deq_qdepth: standard_metadata.deq_qdepth
-(egress) standard_metadata.deq_timedelta: standard_metadata.deq_timedelta
-(egress) standard_metadata.egress_global_timestamp: standard_metadata.egress_global_timestamp
+(egress) standard_metadata.checksum_error: #b0
+(egress) standard_metadata.deq_qdepth: #b0000000000000000000
+(egress) standard_metadata.deq_timedelta: #x00000000
+(egress) standard_metadata.egress_global_timestamp: #x000000000000
 (egress) standard_metadata.egress_port: (let ((a!1 (ite (and true (= (concat #x0 #x800) ethernet.eth_type)) true false))
       (a!3 (not (and true (= (bvand ipv4.srcAddr #x09210909) #x00210100)))))
 (let ((a!2 (and (and true a!1)
@@ -347,9 +347,7 @@
                       (and (not a!7) (not a!8))
                       a!9)
                  #b000000001
-                 (ite a!11
-                      #b000000001
-                      (ite a!12 #b111111111 standard_metadata.egress_spec)))))
+                 (ite a!11 #b000000001 (ite a!12 #b111111111 #b000000000)))))
 (let ((a!14 (ite (and (and (and true a!1) (bvuge a!5 #b1)) (not a!7) a!8)
                  #b000000000
                  a!13)))
@@ -357,7 +355,7 @@
                  #b000000001
                  a!14)))
   (ite (not (= a!15 #b111111111)) a!15 standard_metadata.egress_port)))))))))
-(egress) standard_metadata.egress_rid: standard_metadata.egress_rid
+(egress) standard_metadata.egress_rid: #x0000
 (egress) standard_metadata.egress_spec: (let ((a!1 (ite (and true (= (concat #x0 #x800) ethernet.eth_type)) true false))
       (a!3 (not (and true (= (bvand ipv4.srcAddr #x09210909) #x00210100)))))
 (let ((a!2 (and (and true a!1)
@@ -405,72 +403,69 @@
                       (and (not a!7) (not a!8))
                       a!9)
                  #b000000001
-                 (ite a!11
-                      #b000000001
-                      (ite a!12 #b111111111 standard_metadata.egress_spec)))))
+                 (ite a!11 #b000000001 (ite a!12 #b111111111 #b000000000)))))
 (let ((a!14 (ite (and (and (and true a!1) (bvuge a!5 #b1)) (not a!7) a!8)
                  #b000000000
                  a!13)))
   (ite (and (and (and true a!1) (bvuge a!5 #b1)) a!7) #b000000001 a!14))))))))
-(egress) standard_metadata.enq_qdepth: standard_metadata.enq_qdepth
-(egress) standard_metadata.enq_timestamp: standard_metadata.enq_timestamp
-(egress) standard_metadata.ingress_global_timestamp: standard_metadata.ingress_global_timestamp
+(egress) standard_metadata.enq_qdepth: #b0000000000000000000
+(egress) standard_metadata.enq_timestamp: #x00000000
+(egress) standard_metadata.ingress_global_timestamp: #x000000000000
 (egress) standard_metadata.ingress_port: standard_metadata.ingress_port
-(egress) standard_metadata.instance_type: standard_metadata.instance_type
-(egress) standard_metadata.mcast_grp: standard_metadata.mcast_grp
+(egress) standard_metadata.instance_type: #x00000000
+(egress) standard_metadata.mcast_grp: #x0000
 (egress) standard_metadata.packet_length: standard_metadata.packet_length
 (egress) standard_metadata.parser_error: (let ((a!1 (and true (not (= (concat #x0 #x800) ethernet.eth_type)) (not true)))
       (a!2 (ite (and true (= (concat #x0 #x800) ethernet.eth_type) (not true))
                 #x00000002
                 #x00000000)))
   (ite a!1 #x00000002 a!2))
-(egress) standard_metadata.priority: standard_metadata.priority
+(egress) standard_metadata.priority: #b000
 
 (solver constraints)
 ; 
 (set-info :status unknown)
 (declare-fun standard_metadata.ingress_port () (_ BitVec 9))
-(declare-fun standard_metadata.egress_spec () (_ BitVec 9))
 (declare-fun scalars.local_metadata_t.vrf () (_ BitVec 10))
 (declare-fun ipv4.srcAddr () (_ BitVec 32))
 (declare-fun ethernet.eth_type () (_ BitVec 16))
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
- (let (($x181 (= standard_metadata.ingress_port (_ bv1 9))))
- (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x181)))
+ (let (($x172 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x172)))
 (assert
- (let ((?x61 (concat (_ bv0 9) (_ bv0 1))))
- (let (($x75 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
+ (let ((?x53 (concat (_ bv0 9) (_ bv0 1))))
+ (let (($x67 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
  (let (($x11 (= (concat (_ bv0 4) (_ bv2048 12)) ethernet.eth_type)))
  (let (($x10 (and true $x11)))
- (let (($x51 (ite $x10 true false)))
- (let (($x64 (and true $x51)))
- (let (($x79 (and (and $x64 (not (and true (= (bvand ipv4.srcAddr (_ bv153159945 32)) (_ bv2162944 32))))) $x75)))
- (let ((?x91 (concat (_ bv0 9) (_ bv1 1))))
- (let (($x70 (and true (= (bvand ipv4.srcAddr (_ bv153159945 32)) (_ bv2162944 32)))))
- (let (($x76 (and $x64 $x70)))
- (let ((?x92 (ite $x76 ?x91 (ite $x79 ?x61 (ite true ?x61 scalars.local_metadata_t.vrf)))))
- (let (($x101 (= ?x92 ?x61)))
- (let (($x119 (and (and true (= ((_ extract 31 24) ipv4.dstAddr) ((_ extract 31 24) (_ bv167772160 32)))) $x101)))
- (let (($x113 (and (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv336855040 32)))) (= ?x92 ?x91))))
- (let (($x107 (and (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv168427520 32)))) $x101)))
- (let (($x102 (and (and true (= ipv4.dstAddr (_ bv168427520 32))) $x101)))
- (let (($x121 (not $x102)))
- (let (($x125 (and $x121 (not $x107))))
- (let (($x129 (and $x125 (not $x113))))
- (let ((?x58 (ite false (_ bv1 1) (_ bv0 1))))
- (let ((?x87 (ite true (_ bv1 1) (_ bv0 1))))
- (let ((?x93 (ite $x76 ?x87 (ite $x79 ?x87 (ite true ?x58 scalars.local_metadata_t.vrf_is_valid)))))
- (let (($x94 (bvuge ?x93 (_ bv1 1))))
- (let (($x96 (and $x64 $x94)))
- (let ((?x136 (ite (and $x96 (and $x129 (not $x119))) (_ bv511 9) standard_metadata.egress_spec)))
- (let (($x131 (and (and $x96 $x129) $x119)))
- (let (($x127 (and (and $x96 $x125) $x113)))
- (let (($x123 (and (and $x96 $x121) $x107)))
- (let (($x120 (and $x96 $x102)))
- (let ((?x169 (ite $x120 (_ bv1 9) (ite $x123 (_ bv0 9) (ite $x127 (_ bv1 9) (ite $x131 (_ bv1 9) ?x136))))))
- (let (($x184 (or (or false (= ?x169 (_ bv0 9))) (= ?x169 (_ bv1 9)))))
- (let (($x63 (= ?x169 (_ bv511 9))))
- (or $x63 $x184))))))))))))))))))))))))))))))))))
+ (let (($x41 (ite $x10 true false)))
+ (let (($x56 (and true $x41)))
+ (let (($x71 (and (and $x56 (not (and true (= (bvand ipv4.srcAddr (_ bv153159945 32)) (_ bv2162944 32))))) $x67)))
+ (let ((?x83 (concat (_ bv0 9) (_ bv1 1))))
+ (let (($x62 (and true (= (bvand ipv4.srcAddr (_ bv153159945 32)) (_ bv2162944 32)))))
+ (let (($x68 (and $x56 $x62)))
+ (let ((?x84 (ite $x68 ?x83 (ite $x71 ?x53 (ite true ?x53 scalars.local_metadata_t.vrf)))))
+ (let (($x93 (= ?x84 ?x53)))
+ (let (($x111 (and (and true (= ((_ extract 31 24) ipv4.dstAddr) ((_ extract 31 24) (_ bv167772160 32)))) $x93)))
+ (let (($x105 (and (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv336855040 32)))) (= ?x84 ?x83))))
+ (let (($x99 (and (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv168427520 32)))) $x93)))
+ (let (($x94 (and (and true (= ipv4.dstAddr (_ bv168427520 32))) $x93)))
+ (let (($x113 (not $x94)))
+ (let (($x117 (and $x113 (not $x99))))
+ (let (($x121 (and $x117 (not $x105))))
+ (let ((?x51 (ite false (_ bv1 1) (_ bv0 1))))
+ (let ((?x79 (ite true (_ bv1 1) (_ bv0 1))))
+ (let ((?x85 (ite $x68 ?x79 (ite $x71 ?x79 (ite true ?x51 scalars.local_metadata_t.vrf_is_valid)))))
+ (let (($x86 (bvuge ?x85 (_ bv1 1))))
+ (let (($x88 (and $x56 $x86)))
+ (let (($x123 (and (and $x88 $x121) $x111)))
+ (let (($x119 (and (and $x88 $x117) $x105)))
+ (let ((?x145 (ite $x119 (_ bv1 9) (ite $x123 (_ bv1 9) (ite (and $x88 (and $x121 (not $x111))) (_ bv511 9) (_ bv0 9))))))
+ (let (($x115 (and (and $x88 $x113) $x99)))
+ (let (($x112 (and $x88 $x94)))
+ (let ((?x160 (ite $x112 (_ bv1 9) (ite $x115 (_ bv0 9) ?x145))))
+ (let (($x175 (or (or false (= ?x160 (_ bv0 9))) (= ?x160 (_ bv1 9)))))
+ (let (($x55 (= ?x160 (_ bv511 9))))
+ (or $x55 $x175))))))))))))))))))))))))))))))))))
 (check-sat)
