@@ -24,6 +24,7 @@ cc_library(
     srcs = [
         "action.cc",
         "conditional.cc",
+        "context.cc",
         "control.cc",
         "guarded_map.cc",
         "operators.cc",
@@ -37,6 +38,7 @@ cc_library(
     hdrs = [
         "action.h",
         "conditional.h",
+        "context.h",
         "control.h",
         "guarded_map.h",
         "operators.h",

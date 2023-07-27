@@ -22,7 +22,6 @@
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "google/protobuf/map.h"
-#include "gutil/status.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "z3++.h"
 
@@ -31,17 +30,22 @@ namespace symbolic {
 
 // This class wraps around an internal absl::btree_map instance,
 // while enforcing the following:
-// 1. This class can only be instantiated with an instance of the IR
-//    header definitions. The resulting instance will be initialized
-//    to have exactly the same keys as the fields defined in those header
-//    definitions. These keys are initially mapped to free symbolic variables,
-//    with the same sort (including bitsize) described in the definitions.
-// 2. This class supports a const reference .Get(<key>), which returns
-//    an absl error if the key is not found in the map.
-// 3. This class allows mutation via .Set(<key>, <value>, <guard>), which
-//    sets the value of the key to z3::ite(<guard>, <value>, <old value>),
-//    after checking that the sort of <value> matches the sort of <old value>
-//    modulo padding.
+// 1. When instantiated with an instance of the IR header definitions. The
+//    resulting instance will be initialized to have exactly the same keys as
+//    the fields defined in those header definitions. These keys are initially
+//    mapped to free symbolic variables, with the same sort (including bitsize)
+//    described in the definitions.
+// 2. This class supports const references .Get(<key>) and .Get(<header_name>,
+//    <field_name>), which returns an absl error if the key is not found in the
+//    map.
+// 3. This class allows mutation via .Set(<key>, <value>, <guard>) and
+//    .Set(<header_name>, <field_name>, <value>, <guard>), which set the value
+//    of the key to z3::ite(<guard>, <value>, <old value>), after checking that
+//    the sort of <value> matches the sort of <old value> modulo padding.
+// 4. Special mutation methods are supported via .UnguardedSet(<key>, <value>)
+//    and .UnguardedSet(<header_name>, <field_name>, <value>), which
+//    unconditionally overwrite the old values in the map and are mainly used
+//    for initializing certain architecture- or target-specific values.
 //
 // As such, this class provides the following safety properties:
 // 1. Once initialized, the class has a fixed set of keys.
@@ -49,19 +53,17 @@ namespace symbolic {
 // 3. A value can only be assigned to a key given a guard.
 //
 class SymbolicGuardedMap {
-public:
-  // Constructor requires passing the headers definition and will fill the map
-  // with a free symbolic variable per header field.
+ public:
+  // By passing the headers definition, the constructor will fill the map with a
+  // free symbolic variable per header field.
   static absl::StatusOr<SymbolicGuardedMap> CreateSymbolicGuardedMap(
       const google::protobuf::Map<std::string, ir::HeaderType> &headers);
 
-  // Explicitly copyable and movable!
+  SymbolicGuardedMap() = default;
   SymbolicGuardedMap(const SymbolicGuardedMap &other) = default;
   SymbolicGuardedMap(SymbolicGuardedMap &&other) = default;
-
-  // Not assignable.
-  SymbolicGuardedMap &operator=(const SymbolicGuardedMap &other) = delete;
-  SymbolicGuardedMap &operator=(SymbolicGuardedMap &&other) = delete;
+  SymbolicGuardedMap &operator=(const SymbolicGuardedMap &other) = default;
+  SymbolicGuardedMap &operator=(SymbolicGuardedMap &&other) = default;
 
   // Getters.
   bool ContainsKey(absl::string_view key) const;
@@ -96,7 +98,7 @@ private:
 
   // Private constructor used by factory.
   explicit SymbolicGuardedMap(absl::btree_map<std::string, z3::expr> map)
-      : map_(map) {}
+      : map_(std::move(map)) {}
 };
 
 } // namespace symbolic

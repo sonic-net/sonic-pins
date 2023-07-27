@@ -46,56 +46,56 @@ TEST(TranslateValueToP4RT, ReverseTranslatedValuesAreEqualToTheOriginalOnes) {
 
 // Make sure the code conforms to the peculiarities of PDPI's value conversion.
 TEST(FormatP4RTValue, WorksFor64BitIPv6) {
-  P4RuntimeTranslator trasnlator;
+  P4RuntimeTranslator translator;
   ASSERT_OK_AND_ASSIGN(auto ir_value,
                        gutil::ParseTextProto<pdpi::IrValue>(
                            R"pb(ipv6: "0000:ffff:ffff:ffff::")pb"));
   ASSERT_OK_AND_ASSIGN(
       z3::expr z3_expr,
       FormatP4RTValue(Z3Context(), kFieldName, kFieldType, ir_value,
-                      /*bitwidth=*/64, &trasnlator));
+                      /*bitwidth=*/64, &translator));
   ASSERT_EQ(Z3ValueStringToInt(z3_expr.to_string()), 0x0000'ffff'ffff'ffffULL);
 }
 
 TEST(FormatP4RTValue, WorksForIpv4) {
-  P4RuntimeTranslator trasnlator;
+  P4RuntimeTranslator translator;
   ASSERT_OK_AND_ASSIGN(auto ir_value, gutil::ParseTextProto<pdpi::IrValue>(
                                           R"pb(ipv4: "127.0.0.1")pb"));
   ASSERT_OK_AND_ASSIGN(
       z3::expr z3_expr,
       FormatP4RTValue(Z3Context(), kFieldName, kFieldType, ir_value,
-                      /*bitwidth=*/32, &trasnlator));
+                      /*bitwidth=*/32, &translator));
   ASSERT_EQ(Z3ValueStringToInt(z3_expr.to_string()), 0x7f000001);
 }
 
 TEST(FormatP4RTValue, WorksForMac) {
-  P4RuntimeTranslator trasnlator;
+  P4RuntimeTranslator translator;
   ASSERT_OK_AND_ASSIGN(auto ir_value, gutil::ParseTextProto<pdpi::IrValue>(
                                           R"pb(mac: "01:02:03:04:05:06")pb"));
   ASSERT_OK_AND_ASSIGN(
       z3::expr z3_expr,
       FormatP4RTValue(Z3Context(), kFieldName, kFieldType, ir_value,
-                      /*bitwidth=*/48, &trasnlator));
+                      /*bitwidth=*/48, &translator));
   ASSERT_EQ(Z3ValueStringToInt(z3_expr.to_string()), 0x01'02'03'04'05'06ULL);
 }
 
 TEST(FormatP4RTValue, WorksForHexString) {
-  P4RuntimeTranslator trasnlator;
+  P4RuntimeTranslator translator;
   ASSERT_OK_AND_ASSIGN(auto ir_value, gutil::ParseTextProto<pdpi::IrValue>(
                                           R"pb(hex_str: "0xabcd")pb"));
   ASSERT_OK_AND_ASSIGN(
       z3::expr z3_expr,
       FormatP4RTValue(Z3Context(), kFieldName, kFieldType, ir_value,
-                      /*bitwidth=*/16, &trasnlator));
+                      /*bitwidth=*/16, &translator));
   ASSERT_EQ(Z3ValueStringToInt(z3_expr.to_string()), 0xabcd);
 }
 
 TEST(FormatP4RTValue, FailsForStringWithNonZeroBitwidth) {
-  P4RuntimeTranslator trasnlator;
+  P4RuntimeTranslator translator;
   ASSERT_OK_AND_ASSIGN(auto ir_value, gutil::ParseTextProto<pdpi::IrValue>(
                                           R"pb(str: "dummy_value")pb"));
   ASSERT_THAT(FormatP4RTValue(Z3Context(), kFieldName, kFieldType, ir_value,
-                              /*bitwidth=*/16, &trasnlator),
+                              /*bitwidth=*/16, &translator),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 

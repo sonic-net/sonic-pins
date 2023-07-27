@@ -14,7 +14,6 @@
 
 #include "p4_symbolic/sai/sai.h"
 
-#include <memory>
 #include <string>
 #include <type_traits>
 #include <unordered_set>

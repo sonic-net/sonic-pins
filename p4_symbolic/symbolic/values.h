@@ -22,11 +22,12 @@
 #define P4_SYMBOLIC_SYMBOLIC_VALUES_H_
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
-#include "gutil/status.h"
+#include "absl/status/statusor.h"
 #include "p4_pdpi/ir.pb.h"
 #include "z3++.h"
 

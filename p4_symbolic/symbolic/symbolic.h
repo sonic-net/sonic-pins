@@ -24,14 +24,12 @@
 #include <utility>
 #include <vector>
 
-#include "absl/base/attributes.h"
-#include "absl/base/macros.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_symbolic/ir/table_entries.h"
-#include "p4_symbolic/symbolic/guarded_map.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/values.h"
+#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -65,137 +63,10 @@ constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
 constexpr absl::string_view kParserErrorField =
     "standard_metadata.parser_error";
 
-// Maps the name of a header field in the p4 program to its concrete value.
-using ConcretePerPacketState = absl::btree_map<std::string, std::string>;
-
-// The symbolic counterpart of ConcretePerPacketState.
-// Maps the name of a header field in the p4 program to its symbolic value.
-// This can be used to constrain p4 program fields inside assertions.
-// This is automatically constructred from the header type definitions
-// the p4 program has.
-// Assume the p4 program has a header instance named "standard_metadata" of type
-// "standard_metadata_t", which has field "ingress_port" of type "bit<9>" in it.
-// Then, we will have:
-//    SymbolicMetadata["standard_metadata.ingress_port"] =
-//         <symbolic bit vector of size 9>
-// An instance of this type is passed around and mutated by the functions
-// responsible for symbolically evaluating the program.
-using SymbolicPerPacketState = SymbolicGuardedMap;
-
 // V1model's `mark_to_drop` primitive sets the `egress_spec` field to this
 // value to indicate the packet should be dropped at the end of ingress/egress
 // processing. See v1model.p4 for details.
 z3::expr EgressSpecDroppedValue();
-
-// Expresses a concrete match for a corresponding concrete packet with a
-// table in the program.
-struct ConcreteTableMatch {
-  bool matched; // false if no entry in this table was matched, true otherwise.
-  // If matched is false, this is set to -1.
-  // If matched is true, this is the index of the matched table entry, or -1 if
-  // the default entry was matched.
-  int entry_index;
-  std::string to_string() const {
-    if (!matched) {
-      return "was not matched!";
-    }
-    return absl::StrCat("was matched on entry ", entry_index);
-  }
-};
-
-// Exposes a symbolic handle for a match between the symbolic packet and
-// a symbolic table.
-// This allows encoding of constraints on which (if any) entries are matched,
-// and the value of the match.
-// e.g. for some table "<table_name>":
-// (<symbolic_table_match>.entry_index == i) iff
-//  <entries>[<table_name>][i] was matched/hit.
-struct SymbolicTableMatch {
-  z3::expr matched;
-  z3::expr entry_index;
-};
-
-// `SymbolicTableMatch`es by table name.
-using SymbolicTableMatches = absl::btree_map<std::string, SymbolicTableMatch>;
-
-// Specifies the expected trace in the program that the corresponding
-// concrete packet is expected to take.
-struct ConcreteTrace {
-  absl::btree_map<std::string, ConcreteTableMatch> matched_entries;
-  // Can be extended more in the future to include useful
-  // flags about dropping the packet, taking specific code (e.g. if)
-  // branches, vrf, other interesting events, etc.
-  bool dropped;    // true if the packet was dropped.
-  bool got_cloned; // true if the packet got cloned.
-  std::string to_string() const {
-    std::string result;
-    absl::StrAppend(&result, "dropped = ", dropped, "\n");
-    absl::StrAppend(&result, "got cloned = ", got_cloned);
-    for (const auto &[table, match] : matched_entries) {
-      absl::StrAppend(&result, "\n", table, " => ", match.to_string());
-    }
-    return result;
-  }
-};
-
-// Provides symbolic handles for the trace the symbolic packet is constrained
-// to take in the program.
-struct SymbolicTrace {
-  // Full table name to its symbolic match.
-  // TODO: Rename to matches_by_table_name.
-  SymbolicTableMatches matched_entries;
-  z3::expr dropped;
-  z3::expr got_cloned;
-};
-
-// The result of solving with some assertion.
-// This contains an input test packet with its predicted flow in the program,
-// and the predicted output.
-struct ConcreteContext {
-  std::string ingress_port;
-  std::string egress_port;
-  ConcretePerPacketState ingress_headers;
-  ConcretePerPacketState parsed_headers;
-  ConcretePerPacketState egress_headers;
-  ConcreteTrace trace; // Expected trace in the program.
-
-  std::string to_string() const { return to_string(false); }
-  std::string to_string(bool verbose) const {
-    auto result = absl::StrCat("ingress_port = ", ingress_port, "\n",
-                               "egress_port = ", egress_port, "\n", "trace:\n",
-                               trace.to_string());
-    if (verbose) {
-      auto ingress_string = absl::StrCat("ingress_headers", ":");
-      auto parsed_string = absl::StrCat("parsed_headers", ":");
-      auto egress_string = absl::StrCat("egress_headers", ":");
-      for (const auto &[name, ingress_value] : ingress_headers) {
-        absl::StrAppend(&ingress_string, "\n", name, " = ", ingress_value);
-      }
-      for (const auto &[name, parsed_value] : parsed_headers) {
-        absl::StrAppend(&parsed_string, "\n", name, " = ", parsed_value);
-      }
-      for (const auto &[name, egress_value] : egress_headers) {
-        absl::StrAppend(&egress_string, "\n", name, " = ", egress_value);
-      }
-      absl::StrAppend(&result, "\n\n", ingress_string, "\n\n", parsed_string,
-                      "\n\n", egress_string);
-    }
-    return result;
-  }
-};
-
-// The symbolic context within our analysis.
-// Exposes symbolic handles for the fields of the input packet,
-// and its trace in the program.
-// Assertions are defined on a symbolic context.
-struct SymbolicContext {
-  z3::expr ingress_port;
-  z3::expr egress_port;
-  SymbolicPerPacketState ingress_headers;
-  SymbolicPerPacketState parsed_headers;
-  SymbolicPerPacketState egress_headers;
-  SymbolicTrace trace;
-};
 
 // The overall state of our symbolic solver/interpreter.
 // This is returned by our main analysis/interpration function, and is used
@@ -207,14 +78,10 @@ struct SymbolicContext {
 // many times.
 class SolverState {
  public:
-  SolverState(ir::P4Program program, ir::TableEntries entries,
-              SymbolicContext context, std::unique_ptr<z3::solver> solver,
-              values::P4RuntimeTranslator translator)
+  SolverState(ir::P4Program program, ir::TableEntries entries)
       : program(std::move(program)),
         entries(std::move(entries)),
-        context(std::move(context)),
-        solver(std::move(solver)),
-        translator(std::move(translator)) {}
+        solver(std::make_unique<z3::solver>(Z3Context())) {}
   SolverState(const SolverState &) = delete;
   SolverState(SolverState &&) = default;
   ~SolverState() {
@@ -227,10 +94,10 @@ class SolverState {
   }
 
   // Returns the SMT formulae of all assertions in the solver.
-  std::string GetSolverSMT() const;
+  std::string GetSolverSMT();
   // Returns the SMT formulae of all ingress, parsed, and egress headers and
   // solver constraints.
-  std::string GetHeadersAndSolverConstraintsSMT() const;
+  std::string GetHeadersAndSolverConstraintsSMT();
 
   // The IR of the p4 program being analyzed.
   ir::P4Program program;
@@ -278,16 +145,9 @@ absl::StatusOr<std::unique_ptr<symbolic::SolverState>> EvaluateP4Program(
 
 // Finds a concrete packet and flow in the program that satisfies the given
 // assertion and meets the structure constrained by solver_state.
-absl::StatusOr<std::optional<ConcreteContext>>
-Solve(SolverState &solver_state, const Assertion &assertion);
-absl::StatusOr<std::optional<ConcreteContext>>
-Solve(const SolverState &solver_state);
-
-ABSL_DEPRECATED(
-    "Use the overload Solve(SolverState&, const Assertion&) instead.")
-absl::StatusOr<std::optional<ConcreteContext>>
-Solve(const std::unique_ptr<SolverState> &solver_state,
-      const Assertion &assertion);
+absl::StatusOr<std::optional<ConcreteContext>> Solve(SolverState &solver_state);
+absl::StatusOr<std::optional<ConcreteContext>> Solve(
+    SolverState &solver_state, const Assertion &assertion);
 
 // Dumps the underlying SMT program for debugging.
 std::string DebugSMT(const std::unique_ptr<SolverState> &solver_state,
