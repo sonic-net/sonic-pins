@@ -74,19 +74,19 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
   // variable for every field in every header instance.
   absl::btree_map<std::string, z3::expr> symbolic_headers;
   for (const auto &[header_name, header_type] : Ordered(headers)) {
-    // Pseudo fields used in P4-Symbolic indicating the state of the header.
+    // Pseudo fields (`$valid$`, `$extracted$`) in P4-Symbolic indicate the
+    // state of the header. Here we initialize the pseudo fields of each header
+    // to symbolic variables.
     for (const auto &pseudo_field_name :
          {kValidPseudoField, kExtractedPseudoField}) {
       std::string field_name =
           absl::StrFormat("%s.%s", header_name, pseudo_field_name);
-      // TODO: Set these fields to false while removing SAI parser
-      // code.
-      z3::expr free_expr = z3_context.bool_const(field_name.c_str());
-      symbolic_headers.insert({field_name, free_expr});
+      z3::expr free_variable = z3_context.bool_const(field_name.c_str());
+      symbolic_headers.insert({field_name, free_variable});
     }
 
     // Regular fields defined in the p4 program or v1model.
-    for (const auto &[field_name, field] : header_type.fields()) {
+    for (const auto &[field_name, field] : Ordered(header_type.fields())) {
       if (field.signed_()) {
         return absl::UnimplementedError(
             "Negative header fields are not supported");
@@ -100,7 +100,7 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
     }
   }
 
-  // Initialize pseudo header fields.
+  // Initialize packet-wide pseudo fields to false.
   symbolic_headers.insert({
       std::string(kGotClonedPseudoField),
       z3_context.bool_val(false),
