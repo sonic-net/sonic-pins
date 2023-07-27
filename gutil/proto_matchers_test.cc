@@ -75,6 +75,40 @@ table_name: "router_interface_table" priority: 123>)");
 table_name: "router_interface_table" priority: 123>)");
 }
 
+TEST(PartiallyMatcherTest, IdenticalProtosAreAlsoPartiallyEqual) {
+  pdpi::IrTableEntry table_entry;
+  table_entry.set_table_name("router_interface_table");
+  table_entry.set_priority(123);
+
+  EXPECT_THAT(table_entry, Partially(EqualsProto(table_entry)));
+}
+
+TEST(PartiallyMatcherTest, PartiallyEqualsProtoOnlyComparePresentFields) {
+  pdpi::IrTableEntry table_entry;
+  table_entry.set_table_name("router_interface_table");
+  table_entry.set_priority(123);
+
+  EXPECT_THAT(table_entry, Partially(EqualsProto(R"pb(
+                table_name: "router_interface_table"
+                priority: 123)pb")));
+}
+
+TEST(PartiallyMatcherTest, DifferentlProtosDoNotMatch) {
+  pdpi::IrTableEntry table_entry;
+  table_entry.set_table_name("router_interface_table");
+  table_entry.set_priority(123);
+
+  // Proto differs in one field and remains the same for another field does not
+  // match.
+  EXPECT_THAT(table_entry, Not(Partially(EqualsProto(R"pb(
+                table_name: "big_table"
+                priority: 123)pb"))));
+  // Proto differs in both fields should not match.
+  EXPECT_THAT(table_entry, Not(Partially(EqualsProto(R"pb(
+                table_name: "big_table"
+                priority: 1234)pb"))));
+}
+
 TEST(HasOneofCaseTest, NotHasOneofCase) {
   EXPECT_THAT(gutil::ParseProtoOrDie<TestMessageWithOneof>(R"pb()pb"),
               Not(HasOneofCase<TestMessageWithOneof>(

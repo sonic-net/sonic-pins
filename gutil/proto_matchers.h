@@ -95,6 +95,7 @@ class ProtobufEqMatcher {
                        ::testing::MatchResultListener* listener) const {
     std::string diff;
     google::protobuf::util::MessageDifferencer differ;
+    differ.set_scope(comparison_scope_);
     differ.ReportDifferencesToString(&diff);
     // Order does not matter for repeated fields.
     differ.set_repeated_field_comparison(
@@ -121,10 +122,15 @@ class ProtobufEqMatcher {
     }
     return equal;
   }
+  void SetComparePartially() {
+    comparison_scope_ = google::protobuf::util::MessageDifferencer::PARTIAL;
+  }
 
  private:
   mutable std::shared_ptr<google::protobuf::Message> expected_;
   std::string expected_text_;
+  google::protobuf::util::MessageDifferencer::Scope comparison_scope_ =
+      google::protobuf::util::MessageDifferencer::FULL;
 };
 
 inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
@@ -217,6 +223,18 @@ template <class ProtoMessage>
 HasOneofCaseMatcher<ProtoMessage> HasOneofCase(absl::string_view oneof_name,
                                                int expected_oneof_case) {
   return HasOneofCaseMatcher<ProtoMessage>(oneof_name, expected_oneof_case);
+}
+
+// Partially(m) returns a matcher that is the same as m, except that
+// only fields present in the expected protobuf are considered (using
+// google::protobuf::util::MessageDifferencer's PARTIAL comparison option).  For
+// example, Partially(EqualsProto(p)) will ignore any field that's
+// not set in p when comparing the protobufs. The inner matcher m can
+// be any of the Equals* and EquivTo* protobuf matchers above.
+template <class InnerProtoMatcher>
+inline InnerProtoMatcher Partially(InnerProtoMatcher inner_proto_matcher) {
+  inner_proto_matcher.mutable_impl().SetComparePartially();
+  return inner_proto_matcher;
 }
 
 }  // namespace gutil
