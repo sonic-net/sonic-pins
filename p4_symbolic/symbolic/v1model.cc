@@ -148,12 +148,13 @@ absl::Status EvaluateV1model(const ir::Dataplane &data_plane,
                                 /*guard=*/Z3Context().bool_val(true)));
   ASSIGN_OR_RETURN(z3::expr dropped, IsDropped(context.egress_headers));
 
-  // Constrain egress_port to be equal to egress_spec.
+  // Assign egress_spec to egress_port if the packet is not dropped.
+  // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md
   ASSIGN_OR_RETURN(z3::expr egress_spec,
                    context.egress_headers.Get("standard_metadata.egress_spec"));
-  RETURN_IF_ERROR(
-      context.egress_headers.Set("standard_metadata.egress_port", egress_spec,
-                                 /*guard=*/Z3Context().bool_val(true)));
+  RETURN_IF_ERROR(context.egress_headers.Set("standard_metadata.egress_port",
+                                             egress_spec,
+                                             /*guard=*/!dropped));
 
   // Evaluate the egress pipeline.
   ASSIGN_OR_RETURN(

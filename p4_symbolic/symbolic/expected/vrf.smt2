@@ -356,7 +356,7 @@
 (let ((a!15 (ite (and (and (and true a!1) (bvuge a!5 #b1)) a!7)
                  #b000000001
                  a!14)))
-  (ite true a!15 standard_metadata.egress_port)))))))))
+  (ite (not (= a!15 #b111111111)) a!15 standard_metadata.egress_port)))))))))
 (egress) standard_metadata.egress_rid: standard_metadata.egress_rid
 (egress) standard_metadata.egress_spec: (let ((a!1 (ite (and true (= (concat #x0 #x800) ethernet.eth_type)) true false))
       (a!3 (not (and true (= (bvand ipv4.srcAddr #x09210909) #x00210100)))))
@@ -437,8 +437,8 @@
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
- (let (($x180 (= standard_metadata.ingress_port (_ bv1 9))))
- (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x180)))
+ (let (($x181 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x181)))
 (assert
  (let ((?x61 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x75 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -470,7 +470,7 @@
  (let (($x123 (and (and $x96 $x121) $x107)))
  (let (($x120 (and $x96 $x102)))
  (let ((?x169 (ite $x120 (_ bv1 9) (ite $x123 (_ bv0 9) (ite $x127 (_ bv1 9) (ite $x131 (_ bv1 9) ?x136))))))
- (let (($x183 (or (or false (= ?x169 (_ bv0 9))) (= ?x169 (_ bv1 9)))))
+ (let (($x184 (or (or false (= ?x169 (_ bv0 9))) (= ?x169 (_ bv1 9)))))
  (let (($x63 (= ?x169 (_ bv511 9))))
- (or $x63 $x183))))))))))))))))))))))))))))))))))
+ (or $x63 $x184))))))))))))))))))))))))))))))))))
 (check-sat)

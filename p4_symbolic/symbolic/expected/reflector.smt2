@@ -54,7 +54,10 @@
 (egress) standard_metadata.deq_qdepth: standard_metadata.deq_qdepth
 (egress) standard_metadata.deq_timedelta: standard_metadata.deq_timedelta
 (egress) standard_metadata.egress_global_timestamp: standard_metadata.egress_global_timestamp
-(egress) standard_metadata.egress_port: (ite true
+(egress) standard_metadata.egress_port: (ite (not (= (ite true
+                  standard_metadata.ingress_port
+                  standard_metadata.egress_spec)
+             #b111111111))
      (ite true standard_metadata.ingress_port standard_metadata.egress_spec)
      standard_metadata.egress_port)
 (egress) standard_metadata.egress_rid: standard_metadata.egress_rid
@@ -75,11 +78,11 @@
 (declare-fun standard_metadata.ingress_port () (_ BitVec 9))
 (declare-fun standard_metadata.egress_spec () (_ BitVec 9))
 (assert
- (let (($x37 (= standard_metadata.ingress_port (_ bv1 9))))
- (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x37)))
+ (let (($x38 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x38)))
 (assert
  (let ((?x27 (ite true standard_metadata.ingress_port standard_metadata.egress_spec)))
- (let (($x40 (or (or false (= ?x27 (_ bv0 9))) (= ?x27 (_ bv1 9)))))
+ (let (($x41 (or (or false (= ?x27 (_ bv0 9))) (= ?x27 (_ bv1 9)))))
  (let (($x29 (= ?x27 (_ bv511 9))))
- (or $x29 $x40)))))
+ (or $x29 $x41)))))
 (check-sat)

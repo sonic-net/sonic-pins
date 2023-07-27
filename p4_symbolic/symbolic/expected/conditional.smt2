@@ -79,7 +79,7 @@
 (let ((a!4 (ite (and true (and true (= ethernet.dst_addr #x000000000001)))
                 #b000000001
                 (ite a!1 #b111111111 (ite a!2 #b111111111 a!3)))))
-  (ite true a!4 standard_metadata.egress_port)))
+  (ite (not (= a!4 #b111111111)) a!4 standard_metadata.egress_port)))
 (egress) standard_metadata.egress_rid: standard_metadata.egress_rid
 (egress) standard_metadata.egress_spec: (let ((a!1 (and true (not (and true (= ethernet.dst_addr #x000000000001)))))
       (a!2 (and true (not (= standard_metadata.ingress_port (concat #x00 #b0)))))
@@ -106,8 +106,8 @@
 (declare-fun standard_metadata.egress_spec () (_ BitVec 9))
 (declare-fun ethernet.dst_addr () (_ BitVec 48))
 (assert
- (let (($x63 (= standard_metadata.ingress_port (_ bv1 9))))
- (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x63)))
+ (let (($x64 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x64)))
 (assert
  (let (($x33 (= standard_metadata.ingress_port (concat (_ bv0 8) (_ bv0 1)))))
  (let (($x35 (and true $x33)))
@@ -117,7 +117,7 @@
  (let (($x45 (and true $x44)))
  (let (($x46 (and true $x45)))
  (let ((?x54 (ite $x46 (_ bv1 9) ?x49)))
- (let (($x66 (or (or false (= ?x54 (_ bv0 9))) (= ?x54 (_ bv1 9)))))
+ (let (($x67 (or (or false (= ?x54 (_ bv0 9))) (= ?x54 (_ bv1 9)))))
  (let (($x56 (= ?x54 (_ bv511 9))))
- (or $x56 $x66))))))))))))
+ (or $x56 $x67))))))))))))
 (check-sat)
