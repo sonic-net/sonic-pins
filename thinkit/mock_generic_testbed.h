@@ -33,6 +33,7 @@ class MockGenericTestbed : public GenericTestbed {
   MOCK_METHOD(TestEnvironment&, Environment, (), (override));
   MOCK_METHOD((absl::flat_hash_map<std::string, InterfaceInfo>),
               GetSutInterfaceInfo, (), (override));
+  MOCK_METHOD(otg::Openapi::StubInterface*, GetTrafficClient, (), (override));
   MOCK_METHOD(absl::StatusOr<HttpResponse>, SendRestRequestToIxia,
               (RequestType type, absl::string_view url,
                absl::string_view payload),
