@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <iostream>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -151,21 +152,19 @@ void GetEntriesUnreachableFromRootsTest(
     const pdpi::IrP4Info& info, const std::string& test_name,
     const std::vector<std::string> pd_table_entry_strings) {
   // Convert input to PI.
-  std::vector<p4::v1::TableEntry> pi_entries;
+  std::vector<p4::v1::Entity> pi_entities;
   std::vector<pdpi::TableEntry> pd_entries;
   for (const auto& pd_entry_string : pd_table_entry_strings) {
     const auto pd_entry =
         gutil::ParseProtoOrDie<pdpi::TableEntry>(pd_entry_string);
     pd_entries.push_back(pd_entry);
-    const auto pi_entry_or_status =
-        pdpi::PartialPdTableEntryToPiTableEntry(info, pd_entry);
-    if (!pi_entry_or_status.status().ok()) {
+    const auto pi_entity = pdpi::PdTableEntryToPiEntity(info, pd_entry);
+    if (!pi_entity.status().ok()) {
       std::cerr << "Unable to convert TableEntry from PD to PI."
-                << pi_entry_or_status.status() << std::endl;
+                << pi_entity.status() << std::endl;
       return;
     }
-    const auto& pi_entry = pi_entry_or_status.value();
-    pi_entries.push_back(pi_entry);
+    pi_entities.push_back(*pi_entity);
   }
 
   // Output input.
@@ -181,30 +180,31 @@ void GetEntriesUnreachableFromRootsTest(
 
   // We use the entry metadata to determine whether to treat it as a root entry
   // or not.
-  auto is_root = [](const p4::v1::TableEntry& entry) {
-    return entry.metadata() == "Root";
+  auto is_root = [](const p4::v1::Entity& entity) {
+    return entity.table_entry().metadata() == "Root";
   };
 
   // Run GetEntriesUnreachableFromRoots.
-  auto unreachable_entries =
-      pdpi::GetEntriesUnreachableFromRoots(pi_entries, is_root, info);
-  if (!unreachable_entries.ok()) {
-    std::cout << "--- Getting unreachable entries from roots failed (output):"
+  absl::StatusOr<std::vector<p4::v1::Entity>> unreachable_entities =
+      pdpi::GetEntitiesUnreachableFromRoots(pi_entities, is_root, info);
+  if (!unreachable_entities.ok()) {
+    std::cout << "--- Getting unreachable entities from roots failed (output):"
               << std::endl;
-    std::cout << unreachable_entries.status() << std::endl;
+    std::cout << unreachable_entities.status() << std::endl;
     return;
   }
   std::cout << "--- Unreachable entries from roots (output):" << std::endl;
-  if (unreachable_entries->empty()) {
+  if (unreachable_entities->empty()) {
     std::cout << "<empty>" << std::endl << std::endl;
   }
 
   // Output results.
-  for (const auto& entry : *unreachable_entries) {
+  for (const auto& entity : *unreachable_entities) {
     pdpi::TableEntry pd_entry;
-    if (absl::Status status = pdpi::PiTableEntryToPd(info, entry, &pd_entry);
+    if (absl::Status status =
+            pdpi::PiEntityToPdTableEntry(info, entity, &pd_entry);
         !status.ok()) {
-      std::cerr << "Unable to convert TableEntry from PI to PD." << status
+      std::cerr << "Unable to convert Entity from PI to PD." << status
                 << std::endl;
       return;
     }
@@ -933,8 +933,8 @@ int main(int argc, char** argv) {
   // Dependency   Root
   GetEntriesUnreachableFromRootsTest(
       info,
-      "Root referring to dependency and a "
-      "standalone Root generates no garbage.",
+      "Root referring to dependency and a standalone Root generates no "
+      "garbage.",
       {
           R"pb(
             referring_by_action_table_entry {
@@ -1053,17 +1053,17 @@ int main(int argc, char** argv) {
             }
           )pb",
       });
-  // NonRoot garbage
-  //        |
-  // NonRoot garbage
+  // garbage
+  //  |
+  // garbage
   GetEntriesUnreachableFromRootsTest(
-      info, "NonRoot referring to other NonRoot is garbage.",
+      info, "Garbage referring to other is garbage.",
       {
           R"pb(
             referring_by_match_field_table_entry {
               match { referring_id_1: "key-a" }
               action { do_thing_4 {} }
-              controller_metadata: "NonRoot garbage"
+              controller_metadata: "garbage"
               priority: 32
             }
           )pb",
@@ -1071,19 +1071,19 @@ int main(int argc, char** argv) {
             one_match_field_table_entry {
               match { id: "key-a" }
               action { do_thing_4 {} }
-              controller_metadata: "NonRoot garbage"
+              controller_metadata: "garbage"
             }
           )pb",
       });
 
   // Root
   //   |
-  // Child dependency          NonRoot garbage
+  // Child dependency          garbage
   //   |                        /
   // Grand child Dependency
   GetEntriesUnreachableFromRootsTest(
       info,
-      "NonRoot referring to other dependency is garbage, but other "
+      "Garbage referring to other dependency is garbage, but other "
       "dependencies that are referred by a root won't be removed.",
       {
           R"pb(
@@ -1104,7 +1104,7 @@ int main(int argc, char** argv) {
             one_match_field_table_entry {
               match { id: "key-a" }
               action { do_thing_4 {} }
-              controller_metadata: "Grand child Dependency"
+              controller_metadata: "garbage"
             }
           )pb",
           R"pb(
@@ -1113,7 +1113,7 @@ int main(int argc, char** argv) {
               action {
                 referring_to_one_match_field_action { referring_id_1: "key-a" }
               }
-              controller_metadata: "NonRoot garbage"
+              controller_metadata: "garbage"
             }
           )pb",
       });
@@ -1121,9 +1121,9 @@ int main(int argc, char** argv) {
   // Conglomeration of entries, courtesy of dilo@.
   // Root
   //   |
-  // Dependency    NonRoot Garbage  NonRoot Garbage        Root
-  //   |             /                      |                |
-  // Dependency                     NonRoot Garbage        Dependency      Root
+  // Dependency Garbage              Garbage            Root
+  //   |        /                      |                |
+  // Dependency                     Garbage        Dependency      Root
   GetEntriesUnreachableFromRootsTest(
       info, "Conglomeration test.",
       {
@@ -1136,14 +1136,17 @@ int main(int argc, char** argv) {
           )pb",
           R"pb(
             referring_by_match_field_table_entry {
-              match { referring_id_1: "key-a" }
+              match {
+                referring_id_1: "key-a"
+                referring_id_2 { value: "0x002" }
+              }
               action { do_thing_4 {} }
               controller_metadata: "Child dependency"
               priority: 32
             })pb",
           R"pb(
-            one_match_field_table_entry {
-              match { id: "key-a" }
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x002" }
               action { do_thing_4 {} }
               controller_metadata: "Grand child Dependency"
             }
@@ -1157,14 +1160,14 @@ int main(int argc, char** argv) {
                   referring_id_2: "0x000"
                 }
               }
-              controller_metadata: "NonRoot garbage"
+              controller_metadata: "garbage"
             }
           )pb",
           R"pb(
             one_match_field_table_entry {
               match { id: "key-b" }
               action { do_thing_4 {} }
-              controller_metadata: "NonRoot garbage"
+              controller_metadata: "garbage"
             }
           )pb",
           R"pb(
@@ -1176,16 +1179,15 @@ int main(int argc, char** argv) {
                   referring_id_2: "0x000"
                 }
               }
-              controller_metadata: "NonRoot garbage"
+              controller_metadata: "garbage"
             }
           )pb",
           R"pb(
             referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_to_two_match_fields_action {
+                referring_to_one_match_field_action {
                   referring_id_1: "key-c",
-                  referring_id_2: "0x000"
                 }
               }
               controller_metadata: "Root"
@@ -1212,9 +1214,85 @@ int main(int argc, char** argv) {
           )pb",
       });
 
+  // The reason why some tests are subsets of other tests instead of being
+  // combined into one test is because Reference computation is a stateful
+  // computation so presence of other entries could influence the outcome of
+  // reachability analysis so test cases need to be built incrementally(There
+  // was a bug during development that was masked because of test cases were
+  // combined).
   GetEntriesUnreachableFromRootsTest(
       info,
-      "[Incorrect due to false dependency] Partially referred non-root is "
+      "Reference via match fields: partially referred to non-root entries are "
+      "unreachable.",
+      {
+          R"pb(
+            referring_by_match_field_table_entry {
+              match {
+                referring_id_1: "key-a"
+                referring_id_2 { value: "0x000" }
+              }
+              action { do_thing_4 {} }
+              priority: 32
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x001" }
+              action { do_thing_4 {} }
+              controller_metadata: "garbage partially referred to via id_1"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-b", id_2: "0x000" }
+              action { do_thing_4 {} }
+              controller_metadata: "garbage partially referred to via id_2"
+            }
+          )pb",
+      });
+  GetEntriesUnreachableFromRootsTest(
+      info,
+      "Reference via match fields: partially referred to non-root entries are "
+      "unreachable and the fully referred to entry is reachable.",
+      {
+          R"pb(
+            referring_by_match_field_table_entry {
+              match {
+                referring_id_1: "key-a"
+                referring_id_2 { value: "0x000" }
+              }
+              action { do_thing_4 {} }
+              priority: 32
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x001" }
+              action { do_thing_4 {} }
+              controller_metadata: "garbage partially referred to via id_1"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-b", id_2: "0x000" }
+              action { do_thing_4 {} }
+              controller_metadata: "garbage partially referred to via id_2"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x000" }
+              action { do_thing_4 {} }
+              controller_metadata: "fully referred to via both match fields"
+            }
+          )pb",
+      });
+
+  GetEntriesUnreachableFromRootsTest(
+      info,
+      "Reference via action: partially referred to non-root entries are "
       "unreachable.",
       {
           R"pb(
@@ -1233,7 +1311,86 @@ int main(int argc, char** argv) {
             two_match_fields_table_entry {
               match { id_1: "key-a", id_2: "0x001" }
               action { do_thing_4 {} }
-              controller_metadata: "NonRoot garbage"
+              controller_metadata: "garbage partially referred to via id_1"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-b", id_2: "0x000" }
+              action { do_thing_4 {} }
+              controller_metadata: "garbage partially referred to via id_2"
+            }
+          )pb",
+      });
+
+  GetEntriesUnreachableFromRootsTest(
+      info,
+      "Reference via action: partially referred to non-root entries are "
+      "unreachable and the fully referred entry is reachable.",
+      {
+          R"pb(
+            referring_by_action_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_to_two_match_fields_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "0x000"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x000" }
+              action { do_thing_4 {} }
+              controller_metadata: "Child fully referred by all match fields"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x001" }
+              action { do_thing_4 {} }
+              controller_metadata: "garbage partially referred to via id_1"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-b", id_2: "0x000" }
+              action { do_thing_4 {} }
+              controller_metadata: "garbage partially referred to via id_2"
+            }
+          )pb",
+      });
+  GetEntriesUnreachableFromRootsTest(
+      info,
+      "Referred to Entries with same match fields but different actions and "
+      "metadata are reachable",
+      {
+          R"pb(
+            referring_by_action_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_to_two_match_fields_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "0x000"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x000" }
+              action { do_thing_4 {} }
+              controller_metadata: "Child fully referred to by all match fields"
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x000" }
+              action { do_thing_1 { arg1: "0x00000002" arg2: "0x00000001" } }
+              controller_metadata: "Referred to child with a :)"
             }
           )pb",
       });
