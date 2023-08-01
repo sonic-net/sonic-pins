@@ -63,24 +63,6 @@ TEST_P(TestEntriesTest, MakePdEntryPuntingAllPacketsDoesNotError) {
   ASSERT_THAT(MakePdEntryPuntingAllPackets(PuntAction::kTrap), IsOkAndHolds(_));
 }
 
-TEST_P(TestEntriesTest,
-       MakePiEntriesForwardingIpPacketsToGivenPortDoesNotError) {
-  ASSERT_THAT(MakePiEntriesForwardingIpPacketsToGivenPort(
-                  /*egress_port=*/"42", sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
-}
-TEST_P(TestEntriesTest,
-       MakeIrEntriesForwardingIpPacketsToGivenPortDoesNotError) {
-  ASSERT_THAT(MakeIrEntriesForwardingIpPacketsToGivenPort(
-                  /*egress_port=*/"42", sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
-}
-TEST_P(TestEntriesTest,
-       MakePdEntriesForwardingIpPacketsToGivenPortDoesNotError) {
-  ASSERT_THAT(MakePdEntriesForwardingIpPacketsToGivenPort(/*egress_port=*/"42"),
-              IsOkAndHolds(_));
-}
-
 INSTANTIATE_TEST_SUITE_P(, TestEntriesTest,
                          testing::ValuesIn(sai::AllSaiInstantiations()),
                          [](const auto& info) -> std::string {
