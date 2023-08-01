@@ -31,6 +31,7 @@ cc_library(
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
+        "//p4_pdpi:translation_options",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",

@@ -106,46 +106,38 @@ control routing(in headers_t headers,
     size = ROUTER_INTERFACE_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
-  // Sets SAI_TUNNEL_ATTR_TYPE to SAI_TUNNEL_TYPE_IPINIP_GRE,
-  // SAI_TUNNEL_PEER_MODE to SAI_TUNNEL_PEER_MODE_P2P and
-  // also sets SAI_TUNNEL_ATTR_ENCAP_SRC_IP, SAI_TUNNEL_ATTR_ENCAP_DST_IP
-  // and SAI_TUNNEL_ATTR_UNDERLAY_INTERFACE.
-  //
-  // Because we are using P2P tunnels, this action requires an `encap_dst_ip`,
-  // which will also be the `neighbor_id` of an associated `neighbor_table`
-  // entry.
-  @id(ROUTING_MARK_FOR_P2P_TUNNEL_ENCAP_ACTION_ID)
-  action mark_for_p2p_tunnel_encap(@id(1) @format(IPV6_ADDRESS)
-                              ipv6_addr_t encap_src_ip,
-                              @id(2) @format(IPV6_ADDRESS)
-                              @refers_to(neighbor_table, neighbor_id)
-                              ipv6_addr_t encap_dst_ip,
-                              @id(3)
-                              @refers_to(router_interface_table,
-                              router_interface_id)
-                              router_interface_id_t router_interface_id) {
-    local_metadata.tunnel_encap_src_ipv6 = encap_src_ip;
-    local_metadata.tunnel_encap_dst_ipv6 = encap_dst_ip;
-    local_metadata.apply_tunnel_encap_at_egress = true;
+  // Sets SAI_NEXT_HOP_ATTR_TYPE to SAI_NEXT_HOP_TYPE_IP. Also sets
+  // SAI_NEXT_HOP_ATTR_ROUTER_INTERFACE_ID, SAI_NEXT_HOP_ATTR_IP,
+  // SAI_NEXT_HOP_ATTR_DISABLE_SRC_MAC_REWRITE,
+  // SAI_NEXT_HOP_ATTR_DISABLE_DST_MAC_REWRITE,
+  // SAI_NEXT_HOP_ATTR_DISABLE_DECREMENT_TTL and
+  // SAI_NEXT_HOP_ATTR_DISABLE_VLAN_REWRITE based on action parameters.
+  // TODO Remove unsupported annotation once the switch stack
+  // supports this action.
+  @unsupported
+  @id(ROUTING_SET_IP_NEXTHOP_AND_DISABLE_REWRITES_ACTION_ID)
+  action set_ip_nexthop_and_disable_rewrites(
+      @id(1)
+      @refers_to(router_interface_table, router_interface_id)
+      @refers_to(neighbor_table, router_interface_id)
+      router_interface_id_t router_interface_id,
+      @id(2) @format(IPV6_ADDRESS)
+      @refers_to(neighbor_table, neighbor_id)
+      ipv6_addr_t neighbor_id,
+      // TODO: Use @format(BOOL) once PDPI
+      // supports it.
+      @id(3) bit<1> disable_ttl_rewrite,
+      @id(4) bit<1> disable_src_mac_rewrite,
+      @id(5) bit<1> disable_dst_mac_rewrite,
+      // TODO: Implement disable_vlan_rewrite.
+      @id(6) bit<1> disable_vlan_rewrite) {
     router_interface_id_valid = true;
     router_interface_id_value = router_interface_id;
     neighbor_id_valid = true;
-    neighbor_id_value = encap_dst_ip;
-  }
-
-  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
-  @id(ROUTING_TUNNEL_TABLE_ID)
-  table tunnel_table {
-    key = {
-      tunnel_id_value : exact @id(1)
-                              @name("tunnel_id");
-    }
-    actions = {
-      @proto_id(1) mark_for_p2p_tunnel_encap;
-      @defaultonly NoAction;
-    }
-    const default_action = NoAction;
-    size = ROUTING_TUNNEL_TABLE_MINIMUM_GUARANTEED_SIZE;
+    neighbor_id_value = neighbor_id;
+    local_metadata.enable_ttl_rewrite = !(bool) disable_ttl_rewrite;
+    local_metadata.enable_src_mac_rewrite = !(bool) disable_src_mac_rewrite;
+    local_metadata.enable_dst_mac_rewrite = !(bool) disable_dst_mac_rewrite;
   }
 
   // Sets SAI_NEXT_HOP_ATTR_TYPE to SAI_NEXT_HOP_TYPE_IP, and
@@ -161,30 +153,31 @@ control routing(in headers_t headers,
   // two match fields in neighbor_table. This is still correct, but less
   // precise.
   @id(ROUTING_SET_IP_NEXTHOP_ACTION_ID)
-  action set_ip_nexthop(@id(1)
-                        @refers_to(router_interface_table, router_interface_id)
-                        @refers_to(neighbor_table, router_interface_id)
-                        router_interface_id_t router_interface_id,
-                        @id(2) @format(IPV6_ADDRESS)
-                        @refers_to(neighbor_table, neighbor_id)
-                        ipv6_addr_t neighbor_id) {
-    router_interface_id_valid = true;
-    router_interface_id_value = router_interface_id;
-    neighbor_id_valid = true;
-    neighbor_id_value = neighbor_id;
+  action set_ip_nexthop(
+      @id(1)
+      @refers_to(router_interface_table, router_interface_id)
+      @refers_to(neighbor_table, router_interface_id)
+      router_interface_id_t router_interface_id,
+      @id(2) @format(IPV6_ADDRESS)
+      @refers_to(neighbor_table, neighbor_id)
+      ipv6_addr_t neighbor_id) {
+    set_ip_nexthop_and_disable_rewrites(router_interface_id, neighbor_id,
+      /*disable_ttl_rewrite*/0x0, /*disable_src_mac_rewrite*/0x0,
+      /*disable_dst_mac_rewrite*/0x0, /*disable_vlan_rewrite*/0x0);
   }
 
   @id(ROUTING_SET_NEXTHOP_ACTION_ID)
   @deprecated("Use set_ip_nexthop instead.")
   // TODO: Remove this action once migration to `set_ip_nexthop`
   // is complete & rolled out.
-  action set_nexthop(@id(1)
-                     @refers_to(router_interface_table, router_interface_id)
-                     @refers_to(neighbor_table, router_interface_id)
-                     router_interface_id_t router_interface_id,
-                     @id(2)  @format(IPV6_ADDRESS)
-                     @refers_to(neighbor_table, neighbor_id)
-                     ipv6_addr_t neighbor_id) {
+  action set_nexthop(
+      @id(1)
+      @refers_to(router_interface_table, router_interface_id)
+      @refers_to(neighbor_table, router_interface_id)
+      router_interface_id_t router_interface_id,
+      @id(2)  @format(IPV6_ADDRESS)
+      @refers_to(neighbor_table, neighbor_id)
+      ipv6_addr_t neighbor_id) {
     set_ip_nexthop(router_interface_id, neighbor_id);
   }
 
@@ -212,11 +205,52 @@ control routing(in headers_t headers,
     actions = {
       @proto_id(1) set_ip_nexthop;
       @proto_id(2) set_p2p_tunnel_encap_nexthop;
+      @proto_id(3) set_ip_nexthop_and_disable_rewrites;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
     size = NEXTHOP_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
+
+  // Sets SAI_TUNNEL_ATTR_TYPE to SAI_TUNNEL_TYPE_IPINIP_GRE,
+  // SAI_TUNNEL_PEER_MODE to SAI_TUNNEL_PEER_MODE_P2P and
+  // also sets SAI_TUNNEL_ATTR_ENCAP_SRC_IP, SAI_TUNNEL_ATTR_ENCAP_DST_IP
+  // and SAI_TUNNEL_ATTR_UNDERLAY_INTERFACE.
+  //
+  // Because we are using P2P tunnels, this action requires an `encap_dst_ip`,
+  // which will also be the `neighbor_id` of an associated `neighbor_table`
+  // entry.
+  @id(ROUTING_MARK_FOR_P2P_TUNNEL_ENCAP_ACTION_ID)
+  action mark_for_p2p_tunnel_encap(
+      @id(1) @format(IPV6_ADDRESS)
+      ipv6_addr_t encap_src_ip,
+      @id(2) @format(IPV6_ADDRESS)
+      @refers_to(neighbor_table, neighbor_id)
+      ipv6_addr_t encap_dst_ip,
+      @id(3) @refers_to(neighbor_table, router_interface_id)
+      @refers_to(router_interface_table, router_interface_id)
+      router_interface_id_t router_interface_id) {
+    local_metadata.tunnel_encap_src_ipv6 = encap_src_ip;
+    local_metadata.tunnel_encap_dst_ipv6 = encap_dst_ip;
+    local_metadata.apply_tunnel_encap_at_egress = true;
+    set_ip_nexthop(router_interface_id, encap_dst_ip);
+  }
+
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  @id(ROUTING_TUNNEL_TABLE_ID)
+  table tunnel_table {
+    key = {
+      tunnel_id_value : exact @id(1)
+                              @name("tunnel_id");
+    }
+    actions = {
+      @proto_id(1) mark_for_p2p_tunnel_encap;
+      @defaultonly NoAction;
+    }
+    const default_action = NoAction;
+    size = ROUTING_TUNNEL_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
 
   // When called from a route, sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
   // SAI_PACKET_ACTION_FORWARD, and SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a

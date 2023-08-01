@@ -25,6 +25,7 @@
 
 #include "absl/base/attributes.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
@@ -40,11 +41,34 @@ enum class PuntAction {
   kCopy,
 };
 
+// Rewrite-related options for nexthop action generation.
+struct NexthopRewriteOptions {
+  bool disable_ttl_rewrite = false;
+  bool disable_src_mac_rewrite = false;
+  bool disable_dst_mac_rewrite = false;
+  bool disable_vlan_rewrite = false;
+};
+
 enum class IpVersion {
   kIpv4,
   kIpv6,
   kIpv4And6,
 };
+
+template <typename Sink>
+void AbslStringify(Sink& sink, const IpVersion& ip_version) {
+  switch (ip_version) {
+    case IpVersion::kIpv4:
+      absl::Format(&sink, "IPv4");
+      break;
+    case IpVersion::kIpv6:
+      absl::Format(&sink, "IPv6");
+      break;
+    case IpVersion::kIpv4And6:
+      absl::Format(&sink, "IPv4And6");
+      break;
+  }
+}
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
@@ -75,6 +99,9 @@ class EntryBuilder {
   EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
   EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port);
+  EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
+      absl::string_view egress_port,
+      const NexthopRewriteOptions& rewrite_options);
   EntryBuilder& AddVrfEntry(absl::string_view vrf);
   EntryBuilder& AddEntryAdmittingAllPacketsToL3();
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
@@ -84,6 +111,7 @@ class EntryBuilder {
       absl::string_view vrf, IpVersion ip_version);
   EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
       absl::string_view vrf);
+  EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
 
  private:
   sai::TableEntries entries_;

@@ -35,12 +35,14 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
+#include "p4_pdpi/translation_options.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
 
 absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
-    absl::string_view egress_port) {
+    absl::string_view egress_port,
+    const NexthopRewriteOptions& nexthop_rewrite_options) {
   ASSIGN_OR_RETURN(
       sai::TableEntries entries,
       gutil::ParseTextProto<sai::TableEntries>(
@@ -78,17 +80,6 @@ absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
               }
             }
             entries {
-              nexthop_table_entry {
-                match { nexthop_id: "nexthop" }
-                action {
-                  set_ip_nexthop {
-                    router_interface_id: "rif"
-                    neighbor_id: "fe80::2:2ff:fe02:202"
-                  }
-                }
-              }
-            }
-            entries {
               neighbor_table_entry {
                 match {
                   router_interface_id: "rif"
@@ -98,6 +89,37 @@ absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
               }
             }
           )pb"));
+  // Create Nexthop entry based on `nexthop_rewrite_options`
+  sai::TableEntry& nexthop_table_entry = *entries.add_entries();
+  nexthop_table_entry.mutable_nexthop_table_entry()
+      ->mutable_match()
+      ->set_nexthop_id("nexthop");
+  if (!nexthop_rewrite_options.disable_ttl_rewrite &&
+      !nexthop_rewrite_options.disable_src_mac_rewrite &&
+      !nexthop_rewrite_options.disable_dst_mac_rewrite) {
+    SetIpNexthopAction* action =
+        nexthop_table_entry.mutable_nexthop_table_entry()
+            ->mutable_action()
+            ->mutable_set_ip_nexthop();
+    action->set_router_interface_id("rif");
+    action->set_neighbor_id("fe80::2:2ff:fe02:202");
+  } else {
+    SetIpNexthopAndDisableRewritesAction* action =
+        nexthop_table_entry.mutable_nexthop_table_entry()
+            ->mutable_action()
+            ->mutable_set_ip_nexthop_and_disable_rewrites();
+    action->set_router_interface_id("rif");
+    action->set_neighbor_id("fe80::2:2ff:fe02:202");
+    action->set_disable_ttl_rewrite(
+        nexthop_rewrite_options.disable_ttl_rewrite ? "0x1" : "0x0");
+    action->set_disable_src_mac_rewrite(
+        nexthop_rewrite_options.disable_src_mac_rewrite ? "0x1" : "0x0");
+    action->set_disable_dst_mac_rewrite(
+        nexthop_rewrite_options.disable_dst_mac_rewrite ? "0x1" : "0x0");
+    action->set_disable_vlan_rewrite(
+        nexthop_rewrite_options.disable_vlan_rewrite ? "0x1" : "0x0");
+  }
+
   sai::TableEntry& router_interface_table_entry = *entries.add_entries();
   router_interface_table_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -138,20 +160,33 @@ absl::StatusOr<sai::TableEntry> MakePdEntryPuntingAllPackets(
 }
 
 absl::StatusOr<std::vector<p4::v1::TableEntry>>
-MakePiEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
-                                            const pdpi::IrP4Info& ir_p4info) {
+MakePiEntriesForwardingIpPacketsToGivenPort(
+    absl::string_view egress_port,
+    const NexthopRewriteOptions& nexthop_rewrite_options,
+    const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(sai::TableEntries pd_entries,
-                   MakePdEntriesForwardingIpPacketsToGivenPort(egress_port));
-  return pdpi::PartialPdTableEntriesToPiTableEntries(ir_p4info, pd_entries);
+                   MakePdEntriesForwardingIpPacketsToGivenPort(
+                       egress_port, nexthop_rewrite_options));
+  return pdpi::PartialPdTableEntriesToPiTableEntries(
+      ir_p4info, pd_entries,
+      // TODO: Remove once `@unsupported` annotation is removed
+      // from set_ip_nexthop_and_disable_rewrites.
+      pdpi::TranslationOptions{.allow_unsupported = true});
 }
 
-absl::StatusOr<pdpi::IrTableEntries> 
+absl::StatusOr<pdpi::IrTableEntries>
 MakeIrEntriesForwardingIpPacketsToGivenPort(
-			absl::string_view egress_port,
-                        const pdpi::IrP4Info& ir_p4info) {
+    absl::string_view egress_port,
+    const NexthopRewriteOptions& nexthop_rewrite_options,
+    const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(sai::TableEntries pd_entries,
-                   MakePdEntriesForwardingIpPacketsToGivenPort(egress_port));
-  return pdpi::PartialPdTableEntriesToIrTableEntries(ir_p4info, pd_entries);
+                   MakePdEntriesForwardingIpPacketsToGivenPort(
+                       egress_port, nexthop_rewrite_options));
+  return pdpi::PartialPdTableEntriesToIrTableEntries(
+      ir_p4info, pd_entries,
+      // TODO: Remove once `@unsupported` annotation is removed
+      // from set_ip_nexthop_and_disable_rewrites.
+      pdpi::TranslationOptions{.allow_unsupported = true});
 }
 
 absl::StatusOr<p4::v1::TableEntry> MakePiEntryPuntingAllPackets(
@@ -239,7 +274,7 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
     sai::TableEntry& entry = *entries_.add_entries();
     entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
       ipv4_table_entry {
-        # IP match field ommitted so this entry serves as the default route.
+        # IP match field omitted so this entry serves as the default route.
         match { vrf_id: "TBD" }
         action { set_nexthop_id { nexthop_id: "nexthop" } }
       }
@@ -256,7 +291,7 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
     sai::TableEntry& entry = *entries_.add_entries();
     entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
       ipv6_table_entry {
-        # IP match field ommitted so this entry serves as the default route.
+        # IP match field omitted so this entry serves as the default route.
         match { vrf_id: "TBD" }
         action { set_nexthop_id { nexthop_id: "nexthop" } }
       }
@@ -320,13 +355,55 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
 
 EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
     absl::string_view egress_port) {
+  AddEntriesForwardingIpPacketsToGivenPort(egress_port,
+                                           NexthopRewriteOptions{});
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
+    absl::string_view egress_port,
+    const NexthopRewriteOptions& rewrite_options) {
   absl::StatusOr<sai::TableEntries> entries =
-      MakePdEntriesForwardingIpPacketsToGivenPort(egress_port);
+      MakePdEntriesForwardingIpPacketsToGivenPort(egress_port, rewrite_options);
   CHECK_OK(entries.status());  // Crash ok: test-only library.
+
   for (auto& entry : *entries->mutable_entries()) {
     *entries_.add_entries() = std::move(entry);
   }
   return *this;
+}
+
+EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithTtlZeroAndOne() {
+  *entries_.add_entries() = (gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
+    acl_ingress_table_entry {
+      match {
+        is_ip { value: "0x1" }
+        ttl { value: "0x00" mask: "0xfe" }
+      }
+      action { acl_trap { qos_queue: "queue" } }
+      priority: 1
+    }
+  )pb"));
+  return *this;
+}
+
+absl::StatusOr<std::vector<p4::v1::TableEntry>>
+MakePiEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
+                                            const pdpi::IrP4Info& ir_p4info) {
+  return MakePiEntriesForwardingIpPacketsToGivenPort(
+      egress_port, sai::NexthopRewriteOptions(), ir_p4info);
+}
+
+absl::StatusOr<pdpi::IrTableEntries>
+MakeIrEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
+                                            const pdpi::IrP4Info& ir_p4info) {
+  return MakeIrEntriesForwardingIpPacketsToGivenPort(
+      egress_port, sai::NexthopRewriteOptions(), ir_p4info);
+}
+absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
+    absl::string_view egress_port) {
+  return MakePdEntriesForwardingIpPacketsToGivenPort(
+      egress_port, sai::NexthopRewriteOptions());
 }
 
 EntryBuilder& EntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
