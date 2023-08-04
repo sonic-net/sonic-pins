@@ -13,6 +13,9 @@
 // limitations under the License.
 #include "proto_matchers.h"
 
+#include <utility>
+#include <vector>
+
 #include "absl/strings/str_replace.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -73,6 +76,59 @@ table_name: "router_interface_table" priority: 123>)");
   EXPECT_EQ(testing::DescribeMatcher<pdpi::IrTableEntry>(Not(matcher)),
             R"(is not equal to <
 table_name: "router_interface_table" priority: 123>)");
+}
+
+TEST(BinaryEqualsProtoTest, EqualPairWorks) {
+  auto arbitrary_proto_1 = ParseProtoOrDie<TestMessage>("int_field: 24");
+  EXPECT_THAT(std::make_pair(arbitrary_proto_1, arbitrary_proto_1),
+              EqualsProto());
+
+  auto arbitrary_proto_2 = ParseProtoOrDie<TestMessage>("string_field: \"hi\"");
+  EXPECT_THAT(std::make_pair(arbitrary_proto_2, arbitrary_proto_2),
+              EqualsProto());
+}
+
+TEST(BinaryEqualsProtoTest, UnequalPairWorks) {
+  auto arbitrary_proto_1 = ParseProtoOrDie<TestMessage>("int_field: 24");
+  auto arbitrary_proto_2 = ParseProtoOrDie<TestMessage>("string_field: \"hi\"");
+  EXPECT_THAT(std::make_pair(arbitrary_proto_1, arbitrary_proto_2),
+              Not(EqualsProto()));
+  EXPECT_THAT(std::make_pair(arbitrary_proto_2, arbitrary_proto_1),
+              Not(EqualsProto()));
+}
+
+TEST(BinaryEqualsProtoTest, WorksWithPointwiseMatcher) {
+  std::vector<TestMessage> protos = {
+      ParseProtoOrDie<TestMessage>("int_field: 24"),
+      ParseProtoOrDie<TestMessage>("string_field: \"hi\""),
+  };
+  EXPECT_THAT(protos, testing::Pointwise(EqualsProto(), protos));
+}
+
+TEST(BinaryEqualsProtoTest, DescribeBinaryEqualsProto) {
+  auto matcher = EqualsProto();
+  EXPECT_EQ(
+      (testing::DescribeMatcher<std::pair<TestMessage, TestMessage>>(matcher)),
+      "is a pair of equal protobufs");
+}
+
+TEST(EqualsProtoSequenceTest, EqualSequencesWork) {
+  std::vector<TestMessage> protos = {
+      ParseProtoOrDie<TestMessage>("int_field: 24"),
+      ParseProtoOrDie<TestMessage>("string_field: \"hi\""),
+  };
+  EXPECT_THAT(protos, EqualsProtoSequence(protos));
+}
+
+TEST(EqualsProtoSequenceTest, UnequalSequencesWork) {
+  std::vector<TestMessage> protos1 = {
+      ParseProtoOrDie<TestMessage>("int_field: 24"),
+      ParseProtoOrDie<TestMessage>("string_field: \"hi\""),
+  };
+  std::vector<TestMessage> protos2 = {
+      ParseProtoOrDie<TestMessage>("int_field: 42"),
+  };
+  EXPECT_THAT(protos1, Not(EqualsProtoSequence(protos2)));
 }
 
 TEST(PartiallyMatcherTest, IdenticalProtosAreAlsoPartiallyEqual) {

@@ -21,6 +21,7 @@
 
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -141,6 +142,19 @@ inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
 inline ::testing::PolymorphicMatcher<ProtobufEqMatcher> EqualsProto(
     absl::string_view proto_text) {
   return ::testing::MakePolymorphicMatcher(ProtobufEqMatcher(proto_text));
+}
+
+// Checks that a pair of protos are equal. Useful in combination with
+// `Pointwise`.
+MATCHER(EqualsProto, "is a pair of equal protobufs") {
+  const auto& [x, y] = arg;
+  return testing::ExplainMatchResult(EqualsProto(x), y, result_listener);
+}
+
+// Checks that a sequences of protos is equal to a given sequence.
+template <class T>
+auto EqualsProtoSequence(T&& sequence) {
+  return testing::Pointwise(EqualsProto(), std::forward<T>(sequence));
 }
 
 // -- HasOneofCaseMatcher matcher ----------------------------------------------
