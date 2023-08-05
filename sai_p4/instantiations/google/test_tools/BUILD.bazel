@@ -25,6 +25,7 @@ cc_library(
     hdrs = ["test_entries.h"],
     deps = [
         "//gutil:proto",
+        "//gutil:proto_ordering",
         "//gutil:status",
         "//gutil:testing",
         "//p4_pdpi:ir_cc_proto",
