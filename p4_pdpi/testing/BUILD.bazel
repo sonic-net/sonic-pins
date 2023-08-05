@@ -377,6 +377,7 @@ cc_test(
         ":test_p4info_cc",
         "//gutil:proto",
         "//gutil:proto_matchers",
+        "//gutil:status",
         "//gutil:status_matchers",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",

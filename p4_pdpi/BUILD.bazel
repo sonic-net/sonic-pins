@@ -21,6 +21,8 @@ cc_library(
     name = "sequencing_util",
     srcs = ["sequencing_util.cc"],
     hdrs = ["sequencing_util.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
         "//gutil:collections",
@@ -48,12 +50,10 @@ cc_test(
 
 cc_library(
     name = "sequencing",
-    srcs = [
-        "sequencing.cc",
-    ],
-    hdrs = [
-        "sequencing.h",
-    ],
+    srcs = ["sequencing.cc"],
+    hdrs = ["sequencing.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
         ":sequencing_util",
@@ -78,12 +78,10 @@ cc_library(
 
 cc_library(
     name = "pd",
-    srcs = [
-        "pd.cc",
-    ],
-    hdrs = [
-        "pd.h",
-    ],
+    srcs = ["pd.cc"],
+    hdrs = ["pd.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir",
         ":ir_cc_proto",
@@ -131,12 +129,10 @@ cc_binary(
 
 cc_library(
     name = "pdgenlib",
-    srcs = [
-        "pdgenlib.cc",
-    ],
-    hdrs = [
-        "pdgenlib.h",
-    ],
+    srcs = ["pdgenlib.cc"],
+    hdrs = ["pdgenlib.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
         ":pd",
@@ -153,9 +149,9 @@ cc_library(
 cc_library(
     name = "p4info_union_lib",
     srcs = ["p4info_union_lib.cc"],
-    hdrs = [
-        "p4info_union_lib.h",
-    ],
+    hdrs = ["p4info_union_lib.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         "//gutil:proto",
         "//gutil:status",
@@ -190,12 +186,10 @@ cc_binary(
 
 cc_library(
     name = "ir",
-    srcs = [
-        "ir.cc",
-    ],
-    hdrs = [
-        "ir.h",
-    ],
+    srcs = ["ir.cc"],
+    hdrs = ["ir.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
         ":translation_options",
@@ -285,6 +279,8 @@ cc_library(
     name = "pi",
     srcs = ["pi.cc"],
     hdrs = ["pi.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
         "//gutil:collections",
@@ -303,6 +299,8 @@ cc_library(
     name = "ir_tools",
     srcs = ["ir_tools.cc"],
     hdrs = ["ir_tools.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
         "//gutil:collections",
