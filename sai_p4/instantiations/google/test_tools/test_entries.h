@@ -20,6 +20,7 @@
 #ifndef GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 #define GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -27,8 +28,10 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
@@ -70,6 +73,13 @@ void AbslStringify(Sink& sink, const IpVersion& ip_version) {
   }
 }
 
+// Convenience struct corresponding to the protos `p4::v1::Replica` and
+// `sai::ReplicateAction::Replica`.
+struct Replica {
+  std::string egress_port;
+  int instance = 0;
+};
+
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
 //
@@ -96,22 +106,50 @@ class EntryBuilder {
   absl::StatusOr<pdpi::IrEntities> GetDedupedIrEntities(
       const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
 
+  // Convenience struct corresponding to the proto
+  // `MulticastSourceMacTableEntry`
+  // in `sai_pd.proto`.
+  struct MulticastSourceMacTableEntry {
+    std::string multicast_replica_port;
+    int multicast_replica_instance = 0;
+    netaddr::MacAddress src_mac;
+  };
+
   EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
+  // Note: Cannot be combined with other entries that forward *all* IP packets
+  // in a specific way.
   EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port);
+  // Note: Cannot be combined with other entries that forward *all* IP packets
+  // in a specific way.
+
   EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port,
       const NexthopRewriteOptions& rewrite_options);
+  // Note: Cannot be combined with other entries that forward *all* IP packets
+  // in a specific way.
+  EntryBuilder& AddEntriesForwardingIpPacketsToGivenMulticastGroup(
+      int multicast_group_id);
   EntryBuilder& AddVrfEntry(absl::string_view vrf);
   EntryBuilder& AddEntryAdmittingAllPacketsToL3();
+
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
       absl::string_view egress_port, IpVersion ip_version,
       absl::string_view vrf);
+  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
+      int multicast_group_id, IpVersion ip_version, absl::string_view vrf);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
   EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
       absl::string_view vrf);
   EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
+  EntryBuilder& AddMulticastGroupEntry(int multicast_group_id,
+                                         absl::Span<const Replica> replicas);
+  EntryBuilder& AddMulticastGroupEntry(
+      int multicast_group_id, absl::Span<const std::string> egress_ports);
+  EntryBuilder& AddMulticastSourceMacEntry(
+      const MulticastSourceMacTableEntry& entry);
+  EntryBuilder& AddIngressAclDroppingAllPackets();
 
  private:
   sai::TableEntries entries_;

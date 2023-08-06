@@ -406,7 +406,30 @@ control routing(in headers_t headers,
   }
 #endif
 
-   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  // Sets the multicast group ID (SAI_IPMC_ENTRY_ATTR_OUTPUT_GROUP_ID).
+  // The ID will be looked up in the multicast group table after ingress
+  // processing. The group table will then make 0 or more copies of the packet
+  // and pass them to the egress pipeline.
+  //
+  // Calling this action will override unicast, and can itself be overriden by
+  // `mark_to_drop`.
+  //
+  // Using a `multicast_group_id` of 0 is not allowed.
+  // TODO: Enforce this requirement using p4-constraints.
+  //
+  // TODO: Remove `@unsupported` annotation once the switch stack
+  // supports multicast.
+  @unsupported
+  @id(ROUTING_SET_MULTICAST_GROUP_ID_ACTION_ID)
+  action set_multicast_group_id(
+      @id(1)
+      // TODO: Add this once supported by PDPI and its customers.
+      // @refers_to(multicast_group_table, multicast_group_id)
+      multicast_group_id_t multicast_group_id) {
+    standard_metadata.mcast_grp = multicast_group_id;
+  }
+
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(ROUTING_IPV4_TABLE_ID)
   table ipv4_table {
     key = {
@@ -427,6 +450,7 @@ control routing(in headers_t headers,
 #ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
       @proto_id(7) set_metadata_and_drop;
 #endif
+      @proto_id(8) set_multicast_group_id;
     }
     const default_action = drop;
     size = ROUTING_IPV4_TABLE_MINIMUM_GUARANTEED_SIZE;
@@ -453,6 +477,7 @@ control routing(in headers_t headers,
 #ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
       @proto_id(7) set_metadata_and_drop;
 #endif
+      @proto_id(8) set_multicast_group_id;
     }
     const default_action = drop;
     size = ROUTING_IPV6_TABLE_MINIMUM_GUARANTEED_SIZE;

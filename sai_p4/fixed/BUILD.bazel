@@ -21,7 +21,8 @@ filegroup(
     name = "fixed",
     srcs = [
         "bitwidths.p4",
-	"drop_martians.p4",
+        "bmv2_intrinsics.h",
+        "drop_martians.p4",
         "headers.p4",
         "ids.h",
         "ipv4_checksum.p4",

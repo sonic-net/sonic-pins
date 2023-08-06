@@ -123,6 +123,8 @@ message Ipv4TableEntry {
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
+      // CAUTION: This action is not (yet) supported.
+      SetMulticastGroupIdAction set_multicast_group_id = 8;
     }
   }
   Action action = 2;
@@ -145,6 +147,8 @@ message Ipv6TableEntry {
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
+      // CAUTION: This action is not (yet) supported.
+      SetMulticastGroupIdAction set_multicast_group_id = 8;
     }
   }
   Action action = 2;
@@ -207,6 +211,21 @@ message Ipv6TunnelTerminationTableEntry {
   }
   Action action = 2;
   int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
+// CAUTION: This table is not (yet) supported.
+message MulticastSourceMacTableEntry {
+  message Match {
+    string multicast_replica_port = 1;  // exact match / Format::STRING
+    string multicast_replica_instance =
+        2;  // exact match / Format::HEX_STRING / 16 bits
+  }
+  Match match = 1;
+  message Action {
+    SetMulticastSrcMacAction set_multicast_src_mac = 1;
+  }
+  Action action = 2;
   bytes controller_metadata = 8;
 }
 
@@ -738,6 +757,15 @@ message SetIpNexthopAndDisableRewritesAction {
   string disable_vlan_rewrite = 6;     // Format::HEX_STRING / 1 bits
 }
 
+// CAUTION: This action is not (yet) supported.
+message SetMulticastGroupIdAction {
+  string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
+}
+
+message SetMulticastSrcMacAction {
+  string src_mac = 1;  // Format::MAC
+}
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -816,6 +844,8 @@ message TableEntry {
     VrfTableEntry vrf_table_entry = 74;
     // CAUTION: This table is not (yet) supported.
     Ipv6TunnelTerminationTableEntry ipv6_tunnel_termination_table_entry = 75;
+    // CAUTION: This table is not (yet) supported.
+    MulticastSourceMacTableEntry multicast_source_mac_table_entry = 76;
     TunnelTableEntry tunnel_table_entry = 80;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;

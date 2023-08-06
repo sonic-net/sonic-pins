@@ -25,6 +25,7 @@
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -34,8 +35,8 @@ namespace sai {
 namespace {
 
 using ::gutil::EqualsProto;
-using ::gutil::IsOkAndHolds;
-using ::testing::_;
+using ::gutil::HasOneofCase;
+using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::Pointwise;
 using ::testing::SizeIs;
@@ -43,24 +44,35 @@ using ::testing::SizeIs;
 using TestEntriesTest = ::testing::TestWithParam<sai::Instantiation>;
 
 TEST_P(TestEntriesTest, MakePiEntryPuntingAllPacketsDoesNotError) {
-  ASSERT_THAT(MakePiEntryPuntingAllPackets(PuntAction::kCopy,
-                                           sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
-  ASSERT_THAT(MakePiEntryPuntingAllPackets(PuntAction::kTrap,
-                                           sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
+  EXPECT_OK(MakePiEntryPuntingAllPackets(PuntAction::kCopy,
+                                         sai::GetIrP4Info(GetParam())));
+  EXPECT_OK(MakePiEntryPuntingAllPackets(PuntAction::kTrap,
+                                         sai::GetIrP4Info(GetParam())));
 }
 TEST_P(TestEntriesTest, MakeIrEntryPuntingAllPacketsDoesNotError) {
-  ASSERT_THAT(MakeIrEntryPuntingAllPackets(PuntAction::kCopy,
-                                           sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
-  ASSERT_THAT(MakeIrEntryPuntingAllPackets(PuntAction::kTrap,
-                                           sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
+  EXPECT_OK(MakeIrEntryPuntingAllPackets(PuntAction::kCopy,
+                                         sai::GetIrP4Info(GetParam())));
+  EXPECT_OK(MakeIrEntryPuntingAllPackets(PuntAction::kTrap,
+                                         sai::GetIrP4Info(GetParam())));
 }
 TEST_P(TestEntriesTest, MakePdEntryPuntingAllPacketsDoesNotError) {
-  ASSERT_THAT(MakePdEntryPuntingAllPackets(PuntAction::kCopy), IsOkAndHolds(_));
-  ASSERT_THAT(MakePdEntryPuntingAllPackets(PuntAction::kTrap), IsOkAndHolds(_));
+  EXPECT_OK(MakePdEntryPuntingAllPackets(PuntAction::kCopy));
+  EXPECT_OK(MakePdEntryPuntingAllPackets(PuntAction::kTrap));
+}
+
+TEST_P(TestEntriesTest,
+       MakePiEntriesForwardingIpPacketsToGivenPortDoesNotError) {
+  EXPECT_OK(MakePiEntriesForwardingIpPacketsToGivenPort(
+      /*egress_port=*/"42", sai::GetIrP4Info(GetParam())));
+}
+TEST_P(TestEntriesTest,
+       MakeIrEntriesForwardingIpPacketsToGivenPortDoesNotError) {
+  EXPECT_OK(MakeIrEntriesForwardingIpPacketsToGivenPort(
+      /*egress_port=*/"42", sai::GetIrP4Info(GetParam())));
+}
+TEST_P(TestEntriesTest,
+       MakePdEntriesForwardingIpPacketsToGivenPortDoesNotError) {
+  EXPECT_OK(MakePdEntriesForwardingIpPacketsToGivenPort(/*egress_port=*/"42"));
 }
 
 INSTANTIATE_TEST_SUITE_P(, TestEntriesTest,
