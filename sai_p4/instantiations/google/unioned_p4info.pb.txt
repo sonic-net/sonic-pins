@@ -187,7 +187,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 128
+  size: 64
 }
 tables {
   preamble {
@@ -416,6 +416,10 @@ tables {
     id: 16777237
     annotations: "@proto_id(7)"
   }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(8)"
+  }
   const_default_action_id: 16777222
   size: 131072
 }
@@ -465,6 +469,10 @@ tables {
   action_refs {
     id: 16777237
     annotations: "@proto_id(7)"
+  }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(8)"
   }
   const_default_action_id: 16777222
   size: 17000
@@ -786,6 +794,39 @@ tables {
     scope: DEFAULT_ONLY
   }
   size: 1024
+}
+tables {
+  preamble {
+    id: 33554508
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_router_interface_table"
+    alias: "multicast_router_interface_table"
+    annotations: "@unsupported"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+  }
+  match_fields {
+    id: 1
+    name: "multicast_replica_port"
+    match_type: EXACT
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "multicast_replica_instance"
+    bitwidth: 16
+    match_type: EXACT
+  }
+  action_refs {
+    id: 16777241
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 128
 }
 tables {
   preamble {
@@ -1681,6 +1722,19 @@ actions {
 }
 actions {
   preamble {
+    id: 16777240
+    name: "ingress.routing.set_multicast_group_id"
+    alias: "set_multicast_group_id"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "multicast_group_id"
+    bitwidth: 16
+  }
+}
+actions {
+  preamble {
     id: 16777473
     name: "ingress.acl_ingress.acl_copy"
     alias: "acl_copy"
@@ -1826,6 +1880,19 @@ actions {
     id: 1
     name: "clone_session"
     bitwidth: 32
+  }
+}
+actions {
+  preamble {
+    id: 16777241
+    name: "egress.packet_rewrites.multicast_rewrites.set_multicast_src_mac"
+    alias: "set_multicast_src_mac"
+  }
+  params {
+    id: 1
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
   }
 }
 actions {
