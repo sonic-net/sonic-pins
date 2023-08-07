@@ -63,9 +63,15 @@ absl::StatusOr<SymbolicTableMatches>
 MergeDisjointTableMatches(const SymbolicTableMatches &lhs,
                           const SymbolicTableMatches &rhs);
 
-// Extracts the bit-width of the field with name `field_name` in the given
-// `program`.
-absl::StatusOr<int> GetFieldBitwidth(absl::string_view field_name,
+// Extracts the bit-width of the field with the `qualified_field_name` (i.e.,
+// `<header>.<field>`) in the given `program`.
+absl::StatusOr<int> GetFieldBitwidth(absl::string_view qualified_field_name,
+                                     const ir::P4Program &program);
+
+// Extracts the bit-width of the field with the name `field_name` of header
+// `header_name` in the given `program`.
+absl::StatusOr<int> GetFieldBitwidth(absl::string_view header_name,
+                                     absl::string_view field_name,
                                      const ir::P4Program &program);
 
 // Returns the full valid field name of the given header.
