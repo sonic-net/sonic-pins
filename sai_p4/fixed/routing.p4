@@ -351,6 +351,7 @@ control routing(in headers_t headers,
   // Google's naming conventions.
   // TODO: Add support for CamlCase actions to the PD generator,
   // so we can use `NoAction` throughout.
+  @id(ROUTING_NO_ACTION_ACTION_ID)
   action no_action() {}
 
   // Programming this table does not affect packet forwarding directly -- the

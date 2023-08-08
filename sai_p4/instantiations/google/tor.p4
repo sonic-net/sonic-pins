@@ -70,11 +70,11 @@ control egress(inout headers_t headers,
                inout local_metadata_t local_metadata,
                inout standard_metadata_t standard_metadata) {
   apply {
+    packet_in_encap.apply(headers, local_metadata, standard_metadata);
     packet_rewrites.apply(headers, local_metadata, standard_metadata);
     mirroring_encap.apply(headers, local_metadata, standard_metadata);
-    packet_in_encap.apply(headers, local_metadata, standard_metadata);
-    acl_egress.apply(headers, local_metadata, standard_metadata);
     vlan_tag.apply(headers, local_metadata, standard_metadata);
+    acl_egress.apply(headers, local_metadata, standard_metadata);
   }
 }  // control egress
 

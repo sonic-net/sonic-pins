@@ -148,22 +148,26 @@ control acl_egress(in headers_t headers,
   }
 
   apply {
-    if (headers.ipv4.isValid()) {
-      dscp = headers.ipv4.dscp;
-      ip_protocol = headers.ipv4.protocol;
-    } else if (headers.ipv6.isValid()) {
-      dscp = headers.ipv6.dscp;
-      ip_protocol = headers.ipv6.next_header;
-    } else {
-      ip_protocol = 0;
-    }
+    // We configure the hardware to explictly ignore the ACL egress tables for
+    // CPU traffic.
+    if (standard_metadata.egress_port != SAI_P4_CPU_PORT) {
+      if (headers.ipv4.isValid()) {
+        dscp = headers.ipv4.dscp;
+        ip_protocol = headers.ipv4.protocol;
+      } else if (headers.ipv6.isValid()) {
+        dscp = headers.ipv6.dscp;
+        ip_protocol = headers.ipv6.next_header;
+      } else {
+        ip_protocol = 0;
+      }
 
 #if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
-    acl_egress_table.apply();
+      acl_egress_table.apply();
 #elif defined(SAI_INSTANTIATION_TOR)
-    acl_egress_table.apply();
-    acl_egress_dhcp_to_host_table.apply();
+      acl_egress_table.apply();
+      acl_egress_dhcp_to_host_table.apply();
 #endif
+    }
   }
 }  // control ACL_EGRESS
 
