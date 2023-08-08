@@ -33,6 +33,9 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
 
   // Rewrites the source MAC of the multicast-replicated packet.
   //
+  // In the context of SAI, used to look up the SAI router interface (RIF) to
+  // associate with a multicast group member.
+  //
   // This is a logical table that does not exist in SAI and that is managed by
   // Orchagent. There is a many-to-one correspondence between entries in this
   // table and SAI Router Interfaces (RIFs). Each entry corresponds to a RIF
@@ -57,8 +60,8 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   // supports this table.
   @unsupported
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
-  @id(ROUTING_MULTICAST_SRC_MAC_TABLE_ID)
-  table multicast_source_mac_table {
+  @id(ROUTING_MULTICAST_ROUTER_INTERFACE_TABLE_ID)
+  table multicast_router_interface_table {
     key = {
       multicast_replica_port : exact
         // TODO: Add this once supported by PDPI and its customers.
@@ -76,7 +79,7 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   }
 
   apply {
-    multicast_source_mac_table.apply();
+    multicast_router_interface_table.apply();
   }
 }  // control multicast_rewrites
 

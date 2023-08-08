@@ -746,8 +746,8 @@ tables {
 tables {
   preamble {
     id: 33554508
-    name: "egress.packet_rewrites.multicast_rewrites.multicast_source_mac_table"
-    alias: "multicast_source_mac_table"
+    name: "egress.packet_rewrites.multicast_rewrites.multicast_router_interface_table"
+    alias: "multicast_router_interface_table"
     annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }

@@ -12,20 +12,20 @@
 // --- Tables ------------------------------------------------------------------
 
 // IDs of fixed SAI tables (8 most significant bits = 0x02).
-#define ROUTING_NEIGHBOR_TABLE_ID 0x02000040            // 33554496
-#define ROUTING_ROUTER_INTERFACE_TABLE_ID 0x02000041    // 33554497
-#define ROUTING_NEXTHOP_TABLE_ID 0x02000042             // 33554498
-#define ROUTING_WCMP_GROUP_TABLE_ID 0x02000043          // 33554499
-#define ROUTING_IPV4_TABLE_ID 0x02000044                // 33554500
-#define ROUTING_IPV6_TABLE_ID 0x02000045                // 33554501
-#define ROUTING_VRF_TABLE_ID 0x0200004A                 // 33554506
-#define ROUTING_MULTICAST_SRC_MAC_TABLE_ID 0x0200004C   // 33554508
-#define MIRROR_SESSION_TABLE_ID 0x02000046              // 33554502
-#define L3_ADMIT_TABLE_ID 0x02000047                    // 33554503
-#define MIRROR_PORT_TO_PRE_SESSION_TABLE_ID 0x02000048  // 33554504
-#define ECMP_HASHING_TABLE_ID 0x02000049                // 33554505
-#define ROUTING_TUNNEL_TABLE_ID 0x02000050              // 33554512
-#define IPV6_TUNNEL_TERMINATION_TABLE_ID 0x0200004B     // 33554507
+#define ROUTING_NEIGHBOR_TABLE_ID 0x02000040                    // 33554496
+#define ROUTING_ROUTER_INTERFACE_TABLE_ID 0x02000041            // 33554497
+#define ROUTING_NEXTHOP_TABLE_ID 0x02000042                     // 33554498
+#define ROUTING_WCMP_GROUP_TABLE_ID 0x02000043                  // 33554499
+#define ROUTING_IPV4_TABLE_ID 0x02000044                        // 33554500
+#define ROUTING_IPV6_TABLE_ID 0x02000045                        // 33554501
+#define ROUTING_VRF_TABLE_ID 0x0200004A                         // 33554506
+#define ROUTING_MULTICAST_ROUTER_INTERFACE_TABLE_ID 0x0200004C  // 33554508
+#define MIRROR_SESSION_TABLE_ID 0x02000046                      // 33554502
+#define L3_ADMIT_TABLE_ID 0x02000047                            // 33554503
+#define MIRROR_PORT_TO_PRE_SESSION_TABLE_ID 0x02000048          // 33554504
+#define ECMP_HASHING_TABLE_ID 0x02000049                        // 33554505
+#define ROUTING_TUNNEL_TABLE_ID 0x02000050                      // 33554512
+#define IPV6_TUNNEL_TERMINATION_TABLE_ID 0x0200004B             // 33554507
 // Next available table id: 0x0200004D (33554509)
 
 // --- Actions -----------------------------------------------------------------

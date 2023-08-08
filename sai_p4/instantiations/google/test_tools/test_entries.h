@@ -107,9 +107,9 @@ class EntryBuilder {
       const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
 
   // Convenience struct corresponding to the proto
-  // `MulticastSourceMacTableEntry`
+  // `MulticastRouterInterfaceTableEntry`
   // in `sai_pd.proto`.
-  struct MulticastSourceMacTableEntry {
+  struct MulticastRouterInterfaceTableEntry {
     std::string multicast_replica_port;
     int multicast_replica_instance = 0;
     netaddr::MacAddress src_mac;
@@ -147,8 +147,8 @@ class EntryBuilder {
                                          absl::Span<const Replica> replicas);
   EntryBuilder& AddMulticastGroupEntry(
       int multicast_group_id, absl::Span<const std::string> egress_ports);
-  EntryBuilder& AddMulticastSourceMacEntry(
-      const MulticastSourceMacTableEntry& entry);
+  EntryBuilder& AddMulticastRouterInterfaceEntry(
+      const MulticastRouterInterfaceTableEntry& entry);
   EntryBuilder& AddIngressAclDroppingAllPackets();
 
  private:

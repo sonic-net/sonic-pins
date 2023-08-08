@@ -162,22 +162,22 @@ TEST_P(IpMulticastTest, Ipv4PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
                   sai::Replica{.egress_port = "\1", .instance = 2},
                   sai::Replica{.egress_port = "\2", .instance = 0},
               })
-          .AddMulticastSourceMacEntry({
+          .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\1",
               .multicast_replica_instance = 0,
               .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 0),
           })
-          .AddMulticastSourceMacEntry({
+          .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\1",
               .multicast_replica_instance = 1,
               .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 1),
           })
-          .AddMulticastSourceMacEntry({
+          .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\1",
               .multicast_replica_instance = 2,
               .src_mac = netaddr::MacAddress(1, 0, 0, 0, 0, 2),
           })
-          .AddMulticastSourceMacEntry({
+          .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\2",
               .multicast_replica_instance = 0,
               .src_mac = netaddr::MacAddress(2, 0, 0, 0, 0, 0x42),
@@ -260,17 +260,17 @@ TEST_P(IpMulticastTest, Ipv6PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
                   sai::Replica{.egress_port = "\7", .instance = 1234},
                   sai::Replica{.egress_port = "\5", .instance = 0},
               })
-          .AddMulticastSourceMacEntry({
+          .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\7",
               .multicast_replica_instance = 0,
               .src_mac = netaddr::MacAddress(7, 7, 7, 7, 7, 7),
           })
-          .AddMulticastSourceMacEntry({
+          .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\7",
               .multicast_replica_instance = 1234,
               .src_mac = netaddr::MacAddress(7, 7, 7, 7, 7, 7),
           })
-          .AddMulticastSourceMacEntry({
+          .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\5",
               .multicast_replica_instance = 0,
               .src_mac = netaddr::MacAddress(5, 5, 5, 5, 5, 5),
@@ -336,7 +336,7 @@ TEST_P(IpMulticastTest, AclIngressDropActionOverridesMulticastAction) {
           .AddEntriesForwardingIpPacketsToGivenMulticastGroup(kMulticastGroupId)
           .AddMulticastGroupEntry(kMulticastGroupId,
                                   {sai::Replica{.egress_port = "\1"}})
-          .AddMulticastSourceMacEntry({
+          .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\1",
               .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
           })

@@ -276,7 +276,7 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "ipv6_tunnel_termination_table",
           // TODO: Add support for this table once the switch
           // supports it.
-          "multicast_source_mac_table",
+          "multicast_router_interface_table",
       });
   return *kUnsupportedTables;
 }

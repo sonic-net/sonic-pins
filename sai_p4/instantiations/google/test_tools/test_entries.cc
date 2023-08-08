@@ -520,10 +520,10 @@ EntryBuilder& EntryBuilder::AddMulticastGroupEntry(
   return AddMulticastGroupEntry(multicast_group_id, replicas);
 }
 
-EntryBuilder& EntryBuilder::AddMulticastSourceMacEntry(
-    const MulticastSourceMacTableEntry& entry) {
-  sai::MulticastSourceMacTableEntry& pd_entry =
-      *entries_.add_entries()->mutable_multicast_source_mac_table_entry();
+EntryBuilder& EntryBuilder::AddMulticastRouterInterfaceEntry(
+    const MulticastRouterInterfaceTableEntry& entry) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
   auto& match = *pd_entry.mutable_match();
   match.set_multicast_replica_port(entry.multicast_replica_port);
   match.set_multicast_replica_instance(

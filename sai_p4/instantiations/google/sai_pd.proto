@@ -215,7 +215,7 @@ message Ipv6TunnelTerminationTableEntry {
 }
 
 // CAUTION: This table is not (yet) supported.
-message MulticastSourceMacTableEntry {
+message MulticastRouterInterfaceTableEntry {
   message Match {
     string multicast_replica_port = 1;  // exact match / Format::STRING
     string multicast_replica_instance =
@@ -424,6 +424,9 @@ message AclEgressTableEntry {
     Optional is_ipv4 = 6;     // optional match / Format::HEX_STRING / 1 bits
     Optional is_ipv6 = 7;     // optional match / Format::HEX_STRING / 1 bits
     Ternary dscp = 8;         // ternary match / Format::HEX_STRING / 6 bits
+    Ternary dst_ipv6 = 9;     // ternary match / Format::IPV6 / upper 64 bits
+    // CAUTION: This match field is not (yet) supported.
+    Ternary src_mac = 10;  // ternary match / Format::MAC
   }
   Match match = 1;
   message Action {
@@ -845,7 +848,8 @@ message TableEntry {
     // CAUTION: This table is not (yet) supported.
     Ipv6TunnelTerminationTableEntry ipv6_tunnel_termination_table_entry = 75;
     // CAUTION: This table is not (yet) supported.
-    MulticastSourceMacTableEntry multicast_source_mac_table_entry = 76;
+    MulticastRouterInterfaceTableEntry multicast_router_interface_table_entry =
+        76;
     TunnelTableEntry tunnel_table_entry = 80;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;
