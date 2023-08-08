@@ -72,8 +72,7 @@ class IPv4RoutingTableEntriesTest : public testing::Test {
     ir_entries_ = std::move(dataplane.entries);
   }
 
-  absl::StatusOr<TableEntry> CreateSymbolicEntry(int entry_index,
-                                                 int prefix_length) const {
+  absl::StatusOr<ir::Table> GetTable() const {
     // The P4 program should have exactly one table.
     if (state_->program.tables_size() != 1) {
       return gutil::InternalErrorBuilder()
@@ -81,43 +80,7 @@ class IPv4RoutingTableEntriesTest : public testing::Test {
              << state_->program.tables_size() << " tables.";
     }
 
-    const std::string &table_name = state_->program.tables().begin()->first;
-    const ir::Table &table = state_->program.tables().begin()->second;
-
-    // The table should have exactly one LPM match.
-    if (table.table_definition().match_fields_by_name_size() != 1) {
-      return gutil::InternalErrorBuilder()
-             << "The table '" << table_name
-             << "' must have exactly 1 match. Found: "
-             << table.table_definition().DebugString();
-    }
-
-    const std::string &match_name =
-        table.table_definition().match_fields_by_name().begin()->first;
-    const p4::config::v1::MatchField &pi_match = table.table_definition()
-                                                     .match_fields_by_name()
-                                                     .begin()
-                                                     ->second.match_field();
-
-    // The match should be an LPM match.
-    if (pi_match.match_type() != MatchType::MatchField_MatchType_LPM) {
-      return gutil::InternalErrorBuilder()
-             << "The match '" << match_name
-             << "' must be an LPM match. Found: " << pi_match.DebugString();
-    }
-
-    // Construct the symbolic table entry in P4-Symbolic IR.
-    ir::TableEntry ir_entry;
-    pdpi::IrTableEntry &sketch =
-        *ir_entry.mutable_symbolic_entry()->mutable_sketch();
-    sketch.set_table_name(table_name);
-    pdpi::IrMatch &ir_match = *sketch.add_matches();
-    ir_match.set_name(match_name);
-    ir_match.mutable_lpm()->set_prefix_length(prefix_length);
-    sketch.set_priority(0);
-
-    // Build and return the symbolic table entry object.
-    return TableEntry(entry_index, ir_entry);
+    return state_->program.tables().begin()->second;
   }
 
  protected:
@@ -127,11 +90,15 @@ class IPv4RoutingTableEntriesTest : public testing::Test {
 
 TEST_F(IPv4RoutingTableEntriesTest, SymbolicEntryWithGetterFunctions) {
   constexpr int entry_index = 0;
+  constexpr int priority = 0;
   constexpr int prefix_length = 16;
 
   // Construct a symbolic table entry.
-  ASSERT_OK_AND_ASSIGN(TableEntry entry,
-                       CreateSymbolicEntry(entry_index, prefix_length));
+  ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
+  ASSERT_OK_AND_ASSIGN(
+      ir::TableEntry ir_entry,
+      CreateSymbolicIrTableEntry(table, priority, prefix_length));
+  TableEntry entry(entry_index, std::move(ir_entry));
 
   // Test all basic getter functions.
   EXPECT_EQ(entry.GetIndex(), entry_index);
@@ -149,15 +116,17 @@ TEST_F(IPv4RoutingTableEntriesTest, SymbolicEntryWithGetterFunctions) {
 
 TEST_F(IPv4RoutingTableEntriesTest, MatchVariablesOfSymbolicEntry) {
   constexpr int entry_index = 0;
+  constexpr int priority = 0;
   constexpr int prefix_length = 16;
 
   // Construct a symbolic table entry.
-  ASSERT_OK_AND_ASSIGN(TableEntry entry,
-                       CreateSymbolicEntry(entry_index, prefix_length));
+  ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
+  ASSERT_OK_AND_ASSIGN(
+      ir::TableEntry ir_entry,
+      CreateSymbolicIrTableEntry(table, priority, prefix_length));
+  TableEntry entry(entry_index, std::move(ir_entry));
 
   // Test the symbolic variables of the symbolic LPM match.
-  ASSERT_EQ(state_->program.tables_size(), 1);
-  const ir::Table &table = state_->program.tables().begin()->second;
   const std::string &match_name = entry.GetPdpiIrTableEntry().matches(0).name();
   int bitwidth = table.table_definition()
                      .match_fields_by_name()
@@ -180,15 +149,17 @@ TEST_F(IPv4RoutingTableEntriesTest, MatchVariablesOfSymbolicEntry) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ActionInvocationVariablesOfSymbolicEntry) {
   constexpr int entry_index = 0;
+  constexpr int priority = 0;
   constexpr int prefix_length = 16;
 
   // Construct a symbolic table entry.
-  ASSERT_OK_AND_ASSIGN(TableEntry entry,
-                       CreateSymbolicEntry(entry_index, prefix_length));
+  ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
+  ASSERT_OK_AND_ASSIGN(
+      ir::TableEntry ir_entry,
+      CreateSymbolicIrTableEntry(table, priority, prefix_length));
+  TableEntry entry(entry_index, std::move(ir_entry));
 
   // Test the symbolic variables of the symbolic action invocations.
-  ASSERT_EQ(state_->program.tables_size(), 1);
-  const ir::Table &table = state_->program.tables().begin()->second;
   for (const auto &action_ref : table.table_definition().entry_actions()) {
     const std::string &action_name = action_ref.action().preamble().name();
     ASSERT_OK_AND_ASSIGN(z3::expr action_invocation,
@@ -205,15 +176,17 @@ TEST_F(IPv4RoutingTableEntriesTest, ActionInvocationVariablesOfSymbolicEntry) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ActionParameterVariablesOfSymbolicEntry) {
   constexpr int entry_index = 0;
+  constexpr int priority = 0;
   constexpr int prefix_length = 16;
 
   // Construct a symbolic table entry.
-  ASSERT_OK_AND_ASSIGN(TableEntry entry,
-                       CreateSymbolicEntry(entry_index, prefix_length));
+  ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
+  ASSERT_OK_AND_ASSIGN(
+      ir::TableEntry ir_entry,
+      CreateSymbolicIrTableEntry(table, priority, prefix_length));
+  TableEntry entry(entry_index, std::move(ir_entry));
 
   // Test the symbolic variables of the symbolic action parameters.
-  ASSERT_EQ(state_->program.tables_size(), 1);
-  const ir::Table &table = state_->program.tables().begin()->second;
   for (const auto &action_ref : table.table_definition().entry_actions()) {
     const std::string &action_name = action_ref.action().preamble().name();
     ASSERT_TRUE(state_->program.actions().contains(action_name));
@@ -236,15 +209,17 @@ TEST_F(IPv4RoutingTableEntriesTest, ActionParameterVariablesOfSymbolicEntry) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentMatch) {
   constexpr int entry_index = 0;
+  constexpr int priority = 0;
   constexpr int prefix_length = 16;
 
   // Construct a symbolic table entry.
-  ASSERT_OK_AND_ASSIGN(TableEntry entry,
-                       CreateSymbolicEntry(entry_index, prefix_length));
+  ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
+  ASSERT_OK_AND_ASSIGN(
+      ir::TableEntry ir_entry,
+      CreateSymbolicIrTableEntry(table, priority, prefix_length));
+  TableEntry entry(entry_index, std::move(ir_entry));
 
   // Test getting the symbolic variables of a non-existent match.
-  ASSERT_EQ(state_->program.tables_size(), 1);
-  const ir::Table &table = state_->program.tables().begin()->second;
   constexpr absl::string_view non_existent_match_name = "non_existent_match";
   EXPECT_THAT(
       entry.GetMatchValues(non_existent_match_name, table, state_->program,
@@ -256,18 +231,19 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentMatch) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ErrorWithWildcardMatch) {
   constexpr int entry_index = 0;
+  constexpr int priority = 0;
   constexpr int prefix_length = 16;
 
   // Construct a symbolic table entry with all wildcard matches.
-  ASSERT_OK_AND_ASSIGN(TableEntry non_wildcard_entry,
-                       CreateSymbolicEntry(entry_index, prefix_length));
-  ir::TableEntry ir_entry = non_wildcard_entry.GetP4SymbolicIrTableEntry();
+  ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
+  ASSERT_OK_AND_ASSIGN(
+      ir::TableEntry ir_entry,
+      CreateSymbolicIrTableEntry(table, priority, prefix_length));
+  TableEntry non_wildcard_entry(entry_index, ir_entry);
   ir_entry.mutable_symbolic_entry()->mutable_sketch()->clear_matches();
   TableEntry entry(entry_index, ir_entry);
 
   // Test getting the symbolic variables of an all-wildcard symbolic entry.
-  ASSERT_EQ(state_->program.tables_size(), 1);
-  const ir::Table &table = state_->program.tables().begin()->second;
   constexpr absl::string_view match_name = "hdr.ipv4.dstAddr";
   EXPECT_THAT(
       entry.GetMatchValues(match_name, table, state_->program,
@@ -279,15 +255,17 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithWildcardMatch) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentAction) {
   constexpr int entry_index = 0;
+  constexpr int priority = 0;
   constexpr int prefix_length = 16;
 
   // Construct a symbolic table entry.
-  ASSERT_OK_AND_ASSIGN(TableEntry entry,
-                       CreateSymbolicEntry(entry_index, prefix_length));
+  ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
+  ASSERT_OK_AND_ASSIGN(
+      ir::TableEntry ir_entry,
+      CreateSymbolicIrTableEntry(table, priority, prefix_length));
+  TableEntry entry(entry_index, std::move(ir_entry));
 
   // Test getting the symbolic variables of a non-existent action.
-  ASSERT_EQ(state_->program.tables_size(), 1);
-  const ir::Table &table = state_->program.tables().begin()->second;
   constexpr absl::string_view non_existent_action_name = "non_existent_action";
   EXPECT_THAT(entry.GetActionInvocation(non_existent_action_name, table,
                                         *state_->context.z3_context),
@@ -317,15 +295,17 @@ TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentAction) {
 
 TEST_F(IPv4RoutingTableEntriesTest, ErrorWithNonExistentActionParameter) {
   constexpr int entry_index = 0;
+  constexpr int priority = 0;
   constexpr int prefix_length = 16;
 
   // Construct a symbolic table entry.
-  ASSERT_OK_AND_ASSIGN(TableEntry entry,
-                       CreateSymbolicEntry(entry_index, prefix_length));
+  ASSERT_OK_AND_ASSIGN(ir::Table table, GetTable());
+  ASSERT_OK_AND_ASSIGN(
+      ir::TableEntry ir_entry,
+      CreateSymbolicIrTableEntry(table, priority, prefix_length));
+  TableEntry entry(entry_index, std::move(ir_entry));
 
   // Test getting the symbolic variables of a non-existent action parameter.
-  ASSERT_EQ(state_->program.tables_size(), 1);
-  const ir::Table &table = state_->program.tables().begin()->second;
   constexpr absl::string_view non_existent_param_name = "non_existent_param";
   for (const auto &action_ref : table.table_definition().entry_actions()) {
     const std::string &action_name = action_ref.action().preamble().name();

@@ -15,6 +15,8 @@
 #ifndef PINS_P4_SYMBOLIC_SYMBOLIC_TABLE_ENTRY_H_
 #define PINS_P4_SYMBOLIC_SYMBOLIC_TABLE_ENTRY_H_
 
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -123,6 +125,19 @@ class TableEntry {
 };
 
 using TableEntries = absl::btree_map<std::string, std::vector<TableEntry>>;
+
+// Returns a fully symbolic IR table entry for the given `table`.
+// All matches will be specified as a symbolic match.
+// If the given `table` has ternary or optional matches, the `priority` must be
+// provided with a positive value, and it is set concretely in the table entry
+// for deterministic entry priority. Otherwise the `priority` must be 0.
+// If the given `table` has no ternary or optional matches, and has exactly 1
+// LPM match with zero or more exact matches, the `prefix_length` must be
+// provided with a non-negative value, and it is set concretely in the table
+// entry for deterministic entry priority.
+absl::StatusOr<ir::TableEntry> CreateSymbolicIrTableEntry(
+    const ir::Table &table, int priority = 0,
+    std::optional<size_t> prefix_length = std::nullopt);
 
 }  // namespace p4_symbolic::symbolic
 

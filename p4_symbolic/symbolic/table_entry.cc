@@ -15,6 +15,8 @@
 #include "p4_symbolic/symbolic/table_entry.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -24,6 +26,7 @@
 #include "absl/strings/string_view.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/util.h"
@@ -307,6 +310,67 @@ absl::StatusOr<z3::expr> TableEntry::GetActionParameter(
   // Construct and return the symbolic variable as a Z3 expression.
   return z3_context.bv_const(action_param.variable_name.c_str(),
                              action_param.bitwidth);
+}
+
+absl::StatusOr<ir::TableEntry> CreateSymbolicIrTableEntry(
+    const ir::Table &table, int priority, std::optional<size_t> prefix_length) {
+  // Build a symbolic table entry in P4-Symbolic IR.
+  ir::TableEntry ir_entry;
+  pdpi::IrTableEntry &sketch =
+      *ir_entry.mutable_symbolic_entry()->mutable_sketch();
+
+  // Set table name.
+  const std::string &table_name = table.table_definition().preamble().name();
+  sketch.set_table_name(table_name);
+
+  bool has_ternary_or_optional = false;
+  pdpi::IrMatch *lpm_match = nullptr;
+
+  for (const auto &[match_name, match_definition] :
+       Ordered(table.table_definition().match_fields_by_name())) {
+    // Set match name.
+    pdpi::IrMatch *ir_match = sketch.add_matches();
+    ir_match->set_name(match_name);
+
+    const auto &pi_match = match_definition.match_field();
+    switch (pi_match.match_type()) {
+      case MatchType::MatchField_MatchType_TERNARY:
+      case MatchType::MatchField_MatchType_OPTIONAL: {
+        has_ternary_or_optional = true;
+        break;
+      }
+      case MatchType::MatchField_MatchType_LPM: {
+        lpm_match = ir_match;
+        break;
+      }
+      default: {
+        // Exact or some other unsupported type, no need to do anything here.
+        // An absl error will be returned during symbolic evaluation.
+        break;
+      }
+    }
+  }
+
+  // Set prefix length for single-LPM tables.
+  if (!has_ternary_or_optional && lpm_match) {
+    if (!prefix_length.has_value()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Prefix length must be provided for tables with a single LPM "
+                "match.";
+    }
+    lpm_match->mutable_lpm()->set_prefix_length(*prefix_length);
+  }
+
+  // Set priority.
+  if (has_ternary_or_optional && priority <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Priority must be greater than 0 for tables with ternary or "
+              "optional matches. Found: "
+           << priority;
+  }
+  sketch.set_priority(has_ternary_or_optional ? priority : 0);
+
+  return ir_entry;
 }
 
 }  // namespace p4_symbolic::symbolic
