@@ -32,3 +32,31 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "symbolic_table_entries_test",
+    srcs = ["symbolic_table_entries_test.cc"],
+    data = [
+        "//p4_symbolic/testdata:ipv4-routing/basic.config.json",
+        "//p4_symbolic/testdata:ipv4-routing/basic.p4info.pb.txt",
+        "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
+    ],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4_symbolic:test_util",
+        "//p4_symbolic/ir",
+        "//p4_symbolic/ir:ir_cc_proto",
+        "//p4_symbolic/ir:parser",
+        "//p4_symbolic/ir:table_entries",
+        "//p4_symbolic/sai",
+        "//p4_symbolic/symbolic",
+        "//thinkit:bazel_test_environment",
+        "//thinkit:test_environment",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

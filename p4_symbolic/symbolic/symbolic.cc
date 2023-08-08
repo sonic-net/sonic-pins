@@ -23,13 +23,16 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
+#include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/parser.h"
@@ -45,6 +48,19 @@ namespace p4_symbolic {
 namespace symbolic {
 
 namespace {
+
+// Returns a pointer to the P4-Symbolic IR table with the given `table_name`
+// from the `program` IR. The returned pointer would not be null when the status
+// is ok.
+absl::StatusOr<const ir::Table *> GetIrTable(const ir::P4Program &program,
+                                             absl::string_view table_name) {
+  auto it = program.tables().find(table_name);
+  if (it == program.tables().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Table '" << table_name << "' not found";
+  }
+  return &it->second;
+}
 
 // Initializes the table entry objects in the symbolic context based on the
 // given `ir_entries`. For symbolic table entries, symbolic variables and their
@@ -66,6 +82,35 @@ absl::Status InitializeTableEntries(SolverState &state,
       ir::TableEntry &ir_entry = per_table_ir_entries[index];
       state.context.table_entries[table_name].push_back(
           TableEntry(index, std::move(ir_entry)));
+    }
+  }
+
+  // For each symbolic table entry object in each table, create respective
+  // symbolic variables and add corresponding constraints as Z3 assertions.
+  for (auto &[table_name, table_entries] : state.context.table_entries) {
+    ASSIGN_OR_RETURN(const ir::Table *table,
+                     GetIrTable(state.program, table_name));
+
+    for (TableEntry &entry : table_entries) {
+      // Skip concrete table entries.
+      if (entry.IsConcrete()) continue;
+
+      // Initialize the symbolic match fields of the current entry.
+      RETURN_IF_ERROR(InitializeSymbolicMatches(
+          entry, *table, state.program, *state.context.z3_context,
+          *state.solver, state.translator));
+
+      // Entries with symbolic action sets are not supported for now.
+      if (table->table_definition().has_action_profile_id()) {
+        return gutil::UnimplementedErrorBuilder()
+               << "Table entries with symbolic action sets are not supported "
+                  "at the moment.";
+      }
+
+      // Initialize the symbolic actions of the current entry.
+      RETURN_IF_ERROR(InitializeSymbolicActions(
+          entry, *table, state.program, *state.context.z3_context,
+          *state.solver, state.translator));
     }
   }
 
