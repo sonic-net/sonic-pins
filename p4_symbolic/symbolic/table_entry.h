@@ -101,6 +101,14 @@ class TableEntry {
                                               const ir::Table &table,
                                               z3::context &z3_context) const;
 
+  // Translates the table and action names back to the aliases.
+  // This should be called when synthesizing concrete entries used on other
+  // target platforms. PDPI maps are keyed by the alias names. This function
+  // makes the table entry compatible with PDPI formats.
+  // TODO: Consider removing this function if we switch to using
+  // aliases as table/action names in P4-Symbolic.
+  void ConvertToTableAndActionAliases(const ir::P4Program &program);
+
  private:
   int index_;                // The original index of the entry in the table.
   ir::TableEntry ir_entry_;  // Entry in P4-Symbolic IR.
