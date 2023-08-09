@@ -22,6 +22,7 @@
 #define P4_SYMBOLIC_SYMBOLIC_VALUES_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -85,6 +86,8 @@ private:
 // This struct stores all the state that is required to translate string values
 // to internal bitvectors per custom p4 type (e.g. vrf_t), and reverse translate
 // bitvector values of fields of such a custom type to a string value.
+// TODO: Consider simplifying the implementation of
+// P4RuntimeTranslator and the related functions.
 struct P4RuntimeTranslator {
   // Maps a type name to an allocator responsible for translating values for
   // that type.
@@ -114,11 +117,15 @@ absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value);
 // translated values (i.e. string IrValues) the bitwidth MUST be 0, in which
 // case we use the minimum number of bits to encode the resulting translated
 // value.
-absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
-                                         const std::string &type_name,
-                                         const pdpi::IrValue &value,
-                                         int bitwidth, z3::context &context,
-                                         P4RuntimeTranslator &translator);
+//
+// If `field_name` is provided (e.g., for entry field matches), it is used to
+// look up the type of the value from the field-to-type mapping in the
+// translator, which is then used for the actual translation. Otherwise (e.g.,
+// for action parameters), `type_name` is used instead.
+absl::StatusOr<z3::expr> FormatP4RTValue(
+    const pdpi::IrValue &value, const std::optional<std::string> &field_name,
+    const std::string &type_name, int bitwidth, z3::context &context,
+    P4RuntimeTranslator &translator);
 
 // Reverse translation: operates opposite to FormatP4RTValue().
 // If the given field was not detected to be translatable (perhaps it is indeed
@@ -127,9 +134,33 @@ absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
 // were previously translated by a call to FormatP4RTValue), then the value
 // is looked up using the reverse mapping inside the given translator, if that
 // look fails, an absl error is returned.
-absl::StatusOr<std::string>
-TranslateValueToP4RT(const std::string &field_name, const std::string &value,
-                     const P4RuntimeTranslator &translator);
+// A boolean is also returned to indicate whether a translation took place.
+//
+// If `field_name` is provided (e.g., for entry field matches) and when
+// `type_name` is not provided or empty (e.g., for entry field matches that
+// match on locally defined variables), it is used to look up the type of the
+// value from the field-to-type mapping in the translator, which is then used
+// for the actual translation. Otherwise (e.g., for action parameters or entry
+// field matches that provide a type name), `type_name` is used instead.
+absl::StatusOr<std::pair<std::string, bool>> TranslateZ3ValueStringToP4RT(
+    const std::string &value, const std::string &field_name,
+    const std::optional<std::string> &type_name,
+    const P4RuntimeTranslator &translator,
+    std::optional<pdpi::Format> format = std::nullopt);
+
+// Similar to `TranslateZ3ValueToP4RT` but additionally converts the translated
+// P4Runtime string representation to PDPI IR value.
+//
+// If `field_name` is provided (e.g., for entry field matches) and when
+// `type_name` is not provided or empty (e.g., for entry field matches that
+// match on locally defined variables), it is used to look up the type of the
+// value from the field-to-type mapping in the translator, which is then used
+// for the actual translation. Otherwise (e.g., for action parameters or entry
+// field matches that provide a type name), `type_name` is used instead.
+absl::StatusOr<pdpi::IrValue> TranslateZ3ValueStringToIrValue(
+    const std::string &value, int bitwidth, const std::string &field_name,
+    const std::string &type_name, const P4RuntimeTranslator &translator,
+    const pdpi::Format &format);
 
 } // namespace values
 } // namespace symbolic

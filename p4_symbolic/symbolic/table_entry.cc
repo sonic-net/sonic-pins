@@ -71,7 +71,7 @@ absl::StatusOr<z3::expr> GetZ3Value(const pdpi::IrValue &value,
   const ir::FieldValue &matched_field = it->second;
   std::string field_name = absl::StrFormat("%s.%s", matched_field.header_name(),
                                            matched_field.field_name());
-  return values::FormatP4RTValue(field_name, match.type_name().name(), value,
+  return values::FormatP4RTValue(value, field_name, match.type_name().name(),
                                  match.bitwidth(), z3_context, translator);
 }
 
@@ -319,10 +319,10 @@ absl::Status AddConstraintsForConcretePartsOfSymbolicAction(
                                             param.name()));
     ASSIGN_OR_RETURN(
         z3::expr concrete_param_value,
-        values::FormatP4RTValue(
-            /*field_name=*/"", param_definition->param().type_name().name(),
-            param.value(), param_definition->param().bitwidth(), z3_context,
-            translator));
+        values::FormatP4RTValue(param.value(), /*field_name=*/std::nullopt,
+                                param_definition->param().type_name().name(),
+                                param_definition->param().bitwidth(),
+                                z3_context, translator));
     ASSIGN_OR_RETURN(z3::expr param_constraint,
                      operators::Eq(action_param, concrete_param_value));
     solver.add(param_constraint);

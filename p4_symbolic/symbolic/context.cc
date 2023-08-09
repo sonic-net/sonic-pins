@@ -38,10 +38,6 @@ std::string ConcreteTrace::to_string() const {
   return result;
 }
 
-std::string ConcreteContext::to_string() const {
-  return to_string(/*verbose=*/false);
-}
-
 std::string ConcreteContext::to_string(bool verbose) const {
   auto result = absl::StrCat("ingress_port = ", ingress_port, "\n",
                              "egress_port = ", egress_port, "\n", "trace:\n",
