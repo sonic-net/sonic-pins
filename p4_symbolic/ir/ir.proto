@@ -327,6 +327,7 @@ message Statement {
     CloneStatement clone = 4;
     HashStatement hash = 5;
     ExitStatement exit = 6;
+    HeaderAssignmentStatement header_assignment = 7;
   }
 }
 
@@ -364,6 +365,13 @@ message HashStatement {
 
 // Statement that terminates the execution of all blocks currently executing.
 message ExitStatement {}
+
+// An assignment statement of the form <left> = <right>, where both <left> and
+// <right> describe a header instance.
+message HeaderAssignmentStatement {
+  HeaderValue left = 1;
+  HeaderValue right = 2;
+}
 
 // The structure of an abstract RValue.
 message RValue {
