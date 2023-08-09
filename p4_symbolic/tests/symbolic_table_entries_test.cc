@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -32,10 +33,13 @@
 #include "p4_symbolic/ir/parser.h"
 #include "p4_symbolic/ir/table_entries.h"
 #include "p4_symbolic/sai/sai.h"
+#include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table_entry.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/test_util.h"
+#include "p4_symbolic/z3_util.h"
+#include "z3++.h"
 
 namespace p4_symbolic {
 namespace {
@@ -111,17 +115,66 @@ TEST_F(SymbolicTableEntriesIPv4BasicTest, OneSymbolicEntryPerTable) {
     std::string banner =
         absl::StrCat("== ", table_name, " ",
                      std::string(80 - table_name.size() - 4, '='), "\n");
-    EXPECT_OK(artifact_writer_.AppendToTestArtifact("table_entries.textproto",
-                                                    banner));
+    EXPECT_OK(artifact_writer_.AppendToTestArtifact(
+        "input_table_entries.textproto", banner));
     for (const auto& entry : entries) {
       EXPECT_OK(artifact_writer_.AppendToTestArtifact(
-          "table_entries.textproto", entry.GetP4SymbolicIrTableEntry()));
+          "input_table_entries.textproto", entry.GetP4SymbolicIrTableEntry()));
     }
   }
   EXPECT_OK(
       artifact_writer_.StoreTestArtifact("program.textproto", state->program));
   EXPECT_OK(artifact_writer_.StoreTestArtifact(
       "all_smt_formulae.txt", state->GetHeadersAndSolverConstraintsSMT()));
+
+  // Define criteria to hit the ipv4_lpm table and have the packet forwarded.
+  constexpr absl::string_view table_name = "MyIngress.ipv4_lpm";
+  ASSERT_OK_AND_ASSIGN(
+      z3::expr egress_spec_of_ingress_packet,
+      state->context.ingress_headers.Get("standard_metadata.egress_spec"));
+  ASSERT_TRUE(state->context.trace.matched_entries.contains(table_name));
+  const symbolic::SymbolicTableMatch& lpm_table =
+      state->context.trace.matched_entries.at(table_name);
+  symbolic::Assertion criteria =
+      [&egress_spec_of_ingress_packet,
+       &lpm_table](const symbolic::SymbolicContext& ctx) -> z3::expr {
+    // TODO: Remove this once cl/550894398 is submitted.
+    z3::expr ingress_constraint = (egress_spec_of_ingress_packet == 0);
+    return lpm_table.matched && !ctx.trace.dropped && ctx.egress_port == 3 &&
+           ingress_constraint;
+  };
+  EXPECT_OK(artifact_writer_.StoreTestArtifact(
+      "criteria.smt.txt", symbolic::DebugSMT(state, criteria)));
+
+  // Solve for a concrete solution given the criteria.
+  ASSERT_OK_AND_ASSIGN(std::optional<symbolic::ConcreteContext> solution,
+                       symbolic::Solve(*state, criteria));
+  ASSERT_TRUE(solution.has_value());
+
+  // Dump the concrete context.
+  EXPECT_OK(artifact_writer_.StoreTestArtifact(
+      "solution.txt", solution->to_string(/*verbose=*/true)));
+  // Dump the table entries.
+  for (const auto& [table_name, entries] : solution->table_entries) {
+    std::string banner =
+        absl::StrCat("== ", table_name, " ",
+                     std::string(80 - table_name.size() - 4, '='), "\n");
+    EXPECT_OK(artifact_writer_.AppendToTestArtifact(
+        "concrete_table_entries.textproto", banner));
+    for (const auto& entry : entries) {
+      EXPECT_OK(artifact_writer_.AppendToTestArtifact(
+          "concrete_table_entries.textproto",
+          entry.GetP4SymbolicIrTableEntry()));
+    }
+  }
+
+  // Check properties of the solution.
+  EXPECT_EQ(Z3ValueStringToInt(solution->egress_port), 3);
+  EXPECT_FALSE(solution->trace.dropped);
+  ASSERT_EQ(solution->trace.matched_entries.size(), 1);
+  ASSERT_TRUE(solution->trace.matched_entries.contains(table_name));
+  EXPECT_TRUE(solution->trace.matched_entries.at(table_name).matched);
+  EXPECT_EQ(solution->trace.matched_entries.at(table_name).entry_index, 0);
 }
 
 }  // namespace

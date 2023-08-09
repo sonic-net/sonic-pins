@@ -103,6 +103,7 @@ struct ConcreteContext {
   ConcretePerPacketState ingress_headers;
   ConcretePerPacketState parsed_headers;
   ConcretePerPacketState egress_headers;
+  TableEntries table_entries;
   ConcreteTrace trace;  // Expected trace in the program.
 
   std::string to_string(bool verbose = false) const;
