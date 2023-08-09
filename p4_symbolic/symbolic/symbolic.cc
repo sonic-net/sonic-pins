@@ -80,8 +80,13 @@ absl::Status InitializeTableEntries(SolverState &state,
     // For each IR entry, create a table entry object.
     for (size_t index = 0; index < per_table_ir_entries.size(); ++index) {
       ir::TableEntry &ir_entry = per_table_ir_entries[index];
-      state.context.table_entries[table_name].push_back(
-          TableEntry(index, std::move(ir_entry)));
+      TableEntry entry(index, std::move(ir_entry));
+      if (!entry.IsConcrete() && !entry.IsSymbolic()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "A table entry must be either concrete or symbolic. Found: "
+               << entry.GetPdpiIrTableEntry().DebugString();
+      }
+      state.context.table_entries[table_name].push_back(std::move(entry));
     }
   }
 

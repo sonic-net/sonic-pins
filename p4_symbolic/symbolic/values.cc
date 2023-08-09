@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <string>
 
+#include "absl/numeric/bits.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
@@ -48,21 +49,6 @@
 namespace p4_symbolic {
 namespace symbolic {
 namespace values {
-
-namespace {
-
-// Finds the minimum bit size required for representing the given value.
-unsigned int FindBitsize(uint64_t value) {
-  unsigned int bitsize = 0;
-  uint64_t pow = 1;
-  while (bitsize <= 64 && pow <= value) {
-    pow = pow * 2;
-    bitsize++;
-  }
-  return (bitsize > 1 ? bitsize : 1);  // At least 1 bit.
-}
-
-}  // namespace
 
 absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value) {
   // Format according to type.
@@ -103,7 +89,7 @@ absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
 
       ASSIGN_OR_RETURN(uint64_t int_value, allocator.AllocateId(string_value));
       if (bitwidth == 0) {
-        bitwidth = FindBitsize(int_value);
+        bitwidth = int_value == 0 ? 1 : absl::bit_width(int_value);
       } else {
         return absl::InvalidArgumentError(absl::Substitute(
             "Translated type '$0' is expected to have bitwidth 0, got $1",

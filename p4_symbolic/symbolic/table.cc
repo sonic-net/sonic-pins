@@ -30,14 +30,13 @@
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "google/protobuf/map.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -56,21 +55,6 @@ namespace symbolic {
 namespace table {
 
 namespace {
-
-// Finds a match field with the given match name in the given table entry.
-// Returns the index of that match field inside the matches array in entry, or
-// -1 if no such match was found.
-int FindMatchWithName(const pdpi::IrTableEntry &entry,
-                      const std::string &name) {
-  int index = -1;
-  for (int i = 0; i < entry.matches_size(); i++) {
-    if (entry.matches(i).name() == name) {
-      index = i;
-      break;
-    }
-  }
-  return index;
-}
 
 // Sort the given table entries by priority.
 // The priority depends on the match types.
@@ -170,169 +154,240 @@ std::vector<TableEntry> SortEntries(const ir::Table &table,
   return sorted_entries;
 }
 
-// Analyze a single match that is part of a table entry.
-// Constructs a symbolic expression that semantically corresponds to this match.
-absl::StatusOr<z3::expr> EvaluateSingleMatch(
-    const p4::config::v1::MatchField &match_definition,
-    const std::string &field_name, const z3::expr &field_expression,
-    const pdpi::IrMatch &match, SolverState &state) {
-  if (match_definition.match_case() != p4::config::v1::MatchField::kMatchType) {
-    // Arch-specific match type.
-    return absl::InvalidArgumentError(
-        absl::StrCat("Found match with non-standard type"));
+// Analyzes a single symbolic match of a table entry.
+// Constructs a symbolic expression that semantically corresponds to the given
+// symbolic match.
+absl::StatusOr<z3::expr> EvaluateSymbolicMatch(absl::string_view match_name,
+                                               const z3::expr &field_value,
+                                               const TableEntry &entry,
+                                               const ir::Table &table,
+                                               SolverState &state) {
+  ASSIGN_OR_RETURN(SymbolicMatchVariables variables,
+                   entry.GetMatchValues(match_name, table, state.program,
+                                        *state.context.z3_context));
+  ASSIGN_OR_RETURN(z3::expr masked_field,
+                   operators::BitAnd(field_value, variables.mask));
+  return operators::Eq(masked_field, variables.value);
+}
+
+// Analyzes a single concrete match of a table entry.
+// Constructs a symbolic expression that semantically corresponds to the given
+// concrete match.
+absl::StatusOr<z3::expr> EvaluateConcreteMatch(
+    const pdpi::IrMatch &ir_match, const p4::config::v1::MatchField &pi_match,
+    const std::string &field_name, const z3::expr &field_value,
+    SolverState &state) {
+  if (!pi_match.has_match_type()) {
+    // Architecture-specific match type.
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Found match with non-standard type";
   }
+
+  // Translates the given `value` read from the match of a table entry into a Z3
+  // expression.
+  auto GetZ3Value =
+      [&field_name, &pi_match,
+       &state](const pdpi::IrValue &value) -> absl::StatusOr<z3::expr> {
+    return values::FormatP4RTValue(field_name, pi_match.type_name().name(),
+                                   value, pi_match.bitwidth(),
+                                   *state.context.z3_context, state.translator);
+  };
 
   absl::Status mismatch =
       gutil::InvalidArgumentErrorBuilder()
       << "match on field '" << field_name << "' must be of type "
-      << p4::config::v1::MatchField::MatchType_Name(
-             match_definition.match_type())
+      << p4::config::v1::MatchField::MatchType_Name(pi_match.match_type())
       << " according to the table definition, but got entry with match: "
-      << match_definition.ShortDebugString();
+      << ir_match.ShortDebugString();
 
-  auto GetZ3Value =
-      [&](const pdpi::IrValue &value) -> absl::StatusOr<z3::expr> {
-    return values::FormatP4RTValue(field_name,
-                                   match_definition.type_name().name(), value,
-                                   match_definition.bitwidth(),
-                                   *state.context.z3_context, state.translator);
-  };
-
-  switch (match_definition.match_type()) {
+  switch (pi_match.match_type()) {
     case p4::config::v1::MatchField::EXACT: {
-      if (match.match_value_case() != pdpi::IrMatch::kExact) return mismatch;
-      ASSIGN_OR_RETURN(z3::expr value_expression, GetZ3Value(match.exact()));
-      return operators::Eq(field_expression, value_expression);
+      if (!ir_match.has_exact()) return mismatch;
+
+      ASSIGN_OR_RETURN(z3::expr exact_value, GetZ3Value(ir_match.exact()));
+      return operators::Eq(field_value, exact_value);
     }
 
     case p4::config::v1::MatchField::LPM: {
-      if (match.match_value_case() != pdpi::IrMatch::kLpm) return mismatch;
+      if (!ir_match.has_lpm()) return mismatch;
 
-      ASSIGN_OR_RETURN(z3::expr value_expression,
-                       GetZ3Value(match.lpm().value()));
+      ASSIGN_OR_RETURN(z3::expr lpm_value, GetZ3Value(ir_match.lpm().value()));
       return operators::PrefixEq(
-          field_expression, value_expression,
-          static_cast<unsigned int>(match.lpm().prefix_length()));
+          field_value, lpm_value,
+          static_cast<unsigned int>(ir_match.lpm().prefix_length()));
     }
 
     case p4::config::v1::MatchField::TERNARY: {
-      if (match.match_value_case() != pdpi::IrMatch::kTernary) return mismatch;
+      if (!ir_match.has_ternary()) return mismatch;
 
-      ASSIGN_OR_RETURN(z3::expr mask_expression,
-                       GetZ3Value(match.ternary().mask()));
-      ASSIGN_OR_RETURN(z3::expr value_expression,
-                       GetZ3Value(match.ternary().value()));
+      ASSIGN_OR_RETURN(z3::expr ternary_value,
+                       GetZ3Value(ir_match.ternary().value()));
+      ASSIGN_OR_RETURN(z3::expr ternary_mask,
+                       GetZ3Value(ir_match.ternary().mask()));
       ASSIGN_OR_RETURN(z3::expr masked_field,
-                       operators::BitAnd(field_expression, mask_expression));
-      return operators::Eq(masked_field, value_expression);
+                       operators::BitAnd(field_value, ternary_mask));
+      return operators::Eq(masked_field, ternary_value);
     }
 
     case p4::config::v1::MatchField::OPTIONAL: {
-      if (match.match_value_case() != pdpi::IrMatch::kOptional) return mismatch;
+      if (!ir_match.has_optional()) return mismatch;
+
       // According to the P4Runtime spec, "for don't care matches, the P4Runtime
       // client must omit the field's entire FieldMatch entry when building the
       // match repeated field of the TableEntry message". Therefore, if the
       // match value is present for an optional match type, it must be a
       // concrete value.
-      ASSIGN_OR_RETURN(z3::expr value_expression,
-                       GetZ3Value(match.optional().value()));
-      return operators::Eq(field_expression, value_expression);
+      ASSIGN_OR_RETURN(z3::expr optional_value,
+                       GetZ3Value(ir_match.optional().value()));
+      return operators::Eq(field_value, optional_value);
     }
 
-    default:
-      return absl::UnimplementedError(absl::StrCat(
-          "Found unsupported match type ", match_definition.DebugString()));
+    default: {
+      return gutil::UnimplementedErrorBuilder()
+             << "Found unsupported match type " << pi_match.DebugString();
+    }
   }
 }
 
 // Constructs a symbolic expression that is true if and only if this entry
 // is matched on.
 absl::StatusOr<z3::expr> EvaluateTableEntryCondition(
-    const ir::Table &table, const pdpi::IrTableEntry &entry, SolverState &state,
+    const ir::Table &table, const TableEntry &entry, SolverState &state,
     const SymbolicPerPacketState &headers) {
   const std::string &table_name = table.table_definition().preamble().name();
+  const google::protobuf::Map<std::string, ::p4_symbolic::ir::FieldValue>
+      &match_name_to_header_fields =
+          table.table_implementation().match_name_to_field();
+  const google::protobuf::Map<std::string, ::pdpi::IrMatchFieldDefinition>
+      &match_definition_by_name =
+          table.table_definition().match_fields_by_name();
 
   // Construct the match condition expression.
-  z3::expr condition_expression = state.context.z3_context->bool_val(true);
-  const google::protobuf::Map<std::string, ir::FieldValue> &match_to_fields =
-      table.table_implementation().match_name_to_field();
+  z3::expr match_condition = state.context.z3_context->bool_val(true);
 
-  // It is desirable for P4Symbolic to produce deterministic outputs. Therefore,
-  // all containers need to be traversed in a deterministic order.
-  const auto sorted_match_fields_by_name =
-      Ordered(table.table_definition().match_fields_by_name());
+  // TODO: Consider sorting the matches before evaluating them to
+  // ensure equivalent entries produce the same formulae.
+  for (const pdpi::IrMatch &ir_match : entry.GetPdpiIrTableEntry().matches()) {
+    const std::string &match_name = ir_match.name();
 
-  for (const auto &[name, match_fields] : sorted_match_fields_by_name) {
-    p4::config::v1::MatchField match_definition = match_fields.match_field();
-
-    int match_field_index = FindMatchWithName(entry, name);
-    if (match_field_index == -1) {
-      // Table entry does not specify a value for this match key, means
-      // it is a wildcard, no need to do any symbolic condition for it.
-      continue;
+    // Check if the match exists in the table definition.
+    if (!match_definition_by_name.contains(match_name)) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Match '" << match_name
+             << "' not found in the definition of table '" << table_name << "'";
     }
-    const pdpi::IrMatch &match = entry.matches(match_field_index);
 
-    // We get the match name for pdpi/p4info for simplicity, however that
-    // file only contains the match name as a string, which is the same as the
-    // match target expression in most cases but not always.
-    // For conciseness, we get the corresponding accurate match target from
-    // bmv2 by looking up the match name there.
+    // We get the match name from pdpi/p4info for simplicity, however that file
+    // only contains the match name as a string, which is the same as the match
+    // target expression in most cases but not always.
+    // For conciseness, we get the corresponding accurate match target from bmv2
+    // by looking up the match name there.
     // In certain cases this is important, e.g. a match defined over field
     // "dstAddr" may have aliases of that field as a match name, but will always
     // have the fully qualified name of the field in the bmv2 format.
-    if (match_to_fields.count(match_definition.name()) != 1) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Match key with name \"", match_definition.name(),
-          "\" was not found in implementation of table \"", table_name, "\""));
+    if (!match_name_to_header_fields.contains(match_name)) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Match '" << match_name
+             << "' not found in the implementation of table '" << table_name
+             << "'";
     }
 
-    ir::FieldValue match_field = match_to_fields.at(match_definition.name());
-    std::string field_name = absl::StrFormat("%s.%s", match_field.header_name(),
-                                             match_field.field_name());
-    ASSIGN_OR_RETURN(z3::expr field_expr,
-                     action::EvaluateFieldValue(match_field, headers));
-    ASSIGN_OR_RETURN(z3::expr match_expression,
-                     EvaluateSingleMatch(match_definition, field_name,
-                                         field_expr, match, state));
-    ASSIGN_OR_RETURN(condition_expression,
-                     operators::And(condition_expression, match_expression));
+    const p4::config::v1::MatchField &pi_match =
+        match_definition_by_name.at(match_name).match_field();
+    const ir::FieldValue &matched_field =
+        match_name_to_header_fields.at(match_name);
+    std::string field_name = absl::StrFormat(
+        "%s.%s", matched_field.header_name(), matched_field.field_name());
+    ASSIGN_OR_RETURN(z3::expr field_value,
+                     action::EvaluateFieldValue(matched_field, headers));
+
+    // Evaluate the condition of the specific match.
+    z3::expr match_expression(*state.context.z3_context);
+    if (entry.IsSymbolic()) {
+      ASSIGN_OR_RETURN(
+          match_expression,
+          EvaluateSymbolicMatch(match_name, field_value, entry, table, state));
+    } else {
+      ASSIGN_OR_RETURN(match_expression,
+                       EvaluateConcreteMatch(ir_match, pi_match, field_name,
+                                             field_value, state));
+    }
+
+    ASSIGN_OR_RETURN(match_condition,
+                     operators::And(match_condition, match_expression));
   }
 
-  return condition_expression;
+  return match_condition;
 }
 
-absl::Status EvaluateSingeTableEntryAction(
-    const pdpi::IrActionInvocation &action,
-    const google::protobuf::Map<std::string, ir::Action> &actions,
-    SolverState &state, SymbolicPerPacketState *headers,
-    const z3::expr &guard) {
-  // Check that the action invoked by entry exists.
-  if (actions.count(action.name()) != 1) {
+absl::Status EvaluateSingeConcreteAction(const pdpi::IrActionInvocation &action,
+                                         SolverState &state,
+                                         SymbolicPerPacketState &headers,
+                                         const z3::expr &guard) {
+  const google::protobuf::Map<std::string, ir::Action> &actions =
+      state.program.actions();
+
+  // Check if the action invoked by entry exists.
+  if (!actions.contains(action.name())) {
     return gutil::InvalidArgumentErrorBuilder()
            << "unknown action '" << action.name() << "'";
   }
-  return action::EvaluateAction(actions.at(action.name()), action.params(),
-                                state, headers, guard);
+  return action::EvaluateConcreteAction(actions.at(action.name()),
+                                        action.params(), state, headers, guard);
+}
+
+absl::Status EvaluateSingleSymbolicAction(absl::string_view action_name,
+                                          const TableEntry &entry,
+                                          SolverState &state,
+                                          SymbolicPerPacketState &headers,
+                                          const z3::expr &guard) {
+  const google::protobuf::Map<std::string, ir::Action> &actions =
+      state.program.actions();
+
+  // Check if the action from the table definition exists.
+  if (!actions.contains(action_name)) {
+    return gutil::InternalErrorBuilder()
+           << "unknown action '" << action_name << "'";
+  }
+  return action::EvaluateSymbolicAction(actions.at(action_name), entry, state,
+                                        headers, guard);
 }
 
 // Constructs a symbolic expressions that represents the action invocation
 // corresponding to this entry.
-absl::Status EvaluateTableEntryAction(
-    const ir::Table &table, const TableEntry &entry,
-    const google::protobuf::Map<std::string, ir::Action> &actions,
-    SolverState &state, SymbolicPerPacketState *headers,
-    const z3::expr &guard) {
+absl::Status EvaluateTableEntryAction(const ir::Table &table,
+                                      const TableEntry &entry,
+                                      SolverState &state,
+                                      SymbolicPerPacketState &headers,
+                                      const z3::expr &guard) {
   const pdpi::IrTableEntry &ir_entry = entry.GetPdpiIrTableEntry();
 
-  switch (ir_entry.type_case()) {
-    case pdpi::IrTableEntry::kAction:
-      RETURN_IF_ERROR(EvaluateSingeTableEntryAction(ir_entry.action(), actions,
-                                                    state, headers, guard))
+  if (entry.IsSymbolic()) {
+    // Entries with symbolic action sets are not supported for now.
+    if (table.table_definition().has_action_profile_id()) {
+      return gutil::UnimplementedErrorBuilder()
+             << "Table entries with symbolic action sets are not supported "
+                "at the moment.";
+    }
+
+    // Evaluate each symbolic action of a symbolic table entry.
+    for (const pdpi::IrActionReference &action_ref :
+         table.table_definition().entry_actions()) {
+      absl::string_view action_name = action_ref.action().preamble().name();
+      ASSIGN_OR_RETURN(z3::expr action_is_applied,
+                       entry.GetActionInvocation(action_name, table,
+                                                 *state.context.z3_context));
+      RETURN_IF_ERROR(EvaluateSingleSymbolicAction(
+          action_name, entry, state, headers, guard && action_is_applied));
+    }
+  } else {
+    // Evaluate the concrete action or action set of a concrete table entry.
+    if (ir_entry.has_action()) {
+      RETURN_IF_ERROR(
+          EvaluateSingeConcreteAction(ir_entry.action(), state, headers, guard))
               .SetPrepend()
           << "In table entry '" << ir_entry.ShortDebugString() << "':";
-      return absl::OkStatus();
-    case pdpi::IrTableEntry::kActionSet: {
+    } else if (ir_entry.has_action_set()) {
       auto &action_set = ir_entry.action_set().actions();
       // For action sets, we introduce a new free integer variable "selector"
       // whose value determines which action is executed: to a first
@@ -348,27 +403,28 @@ absl::Status EvaluateTableEntryAction(
         bool is_last_action = i == action_set.size() - 1;
         z3::expr selected = is_last_action ? unselected : (selector == i);
         unselected = unselected && !selected;
-        RETURN_IF_ERROR(EvaluateSingeTableEntryAction(
-                            action, actions, state, headers, guard && selected))
+        RETURN_IF_ERROR(EvaluateSingeConcreteAction(action, state, headers,
+                                                    guard && selected))
                 .SetPrepend()
             << "In table entry '" << ir_entry.ShortDebugString() << "':";
       }
-      return absl::OkStatus();
+    } else {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "unexpected or missing action in table entry: "
+             << ir_entry.DebugString();
     }
-    default:
-      break;
   }
-  return gutil::InvalidArgumentErrorBuilder()
-         << "unexpected or missing action in table entry: "
-         << ir_entry.DebugString();
+
+  return absl::OkStatus();
 }
 
 }  // namespace
 
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
-    const ir::Table &table, SolverState &state, SymbolicPerPacketState *headers,
+    const ir::Table &table, SolverState &state, SymbolicPerPacketState &headers,
     const z3::expr &guard) {
   const std::string &table_name = table.table_definition().preamble().name();
+
   // Sort entries by priority deduced from match types.
   std::vector<TableEntry> sorted_entries;
   if (auto it = state.context.table_entries.find(table_name);
@@ -416,16 +472,8 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   // Find all entries match conditions.
   std::vector<z3::expr> entries_matches;
   for (const auto &entry : sorted_entries) {
-    if (entry.IsSymbolic()) {
-      return gutil::UnimplementedErrorBuilder()
-             << "Symbolic entries are not supported at the moment.";
-    }
-
-    // We are passing state by const reference here, so we do not need
-    // any guard yet.
     ASSIGN_OR_RETURN(z3::expr entry_match,
-                     EvaluateTableEntryCondition(
-                         table, entry.GetPdpiIrTableEntry(), state, *headers));
+                     EvaluateTableEntryCondition(table, entry, state, headers));
     entries_matches.push_back(entry_match);
   }
 
@@ -471,9 +519,8 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   // Start with the default entry
   z3::expr match_index =
       state.context.z3_context->int_val(kDefaultActionEntryIndex);
-  RETURN_IF_ERROR(
-      EvaluateTableEntryAction(table, default_entry, state.program.actions(),
-                               state, headers, default_entry_assignment_guard));
+  RETURN_IF_ERROR(EvaluateTableEntryAction(table, default_entry, state, headers,
+                                           default_entry_assignment_guard));
 
   // Continue evaluating each table entry in reverse priority
   for (int row = sorted_entries.size() - 1; row >= 0; row--) {
@@ -488,9 +535,8 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
 
     // Evaluate the entry's action guarded by its complete assignment guard.
     z3::expr entry_assignment_guard = assignment_guards.at(row);
-    RETURN_IF_ERROR(EvaluateTableEntryAction(table, entry,
-                                             state.program.actions(), state,
-                                             headers, entry_assignment_guard));
+    RETURN_IF_ERROR(EvaluateTableEntryAction(table, entry, state, headers,
+                                             entry_assignment_guard));
   }
 
   const std::string &merge_point = table.table_implementation()

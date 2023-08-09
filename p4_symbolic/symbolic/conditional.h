@@ -30,7 +30,7 @@ namespace conditional {
 
 absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     const ir::Conditional &conditional, SolverState &state,
-    SymbolicPerPacketState *headers, const z3::expr &guard);
+    SymbolicPerPacketState &headers, const z3::expr &guard);
 
 } // namespace conditional
 } // namespace symbolic
