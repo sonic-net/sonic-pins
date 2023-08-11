@@ -132,8 +132,8 @@ absl::Status AddMatchTypeConstraintsForSymbolicMatch(
   switch (variables.match_type) {
     case p4::config::v1::MatchField::EXACT: {
       // For exact matches, the mask bit-vector must be all-1s.
-      int bitwidth = variables.mask.get_sort().bv_size();
-      z3::expr all_ones = z3_context.bv_val((1UL << bitwidth) - 1, bitwidth);
+      unsigned int bitwidth = variables.mask.get_sort().bv_size();
+      z3::expr all_ones = z3_context.bv_val(1, 1).repeat(bitwidth);
       ASSIGN_OR_RETURN(z3::expr mask_constraint,
                        operators::Eq(variables.mask, all_ones));
       solver.add(mask_constraint);
@@ -142,7 +142,7 @@ absl::Status AddMatchTypeConstraintsForSymbolicMatch(
     case p4::config::v1::MatchField::LPM: {
       // For LPM matches, the mask bit-vector must comply with the LPM format.
       // I.e. (~lpm_mask) & (~lpm_mask + 1) == 0
-      int bitwidth = variables.mask.get_sort().bv_size();
+      unsigned int bitwidth = variables.mask.get_sort().bv_size();
       ASSIGN_OR_RETURN(z3::expr negated_mask,
                        operators::BitNeg(variables.mask));
       ASSIGN_OR_RETURN(
@@ -158,8 +158,8 @@ absl::Status AddMatchTypeConstraintsForSymbolicMatch(
     case p4::config::v1::MatchField::OPTIONAL: {
       // For optional matches, the mask bit-vector must be either all-1s
       // (present) or all-0s (don't-care).
-      int bitwidth = variables.mask.get_sort().bv_size();
-      z3::expr all_ones = z3_context.bv_val((1UL << bitwidth) - 1, bitwidth);
+      unsigned int bitwidth = variables.mask.get_sort().bv_size();
+      z3::expr all_ones = z3_context.bv_val(1, 1).repeat(bitwidth);
       z3::expr all_zeroes = z3_context.bv_val(0, bitwidth);
       ASSIGN_OR_RETURN(z3::expr mask_is_all_ones,
                        operators::Eq(variables.mask, all_ones));

@@ -61,17 +61,17 @@ struct local_metadata_t {
   // support passing structs in clone3.
   bool mirror_session_id_valid;
   mirror_session_id_t mirror_session_id_value;
-  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   ipv4_addr_t mirroring_src_ip;
-  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   ipv4_addr_t mirroring_dst_ip;
-  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   ethernet_addr_t mirroring_src_mac;
-  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   ethernet_addr_t mirroring_dst_mac;
-  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bit<8> mirroring_ttl;
-  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bit<8> mirroring_tos;
 
   // Packet-in related fields, which we can't group into a struct, because BMv2
@@ -79,11 +79,11 @@ struct local_metadata_t {
 
   // The value to be copied into the `ingress_port` field of packet_in_header on
   // punted packets.
-  @field_list(PreservedFieldList.CLONE_I2E_PACKET_IN)
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bit<PORT_BITWIDTH> packet_in_ingress_port;
   // The value to be copied into the `target_egress_port` field of
   // packet_in_header on punted packets.
-  @field_list(PreservedFieldList.CLONE_I2E_PACKET_IN)
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bit<PORT_BITWIDTH> packet_in_target_egress_port;
 
   MeterColor_t color;

@@ -79,7 +79,7 @@
 //       session_id: COPY_TO_CPU_SESSION_ID
 //       replicas {
 //        egress_port: SAI_P4_CPU_PORT
-//        instance: CLONE_REPLICA_INSTANCE_PACKET_IN
+//        instance: SAI_P4_REPLICA_INSTANCE_PACKET_IN
 //       }
 //     }
 //   }
@@ -97,14 +97,12 @@
 #define PACKET_OUT_SUBMIT_TO_INGRESS_ID 2
 #define PACKET_OUT_UNUSED_PAD_ID 3
 
-//--- Packet Replication Engine Instances --------------------------------------
-
-// Egress instance type definitions.
-// The egress instance is a 32-bit standard metadata set by the packet
-// replication engine (PRE) in the V1Model architecture. However, the values are
-// not defined by the P4 specification. Here we define our own values; these may
-// be changed when we adopt another architecture.
-#define CLONE_REPLICA_INSTANCE_PACKET_IN 1
-#define CLONE_REPLICA_INSTANCE_MIRRORING 2
+// Values for standard_metadata.egress_rid set by the packet replication engine
+// (PRE) in the V1Model architecture. These values are used by
+// p4::v1::Replica::instance to indicate whether the replicated packet is for
+// mirroring, punting or other purposes. However, these values are
+// not defined by the P4 specification. Here we define our own values.
+#define SAI_P4_REPLICA_INSTANCE_PACKET_IN 1
+#define SAI_P4_REPLICA_INSTANCE_MIRRORING 2
 
 #endif  // P4_SYMBOLIC_TESTDATA_COMMON_SAI_IDS_P4_
