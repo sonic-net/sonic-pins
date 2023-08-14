@@ -20,6 +20,10 @@
 namespace pins_test {
 
 class ControlDeviceRebootTestFixture : public thinkit::GenericTestbedFixture<> {
+ protected:
+  ControlDeviceRebootTestFixture() {
+    GetParam().testbed_interface->ExpectLinkFlaps();
+  }
 };
 
 }  // namespace pins_test
