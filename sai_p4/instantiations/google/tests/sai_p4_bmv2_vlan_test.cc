@@ -43,7 +43,10 @@ namespace {
 
 using ::orion::p4::test::Bmv2;
 using ::packetlib::HasHeaderCase;
+using ::testing::_;
 using ::testing::ElementsAre;
+using ::testing::IsEmpty;
+using ::testing::Pair;
 
 using PacketsByPort = absl::flat_hash_map<int, packetlib::Packets>;
 using VlanTest = testing::TestWithParam<sai::Instantiation>;
@@ -140,12 +143,8 @@ absl::Status InstallEntries(Bmv2& bmv2, pdpi::IrP4Info ir_p4info,
                                        // stack supports VLAN features.
                                        {.allow_unsupported = true}));
 
-  // TODO: Use pdpi::InstallPiEntities instead when supported.
-  for (const auto& pi_entry : pi_entries) {
-    RETURN_IF_ERROR(pdpi::InstallPiEntity(&bmv2.P4RuntimeSession(), pi_entry));
-  }
-
-  return absl::OkStatus();
+  return pdpi::InstallPiEntities(&bmv2.P4RuntimeSession(), ir_p4info,
+                                 pi_entries);
 }
 
 TEST_P(VlanTest, VlanPacketWithNonReservedVidGetsDroppedByDefault) {
@@ -167,7 +166,7 @@ TEST_P(VlanTest, VlanPacketWithNonReservedVidGetsDroppedByDefault) {
                                         /*vid_hexstr=*/"0x002")));
 
   // The packet must be dropped.
-  ASSERT_EQ(output_by_port.size(), 0);
+  ASSERT_THAT(output_by_port, IsEmpty());
 }
 
 TEST_P(VlanTest, VlanPacketWithVid4095GetsForwardedWithoutVlanTagByDefault) {
@@ -270,6 +269,17 @@ TEST_P(VlanTest, NonVlanPacketGetsFowardedWhenVlanChecksDisabled) {
   ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
               ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                           HasHeaderCase(packetlib::Header::kIpv4Header)));
+}
+
+sai::TableEntries EntriesOnlyFowardingPacketsMatchingVlanIdInAclPreIngress(
+    absl::string_view vlan_id_hexstr, absl::string_view egress_port) {
+  return sai::PdEntryBuilder()
+      .AddDisableVlanChecksEntry()
+      .AddEntrySettingVrfBasedOnVlanId(vlan_id_hexstr, "vrf-forward")
+      .AddEntryAdmittingAllPacketsToL3()
+      .AddDefaultRouteForwardingAllPacketsToGivenPort(
+          egress_port, sai::IpVersion::kIpv4, "vrf-forward")
+      .GetDedupedEntries();
 }
 
 INSTANTIATE_TEST_SUITE_P(
