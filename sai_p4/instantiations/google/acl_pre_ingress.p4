@@ -51,9 +51,7 @@ control acl_pre_ingress(in headers_t headers,
   action set_outer_vlan_id(
       @id(1) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)
         vlan_id_t vlan_id) {
-    // TODO: Add modeling support for VLANs if needed.
-    // local_metadata.vlan_id_valid = true;
-    // local_metadata.vlan_id = vlan_id;
+    local_metadata.vlan_id = vlan_id;
     acl_pre_ingress_vlan_counter.count();
   }
 
@@ -162,6 +160,9 @@ control acl_pre_ingress(in headers_t headers,
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
     is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
     is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+    // DSCP is only allowed on IP traffic.
+    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Forbid unsupported combinations of IP_TYPE fields.
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
@@ -185,6 +186,12 @@ control acl_pre_ingress(in headers_t headers,
       headers.icmp.type : ternary
           @id(5) @name("icmpv6_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMPV6_TYPE);
+      dscp : ternary
+          @id(6) @name("dscp")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP);
+      ecn : ternary
+          @id(7) @name("ecn")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
     }
     actions = {
       @proto_id(1) set_acl_metadata;

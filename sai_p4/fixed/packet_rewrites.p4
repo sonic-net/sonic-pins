@@ -75,7 +75,7 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
     actions = {
       @proto_id(1) set_multicast_src_mac;
     }
-    size = ROUTING_MULTICAST_SOURCE_MAC_TABLE_MINIMUM_GUARANTEED_SIZE;
+    size = ROUTING_MULTICAST_ROUTER_INTERFACE_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
   apply {

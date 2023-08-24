@@ -802,7 +802,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 128
+  size: 65536
 }
 tables {
   preamble {
