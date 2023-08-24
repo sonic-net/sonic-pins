@@ -137,6 +137,12 @@ absl::StatusOr<NextHeader> GetNextHeader(const ArpHeader& header) {
 absl::StatusOr<NextHeader> GetNextHeader(const IcmpHeader& header) {
   return Header::HEADER_NOT_SET;
 }
+absl::StatusOr<NextHeader> GetNextHeader(const IpfixHeader& header) {
+  return Header::kPsampHeader;
+}
+absl::StatusOr<NextHeader> GetNextHeader(const PsampHeader& header) {
+  return Header::HEADER_NOT_SET;
+}
 absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
   switch (header.header_case()) {
     case Header::kEthernetHeader:
@@ -159,6 +165,10 @@ absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
       return GetNextHeader(header.gre_header());
     case Header::kSaiP4Bmv2PacketInHeader:
       return GetNextHeader(header.sai_p4_bmv2_packet_in_header());
+    case Header::kIpfixHeader:
+      return GetNextHeader(header.ipfix_header());
+    case Header::kPsampHeader:
+      return GetNextHeader(header.psamp_header());
     case Header::HEADER_NOT_SET:
       return Header::HEADER_NOT_SET;
   }
@@ -511,6 +521,9 @@ absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
                        ParseSaiP4BMv2PacketInHeader(data));
       return result;
     }
+    // TODO: update stubs
+    case Header::kIpfixHeader:
+    case Header::kPsampHeader:
     case Header::HEADER_NOT_SET:
       break;
   }
@@ -1238,6 +1251,10 @@ std::string HeaderCaseName(Header::HeaderCase header_case) {
       return "GreHeader";
     case Header::kSaiP4Bmv2PacketInHeader:
       return "SaiP4BMv2PacketInHeader";
+    case Header::kIpfixHeader:
+      return "IpfixHeader";
+    case Header::kPsampHeader:
+      return "PsampHeader";
     case Header::HEADER_NOT_SET:
       return "HEADER_NOT_SET";
   }
@@ -1319,6 +1336,11 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
             result);
         break;
       }
+      // TODO: Replace stubs
+      case Header::kIpfixHeader:
+        continue;
+      case Header::kPsampHeader:
+        continue;
       case Header::HEADER_NOT_SET:
         result.push_back(absl::StrCat(error_prefix, "header uninitialized"));
         continue;  // skip expected_header_case check
@@ -1571,6 +1593,10 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
     case Header::kSaiP4Bmv2PacketInHeader:
       return SerializeSaiP4BMv2PacketInHeader(
           header.sai_p4_bmv2_packet_in_header(), output);
+    // TODO: replace stubs
+    case Header::kIpfixHeader:
+    case Header::kPsampHeader:
+      return absl::OkStatus();
     case Header::HEADER_NOT_SET:
       return gutil::InvalidArgumentErrorBuilder()
              << "Found invalid HEADER_NOT_SET in header.";
@@ -1812,6 +1838,9 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         break;
       }
       case Header::kSaiP4Bmv2PacketInHeader:
+      // TODO: remove stubs
+      case Header::kIpfixHeader:
+      case Header::kPsampHeader:
         break;
       case Header::HEADER_NOT_SET:
         return gutil::InvalidArgumentErrorBuilder()
@@ -1858,6 +1887,9 @@ absl::StatusOr<bool> PadPacketToMinimumSizeFromHeaderIndex(Packet& packet,
     case Header::kVlanHeader:
     case Header::kGreHeader:
     case Header::kSaiP4Bmv2PacketInHeader:
+    // TODO: remove stubs
+    case Header::kIpfixHeader:
+    case Header::kPsampHeader:
       return PadPacketToMinimumSizeFromHeaderIndex(packet, header_index + 1);
     case Header::HEADER_NOT_SET:
       return false;
@@ -1952,6 +1984,12 @@ absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
         break;
       case Header::kSaiP4Bmv2PacketInHeader:
         size += kSaiP4BMv2PacketInHeaderBitwidth;
+        break;
+      case Header::kIpfixHeader:
+        size += kIpfixHeaderBitwidth;
+        break;
+      case Header::kPsampHeader:
+        size += kPsampHeaderBitwidth;
         break;
       case Header::HEADER_NOT_SET:
         return gutil::InvalidArgumentErrorBuilder()
