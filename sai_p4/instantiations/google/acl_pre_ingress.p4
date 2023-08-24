@@ -51,7 +51,8 @@ control acl_pre_ingress(in headers_t headers,
   action set_outer_vlan_id(
       @id(1) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)
         vlan_id_t vlan_id) {
-    local_metadata.vlan_id = vlan_id;
+    // TODO: Add modeling support for VLANs if needed.
+    // local_metadata.vlan_id = vlan_id;
     acl_pre_ingress_vlan_counter.count();
   }
 
@@ -109,6 +110,10 @@ control acl_pre_ingress(in headers_t headers,
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
       local_metadata.ingress_port : optional @name("in_port") @id(8)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
+#if defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
+      local_metadata.vlan_id : ternary @name("vlan_id") @id(11)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
+#endif
     }
     actions = {
       @proto_id(1) set_vrf;

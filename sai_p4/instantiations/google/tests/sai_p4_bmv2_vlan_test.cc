@@ -282,6 +282,79 @@ sai::TableEntries EntriesOnlyFowardingPacketsMatchingVlanIdInAclPreIngress(
       .GetDedupedEntries();
 }
 
+TEST(ExperimentalTorVlanTest, VrfTableMatchOnVlanIdMatchesVlanPacketWithThatId) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  ASSERT_OK(
+      InstallEntries(bmv2, kIrP4Info,
+                     EntriesOnlyFowardingPacketsMatchingVlanIdInAclPreIngress(
+                         /*vlan_id_hexstr=*/"0x00a", kEgressPortProto)));
+
+  {
+    // Inject packet without a VLAN tag..
+    ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
+                         bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be dropped.
+    ASSERT_THAT(output_by_port, IsEmpty());
+  }
+  {
+    // Inject VLAN packet with VLAN 0x00b != 0x00a.
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
+                                          /*vid_hexstr=*/"0x00b")));
+    // The packet must be dropped.
+    ASSERT_THAT(output_by_port, IsEmpty());
+  }
+  {
+    // Inject VLAN packet with VLAN 0x00a.
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
+                                          /*vid_hexstr=*/"0x00a")));
+    // The packet must be forwarded.
+    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+  }
+}
+
+TEST(ExperimentalTorVlanTest, VrfTableMatchOnVlanId4095MatchesPacketWithNoVlanTag) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  ASSERT_OK(
+      InstallEntries(bmv2, kIrP4Info,
+                     EntriesOnlyFowardingPacketsMatchingVlanIdInAclPreIngress(
+                         /*vlan_id_hexstr=*/"0xfff", kEgressPortProto)));
+  {
+    // Inject packet without a VLAN tag.
+    ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
+                         bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be forwarded.
+    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+  }
+  {
+    // Inject VLAN packet with VLAN 0x00b != 0xfff
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
+                                          /*vid_hexstr=*/"0x00b")));
+    // The packet must be dropped.
+    ASSERT_THAT(output_by_port, IsEmpty());
+  }
+  {
+    // Inject VLAN packet with VLAN 0xfff
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
+                                          /*vid_hexstr=*/"0xfff")));
+    // The packet must be forwarded.
+    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(
     VlanTest, VlanTest, testing::ValuesIn(sai::AllSaiInstantiations()),
     [&](const testing::TestParamInfo<sai::Instantiation>& info) {
