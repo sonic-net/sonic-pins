@@ -5,6 +5,7 @@
 #define ETHERTYPE_IPV6  0x86dd
 #define ETHERTYPE_ARP   0x0806
 #define ETHERTYPE_LLDP  0x88cc
+#define ETHERTYPE_8021Q 0x8100
 
 #define IP_PROTOCOL_IPV4   0x04
 #define IP_PROTOCOL_TCP    0x06
@@ -31,6 +32,9 @@ const vlan_id_t INTERNAL_VLAN_ID = 0xfff;
 // in this case, the 802.1Q tag specifies only a priority"
 // (https://en.wikipedia.org/wiki/IEEE_802.1Q).
 const vlan_id_t NO_VLAN_ID = 0x000;
+
+#define IS_RESERVED_VLAN_ID(vlan_id) \
+    (vlan_id == NO_VLAN_ID || vlan_id == INTERNAL_VLAN_ID)
 
 // -- Protocol headers ---------------------------------------------------------
 

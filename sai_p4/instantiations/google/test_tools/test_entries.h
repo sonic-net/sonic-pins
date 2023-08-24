@@ -150,6 +150,7 @@ class EntryBuilder {
   EntryBuilder& AddMulticastRouterInterfaceEntry(
       const MulticastRouterInterfaceTableEntry& entry);
   EntryBuilder& AddIngressAclDroppingAllPackets();
+  EntryBuilder& AddDisableVlanChecksEntry();
 
  private:
   sai::TableEntries entries_;

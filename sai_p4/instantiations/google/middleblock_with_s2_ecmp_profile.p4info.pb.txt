@@ -32,6 +32,32 @@ tables {
 }
 tables {
   preamble {
+    id: 33554509
+    name: "ingress.vlan_untag.disable_vlan_checks_table"
+    alias: "disable_vlan_checks_table"
+    annotations: "@unsupported"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::mask == 0;\n  \")"
+  }
+  match_fields {
+    id: 1
+    name: "dummy_match"
+    bitwidth: 1
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777242
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1
+}
+tables {
+  preamble {
     id: 33554689
     name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
     alias: "acl_pre_ingress_table"
@@ -804,6 +830,13 @@ actions {
     type_name {
       name: "vrf_id_t"
     }
+  }
+}
+actions {
+  preamble {
+    id: 16777242
+    name: "ingress.vlan_untag.disable_vlan_checks"
+    alias: "disable_vlan_checks"
   }
 }
 actions {
