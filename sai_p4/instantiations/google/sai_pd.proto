@@ -210,6 +210,23 @@ message Ipv6TunnelTerminationTableEntry {
   bytes controller_metadata = 8;
 }
 
+// CAUTION: This table is not (yet) supported.
+// Table entry restrictions:
+// ## Force the dummy_match to be wildcard.
+//   dummy_match::mask == 0;
+message DisableVlanChecksTableEntry {
+  message Match {
+    Ternary dummy_match = 1;  // ternary match / Format::HEX_STRING / 1 bits
+  }
+  Match match = 1;
+  message Action {
+    DisableVlanChecksAction disable_vlan_checks = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 message TunnelTableEntry {
   message Match {
     string tunnel_id = 1;  // exact match / Format::STRING
@@ -738,6 +755,8 @@ message SetIpNexthopAndDisableRewritesAction {
   string disable_vlan_rewrite = 6;     // Format::HEX_STRING / 1 bits
 }
 
+message DisableVlanChecksAction {}
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -816,6 +835,8 @@ message TableEntry {
     VrfTableEntry vrf_table_entry = 74;
     // CAUTION: This table is not (yet) supported.
     Ipv6TunnelTerminationTableEntry ipv6_tunnel_termination_table_entry = 75;
+    // CAUTION: This table is not (yet) supported.
+    DisableVlanChecksTableEntry disable_vlan_checks_table_entry = 77;
     TunnelTableEntry tunnel_table_entry = 80;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;

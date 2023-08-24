@@ -184,6 +184,9 @@ struct packet_rewrites_t {
 
 // Local metadata for each packet being processed.
 struct local_metadata_t {
+  // If true, ingress packets with ingress VID and egress packets with
+  // egress VID besides the reserved ones (0, 4095) get dropped.
+  bool enable_vlan_checks;
   // The VLAN ID used for the packet throughout the pipeline. If the input
   // packet has a VLAN tag, the VID from the outer VLAN tag is used
   // (and the VLAN header gets invalidated at the beginning of the ingress
@@ -194,7 +197,7 @@ struct local_metadata_t {
   // used at the end of the egress pipeline to determine whether or not the
   // packet should be VLAN tagged (if not dropped).
   vlan_id_t vlan_id;
-  bool vlan_id_valid;  // True iff `vlan_id` is valid.
+
   bool admit_to_l3;
   vrf_id_t vrf_id;
 
