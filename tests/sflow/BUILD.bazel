@@ -52,7 +52,6 @@ cc_library(
         "//thinkit:ssh_client",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_google_glog//:glog",
-        "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -101,7 +100,9 @@ cc_test(
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],
 )

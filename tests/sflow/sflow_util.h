@@ -59,6 +59,12 @@ absl::Status SetSflowIngressSamplingRate(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
     int sampling_rate, absl::Duration timeout = absl::Seconds(5));
 
+// Sets sFlow interface enable and sample config and waits until it's converged
+// in state path. `interface` must be present.
+absl::Status SetSflowInterfaceConfig(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
+    bool enabled, int samping_rate, absl::Duration timeout = absl::Seconds(30));
+
 // Sets sFlow interface config and waits until it's converged in state path.
 // `interface` must be present.
 absl::Status SetSflowInterfaceConfigEnable(

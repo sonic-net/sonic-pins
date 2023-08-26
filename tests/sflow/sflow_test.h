@@ -104,6 +104,8 @@ class SflowMirrorTestFixture
 
   std::string agent_address_;
 };
+
+class SflowRebootTestFixture : public SflowMirrorTestFixture {};
 }  // namespace pins
 
 #endif // PINS_TESTS_SFLOW_SFLOW_TEST_H_

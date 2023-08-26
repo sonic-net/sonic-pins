@@ -15,7 +15,9 @@
 #include "tests/sflow/sflow_util.h"
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
@@ -747,6 +749,62 @@ TEST(SflowUtilTest, UpdateQueueLimitSucceed) {
       Return(grpc::Status::OK)));
   ASSERT_OK(VerifySflowQueueLimitState(&stub, kQueueNumberForBE1,
                                        /*expected_queue_limit=*/120));
+}
+
+TEST(SflowUtilTest, UpdateSflowInterfaceConfigSuccess) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Set).WillByDefault(Return(grpc::Status::OK));
+  EXPECT_CALL(stub, Get)
+      .Times(2)
+      .WillOnce((DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(
+                notification {
+                  timestamp: 1664239058571609826
+                  prefix { origin: "openconfig" }
+                  update {
+                    val {
+                      json_ietf_val: "{\"openconfig-sampling-sflow:enabled\":true}"
+                    }
+                  }
+                })pb")),
+          Return(grpc::Status::OK))))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(
+                notification {
+                  timestamp: 1664239058571609826
+                  prefix { origin: "openconfig" }
+                  update {
+                    val {
+                      json_ietf_val: "{\"openconfig-sampling-sflow:ingress-sampling-rate\":4000}"
+                    }
+                  }
+                })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_OK(SetSflowInterfaceConfig(&stub, "Ethernet1/1/1", /*enabled=*/true,
+                                    /*samping_rate=*/4000, absl::Seconds(1)));
+}
+
+TEST(SflowUtilTest, UpdateSflowInterfaceConfigNotConvergeFail) {
+  gnmi::MockgNMIStub stub;
+  ON_CALL(stub, Set).WillByDefault(Return(grpc::Status::OK));
+  ON_CALL(stub, Get).WillByDefault((DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(
+            notification {
+              timestamp: 1664239058571609826
+              prefix { origin: "openconfig" }
+              update {
+                val {
+                  json_ietf_val: "{\"openconfig-sampling-sflow:enabled\":false}"
+                }
+              }
+            })pb")),
+      Return(grpc::Status::OK))));
+  EXPECT_THAT(SetSflowInterfaceConfig(&stub, "Ethernet1/1/1", /*enabled=*/true,
+                                      /*samping_rate=*/4000, absl::Seconds(1)),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
 }
 
 TEST(SflowUtilTest, UpdateSflowInterfaceEnableSuccess) {

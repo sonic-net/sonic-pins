@@ -130,10 +130,10 @@ constexpr absl::string_view kVrfIdPrefix = "vrf-";
 // Used for sFLow collector.
 constexpr char kLocalLoopbackIpv6[] = "::1";
 
-// We need 800 samples/sec for 3 secs to trigger this back off. Let's use 1200
+// We need 800 samples/sec for 3 secs to trigger this back off. Let's use 950
 // samples/sec which are larger values to make sure backoff could be triggered.
-constexpr int kBackOffThresholdSamples = 1200;
-constexpr int kBackOffThresholdDuration = 4;
+constexpr int kBackOffThresholdSamples = 950;
+constexpr int kBackoffTrafficDurationSecs = 4;
 
 constexpr absl::string_view kSflowQueueName = "BE1";
 constexpr int kSflowOutPacketsTos = 0x80;
@@ -523,7 +523,8 @@ absl::StatusOr<std::string> GetHsflowdPid(thinkit::SSHClient& ssh_client,
   return result;
 }
 
-// Send packets to SUT and validate packet counters via gNMI.
+// Send packets to SUT and validate packet counters via gNMI. This function
+// expects no drops on CPU queue.
 absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
                               absl::string_view topology_ref,
                               absl::Span<const IxiaLink> ixia_links,
@@ -567,9 +568,14 @@ absl::Status SendSflowTraffic(absl::Span<const std::string> traffic_refs,
       DeltaCounters(initial_in_counters.back(), final_in_counters.back());
   LOG(INFO) << "\nIngress Deltas (\"CPU\"):\n";
   ShowCounters(delta);
+  auto queue_delta = final_queue_counter - initial_queue_counter;
   LOG(INFO) << "CPU " << kSflowQueueName << " queue counter delta:\n"
-            << final_queue_counter - initial_queue_counter
-            << " \n total time: " << (absl::Now() - start_time);
+            << queue_delta << " \n total time: " << (absl::Now() - start_time);
+  EXPECT_EQ(queue_delta.num_packet_dropped, 0)
+      << "BE1 queue dropped packets:" << queue_delta.num_packet_dropped
+      << ". BE1 queue transimitted pkts: "
+      << queue_delta.num_packets_transmitted
+      << ". Expected 0 drops for BE1 queue.";
   return absl::OkStatus();
 }
 
@@ -896,6 +902,26 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
   EXPECT_OK(environment.StoreTestArtifact(
       absl::StrCat(prefix, "ipv6_neigh_show.txt"), result));
 
+  // ASIC_DB
+  ASSERT_OK_AND_ASSIGN(
+      result, ssh_client->RunCommand(device_name,
+                                     /*command=*/
+                                     "ctr tasks exec --exec-id tmp db-con "
+                                     "redis-dump -H 127.0.0.1 -p 6379 -d 1 -y",
+                                     absl::Seconds(20)));
+  EXPECT_OK(environment.StoreTestArtifact(
+      absl::StrCat(prefix, "sut_asic_db.txt"), result));
+
+  // CONFIG_DB
+  ASSERT_OK_AND_ASSIGN(
+      result, ssh_client->RunCommand(device_name,
+                                     /*command=*/
+                                     "ctr tasks exec --exec-id tmp db-con "
+                                     "redis-dump -H 127.0.0.1 -p 6379 -d 4 -y",
+                                     absl::Seconds(20)));
+  EXPECT_OK(environment.StoreTestArtifact(
+      absl::StrCat(prefix, "sut_config_db.txt"), result));
+
   // STATE_DB
   ASSERT_OK_AND_ASSIGN(
       result, ssh_client->RunCommand(device_name,
@@ -917,14 +943,10 @@ void CollectSflowDebugs(thinkit::SSHClient* ssh_client,
       absl::StrCat(prefix, "sut_app_state_db.txt"), result));
 }
 
-// Returns OK if `sflowtool_output` has expected sample rate. i.e.,
-// comp(actual_sample_rate, sample_rate) is true. Returns an InternalError if
-// something goes wrong.
-// TODO: Change test expectation once sFlow change is merged in
-// PINs release.
-absl::Status IsExpectedSampleRateFromSamples(
-    absl::string_view sflowtool_output, int sample_rate,
-    std::function<bool(int, int)> comp) {
+// Returns OK if `sflowtool_output` has samples with `sample_rate`. Returns an
+// InternalError if something goes wrong.
+absl::Status IsExpectedSampleRateFromSamples(absl::string_view sflowtool_output,
+                                             int sample_rate) {
   std::vector<std::string> sflow_samples =
       absl::StrSplit(sflowtool_output, '\n');
   if (sflow_samples.empty()) {
@@ -952,7 +974,7 @@ absl::Status IsExpectedSampleRateFromSamples(
     return absl::InternalError(absl::Substitute(
         "$0 is not a valid sample rate.", actual_sample_rate_str));
   }
-  if (!comp(actual_sample_rate, sample_rate)) {
+  if (actual_sample_rate != sample_rate) {
     return absl::InternalError(
         absl::Substitute("Expect sample rate : $0. Actual sample rate: $1.",
                          sample_rate, actual_sample_rate));
@@ -960,16 +982,14 @@ absl::Status IsExpectedSampleRateFromSamples(
   return absl::OkStatus();
 }
 
-// Verify that `comp`(`sflow_enabled_interfaces`[interface],
-// `initial_interfaces_to_sample_rate`[interface]) is true .
-// TODO: Change test expectation once sFlow change is merged in
-// PINs release.
+// Verify that sample rate of interface in `sflow_enabled_interfaces` is equal
+// to `multiple` * initial_interfaces_to_sample_rate[interface] .
 absl::Status IsExpectedSamplingRateFromGnmi(
     gnmi::gNMI::StubInterface* gnmi_stub,
     const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
     const absl::flat_hash_map<std::string, int>&
         initial_interfaces_to_sample_rate,
-    std::function<bool(int, int)> comp) {
+    int multiple) {
   // Verify that sample rate on all interfaces is as expected.
   absl::flat_hash_map<std::string, int>
       current_interfaces_to_actual_sample_rate;
@@ -984,11 +1004,12 @@ absl::Status IsExpectedSamplingRateFromGnmi(
       return absl::FailedPreconditionError(absl::Substitute(
           "Interface $0 does not have a initial samplerate.", interface));
     }
-    if (!comp(sample_rate, *initial_sample_rate)) {
-      return absl::InternalError(absl::Substitute(
-          "Current interface $0 sample rate is not as expected. "
-          "Initial sample rate: $1. Current sample rate: $2.",
-          interface, *initial_sample_rate, sample_rate));
+    const int expected_sample_rate = multiple * (*initial_sample_rate);
+    if (sample_rate != expected_sample_rate) {
+      return absl::InternalError(
+          absl::Substitute("Interface $0 sample rate is not as expected. "
+                           "Expected sample rate: $1. Actual sample rate: $2.",
+                           interface, expected_sample_rate, sample_rate));
     }
   }
   return absl::OkStatus();
@@ -1639,7 +1660,7 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
   // samples/sec.
   int64_t traffic_rate = 10 * interface_sample_rate;
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 traffic_rate * kBackOffThresholdDuration,
+                                 traffic_rate * kBackoffTrafficDurationSecs,
                                  traffic_rate, *testbed_));
 
   // Start sflowtool on SUT.
@@ -1650,7 +1671,7 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
         RunSflowCollectorForNSecs(
             *ssh_client_, testbed_->Sut().ChassisName(),
             kSflowtoolLineFormatTemplate,
-            /*sflowtool_runtime=*/kBackOffThresholdDuration + 30,
+            /*sflowtool_runtime=*/kBackoffTrafficDurationSecs + 30,
             sflow_result));
 
     // Wait for sflowtool to finish.
@@ -1664,7 +1685,8 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
     ASSERT_OK(SendSflowTraffic(
         std::vector<std::string>{std::string(traffic_ref)}, topology_ref,
         {ingress_link}, *testbed_, gnmi_stub_.get(),
-        /*pkt_count=*/traffic_rate * kBackOffThresholdDuration, traffic_rate));
+        /*pkt_count=*/traffic_rate * kBackoffTrafficDurationSecs,
+        traffic_rate));
   }
 
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
@@ -1672,21 +1694,19 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
                    "_before_backoff.txt"),
       sflow_result));
 
-  std::function<bool(int, int)> is_eq = [](int a, int b) { return a == b; };
-  std::function<bool(int, int)> is_gt = [](int a, int b) { return a > b; };
   // Verify that sample rate on all interfaces is still the initial value.
-  ASSERT_OK(
-      IsExpectedSamplingRateFromGnmi(gnmi_stub_.get(), sflow_enabled_interfaces,
-                                     initial_interfaces_to_sample_rate, is_eq));
+  ASSERT_OK(IsExpectedSamplingRateFromGnmi(
+      gnmi_stub_.get(), sflow_enabled_interfaces,
+      initial_interfaces_to_sample_rate, /*multiple=*/1));
   // Verify that sample rate from sflowtool result is the same as initial.
-  ASSERT_OK(IsExpectedSampleRateFromSamples(sflow_result, interface_sample_rate,
-                                            is_eq));
+  ASSERT_OK(
+      IsExpectedSampleRateFromSamples(sflow_result, interface_sample_rate));
 
   // Setup Ixia for higher traffic speed to trigger sFlow backoff - it would
   // generate kBackOffThresholdSamples per sec.
   traffic_rate = kBackOffThresholdSamples * interface_sample_rate;
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 traffic_rate * kBackOffThresholdDuration,
+                                 traffic_rate * kBackoffTrafficDurationSecs,
                                  traffic_rate, *testbed_));
 
   // Start sflowtool on SUT.
@@ -1696,7 +1716,7 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
         RunSflowCollectorForNSecs(
             *ssh_client_, testbed_->Sut().ChassisName(),
             kSflowtoolLineFormatTemplate,
-            /*sflowtool_runtime=*/kBackOffThresholdDuration + 30,
+            /*sflowtool_runtime=*/kBackoffTrafficDurationSecs + 30,
             sflow_result));
 
     // Wait for sflowtool to finish.
@@ -1706,11 +1726,13 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
       }
     });
 
-    // Send packets from Ixia to SUT.
+    // Send packets from Ixia to SUT. We set the `expected_drop_ratio` to 0.05
+    // since Ixia traffic unavoidably causes some drops on BE1 queue.
     ASSERT_OK(SendSflowTraffic(
         std::vector<std::string>{std::string(traffic_ref)}, topology_ref,
         {ingress_link}, *testbed_, gnmi_stub_.get(),
-        /*pkt_count=*/traffic_rate * kBackOffThresholdDuration, traffic_rate));
+        /*pkt_count=*/traffic_rate * kBackoffTrafficDurationSecs,
+        traffic_rate));
   }
 
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
@@ -1718,21 +1740,15 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
                    "_triggering_backoff.txt"),
       sflow_result));
 
-  // Verify that sample rate on all interfaces is greater.
-  ASSERT_OK(
-      IsExpectedSamplingRateFromGnmi(gnmi_stub_.get(), sflow_enabled_interfaces,
-                                     initial_interfaces_to_sample_rate, is_gt));
-  // Verify that sample rate from sflowtool result is greater.
-  // Disable this check since samples are flooding in sflowtool when backoff is
-  // triggered and the test cannot get samples with greater sample rate.
-  // EXPECT_OK(IsExpectedSampleRateFromSamples(sflow_result,
-  // interface_sample_rate,
-  //                                           is_gt));
+  // Verify that sample rate on all interfaces is doubled.
+  ASSERT_OK(IsExpectedSamplingRateFromGnmi(
+      gnmi_stub_.get(), sflow_enabled_interfaces,
+      initial_interfaces_to_sample_rate, /*multiple=*/2));
 
-  // Use a normal traffic speed, sample rate should remain as greater.
+  // Use a normal traffic speed, sample rate should remain as doubled.
   traffic_rate = 10 * interface_sample_rate;
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 traffic_rate * kBackOffThresholdDuration,
+                                 traffic_rate * kBackoffTrafficDurationSecs,
                                  traffic_rate, *testbed_));
 
   {
@@ -1742,7 +1758,7 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
         RunSflowCollectorForNSecs(
             *ssh_client_, testbed_->Sut().ChassisName(),
             kSflowtoolLineFormatTemplate,
-            /*sflowtool_runtime=*/kBackOffThresholdDuration + 30,
+            /*sflowtool_runtime=*/kBackoffTrafficDurationSecs + 30,
             sflow_result));
 
     // Wait for sflowtool to finish.
@@ -1756,7 +1772,8 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
     ASSERT_OK(SendSflowTraffic(
         std::vector<std::string>{std::string(traffic_ref)}, topology_ref,
         {ingress_link}, *testbed_, gnmi_stub_.get(),
-        /*pkt_count=*/traffic_rate * kBackOffThresholdDuration, traffic_rate));
+        /*pkt_count=*/traffic_rate * kBackoffTrafficDurationSecs,
+        traffic_rate));
   }
 
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
@@ -1764,26 +1781,26 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
                    "_after_backoff.txt"),
       sflow_result));
 
-  // Verify that sample rate on all interfaces is still greater.
-  ASSERT_OK(
-      IsExpectedSamplingRateFromGnmi(gnmi_stub_.get(), sflow_enabled_interfaces,
-                                     initial_interfaces_to_sample_rate, is_gt));
-  // Verify that sample rate from sflowtool result is still greater.
-  EXPECT_OK(IsExpectedSampleRateFromSamples(sflow_result, interface_sample_rate,
-                                            is_gt));
+  // Verify that sample rate on all interfaces is still doubled.
+  ASSERT_OK(IsExpectedSamplingRateFromGnmi(
+      gnmi_stub_.get(), sflow_enabled_interfaces,
+      initial_interfaces_to_sample_rate, /*multiple=*/2));
+  // Verify that sample rate from sflowtool result is still doubled.
+  EXPECT_OK(
+      IsExpectedSampleRateFromSamples(sflow_result, 2 * interface_sample_rate));
 
-  // Push initial config again, expect the sample rate is still greater than
+  // Push initial config again, expect the sample rate is still doubled than
   // initial value.
   ASSERT_OK(
       pins_test::PushGnmiConfig(testbed_->Sut(), gnmi_config_with_sflow_));
-  ASSERT_OK(
-      IsExpectedSamplingRateFromGnmi(gnmi_stub_.get(), sflow_enabled_interfaces,
-                                     initial_interfaces_to_sample_rate, is_gt));
+  ASSERT_OK(IsExpectedSamplingRateFromGnmi(
+      gnmi_stub_.get(), sflow_enabled_interfaces,
+      initial_interfaces_to_sample_rate, /*multiple=*/2));
 
-  // Use a normal traffic speed, sample rate should remain as greater.
+  // Use a normal traffic speed, sample rate should remain as doubled.
   traffic_rate = 10 * interface_sample_rate;
   ASSERT_OK(SetIxiaTrafficParams(traffic_ref,
-                                 traffic_rate * kBackOffThresholdDuration,
+                                 traffic_rate * kBackoffTrafficDurationSecs,
                                  traffic_rate, *testbed_));
 
   {
@@ -1793,7 +1810,7 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
         RunSflowCollectorForNSecs(
             *ssh_client_, testbed_->Sut().ChassisName(),
             kSflowtoolLineFormatTemplate,
-            /*sflowtool_runtime=*/kBackOffThresholdDuration + 30,
+            /*sflowtool_runtime=*/kBackoffTrafficDurationSecs + 30,
             sflow_result));
 
     // Wait for sflowtool to finish.
@@ -1807,7 +1824,8 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
     ASSERT_OK(SendSflowTraffic(
         std::vector<std::string>{std::string(traffic_ref)}, topology_ref,
         {ingress_link}, *testbed_, gnmi_stub_.get(),
-        /*pkt_count=*/traffic_rate * kBackOffThresholdDuration, traffic_rate));
+        /*pkt_count=*/traffic_rate * kBackoffTrafficDurationSecs,
+        traffic_rate));
   }
 
   ASSERT_OK(testbed_->Environment().StoreTestArtifact(
@@ -1815,12 +1833,12 @@ TEST_P(BackoffTest, VerifyBackoffWorks) {
                    "_config_push_after_backoff.txt"),
       sflow_result));
 
-  ASSERT_OK(
-      IsExpectedSamplingRateFromGnmi(gnmi_stub_.get(), sflow_enabled_interfaces,
-                                     initial_interfaces_to_sample_rate, is_gt));
-  // Verify that sample rate from sflowtool result is still greater.
-  EXPECT_OK(IsExpectedSampleRateFromSamples(sflow_result, interface_sample_rate,
-                                            is_gt));
+  // Verify that sample rate is still doubled.
+  ASSERT_OK(IsExpectedSamplingRateFromGnmi(
+      gnmi_stub_.get(), sflow_enabled_interfaces,
+      initial_interfaces_to_sample_rate, /*multiple=*/2));
+  EXPECT_OK(
+      IsExpectedSampleRateFromSamples(sflow_result, 2 * interface_sample_rate));
 }
 
 namespace {
@@ -1833,6 +1851,7 @@ constexpr absl::string_view kClusterMacAddr = "00:1a:11:17:5f:80";
 // ipv4_source field changes based on `port_id`.
 absl::Status SendNPacketsFromSwitch(
     int num_packets, int traffic_speed, int port_id,
+    absl::string_view interface, gnmi::gNMI::StubInterface* sut_gnmi_stub,
     const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& p4_session,
     thinkit::TestEnvironment& test_environment) {
   const absl::Time start_time = absl::Now();
@@ -1863,6 +1882,8 @@ absl::Status SendNPacketsFromSwitch(
                          payload: "Test packet for Sflow Inband testing")pb",
                        kDstMac.ToString(), kIpv4Src.ToString(),
                        GetDstIpv4AddrByPortId(port_id)));
+  ASSIGN_OR_RETURN(auto initial_in_counter,
+                   ReadCounters(std::string(interface), sut_gnmi_stub));
   ASSIGN_OR_RETURN(std::string raw_packet, SerializePacket(packet));
   for (int i = 0; i < num_packets; i++) {
     // Rate limit to traffic_speed packets per second.
@@ -1870,10 +1891,20 @@ absl::Status SendNPacketsFromSwitch(
         absl::StrCat(port_id), raw_packet, ir_p4info, &p4_session,
         /*packet_delay=*/absl::Milliseconds(1000 / traffic_speed)));
   }
-
+  ASSIGN_OR_RETURN(auto final_in_counter,
+                   ReadCounters(std::string(interface), sut_gnmi_stub));
+  auto delta = DeltaCounters(initial_in_counter, final_in_counter);
+  LOG(INFO) << "Ingress Deltas (" << interface << "):\n";
+  ShowCounters(delta);
+  // There might be some bearable drop.
+  EXPECT_GE(delta.in_pkts, (double)0.85 * num_packets)
+      << "Sent " << num_packets
+      << " on interface: " << interface << " port_id: " << port_id
+      << ". Received: " << delta.in_pkts;
   LOG(INFO) << "Sent " << num_packets << " packets in "
             << (absl::Now() - start_time) << " for port: " << port_id << "."
-            << " Packets dst ip: " << GetDstIpv4AddrByPortId(port_id);
+            << " Interface: " << interface << ". Packets dst ip: "
+            << GetDstIpv4AddrByPortId(port_id);
   return absl::OkStatus();
 }
 
@@ -2269,7 +2300,8 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
 
     // Send packets from control switch.
     ASSERT_OK(SendNPacketsFromSwitch(
-        packets_num, kInbandTrafficPps, traffic_port.port_id, GetIrP4Info(),
+        packets_num, kInbandTrafficPps, traffic_port.port_id,
+        traffic_port.interface_name, sut_gnmi_stub_.get(), GetIrP4Info(),
         *control_p4_session_, testbed.Environment()));
   }
 
@@ -2362,7 +2394,8 @@ TEST_P(SflowMirrorTestFixture, TestSflowDscpValue) {
 
     // Send packets from control switch.
     ASSERT_OK(SendNPacketsFromSwitch(
-        packets_num, kInbandTrafficPps, traffic_port.port_id, GetIrP4Info(),
+        packets_num, kInbandTrafficPps, traffic_port.port_id,
+        traffic_port.interface_name, sut_gnmi_stub_.get(), GetIrP4Info(),
         *control_p4_session_, testbed.Environment()));
   }
   EXPECT_OK(testbed.Environment().StoreTestArtifact("tcpdump_result.txt",
@@ -2449,11 +2482,12 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksOnAllInterfaces) {
         });
 
     // Send packets from control switch on all UP interfaces.
-    for (const auto& [unused, port_id_str] : port_id_per_port_name) {
+    for (const auto& [interface_name, port_id_str] : port_id_per_port_name) {
       int port_id;
       ASSERT_TRUE(absl::SimpleAtoi(port_id_str, &port_id))
           << port_id_str << " is not a valid port id.";
       ASSERT_OK(SendNPacketsFromSwitch(packets_num, kInbandTrafficPps, port_id,
+                                       interface_name, sut_gnmi_stub_.get(),
                                        GetIrP4Info(), *control_p4_session_,
                                        testbed.Environment()));
     }
@@ -2488,7 +2522,7 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksOnAllInterfaces) {
 // 5. Reboot SUT and wait for interfaces to be UP.
 // 6. Send traffic from control switch on the same 5 interfaces.
 // 7. Verify samples are generated for interesting interfaces.
-TEST_P(SflowMirrorTestFixture, TestSamplingWorksAfterReboot) {
+TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
   GetParam().testbed_interface->ExpectLinkFlaps();
 
   thinkit::MirrorTestbed& testbed =
@@ -2564,11 +2598,13 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksAfterReboot) {
     });
 
     // Send packets from control switch on picked interfaces.
-    for (const auto& [unused, port_id_str] : traffic_interfaces_and_port_ids) {
+    for (const auto& [interface_name, port_id_str] :
+         traffic_interfaces_and_port_ids) {
       int port_id;
       ASSERT_TRUE(absl::SimpleAtoi(port_id_str, &port_id))
           << port_id_str << " is not a valid port id.";
       ASSERT_OK(SendNPacketsFromSwitch(num_packets, kInbandTrafficPps, port_id,
+                                       interface_name, sut_gnmi_stub_.get(),
                                        GetIrP4Info(), *control_p4_session_,
                                        testbed.Environment()));
     }
@@ -2659,11 +2695,13 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksAfterReboot) {
     });
 
     // Send packets from control switch on picked interfaces.
-    for (const auto& [unused, port_id_str] : traffic_interfaces_and_port_ids) {
+    for (const auto& [interface_name, port_id_str] :
+         traffic_interfaces_and_port_ids) {
       int port_id;
       ASSERT_TRUE(absl::SimpleAtoi(port_id_str, &port_id))
           << port_id_str << " is not a valid port id.";
       ASSERT_OK(SendNPacketsFromSwitch(num_packets, kInbandTrafficPps, port_id,
+                                       interface_name, sut_gnmi_stub_.get(),
                                        GetIrP4Info(), *control_p4_session_,
                                        testbed.Environment()));
     }
