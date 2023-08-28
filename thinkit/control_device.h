@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -31,6 +32,8 @@
 #include "thinkit/packet_generation_finalizer.h"
 
 namespace thinkit {
+
+inline constexpr absl::Duration kDefaultDownDuration = absl::Seconds(30);
 
 enum class LinkState {
   kUnknown,
@@ -113,6 +116,16 @@ class ControlDevice {
   // Checks if the given control device ports are up.
   virtual absl::Status ValidatePortsUp(
       absl::Span<const std::string> interfaces) = 0;
+
+  // Sets the desired links down on the control device for a period of time, and
+  // then brings the links back up. This can be used for devices that will go
+  // unreachable if the links are down, and will bring the links down and up as
+  // part of the same command.
+  virtual absl::Status FlapLinks(absl::string_view interface,
+                                 absl::Duration down_duration) = 0;
+  absl::Status FlapLinks(absl::string_view interface) {
+    return FlapLinks(interface, kDefaultDownDuration);
+  }
 
   // Return the subset of the given interfaces that, when admin-disabled, do not
   // cause link flaps on the other interfaces on the same physical port.

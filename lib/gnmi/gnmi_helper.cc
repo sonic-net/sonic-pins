@@ -44,6 +44,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "github.com/openconfig/gnmi/proto/gnmi_ext/gnmi_ext.pb.h"
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "glog/logging.h"
 #include "google/protobuf/any.pb.h"

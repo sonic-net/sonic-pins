@@ -60,20 +60,27 @@ enum class RequestType {
 // - In the case of multiple CONTROL_INTERFACE, the `peer_device_index` will be
 //   used to identify the connected control device. If `peer_device_index` is
 //   not provided, ControlDevice(0) will be returned by default.
-// - In the case of TRAFFIC_GENERATOR, the format of the `peer_interface_name`
-//   is "<hostname of generator>/<card number>/<port number>".
+// - `peer_mac_address` is the MAC address of the peer interface.
+// - `peer_ipv4_address` is the IPv4 address of the peer interface.
+// - `peer_ipv6_address` is the IPv6 address of the peer interface.
 // - `peer_traffic_location` is the location of the OTG traffic port that can be
 //   assigned to `otg.Port.location` field.
 struct InterfaceInfo {
   absl::flat_hash_set<thinkit::InterfaceMode> interface_modes;
   int peer_device_index;              // Ignore if not applicable.
   std::string peer_interface_name;    // Empty if not applicable.
+  std::string peer_mac_address;       // Empty if not applicable.
+  std::string peer_ipv4_address;      // Empty if not applicable.
+  std::string peer_ipv6_address;      // Empty if not applicable.
   std::string peer_traffic_location;  // Empty if not applicable.
   bool operator==(const InterfaceInfo& other) const {
     return std::tie(interface_modes, peer_device_index, peer_interface_name,
+                    peer_mac_address, peer_ipv4_address, peer_ipv6_address,
                     peer_traffic_location) ==
            std::tie(other.interface_modes, other.peer_device_index,
-                    other.peer_interface_name, other.peer_traffic_location);
+                    other.peer_interface_name, other.peer_mac_address,
+                    other.peer_ipv4_address, other.peer_ipv6_address,
+                    other.peer_traffic_location);
   }
 };
 
