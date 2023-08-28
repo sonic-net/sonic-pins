@@ -18,6 +18,7 @@
 #include <iostream>
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
@@ -33,7 +34,9 @@ namespace packetlib {
 namespace {
 
 using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
 using ::testing::Eq;
+using ::testing::HasSubstr;
 
 const absl::string_view kEthernetSourceAddress = "8:0:20:86:35:4b";
 const absl::string_view kEthernetDestinationAddress = "0:e0:f7:26:3f:e9";
@@ -47,8 +50,7 @@ TEST(PacketLib, BitWidthTest) {
         "Input has been truncated because maximum allowable "
         "bitwidth for this field is %d but input has %d bits: %d",
         kIpVersionBitwidth, bit_shift + 1, input);
-    ASSERT_DEBUG_DEATH(IpVersion(input),
-                       testing::HasSubstr(expected_error_message));
+    ASSERT_DEBUG_DEATH(IpVersion(input), HasSubstr(expected_error_message));
   }
 }
 
@@ -78,6 +80,39 @@ TEST(PacketLib, UdpWithIpv4Header) {
   udp->set_destination_port(UdpPort(0x000a));
   udp->set_length(UdpLength(0x001a));
   ASSERT_OK(SerializePacket(packet));
+}
+
+TEST(PacketLib, UdpWithIpv4HeaderIpfixDestPort) {
+  Packet packet;
+
+  EthernetHeader* eth = packet.add_headers()->mutable_ethernet_header();
+  eth->set_ethertype(EtherType(ETHERTYPE_IP));
+  eth->set_ethernet_source(std::string(kEthernetSourceAddress));
+  eth->set_ethernet_destination(std::string(kEthernetDestinationAddress));
+
+  Ipv4Header* ipv4 = packet.add_headers()->mutable_ipv4_header();
+  ipv4->set_version(IpVersion(4));
+  ipv4->set_ihl(IpIhl(5));
+  ipv4->set_ipv4_source("192.168.0.31");
+  ipv4->set_ipv4_destination("192.168.0.30");
+  ipv4->set_ttl(IpTtl(0x10));
+  ipv4->set_dscp(IpDscp(3));
+  ipv4->set_protocol(IpProtocol(IPPROTO_UDP));
+  ipv4->set_ecn(IpEcn(2));
+  ipv4->set_identification(IpIdentification(0));
+  ipv4->set_flags(IpFlags(3));
+  ipv4->set_fragment_offset(IpFragmentOffset(1234));
+
+  // Test should fail if UDP destination port == IPFIX and
+  // IPFIX header is missing.
+  UdpHeader* udp = packet.add_headers()->mutable_udp_header();
+  udp->set_source_port(UdpPort(0x0014));
+  udp->set_destination_port(UdpPort(kIpfixUdpDestPort));
+  udp->set_length(UdpLength(0x001a));
+
+  ASSERT_THAT(SerializePacket(packet),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("expected IpfixHeader")));
 }
 
 TEST(PacketLib, UdpWithIpv6Header) {

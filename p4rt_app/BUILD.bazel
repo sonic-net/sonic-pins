@@ -27,7 +27,6 @@ cc_binary(
     srcs = ["p4rt.cc"],
     deps = [
         "@com_github_google_glog//:glog",
-        "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/flags:parse",
         "@com_github_gflags_gflags//:gflags",
         "@com_github_grpc_grpc//:grpc++_authorization_provider",
@@ -38,7 +37,7 @@ cc_binary(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
-        "@com_github_grpc_grpc//:grpc",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "//gutil:status",
         "//p4rt_app/event_monitoring:app_state_db_port_table_event",
         "//p4rt_app/event_monitoring:app_state_db_send_to_ingress_port_table_event",
