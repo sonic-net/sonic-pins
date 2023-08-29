@@ -14,7 +14,7 @@
 
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 
-#include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -265,8 +265,8 @@ EntryBuilder& EntryBuilder::AddEntryPuntingAllPackets(PuntAction action) {
 }
 
 EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
-    absl::string_view egress_port, IpVersion ip_version,
-    absl::string_view vrf) {
+    absl::string_view egress_port, IpVersion ip_version, absl::string_view vrf,
+    std::optional<absl::string_view> vlan_hexstr) {
   const std::string kNexthopId =
       absl::StrFormat("nexthop(%s, %s)", egress_port, vrf);
   const std::string kRifId = absl::StrFormat("rif(port = %s)", egress_port);
@@ -334,21 +334,20 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
         ->set_router_interface_id(kRifId);
   }
   {
-    sai::TableEntry& entry = *entries_.add_entries();
-    entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
-      router_interface_table_entry {
-        match { router_interface_id: "rif" }
-        action { set_port_and_src_mac { src_mac: "00:01:02:03:04:05" } }
-      }
-    )pb");
-    entry.mutable_router_interface_table_entry()
-        ->mutable_match()
-        ->set_router_interface_id(kRifId);
-    entry.mutable_router_interface_table_entry()
-        ->mutable_action()
-        ->mutable_set_port_and_src_mac()
-        // TODO: Pass string_view directly once proto supports it.
-        ->set_port(std::string(egress_port));
+    sai::RouterInterfaceTableEntry& entry =
+        *entries_.add_entries()->mutable_router_interface_table_entry();
+    entry.mutable_match()->set_router_interface_id(kRifId);
+    if (vlan_hexstr.has_value()) {
+      auto& action =
+          *entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
+      action.set_vlan_id(*vlan_hexstr);
+      action.set_src_mac("00:01:02:03:04:05");
+      action.set_port(egress_port);
+    } else {
+      auto& action = *entry.mutable_action()->mutable_set_port_and_src_mac();
+      action.set_src_mac("00:01:02:03:04:05");
+      action.set_port(egress_port);
+    }
   }
   return *this;
 }
@@ -471,6 +470,15 @@ EntryBuilder& EntryBuilder::AddEntrySettingVrfBasedOnVlanId(
       *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
   entry.mutable_match()->mutable_vlan_id()->set_value(vlan_id_hexstr);
   entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
+  entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
+  entry.set_priority(1);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddEntrySettingVrfForAllPackets(
+    absl::string_view vrf) {
+  sai::AclPreIngressTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
   entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
   entry.set_priority(1);
   return *this;
