@@ -243,6 +243,10 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 16777243
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -878,6 +882,32 @@ actions {
     name: "dst_mac"
     annotations: "@format(MAC_ADDRESS)"
     bitwidth: 48
+  }
+}
+actions {
+  preamble {
+    id: 16777243
+    name: "ingress.routing.set_port_and_src_mac_and_vlan_id"
+    alias: "set_port_and_src_mac_and_vlan_id"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "port"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  params {
+    id: 2
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+  params {
+    id: 3
+    name: "vlan_id"
+    bitwidth: 12
   }
 }
 actions {

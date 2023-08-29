@@ -20,6 +20,7 @@
 #ifndef GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 #define GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -135,7 +136,8 @@ class EntryBuilder {
 
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
       absl::string_view egress_port, IpVersion ip_version,
-      absl::string_view vrf);
+      absl::string_view vrf,
+      std::optional<absl::string_view> vlan_hexstr = std::nullopt);
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
       int multicast_group_id, IpVersion ip_version, absl::string_view vrf);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
@@ -153,6 +155,7 @@ class EntryBuilder {
   EntryBuilder& AddDisableVlanChecksEntry();
   EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
       absl::string_view vlan_id_hexstr, absl::string_view vrf);
+  EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf);
 
  private:
   sai::TableEntries entries_;
