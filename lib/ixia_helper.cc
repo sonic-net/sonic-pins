@@ -1284,7 +1284,7 @@ absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
   // checking if the link is up.  Add the pair to connections.
   for (const auto &[interface, info] : interface_info) {
     bool sut_link_up = false;
-    if (info.interface_mode == thinkit::TRAFFIC_GENERATOR) {
+    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
       ASSIGN_OR_RETURN(sut_link_up, CheckLinkUp(interface, gnmi_stub));
       if (sut_link_up) {
         ASSIGN_OR_RETURN(int64_t bit_per_second,

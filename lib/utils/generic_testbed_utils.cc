@@ -14,14 +14,17 @@
 
 #include "lib/utils/generic_testbed_utils.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "artifacts/otg.pb.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "thinkit/generic_testbed.h"
@@ -29,6 +32,8 @@
 #include "thinkit/switch.h"
 
 namespace pins_test {
+
+using ::otg::Layer1;
 
 std::vector<std::string> GetSutInterfaces(
     absl::Span<const InterfaceLink> links) {
@@ -55,8 +60,8 @@ std::vector<InterfaceLink> GetAllControlLinks(
         sut_interface_info) {
   std::vector<InterfaceLink> links;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
-    if (interface_info.interface_mode ==
-        thinkit::InterfaceMode::CONTROL_INTERFACE) {
+    if (interface_info.interface_modes.contains(
+            thinkit::InterfaceMode::CONTROL_INTERFACE)) {
       links.push_back(
           InterfaceLink{.sut_interface = sut_interface,
                         .peer_interface = interface_info.peer_interface_name});
@@ -70,11 +75,12 @@ std::vector<InterfaceLink> GetAllTrafficGeneratorLinks(
         sut_interface_info) {
   std::vector<InterfaceLink> links;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
-    if (interface_info.interface_mode ==
-        thinkit::InterfaceMode::TRAFFIC_GENERATOR) {
-      links.push_back(
-          InterfaceLink{.sut_interface = sut_interface,
-                        .peer_interface = interface_info.peer_interface_name});
+    if (interface_info.interface_modes.contains(
+            thinkit::InterfaceMode::TRAFFIC_GENERATOR)) {
+      links.push_back(InterfaceLink{
+          .sut_interface = sut_interface,
+          .peer_interface = interface_info.peer_interface_name,
+          .peer_traffic_location = interface_info.peer_traffic_location});
     }
   }
   return links;
@@ -85,7 +91,8 @@ std::vector<std::string> GetAllLoopbackInterfaces(
         sut_interface_info) {
   std::vector<std::string> interfaces;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
-    if (interface_info.interface_mode == thinkit::InterfaceMode::LOOPBACK) {
+    if (interface_info.interface_modes.contains(
+            thinkit::InterfaceMode::LOOPBACK)) {
       interfaces.push_back(sut_interface);
     }
   }
@@ -97,7 +104,8 @@ std::vector<std::string> GetAllConnectedInterfaces(
         sut_interface_info) {
   std::vector<std::string> interfaces;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
-    if (interface_info.interface_mode != thinkit::InterfaceMode::DISCONNECTED) {
+    if (!interface_info.interface_modes.contains(
+            thinkit::InterfaceMode::DISCONNECTED)) {
       interfaces.push_back(sut_interface);
     }
   }
@@ -136,6 +144,25 @@ absl::StatusOr<std::vector<InterfaceLink>> GetUpLinks(
     up_links.push_back(std::move(link));
   }
   return up_links;
+}
+
+absl::StatusOr<Layer1::Speed::Enum> GetLayer1SpeedFromBitsPerSecond(
+    int64_t bits_per_second) {
+  // Map keyed on openconfig speed in bits per second to value in OTG layer 1
+  // speed enum.
+  // http://ops.openconfig.net/branches/models/master/docs/openconfig-interfaces.html#mod-openconfig-if-ethernet
+  static const auto* const kLayer1SpeedTable =
+      new absl::flat_hash_map<int64_t, Layer1::Speed::Enum>({
+          {100000000000, Layer1::Speed::speed_100_gbps},
+          {200000000000, Layer1::Speed::speed_200_gbps},
+          {400000000000, Layer1::Speed::speed_400_gbps},
+      });
+  auto speed = kLayer1SpeedTable->find(bits_per_second);
+  if (speed == kLayer1SpeedTable->end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Speed not found for bits per second: " << bits_per_second;
+  }
+  return speed->second;
 }
 
 }  // namespace pins_test
