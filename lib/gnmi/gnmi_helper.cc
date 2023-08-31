@@ -1101,4 +1101,20 @@ absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
   return ops_response == "\"UP\"";
 }
 
+absl::Status SetPortLoopbackMode(bool port_loopback,
+                                 absl::string_view interface_name,
+                                 gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path = absl::StrCat(
+      "interfaces/interface[name=", interface_name, "]/config/loopback-mode");
+  std::string config_json;
+  if (port_loopback) {
+    config_json = "{\"openconfig-interfaces:loopback-mode\":true}";
+  } else {
+    config_json = "{\"openconfig-interfaces:loopback-mode\":false}";
+  }
+
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
+                                      GnmiSetType::kUpdate, config_json);
+}
+
 }  // namespace pins_test
