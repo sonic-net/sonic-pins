@@ -704,7 +704,7 @@ grpc::Status P4RuntimeImpl::Read(
                           "ReadResponse writer cannot be a nullptr.");
     }
 
-    auto response_status = ReadAllTableEntries(
+    auto response_status = ReadAllEntities(
         *request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
         port_translation_map_, *cpu_queue_translator_, p4rt_table_);
     if (!response_status.ok()) {
