@@ -14,6 +14,7 @@
 #include "p4_pdpi/packetlib/packetlib.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -126,6 +127,11 @@ absl::StatusOr<NextHeader> GetNextHeader(const Ipv6Header& header) {
                                 header.next_header())};
 }
 absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
+  ASSIGN_OR_RETURN(auto dest_port,
+                   pdpi::HexStringToInt32(header.destination_port()));
+  if (dest_port == kIpfixUdpDestPort) {
+    return Header::kIpfixHeader;
+  }
   return Header::HEADER_NOT_SET;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const TcpHeader& header) {
@@ -475,6 +481,49 @@ absl::StatusOr<SaiP4BMv2PacketInHeader> ParseSaiP4BMv2PacketInHeader(
   return header;
 }
 
+absl::StatusOr<IpfixHeader> ParseIpfixHeader(pdpi::BitString& data) {
+  if (data.size() < kIpfixHeaderBitwidth) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Packet is too short to parse an IPFIX header next. Only "
+           << data.size() << " bits left, need at least "
+           << kIpfixHeaderBitwidth << ".";
+  }
+
+  IpfixHeader header;
+  header.set_version(ParseBits(data, kIpfixVersionBitwidth));
+  header.set_length(ParseBits(data, kIpfixLengthBitwidth));
+  header.set_export_time(ParseBits(data, kIpfixExportTimeBitwidth));
+  header.set_sequence_number(ParseBits(data, kIpfixSequenceNumberBitwidth));
+  header.set_observation_domain_id(
+      ParseBits(data, kIpfixObservationDomainIdBitwidth));
+  return header;
+}
+
+absl::StatusOr<PsampHeader> ParsePsampHeader(pdpi::BitString& data) {
+  if (data.size() < kPsampHeaderBitwidth) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Packet is too short to parse a PSAMP header next. Only "
+           << data.size() << " bits left, need at least "
+           << kPsampHeaderBitwidth << ".";
+  }
+  PsampHeader header;
+
+  header.set_template_id(ParseBits(data, kPsampTemplateIdBitwidth));
+  header.set_length(ParseBits(data, kPsampLengthBitwidth));
+  header.set_observation_time(ParseBits(data, kPsampObservationTimeBitwidth));
+  header.set_flowset(ParseBits(data, kPsampFlowsetBitwidth));
+  header.set_next_hop_index(ParseBits(data, kPsampNextHopIndexBitwidth));
+  header.set_epoch(ParseBits(data, kPsampEpochBitwidth));
+  header.set_ingress_port(ParseBits(data, kPsampIngressPortBitwidth));
+  header.set_egress_port(ParseBits(data, kPsampEgressPortBitwidth));
+  header.set_user_meta_field(ParseBits(data, kPsampUserMetaFieldBitwidth));
+  header.set_dlb_id(ParseBits(data, kPsampDlbIdBitwidth));
+  header.set_variable_length(ParseBits(data, kPsampVariableLengthBitwidth));
+  header.set_packet_sampled_length(
+      ParseBits(data, kPsampPacketSampledLengthBitwidth));
+  return header;
+}
+
 absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
                                    pdpi::BitString& data) {
   Header result;
@@ -521,9 +570,14 @@ absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
                        ParseSaiP4BMv2PacketInHeader(data));
       return result;
     }
-    // TODO: update stubs
-    case Header::kIpfixHeader:
-    case Header::kPsampHeader:
+    case Header::kIpfixHeader: {
+      ASSIGN_OR_RETURN(*result.mutable_ipfix_header(), ParseIpfixHeader(data));
+      return result;
+    }
+    case Header::kPsampHeader: {
+      ASSIGN_OR_RETURN(*result.mutable_psamp_header(), ParsePsampHeader(data));
+      return result;
+    }
     case Header::HEADER_NOT_SET:
       break;
   }
@@ -945,6 +999,16 @@ void UdpHeaderInvalidReasons(const UdpHeader& header,
       output.push_back(absl::StrCat(
           field_prefix, "checksum: Couldn't compute expected checksum: ",
           checksum.status().ToString()));
+    } else if (packet.headers_size() > header_index + 1) {
+      // UDP is not the latest header.
+      if (packet.headers(header_index + 1).header_case() ==
+              Header::kIpfixHeader &&
+          header.checksum() != UdpChecksum(0)) {
+        // UDP checksum is defaulted to zero in case of Ipfix.
+        output.push_back(absl::StrCat(field_prefix,
+                                      "checksum: Must be 0, but was ",
+                                      header.checksum(), " instead."));
+      }
     } else {
       std::string expected =
           pdpi::BitsetToHexString(std::bitset<kUdpChecksumBitwidth>(*checksum));
@@ -1227,6 +1291,128 @@ void SaiP4BMv2PacketInHeaderInvalidReasons(
     }
   }
 }
+
+void IpfixHeaderInvalidReasons(const IpfixHeader& header,
+                               const std::string& field_prefix,
+                               const Packet& packet, int header_index,
+                               std::vector<std::string>& output) {
+  HexStringInvalidReasons<kIpfixVersionBitwidth>(
+      header.version(), absl::StrCat(field_prefix, "version"), output);
+  HexStringInvalidReasons<kIpfixExportTimeBitwidth>(
+      header.export_time(), absl::StrCat(field_prefix, "export_time"), output);
+  HexStringInvalidReasons<kIpfixSequenceNumberBitwidth>(
+      header.sequence_number(), absl::StrCat(field_prefix, "sequence_number"),
+      output);
+  HexStringInvalidReasons<kIpfixObservationDomainIdBitwidth>(
+      header.observation_domain_id(),
+      absl::StrCat(field_prefix, "observation_domain_id"), output);
+
+  bool length_invalid = HexStringInvalidReasons<kIpfixLengthBitwidth>(
+      header.length(), absl::StrCat(field_prefix, "length"), output);
+  // Check computed field: length.
+  if (!length_invalid) {
+    if (auto size = PacketSizeInBytes(packet, header_index); !size.ok()) {
+      output.push_back(absl::StrCat(field_prefix,
+                                    "length: Couldn't compute expected size: ",
+                                    size.status().ToString()));
+    } else {
+      std::string expected =
+          pdpi::BitsetToHexString(std::bitset<kIpfixLengthBitwidth>(*size));
+      if (header.length() != expected) {
+        output.push_back(absl::StrCat(field_prefix, "length: Must be ",
+                                      expected, ", but was ", header.length(),
+                                      " instead."));
+      }
+    }
+  }
+}
+
+void PsampHeaderInvalidReasons(const PsampHeader& header,
+                               const std::string& field_prefix,
+                               const Packet& packet, int header_index,
+                               std::vector<std::string>& output) {
+  HexStringInvalidReasons<kPsampTemplateIdBitwidth>(
+      header.template_id(), absl::StrCat(field_prefix, "template_id"), output);
+  HexStringInvalidReasons<kPsampObservationTimeBitwidth>(
+      header.observation_time(), absl::StrCat(field_prefix, "observation_time"),
+      output);
+  HexStringInvalidReasons<kPsampFlowsetBitwidth>(
+      header.flowset(), absl::StrCat(field_prefix, "flowset"), output);
+  HexStringInvalidReasons<kPsampNextHopIndexBitwidth>(
+      header.next_hop_index(), absl::StrCat(field_prefix, "next_hop_index"),
+      output);
+  HexStringInvalidReasons<kPsampEpochBitwidth>(
+      header.epoch(), absl::StrCat(field_prefix, "epoch"), output);
+  HexStringInvalidReasons<kPsampIngressPortBitwidth>(
+      header.ingress_port(), absl::StrCat(field_prefix, "ingress_port"),
+      output);
+  HexStringInvalidReasons<kPsampEgressPortBitwidth>(
+      header.egress_port(), absl::StrCat(field_prefix, "egress_port"), output);
+  HexStringInvalidReasons<kPsampUserMetaFieldBitwidth>(
+      header.user_meta_field(), absl::StrCat(field_prefix, "user_meta_field"),
+      output);
+  HexStringInvalidReasons<kPsampDlbIdBitwidth>(
+      header.dlb_id(), absl::StrCat(field_prefix, "dlb_id"), output);
+  bool variable_length_invalid =
+      HexStringInvalidReasons<kPsampVariableLengthBitwidth>(
+          header.variable_length(),
+          absl::StrCat(field_prefix, "variable_length"), output);
+
+  if (!variable_length_invalid) {
+    if (auto variable_length = pdpi::HexStringToInt(header.variable_length());
+        !variable_length.ok()) {
+      output.push_back(absl::StrCat(field_prefix,
+                                    "variable_length: Couldn't parse value: ",
+                                    variable_length.status().ToString()));
+    } else {
+      if (variable_length.value() != 0xff) {
+        output.push_back(absl::StrCat(field_prefix,
+                                      "variable_length: Must be 0xFF, but was ",
+                                      header.variable_length(), " instead."));
+      }
+    }
+  }
+
+  // Check computed field length
+  bool length_invalid = HexStringInvalidReasons<kPsampLengthBitwidth>(
+      header.length(), absl::StrCat(field_prefix, "length"), output);
+  if (!length_invalid) {
+    if (auto size = PacketSizeInBytes(packet, header_index); !size.ok()) {
+      output.push_back(absl::StrCat(field_prefix,
+                                    "length: Couldn't compute expected size: ",
+                                    size.status().ToString()));
+    } else {
+      std::string expected =
+          pdpi::BitsetToHexString(std::bitset<kPsampLengthBitwidth>(*size));
+      if (header.length() != expected) {
+        output.push_back(absl::StrCat(field_prefix, "length: Must be ",
+                                      expected, ", but was ", header.length(),
+                                      " instead."));
+      }
+    }
+  }
+
+  // Check computed field packet_sampled_length
+  bool packet_sampled_length_invalid =
+      HexStringInvalidReasons<kPsampPacketSampledLengthBitwidth>(
+          header.packet_sampled_length(),
+          absl::StrCat(field_prefix, "packet_sampled_length"), output);
+  if (!packet_sampled_length_invalid) {
+    if (auto size = PacketSizeInBytes(packet, header_index + 1); !size.ok()) {
+      output.push_back(absl::StrCat(field_prefix,
+                                    "length: Couldn't compute expected size: ",
+                                    size.status().ToString()));
+    } else {
+      std::string expected = pdpi::BitsetToHexString(
+          std::bitset<kPsampPacketSampledLengthBitwidth>(*size));
+      if (header.packet_sampled_length() != expected) {
+        output.push_back(absl::StrCat(
+            field_prefix, "packet_sampled_length: Must be ", expected,
+            ", but was ", header.packet_sampled_length(), " instead."));
+      }
+    }
+  }
+}
 }  // namespace
 
 std::string HeaderCaseName(Header::HeaderCase header_case) {
@@ -1336,11 +1522,16 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
             result);
         break;
       }
-      // TODO: Replace stubs
-      case Header::kIpfixHeader:
-        continue;
-      case Header::kPsampHeader:
-        continue;
+      case Header::kIpfixHeader: {
+        IpfixHeaderInvalidReasons(header.ipfix_header(), error_prefix, packet,
+                                  index, result);
+        break;
+      }
+      case Header::kPsampHeader: {
+        PsampHeaderInvalidReasons(header.psamp_header(), error_prefix, packet,
+                                  index, result);
+        break;
+      }
       case Header::HEADER_NOT_SET:
         result.push_back(absl::StrCat(error_prefix, "header uninitialized"));
         continue;  // skip expected_header_case check
@@ -1570,6 +1761,46 @@ absl::Status SerializeSaiP4BMv2PacketInHeader(
   return absl::OkStatus();
 }
 
+absl::Status SerializeIpfixHeader(const IpfixHeader& header,
+                                  pdpi::BitString& output) {
+  RETURN_IF_ERROR(
+      SerializeBits<kIpfixVersionBitwidth>(header.version(), output));
+  RETURN_IF_ERROR(SerializeBits<kIpfixLengthBitwidth>(header.length(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kIpfixExportTimeBitwidth>(header.export_time(), output));
+  RETURN_IF_ERROR(SerializeBits<kIpfixSequenceNumberBitwidth>(
+      header.sequence_number(), output));
+  RETURN_IF_ERROR(SerializeBits<kIpfixObservationDomainIdBitwidth>(
+      header.observation_domain_id(), output));
+  return absl::OkStatus();
+}
+
+absl::Status SerializePsampHeader(const PsampHeader& header,
+                                  pdpi::BitString& output) {
+  RETURN_IF_ERROR(
+      SerializeBits<kPsampTemplateIdBitwidth>(header.template_id(), output));
+  RETURN_IF_ERROR(SerializeBits<kPsampLengthBitwidth>(header.length(), output));
+  RETURN_IF_ERROR(SerializeBits<kPsampObservationTimeBitwidth>(
+      header.observation_time(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPsampFlowsetBitwidth>(header.flowset(), output));
+  RETURN_IF_ERROR(SerializeBits<kPsampNextHopIndexBitwidth>(
+      header.next_hop_index(), output));
+  RETURN_IF_ERROR(SerializeBits<kPsampEpochBitwidth>(header.epoch(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPsampIngressPortBitwidth>(header.ingress_port(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kPsampEgressPortBitwidth>(header.egress_port(), output));
+  RETURN_IF_ERROR(SerializeBits<kPsampUserMetaFieldBitwidth>(
+      header.user_meta_field(), output));
+  RETURN_IF_ERROR(SerializeBits<kPsampDlbIdBitwidth>(header.dlb_id(), output));
+  RETURN_IF_ERROR(SerializeBits<kPsampVariableLengthBitwidth>(
+      header.variable_length(), output));
+  RETURN_IF_ERROR(SerializeBits<kPsampPacketSampledLengthBitwidth>(
+      header.packet_sampled_length(), output));
+  return absl::OkStatus();
+}
+
 absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
   switch (header.header_case()) {
     case Header::kEthernetHeader:
@@ -1586,6 +1817,10 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
       return SerializeArpHeader(header.arp_header(), output);
     case Header::kIcmpHeader:
       return SerializeIcmpHeader(header.icmp_header(), output);
+    case Header::kIpfixHeader:
+      return SerializeIpfixHeader(header.ipfix_header(), output);
+    case Header::kPsampHeader:
+      return SerializePsampHeader(header.psamp_header(), output);
     case Header::kVlanHeader:
       return SerializeVlanHeader(header.vlan_header(), output);
     case Header::kGreHeader:
@@ -1593,10 +1828,6 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
     case Header::kSaiP4Bmv2PacketInHeader:
       return SerializeSaiP4BMv2PacketInHeader(
           header.sai_p4_bmv2_packet_in_header(), output);
-    // TODO: replace stubs
-    case Header::kIpfixHeader:
-    case Header::kPsampHeader:
-      return absl::OkStatus();
     case Header::HEADER_NOT_SET:
       return gutil::InvalidArgumentErrorBuilder()
              << "Found invalid HEADER_NOT_SET in header.";
@@ -1838,10 +2069,41 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         break;
       }
       case Header::kSaiP4Bmv2PacketInHeader:
-      // TODO: remove stubs
-      case Header::kIpfixHeader:
-      case Header::kPsampHeader:
         break;
+      case Header::kIpfixHeader: {
+        IpfixHeader& ipfix_header = *header.mutable_ipfix_header();
+        if (ipfix_header.length().empty() || overwrite) {
+          ASSIGN_OR_RETURN(int size, PacketSizeInBytes(packet, header_index),
+                           _.SetPrepend() << error_prefix << "length: ");
+          ipfix_header.set_length(
+              pdpi::BitsetToHexString(std::bitset<kIpfixLengthBitwidth>(size)));
+          changes = true;
+        }
+        break;
+      }
+      case Header::kPsampHeader: {
+        PsampHeader& psamp_header = *header.mutable_psamp_header();
+        if (psamp_header.length().empty() || overwrite) {
+          ASSIGN_OR_RETURN(int size, PacketSizeInBytes(packet, header_index),
+                           _.SetPrepend() << error_prefix << "length: ");
+          psamp_header.set_length(
+              pdpi::BitsetToHexString(std::bitset<kPsampLengthBitwidth>(size)));
+          changes = true;
+        }
+        if (psamp_header.variable_length().empty() || overwrite) {
+          psamp_header.set_variable_length("0xFF");
+          changes = true;
+        }
+        if (psamp_header.packet_sampled_length().empty() || overwrite) {
+          ASSIGN_OR_RETURN(
+              int size, PacketSizeInBytes(packet, header_index + 1),
+              _.SetPrepend() << error_prefix << "packet_sampled_length: ");
+          psamp_header.set_packet_sampled_length(pdpi::BitsetToHexString(
+              std::bitset<kPsampPacketSampledLengthBitwidth>(size)));
+          changes = true;
+        }
+        break;
+      }
       case Header::HEADER_NOT_SET:
         return gutil::InvalidArgumentErrorBuilder()
                << "Invalid packet with HEADER_NOT_SET: "
@@ -1887,7 +2149,6 @@ absl::StatusOr<bool> PadPacketToMinimumSizeFromHeaderIndex(Packet& packet,
     case Header::kVlanHeader:
     case Header::kGreHeader:
     case Header::kSaiP4Bmv2PacketInHeader:
-    // TODO: remove stubs
     case Header::kIpfixHeader:
     case Header::kPsampHeader:
       return PadPacketToMinimumSizeFromHeaderIndex(packet, header_index + 1);
@@ -2047,6 +2308,12 @@ absl::StatusOr<int> UdpHeaderChecksum(Packet packet, int udp_header_index) {
            << "udp_header_index must be in [1, " << packet.headers().size()
            << ") since the given packet has " << packet.headers().size()
            << " headers and the UDP header must be preceded by an IP header";
+  }
+  // If the next header is PSAMP = checksum should be zero.
+  if (udp_header_index < packet.headers().size() - 1 &&
+      packet.headers(udp_header_index + 1).header_case() ==
+          Header::kIpfixHeader) {
+    return 0;
   }
   const Header& preceding_header = packet.headers(udp_header_index - 1);
   if (auto header_case = packet.headers(udp_header_index).header_case();
@@ -2328,5 +2595,66 @@ std::string GreChecksum(uint32_t checksum) {
 
 std::string GreReserved1(uint32_t reserved1) {
   return ValidateAndConvertToHexString<kGreReserved1Bitwidth>(reserved1);
+}
+
+std::string IpfixVersion(uint32_t version) {
+  return ValidateAndConvertToHexString<kIpfixVersionBitwidth>(version);
+}
+
+std::string IpfixLength(uint32_t length) {
+  return ValidateAndConvertToHexString<kIpfixLengthBitwidth>(length);
+}
+
+std::string IpfixExportTime(uint32_t exported_time) {
+  return ValidateAndConvertToHexString<kIpfixExportTimeBitwidth>(exported_time);
+}
+
+std::string IpfixSequenceNumber(uint32_t sequence_number) {
+  return ValidateAndConvertToHexString<kIpfixSequenceNumberBitwidth>(
+      sequence_number);
+}
+
+std::string IpfixObservationDomainId(uint32_t observation_domain_id) {
+  return ValidateAndConvertToHexString<kIpfixObservationDomainIdBitwidth>(
+      observation_domain_id);
+}
+
+std::string PsampTemplateId(uint32_t template_id) {
+  return ValidateAndConvertToHexString<kPsampTemplateIdBitwidth>(template_id);
+}
+
+std::string PsampObservationTime(uint64_t observation_time) {
+  return ValidateAndConvertToHexString<kPsampObservationTimeBitwidth>(
+      observation_time);
+}
+
+std::string PsampFlowset(uint32_t flowset) {
+  return ValidateAndConvertToHexString<kPsampFlowsetBitwidth>(flowset);
+}
+
+std::string PsampNextHopIndex(uint32_t next_hop_index) {
+  return ValidateAndConvertToHexString<kPsampNextHopIndexBitwidth>(
+      next_hop_index);
+}
+
+std::string PsampEpoch(uint32_t epoch) {
+  return ValidateAndConvertToHexString<kPsampEpochBitwidth>(epoch);
+}
+
+std::string PsampIngressPort(uint32_t ingress_port) {
+  return ValidateAndConvertToHexString<kPsampIngressPortBitwidth>(ingress_port);
+}
+
+std::string PsampEgressPort(uint32_t egress_port) {
+  return ValidateAndConvertToHexString<kPsampEgressPortBitwidth>(egress_port);
+}
+
+std::string PsampUserMetaField(uint32_t user_meta_field) {
+  return ValidateAndConvertToHexString<kPsampUserMetaFieldBitwidth>(
+      user_meta_field);
+}
+
+std::string PsampDlbId(uint32_t dlb_id) {
+  return ValidateAndConvertToHexString<kPsampDlbIdBitwidth>(dlb_id);
 }
 }  // namespace packetlib
