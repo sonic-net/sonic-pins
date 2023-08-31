@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "thinkit/generic_testbed.h"
@@ -28,10 +29,12 @@ namespace pins_test {
 struct InterfaceLink {
   std::string sut_interface;
   std::string peer_interface;
+  std::string peer_traffic_location;
 
   bool operator==(const InterfaceLink& other) const {
     return sut_interface == other.sut_interface &&
-           peer_interface == other.peer_interface;
+           peer_interface == other.peer_interface &&
+           peer_traffic_location == other.peer_traffic_location;
   }
 };
 

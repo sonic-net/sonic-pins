@@ -87,6 +87,7 @@ cc_test(
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",

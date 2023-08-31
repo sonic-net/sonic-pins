@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "gutil/status.h"
@@ -55,8 +56,8 @@ std::vector<InterfaceLink> GetAllControlLinks(
         sut_interface_info) {
   std::vector<InterfaceLink> links;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
-    if (interface_info.interface_mode ==
-        thinkit::InterfaceMode::CONTROL_INTERFACE) {
+    if (interface_info.interface_modes.contains(
+            thinkit::InterfaceMode::CONTROL_INTERFACE)) {
       links.push_back(
           InterfaceLink{.sut_interface = sut_interface,
                         .peer_interface = interface_info.peer_interface_name});
@@ -70,11 +71,12 @@ std::vector<InterfaceLink> GetAllTrafficGeneratorLinks(
         sut_interface_info) {
   std::vector<InterfaceLink> links;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
-    if (interface_info.interface_mode ==
-        thinkit::InterfaceMode::TRAFFIC_GENERATOR) {
-      links.push_back(
-          InterfaceLink{.sut_interface = sut_interface,
-                        .peer_interface = interface_info.peer_interface_name});
+    if (interface_info.interface_modes.contains(
+            thinkit::InterfaceMode::TRAFFIC_GENERATOR)) {
+      links.push_back(InterfaceLink{
+          .sut_interface = sut_interface,
+          .peer_interface = interface_info.peer_interface_name,
+          .peer_traffic_location = interface_info.peer_traffic_location});
     }
   }
   return links;
@@ -85,7 +87,8 @@ std::vector<std::string> GetAllLoopbackInterfaces(
         sut_interface_info) {
   std::vector<std::string> interfaces;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
-    if (interface_info.interface_mode == thinkit::InterfaceMode::LOOPBACK) {
+    if (interface_info.interface_modes.contains(
+            thinkit::InterfaceMode::LOOPBACK)) {
       interfaces.push_back(sut_interface);
     }
   }
@@ -97,7 +100,8 @@ std::vector<std::string> GetAllConnectedInterfaces(
         sut_interface_info) {
   std::vector<std::string> interfaces;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
-    if (interface_info.interface_mode != thinkit::InterfaceMode::DISCONNECTED) {
+    if (!interface_info.interface_modes.contains(
+            thinkit::InterfaceMode::DISCONNECTED)) {
       interfaces.push_back(sut_interface);
     }
   }
