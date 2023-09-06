@@ -26,7 +26,7 @@
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/ir_builder.h"
 #include "swss/json.h"
-#include "swss/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace sonic {
