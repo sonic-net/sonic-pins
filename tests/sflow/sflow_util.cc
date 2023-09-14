@@ -33,6 +33,8 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/json_utils.h"
 #include "lib/validator/validator_lib.h"
+#include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
 #include "re2/re2.h"
 
 namespace pins {
@@ -525,6 +527,22 @@ absl::StatusOr<int64_t> GetSflowCollectorPacketsSentCounter(
         collector_ip, " has invalid packets-sent value: ", counter_str));
   }
   return counter;
+}
+
+absl::StatusOr<bool> IsSameIpAddressStr(const std::string& ip1,
+                                        const std::string& ip2) {
+  // Ipv4 address only has one format.
+  if (absl::StatusOr<netaddr::Ipv4Address> ipv4_address_1 =
+          netaddr::Ipv4Address::OfString(ip1);
+      ipv4_address_1.ok()) {
+    return ip1 == ip2;
+  }
+  ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6_adddress_1,
+                   netaddr::Ipv6Address::OfString(ip1));
+  ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6_adddress_2,
+                   netaddr::Ipv6Address::OfString(ip2));
+
+  return ipv6_adddress_1 == ipv6_adddress_2;
 }
 
 }  // namespace pins

@@ -936,5 +936,53 @@ TEST(SflowDscpTest, ParseTcpdumpResultFailure) {
                HasSubstr("Failed to find ToS value in tcpdump result.")));
 }
 
+TEST(IpAddressTest, ParseError) {
+  EXPECT_THAT(IsSameIpAddressStr("", "127.0.0.1"),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(IpAddressTest, SameIpv4Address) {
+  EXPECT_THAT(IsSameIpAddressStr("127.0.0.1", "127.0.0.1"), IsOkAndHolds(true));
+}
+
+TEST(IpAddressTest, DifferentIpv4Address) {
+  EXPECT_THAT(IsSameIpAddressStr("127.0.0.1", "127.0.0.2"),
+              IsOkAndHolds(false));
+}
+
+TEST(IpAddressTest, SameIpv6Address) {
+  EXPECT_THAT(IsSameIpAddressStr("2001:db8:0:12::1", "2001:db8:0:12::1"),
+              IsOkAndHolds(true));
+}
+
+TEST(IpAddressTest, DifferentIpv6Address) {
+  EXPECT_THAT(IsSameIpAddressStr("2001:db8:0:12::1", "2001:db8:0:12::2"),
+              IsOkAndHolds(false));
+}
+
+TEST(IpAddressTest, SameIpv6AddressDifferentFormat) {
+  EXPECT_THAT(IsSameIpAddressStr("2607:f001:0acd::",
+                                 "2607:f001:0acd:0000:0000:0000:0000:0000"),
+              IsOkAndHolds(true));
+}
+
+TEST(IpAddressTest, SameIpv6AddressDifferentFormat2) {
+  EXPECT_THAT(IsSameIpAddressStr("2001:db8:0:12::1",
+                                 "2001:0db8:0000:0012:0000:0000:0000:0001"),
+              IsOkAndHolds(true));
+}
+
+TEST(IpAddressTest, SameIpv6AddressDifferentFormat3) {
+  EXPECT_THAT(IsSameIpAddressStr("2607:f001:0acf:0000:0000:0000:0000:0000",
+                                 "2607:f001:acf::"),
+              IsOkAndHolds(true));
+}
+
+TEST(IpAddressTest, SameIpv6AddressDifferentFormat4) {
+  EXPECT_THAT(IsSameIpAddressStr("2607:f001:acf::",
+                                 "2607:f001:0acf:0000:0000:0000:0000:0000"),
+              IsOkAndHolds(true));
+}
+
 }  // namespace
 }  // namespace pins
