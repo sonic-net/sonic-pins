@@ -24,6 +24,9 @@
 #include "dvaas/test_vector.pb.h"
 #include "gutil/status.h"
 #include "gutil/test_artifact_writer.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
@@ -35,11 +38,17 @@ absl::Status ValidateAgaistArribaTestVector(
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params) {
   // Prepare control switch.
+  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
+                   GetForwardingPipelineConfig(&control_switch));
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
+                   pdpi::CreateIrP4Info(config.config().p4info()));
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> punt_entities,
+                   sai::EntryBuilder()
+                       .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
+                       .GetDedupedPiEntities(ir_p4info));
+
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&control_switch));
-  RETURN_IF_ERROR(pdpi::InstallPdTableEntries(
-      control_switch, sai::PdEntryBuilder()
-                          .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
-                          .GetDedupedEntries()));
+  RETURN_IF_ERROR(pdpi::InstallPiEntities(control_switch, punt_entities));
 
   // Prepare SUT.
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&sut));

@@ -16,7 +16,9 @@
 // limitations under the License.
 
 #include <ostream>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -30,11 +32,10 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_matchers.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/packetlib/packetlib_matchers.h"
-#include "p4_pdpi/pd.h"
-#include "p4_pdpi/translation_options.h"
 #include "platforms/networking/p4/p4_infra/bmv2/bmv2.h"
 #include "sai_p4/fixed/ids.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -112,8 +113,9 @@ TEST_P(TunnelTerminationTest, PacketGetsDecapsulatedAndForwarded) {
 
   // Install table entries: decap & default route, so we can check that VRF
   // assignment works and observe the forwarded output packet.
-  sai::TableEntries entries =
-      sai::PdEntryBuilder()
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
           .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf")
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
               /*egress_port=*/"\001", sai::IpVersion::kIpv4, "vrf")
@@ -177,8 +179,9 @@ TEST_P(TunnelTerminationTest,
   // Install table entries: decap & default routes, so we can check that VRF
   // assignment works as expected by observing the egress port of the forwarded
   // output packet.
-  sai::TableEntries entries =
-      sai::PdEntryBuilder()
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
           .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("decap-vrf")
           .AddPreIngressAclEntryAssigningVrfForGivenIpType(
               "acl-ipv4-vrf", sai::IpVersion::kIpv4)
@@ -192,7 +195,7 @@ TEST_P(TunnelTerminationTest,
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
               /*egress_port=*/"\002", sai::IpVersion::kIpv4And6, "acl-ipv4-vrf")
           // Route that will apply if the ACL entry matching the undecapped
-          // packet determines the VRF.
+          // packet determines the VRF.p
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
               /*egress_port=*/"\003", sai::IpVersion::kIpv4And6, "acl-ipv6-vrf")
           .AddEntryAdmittingAllPacketsToL3()  // Needed for forwarding.
@@ -231,8 +234,9 @@ TEST_P(TunnelTerminationTest, PuntedPacketIsNotDecapsulated) {
 
   // Install table entries: decap & punt to controller, so we can check that the
   // punted packet did not get decapped.
-  sai::TableEntries entries =
-      sai::PdEntryBuilder()
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
           .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf")
           .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
           .GetDedupedEntries();
