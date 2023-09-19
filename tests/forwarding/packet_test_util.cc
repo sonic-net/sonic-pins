@@ -183,7 +183,7 @@ int Range(const TestConfiguration &config) {
   // GenerateIthPacket takes in an int index. Any field with 31 or more bits
   // may be limited by the int range before the header field range.
   static constexpr int kIpv4Range =
-      0xff000000 - kBaseDecapIpV4Dst;  // Exclude 127.x.x.x
+      0x7f000000 - kBaseDecapIpV4Dst;  // Exclude 127.x.x.x
   static constexpr int kInt64Range =
       std::min(static_cast<uint64_t>(std::numeric_limits<int>::max()),
                std::numeric_limits<uint64_t>::max());
