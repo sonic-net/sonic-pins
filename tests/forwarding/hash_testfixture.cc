@@ -61,6 +61,7 @@
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "tests/forwarding/util.h"
+#include "tests/lib/packet_generator.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/thinkit_sanity_tests.h"
 #include "thinkit/mirror_testbed.h"
@@ -390,6 +391,36 @@ const TestConfigurationMap &HashingTestConfigs() {
   return *kTestConfigMap;
 }
 
+const packetgen::Options& Ipv4HashingOptions() {
+  static const auto* const kOptions = new packetgen::Options({
+      .ip_type = packetgen::IpType::kIpv4,
+      .variables =
+          {
+              packetgen::Field::kIpSrc,
+              packetgen::Field::kIpDst,
+              packetgen::Field::kL4SrcPort,
+              packetgen::Field::kL4DstPort,
+          },
+  });
+  return *kOptions;
+}
+
+const packetgen::Options& Ipv6HashingOptions() {
+  static const auto* const kOptions = new packetgen::Options({
+      .ip_type = packetgen::IpType::kIpv6,
+      .variables =
+          {
+              packetgen::Field::kIpSrc,
+              packetgen::Field::kIpDst,
+              packetgen::Field::kL4SrcPort,
+              packetgen::Field::kL4DstPort,
+              packetgen::Field::kFlowLabelLower16,
+              packetgen::Field::kFlowLabelUpper4,
+          },
+  });
+  return *kOptions;
+}
+
 // Return the list of all TestConfig() names.
 const std::vector<std::string> &HashingTestConfigNames() {
   static const auto *const kConfigNames = []() {
@@ -471,6 +502,19 @@ absl::Status HashTest::TestData::Log(thinkit::TestEnvironment &environment,
                                        packet_log);
 }
 
+std::vector<packetlib::Packet> HashTest::TestData::GetReceivedPacketsOnPort(
+    const P4rtPortId& port_id) const ABSL_LOCKS_EXCLUDED(mutex_) {
+  std::vector<packetlib::Packet> port_packets;
+  const std::string& match_port = port_id.GetP4rtEncoding();
+  absl::MutexLock lock(&mutex_);
+  for (const auto& [inport, packet] : received_packets_) {
+    if (inport == match_port) {
+      port_packets.push_back(packet);
+    }
+  }
+  return port_packets;
+}
+
 void HashTest::SetUp() {
   MirrorTestbedFixture::SetUp();
 
@@ -548,7 +592,8 @@ void HashTest::RebootSut() {
 }
 
 absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
-    const pins::TestConfiguration &test_config, int num_packets) {
+    const pins::TestConfiguration& test_config, int num_packets,
+    HashTest::PacketGeneratorStyle style) {
   // Try to generate one packet first to see if the config is valid.
   ASSIGN_OR_RETURN(packetlib::Packet packet,
                    pins::GenerateIthPacket(test_config, 0));
@@ -560,9 +605,11 @@ absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
   // values distributed from the full range. Otherwise, choose sequential
   // values.
   int range = pins::Range(test_config);
-  bool use_random_index = range > 4 * num_packets;
-  LOG(INFO) << "Generating " << (use_random_index ? "random" : "sequential")
-            << " packets for config: " << pins::DescribeTestConfig(test_config);
+  bool use_random_index = style == PacketGeneratorStyle::kUniform;
+  LOG(INFO) << "Generating " << num_packets << " "
+            << (use_random_index ? "random" : "sequential")
+            << " packets for config: " << pins::DescribeTestConfig(test_config)
+            << " allowing for up to " << range << " unique values";
 
   std::vector<packetlib::Packet> packets;
   for (int packet_index = 0; packet_index < num_packets; ++packet_index) {
@@ -580,11 +627,23 @@ absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
 }
 
 absl::StatusOr<TestPacketMap> HashTest::GeneratePackets(
-    const TestConfigurationMap &test_configs, int num_packets) {
+    const TestConfigurationMap& test_configs, int num_packets,
+    HashTest::PacketGeneratorStyle style) {
   TestPacketMap packets;
   for (const auto &[field, config] : test_configs) {
-    ASSIGN_OR_RETURN(packets[field], GeneratePackets(config, num_packets),
+    ASSIGN_OR_RETURN(packets[field],
+                     GeneratePackets(config, num_packets, style),
                      _ << "Invalid test config for " << field);
+  }
+  return packets;
+}
+
+absl::StatusOr<std::vector<packetlib::Packet>> HashTest::GeneratePackets(
+    const packetgen::Options& options, int num_packets) {
+  ASSIGN_OR_RETURN(auto generator, packetgen::PacketGenerator::Create(options));
+  std::vector<packetlib::Packet> packets = generator.Packets(num_packets);
+  for (int i = 0; i < num_packets; ++i) {
+    SetPayload(packets[i], i, std::nullopt);
   }
   return packets;
 }
@@ -721,17 +780,6 @@ void HashTest::ForwardAllPacketsToMembers(
   pi_entries.push_back(pi_entry);
 
   ASSERT_OK(pdpi::InstallPiTableEntries(session.get(), ir_p4info, pi_entries));
-}
-
-absl::Status HashTest::SendPacketsAndRecordResultsPerTestConfig(
-    const TestConfigurationMap &test_configs,
-    const p4::config::v1::P4Info &p4info, absl::string_view test_stage,
-    const P4rtPortId &ingress_port_id, int num_packets,
-    absl::node_hash_map<std::string, TestData> &output_record) {
-  ASSIGN_OR_RETURN(TestPacketMap test_packets,
-                   GeneratePackets(test_configs, num_packets));
-  return SendPacketsAndRecordResultsPerTest(test_packets, p4info, test_stage,
-                                            ingress_port_id, output_record);
 }
 
 absl::Status HashTest::SendPacketsAndRecordResultsPerTest(
