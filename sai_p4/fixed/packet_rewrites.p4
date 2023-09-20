@@ -29,7 +29,7 @@ control packet_rewrites(inout headers_t headers,
         headers.ethernet.dst_addr = local_metadata.packet_rewrites.dst_mac;
       }
       if (headers.ipv4.isValid()) {
-        if (headers.ipv4.ttl > 0 && local_metadata.enable_ttl_rewrite) {
+        if (headers.ipv4.ttl > 0 && local_metadata.enable_decrement_ttl) {
           headers.ipv4.ttl = headers.ipv4.ttl - 1;
         }
         // TODO: Verify this is accurate when TTL rewrite is
@@ -39,7 +39,7 @@ control packet_rewrites(inout headers_t headers,
         }
       }
       if (headers.ipv6.isValid()) {
-        if (headers.ipv6.hop_limit > 0 && local_metadata.enable_ttl_rewrite) {
+        if (headers.ipv6.hop_limit > 0 && local_metadata.enable_decrement_ttl) {
           headers.ipv6.hop_limit = headers.ipv6.hop_limit - 1;
         }
         // TODO: Verify this is accurate when TTL rewrite is

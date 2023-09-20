@@ -201,6 +201,10 @@ control acl_pre_ingress(in headers_t headers,
       ecn : ternary
           @id(7) @name("ecn")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
+#if defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
+      local_metadata.ingress_port : optional @name("in_port") @id(8)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
+#endif
     }
     actions = {
       @proto_id(1) set_acl_metadata;
