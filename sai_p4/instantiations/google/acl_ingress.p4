@@ -410,7 +410,7 @@ control acl_ingress(in headers_t headers,
 #endif
   // TODO: This comment is required for the preprocessor to not
   // spit out nonsense.
-#if defined(SAI_INSTANTIATION_TOR)
+#if defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
@@ -453,7 +453,7 @@ control acl_ingress(in headers_t headers,
               @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_IPV6_WORD2)
           ) @format(IPV6_ADDRESS);
 #endif
-#if defined(SAI_INSTANTIATION_TOR)
+#if defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
       dscp : ternary
           @id(8) @name("dscp")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP);

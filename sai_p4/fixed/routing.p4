@@ -143,7 +143,7 @@ control routing(in headers_t headers,
       ipv6_addr_t neighbor_id,
       // TODO: Use @format(BOOL) once PDPI
       // supports it.
-      @id(3) bit<1> disable_ttl_rewrite,
+      @id(3) bit<1> disable_decrement_ttl,
       @id(4) bit<1> disable_src_mac_rewrite,
       @id(5) bit<1> disable_dst_mac_rewrite,
       // TODO: Implement disable_vlan_rewrite.
@@ -152,7 +152,7 @@ control routing(in headers_t headers,
     router_interface_id_value = router_interface_id;
     neighbor_id_valid = true;
     neighbor_id_value = neighbor_id;
-    local_metadata.enable_ttl_rewrite = !(bool) disable_ttl_rewrite;
+    local_metadata.enable_decrement_ttl = !(bool) disable_decrement_ttl;
     local_metadata.enable_src_mac_rewrite = !(bool) disable_src_mac_rewrite;
     local_metadata.enable_dst_mac_rewrite = !(bool) disable_dst_mac_rewrite;
   }
@@ -179,7 +179,7 @@ control routing(in headers_t headers,
       @refers_to(neighbor_table, neighbor_id)
       ipv6_addr_t neighbor_id) {
     set_ip_nexthop_and_disable_rewrites(router_interface_id, neighbor_id,
-      /*disable_ttl_rewrite*/0x0, /*disable_src_mac_rewrite*/0x0,
+      /*disable_decrement_ttl*/0x0, /*disable_src_mac_rewrite*/0x0,
       /*disable_dst_mac_rewrite*/0x0, /*disable_vlan_rewrite*/0x0);
   }
 
@@ -285,17 +285,13 @@ control routing(in headers_t headers,
     nexthop_id_value = nexthop_id;
   }
 
-  // When called from a route, sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
+  // Can only be called form a route. Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
   // SAI_PACKET_ACTION_FORWARD, and SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a
   // SAI_OBJECT_TYPE_NEXT_HOP.
-  //
-  // When called from a group, sets SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID.
-  // When called from a group, sets SAI_NEXT_HOP_GROUP_MEMBER_ATTR_WEIGHT.
+  // Also sets SAI_ROUTE_ENTRY_ATTR_META_DATA.
   //
   // This action can only refer to `nexthop_id`s that are programmed in the
   // `nexthop_table`.
-  //
-  // Also sets the route metadata available for Ingress ACL lookup.
   @id(ROUTING_SET_NEXTHOP_ID_AND_METADATA_ACTION_ID)
   action set_nexthop_id_and_metadata(@id(1)
                                      @refers_to(nexthop_table, nexthop_id)
@@ -320,6 +316,7 @@ control routing(in headers_t headers,
 #else
   @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE)
 #endif
+  @id(ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID)
   action_selector(HashAlgorithm.identity,
 #if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
  WCMP_GROUP_SELECTOR_SIZE_TOR,
@@ -342,7 +339,6 @@ control routing(in headers_t headers,
       @defaultonly NoAction;
     }
     const default_action = NoAction;
-    @id(ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID)
         implementation = wcmp_group_selector;
 #if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
     size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR;

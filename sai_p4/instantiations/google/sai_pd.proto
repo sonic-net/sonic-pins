@@ -491,6 +491,7 @@ message AclPreIngressMetadataTableEntry {
     Ternary icmpv6_type = 5;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary dscp = 6;         // ternary match / Format::HEX_STRING / 6 bits
     Ternary ecn = 7;          // ternary match / Format::HEX_STRING / 2 bits
+    Optional in_port = 8;     // optional match / Format::STRING
   }
   Match match = 1;
   message Action {
@@ -633,13 +634,19 @@ message AclIngressCountingTableEntry {
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclIngressSecurityTableEntry {
   message Match {
-    Optional is_ip = 1;      // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv4 = 2;    // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv6 = 3;    // optional match / Format::HEX_STRING / 1 bits
-    Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
-    Ternary src_ip = 5;      // ternary match / Format::IPV4
-    Ternary dst_ip = 6;      // ternary match / Format::IPV4
-    Ternary src_ipv6 = 7;    // ternary match / Format::IPV6 / upper 64 bits
+    Optional is_ip = 1;        // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;      // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 4;    // ternary match / Format::HEX_STRING / 16 bits
+    Ternary src_ip = 5;        // ternary match / Format::IPV4
+    Ternary dst_ip = 6;        // ternary match / Format::IPV4
+    Ternary src_ipv6 = 7;      // ternary match / Format::IPV6 / upper 64 bits
+    Ternary dscp = 8;          // ternary match / Format::HEX_STRING / 6 bits
+    Ternary ip_protocol = 9;   // ternary match / Format::HEX_STRING / 8 bits
+    Ternary l4_src_port = 10;  // ternary match / Format::HEX_STRING / 16 bits
+    Ternary l4_dst_port = 11;  // ternary match / Format::HEX_STRING / 16 bits
+    Ternary route_metadata = 12;  // ternary match / Format::HEX_STRING / 6 bits
+    Ternary acl_metadata = 13;    // ternary match / Format::HEX_STRING / 8 bits
   }
   Match match = 1;
   message Action {
@@ -763,7 +770,7 @@ message SetIpNexthopAndDisableRewritesAction {
   string router_interface_id = 1;  // Format::STRING
   // Refers to 'neighbor_table.neighbor_id'.
   string neighbor_id = 2;              // Format::IPV6 / 128 bits
-  string disable_ttl_rewrite = 3;      // Format::HEX_STRING / 1 bits
+  string disable_decrement_ttl = 3;    // Format::HEX_STRING / 1 bits
   string disable_src_mac_rewrite = 4;  // Format::HEX_STRING / 1 bits
   string disable_dst_mac_rewrite = 5;  // Format::HEX_STRING / 1 bits
   string disable_vlan_rewrite = 6;     // Format::HEX_STRING / 1 bits
