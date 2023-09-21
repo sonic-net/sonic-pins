@@ -40,6 +40,7 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "absl/utility/utility.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
@@ -72,6 +73,10 @@
 #include "gtest/gtest.h"
 
 namespace pins_test {
+
+absl::btree_set<P4rtPortId> HashTest::port_ids_ = {};
+absl::flat_hash_map<P4rtPortId, std::string> HashTest::port_ids_to_interfaces_ =
+    {};
 
 namespace {
 
@@ -189,16 +194,19 @@ GetOrSetP4Info(thinkit::Switch &device,
   return p4info;
 }
 
-// Initialize the testbed for the test.
-//   Push gNMI config.
-//   Add the trap rule to the control switch.
-void InitializeTestbed(thinkit::MirrorTestbed &testbed,
-                       const p4::config::v1::P4Info &default_p4info) {
-  // Wait for ports to come up before the test. We don't need all the ports to
-  // be up, but it helps with reproducibility. We're using a short timeout (1
-  // minute) so the impact is small if the testbed doesn't bring up every port.
-  if (auto all_interfaces_up_status = WaitForCondition(
-          AllPortsUp, absl::Seconds(10), testbed.Sut(), /*with_healthz=*/false);
+absl::Status WaitForPortsUp(thinkit::Switch &target,
+                            const absl::Span<const std::string> &interfaces) {
+  return WaitForCondition(PortsUp, absl::Seconds(10), target, interfaces,
+                          /*with_healthz=*/false);
+}
+
+// Wait for ports to come up before the test. We don't need all the ports to
+// be up, but it helps with reproducibility. We're using a short timeout so the
+// impact is small if the testbed doesn't bring up every port.
+void WaitForPortsToStabilize(thinkit::MirrorTestbed &testbed) {
+  if (auto all_interfaces_up_status =
+          WaitForCondition(AllPortsUp, absl::Seconds(10), testbed.Sut(),
+                           /*with_healthz=*/false);
       !all_interfaces_up_status.ok()) {
     LOG(WARNING) << "Some ports are down at the start of the test. "
                  << "Continuing with only the UP ports.";
@@ -209,7 +217,13 @@ void InitializeTestbed(thinkit::MirrorTestbed &testbed,
     LOG_IF(WARNING, !tmp_status.ok())
         << "Control Ports Up Check: " << tmp_status;
   }
+}
 
+// Initialize the testbed for the test.
+//   Push gNMI config.
+//   Add the trap rule to the control switch.
+void InitializeTestbed(thinkit::MirrorTestbed &testbed,
+                       const p4::config::v1::P4Info &default_p4info) {
   LOG(INFO) << "Initializing forwarding pipeline for SUT.";
   {
     // Use this function to push P4Info if needed. Then clear the forwarding
@@ -516,16 +530,40 @@ std::vector<packetlib::Packet> HashTest::TestData::GetReceivedPacketsOnPort(
 }
 
 void HashTest::SetUp() {
-  MirrorTestbedFixture::SetUp();
+  mirror_testbed_->SetUp();
 
-  ASSERT_NO_FATAL_FAILURE(
-      GetTestablePorts(GetMirrorTestbed().Sut(), port_ids_to_interfaces_));
-  for (const auto &[port, interface] : port_ids_to_interfaces_) {
-    port_ids_.insert(port);
-    interfaces_.push_back(interface);
+  // Initialize testbed configuration. P4 changes may require a reboot, so we do
+  // this before checking interface status.
+  ASSERT_NO_FATAL_FAILURE(InitializeTestbed(GetMirrorTestbed(), p4_info()));
+
+  // Shortcut port selection to a previously used set if available.
+  if (!PortIds().empty()) {
+    std::vector<std::string> interfaces;
+    for (const auto &port : PortIds()) {
+      ASSERT_OK_AND_ASSIGN(std::string interface, GnmiInterfaceName(port));
+      interfaces.push_back(interface);
+    }
+    if (auto result = WaitForPortsUp(GetMirrorTestbed().Sut(), interfaces);
+        !result.ok()) {
+      LOG(WARNING)
+          << "The previous set of ports are no longer up. Updating port set. "
+          << result;
+      port_ids_.clear();
+    }
   }
-  LOG(INFO) << "Using ports: ["
-            << absl::StrJoin(port_ids_, ", ", absl::StreamFormatter()) << "]";
+
+  // Select available ports for the test.
+  if (PortIds().empty()) {
+    WaitForPortsToStabilize(GetMirrorTestbed());
+    ASSERT_NO_FATAL_FAILURE(
+        GetTestablePorts(GetMirrorTestbed().Sut(), port_ids_to_interfaces_));
+    for (const auto &[port, interface] : port_ids_to_interfaces_) {
+      port_ids_.insert(port);
+      interfaces_.push_back(interface);
+    }
+    LOG(INFO) << "Available ports: ["
+              << absl::StrJoin(port_ids_, ", ", absl::StreamFormatter()) << "]";
+  }
   ASSERT_GE(port_ids_.size(), kMinimumMembersForTest);
 }
 
@@ -551,7 +589,16 @@ void HashTest::TearDown() {
     ADD_FAILURE() << "failed to connect to sut switch: "
                   << sut_p4_session.status();
   }
-  MirrorTestbedFixture::TearDown();
+
+  switch (mirror_testbed_teardown_condition_) {
+  case TearDownCondition::kAlways:
+    mirror_testbed_->TearDown();
+    break;
+  case TearDownCondition::kOnFailure:
+    if (HasFailure())
+      mirror_testbed_->TearDown();
+    break;
+  }
 }
 
 absl::Status HashTest::RecordP4Info(absl::string_view test_stage,
@@ -692,29 +739,38 @@ absl::Status HashTest::SendAndReceivePackets(
       }
     }
   }
-  std::vector<std::string> errors;
-  if (test_data.PacketCount() != packets.size()) {
-    errors.push_back(absl::Substitute(
-        "Unexpected number of packets received. Expected $0. Got $1.$2",
-        packets.size(), test_data.PacketCount(),
-        missing_packets.empty()
-            ? ""
-            : absl::Substitute(" Missing packets [$0]",
-                               absl::StrJoin(missing_packets, ", "))));
-  }
-  // Clean up.
-  if (absl::Status finished = control_p4_session->Finish(); !finished.ok()) {
-    errors.push_back(absl::StrCat("Failed control_p4_session->Finish(): ",
-                                  finished.message()));
-  }
+  std::vector<packetlib::Packet> missing_packet_list;
   if (!missing_packets.empty()) {
-    std::vector<packetlib::Packet> missing_packet_list;
     missing_packet_list.reserve(missing_packets.size());
     for (int index : missing_packets) {
       missing_packet_list.push_back(packets[index]);
     }
     LogPackets(GetMirrorTestbed().Environment(), missing_packet_list,
                absl::StrCat(record_prefix, "_missing_packets"));
+  }
+  std::vector<std::string> errors;
+  if (test_data.PacketCount() != packets.size()) {
+    std::string error = absl::Substitute(
+        "Unexpected number of packets received. Expected $0. Got $1.$2",
+        packets.size(), test_data.PacketCount(),
+        missing_packets.empty()
+            ? ""
+            : absl::Substitute(" Missing packets [$0]",
+                               absl::StrJoin(missing_packets, ", ")));
+    if (missing_packets.size() < 10) { // Don't make this too noisy.
+      absl::StrAppend(
+          &error, ":\n",
+          absl::StrJoin(missing_packet_list, "\n",
+                        [](std::string *out, const packetlib::Packet &packet) {
+                          absl::StrAppend(out, packet.ShortDebugString());
+                        }));
+    }
+    errors.push_back(std::move(error));
+  }
+  // Clean up.
+  if (absl::Status finished = control_p4_session->Finish(); !finished.ok()) {
+    errors.push_back(absl::StrCat("Failed control_p4_session->Finish(): ",
+                                  finished.message()));
   }
   if (errors.empty()) return absl::OkStatus();
   return absl::InternalError(absl::StrJoin(errors, "\n"));
