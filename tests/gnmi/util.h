@@ -10,7 +10,8 @@ namespace pins_test {
 
 absl::Status SetAdminStatus(gnmi::gNMI::StubInterface* gnmi_stub,
                             absl::string_view if_name,
-                            absl::string_view if_status);
+                            absl::string_view if_status,
+                            absl::Duration timeout = absl::Seconds(15));
 
 absl::Status FlapLink(gnmi::gNMI::StubInterface &gnmi_stub,
                       thinkit::GenericTestbed &generic_testbed,
