@@ -16,11 +16,23 @@
 #define PINS_TESTS_FORWARDING_HASH_MULTISTAGE_TEST_H_
 
 #include "tests/forwarding/hash_testfixture.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 
+struct HashMultiStageParameters {
+  thinkit::MirrorTestbedInterface *mirror_testbed;
+  p4::config::v1::P4Info p4_info;
+};
+
 // Multistage hash test.
-class HashMultiStage : public HashTest {};
+class HashMultiStage
+    : public HashTest,
+      public testing::WithParamInterface<HashMultiStageParameters> {
+public:
+  HashMultiStage()
+      : HashTest(GetParam().mirror_testbed, std::move(GetParam().p4_info)) {}
+};
 
 }  // namespace pins_test
 
