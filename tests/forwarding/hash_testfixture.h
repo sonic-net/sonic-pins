@@ -38,6 +38,7 @@
 #include "tests/lib/packet_generator.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/test_environment.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 
@@ -52,7 +53,7 @@ using TestPacketGenOptionsMap =
 // keeps track of packets based on the egress port for the SUT / ingress port of
 // the Control Switch.
 // Test class for the hash config test.
-class HashTest : public thinkit::MirrorTestbedFixture {
+class HashTest : public testing::Test {
 public:
   class TestData {
   public:
@@ -111,9 +112,37 @@ public:
     kUniform,     // Values are randomly distributed uniformly across the range.
   };
 
+  // Condition for running mirror_testbed_->TearDown().
+  enum class TearDownCondition {
+    kAlways,
+    kOnFailure,
+  };
+
+  // Constructors.
+  HashTest(thinkit::MirrorTestbedInterface *mirror_testbed_interface,
+           p4::config::v1::P4Info p4info,
+           TearDownCondition testbed_teardown_condition)
+      : mirror_testbed_(mirror_testbed_interface), p4info_(std::move(p4info)),
+        mirror_testbed_teardown_condition_(testbed_teardown_condition) {}
+
+  HashTest(thinkit::MirrorTestbedInterface *mirror_testbed_interface,
+           p4::config::v1::P4Info p4info)
+      : HashTest(mirror_testbed_interface, p4info, TearDownCondition::kAlways) {
+  }
+
   void SetUp() override;
 
   void TearDown() override;
+
+  const p4::config::v1::P4Info &p4_info() const { return p4info_; }
+
+  // MirrorTestbed accessors
+  thinkit::MirrorTestbed &GetMirrorTestbed() {
+    return mirror_testbed_->GetMirrorTestbed();
+  }
+  absl::Status SaveSwitchLogs(absl::string_view prefix) {
+    return mirror_testbed_->SaveSwitchLogs(prefix);
+  }
 
   // Record the P4Info file for debugging.
   absl::Status RecordP4Info(absl::string_view test_stage,
@@ -200,9 +229,16 @@ private:
   std::vector<std::string> interfaces_;
 
   // Set of port IDs to hash against.
-  absl::btree_set<P4rtPortId> port_ids_;
+  static absl::btree_set<P4rtPortId> port_ids_;
+
   // A map of port IDs to interface names.
-  absl::flat_hash_map<P4rtPortId, std::string> port_ids_to_interfaces_;
+  static absl::flat_hash_map<P4rtPortId, std::string> port_ids_to_interfaces_;
+
+  thinkit::MirrorTestbedInterface *mirror_testbed_;
+  p4::config::v1::P4Info p4info_;
+
+  // Condition for running mirror_testbed_->TearDown().
+  TearDownCondition mirror_testbed_teardown_condition_;
 };
 
 // Return the list of all packet TestConfigurations to be tested. Each
