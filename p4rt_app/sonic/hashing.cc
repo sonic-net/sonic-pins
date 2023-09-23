@@ -27,7 +27,7 @@
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
 #include "swss/json.h"
-#include "swss/json.hpp"
+#include <nlohmann/json.hpp>
 #include "swss/rediscommand.h"
 
 namespace p4rt_app {

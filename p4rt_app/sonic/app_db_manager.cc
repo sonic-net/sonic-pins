@@ -37,7 +37,7 @@
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
-#include "swss/json.hpp"
+#include <nlohmann/json.hpp>
 #include "swss/schema.h"
 
 namespace p4rt_app {

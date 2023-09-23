@@ -29,7 +29,7 @@
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
-#include "swss/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace {
