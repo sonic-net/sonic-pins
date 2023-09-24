@@ -28,7 +28,7 @@ p4::v1::Entity MakeV1modelPacketReplicationEngineEntryRequiredForPunts() {
   clone_session.set_session_id(COPY_TO_CPU_SESSION_ID);
   p4::v1::Replica& replica = *clone_session.add_replicas();
   replica.set_egress_port(SAI_P4_CPU_PORT);
-  replica.set_instance(CLONE_REPLICA_INSTANCE_PACKET_IN);
+  replica.set_instance(SAI_P4_REPLICA_INSTANCE_PACKET_IN);
 
   return entity;
 }

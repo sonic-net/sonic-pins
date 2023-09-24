@@ -6,12 +6,13 @@
 #include "metadata.p4"
 #include "ids.h"
 #include "minimum_guaranteed_sizes.p4"
+#include "bmv2_intrinsics.h"
 
 control mirroring_encap(inout headers_t headers,
                         inout local_metadata_t local_metadata,
                         inout standard_metadata_t standard_metadata) {
   apply {
-    if (standard_metadata.instance_type == CLONE_REPLICA_INSTANCE_MIRRORING) {
+    if (IS_MIRROR_COPY(standard_metadata)) {
 
       // Reference for ERSPAN Type II header construction
       // https://tools.ietf.org/html/draft-foschiano-erspan-00
