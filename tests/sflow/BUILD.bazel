@@ -92,6 +92,35 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "sflow_breakout_test",
+    testonly = True,
+    srcs = ["sflow_breakout_test.cc"],
+    hdrs = ["sflow_breakout_test.h"],
+    deps = [
+        ":sflow_util",
+        "//gutil:status",
+        "//lib/gnmi:gnmi_helper",
+        "//lib/validator:validator_lib",
+        "//tests:thinkit_gnmi_interface_util",
+        "//tests:thinkit_gnmi_subscribe_tests",
+        "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
 cc_test(
     name = "sflow_util_test",
     srcs = ["sflow_util_test.cc"],
