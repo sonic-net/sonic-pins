@@ -131,15 +131,16 @@ TEST_P(HashMultiStage, MultiStageHashingHasNoPolarizationWithWcmp) {
 
   // Program groups on SUT, send packets from control switch to sut
   // and capture packets on Control switch to verify distribution.
-  ForwardAllPacketsToMembers(p4_info(), members);
+  ForwardAllPacketsToMembers(test_p4_info(), members);
   const P4rtPortId ingress_port = DefaultIngressPort();
   absl::node_hash_map<std::string, TestData> hash_test_data;
   {
     LOG(INFO) << "Sending " << num_packets * 2
               << " packets to first stage members, ingress port: "
               << ingress_port.GetP4rtEncoding();
-    ASSERT_OK(SendPacketsAndRecordResultsPerTest(
-        test_packets, p4_info(), "first_stage_", ingress_port, hash_test_data));
+    ASSERT_OK(SendPacketsAndRecordResultsPerTest(test_packets, test_p4_info(),
+                                                 "first_stage_", ingress_port,
+                                                 hash_test_data));
   }
   VerifyDistribution(expected_num_packets, members, hash_test_data,
                      "first_stage", /*confidence=*/0.85,
@@ -187,7 +188,7 @@ TEST_P(HashMultiStage, MultiStageHashingHasNoPolarizationWithWcmp) {
               << "first stage on last port " << members.back().port
               << " to second stage members, ingress port: "
               << ingress_port.GetOpenConfigEncoding();
-    ASSERT_OK(SendPacketsAndRecordResultsPerTest(test_packets, p4_info(),
+    ASSERT_OK(SendPacketsAndRecordResultsPerTest(test_packets, test_p4_info(),
                                                  "second_stage_", ingress_port,
                                                  hash_test_data));
   }

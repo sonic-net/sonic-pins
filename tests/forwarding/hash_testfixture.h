@@ -15,6 +15,7 @@
 #ifndef PINS_TESTS_FORWARDING_HASH_TESTFIXTURE_H_
 #define PINS_TESTS_FORWARDING_HASH_TESTFIXTURE_H_
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -32,10 +33,12 @@
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "tests/forwarding/group_programming_util.h"
 #include "tests/forwarding/packet_test_util.h"
 #include "tests/lib/packet_generator.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/test_environment.h"
 #include "gtest/gtest.h"
@@ -122,7 +125,8 @@ public:
   HashTest(thinkit::MirrorTestbedInterface *mirror_testbed_interface,
            p4::config::v1::P4Info p4info,
            TearDownCondition testbed_teardown_condition)
-      : mirror_testbed_(mirror_testbed_interface), p4info_(std::move(p4info)),
+      : mirror_testbed_(mirror_testbed_interface),
+        test_p4info_(std::move(p4info)),
         mirror_testbed_teardown_condition_(testbed_teardown_condition) {}
 
   HashTest(thinkit::MirrorTestbedInterface *mirror_testbed_interface,
@@ -134,7 +138,13 @@ public:
 
   void TearDown() override;
 
-  const p4::config::v1::P4Info &p4_info() const { return p4info_; }
+  // Return the p4_info that was applied to the SUT during SetUp().
+  const p4::config::v1::P4Info &test_p4_info() const { return test_p4info_; }
+
+  // Return the p4_info on the control switch after SetUp().
+  const p4::config::v1::P4Info &control_switch_p4_info() const {
+    return control_switch_p4info_;
+  }
 
   // MirrorTestbed accessors
   thinkit::MirrorTestbed &GetMirrorTestbed() {
@@ -147,11 +157,6 @@ public:
   // Record the P4Info file for debugging.
   absl::Status RecordP4Info(absl::string_view test_stage,
                             const p4::config::v1::P4Info &p4info);
-
-  // Reboot the SUT switch and wait for it to be ready.
-  // The switch is considered ready when the test ports are up and the P4Runtime
-  // session is reachable.
-  void RebootSut();
 
   // Generate packets based on the provided test config. Values are sequential
   // if num_packets is sufficiently large compared to the range of unique
@@ -210,10 +215,18 @@ public:
   absl::StatusOr<std::string>
   GnmiInterfaceName(const P4rtPortId &port_id) const;
 
-  // Returns the P4Info from the requested switch. If the forwarding pipeline is
-  // not configured, returns an empty protobuf.
+  // Returns the current P4Info from the SUT. If the forwarding pipeline is not
+  // configured, returns an empty protobuf.
   absl::StatusOr<p4::config::v1::P4Info> GetSutP4Info();
-  absl::StatusOr<p4::config::v1::P4Info> GetControlSwitchP4Info();
+
+  // Update the P4Info on the SUT.
+  absl::Status UpdateSutP4Info(const p4::config::v1::P4Info &p4_info);
+
+  // Accessors for the persistent P4 sessions for the test.
+  pdpi::P4RuntimeSession &sut_p4_session() { return *sut_p4_session_; }
+  pdpi::P4RuntimeSession &control_switch_p4_session() {
+    return *control_p4_session_;
+  }
 
 protected:
   // Send and receive packets for a particular test config. Save the resulting
@@ -223,22 +236,30 @@ protected:
      const P4rtPortId &ingress_port_id,
      const std::vector<packetlib::Packet> &packets, TestData &test_data);
 
-private:
-  // Set of interfaces to hash against. There is a 1:1 mapping of interfaces_ to
-  // port_ids_, but we don't care about the mapping in the test.
-  std::vector<std::string> interfaces_;
+ private:
+ void InitializeTestbed();
 
-  // Set of port IDs to hash against.
-  static absl::btree_set<P4rtPortId> port_ids_;
+ // Set of interfaces to hash against. There is a 1:1 mapping of interfaces_ to
+ // port_ids_, but we don't care about the mapping in the test.
+ std::vector<std::string> interfaces_;
 
-  // A map of port IDs to interface names.
-  static absl::flat_hash_map<P4rtPortId, std::string> port_ids_to_interfaces_;
+ // Set of port IDs to hash against.
+ absl::btree_set<P4rtPortId> port_ids_;
 
-  thinkit::MirrorTestbedInterface *mirror_testbed_;
-  p4::config::v1::P4Info p4info_;
+ // A map of port IDs to interface names.
+ absl::flat_hash_map<P4rtPortId, std::string> port_ids_to_interfaces_;
 
-  // Condition for running mirror_testbed_->TearDown().
-  TearDownCondition mirror_testbed_teardown_condition_;
+ // Testbed accessors.
+ thinkit::MirrorTestbedInterface *mirror_testbed_;
+
+ std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
+ std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
+
+ p4::config::v1::P4Info test_p4info_;
+ p4::config::v1::P4Info control_switch_p4info_;
+
+ // Condition for running mirror_testbed_->TearDown().
+ TearDownCondition mirror_testbed_teardown_condition_;
 };
 
 // Return the list of all packet TestConfigurations to be tested. Each
