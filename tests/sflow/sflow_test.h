@@ -81,6 +81,9 @@ struct SflowMirrorTestParams {
   std::string sut_gnmi_config;
   std::string control_gnmi_config;
   p4::config::v1::P4Info p4_info;
+
+  // Used for port breakout test.
+  std::string platform_json_path;
 };
 
 struct Port {
@@ -101,11 +104,14 @@ class SflowMirrorTestFixture
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
   std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
+  std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub_;
 
   std::string agent_address_;
 };
 
 class SflowRebootTestFixture : public SflowMirrorTestFixture {};
+
+class SflowPortBreakoutTest : public SflowMirrorTestFixture {};
 }  // namespace pins
 
 #endif // PINS_TESTS_SFLOW_SFLOW_TEST_H_
