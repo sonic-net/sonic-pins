@@ -689,7 +689,7 @@ tables {
     name: "referring_id_2"
     annotations: "@refers_to(two_match_fields_table , id_2)"
     bitwidth: 10
-    match_type: OPTIONAL
+    match_type: EXACT
     type_name {
       name: "normal_id_t"
     }
@@ -937,7 +937,6 @@ tables {
   match_fields {
     id: 6
     name: "referring_str"
-    annotations: "@refers_to(one_match_field_table , id)"
     match_type: OPTIONAL
     type_name {
       name: "string_id_t"
@@ -3381,19 +3380,12 @@ tables_by_id {
         match_field {
           id: 6
           name: "referring_str"
-          annotations: "@refers_to(one_match_field_table , id)"
           match_type: OPTIONAL
           type_name {
             name: "string_id_t"
           }
         }
         format: STRING
-        references {
-          table: "one_match_field_table"
-          match_field: "id"
-          table_id: 46253494
-          match_field_id: 1
-        }
       }
     }
     match_fields_by_id {
@@ -3505,19 +3497,12 @@ tables_by_id {
         match_field {
           id: 6
           name: "referring_str"
-          annotations: "@refers_to(one_match_field_table , id)"
           match_type: OPTIONAL
           type_name {
             name: "string_id_t"
           }
         }
         format: STRING
-        references {
-          table: "one_match_field_table"
-          match_field: "id"
-          table_id: 46253494
-          match_field_id: 1
-        }
       }
     }
     match_fields_by_name {
@@ -4038,7 +4023,7 @@ tables_by_id {
           name: "referring_id_2"
           annotations: "@refers_to(two_match_fields_table , id_2)"
           bitwidth: 10
-          match_type: OPTIONAL
+          match_type: EXACT
           type_name {
             name: "normal_id_t"
           }
@@ -4080,7 +4065,7 @@ tables_by_id {
           name: "referring_id_2"
           annotations: "@refers_to(two_match_fields_table , id_2)"
           bitwidth: 10
-          match_type: OPTIONAL
+          match_type: EXACT
           type_name {
             name: "normal_id_t"
           }
@@ -4123,7 +4108,6 @@ tables_by_id {
       }
     }
     size: 1024
-    requires_priority: true
     const_default_action {
       preamble {
         id: 21257015
@@ -4294,19 +4278,12 @@ tables_by_name {
         match_field {
           id: 6
           name: "referring_str"
-          annotations: "@refers_to(one_match_field_table , id)"
           match_type: OPTIONAL
           type_name {
             name: "string_id_t"
           }
         }
         format: STRING
-        references {
-          table: "one_match_field_table"
-          match_field: "id"
-          table_id: 46253494
-          match_field_id: 1
-        }
       }
     }
     match_fields_by_id {
@@ -4418,19 +4395,12 @@ tables_by_name {
         match_field {
           id: 6
           name: "referring_str"
-          annotations: "@refers_to(one_match_field_table , id)"
           match_type: OPTIONAL
           type_name {
             name: "string_id_t"
           }
         }
         format: STRING
-        references {
-          table: "one_match_field_table"
-          match_field: "id"
-          table_id: 46253494
-          match_field_id: 1
-        }
       }
     }
     match_fields_by_name {
@@ -5920,7 +5890,7 @@ tables_by_name {
           name: "referring_id_2"
           annotations: "@refers_to(two_match_fields_table , id_2)"
           bitwidth: 10
-          match_type: OPTIONAL
+          match_type: EXACT
           type_name {
             name: "normal_id_t"
           }
@@ -5962,7 +5932,7 @@ tables_by_name {
           name: "referring_id_2"
           annotations: "@refers_to(two_match_fields_table , id_2)"
           bitwidth: 10
-          match_type: OPTIONAL
+          match_type: EXACT
           type_name {
             name: "normal_id_t"
           }
@@ -6005,7 +5975,6 @@ tables_by_name {
       }
     }
     size: 1024
-    requires_priority: true
     const_default_action {
       preamble {
         id: 21257015

@@ -18,6 +18,36 @@ package(
 )
 
 cc_library(
+    name = "built_ins",
+    srcs = [
+        "built_ins.cc",
+    ],
+    hdrs = [
+        "built_ins.h",
+    ],
+    deps = [
+        ":ir_cc_proto",
+        "//gutil:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+)
+
+cc_test(
+    name = "built_ins_test",
+    srcs = [
+        "built_ins_test.cc",
+    ],
+    deps = [
+        ":built_ins",
+        ":ir_cc_proto",
+        "//gutil:status_matchers",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "sequencing_util",
     srcs = ["sequencing_util.cc"],
     hdrs = ["sequencing_util.h"],
@@ -347,10 +377,12 @@ cc_library(
         ":p4_runtime_session_extras_cc_proto",
         ":pd",
         "//gutil:proto",
+        "//gutil:status",
         "//gutil:table_entry_key",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
