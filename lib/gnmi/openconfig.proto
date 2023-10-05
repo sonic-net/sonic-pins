@@ -41,6 +41,10 @@ message Interfaces {
           [json_name = "google-pins-interfaces:ecmp-hash-algorithm"];
       optional uint32 ecmp_hash_offset = 6
           [json_name = "google-pins-interfaces:ecmp-hash-offset"];
+      optional bool cpu = 7;
+      optional bool management = 8;
+      // State subtree only
+      optional string oper_status = 9 [json_name = "oper-status"];
     }
   }
 }
