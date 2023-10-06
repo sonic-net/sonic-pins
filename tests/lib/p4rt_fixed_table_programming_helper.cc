@@ -202,6 +202,36 @@ absl::StatusOr<p4::v1::Update> NexthopTableUpdate(
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
+absl::StatusOr<p4::v1::Update> NexthopTunnelTableUpdate(
+    const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
+    absl::string_view nexthop_id, absl::string_view tunnel_id) {
+  pdpi::IrUpdate ir_update;
+  RETURN_IF_ERROR(gutil::ReadProtoFromString(
+      absl::Substitute(R"pb(
+                         type: $0
+                         entity {
+                           table_entry {
+                             table_name: "nexthop_table"
+                             matches {
+                               name: "nexthop_id"
+                               exact { str: "$1" }
+                             }
+                             action {
+                               name: "set_p2p_tunnel_encap_nexthop"
+                               params {
+                                 name: "tunnel_id"
+                                 value { str: "$2" }
+                               }
+                             }
+                           }
+                         }
+                       )pb",
+                       type, nexthop_id, tunnel_id),
+      &ir_update))
+      << "invalid pdpi::IrUpdate string.";
+  return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
+}
+
 absl::StatusOr<p4::v1::Update> TunnelTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
     absl::string_view tunnel_id, absl::string_view encap_dst_ip,
