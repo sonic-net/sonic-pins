@@ -296,6 +296,13 @@ absl::Status PinsControlDevice::FlapLinks(const absl::string_view interface,
       "FlapLinks is not supported by PinsControlDevice.");
 }
 
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+PinsControlDevice::GetInterfaceLaneSpeed(
+     absl::flat_hash_set<std::string>& interfaces) {
+  ASSIGN_OR_RETURN(auto gnmi_stub, sut_->CreateGnmiStub());
+  return pins_test::GetInterfaceToLaneSpeedMap(*gnmi_stub, interfaces);
+}
+
 absl::StatusOr<std::vector<std::string>>
 PinsControlDevice::FilterCollateralDownOnAdminDownInterfaces(
     absl::Span<const std::string> interfaces) {

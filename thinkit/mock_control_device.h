@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -64,6 +65,9 @@ class MockControlDevice : public ControlDevice {
   MOCK_METHOD(absl::Status, FlapLinks,
               (absl::string_view interface, absl::Duration down_duration),
               (override));
+  MOCK_METHOD((absl::StatusOr<absl::flat_hash_map<std::string, int>>),
+              GetInterfaceLaneSpeed,
+              (absl::flat_hash_set<std::string> & interfaces), (override));
   MOCK_METHOD(absl::StatusOr<std::vector<std::string>>,
               FilterCollateralDownOnAdminDownInterfaces,
               (absl::Span<const std::string> interfaces), (override));

@@ -91,6 +91,9 @@ class PinsControlDevice : public thinkit::ControlDevice {
   absl::Status FlapLinks(absl::string_view interface,
                          absl::Duration down_duration) override;
 
+  absl::StatusOr<absl::flat_hash_map<std::string, int>> GetInterfaceLaneSpeed(
+       absl::flat_hash_set<std::string>& interfaces) override;
+
   absl::StatusOr<std::vector<std::string>>
   FilterCollateralDownOnAdminDownInterfaces(
       absl::Span<const std::string> interfaces) override;
