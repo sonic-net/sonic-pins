@@ -139,6 +139,28 @@ control acl_ingress(in headers_t headers,
 
   // Forwards green packets normally. Otherwise, drops packets and ensures that
   // they are not copied to the CPU.
+  // Also sets CPU queue and Multicast queue, with different multicast queues
+  // set depending on packet color.
+  @id(ACL_INGRESS_SET_CPU_AND_MULTICAST_QUEUES_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
+  @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_YELLOW)
+  @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_RED)
+  // TODO: Remove @unsupported annotation.
+  @unsupported
+  action set_cpu_and_multicast_queues_and_deny_above_rate_limit(
+      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
+      @id(2) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_GREEN)
+        qos_queue_t green_multicast_queue,
+      @id(3) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_YELLOW)
+      @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_and_yellow_multicast_queue) {
+    acl_ingress_qos_meter.read(local_metadata.color);
+    // We model the behavior for GREEN packes only here.
+    // TODO: Branch on color and model behavior for all colors.
+  }
+
+  // Forwards green packets normally. Otherwise, drops packets and ensures that
+  // they are not copied to the CPU.
   @id(ACL_INGRESS_SET_CPU_QUEUE_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_YELLOW)
@@ -356,6 +378,8 @@ control acl_ingress(in headers_t headers,
       @proto_id(3) acl_forward();
       @proto_id(4) acl_drop(standard_metadata);
       @proto_id(5) set_cpu_queue();
+      @proto_id(6)
+        set_cpu_and_multicast_queues_and_deny_above_rate_limit();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
