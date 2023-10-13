@@ -146,7 +146,6 @@ control routing(in headers_t headers,
       @id(3) bit<1> disable_decrement_ttl,
       @id(4) bit<1> disable_src_mac_rewrite,
       @id(5) bit<1> disable_dst_mac_rewrite,
-      // TODO: Implement disable_vlan_rewrite.
       @id(6) bit<1> disable_vlan_rewrite) {
     router_interface_id_valid = true;
     router_interface_id_value = router_interface_id;
@@ -155,6 +154,7 @@ control routing(in headers_t headers,
     local_metadata.enable_decrement_ttl = !(bool) disable_decrement_ttl;
     local_metadata.enable_src_mac_rewrite = !(bool) disable_src_mac_rewrite;
     local_metadata.enable_dst_mac_rewrite = !(bool) disable_dst_mac_rewrite;
+    local_metadata.enable_vlan_rewrite = !(bool) disable_vlan_rewrite;
   }
 
   // Sets SAI_NEXT_HOP_ATTR_TYPE to SAI_NEXT_HOP_TYPE_IP, and
