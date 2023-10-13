@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <optional>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -270,16 +271,17 @@ absl::Status InstallEntriesOnlyForwardingPacketsMatchingVlanIdInAclPreIngress(
 
 absl::Status InstallEntriesForwardingAndRewritingVlanInRifTable(
     Bmv2& bmv2, const pdpi::IrP4Info& ir_p4info,
-    absl::string_view vlan_id_hexstr, absl::string_view egress_port,
-    bool disable_vlan_checks) {
-  RETURN_IF_ERROR(
-      InstallEntries(bmv2, ir_p4info,
-                     sai::EntryBuilder()
-                         .AddEntrySettingVrfForAllPackets("vrf-forward")
-                         .AddEntryAdmittingAllPacketsToL3()
-                         .AddDefaultRouteForwardingAllPacketsToGivenPort(
-                             egress_port, sai::IpVersion::kIpv4, "vrf-forward",
-                             /*vlan_hexstr=*/vlan_id_hexstr)));
+    std::optional<absl::string_view> vlan_id_hexstr,
+    absl::string_view egress_port, bool disable_vlan_checks,
+    bool disable_vlan_rewrite) {
+  RETURN_IF_ERROR(InstallEntries(
+      bmv2, ir_p4info,
+      sai::EntryBuilder()
+          .AddEntrySettingVrfForAllPackets("vrf-forward")
+          .AddEntryAdmittingAllPacketsToL3()
+          .AddDefaultRouteForwardingAllPacketsToGivenPort(
+              egress_port, sai::IpVersion::kIpv4, "vrf-forward",
+              {.disable_vlan_rewrite = disable_vlan_rewrite}, vlan_id_hexstr)));
   if (disable_vlan_checks) {
     return InstallEntries(bmv2, ir_p4info,
                           sai::EntryBuilder().AddDisableVlanChecksEntry());
@@ -287,16 +289,16 @@ absl::Status InstallEntriesForwardingAndRewritingVlanInRifTable(
   return absl::OkStatus();
 }
 
-TEST(VlanTest,
-     SettingNonReservedVidInRifWithoutVlanChecksResultsInPacketWithThatId) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+TEST_P(VlanTest,
+       SettingNonReservedVidInRifWithoutVlanChecksResultsInPacketWithThatId) {
+  const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
   constexpr absl::string_view kEgressVlan = "0x003";
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
       bmv2, kIrP4Info, kEgressVlan, kEgressPortProto,
-      /*disable_vlan_checks=*/true));
+      /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/false));
 
   {
     // Inject packet without a VLAN tag.
@@ -349,15 +351,15 @@ TEST(VlanTest,
   }
 }
 
-TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+TEST_P(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
+  const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
   constexpr absl::string_view kEgressVlan = "0x003";
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
       bmv2, kIrP4Info, kEgressVlan, kEgressPortProto,
-      /*disable_vlan_checks=*/false));
+      /*disable_vlan_checks=*/false, /*disable_vlan_rewrite=*/false));
 
   {
     // Inject packet without a VLAN tag.
@@ -386,15 +388,15 @@ TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
   }
 }
 
-TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+TEST_P(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
+  const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
   constexpr absl::string_view kEgressVlan = "0xfff";
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
       bmv2, kIrP4Info, kEgressVlan, kEgressPortProto,
-      /*disable_vlan_checks=*/true));
+      /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/false));
 
   {
     // Inject packet without a VLAN tag.
@@ -417,6 +419,107 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
+  }
+  {
+    // Inject VLAN packet with VLAN 0xfff.
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
+                                          /*vid_hexstr=*/"0xfff")));
+    // The packet must be forwarded with no VLAN tag.
+    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
+                ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
+                            HasHeaderCase(packetlib::Header::kIpv4Header)));
+  }
+}
+
+TEST_P(VlanTest, IngressVidGetCarriedOverToEgressWhenVlanRewriteIsDisabled) {
+  const sai::Instantiation kInstantiation = GetParam();
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
+      bmv2, kIrP4Info, /*vlan_id_hexstr=*/std::nullopt, kEgressPortProto,
+      /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/true));
+
+  {
+    // Inject packet without a VLAN tag.
+    ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
+                         bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be forwarded with no VLAN tag.
+    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
+                ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
+                            HasHeaderCase(packetlib::Header::kIpv4Header)));
+  }
+  {
+    // Inject VLAN packet with VLAN 0x00b.
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
+                                          /*vid_hexstr=*/"0x00b")));
+    // The packet must be forwarded with VLAN 0x00b.
+    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port.at(kEgressPort)
+                    .packets()
+                    .at(0)
+                    .headers()
+                    .at(1)
+                    .vlan_header()
+                    .vlan_identifier(),
+                Eq("0x00b"));
+  }
+  {
+    // Inject VLAN packet with VLAN 0xfff.
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
+                                          /*vid_hexstr=*/"0xfff")));
+    // The packet must be forwarded with no VLAN tag.
+    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
+                ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
+                            HasHeaderCase(packetlib::Header::kIpv4Header)));
+  }
+}
+
+TEST_P(VlanTest,
+       RifVlanRewriteIsNotEffectiveWhenVlanRewriteIsDisabledInNexthop) {
+  const sai::Instantiation kInstantiation = GetParam();
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
+      bmv2, kIrP4Info, /*vlan_id_hexstr=*/"0x00c", kEgressPortProto,
+      /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/true));
+
+  {
+    // Inject packet without a VLAN tag.
+    ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
+                         bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
+    // The packet must be forwarded with no VLAN tag.
+    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
+                ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
+                            HasHeaderCase(packetlib::Header::kIpv4Header)));
+  }
+  {
+    // Inject VLAN packet with VLAN 0x00b.
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
+                                          /*vid_hexstr=*/"0x00b")));
+    // The packet must be forwarded with VLAN 0x00b.
+    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port.at(kEgressPort)
+                    .packets()
+                    .at(0)
+                    .headers()
+                    .at(1)
+                    .vlan_header()
+                    .vlan_identifier(),
+                Eq("0x00b"));
   }
   {
     // Inject VLAN packet with VLAN 0xfff.
