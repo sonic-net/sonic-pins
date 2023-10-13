@@ -1217,7 +1217,7 @@ actions {
     id: 16777487
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DROP)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DENY)"
   }
 }
 actions {
