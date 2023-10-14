@@ -31,6 +31,7 @@
 // --- Actions -----------------------------------------------------------------
 
 // IDs of fixed SAI actions (8 most significant bits = 0x01).
+#define ROUTING_NO_ACTION_ACTION_ID 0x01798B9E             // 24742814
 #define ROUTING_SET_DST_MAC_ACTION_ID 0x01000001           // 16777217
 #define ROUTING_SET_PORT_AND_SRC_MAC_ACTION_ID 0x01000002  // 16777218
 #define ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID \

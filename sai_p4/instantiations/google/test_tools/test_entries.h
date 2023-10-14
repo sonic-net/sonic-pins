@@ -120,6 +120,9 @@ class EntryBuilder {
   EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
       absl::string_view vlan_id_hexstr, absl::string_view vrf);
   EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf);
+  EntryBuilder& AddEntrySettingVlanIdInPreIngress(
+      absl::string_view set_vlan_id_hexstr,
+      std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt);
 
  private:
   sai::TableEntries entries_;

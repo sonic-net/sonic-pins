@@ -146,6 +146,8 @@ control acl_pre_ingress(in headers_t headers,
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
       headers.ethernet.ether_type : ternary @name("ether_type") @id(4)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
+      local_metadata.vlan_id : ternary @id(5) @name("vlan_id")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
     }
     actions = {
       @proto_id(1) set_outer_vlan_id;
