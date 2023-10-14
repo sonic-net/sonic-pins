@@ -504,4 +504,20 @@ EntryBuilder& EntryBuilder::AddEntrySettingVrfForAllPackets(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
+    absl::string_view set_vlan_id_hexstr,
+    std::optional<absl::string_view> match_vlan_id_hexstr) {
+  sai::AclPreIngressVlanTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_pre_ingress_vlan_table_entry();
+  if (match_vlan_id_hexstr.has_value()) {
+    entry.mutable_match()->mutable_vlan_id()->set_value(*match_vlan_id_hexstr);
+    entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
+  }
+  entry.mutable_action()->mutable_set_outer_vlan_id()->set_vlan_id(
+      set_vlan_id_hexstr);
+  entry.set_priority(1);
+
+  return *this;
+}
+
 }  // namespace sai
