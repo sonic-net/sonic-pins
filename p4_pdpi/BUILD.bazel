@@ -48,6 +48,37 @@ cc_test(
 )
 
 cc_library(
+    name = "reference_annotations",
+    srcs = [
+        "reference_annotations.cc",
+    ],
+    hdrs = [
+        "reference_annotations.h",
+    ],
+    deps = [
+        "//gutil:status",
+        "//p4_pdpi/utils:annotation_parser",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "reference_annotations_test",
+    srcs = [
+        "reference_annotations_test.cc",
+    ],
+    deps = [
+        ":reference_annotations",
+        "//gutil:status_matchers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
     name = "sequencing_util",
     srcs = ["sequencing_util.cc"],
     hdrs = ["sequencing_util.h"],
@@ -221,6 +252,7 @@ cc_library(
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
+        ":reference_annotations",
         ":translation_options",
         "//gutil:collections",
         "//gutil:proto",
