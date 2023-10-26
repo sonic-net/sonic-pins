@@ -12,7 +12,9 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/testing/test_p4info.h"
+#include "p4rt_app/utils/ir_builder.h"
 
 namespace pdpi {
 namespace {
@@ -21,8 +23,12 @@ using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::gutil::ParseProtoOrDie;
 using ::gutil::StatusIs;
+using ::p4rt_app::IrActionDefinitionBuilder;
+using ::p4rt_app::IrP4InfoBuilder;
+using ::p4rt_app::IrTableDefinitionBuilder;
 using ::testing::ElementsAre;
 using ::testing::Eq;
+using ::testing::IsEmpty;
 
 // -- Matchers -----------------------------------------------------------------
 
@@ -372,6 +378,390 @@ TEST(CreateIrFieldFromReferencedBy, FailsWhenReferencedByAction) {
                       .field = param.param().name(),
                   },
                   info),
+              StatusIs(absl::StatusCode::kUnimplemented));
+}
+
+// -- ParseIrTableReferencesTest ------------------------------------------
+
+TEST(ParseIrTableReferences, CreateEmptyListWhenNoReferenceAnnotationsExist) {
+  EXPECT_THAT(ParseIrTableReferences(IrP4Info()), IsOkAndHolds(IsEmpty()));
+}
+
+TEST(ParseIrTableReferences, SucceedsWithMatchToMatchReference) {
+  // Setup: Create p4 info.
+  auto src_table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(id: 2)pb")
+          .name("src_table")
+          .match_field(
+              R"pb(
+                id: 1
+                name: "src_match_field"
+                match_type: EXACT
+                annotations: "@refers_to(dst_table, dst_match_field)"
+              )pb",
+              pdpi::Format::STRING)();
+  auto dst_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 3)pb")
+                       .name("dst_table")
+                       .match_field(
+                           R"pb(
+                             id: 1 name: "dst_match_field" match_type: EXACT
+                           )pb",
+                           pdpi::Format::STRING)();
+  auto info = IrP4InfoBuilder().table(src_table).table(dst_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(
+      ParseIrTableReferences(info),
+      IsOkAndHolds(
+          ElementsAre(EqualsProto(ParseProtoOrDie<IrTableReference>(R"pb(
+            source_table { p4_table { table_name: "src_table" table_id: 2 } }
+            destination_table {
+              p4_table { table_name: "dst_table" table_id: 3 }
+            }
+            field_references {
+              source {
+                match_field { field_name: "src_match_field" field_id: 1 }
+              }
+              destination {
+                match_field { field_name: "dst_match_field" field_id: 1 }
+              }
+            }
+          )pb")))));
+}
+
+TEST(ParseIrTableReferences, SucceedsWithActionToMatchReference) {
+  // Setup: Create p4 info.
+  auto src_action =
+      IrActionDefinitionBuilder()
+          .preamble(R"pb(id: 1)pb")
+          .name("src_action")
+          .param(
+              R"pb(
+                id: 1
+                name: "src_param"
+                annotations: "@refers_to(dst_table, dst_match_field)"
+              )pb")();
+  auto src_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 2)pb")
+                       .name("src_table")
+                       .match_field(
+                           R"pb(
+                             id: 1 name: "src_match_field" match_type: EXACT
+                           )pb",
+                           pdpi::Format::STRING)
+                       .entry_action(src_action)();
+  auto dst_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 3)pb")
+                       .name("dst_table")
+                       .match_field(
+                           R"pb(
+                             id: 1 name: "dst_match_field" match_type: EXACT
+                           )pb",
+                           pdpi::Format::STRING)();
+  auto info =
+      IrP4InfoBuilder().action(src_action).table(src_table).table(dst_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(
+      ParseIrTableReferences(info),
+      IsOkAndHolds(
+          ElementsAre(EqualsProto(ParseProtoOrDie<IrTableReference>(R"pb(
+            source_table { p4_table { table_name: "src_table" table_id: 2 } }
+            destination_table {
+              p4_table { table_name: "dst_table" table_id: 3 }
+            }
+            field_references {
+              source {
+                action_field {
+                  action_name: "src_action"
+                  action_id: 1
+                  parameter_name: "src_param"
+                  parameter_id: 1
+                }
+              }
+              destination {
+                match_field { field_name: "dst_match_field" field_id: 1 }
+              }
+            }
+          )pb")))));
+}
+
+TEST(ParseIrTableReferences, SucceedsWithMatchToBuiltInReference) {
+  // Setup: Create p4 info.
+  auto src_table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(id: 2)pb")
+          .name("src_table")
+          .match_field(
+              R"pb(
+                id: 1
+                name: "src_match_field"
+                match_type: EXACT
+                annotations: "@refers_to(builtin::multicast_group_table, multicast_group_id)"
+              )pb",
+              pdpi::Format::STRING)();
+  auto info = IrP4InfoBuilder().table(src_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(
+      ParseIrTableReferences(info),
+      IsOkAndHolds(
+          ElementsAre(EqualsProto(ParseProtoOrDie<IrTableReference>(R"pb(
+            source_table { p4_table { table_name: "src_table" table_id: 2 } }
+            destination_table {
+              built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+            }
+            field_references {
+              source {
+                match_field { field_name: "src_match_field" field_id: 1 }
+              }
+              destination { built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID }
+            }
+          )pb")))));
+}
+
+TEST(ParseIrTableReferences, SucceedsWithActionToBuiltInReference) {
+  // Setup: Create p4 info.
+  auto src_action =
+      IrActionDefinitionBuilder()
+          .preamble(R"pb(id: 1)pb")
+          .name("src_action")
+          .param(
+              R"pb(
+                id: 1
+                name: "src_param"
+                annotations: "@refers_to(builtin::multicast_group_table, multicast_group_id)"
+              )pb")();
+  auto src_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 2)pb")
+                       .name("src_table")
+                       .match_field(
+                           R"pb(
+                             id: 1 name: "src_match_field" match_type: EXACT
+                           )pb",
+                           pdpi::Format::STRING)
+                       .entry_action(src_action)();
+  auto info = IrP4InfoBuilder().action(src_action).table(src_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(
+      ParseIrTableReferences(info),
+      IsOkAndHolds(
+          ElementsAre(EqualsProto(ParseProtoOrDie<IrTableReference>(R"pb(
+            source_table { p4_table { table_name: "src_table" table_id: 2 } }
+            destination_table {
+              built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+            }
+            field_references {
+              source {
+                action_field {
+                  action_name: "src_action"
+                  action_id: 1
+                  parameter_name: "src_param"
+                  parameter_id: 1
+                }
+              }
+              destination { built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID }
+            }
+          )pb")))));
+}
+
+TEST(ParseIrTableReferences, SucceedsWithBuiltInToMatchReference) {
+  // Setup: Create p4 info.
+  auto dst_table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(id: 3)pb")
+          .name("dst_table")
+          .match_field(
+              R"pb(
+                id: 1
+                name: "dst_match_field"
+                match_type: EXACT
+                annotations: "@referenced_by(builtin::multicast_group_table, replica.instance)"
+              )pb",
+              pdpi::Format::STRING)();
+  auto info = IrP4InfoBuilder().table(dst_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(
+      ParseIrTableReferences(info),
+      IsOkAndHolds(
+          ElementsAre(EqualsProto(ParseProtoOrDie<IrTableReference>(R"pb(
+            source_table {
+              built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+            }
+            destination_table {
+              p4_table { table_name: "dst_table" table_id: 3 }
+            }
+            field_references {
+              source { built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE }
+              destination {
+                match_field { field_name: "dst_match_field" field_id: 1 }
+              }
+            }
+          )pb")))));
+}
+
+TEST(ParseIrTableReferences, FailsWithRefersToUnknown) {
+  // Setup: Create p4 info.
+  auto src_table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(id: 2)pb")
+          .name("src_table")
+          .match_field(
+              R"pb(
+                id: 1
+                name: "src_match_field"
+                match_type: EXACT
+                annotations: "@refers_to(dragon_table, dragon_field)"
+              )pb",
+              pdpi::Format::STRING)();
+  auto info = IrP4InfoBuilder().table(src_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(ParseIrTableReferences(info),
+              StatusIs(absl::StatusCode::kNotFound));
+}
+
+TEST(ParseIrTableReferences, FailsWithRefersToAction) {
+  // Setup: Create p4 info.
+  auto dst_action = IrActionDefinitionBuilder()
+                        .preamble(R"pb(id: 1)pb")
+                        .name("dst_action")
+                        .param(
+                            R"pb(
+                              id: 1 name: "dst_param"
+                            )pb")();
+  auto src_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 2)pb")
+                       .name("src_table")
+                       .match_field(
+                           R"pb(
+                             id: 1
+                             name: "src_match_field"
+                             match_type: EXACT
+                             annotations: "@refers_to(dst_action, dst_param)"
+                           )pb",
+                           pdpi::Format::STRING)();
+  auto info = IrP4InfoBuilder().action(dst_action).table(src_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(ParseIrTableReferences(info),
+              StatusIs(absl::StatusCode::kUnimplemented));
+}
+
+TEST(ParseIrTableReferences, FailsWithReferencedByOnAction) {
+  // Setup: Create p4 info.
+  auto dst_action =
+      IrActionDefinitionBuilder()
+          .preamble(R"pb(id: 1)pb")
+          .name("dst_action")
+          .param(
+              R"pb(
+                id: 1
+                name: "dst_param"
+                annotations: "@referenced_by(src_table, src_match_field)"
+              )pb")();
+  auto src_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 2)pb")
+                       .name("src_table")
+                       .match_field(
+                           R"pb(
+                             id: 1 name: "src_match_field" match_type: EXACT
+                           )pb",
+                           pdpi::Format::STRING)();
+  auto info = IrP4InfoBuilder().action(dst_action).table(src_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(ParseIrTableReferences(info),
+              StatusIs(absl::StatusCode::kUnimplemented));
+}
+
+TEST(ParseIrTableReferences, FailsWithTypeOptional) {
+  // Setup: Create p4 info.
+  auto src_table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(id: 2)pb")
+          .name("src_table")
+          .match_field(
+              R"pb(
+                id: 1
+                name: "src_match_field"
+                match_type: OPTIONAL
+                annotations: "@refers_to(dst_table, dst_match_field)"
+              )pb",
+              pdpi::Format::STRING)();
+  auto dst_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 3)pb")
+                       .name("dst_table")
+                       .match_field(
+                           R"pb(
+                             id: 1 name: "dst_match_field" match_type: EXACT
+                           )pb",
+                           pdpi::Format::STRING)();
+  auto info = IrP4InfoBuilder().table(src_table).table(dst_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(ParseIrTableReferences(info),
+              StatusIs(absl::StatusCode::kUnimplemented));
+}
+
+TEST(ParseIrTableReferences, FailsWithReferenceByThanCanBeRefersTo) {
+  // Setup: Create p4 info.
+  auto src_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 2)pb")
+                       .name("src_table")
+                       .match_field(
+                           R"pb(
+                             id: 1 name: "src_match_field" match_type: EXACT
+                           )pb",
+                           pdpi::Format::STRING)();
+  auto dst_table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(id: 3)pb")
+          .name("dst_table")
+          .match_field(
+              R"pb(
+                id: 1
+                name: "dst_match_field"
+                match_type: EXACT
+                annotations: "@referenced_by(src_table, src_match_field)"
+              )pb",
+              pdpi::Format::STRING)();
+  auto info = IrP4InfoBuilder().table(src_table).table(dst_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(ParseIrTableReferences(info),
+              StatusIs(absl::StatusCode::kUnimplemented));
+}
+
+TEST(ParseIrTableReferences, FailsWithReferenceOnDefaultAction) {
+  // Setup: Create p4 info.
+  auto src_action =
+      IrActionDefinitionBuilder()
+          .preamble(R"pb(id: 1)pb")
+          .name("src_action")
+          .param(
+              R"pb(
+                id: 1
+                name: "src_param"
+                annotations: "@refers_to(builtin::multicast_group_table, multicast_group_id)"
+              )pb")();
+  auto src_table = IrTableDefinitionBuilder()
+                       .preamble(R"pb(id: 2)pb")
+                       .name("src_table")
+                       .match_field(
+                           R"pb(
+                             id: 1 name: "src_match_field" match_type: EXACT
+                           )pb",
+                           pdpi::Format::STRING)
+                       .default_only_action(src_action)();
+  auto info = IrP4InfoBuilder().action(src_action).table(src_table)();
+
+  // Execute and Test:
+  EXPECT_THAT(ParseIrTableReferences(info),
               StatusIs(absl::StatusCode::kUnimplemented));
 }
 
