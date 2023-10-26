@@ -503,7 +503,7 @@ TEST(PacketLib, PadPacketWithEthernetHeader) {
   EXPECT_EQ(current_size + 1, updated_size);
 }
 
-TEST(PacketLib, ButterEncapsulatedPacket) {
+TEST(PacketLib, ExperimentalEncapsulatedPacket) {
   // Packet structure is:
   // Ethernet -> IP -> UDP -> IPFIX -> PSAMP ->
   // Sampled packet (ETH -> IP -> TCP/UDP -> payload)
