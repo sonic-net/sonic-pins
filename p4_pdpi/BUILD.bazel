@@ -266,6 +266,7 @@ cc_library(
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
+        ":built_ins",
         ":ir_cc_proto",
         ":reference_annotations",
         ":translation_options",
@@ -278,6 +279,7 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
