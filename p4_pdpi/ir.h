@@ -52,6 +52,11 @@ absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
     const IrP4Info& info, absl::Span<const p4::v1::TableEntry> pi,
     TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
+absl::StatusOr<IrPacketReplicationEngineEntry>
+PiPacketReplicationEngineEntryToIr(
+    const IrP4Info& info, const p4::v1::PacketReplicationEngineEntry& pi,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+
 absl::StatusOr<IrMulticastGroupEntry> PiMulticastGroupEntryToIr(
     const IrP4Info& info, const p4::v1::MulticastGroupEntry& pi,
     TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
@@ -101,6 +106,11 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     const IrP4Info& info, absl::Span<const IrTableEntry> ir,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+
+absl::StatusOr<p4::v1::PacketReplicationEngineEntry>
+IrPacketReplicationEngineEntryToPi(
+    const IrP4Info& info, const IrPacketReplicationEngineEntry& ir,
     TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
 absl::StatusOr<p4::v1::MulticastGroupEntry> IrMulticastGroupEntryToPi(

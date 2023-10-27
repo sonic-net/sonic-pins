@@ -88,6 +88,34 @@ absl::StatusOr<IrActionField> CreateIrActionField(absl::string_view action_name,
                                                   absl::string_view param_name,
                                                   const IrP4Info &info);
 
+// Returns string representation of `IrTable`. String uniquely identifies table
+// within the scope of a p4 program. String representation differs based on
+// type.
+//   `IrP4Table`: { table_name: "t" } -> "t"
+//   `IrBuiltInTable`: Translation provided by built_ins.h
+//    - BUILT_IN_TABLE_MULTICAST_GROUP_TABLE -> "builtin::multicast_group_table"
+// Returns error if an unknown `IrBuiltInTable` is provided.
+absl::StatusOr<std::string> GetNameOfTable(const IrTable &table);
+
+// Returns string representation of `IrField`. String uniquely identifies field
+// within the scope of a table entry. The string representation differs based on
+// type.
+//   `IrMatchField`: { field_name: "m" } - > "m"
+//   `IrActionField`: {action_name: "a" parameter_name: "p"} -> "a.p"
+//   `IrBuiltInField`: Translation provided by built_ins.h
+//    - BUILT_IN_FIELD_REPLICA_INSTANCE -> "replica.instance"
+// Returns error if an unknown `IrBuiltInField` is provided.
+absl::StatusOr<std::string> GetNameOfField(const IrField &field);
+
+// Returns string representation of action `IrField` belongs to. String
+// uniquely identifies the action within the scope of a table entry. The string
+// representation differs based on type.
+//   `IrMatchField`: Returns error
+//   `IrActionField`: {action_name: "a" parameter_name: "p"} -> "a"
+//   `IrBuiltInField`: refer to implementation details
+// Returns error if an unknown or invalid `IrBuiltInField` is provided.
+absl::StatusOr<std::string> GetNameOfAction(const IrField &field);
+
 }  // namespace pdpi
 
 #endif  // PINS_P4_PDPI_REFERENCE_ANNOTATIONS_H_

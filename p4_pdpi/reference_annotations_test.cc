@@ -114,6 +114,89 @@ TEST(CreateIrTable, FailsForUnknownTable) {
               StatusIs(absl::StatusCode::kNotFound));
 }
 
+// -- GetNameOfTable Tests -----------------------------------------------------
+
+TEST(GetNameOfTable, WorksForP4Table) {
+  EXPECT_THAT(GetNameOfTable(ParseProtoOrDie<IrTable>(R"pb(
+                p4_table { table_name: "table" }
+              )pb")),
+              IsOkAndHolds(Eq("table")));
+}
+
+TEST(GetNameOfTable, WorksForIrBuiltInTable) {
+  EXPECT_THAT(GetNameOfTable(ParseProtoOrDie<IrTable>(R"pb(
+                built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+              )pb")),
+              IsOkAndHolds(Eq("builtin::multicast_group_table")));
+}
+
+TEST(GetNameOfTable, FailsForUnknownIrBuiltInTable) {
+  EXPECT_THAT(GetNameOfTable(ParseProtoOrDie<IrTable>(R"pb(
+                built_in_table: BUILT_IN_TABLE_UNSPECIFIED
+              )pb")),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+// -- GetNameOfField Tests -----------------------------------------------------
+
+TEST(GetNameOfField, WorksForMatchField) {
+  EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
+                match_field { field_name: "field" }
+              )pb")),
+              IsOkAndHolds(Eq("field")));
+}
+
+TEST(GetNameOfField, WorksForActionField) {
+  EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
+                action_field { action_name: "action" parameter_name: "param" }
+              )pb")),
+              IsOkAndHolds(Eq("action.param")));
+}
+
+TEST(GetNameOfField, WorksForBuiltInField) {
+  EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
+                built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+              )pb")),
+              IsOkAndHolds(Eq("replica.instance")));
+}
+
+TEST(GetNameOfField, FailsForUnknownIrBuiltInField) {
+  EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
+                built_in_field: BUILT_IN_FIELD_UNSPECIFIED
+              )pb")),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+// -- GetNameOfActionField -----------------------------------------------------
+
+TEST(GetNameOfAction, WorksForActionField) {
+  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrField>(R"pb(
+                action_field { action_name: "action" parameter_name: "param" }
+              )pb")),
+              IsOkAndHolds(Eq("action")));
+}
+
+TEST(GetNameOfAction, WorksForValidBuiltInField) {
+  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrField>(R"pb(
+                built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+              )pb")),
+              IsOkAndHolds(Eq("replica")));
+}
+
+TEST(GetNameOfAction, FailsForInvalidIrBuiltInField) {
+  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrField>(R"pb(
+                built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+              )pb")),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(GetNameOfAction, FailsForMatchField) {
+  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrField>(R"pb(
+                match_field { field_name: "field" }
+              )pb")),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
 // -- CreateIrField Tests ------------------------------------------------------
 
 TEST(CreateIrBuiltInField, WorksForBuiltInField) {
