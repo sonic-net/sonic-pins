@@ -15,12 +15,14 @@
 #ifndef PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_
 #define PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_
 
+#include <cstdint>
 #include <functional>
 #include <list>
 #include <string>
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
@@ -74,13 +76,21 @@ absl::Status GnmiAble(thinkit::Switch& thinkit_switch,
 absl::Status GnoiAble(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
-// Checks if "oper-status" of all interfaces are "UP". If the interfaces is
+// Checks if "oper-status" of all interfaces are "UP". If the interfaces are
 // provided, checks only those interfaces.
-// Will wait up to `timeout` for the RPC to return. Peforms one request.
+// Will wait up to `timeout` for the RPC to return. Performs one request.
 absl::Status PortsUp(thinkit::Switch& thinkit_switch,
                      absl::Span<const std::string> interfaces = {},
                      bool with_healthz = true,
                      absl::Duration timeout = kDefaultTimeout);
+
+// Checks if "oper-status" of all interfaces are "DOWN". If the interfaces are
+// provided, checks only those interfaces.
+// Will wait up to `timeout` for the RPC to return. Performs one request.
+absl::Status PortsDown(thinkit::Switch& thinkit_switch,
+                       absl::Span<const std::string> interfaces = {},
+                       bool with_healthz = true,
+                       absl::Duration timeout = kDefaultTimeout);
 
 inline absl::Status AllPortsUp(thinkit::Switch& thinkit_switch,
                                bool with_healthz = true,

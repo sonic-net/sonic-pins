@@ -19,7 +19,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -33,12 +32,13 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
+#include "grpcpp/client_context.h"
+#include "grpcpp/support/status.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnoi/gnoi_helper.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "system/system.grpc.pb.h"
 #include "system/system.pb.h"
 #include "thinkit/ssh_client.h"
@@ -219,6 +219,16 @@ absl::Status PortsUp(thinkit::Switch& thinkit_switch,
   LOG(INFO) << "Running PortsUp on " << thinkit_switch.ChassisName() << ".";
   return pins_test::CheckInterfaceOperStateOverGnmi(
       *gnmi_stub, /*interface_oper_state=*/"UP", interfaces,
+      /*skip_non_ethernet_interfaces=*/false, timeout);
+}
+
+absl::Status PortsDown(thinkit::Switch& thinkit_switch,
+                       absl::Span<const std::string> interfaces,
+                       bool with_healthz, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto gnmi_stub, thinkit_switch.CreateGnmiStub());
+  LOG(INFO) << "Running PortsDown on " << thinkit_switch.ChassisName() << ".";
+  return pins_test::CheckInterfaceOperStateOverGnmi(
+      *gnmi_stub, /*interface_oper_state=*/"DOWN", interfaces,
       /*skip_non_ethernet_interfaces=*/false, timeout);
 }
 
