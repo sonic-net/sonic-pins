@@ -158,16 +158,23 @@ absl::StatusOr<SflowBreakoutResult> TestBreakoutWithSflowConfig(
   } else {
     ASSIGN_OR_RETURN(auto port_id_per_port_name,
                      GetAllUpInterfacePortIdsByName(*sut_gnmi_stub));
-    std::vector<absl::string_view> up_ports;
+    std::vector<absl::string_view> up_copper_ports;
     for (const auto& [interface, unused] : port_id_per_port_name) {
-      up_ports.push_back(interface);
+      // Run breakout tests only on copper ports to avoid breakout compatibility
+      // complexity for non-copper ports.
+      if (auto is_copper = IsCopperPort(sut_gnmi_stub.get(), interface);
+          is_copper.ok() && *is_copper) {
+        up_copper_ports.push_back(interface);
+      }
     }
+    RET_CHECK(!up_copper_ports.empty()) << "No UP copper ports found.";
     // Get a random port from list of front panel UP ports that supports at
     // least one breakout mode of required type other than its current mode.
-    ASSIGN_OR_RETURN(selected_port_info,
-                     GetRandomPortWithSupportedBreakoutModes(
-                         *sut_gnmi_stub, platform_json_contents,
-                         BreakoutType::kAny, BreakoutType::kAny, up_ports));
+    ASSIGN_OR_RETURN(
+        selected_port_info,
+        GetRandomPortWithSupportedBreakoutModes(
+            *sut_gnmi_stub, platform_json_contents, BreakoutType::kAny,
+            BreakoutType::kAny, up_copper_ports));
   }
   LOG(INFO) << "Using port " << selected_port_info.port_name
             << " with current breakout mode "
