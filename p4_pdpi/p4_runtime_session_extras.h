@@ -93,7 +93,7 @@ absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                absl::string_view entities);
 
 // Reads table entries from the switch using `p4rt` and returns them in PI
-// representation in an order determined by gutil::TableEntryKey.
+// representation in an order determined by pdpi::TableEntryKey.
 absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
     P4RuntimeSession& p4rt);
 
@@ -102,7 +102,7 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
 absl::StatusOr<IrTableEntries> ReadIrTableEntries(P4RuntimeSession& p4rt);
 
 // Reads table entries from the switch using `p4rt` and returns them in IR
-// representation in an order determined by gutil::TableEntryKey on the
+// representation in an order determined by pdpi::TableEntryKey on the
 // corresponding PI representation. Reads the P4Info used in translation from
 // the switch.
 absl::StatusOr<IrTableEntries> ReadIrTableEntriesSorted(P4RuntimeSession& p4rt);

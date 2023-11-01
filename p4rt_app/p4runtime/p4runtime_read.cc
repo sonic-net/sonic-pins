@@ -22,9 +22,10 @@
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "gutil/status.h"
-#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -112,7 +113,7 @@ absl::Status AppendTableEntryReads(
 
 absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
+    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
         table_entry_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
