@@ -80,7 +80,8 @@ struct SflowMirrorTestParams {
   thinkit::SSHClient* ssh_client;
   std::string sut_gnmi_config;
   std::string control_gnmi_config;
-  p4::config::v1::P4Info p4_info;
+  p4::config::v1::P4Info sut_p4_info;
+  p4::config::v1::P4Info control_p4_info;
 
   // Used for port breakout test.
   std::string platform_json_path;
@@ -97,10 +98,14 @@ class SflowMirrorTestFixture
   void SetUp() override;
 
   void TearDown() override;
-  const p4::config::v1::P4Info& GetP4Info() { return GetParam().p4_info; }
-  const pdpi::IrP4Info& GetIrP4Info() { return ir_p4_info_; }
 
-  pdpi::IrP4Info ir_p4_info_;
+  p4::config::v1::P4Info GetSutP4Info() { return sut_p4_info_; }
+  p4::config::v1::P4Info GetControlP4Info() { return control_p4_info_; }
+  pdpi::IrP4Info GetSutIrP4Info() { return sut_ir_p4_info_; }
+  pdpi::IrP4Info GetControlIrP4Info() { return control_ir_p4_info_; }
+
+  p4::config::v1::P4Info sut_p4_info_, control_p4_info_;
+  pdpi::IrP4Info sut_ir_p4_info_, control_ir_p4_info_;
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
   std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
   std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
