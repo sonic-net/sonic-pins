@@ -9,7 +9,11 @@ tables {
   }
   actions {
     name: "set_multicast_group_id"
-    parameters { name: "multicast_group_id" format: HEX_STRING }
+    parameters {
+      name: "multicast_group_id"
+      format: HEX_STRING
+      bitwidth: 16
+    }
   }
   actions {
     name: "set_nexthop_id"
@@ -42,7 +46,11 @@ tables {
   }
   actions {
     name: "set_multicast_group_id"
-    parameters { name: "multicast_group_id" format: HEX_STRING }
+    parameters {
+      name: "multicast_group_id"
+      format: HEX_STRING
+      bitwidth: 16
+    }
   }
   actions {
     name: "set_nexthop_id"
@@ -93,7 +101,7 @@ tables {
   }
 }
 tables {
-  name: "multicast_source_mac_table"
+  name: "multicast_router_interface_table"
   match_fields { name: "multicast_replica_port" format: STRING type: EXACT }
   match_fields { name: "multicast_replica_instance" format: STRING type: EXACT }
   actions {
@@ -129,6 +137,15 @@ tables {
     name: "set_p2p_tunnel_encap_nexthop"
     parameters { name: "tunnel_id" format: STRING }
   }
+  actions {
+    name: "set_ip_nexthop_and_disable_rewrites"
+    parameters { name: "router_interface_id" format: STRING }
+    parameters { name: "neighbor_id" format: IPV6 }
+    parameters { name: "disable_decrement_ttl" bitwidth: 1}
+    parameters { name: "disable_src_mac_rewrite" bitwidth: 1}
+    parameters { name: "disable_dst_mac_rewrite" bitwidth: 1}
+    parameters { name: "disable_vlan_rewrite" bitwidth: 1}
+  }
 }
 tables {
   name: "router_interface_table"
@@ -161,4 +178,22 @@ tables {
     name: "set_nexthop_id"
     parameters { name: "nexthop_id" format: STRING }
   }
+}
+tables {
+  name: "ipv6_tunnel_termination_table"
+  match_fields { name: "dst_ipv6" format: IPV6 type: TERNARY }
+  actions {
+    name: "mark_for_tunnel_decap_and_set_vrf"
+    parameters { name: "vrf_id" format: STRING }
+  }
+}
+tables {
+  name: "disable_vlan_checks_table"
+  match_fields {
+    name: "dummy_match"
+    format: HEX_STRING
+    bitwidth: 1
+    type: TERNARY
+  }
+  actions { name: "disable_vlan_checks" }
 }
