@@ -68,27 +68,47 @@ control vlan_untag(inout headers_t headers,
   }
 }  // control vlan_untag
 
+control ingress_vlan_checks(inout headers_t headers,
+                            inout local_metadata_t local_metadata,
+                            inout standard_metadata_t standard_metadata) {
+  apply {
+    if (local_metadata.enable_vlan_checks &&
+        !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
+      mark_to_drop(standard_metadata);
+    }
+  }
+}  // control ingress_vlan_checks
+
+// Apply VLAN checks for forwarded packets.
+// TODO: Add VLAN checks for mirrored packets.
+control egress_vlan_checks(inout headers_t headers,
+                           inout local_metadata_t local_metadata,
+                           inout standard_metadata_t standard_metadata) {
+  apply {
+    if (local_metadata.enable_vlan_checks &&
+        !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
+      mark_to_drop(standard_metadata);
+    }
+  }
+} // control egress_vlan_checks
+
+// Add a VLAN tag for forwarded packets that have non-reserved vlan ids.
 control vlan_tag(inout headers_t headers,
                  inout local_metadata_t local_metadata,
                  inout standard_metadata_t standard_metadata) {
   apply {
-      if (IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
-        // No VLAN tag.
-      } else if (local_metadata.enable_vlan_checks) {
-        // With VLAN checks enabled, an egress packet with VIDs besides the
-        // reserved ones (0, 4095) gets dropped.
-        mark_to_drop(standard_metadata);
-      } else {
-        // Add a VLAN tag.
-        headers.vlan.setValid();
-        headers.vlan.priority_code_point = 0;
-        headers.vlan.drop_eligible_indicator = 0;
-        headers.vlan.vlan_id = local_metadata.vlan_id;
-        // Move ethernet.ether_type to vlan.ether_type so that it can be
-        // placed after the VLAN tag during deparsing.
-        headers.vlan.ether_type = headers.ethernet.ether_type;
-        headers.ethernet.ether_type = ETHERTYPE_8021Q;
-      }
+    // TODO: Forward and Multicast packets should be vlan tagged
+    // but not mirrored packets.
+    if (!IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
+      headers.vlan.setValid();
+      headers.vlan.priority_code_point = 0;
+      headers.vlan.drop_eligible_indicator = 0;
+      headers.vlan.vlan_id = local_metadata.vlan_id;
+      // Move ethernet.ether_type to vlan.ether_type so that it can be
+      // placed after the VLAN tag during deparsing.
+      headers.vlan.ether_type = headers.ethernet.ether_type;
+      headers.ethernet.ether_type = ETHERTYPE_8021Q;
+    }
   }
 }  // control vlan_tag
 

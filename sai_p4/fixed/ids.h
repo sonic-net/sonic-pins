@@ -117,14 +117,13 @@
 
 // Macros to determine whether a packet is replicated due to packet in or
 // replicated due to mirroring.
-#define IS_PACKET_IN_COPY(standard_metadata)                            \
-  standard_metadata.instance_type ==                                    \
-      PKT_INSTANCE_TYPE_INGRESS_CLONE&& standard_metadata.egress_rid == \
-      SAI_P4_REPLICA_INSTANCE_PACKET_IN
+// The enclosing bracket pair allows the use of negation with the macros.
+#define IS_PACKET_IN_COPY(standard_metadata)                             \
+  (standard_metadata.instance_type == PKT_INSTANCE_TYPE_INGRESS_CLONE && \
+   standard_metadata.egress_rid == SAI_P4_REPLICA_INSTANCE_PACKET_IN)
 
-#define IS_MIRROR_COPY(standard_metadata)                               \
-  standard_metadata.instance_type ==                                    \
-      PKT_INSTANCE_TYPE_INGRESS_CLONE&& standard_metadata.egress_rid == \
-      SAI_P4_REPLICA_INSTANCE_MIRRORING
+#define IS_MIRROR_COPY(standard_metadata)                                \
+  (standard_metadata.instance_type == PKT_INSTANCE_TYPE_INGRESS_CLONE && \
+   standard_metadata.egress_rid == SAI_P4_REPLICA_INSTANCE_MIRRORING)
 
 #endif  // SAI_IDS_H_
