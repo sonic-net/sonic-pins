@@ -1,9 +1,25 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -135,6 +151,7 @@ constexpr char all_interfaces_req[] =
     R"pb(prefix { origin: "openconfig" }
          path { elem { name: "interfaces" } }
          type: STATE)pb";
+
 constexpr char all_interfaces_resp[] =
     R"pb(notification {
            timestamp: 1631864194292383538
@@ -147,10 +164,25 @@ constexpr char all_interfaces_resp[] =
            }
          }
     )pb";
+
+constexpr char invalid_interfaces_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path { elem { name: "interfaces" } }
+             val {
+               json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":1,\"openconfig-platform-transceiver:transceiver\":\"Ethernet1\"}},{\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":2,\"openconfig-platform-transceiver:transceiver\":\"EthernetABC\"}}]}}"
+             }
+           }
+         }
+    )pb";
+
 constexpr char all_components_req[] =
     R"pb(prefix { origin: "openconfig" }
          path { elem { name: "components" } }
          type: STATE)pb";
+
 constexpr char all_components_resp[] =
     R"pb(notification {
            timestamp: 1631864194292383538
@@ -163,6 +195,33 @@ constexpr char all_components_resp[] =
            }
          }
     )pb";
+
+constexpr char multi_form_factor_components_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path { elem { name: "components" } }
+             val {
+               json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CDGR4_PLUS\",\"form-factor\":\"OSFP\"}}},{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_10GBASE_LR\",\"form-factor\":\"SFP_PLUS\"}}}]}}"
+             }
+           }
+         }
+    )pb";
+
+constexpr char invalid_components_resp[] =
+    R"pb(notification {
+           timestamp: 1631864194292383538
+           prefix { origin: "openconfig" }
+           update {
+             path { elem { name: "components" } }
+             val {
+               json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet1\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_CDGR4_PLUS\",\"form-factor\":\"OSFP\"}}},{\"name\":\"EthernetABC\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_2X400GBASE_DR4\",\"form-factor\":\"OSFP\"}}}]}}"
+             }
+           }
+         }
+    )pb";
+
 constexpr char all_sfpp_components_resp[] =
     R"pb(notification {
            timestamp: 1631864194292383538
@@ -175,7 +234,6 @@ constexpr char all_sfpp_components_resp[] =
            }
          }
     )pb";
-
 
 class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
  protected:
@@ -384,8 +442,9 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
   absl::StatusOr<gnmi::GetResponse> portIDGetResp(absl::string_view port,
                                                   absl::string_view id) {
     gnmi::GetResponse resp;
-    if (!google::protobuf::TextFormat::ParseFromString(absl::Substitute(
-                                                           R"pb(notification {
+    if (!google::protobuf::TextFormat::ParseFromString(
+            absl::Substitute(
+                R"pb(notification {
                        timestamp: 1631864194292383538
                        prefix { origin: "openconfig" }
                        update {
@@ -403,8 +462,8 @@ class GNMIThinkitInterfaceUtilityTest : public ::testing::Test {
                          }
                        }
                      })pb",
-                                                           port, id),
-                                                       &resp)) {
+                port, id),
+            &resp)) {
       return gutil::InternalErrorBuilder().LogError()
              << "Failed to parse response into proto.";
     }
@@ -871,59 +930,6 @@ TEST_F(
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetRandomPortWithSupportedBreakoutModesNoEthernetPortsFoundFailure) {
-  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  const std::string platform_json_contents =
-      R"pb({
-             "interfaces": {
-               "Ethernet1/1/1": {
-                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
-               },
-               "Ethernet1/2/1": {
-                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
-               },
-               "Ethernet1/2/5": { "breakout_modes": "1x200G[100G,40G]" }
-             }
-           }
-      )pb";
-  gnmi::GetRequest req;
-  ASSERT_TRUE(
-      google::protobuf::TextFormat::ParseFromString(all_interfaces_req, &req));
-  gnmi::GetResponse resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(notification {
-             timestamp: 1631864194292383538
-             prefix { origin: "openconfig" }
-             update {
-               path { elem { name: "interfaces" } }
-               val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\"}}, {\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\"}}]}}"
-
-               }
-             }
-           }
-      )pb",
-      &resp));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillByDefault(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
-  gnmi::GetRequest components_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
-                                                            &components_req));
-  gnmi::GetResponse components_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_resp,
-                                                            &components_resp));
-  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
-      .WillByDefault(
-          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
-  EXPECT_THAT(
-      pins_test::GetRandomPortWithSupportedBreakoutModes(
-          *mock_gnmi_stub_ptr, platform_json_contents),
-      StatusIs(absl::StatusCode::kInternal,
-               HasSubstr(
-                   "No random interface with supported breakout modes found")));
-}
-
-TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetRandomPortWithSupportedBreakoutModesNoPortsWithP4rtIDFailure) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   const std::string platform_json_contents =
@@ -951,6 +957,58 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
                path { elem { name: "interfaces" } }
                val {
                  json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1/1/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-platform-transceiver:transceiver\":\"Ethernet1\"}}, {\"name\":\"Ethernet1/2/1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-platform-transceiver:transceiver\":\"Ethernet2\"}}]}}"
+               }
+             }
+           }
+      )pb",
+      &resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillByDefault(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_resp,
+                                                            &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      pins_test::GetRandomPortWithSupportedBreakoutModes(
+          *mock_gnmi_stub_ptr, platform_json_contents),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr(
+                   "No random interface with supported breakout modes found")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetRandomPortWithSupportedBreakoutModesNoEthernetPortsFoundFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  const std::string platform_json_contents =
+      R"pb({
+             "interfaces": {
+               "Ethernet1/1/1": {
+                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
+               },
+               "Ethernet1/2/1": {
+                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
+               },
+               "Ethernet1/2/5": { "breakout_modes": "1x200G[100G,40G]" }
+             }
+           }
+      )pb";
+  gnmi::GetRequest req;
+  ASSERT_TRUE(
+      google::protobuf::TextFormat::ParseFromString(all_interfaces_req, &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(notification {
+             timestamp: 1631864194292383538
+             prefix { origin: "openconfig" }
+             update {
+               path { elem { name: "interfaces" } }
+               val {
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Loopback0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}},{\"name\":\"Loopback1\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 2}}]}}"
                }
              }
            }
@@ -1520,6 +1578,184 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
                    "No random interface with supported breakout modes found")));
 }
 
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetPortSetWithOsfpOpticsFailedInGettingComponents) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetPortSetWithOsfpOpticsInvalidXcvrName) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      invalid_components_resp, &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to parse transceiver number in")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest, TestGetPortSetWithOsfpOpticsSuccess) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      multi_form_factor_components_resp, &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(
+      auto port_set, pins_test::GetPortSetWithOsfpOptics(*mock_gnmi_stub_ptr));
+  absl::flat_hash_set<int> expected_port_set_set = {1};
+  ASSERT_EQ(port_set, expected_port_set_set);
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeInterfacesGetFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeComponentsGetFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeXcvrNotFoundFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(notification {
+             timestamp: 1631864194292383538
+             prefix { origin: "openconfig" }
+             update {
+               path { elem { name: "components" } }
+               val {
+                 json_ietf_val: "{\"openconfig-platform:components\":{\"component\":[{\"name\":\"Ethernet2\",\"state\":{\"empty\":false},\"openconfig-platform-transceiver:transceiver\":{\"state\":{\"ethernet-pmd\":\"ETH_10GBASE_LR\"}}}]}}"
+               }
+             }
+           }
+      )pb",
+      &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      pins_test::GetXcvrToInterfacesMapGivenPmdType(*mock_gnmi_stub_ptr,
+                                                    "ETH_2X400GBASE_DR4"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Transceiver not found for interface Ethernet1/1/1")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeInvalidXcvrName) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      invalid_interfaces_resp, &interfaces_resp));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      invalid_components_resp, &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                  *mock_gnmi_stub_ptr, "ETH_2X400GBASE_DR4"),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to parse transceiver number in")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetXcvrToInterfacesMapGivenPmdTypeSuccess) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  gnmi::GetRequest components_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_req,
+                                                            &components_req));
+  gnmi::GetResponse components_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_components_resp,
+                                                            &components_resp));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  ON_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(components_req), _))
+      .WillByDefault(
+          DoAll(SetArgPointee<2>(components_resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto xcvr_to_interfaces_map,
+                       pins_test::GetXcvrToInterfacesMapGivenPmdType(
+                           *mock_gnmi_stub_ptr, "ETH_2X400GBASE_CR4"));
+  absl::flat_hash_map<int, std::vector<std::string>>
+      expected_xcvr_to_interfaces_map = {{1, {"Ethernet1/1/1"}},
+                                         {2, {"Ethernet1/2/1"}}};
+  ASSERT_EQ(xcvr_to_interfaces_map, expected_xcvr_to_interfaces_map);
+}
+
 TEST_F(GNMIThinkitInterfaceUtilityTest, TestIsSfpPlusPortTrueSuccess) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   gnmi::GetRequest interfaces_req;
@@ -1722,7 +1958,6 @@ TEST_F(
     TestGetExpectedPortInfoForBreakoutModeAlternatedMixedBreakoutModeSuccess) {
   const std::string port = "Ethernet1/1/1";
   absl::string_view breakout_mode = "2x100G(4)+1x200G(4)";
-
   ASSERT_OK_AND_ASSIGN(
       auto breakout_info,
       pins_test::GetExpectedPortInfoForBreakoutMode(port, breakout_mode));
@@ -2024,7 +2259,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
     replace {
       path {}
       val {
-        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/1\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"id\": 1\n             },\n             \"name\": \"Ethernet1/1/1\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_400GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_400GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 8\n             },\n             \"index\": 0\n           } ] } }\n                 }\n               }]\n             }\n           }"
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": \"NONE\",\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/1\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"openconfig-p4rt:id\": 1\n             },\n             \"name\": \"Ethernet1/1/1\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_400GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_400GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 8\n             },\n             \"index\": 0\n           } ] } }\n                 }\n               }]\n             }\n           }"
       }
     })pb";
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
@@ -2068,7 +2303,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
     replace {
       path {}
       val {
-        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/1\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"id\": 1\n             },\n             \"name\": \"Ethernet1/1/1\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/5\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"id\": 2562\n             },\n             \"name\": \"Ethernet1/1/5\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           } ] } }\n                 }\n               }]\n             }\n           }"
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": \"NONE\",\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/1\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"openconfig-p4rt:id\": 1\n             },\n             \"name\": \"Ethernet1/1/1\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": \"NONE\",\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/5\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"openconfig-p4rt:id\": 2562\n             },\n             \"name\": \"Ethernet1/1/5\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           } ] } }\n                 }\n               }]\n             }\n           }"
       }
     }
   )pb";
@@ -2117,7 +2352,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
     replace {
       path {}
       val {
-        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/1\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"id\": 1\n             },\n             \"name\": \"Ethernet1/1/1\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/5\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"id\": 2562\n             },\n             \"name\": \"Ethernet1/1/5\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           } ] } }\n                 }\n               }]\n             }\n           }"
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": \"NONE\",\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/1\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"openconfig-p4rt:id\": 1\n             },\n             \"name\": \"Ethernet1/1/1\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": \"NONE\",\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/5\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"openconfig-p4rt:id\": 2562\n             },\n             \"name\": \"Ethernet1/1/5\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           } ] } }\n                 }\n               }]\n             }\n           }"
       }
     }
   )pb";
@@ -2164,7 +2399,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
     replace {
       path {}
       val {
-        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/1\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"id\": 1\n             },\n             \"name\": \"Ethernet1/1/1\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/5\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"id\": 2562\n             },\n             \"name\": \"Ethernet1/1/5\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/7\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"id\": 3586\n             },\n             \"name\": \"Ethernet1/1/7\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           },{\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n               \"index\": 1,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 2\n             },\n             \"index\": 1\n           } ] } }\n                 }\n               }]\n             }\n           }"
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": \"NONE\",\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/1\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"openconfig-p4rt:id\": 1\n             },\n             \"name\": \"Ethernet1/1/1\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": \"NONE\",\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/5\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"openconfig-p4rt:id\": 2562\n             },\n             \"name\": \"Ethernet1/1/5\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": \"NONE\",\n               \"mtu\": 9216,\n               \"name\": \"Ethernet1/1/7\",\n               \"type\": \"iana-if-type:ethernetCsmacd\",\n               \"openconfig-p4rt:id\": 3586\n             },\n             \"name\": \"Ethernet1/1/7\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           },{\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n               \"index\": 1,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 2\n             },\n             \"index\": 1\n           } ] } }\n                 }\n               }]\n             }\n           }"
       }
     }
   )pb";
@@ -2217,7 +2452,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
     replace {
       path {}
       val {
-        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": false,\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet1/1/1\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\",\n                 \"id\": 1\n               },\n               \"name\": \"Ethernet1/1/1\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n        ,{\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": false,\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet1/1/5\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\",\n                 \"id\": 2562\n               },\n               \"name\": \"Ethernet1/1/5\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n        ,{\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": false,\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet1/1/7\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\",\n                 \"id\": 3586\n               },\n               \"name\": \"Ethernet1/1/7\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n         ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           },{\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n               \"index\": 1,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 2\n             },\n             \"index\": 1\n           } ] } }\n                 }\n               }]\n             }\n           }"
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": \"NONE\",\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet1/1/1\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\",\n                 \"openconfig-p4rt:id\": 1\n               },\n               \"name\": \"Ethernet1/1/1\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n        ,{\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": \"NONE\",\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet1/1/5\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\",\n                 \"openconfig-p4rt:id\": 2562\n               },\n               \"name\": \"Ethernet1/1/5\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n        ,{\n               \"config\": {\n                 \"enabled\": true,\n                 \"loopback-mode\": \"NONE\",\n                 \"mtu\": 9216,\n                 \"name\": \"Ethernet1/1/7\",\n                 \"type\": \"iana-if-type:ethernetCsmacd\",\n                 \"openconfig-p4rt:id\": 3586\n               },\n               \"name\": \"Ethernet1/1/7\",\n               \"openconfig-if-ethernet:ethernet\": {\n                 \"config\": {\n                   \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n                   \"standalone-link-training\": true\n                 }\n               },\n               \"subinterfaces\": {\n                 \"subinterface\":\n                 [ {\n                   \"config\": { \"index\": 0 },\n                   \"index\": 0,\n                   \"openconfig-if-ip:ipv6\": {\n                     \"unnumbered\": { \"config\": { \"enabled\": true } }\n                   }\n                 }]\n               }\n             }\n         ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           },{\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n               \"index\": 1,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 2\n             },\n             \"index\": 1\n           } ] } }\n                 }\n               }]\n             }\n           }"
       }
     }
   )pb";

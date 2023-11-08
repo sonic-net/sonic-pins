@@ -1,3 +1,17 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "tests/thinkit_gnmi_interface_util.h"
 
 #include <grp.h>
@@ -5,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
+#include <cstring>
 #include <ostream>
 #include <string>
 #include <unordered_set>
@@ -23,6 +38,8 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
@@ -31,8 +48,6 @@
 #include "tests/thinkit_util.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
@@ -49,7 +64,7 @@ std::string ConstructSupportedBreakoutMode(absl::string_view num_breakouts,
 }
 
 absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
-    const std::string& interface_info, const std::string_view port,
+    const std::string& interface_info, const absl::string_view port,
     const BreakoutType breakout_type) {
   auto interface_json = json::parse(interface_info);
   // Get breakout modes information from interface entry in platforms.json.
@@ -226,6 +241,70 @@ absl::StatusOr<bool> IsChannelizedBreakoutMode(const std::string& mode) {
   return ((num_breakouts > 1) || absl::StrContains(mode, "+"));
 }
 
+absl::StatusOr<absl::flat_hash_set<int>> GetPortSetWithOsfpOptics(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub) {
+  absl::flat_hash_set<int> optics_set;
+  absl::flat_hash_map<std::string, std::string>
+      transceiver_to_ethernet_pmd_type_map, transceiver_to_form_factor_map;
+  ASSIGN_OR_RETURN(transceiver_to_ethernet_pmd_type_map,
+                   pins_test::GetTransceiverToEthernetPmdMap(sut_gnmi_stub));
+  ASSIGN_OR_RETURN(transceiver_to_form_factor_map,
+                   pins_test::GetTransceiverToFormFactorMap(sut_gnmi_stub));
+  for (const auto& [xcvr_name, form_factor] : transceiver_to_form_factor_map) {
+    if (form_factor != "OSFP") {
+      // Skip non-OSFP transceivers.
+      continue;
+    }
+
+    int xcvr_num;
+    if (!absl::SimpleAtoi(xcvr_name.substr(kEthernetLen), &xcvr_num)) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "Failed to parse transceiver number in " << xcvr_name;
+    }
+
+    if (!transceiver_to_ethernet_pmd_type_map.contains(xcvr_name)) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "Transceiver pmd type not found for " << xcvr_name;
+    }
+
+    std::string ethernet_pmd = transceiver_to_ethernet_pmd_type_map[xcvr_name];
+    if (absl::StrContains(ethernet_pmd, "_CR")) {
+      // Skip coppers. ETH_2X400GBASE_CR4 and ETH_400GBASE_CR8 are coppers.
+      continue;
+    }
+    optics_set.insert(xcvr_num);
+  }
+  return optics_set;
+}
+
+absl::StatusOr<absl::flat_hash_map<int, std::vector<std::string>>>
+GetXcvrToInterfacesMapGivenPmdType(gnmi::gNMI::StubInterface& sut_gnmi_stub,
+                                   absl::string_view pmd_type) {
+  absl::flat_hash_map<int, std::vector<std::string>> xcvr_to_interfaces_map;
+  absl::flat_hash_map<std::string, std::string> interface_to_transceiver_map,
+      transceiver_to_ethernet_pmd_type_map;
+  ASSIGN_OR_RETURN(interface_to_transceiver_map,
+                   pins_test::GetInterfaceToTransceiverMap(sut_gnmi_stub));
+  ASSIGN_OR_RETURN(transceiver_to_ethernet_pmd_type_map,
+                   pins_test::GetTransceiverToEthernetPmdMap(sut_gnmi_stub));
+  for (const auto& [interface, xcvr_name] : interface_to_transceiver_map) {
+    if (!transceiver_to_ethernet_pmd_type_map.contains(xcvr_name)) {
+      return gutil::InternalErrorBuilder().LogError()
+             << "Transceiver not found for interface " << interface;
+    }
+    std::string ethernet_pmd = transceiver_to_ethernet_pmd_type_map[xcvr_name];
+    if (ethernet_pmd == pmd_type) {
+      int xcvr_num;
+      if (!absl::SimpleAtoi(xcvr_name.substr(kEthernetLen), &xcvr_num)) {
+        return gutil::InternalErrorBuilder().LogError()
+               << "Failed to parse transceiver number in " << xcvr_name;
+      }
+      xcvr_to_interfaces_map[xcvr_num].push_back(interface);
+    }
+  }
+  return xcvr_to_interfaces_map;
+}
+
 absl::StatusOr<bool> IsSfpPlusPort(gnmi::gNMI::StubInterface& sut_gnmi_stub,
                                    absl::string_view port_name) {
   absl::flat_hash_map<std::string, std::string> interface_to_transceiver_map,
@@ -257,7 +336,6 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     const std::vector<absl::string_view>& allow_list) {
   // Get map of front panel port to oper-status on the switch.
   absl::flat_hash_map<std::string, std::string> interface_to_oper_status_map;
-
   ASSIGN_OR_RETURN(
       interface_to_oper_status_map,
       GetInterfaceToOperStatusMapOverGnmi(sut_gnmi_stub,
@@ -277,6 +355,7 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     return gutil::InternalErrorBuilder().LogError()
            << "No ports found on switch";
   }
+
   // Consider only ports that have p4rt ID modelled as this ID is required to
   // configure P4RT router interface on the port.
   ASSIGN_OR_RETURN(auto port_id_by_interface,
@@ -308,6 +387,7 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
     if (!port_id_by_interface.contains(port_info.port_name)) {
       continue;
     }
+
     // Consider only operationally up front panel parent ports.
     if (!absl::StartsWith(port_info.port_name, kEthernet)) {
       continue;
@@ -576,9 +656,8 @@ absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
   return (ethernet_pmd.substr(pos + 1, 2) == "CR");
 }
 
-absl::StatusOr<uint32_t>
-ComputePortIDForPort(gnmi::gNMI::StubInterface *sut_gnmi_stub,
-                     absl::string_view port) {
+absl::StatusOr<uint32_t> ComputePortIDForPort(
+    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view port) {
   // Try to get currently configured id for the port from the switch.
   std::string if_state_path =
       absl::StrCat("interfaces/interface[name=", port, "]/state/id");
@@ -607,18 +686,18 @@ ComputePortIDForPort(gnmi::gNMI::StubInterface *sut_gnmi_stub,
 }
 
 absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
-    gnmi::gNMI::StubInterface *sut_gnmi_stub, absl::string_view port,
+    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view port,
     absl::string_view breakout_speed, const bool is_copper_port) {
   ASSIGN_OR_RETURN(auto id, ComputePortIDForPort(sut_gnmi_stub, port));
   auto interface_config = absl::Substitute(
       R"pb({
              "config": {
                "enabled": true,
-               "loopback-mode": false,
+               "loopback-mode": "NONE",
                "mtu": 9216,
                "name": "$0",
                "type": "iana-if-type:ethernetCsmacd",
-               "id": $2
+               "openconfig-p4rt:id": $2
              },
              "name": "$0",
              "openconfig-if-ethernet:ethernet": {
@@ -642,11 +721,11 @@ absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
         R"pb({
                "config": {
                  "enabled": true,
-                 "loopback-mode": false,
+                 "loopback-mode": "NONE",
                  "mtu": 9216,
                  "name": "$0",
                  "type": "iana-if-type:ethernetCsmacd",
-                 "id": $2
+                 "openconfig-p4rt:id": $2
                },
                "name": "$0",
                "openconfig-if-ethernet:ethernet": {
@@ -716,10 +795,10 @@ absl::StatusOr<std::string> GetBreakoutModeConfigJson(
       auto port =
           absl::StrCat(kEthernet, slot_port_lane.slot, "/", slot_port_lane.port,
                        "/", std::to_string(curr_lane_number));
-      ASSIGN_OR_RETURN(auto interface_config,
-                       GenerateInterfaceBreakoutConfig(sut_gnmi_stub, port,
-                                                       breakout_speed,
-                                                       is_copper_port));
+      ASSIGN_OR_RETURN(
+          auto interface_config,
+          GenerateInterfaceBreakoutConfig(sut_gnmi_stub, port, breakout_speed,
+                                          is_copper_port));
       interface_configs.push_back(interface_config);
       int offset = max_channels_in_group / num_breakouts;
       curr_lane_number += offset;
@@ -748,6 +827,7 @@ absl::StatusOr<std::string> GetBreakoutModeConfigJson(
       full_interface_config, absl::StrCat("1/", port_index), port_index,
       full_component_config);
 }
+
 absl::Status GetBreakoutModeConfigFromString(
     gnmi::SetRequest& req, gnmi::gNMI::StubInterface* sut_gnmi_stub,
     const absl::string_view port_index, const absl::string_view intf_name,
@@ -834,8 +914,8 @@ absl::Status ValidateBreakoutState(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::string>
-GetPortIndex(absl::string_view platform_json_contents, absl::string_view port) {
+absl::StatusOr<std::string> GetPortIndex(
+    absl::string_view platform_json_contents, absl::string_view port) {
   // Get interfaces from platform.json.
   const auto platform_json = json::parse(platform_json_contents);
   const auto interfaces_json = platform_json.find(kInterfaces);
