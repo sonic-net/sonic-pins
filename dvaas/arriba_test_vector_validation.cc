@@ -63,7 +63,7 @@ absl::Status ValidateAgaistArribaTestVector(
   }
 
   PacketStatistics packet_statistics;
-  gutil::TestArtifactWriter artifact_writer;
+  gutil::BazelTestArtifactWriter artifact_writer;
 
   // Send tests to switch and collect results.
   ASSIGN_OR_RETURN(

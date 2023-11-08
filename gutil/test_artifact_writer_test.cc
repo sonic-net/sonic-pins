@@ -43,15 +43,15 @@ ArtifactWriterTestMessage GetTestProto() {
   return proto;
 }
 
-TEST(TestArtifactWriterTest, StoreTestArtifact) {
-  TestArtifactWriter artifact_writer;
+TEST(BazelTestArtifactWriterTest, StoreTestArtifact) {
+  BazelTestArtifactWriter artifact_writer;
   EXPECT_OK(
       artifact_writer.StoreTestArtifact(kTestArtifact, "Hello, World!\n"));
   EXPECT_OK(artifact_writer.StoreTestArtifact(kTestArtifact, GetTestProto()));
 }
 
-TEST(TestArtifactWriterTest, AppendToTestArtifact) {
-  TestArtifactWriter artifact_writer;
+TEST(BazelTestArtifactWriterTest, AppendToTestArtifact) {
+  BazelTestArtifactWriter artifact_writer;
   EXPECT_OK(
       artifact_writer.AppendToTestArtifact(kTestArtifact, "Hello, World!\n"));
   EXPECT_OK(
@@ -60,8 +60,8 @@ TEST(TestArtifactWriterTest, AppendToTestArtifact) {
 
 // Sanity check to rule out crashes and error statuses with mixed appends and
 // stores.
-TEST(TestArtifactWriterTest, AppendStoreAppendTestArtifact) {
-  TestArtifactWriter artifact_writer;
+TEST(BazelTestArtifactWriterTest, AppendStoreAppendTestArtifact) {
+  BazelTestArtifactWriter artifact_writer;
   EXPECT_OK(
       artifact_writer.AppendToTestArtifact(kTestArtifact, "Hello, World!\n"));
   EXPECT_OK(artifact_writer.StoreTestArtifact(kTestArtifact, "Hello, Test!\n"));
@@ -88,7 +88,7 @@ TEST(TestArtifactWriterTest, AppendStoreAppendTestArtifact) {
 void RunBenchmark(benchmark::State& state, bool truncate) {
   const int size = state.range(0);
   const std::string filename = "benchmark_file";
-  TestArtifactWriter artifact_writer;
+  BazelTestArtifactWriter artifact_writer;
 
   std::string str(size, 'a');
   if (truncate) {
@@ -128,7 +128,7 @@ BENCHMARK(BM_StoreTestArtifact)
 void BenchmarkAppendTimeBasedOnStartingSize(benchmark::State& state,
                                             int start_size, int append_size) {
   const std::string filename = "benchmark_file";
-  TestArtifactWriter artifact_writer;
+  BazelTestArtifactWriter artifact_writer;
 
   // We create a file of the given size to start, then benchmark the time that
   // appends take.

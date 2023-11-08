@@ -18,6 +18,7 @@ limitations under the License.
 #include <cstdlib>
 #include <filesystem>  // NOLINT: open source code
 #include <fstream>
+#include <ios>
 #include <string>
 #include <system_error>  // NOLINT: open source code
 
@@ -26,7 +27,10 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
+#include "google/protobuf/message.h"
 #include "gtest/gtest.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 
 namespace gutil {
@@ -105,27 +109,31 @@ absl::Status WriteToTestArtifact(
 
 }  // namespace
 
-absl::Status TestArtifactWriter::StoreTestArtifact(absl::string_view filename,
-                                                   absl::string_view contents) {
-  absl::MutexLock lock(&this->write_mutex_);
-  return WriteToTestArtifact(filename, contents, std::ios_base::trunc,
-                             open_file_by_filepath_);
-}
+// -- TestArtifactWriter -------------------------------------------------------
+
 absl::Status TestArtifactWriter::StoreTestArtifact(
     absl::string_view filename, const google::protobuf::Message& proto) {
-  return StoreTestArtifact(filename, proto.DebugString());
-}
-
-absl::Status TestArtifactWriter::AppendToTestArtifact(
-    absl::string_view filename, absl::string_view contents) {
-  absl::MutexLock lock(&this->write_mutex_);
-  return WriteToTestArtifact(filename, contents, std::ios_base::app,
-                             open_file_by_filepath_);
+  return StoreTestArtifact(filename, PrintTextProto(proto));
 }
 absl::Status TestArtifactWriter::AppendToTestArtifact(
     absl::string_view filename, const google::protobuf::Message& proto) {
   return AppendToTestArtifact(filename,
-                              absl::StrCat(proto.DebugString(), "\n"));
+                              absl::StrCat(PrintTextProto(proto), "\n"));
+}
+
+// -- BazelTestArtifactWriter --------------------------------------------------
+
+absl::Status BazelTestArtifactWriter::StoreTestArtifact(
+    absl::string_view filename, absl::string_view contents) {
+  absl::MutexLock lock(&this->write_mutex_);
+  return WriteToTestArtifact(filename, contents, std::ios_base::trunc,
+                             open_file_by_filepath_);
+}
+absl::Status BazelTestArtifactWriter::AppendToTestArtifact(
+    absl::string_view filename, absl::string_view contents) {
+  absl::MutexLock lock(&this->write_mutex_);
+  return WriteToTestArtifact(filename, contents, std::ios_base::app,
+                             open_file_by_filepath_);
 }
 
 }  // namespace gutil
