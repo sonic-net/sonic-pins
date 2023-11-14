@@ -51,11 +51,11 @@ absl::Status AppendAclCounterData(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table) {
-  ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,
-                   TranslatePiTableEntryForOrchAgent(
-                       pi_table_entry, ir_p4_info, translate_port_ids,
-                       port_translation_map, cpu_queue_translator,
-                       /*translate_key_only=*/false));
+  ASSIGN_OR_RETURN(
+      pdpi::IrTableEntry ir_table_entry,
+      TranslatePiTableEntryForOrchAgent(
+          pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
+          cpu_queue_translator, /*translate_key_only=*/false));
 
   RETURN_IF_ERROR(sonic::AppendCounterDataForTableEntry(
       ir_table_entry, p4rt_table, ir_p4_info));
@@ -73,7 +73,7 @@ absl::Status AppendTableEntryReads(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table) {
-  // Fetch the table defintion since it will inform how we process the read
+  // Fetch the table definition since it will inform how we process the read
   // request.
   auto table_def = ir_p4_info.tables_by_id().find(cached_entry.table_id());
   if (table_def == ir_p4_info.tables_by_id().end()) {
@@ -115,8 +115,7 @@ absl::Status AppendTableEntryReads(
 
 absl::StatusOr<p4::v1::ReadResponse> ReadAllEntities(
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
-    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
-        table_entry_cache,
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     CpuQueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
@@ -126,10 +125,13 @@ absl::StatusOr<p4::v1::ReadResponse> ReadAllEntities(
     switch (entity.entity_case()) {
       case p4::v1::Entity::kTableEntry: {
         RETURN_IF_ERROR(SupportedTableEntryRequest(entity.table_entry()));
-        for (const auto& [_, entry] : table_entry_cache) {
-          RETURN_IF_ERROR(AppendTableEntryReads(
-              response, entry, request.role(), ir_p4_info, translate_port_ids,
-              port_translation_map, cpu_queue_translator, p4rt_table));
+        for (const auto& [_, entry] : entity_cache) {
+          if (entry.entity_case() == p4::v1::Entity::kTableEntry) {
+            RETURN_IF_ERROR(AppendTableEntryReads(
+                response, entry.table_entry(), request.role(), ir_p4_info,
+                translate_port_ids, port_translation_map, cpu_queue_translator,
+                p4rt_table));
+          }
         }
         break;
       }

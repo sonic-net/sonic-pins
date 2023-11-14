@@ -307,7 +307,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
       ABSL_GUARDED_BY(server_state_lock_);
 
   // A forwarding pipeline config with a P4Info protobuf will be set once a
-  // controller connects to the swtich. Only after we receive this config can
+  // controller connects to the switch. Only after we receive this config can
   // the P4RT service start processing write requests.
   absl::optional<p4::v1::ForwardingPipelineConfig> forwarding_pipeline_config_
       ABSL_GUARDED_BY(server_state_lock_);
@@ -332,14 +332,26 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   std::unique_ptr<sonic::PacketIoInterface> packetio_impl_
       ABSL_GUARDED_BY(server_state_lock_);
 
-  // Some switch enviornments cannot rely on the SONiC port names, and can
+  /* TODO(PINS): To handle component_state, system_state and netdev_translator later.
+  // When the switch is in critical state the P4RT service shuould not accept
+  // write requests, but can still handle reads.
+  swss::ComponentStateHelperInterface& component_state_;
+  swss::SystemStateHelperInterface& system_state_;
+
+  // Some controllers may want to use port names that include the
+  // slot/port/channel format (e.g. Ethernet1/1/1) which does not work for
+  // Linux's netdev interfaces. This translator can be used to convert the names
+  // into a valid Linux name (e.g. Ethernet1_1_1).
+  swss::IntfTranslator& netdev_translator_ ABSL_GUARDED_BY(server_state_lock_); */
+
+  // Some switch environments cannot rely on the SONiC port names, and can
   // instead choose to use port ID's configured through gNMI.
   const bool translate_port_ids_ ABSL_GUARDED_BY(server_state_lock_);
 
   // Reading a large number of entries from Redis is costly. To improve the
   // read performance we cache table entries in software.
-  absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>
-      table_entry_cache_ ABSL_GUARDED_BY(server_state_lock_);
+  absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> entity_cache_
+      ABSL_GUARDED_BY(server_state_lock_);
 
   // Monitoring resources in hardware can be difficult. For example in WCMP if a
   // port is down the lower layers will remove those path both freeing resources

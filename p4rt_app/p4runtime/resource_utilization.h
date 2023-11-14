@@ -41,7 +41,7 @@ absl::StatusOr<sonic::TableResources> GetResourceUsageForPiTableEntry(
     const pdpi::IrP4Info& ir_p4info, const p4::v1::TableEntry& table_entry);
 
 // Action profiles in P4 allow us to group multiple actions together, and for
-// any given packet only one action is appled. The applied action is choosen
+// any given packet only one action is applied. The applied action is chosen
 // by a selector (e.g. hash). These selectors can place hard limits on the
 // profile that need to be enforced.
 struct ActionProfileResourceCapacity {
@@ -72,8 +72,7 @@ ActionProfileResourceCapacity GetActionProfileResourceCapacity(
 // SumOfActions selectors.
 absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
     const pdpi::IrP4Info& ir_p4info, const sonic::AppDbEntry& app_db_entry,
-    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
-        table_cache,
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>&
         capacity_by_action_profile_name,
     absl::flat_hash_map<std::string, int64_t>& current_batch_resources);

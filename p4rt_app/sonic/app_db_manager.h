@@ -61,29 +61,30 @@ struct TableResources {
 // AppDb entries can be handled in any order by P4RT, but for error reporting
 // purposes we need to keep track of the RPC update index.
 struct AppDbEntry {
-  // A write request sends a list of TableEntries that need to be handled. The
+  // A write request sends a list of Entities that need to be handled. The
   // rpc_index is the index into that list.
   int rpc_index = 0;
 
   // The IR translation of the PI request.
-  pdpi::IrTableEntry entry;
+  pdpi::IrEntity entry;
 
   // Specifies if this request is an INSERT MODIFY or DELETE.
   p4::v1::Update::Type update_type;
 
-  // Normalized PI table entries. Note this will be semantically the same as the
+  // Normalized PI entities. Note this will be semantically the same as the
   // original request, but does not have to be syntactically the same.
-  p4::v1::TableEntry pi_table_entry;
+  p4::v1::Entity pi_entity;
 
   // A unique hash of the entries match fields. Used to identify duplicates and
   // any caching of entries.
-  pdpi::TableEntryKey table_entry_key;
+  pdpi::EntityKey entity_key;
 
   // The net utilization change for table entries with group actions. If the
   // update_type is an insert then this value will simply be the resources for
   // the entry. If the update_type is a modify then this value is the difference
   // between the new and old entries. If the update_type is a delete then this
   // value is the resources of the old entry.
+  // Note: This is only relevant at the moment for tables with action profiles.
   TableResources resource_utilization_change;
 
   // The SWSS OrchAgent that should handle this entry.
@@ -125,8 +126,10 @@ std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table);
 absl::StatusOr<std::string> GetRedisP4rtTableKey(
     const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info);
 
-// Reads an entry from the P4RT_TABLE in the AppStateDb. Returns a failure if
-// the entry does not exist, or cannot be translated into a pdpi::IrTableEntry.
+// Reads a table entry from the P4RT_TABLE in the AppStateDb. Returns a failure
+// if the entry does not exist, or cannot be translated into a pdpi::IrEntity.
+// Note: this function will not be used to read packet replication entries from
+// the P4RT_TABLE.
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key);

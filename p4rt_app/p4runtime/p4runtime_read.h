@@ -31,8 +31,7 @@ namespace p4rt_app {
 // counter data from CounterDb.
 absl::StatusOr<p4::v1::ReadResponse> ReadAllEntities(
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
-    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
-        table_entry_cache,
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     CpuQueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table);

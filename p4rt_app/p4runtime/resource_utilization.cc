@@ -141,11 +141,15 @@ ActionProfileResourceCapacity GetActionProfileResourceCapacity(
 
 absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
     const pdpi::IrP4Info& ir_p4info, const sonic::AppDbEntry& app_db_entry,
-    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
-        table_cache,
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>&
         capacity_by_action_profile_name,
     absl::flat_hash_map<std::string, int64_t>& current_batch_resources) {
+  sonic::TableResources resources;
+  // This function currently only applies to table entries.
+  if (app_db_entry.entry.entity_case() != pdpi::IrEntity::kTableEntry) {
+    return resources;
+  }
   std::optional<sonic::TableResources> new_resources;
   std::optional<sonic::TableResources> old_resources;
 
@@ -154,7 +158,8 @@ absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
   if (app_db_entry.update_type == p4::v1::Update::INSERT ||
       app_db_entry.update_type == p4::v1::Update::MODIFY) {
     absl::StatusOr<sonic::TableResources> table_resources =
-        GetResourceUsageForIrTableEntry(ir_p4info, app_db_entry.entry);
+        GetResourceUsageForIrTableEntry(ir_p4info,
+                                        app_db_entry.entry.table_entry());
     if (!table_resources.ok()) {
       LOG(WARNING) << "Could not get table entry's resources: "
                    << table_resources.status();
@@ -170,13 +175,14 @@ absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
   if (app_db_entry.update_type == p4::v1::Update::MODIFY ||
       app_db_entry.update_type == p4::v1::Update::DELETE) {
     const auto* cache_entry =
-        gutil::FindOrNull(table_cache, app_db_entry.table_entry_key);
+        gutil::FindOrNull(entity_cache, app_db_entry.entity_key);
     if (cache_entry == nullptr) {
       return gutil::NotFoundErrorBuilder() << "[P4RT App] Could not find cache "
                                               "entry for resource accounting.";
     }
     absl::StatusOr<sonic::TableResources> cache_resources =
-        GetResourceUsageForPiTableEntry(ir_p4info, *cache_entry);
+        GetResourceUsageForPiTableEntry(ir_p4info,
+                                        (*cache_entry).table_entry());
     if (!cache_resources.ok()) {
       LOG(WARNING) << "Could not get cached entry's resources: "
                    << cache_resources.status();
@@ -191,7 +197,6 @@ absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
   // resource is used, but for MODIFY both will be used. If we are adding new
   // resources we also have to take into consideration if the request has too
   // many actions.
-  sonic::TableResources resources;
   int32_t actions_in_new_request = 0;
   if (new_resources.has_value() && new_resources->action_profile.has_value()) {
     resources.name = new_resources->name;
