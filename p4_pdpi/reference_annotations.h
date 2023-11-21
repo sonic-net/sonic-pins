@@ -68,25 +68,43 @@ absl::StatusOr<IrField> CreateIrFieldFromReferencedBy(
 absl::StatusOr<IrTable> CreateIrTable(absl::string_view table_name,
                                       const IrP4Info &info);
 
-// Returns the `IrBuiltInField` named by `field_name`, or an error if
-// `table_name` does not name a built-in table containing a field named
-// `field_name`.
-absl::StatusOr<IrBuiltInField> CreateIrBuiltInField(
-    absl::string_view table_name, absl::string_view field_name);
-
-// Returns an `IrMatchField` whose name and ID are from the definition of
-// `field_name` in `table_name` in `info`. Returns error if `table_name` or
-// `field_name` do not exist in `info`.
+// Returns an `IrMatchField` corresponding to `field_name` in `table_name`.
+// `table_name` and `field_name` can be user-defined or built-in. Returns error
+// if `table_name` or `field_name` does not exist.
 absl::StatusOr<IrMatchField> CreateIrMatchField(absl::string_view table_name,
                                                 absl::string_view field_name,
                                                 const IrP4Info &info);
 
-// Returns an `IrActionField` whose name and ID are from the definition of
-// `param_name` in `action_name` in `info`. Returns error if `action_name` or
-// `param_name` do not exist in `info`.
+// Returns an `IrActionField` corresponding to `param_name` in `action_name`.
+// `action_name` and `param_name` can be user-defined or built-in. Returns error
+// if `action_name` or `param_name` does not exist.
 absl::StatusOr<IrActionField> CreateIrActionField(absl::string_view action_name,
                                                   absl::string_view param_name,
                                                   const IrP4Info &info);
+
+// Returns string representation of `IrTable`. String uniquely identifies table
+// within the scope of a p4 program.
+// Returns error if an unknown `IrBuiltInTable` is provided.
+absl::StatusOr<std::string> GetNameOfTable(const IrTable &table);
+
+// Returns string representation of `IrField`. String uniquely identifies field
+// within the scope of a table entry. The string representation differs based on
+// type.
+//   `IrMatchField`: { field_name: "m" } -> "m"
+//   `IrActionField`: { action_name: "a" parameter_name: "p" } -> "a.p"
+// Returns error if an unknown `IrBuiltInField` is provided.
+absl::StatusOr<std::string> GetNameOfField(const IrField &field);
+
+// Returns string representation of action `IrField` belongs to. String
+// uniquely identifies the action within the scope of a table entry.
+// Returns error if an unknown or invalid `IrBuiltInActionField` is provided.
+absl::StatusOr<std::string> GetNameOfAction(const IrActionField &field);
+
+// Returns true if 'field' is optional. Only IrP4MatchFields can be optional.
+// All other fields (including unset fields) will return false.
+bool FieldIsOptional(const IrField &field);
+bool FieldIsOptional(const IrMatchField &match_field);
+bool FieldIsOptional(const IrP4MatchField &p4_match_field);
 
 }  // namespace pdpi
 

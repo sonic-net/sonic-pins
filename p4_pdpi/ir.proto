@@ -59,35 +59,74 @@ message IrMatchFieldReference {
 
 // Uniquely identifies a user-defined (not built-in) match field within the
 // context of a table.
-message IrMatchField {
+message IrP4MatchField {
   string field_name = 1;
   uint32 field_id = 2;
 }
 
+// Uniquely identifies a built-in (not user-defined) match field within the
+// context of a table. Each field corresponds to a field in the P4Runtime proto
+// and has a unique string representation to be used within
+// `@refers_to`/`@referenced_by` annotations.
+enum IrBuiltInMatchField {
+  BUILT_IN_MATCH_FIELD_UNSPECIFIED = 0;
+  // Corresponds to p4::v1::MulticastGroupEntry::multicast_group_id.
+  // String representation in annotations: "multicast_group_id"
+  BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID = 1;
+}
+
+// Uniquely identifies a match field within the context of a table.
+message IrMatchField {
+  oneof match_field {
+    IrP4MatchField p4_match_field = 1;
+    IrBuiltInMatchField built_in_match_field = 2;
+  }
+}
+
 // Uniquely identifies a user-defined (not built-in) parameter of an action
 // within the context of a table.
-message IrActionField {
+message IrP4ActionField {
   string action_name = 1;
   uint32 action_id = 2;
   string parameter_name = 3;
   uint32 parameter_id = 4;
 }
 
-// Uniquely identifies a built-in (not user-defined) field within the
-// context of a table. Each field corresponds to a field in the P4Runtime proto
-// and has a unique string representation to be used within
-// `@refers_to`/`@referenced_by` annotations.
-enum IrBuiltInField {
-  BUILT_IN_FIELD_UNSPECIFIED = 0;
-  // Corresponds to p4::v1::MulticastGroupEntry::multicast_group_id.
-  // String representation in annotations: "multicast_group_id"
-  BUILT_IN_FIELD_MULTICAST_GROUP_ID = 1;
+// Uniquely identifies a built-in (not user-defined) action. Each action
+// corresponds to a message in the P4Runtime proto and has a unique string
+// representation to be used within annotations.
+enum IrBuiltInAction {
+  BUILT_IN_ACTION_UNSPECIFIED = 0;
+  // Corresponds to p4::v1::Replica.
+  // String representation in annotations: "builtin::replica"
+  BUILT_IN_ACTION_REPLICA = 1;
+}
+
+// Uniquely identifies a built-in (not user-defined) parameter. Each field
+// corresponds to a field in the P4Runtime proto and has a unique string
+// representation to be used within `@refers_to`/`@referenced_by` annotations.
+enum IrBuiltInParameter {
+  BUILT_IN_PARAMETER_UNSPECIFIED = 0;
   // Corresponds to p4::v1::Replica::port.
   // String representation in annotations: "replica.port"
-  BUILT_IN_FIELD_REPLICA_PORT = 2;
+  BUILT_IN_PARAMETER_REPLICA_PORT = 1;
   // Corresponds to p4::v1::Replica::instance.
   // String representation in annotations: "replica.instance"
-  BUILT_IN_FIELD_REPLICA_INSTANCE = 3;
+  BUILT_IN_PARAMETER_REPLICA_INSTANCE = 2;
+}
+
+// Uniquely identifies a built-in (not user-defined) parameter of an action
+// within the context of a table.
+message IrBuiltInActionField {
+  IrBuiltInAction action = 1;
+  IrBuiltInParameter parameter = 2;
+}
+
+message IrActionField {
+  oneof action_field {
+    IrP4ActionField p4_action_field = 1;
+    IrBuiltInActionField built_in_action_field = 2;
+  }
 }
 
 // Uniquely identifies a field within the context of a table.
@@ -95,7 +134,6 @@ message IrField {
   oneof field {
     IrMatchField match_field = 1;
     IrActionField action_field = 2;
-    IrBuiltInField built_in_field = 3;
   }
 }
 

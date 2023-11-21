@@ -70,33 +70,10 @@ absl::StatusOr<IrTable> CreateIrBuiltInTable(absl::string_view table_name) {
   ir_table.set_built_in_table(table);
   return ir_table;
 }
-}  // namespace
 
-absl::StatusOr<IrTable> CreateIrTable(absl::string_view table_name,
-                                      const IrP4Info &info) {
-  if (IsBuiltInTable(table_name)) {
-    return CreateIrBuiltInTable(table_name);
-  } else {
-    return CreateIrP4Table(table_name, info);
-  }
-}
-
-absl::StatusOr<IrBuiltInField> CreateIrBuiltInField(
-    absl::string_view table_name, absl::string_view field_name) {
-  ASSIGN_OR_RETURN(IrBuiltInTable table, StringToIrBuiltInTable(table_name));
-  ASSIGN_OR_RETURN(IrBuiltInField field, StringToIrBuiltInField(field_name));
-  if (!BuiltInTableHasField(table, field)) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Built-in table '" << table_name << "' does have built-in field '"
-           << field_name << "'.";
-  }
-
-  return field;
-}
-
-absl::StatusOr<IrMatchField> CreateIrMatchField(absl::string_view table_name,
-                                                absl::string_view field_name,
-                                                const IrP4Info &info) {
+absl::StatusOr<IrMatchField> CreateIrP4MatchField(absl::string_view table_name,
+                                                  absl::string_view field_name,
+                                                  const IrP4Info &info) {
   ASSIGN_OR_RETURN(const IrTableDefinition *table,
                    gutil::FindPtrOrStatus(info.tables_by_name(), table_name));
   ASSIGN_OR_RETURN(
@@ -112,27 +89,166 @@ absl::StatusOr<IrMatchField> CreateIrMatchField(absl::string_view table_name,
                   match_field->match_field().match_type());
   }
 
-  IrMatchField field;
-  field.set_field_name(field_name);
-  field.set_field_id(match_field->match_field().id());
-  return field;
+  IrMatchField ir_match_field;
+  ir_match_field.mutable_p4_match_field()->set_field_name(field_name);
+  ir_match_field.mutable_p4_match_field()->set_field_id(
+      match_field->match_field().id());
+  return ir_match_field;
 }
 
-absl::StatusOr<IrActionField> CreateIrActionField(absl::string_view action_name,
-                                                  absl::string_view param_name,
-                                                  const IrP4Info &info) {
+absl::StatusOr<IrMatchField> CreateIrBuiltInMatchField(
+    absl::string_view table_name, absl::string_view field_name) {
+  ASSIGN_OR_RETURN(IrBuiltInTable table, StringToIrBuiltInTable(table_name));
+  ASSIGN_OR_RETURN(IrBuiltInMatchField field,
+                   StringToIrBuiltInMatchField(field_name));
+  if (!BuiltInTableHasMatchField(table, field)) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Built-in table '" << table_name
+           << "' does not have built-in match field '" << field_name << "'.";
+  }
+  IrMatchField ir_match_field;
+  ir_match_field.set_built_in_match_field(field);
+  return ir_match_field;
+}
+
+absl::StatusOr<IrActionField> CreateIrP4ActionField(
+    absl::string_view action_name, absl::string_view param_name,
+    const IrP4Info &info) {
   ASSIGN_OR_RETURN(const IrActionDefinition *action,
                    gutil::FindPtrOrStatus(info.actions_by_name(), action_name));
   ASSIGN_OR_RETURN(
       const IrActionDefinition::IrActionParamDefinition *param,
       gutil::FindPtrOrStatus(action->params_by_name(), param_name));
 
-  IrActionField field;
-  field.set_action_name(action_name);
-  field.set_action_id(action->preamble().id());
-  field.set_parameter_name(param_name);
-  field.set_parameter_id(param->param().id());
-  return field;
+  IrActionField ir_action_field;
+  ir_action_field.mutable_p4_action_field()->set_action_name(action_name);
+  ir_action_field.mutable_p4_action_field()->set_action_id(
+      action->preamble().id());
+  ir_action_field.mutable_p4_action_field()->set_parameter_name(param_name);
+  ir_action_field.mutable_p4_action_field()->set_parameter_id(
+      param->param().id());
+  return ir_action_field;
+}
+
+absl::StatusOr<IrActionField> CreateIrBuiltInActionField(
+    absl::string_view action_name, absl::string_view param_name) {
+  ASSIGN_OR_RETURN(IrBuiltInAction action,
+                   StringToIrBuiltInAction(action_name));
+  ASSIGN_OR_RETURN(IrBuiltInParameter parameter,
+                   StringToIrBuiltInParameter(param_name));
+  if (!BuiltInActionHasParameter(action, parameter)) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Built-in action '" << action_name
+           << "' does not have built-in parameter '" << param_name << "'.";
+  }
+  IrActionField ir_action_field;
+  ir_action_field.mutable_built_in_action_field()->set_action(action);
+  ir_action_field.mutable_built_in_action_field()->set_parameter(parameter);
+  return ir_action_field;
+}
+
+}  // namespace
+
+absl::StatusOr<IrTable> CreateIrTable(absl::string_view table_name,
+                                      const IrP4Info &info) {
+  if (IsBuiltInTable(table_name)) {
+    return CreateIrBuiltInTable(table_name);
+  } else {
+    return CreateIrP4Table(table_name, info);
+  }
+}
+
+absl::StatusOr<IrMatchField> CreateIrMatchField(absl::string_view table_name,
+                                                absl::string_view field_name,
+                                                const IrP4Info &info) {
+  if (IsBuiltInTable(table_name)) {
+    return CreateIrBuiltInMatchField(table_name, field_name);
+  } else {
+    return CreateIrP4MatchField(table_name, field_name, info);
+  }
+}
+
+absl::StatusOr<IrActionField> CreateIrActionField(absl::string_view action_name,
+                                                  absl::string_view param_name,
+                                                  const IrP4Info &info) {
+  if (IsBuiltInAction(action_name)) {
+    return CreateIrBuiltInActionField(action_name, param_name);
+  } else {
+    return CreateIrP4ActionField(action_name, param_name, info);
+  }
+}
+
+absl::StatusOr<std::string> GetNameOfTable(const IrTable &table) {
+  switch (table.table_case()) {
+    case IrTable::kP4Table: {
+      return table.p4_table().table_name();
+    }
+    case IrTable::kBuiltInTable: {
+      return IrBuiltInTableToString(table.built_in_table());
+    }
+    case IrTable::TABLE_NOT_SET: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "IrTable table oneof not set.";
+    }
+  }
+}
+
+absl::StatusOr<std::string> GetNameOfField(const IrField &field) {
+  switch (field.field_case()) {
+    case IrField::kMatchField: {
+      switch (field.match_field().match_field_case()) {
+        case IrMatchField::kP4MatchField: {
+          return field.match_field().p4_match_field().field_name();
+        }
+        case IrMatchField::kBuiltInMatchField: {
+          return IrBuiltInMatchFieldToString(
+              field.match_field().built_in_match_field());
+        }
+        case IrMatchField::MATCH_FIELD_NOT_SET: {
+          return gutil::InvalidArgumentErrorBuilder()
+                 << "IrMatchField match_field oneof not set."
+                 << field.DebugString();
+        }
+      }
+    }
+    case IrField::kActionField: {
+      switch (field.action_field().action_field_case()) {
+        case IrActionField::kP4ActionField: {
+          return absl::StrCat(
+              field.action_field().p4_action_field().action_name(), ".",
+              field.action_field().p4_action_field().parameter_name());
+        }
+        case IrActionField::kBuiltInActionField: {
+          return IrBuiltInParameterToString(
+              field.action_field().built_in_action_field().parameter());
+        }
+        case IrActionField::ACTION_FIELD_NOT_SET: {
+          return gutil::InvalidArgumentErrorBuilder()
+                 << "IrActionField action_field oneof not set."
+                 << field.DebugString();
+        }
+      }
+    }
+    case IrField::FIELD_NOT_SET: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "IrField field oneof not set.";
+    }
+  }
+}
+
+absl::StatusOr<std::string> GetNameOfAction(const IrActionField &field) {
+  switch (field.action_field_case()) {
+    case IrActionField::kP4ActionField: {
+      return field.p4_action_field().action_name();
+    }
+    case IrActionField::kBuiltInActionField: {
+      return IrBuiltInActionToString(field.built_in_action_field().action());
+    }
+    case IrField::FIELD_NOT_SET: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "IrActionField field oneof not set.";
+    }
+  }
 }
 
 absl::StatusOr<std::vector<ParsedRefersToAnnotation>>
@@ -150,7 +266,9 @@ ParseAllReferencedByAnnotations(
 
 absl::StatusOr<IrField> CreateIrFieldFromRefersTo(
     const ParsedRefersToAnnotation &annotation, const IrP4Info &info) {
-  if (info.actions_by_name().contains(annotation.table)) {
+  if (info.actions_by_name().contains(annotation.table) ||
+      (IsBuiltInTable(annotation.table) &&
+       StringToIrBuiltInParameter(annotation.field).ok())) {
     return gutil::UnimplementedErrorBuilder()
            << "@refers_to(" << annotation.table << "," << annotation.field
            << ") refers to an action. References to actions are not "
@@ -158,30 +276,25 @@ absl::StatusOr<IrField> CreateIrFieldFromRefersTo(
   }
 
   IrField result;
-  if (IsBuiltInTable(annotation.table)) {
-    ASSIGN_OR_RETURN(IrBuiltInField built_in_field,
-                     CreateIrBuiltInField(annotation.table, annotation.field),
-                     _.SetPrepend()
-                         << "Failed to create IrField from @refers_to: ");
-    result.set_built_in_field(built_in_field);
-  } else {
-    ASSIGN_OR_RETURN(
-        *result.mutable_match_field(),
-        CreateIrMatchField(annotation.table, annotation.field, info),
-        _.SetPrepend() << "Failed to create IrField from @refers_to: ");
-  }
-
+  ASSIGN_OR_RETURN(*result.mutable_match_field(),
+                   CreateIrMatchField(annotation.table, annotation.field, info),
+                   _.SetPrepend()
+                       << "Failed to create IrField from @refers_to: ");
   return result;
 }
 
 absl::StatusOr<IrField> CreateIrFieldFromReferencedBy(
     const ParsedReferencedByAnnotation &annotation, const IrP4Info &info) {
-  if (info.tables_by_name().contains(annotation.table) ||
-      info.actions_by_name().contains(annotation.table)) {
+  absl::StatusOr<IrBuiltInTable> built_in_table =
+      StringToIrBuiltInTable(annotation.table);
+  std::string error_string = "Failed to create IrField from @referenced_by: ";
+
+  if (!built_in_table.ok()) {
     return gutil::UnimplementedErrorBuilder()
+           << error_string
            << "@reference_by should only be used for built-ins, references "
-              "from p4 tables or actions should be captured using "
-              "@refers_to. @referenced_by("
+              "from p4 tables or actions should be captured using @refers_to. "
+              "@referenced_by("
            << annotation.table << "," << annotation.field
            << ") should be replaced with an appropriate @refers_to annotation "
               "at field '"
@@ -189,11 +302,32 @@ absl::StatusOr<IrField> CreateIrFieldFromReferencedBy(
   }
 
   IrField result;
-  ASSIGN_OR_RETURN(IrBuiltInField built_in_field,
-                   CreateIrBuiltInField(annotation.table, annotation.field),
-                   _.SetPrepend()
-                       << "Failed to create IrField from @referenced_by: ");
-  result.set_built_in_field(built_in_field);
+  if (StringToIrBuiltInMatchField(annotation.field).ok()) {
+    ASSIGN_OR_RETURN(
+        *result.mutable_match_field(),
+        CreateIrMatchField(annotation.table, annotation.field, info),
+        _.SetPrepend() << error_string);
+  } else if (absl::StatusOr<IrBuiltInParameter> param =
+                 StringToIrBuiltInParameter(annotation.field);
+             param.ok()) {
+    ASSIGN_OR_RETURN(IrBuiltInAction action,
+                     GetBuiltInActionFromBuiltInParameter(*param));
+    ASSIGN_OR_RETURN(std::string action_name, IrBuiltInActionToString(action));
+    if (!BuiltInTableHasAction(*built_in_table, action)) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << error_string << "Built-in table '" << annotation.table
+             << "' does not have built-in action '" << action_name << "'.";
+    }
+    ASSIGN_OR_RETURN(*result.mutable_action_field(),
+                     CreateIrActionField(action_name, annotation.field, info),
+                     _.SetPrepend() << error_string);
+  } else {
+    return gutil::InvalidArgumentErrorBuilder()
+           << error_string << "'" << annotation.field << "' in @referenced_by("
+           << annotation.table << "," << annotation.field
+           << ") is not a known built-in match field or parameter.";
+  }
+
   return result;
 }
 
