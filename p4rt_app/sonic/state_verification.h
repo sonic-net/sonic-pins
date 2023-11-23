@@ -20,6 +20,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "p4rt_app/sonic/packet_replication_entry_translation.h"
+#include "p4rt_app/sonic/redis_connections.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -41,6 +43,14 @@ std::vector<std::string> VerifyAppStateDbAndAppDbEntries(
 std::vector<std::string> VerifyP4rtTableWithCacheEntities(
     TableAdapter& app_db, const std::vector<pdpi::IrEntity>& ir_entities,
     const pdpi::IrP4Info& ir_p4_info);
+
+// Reads all the packet replication entries out of the P4RT table and compares
+// the values to a list of PI PacketReplicationEntries.
+// On success, an empty vector is returned.  Otherwise, the vector will contain
+// an error message for each problem found.
+std::vector<std::string> VerifyPacketReplicationWithCacheEntities(
+    P4rtTable& p4rt_table,
+    const std::vector<pdpi::IrEntity>& cache_ir_entities);
 
 }  // namespace sonic
 }  // namespace p4rt_app

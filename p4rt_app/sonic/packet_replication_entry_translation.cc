@@ -14,11 +14,15 @@
 
 #include "p4rt_app/sonic/packet_replication_entry_translation.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
+#include "absl/container/btree_set.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
@@ -91,6 +95,54 @@ std::string CreateEntryForDelete(
   p4rt_deletes.push_back(std::move(key_value));
 
   return key;
+}
+
+void ComparePacketReplicationEntities(const pdpi::IrEntity& entity_app_db,
+                                      const pdpi::IrEntity& entity_cache,
+                                      std::vector<std::string>& failures) {
+  const auto& group_entry_app_db =
+      entity_app_db.packet_replication_engine_entry().multicast_group_entry();
+  const auto& group_entry_cache =
+      entity_cache.packet_replication_engine_entry().multicast_group_entry();
+
+  // There's no need to check the multicast group ID, since the caller only
+  // attempts to compare entities with equal multicast group IDs.
+
+  absl::btree_set<std::string> port_instance_app_db;
+  for (const auto& replica : group_entry_app_db.replicas()) {
+    std::string pi = absl::StrCat(replica.port(), "_", replica.instance());
+    port_instance_app_db.insert(pi);
+  }
+
+  absl::btree_set<std::string> port_instance_cache;
+  for (const auto& replica : group_entry_cache.replicas()) {
+    std::string pi = absl::StrCat(replica.port(), "_", replica.instance());
+    port_instance_cache.insert(pi);
+  }
+
+  // Check difference between App DB and the cache.
+  std::vector<std::string> differences;
+  std::set_difference(port_instance_app_db.begin(), port_instance_app_db.end(),
+                      port_instance_cache.begin(), port_instance_cache.end(),
+                      std::inserter(differences, differences.begin()));
+
+  for (const auto& difference : differences) {
+    failures.push_back(absl::StrCat(
+        "Packet replication cache is missing replica ", difference,
+        " for group id ", group_entry_app_db.multicast_group_id()));
+  }
+
+  // Check difference between cache and App DB.
+  differences.clear();
+  std::set_difference(port_instance_cache.begin(), port_instance_cache.end(),
+                      port_instance_app_db.begin(), port_instance_app_db.end(),
+                      std::inserter(differences, differences.begin()));
+
+  for (const auto& difference : differences) {
+    failures.push_back(absl::StrCat("APP DB is missing replica ", difference,
+                                    " for group id ",
+                                    group_entry_app_db.multicast_group_id()));
+  }
 }
 
 }  // namespace
@@ -180,6 +232,50 @@ GetAllAppDbPacketReplicationTableEntries(P4rtTable& p4rt_table) {
     pre_entries.push_back(pre_entry);
   }
   return pre_entries;
+}
+
+std::vector<std::string> ComparePacketReplicationTableEntries(
+    const std::vector<pdpi::IrEntity>& entries_app_db,
+    const std::vector<pdpi::IrEntity>& entries_cache) {
+  std::vector<std::string> failures;
+
+  // Multicast group ID -> IrEntity.
+  absl::btree_map<uint32_t, pdpi::IrEntity> map_app_db;
+  absl::btree_map<uint32_t, pdpi::IrEntity> map_cache;
+
+  for (const auto& entry : entries_app_db) {
+    map_app_db[entry.packet_replication_engine_entry()
+                   .multicast_group_entry()
+                   .multicast_group_id()] = entry;
+  }
+
+  for (const auto& entry : entries_cache) {
+    map_cache[entry.packet_replication_engine_entry()
+                  .multicast_group_entry()
+                  .multicast_group_id()] = entry;
+  }
+
+  for (const auto& id_and_entry : map_app_db) {
+    if (map_cache.find(id_and_entry.first) == map_cache.end()) {
+      failures.push_back(
+          absl::StrCat("Packet replication cache is missing multicast group ",
+                       "ID ", id_and_entry.first));
+      continue;
+    }
+    ComparePacketReplicationEntities(id_and_entry.second,
+                                     map_cache[id_and_entry.first], failures);
+  }
+
+  for (const auto& id_and_entry : map_cache) {
+    if (map_app_db.find(id_and_entry.first) == map_app_db.end()) {
+      failures.push_back(absl::StrCat("APP DB is missing multicast group ID ",
+                                      id_and_entry.first));
+    }
+    // There's no need to compare entities here, since all overlapping entities
+    // were checked in the previous for loop.
+  }
+
+  return failures;
 }
 
 }  // namespace sonic
