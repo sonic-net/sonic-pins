@@ -25,6 +25,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/sonic/packet_replication_entry_translation.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/json.h"
 #include <nlohmann/json.hpp>

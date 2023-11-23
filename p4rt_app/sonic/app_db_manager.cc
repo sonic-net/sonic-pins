@@ -37,6 +37,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
+#include "p4rt_app/sonic/packet_replication_entry_translation.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
 #include "p4rt_app/sonic/vrf_entry_translation.h"
@@ -459,39 +460,55 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
                               entry.entry.table_entry(), *response));
       if (response->statuses(entry.rpc_index).code() != google::rpc::Code::OK) {
         fail_on_first_error = true;
-      } 
-      continue;
-    }
+      }
+    } else if (entry.appdb_table == AppDbTableType::P4RT &&
+               entry.entry.entity_case() ==
+                   pdpi::IrEntity::kPacketReplicationEngineEntry) {
+      // Add update for packet replication to P4RT batch.
+      auto packet_replication_key = CreatePacketReplicationTableUpdateForAppDb(
+          p4rt_table, entry.update_type,
+          entry.entry.packet_replication_engine_entry(), kfv_updates);
 
-    // Otherwise we default to updating the P4RT table.
-    absl::StatusOr<std::string> key;
-    switch (entry.update_type) {
-      case p4::v1::Update::INSERT:
-        key = CreateEntryForInsert(p4rt_table, entry.entry.table_entry(),
-                                   p4_info, kfv_updates);
-        break;
-      case p4::v1::Update::MODIFY:
-        key = CreateEntryForModify(p4rt_table, entry.entry.table_entry(),
-                                   p4_info, kfv_updates);
-        break;
-      case p4::v1::Update::DELETE:
-        key = CreateEntryForDelete(p4rt_table, entry.entry.table_entry(),
-                                   p4_info, kfv_updates);
-        break;
-      default:
-        key = gutil::InvalidArgumentErrorBuilder()
-              << "Unsupported update type: " << entry.update_type;
-    }
+      if (packet_replication_key.ok()) {
+        app_db_status[*packet_replication_key] =
+            response->mutable_statuses(entry.rpc_index);
+      } else {
+        LOG(WARNING) << "Could not update in AppDb: "
+                     << packet_replication_key.status();
+        *response->mutable_statuses(entry.rpc_index) =
+            GetIrUpdateStatus(packet_replication_key.status());
+        fail_on_first_error = true;
+      }
+    } else {
+      // Otherwise we default to updating the P4RT table.
+      absl::StatusOr<std::string> key;
+      switch (entry.update_type) {
+        case p4::v1::Update::INSERT:
+          key = CreateEntryForInsert(p4rt_table, entry.entry.table_entry(),
+                                     p4_info, kfv_updates);
+          break;
+        case p4::v1::Update::MODIFY:
+          key = CreateEntryForModify(p4rt_table, entry.entry.table_entry(),
+                                     p4_info, kfv_updates);
+          break;
+        case p4::v1::Update::DELETE:
+          key = CreateEntryForDelete(p4rt_table, entry.entry.table_entry(),
+                                     p4_info, kfv_updates);
+          break;
+        default:
+          key = gutil::InvalidArgumentErrorBuilder()
+                << "Unsupported update type: " << entry.update_type;
+      }
 
-    if (!key.ok()) {
-      LOG(WARNING) << "Could not update in AppDb: " << key.status();
-      *response->mutable_statuses(entry.rpc_index) =
-          GetIrUpdateStatus(key.status());
-      fail_on_first_error = true;
-      continue;
+      if (key.ok()) {
+        app_db_status[*key] = response->mutable_statuses(entry.rpc_index);
+      } else {
+        LOG(WARNING) << "Could not update in AppDb: " << key.status();
+        *response->mutable_statuses(entry.rpc_index) =
+            GetIrUpdateStatus(key.status());
+        fail_on_first_error = true;
+      }
     }
-
-    app_db_status[*key] = response->mutable_statuses(entry.rpc_index);
   }
 
   // Send all the P4RT_TABLE updates as one batch.
