@@ -39,6 +39,7 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "boost/bimap.hpp"
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -81,6 +82,9 @@
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
 #include <nlohmann/json.hpp>
+
+DEFINE_bool(enable_packet_replication_entries, false,
+            "Enable use of packet replication for multicast");
 
 namespace p4rt_app {
 namespace {
@@ -330,11 +334,13 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
              pdpi::IrEntity::kPacketReplicationEngineEntry) {
     // TODO (b/286567424): To be removed once all multicast adjustments are
     // submitted.
-    LOG(ERROR) << "Packet replication engine entries are not supported yet: "
-               << ir_entity->ShortDebugString();
-    return gutil::UnimplementedErrorBuilder()
-           << "Packet replication engine entries are not supported yet: "
-           << ir_entity->ShortDebugString();
+    if (!FLAGS_enable_packet_replication_entries) {
+      LOG(ERROR) << "Packet replication engine entries are not supported yet: "
+                 << ir_entity->ShortDebugString();
+      return gutil::UnimplementedErrorBuilder()
+             << "Packet replication engine entries are not supported yet: "
+             << ir_entity->ShortDebugString();
+    }
   }
   ASSIGN_OR_RETURN(auto entity_key,
                    pdpi::EntityKey::MakeEntityKey(*normalized_pi_entry));
@@ -347,7 +353,7 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
   };
 }
 
-sonic::AppDbUpdates PiTableEntryUpdatesToIr(
+sonic::AppDbUpdates PiEntityUpdatesToIr(
     const p4::v1::WriteRequest& request, const pdpi::IrP4Info& p4_info,
     const EntityMap& entity_cache,
     const ActionProfileCapacityMap& capacity_by_action_profile_name,
@@ -630,7 +636,7 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     pdpi::IrWriteRpcStatus rpc_status;
     pdpi::IrWriteResponse* rpc_response = rpc_status.mutable_rpc_response();
-    sonic::AppDbUpdates app_db_updates = PiTableEntryUpdatesToIr(
+    sonic::AppDbUpdates app_db_updates = PiEntityUpdatesToIr(
         *request, *ir_p4info_, entity_cache_, capacity_by_action_profile_name_,
         *p4_constraint_info_, translate_port_ids_, port_translation_map_,
         *cpu_queue_translator_, rpc_response);
