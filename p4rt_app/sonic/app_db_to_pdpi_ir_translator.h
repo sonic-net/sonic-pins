@@ -46,6 +46,11 @@ absl::StatusOr<pdpi::IrTableEntry> AppDbKeyAndValuesToIrTableEntry(
     const pdpi::IrP4Info &ir_p4_info, absl::string_view app_db_key,
     const std::vector<std::pair<std::string, std::string>> &app_db_values);
 
+// Given a PDPI IrMulticastGroupEntry, generate the SONiC AppDb key for
+// packet replication in the P4RT table.
+std::string IrMulticastGroupEntryToAppDbKey(
+    const pdpi::IrMulticastGroupEntry &entry);
+
 }  // namespace sonic
 }  // namespace p4rt_app
 

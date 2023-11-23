@@ -384,6 +384,12 @@ std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
                  (split[0] == APP_P4RT_TABLES_DEFINITION_TABLE_NAME))) {
       continue;
     }
+    // Packet replication entries stored in the P4RT_TABLE are handled by
+    // packet replication entry translation.
+    if (split.size() > 1 &&
+        split[0] == APP_P4RT_REPLICATION_IP_MULTICAST_TABLE_NAME) {
+      continue;
+    }
 
     p4rt_keys.push_back(key);
   }
