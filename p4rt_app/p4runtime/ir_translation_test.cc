@@ -601,19 +601,21 @@ TEST(Convert64BitIpv6AclMatchFieldsTo128BitTest, KeepsNonTernaryAddresses) {
 }
 
 TEST(TranslateTableEntry, TranslatesCpuQueueNameToAppDbId) {
-  pdpi::IrTableEntry queue_name_table_entry;
+  pdpi::IrEntity queue_name_table_entry;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(
-        table_name: "acl_ingress_table"
-        matches {
-          name: "is_ip"
-          optional { value { hex_str: "0x1" } }
-        }
-        action {
-          name: "acl_trap"
-          params {
-            name: "qos_queue"
-            value { str: "queue15" }
+        table_entry {
+          table_name: "acl_ingress_table"
+          matches {
+            name: "is_ip"
+            optional { value { hex_str: "0x1" } }
+          }
+          action {
+            name: "acl_trap"
+            params {
+              name: "qos_queue"
+              value { str: "queue15" }
+            }
           }
         }
       )pb",
@@ -622,14 +624,15 @@ TEST(TranslateTableEntry, TranslatesCpuQueueNameToAppDbId) {
   // Translate the table entry using the cpu queue translator.
   ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
                        CpuQueueTranslator::Create({{"queue15", "15"}}));
-  EXPECT_OK(UpdateIrTableEntryForOrchAgent(
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
       queue_name_table_entry, GetIrP4Info(), /*translate_port_ids=*/false,
       /*port_translation_map=*/{}, *cpu_queue_translator));
 
   // Expect that everything is the same except the cpu queue name has been
   // translated.
-  pdpi::IrTableEntry queue_id_table_entry = queue_name_table_entry;
-  queue_id_table_entry.mutable_action()
+  pdpi::IrEntity queue_id_table_entry = queue_name_table_entry;
+  queue_id_table_entry.mutable_table_entry()
+      ->mutable_action()
       ->mutable_params(0)
       ->mutable_value()
       ->set_str("0xf");
@@ -637,30 +640,32 @@ TEST(TranslateTableEntry, TranslatesCpuQueueNameToAppDbId) {
 }
 
 TEST(TranslateTableEntry, IgnoresUnknownCpuQueueNameToAppDbIdTranslation) {
-  pdpi::IrTableEntry ir_table_entry;
+  pdpi::IrEntity ir_table_entry;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(
-        table_name: "acl_ingress_table"
-        matches {
-          name: "is_ip"
-          optional { value { hex_str: "0x1" } }
-        }
-        action {
-          name: "acl_trap"
-          params {
-            name: "qos_queue"
-            value { str: "queue2" }
+        table_entry {
+          table_name: "acl_ingress_table"
+          matches {
+            name: "is_ip"
+            optional { value { hex_str: "0x1" } }
+          }
+          action {
+            name: "acl_trap"
+            params {
+              name: "qos_queue"
+              value { str: "queue2" }
+            }
           }
         }
       )pb",
       &ir_table_entry));
-  const pdpi::IrTableEntry original_table_entry = ir_table_entry;
+  const pdpi::IrEntity original_table_entry = ir_table_entry;
 
   // Add a different queue.
   ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
                        CpuQueueTranslator::Create({{"queue1", "1"}}));
 
-  EXPECT_OK(UpdateIrTableEntryForOrchAgent(
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
       ir_table_entry, GetIrP4Info(), /*translate_port_ids=*/false,
       /*port_translation_map=*/{}, *cpu_queue_translator));
   EXPECT_THAT(ir_table_entry, EqualsProto(original_table_entry));
@@ -797,7 +802,7 @@ TEST(TranslateTableEntry, FailsIfAppDbQueueIsNotAString) {
   EXPECT_FALSE(TranslateTableEntry(options, ir_table_entry).ok());
 }
 
-TEST(TranslateEntity, FailsIfPacketReplicationHasDuplicateReplicas) {
+TEST(TranslatePacketReplication, FailsIfPacketReplicationHasDuplicateReplicas) {
   p4::v1::Entity pi_entity;
   // This packet replication entry is invalid, due to the duplicate replica.
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
@@ -817,6 +822,134 @@ TEST(TranslateEntity, FailsIfPacketReplicationHasDuplicateReplicas) {
                    /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
                    /*translate_key_only=*/false)
                    .ok());
+}
+
+TEST(TranslatePacketReplication, TranslatePortInReplicaToOaSuccess) {
+  pdpi::IrPacketReplicationEngineEntry entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        multicast_group_entry {
+          multicast_group_id: 1
+          replicas { port: "1" instance: 0 }
+        }
+      )pb",
+      &entry));
+
+  boost::bimap<std::string, std::string> port_translation_map;
+  port_translation_map.insert({"Ethernet0", "1"});
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForOrchAgent,
+      .ir_p4_info = GetIrP4Info(),
+      .translate_port_ids = true,
+      .port_map = port_translation_map,
+      .cpu_queue_translator = EmptyCpuQueueTranslator(),
+  };
+  pdpi::IrPacketReplicationEngineEntry updated = entry;
+  updated.mutable_multicast_group_entry()->mutable_replicas(0)->set_port(
+      "Ethernet0");
+
+  EXPECT_OK(TranslatePacketReplicationEntry(options, entry));
+  EXPECT_THAT(updated, EqualsProto(entry));
+}
+
+TEST(TranslatePacketReplication, TranslatePortInReplicaToControllerSuccess) {
+  pdpi::IrPacketReplicationEngineEntry entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        multicast_group_entry {
+          multicast_group_id: 1
+          replicas { port: "Ethernet0" instance: 0 }
+          replicas { port: "Ethernet1" instance: 0 }
+        }
+      )pb",
+      &entry));
+
+  boost::bimap<std::string, std::string> port_translation_map;
+  port_translation_map.insert({"Ethernet0", "1"});
+  port_translation_map.insert({"Ethernet1", "2"});
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForController,
+      .ir_p4_info = GetIrP4Info(),
+      .translate_port_ids = true,
+      .port_map = port_translation_map,
+      .cpu_queue_translator = EmptyCpuQueueTranslator(),
+  };
+  pdpi::IrPacketReplicationEngineEntry updated = entry;
+  updated.mutable_multicast_group_entry()->mutable_replicas(0)->set_port("1");
+  updated.mutable_multicast_group_entry()->mutable_replicas(1)->set_port("2");
+
+  EXPECT_OK(TranslatePacketReplicationEntry(options, entry));
+  EXPECT_THAT(updated, EqualsProto(entry));
+}
+
+TEST(TranslatePacketReplication, TranslatePortInReplicaToOaMissingPort) {
+  pdpi::IrPacketReplicationEngineEntry entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        multicast_group_entry {
+          multicast_group_id: 1
+          replicas { port: "1" instance: 0 }
+        }
+      )pb",
+      &entry));
+
+  boost::bimap<std::string, std::string> port_translation_map;
+  port_translation_map.insert({"Ethernet0", "555"});
+  TranslateTableEntryOptions options = {
+      .direction = TranslationDirection::kForController,
+      .ir_p4_info = GetIrP4Info(),
+      .translate_port_ids = true,
+      .port_map = port_translation_map,
+      .cpu_queue_translator = EmptyCpuQueueTranslator(),
+  };
+  EXPECT_THAT(TranslatePacketReplicationEntry(options, entry),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(TranslatePacketReplication, TranslatesReplicasToOa) {
+  pdpi::IrEntity entry;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 7
+            replicas { port: "1" instance: 5 }
+            replicas { port: "2" instance: 6 }
+          }
+        }
+      )pb",
+      &entry));
+
+  boost::bimap<std::string, std::string> port_translation_map;
+  port_translation_map.insert({"Ethernet0", "1"});
+  port_translation_map.insert({"Ethernet1", "2"});
+  auto cpu_queue_translator = EmptyCpuQueueTranslator();
+
+  EXPECT_OK(UpdateIrEntityForOrchAgent(
+      entry, GetIrP4Info(), /*translate_port_ids=*/true, port_translation_map,
+      cpu_queue_translator));
+
+  // Expect that replica ports have changed.
+  pdpi::IrEntity updated_entry = entry;
+  updated_entry.mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->mutable_replicas(0)
+      ->set_port("Ethernet0");
+  updated_entry.mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->mutable_replicas(1)
+      ->set_port("Ethernet1");
+  EXPECT_THAT(updated_entry, EqualsProto(entry));
+}
+
+TEST(TranslateUnknown, UpdateEmptyEntityFails) {
+  pdpi::IrEntity entry;
+  auto cpu_queue_translator = EmptyCpuQueueTranslator();
+  EXPECT_THAT(UpdateIrEntityForOrchAgent(entry, GetIrP4Info(),
+                                         /*translate_port_ids=*/true,
+                                         /*port_translation_map=*/{},
+                                         cpu_queue_translator),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(TranslateEntity, UnsupportedEntityTypeFails) {

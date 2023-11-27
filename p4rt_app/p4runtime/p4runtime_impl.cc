@@ -39,7 +39,6 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "boost/bimap.hpp"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -83,9 +82,6 @@
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
 #include <nlohmann/json.hpp>
-
-DEFINE_bool(enable_packet_replication_entries, false,
-            "Enable use of packet replication for multicast");
 
 namespace p4rt_app {
 namespace {
@@ -317,12 +313,6 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
           pi_update.entity().table_entry(), constraint_info));
     }
 
-    // Apply any custom translation that are needed on the switch side to
-    // account for gNMI configs (e.g. port ID translation).
-    RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
-        *(ir_entity->mutable_table_entry()), p4_info, translate_port_ids,
-        port_translation_map, cpu_queue_translator));
-
     // Verify the table entry can be written to the table.
     absl::Status role_has_access = AllowRoleAccessToTable(
         role_name, ir_entity->table_entry().table_name(), p4_info);
@@ -331,18 +321,14 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
                    << " IR Table Entry: " << ir_entity->ShortDebugString();
       return role_has_access;
     }
-  } else if (ir_entity->entity_case() ==
-             pdpi::IrEntity::kPacketReplicationEngineEntry) {
-    // TODO (b/286567424): To be removed once all multicast adjustments are
-    // submitted.
-    if (!FLAGS_enable_packet_replication_entries) {
-      LOG(ERROR) << "Packet replication engine entries are not supported yet: "
-                 << ir_entity->ShortDebugString();
-      return gutil::UnimplementedErrorBuilder()
-             << "Packet replication engine entries are not supported yet: "
-             << ir_entity->ShortDebugString();
-    }
   }
+
+  // Apply any custom translation that are needed on the switch side to
+  // account for gNMI configs (e.g. port ID translation).
+  RETURN_IF_ERROR(
+      UpdateIrEntityForOrchAgent(*ir_entity, p4_info, translate_port_ids,
+                                 port_translation_map, cpu_queue_translator));
+
   ASSIGN_OR_RETURN(auto entity_key,
                    pdpi::EntityKey::MakeEntityKey(*normalized_pi_entry));
   return sonic::AppDbEntry{
@@ -539,7 +525,16 @@ RebuildEntityEntryCache(
   ASSIGN_OR_RETURN(std::vector<pdpi::IrPacketReplicationEngineEntry>
                        packet_replication_entries,
                    sonic::GetAllAppDbPacketReplicationTableEntries(p4rt_table));
-  for (const auto& ir_entry : packet_replication_entries) {
+  for (auto& ir_entry : packet_replication_entries) {
+    RETURN_IF_ERROR(TranslatePacketReplicationEntry(
+        TranslateTableEntryOptions{
+            .direction = TranslationDirection::kForController,
+            .ir_p4_info = p4_info,
+            .translate_port_ids = translate_port_ids,
+            .port_map = port_translation_map,
+            .cpu_queue_translator = cpu_queue_translator,
+        },
+        ir_entry));
     auto pi_entry = pdpi::IrPacketReplicationEngineEntryToPi(p4_info, ir_entry);
     if (!pi_entry.ok()) {
       LOG(ERROR) << "PDPI could not translate IR packet replication to PI: "

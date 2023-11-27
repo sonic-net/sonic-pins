@@ -21,7 +21,6 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
-#include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
@@ -39,12 +38,13 @@ class PacketReplicationTableTest
  protected:
   PacketReplicationTableTest()
       : test_lib::P4RuntimeComponentTestFixture(
-            sai::Instantiation::kMiddleblock) {
-    FLAGS_enable_packet_replication_entries = true;
-  }
+            sai::Instantiation::kMiddleblock) {}
 };
 
 TEST_F(PacketReplicationTableTest, InsertReadAndDeleteEntry) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "2"));
+
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
                        test_lib::IrWriteRequestToPi(
                            R"pb(
@@ -54,8 +54,8 @@ TEST_F(PacketReplicationTableTest, InsertReadAndDeleteEntry) {
                                  packet_replication_engine_entry {
                                    multicast_group_entry {
                                      multicast_group_id: 1
-                                     replicas { port: "Ethernet0" instance: 0 }
-                                     replicas { port: "Ethernet1" instance: 0 }
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
                                    }
                                  }
                                }
@@ -95,6 +95,8 @@ TEST_F(PacketReplicationTableTest, InsertReadAndDeleteEntry) {
 }
 
 TEST_F(PacketReplicationTableTest, CannotInsertDuplicateEntries) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "2"));
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
                        test_lib::IrWriteRequestToPi(
                            R"pb(
@@ -104,8 +106,8 @@ TEST_F(PacketReplicationTableTest, CannotInsertDuplicateEntries) {
                                  packet_replication_engine_entry {
                                    multicast_group_entry {
                                      multicast_group_id: 1
-                                     replicas { port: "Ethernet0" instance: 0 }
-                                     replicas { port: "Ethernet1" instance: 0 }
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
                                    }
                                  }
                                }
@@ -119,6 +121,8 @@ TEST_F(PacketReplicationTableTest, CannotInsertDuplicateEntries) {
 }
 
 TEST_F(PacketReplicationTableTest, InsertRequestFails) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "2"));
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
                        test_lib::IrWriteRequestToPi(
                            R"pb(
@@ -128,8 +132,8 @@ TEST_F(PacketReplicationTableTest, InsertRequestFails) {
                                  packet_replication_engine_entry {
                                    multicast_group_entry {
                                      multicast_group_id: 17
-                                     replicas { port: "Ethernet0" instance: 0 }
-                                     replicas { port: "Ethernet1" instance: 0 }
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
                                    }
                                  }
                                }
@@ -157,6 +161,8 @@ TEST_F(PacketReplicationTableTest, InsertRequestFails) {
 }
 
 TEST_F(PacketReplicationTableTest, CannotDeleteMissingEntry) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "2"));
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
                        test_lib::IrWriteRequestToPi(
                            R"pb(
@@ -166,8 +172,8 @@ TEST_F(PacketReplicationTableTest, CannotDeleteMissingEntry) {
                                  packet_replication_engine_entry {
                                    multicast_group_entry {
                                      multicast_group_id: 1
-                                     replicas { port: "Ethernet0" instance: 0 }
-                                     replicas { port: "Ethernet1" instance: 0 }
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
                                    }
                                  }
                                }
@@ -179,6 +185,8 @@ TEST_F(PacketReplicationTableTest, CannotDeleteMissingEntry) {
 }
 
 TEST_F(PacketReplicationTableTest, DeleteRequestFails) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "2"));
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
                        test_lib::IrWriteRequestToPi(
                            R"pb(
@@ -188,8 +196,8 @@ TEST_F(PacketReplicationTableTest, DeleteRequestFails) {
                                  packet_replication_engine_entry {
                                    multicast_group_entry {
                                      multicast_group_id: 1
-                                     replicas { port: "Ethernet0" instance: 0 }
-                                     replicas { port: "Ethernet1" instance: 0 }
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
                                    }
                                  }
                                }
@@ -223,6 +231,9 @@ TEST_F(PacketReplicationTableTest, DeleteRequestFails) {
 }
 
 TEST_F(PacketReplicationTableTest, ModifySuccess) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "2"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet2", "3"));
   ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
                        test_lib::IrWriteRequestToPi(
                            R"pb(
@@ -232,8 +243,8 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
                                  packet_replication_engine_entry {
                                    multicast_group_entry {
                                      multicast_group_id: 1
-                                     replicas { port: "Ethernet0" instance: 0 }
-                                     replicas { port: "Ethernet1" instance: 0 }
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
                                    }
                                  }
                                }
@@ -269,9 +280,9 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
                                  packet_replication_engine_entry {
                                    multicast_group_entry {
                                      multicast_group_id: 1
-                                     replicas { port: "Ethernet0" instance: 0 }
-                                     replicas { port: "Ethernet1" instance: 0 }
-                                     replicas { port: "Ethernet2" instance: 1 }
+                                     replicas { port: "1" instance: 0 }
+                                     replicas { port: "2" instance: 0 }
+                                     replicas { port: "3" instance: 1 }
                                    }
                                  }
                                }
@@ -299,7 +310,6 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
   EXPECT_THAT(read_response2.entities(0),
               EqualsProto(request2.updates(0).entity()));
 }
-
 TEST_F(PacketReplicationTableTest, PopulatedReadRequestFails) {
   // Read back the entry which should result in the same packet replication
   // entry.
@@ -314,6 +324,28 @@ TEST_F(PacketReplicationTableTest, PopulatedReadRequestFails) {
   EXPECT_FALSE(read_response.ok());
   EXPECT_THAT(read_response, StatusIs(absl::StatusCode::kUnknown,
                                       HasSubstr("multicast_group_id: 1")));
+}
+
+TEST_F(PacketReplicationTableTest, CannotTranslatePortFailure) {
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
+                       test_lib::IrWriteRequestToPi(
+                           R"pb(
+                             updates {
+                               type: INSERT
+                               entity {
+                                 packet_replication_engine_entry {
+                                   multicast_group_entry {
+                                     multicast_group_id: 1
+                                     replicas { port: "1" instance: 0 }
+                                   }
+                                 }
+                               }
+                             })pb",
+                           ir_p4_info_));
+  // Expect port translation failure.
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("Cannot translate port")));
 }
 
 }  // namespace
