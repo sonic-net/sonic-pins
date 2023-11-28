@@ -87,6 +87,10 @@ control routing(in headers_t headers,
   // TODO: Remove @unsupported when the switch supports this
   // action.
   @unsupported
+  @action_restriction("
+    // Disallow reserved VLAN IDs with implementation-defined semantics.
+    vlan_id != 0 && vlan_id != 4095"
+  )
   action set_port_and_src_mac_and_vlan_id(@id(1) port_id_t port,
                                           @id(2) @format(MAC_ADDRESS)
                                           ethernet_addr_t src_mac,
@@ -435,13 +439,14 @@ control routing(in headers_t headers,
   // Calling this action will override unicast, and can itself be overriden by
   // `mark_to_drop`.
   //
-  // Using a `multicast_group_id` of 0 is not allowed.
-  // TODO: Enforce this requirement using p4-constraints.
-  //
   // TODO: Remove `@unsupported` annotation once the switch stack
   // supports multicast.
   @unsupported
   @id(ROUTING_SET_MULTICAST_GROUP_ID_ACTION_ID)
+  @action_restriction("
+    // Disallow 0 since it encodes 'no multicast' in V1Model.
+    multicast_group_id != 0"
+  )
   action set_multicast_group_id(
       @id(1)
       // TODO: Add this once supported by PDPI and its customers.

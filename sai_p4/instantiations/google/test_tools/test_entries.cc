@@ -33,6 +33,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
@@ -398,6 +400,36 @@ EntryBuilder& EntryBuilder::AddMulticastRouterInterfaceEntry(
       pdpi::BitsetToHexString<16>(entry.multicast_replica_instance));
   auto& action = *pd_entry.mutable_action()->mutable_set_multicast_src_mac();
   action.set_src_mac(entry.src_mac.ToString());
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddRouteForwardingIpv4PacketsToGivenMulticastGroup(
+    int multicast_group_id, absl::string_view vrf, netaddr::Ipv4Address& dst_ip,
+    int prefix_length) {
+  sai::Ipv4TableEntry& entry =
+      *entries_.add_entries()->mutable_ipv4_table_entry();
+  entry.mutable_match()->set_vrf_id(vrf);
+  auto* ipv4_dst = entry.mutable_match()->mutable_ipv4_dst();
+  ipv4_dst->set_value(dst_ip.ToString());
+  ipv4_dst->set_prefix_length(prefix_length);
+  entry.mutable_action()
+      ->mutable_set_multicast_group_id()
+      ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddRouteForwardingIpv6PacketsToGivenMulticastGroup(
+    int multicast_group_id, absl::string_view vrf, netaddr::Ipv6Address& dst_ip,
+    int prefix_length) {
+  sai::Ipv6TableEntry& entry =
+      *entries_.add_entries()->mutable_ipv6_table_entry();
+  entry.mutable_match()->set_vrf_id(vrf);
+  auto* ipv6_dst = entry.mutable_match()->mutable_ipv6_dst();
+  ipv6_dst->set_value(dst_ip.ToString());
+  ipv6_dst->set_prefix_length(prefix_length);
+  entry.mutable_action()
+      ->mutable_set_multicast_group_id()
+      ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
   return *this;
 }
 
