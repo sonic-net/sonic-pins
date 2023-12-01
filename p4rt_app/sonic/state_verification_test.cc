@@ -283,10 +283,14 @@ TEST_F(StateVerificationPacketReplicationTest,
 }
 
 TEST_F(StateVerificationPacketReplicationTest, VerifyPacketReplicationSuccess) {
+  const std::string json_array1 =
+      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/3"}])j";
   const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
-      std::make_pair("Ethernet1/1/1:0x1", "replica"),
-      std::make_pair("Ethernet1/1/3:0x1", "replica"),
+      std::make_pair("replicas", json_array1),
   };
 
   EXPECT_CALL(*mock_p4rt_app_db_, keys)
@@ -311,9 +315,12 @@ TEST_F(StateVerificationPacketReplicationTest, VerifyPacketReplicationSuccess) {
 }
 
 TEST_F(StateVerificationPacketReplicationTest, VerifyPacketReplicationFails) {
+  const std::string json_array1 =
+      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"}])j";
   const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
-      std::make_pair("Ethernet1/1/1:0x1", "replica"),
+      std::make_pair("replicas", json_array1),
   };
 
   EXPECT_CALL(*mock_p4rt_app_db_, keys)
