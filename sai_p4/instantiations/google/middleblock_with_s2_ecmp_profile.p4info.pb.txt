@@ -35,7 +35,6 @@ tables {
     id: 33554509
     name: "ingress.vlan_untag.disable_vlan_checks_table"
     alias: "disable_vlan_checks_table"
-    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::mask == 0;\n  \")"
   }
@@ -412,10 +411,6 @@ tables {
     id: 16777237
     annotations: "@proto_id(7)"
   }
-  action_refs {
-    id: 16777240
-    annotations: "@proto_id(8)"
-  }
   const_default_action_id: 16777222
   size: 131072
 }
@@ -465,10 +460,6 @@ tables {
   action_refs {
     id: 16777237
     annotations: "@proto_id(7)"
-  }
-  action_refs {
-    id: 16777240
-    annotations: "@proto_id(8)"
   }
   const_default_action_id: 16777222
   size: 17000

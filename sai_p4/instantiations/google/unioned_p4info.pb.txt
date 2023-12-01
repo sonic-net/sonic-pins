@@ -35,7 +35,6 @@ tables {
     id: 33554509
     name: "ingress.vlan_untag.disable_vlan_checks_table"
     alias: "disable_vlan_checks_table"
-    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::mask == 0;\n  \")"
   }
@@ -259,10 +258,6 @@ tables {
     id: 16777237
     annotations: "@proto_id(7)"
   }
-  action_refs {
-    id: 16777240
-    annotations: "@proto_id(8)"
-  }
   const_default_action_id: 16777222
   size: 131072
 }
@@ -313,12 +308,78 @@ tables {
     id: 16777237
     annotations: "@proto_id(7)"
   }
-  action_refs {
-    id: 16777240
-    annotations: "@proto_id(8)"
-  }
   const_default_action_id: 16777222
   size: 17000
+}
+tables {
+  preamble {
+    id: 33554510
+    name: "ingress.routing_lookup.ipv4_multicast_table"
+    alias: "ipv4_multicast_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vrf_id"
+    annotations: "@refers_to(vrf_table , vrf_id)"
+    match_type: EXACT
+    type_name {
+      name: "vrf_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "ipv4_dst"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: EXACT
+  }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1600
+}
+tables {
+  preamble {
+    id: 33554511
+    name: "ingress.routing_lookup.ipv6_multicast_table"
+    alias: "ipv6_multicast_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vrf_id"
+    annotations: "@refers_to(vrf_table , vrf_id)"
+    match_type: EXACT
+    type_name {
+      name: "vrf_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "ipv6_dst"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: EXACT
+  }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1600
 }
 tables {
   preamble {
@@ -902,6 +963,14 @@ tables {
     annotations: "@composite_field(@ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3 ) , @ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2 ))"
     annotations: "@format(IPV6_ADDRESS)"
     bitwidth: 64
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 10
+    name: "src_mac"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
     match_type: TERNARY
   }
   action_refs {

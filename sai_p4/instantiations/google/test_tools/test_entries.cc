@@ -179,32 +179,6 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
                                       nexthop_rewrite_options, vlan_hexstr);
 }
 
-EntryBuilder&
-EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
-    int multicast_group_id, IpVersion ip_version, absl::string_view vrf) {
-  if (ip_version == IpVersion::kIpv4 || ip_version == IpVersion::kIpv4And6) {
-    sai::Ipv4TableEntry& entry =
-        *entries_.add_entries()->mutable_ipv4_table_entry();
-    // TODO: Pass string_view directly once proto supports it.
-    entry.mutable_match()->set_vrf_id(std::string(vrf));
-    entry.mutable_action()
-        ->mutable_set_multicast_group_id()
-        ->set_multicast_group_id(
-            pdpi::BitsetToHexString<16>(multicast_group_id));
-  }
-  if (ip_version == IpVersion::kIpv6 || ip_version == IpVersion::kIpv4And6) {
-    sai::Ipv6TableEntry& entry =
-        *entries_.add_entries()->mutable_ipv6_table_entry();
-    // TODO: Pass string_view directly once proto supports it.
-    entry.mutable_match()->set_vrf_id(std::string(vrf));
-    entry.mutable_action()
-        ->mutable_set_multicast_group_id()
-        ->set_multicast_group_id(
-            pdpi::BitsetToHexString<16>(multicast_group_id));
-  }
-  return *this;
-}
-
 EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
     absl::string_view egress_port, IpVersion ip_version,
     NexthopRewriteOptions rewrite_options) {
@@ -303,13 +277,15 @@ EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithTtlZeroAndOne() {
 EntryBuilder&
 EntryBuilder::AddEntriesForwardingIpPacketsToGivenMulticastGroup(
     int multicast_group_id) {
+  LOG(FATAL)  // Crash ok
+      << "TODO: implement once SAI P4 supports it";
   AddEntryAdmittingAllPacketsToL3();
   const std::string kVrf =
       absl::StrFormat("vrf-for-multicast-group-%d", multicast_group_id);
   AddVrfEntry(kVrf);
   AddPreIngressAclEntryAssigningVrfForGivenIpType(kVrf, IpVersion::kIpv4And6);
-  AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
-      multicast_group_id, IpVersion::kIpv4And6, kVrf);
+  // AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
+  //     multicast_group_id, IpVersion::kIpv4And6, kVrf);
   return *this;
 }
 
@@ -403,30 +379,26 @@ EntryBuilder& EntryBuilder::AddMulticastRouterInterfaceEntry(
   return *this;
 }
 
-EntryBuilder& EntryBuilder::AddRouteForwardingIpv4PacketsToGivenMulticastGroup(
-    int multicast_group_id, absl::string_view vrf, netaddr::Ipv4Address& dst_ip,
-    int prefix_length) {
-  sai::Ipv4TableEntry& entry =
-      *entries_.add_entries()->mutable_ipv4_table_entry();
+EntryBuilder& EntryBuilder::AddMulticastRoute(
+    absl::string_view vrf, const netaddr::Ipv4Address& dst_ip,
+    int multicast_group_id) {
+  sai::Ipv4MulticastTableEntry& entry =
+      *entries_.add_entries()->mutable_ipv4_multicast_table_entry();
   entry.mutable_match()->set_vrf_id(vrf);
-  auto* ipv4_dst = entry.mutable_match()->mutable_ipv4_dst();
-  ipv4_dst->set_value(dst_ip.ToString());
-  ipv4_dst->set_prefix_length(prefix_length);
+  entry.mutable_match()->set_ipv4_dst(dst_ip.ToString());
   entry.mutable_action()
       ->mutable_set_multicast_group_id()
       ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
   return *this;
 }
 
-EntryBuilder& EntryBuilder::AddRouteForwardingIpv6PacketsToGivenMulticastGroup(
-    int multicast_group_id, absl::string_view vrf, netaddr::Ipv6Address& dst_ip,
-    int prefix_length) {
-  sai::Ipv6TableEntry& entry =
-      *entries_.add_entries()->mutable_ipv6_table_entry();
+EntryBuilder& EntryBuilder::AddMulticastRoute(
+    absl::string_view vrf, const netaddr::Ipv6Address& dst_ip,
+    int multicast_group_id) {
+  sai::Ipv6MulticastTableEntry& entry =
+      *entries_.add_entries()->mutable_ipv6_multicast_table_entry();
   entry.mutable_match()->set_vrf_id(vrf);
-  auto* ipv6_dst = entry.mutable_match()->mutable_ipv6_dst();
-  ipv6_dst->set_value(dst_ip.ToString());
-  ipv6_dst->set_prefix_length(prefix_length);
+  entry.mutable_match()->set_ipv6_dst(dst_ip.ToString());
   entry.mutable_action()
       ->mutable_set_multicast_group_id()
       ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
