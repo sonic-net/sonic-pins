@@ -266,7 +266,7 @@ absl::StatusOr<uint64_t> GetAlpmMissStat(gnmi::gNMI::StubInterface& gnmi_stub) {
   return GetGnmiStats(gnmi_stub, state_path, resp_parse_str);
 }
 
-absl::StatusOr<bool> IsPlatformTypeBrixia(
+absl::StatusOr<bool> DoesPlatformSupportAlpm(
     gnmi::gNMI::StubInterface& gnmi_stub) {
   std::string state_path =
       "components/component[name=chassis]/chassis/state/platform";
@@ -275,15 +275,18 @@ absl::StatusOr<bool> IsPlatformTypeBrixia(
   ASSIGN_OR_RETURN(
       std::string state_response,
       GetGnmiStatePathInfo(&gnmi_stub, state_path, resp_parse_str));
-
-  return absl::StrContains(state_response, "BRIXIA");
+  if (absl::StrContains(state_response, "SOME_PLATFORM_NOT_ALPM")){
+     return false;
+  } else {
+    return true;
+  }
 }
 
 // Control switch sends packets to SUT.
 void SendPackets(gnmi::gNMI::StubInterface& sut_gnmi_stub,
                  thinkit::ControlDevice& control_device,
                  absl::string_view sut_port, absl::string_view control_port,
-                 IpVersion ip_version, bool l3_miss = false) {
+                 IpVersion ip_version, bool l3_miss) {
   // Make test packet.
   packetlib::Packet test_packet;
   if (ip_version == IpVersion::kIpv4) {
@@ -328,6 +331,38 @@ void SendPackets(gnmi::gNMI::StubInterface& sut_gnmi_stub,
   EXPECT_GE(in_pkts_on_sut_port, kPacketsToSend);
 }
 
+// Sends the test packets and verifies the test result.
+void SendPacketsAndVerifyResult(gnmi::gNMI::StubInterface& sut_gnmi_stub,
+                                thinkit::ControlDevice& control_device,
+                                absl::string_view sut_port,
+                                absl::string_view control_port,
+                                IpVersion ip_version, bool expect_l3_miss) {
+  ASSERT_OK_AND_ASSIGN(uint64_t initial_miss_count,
+                       GetAlpmMissStat(sut_gnmi_stub));
+  LOG(INFO) << "Initial miss count: " << initial_miss_count;
+
+  LOG(INFO) << "Sending test packets on port: " << control_port;
+  ASSERT_NO_FATAL_FAILURE(SendPackets(sut_gnmi_stub, control_device, sut_port,
+                                      control_port, ip_version,
+                                      expect_l3_miss));
+
+  ASSERT_OK_AND_ASSIGN(uint64_t final_miss_count,
+                       GetAlpmMissStat(sut_gnmi_stub));
+  LOG(INFO) << "Final miss count: " << final_miss_count;
+
+  // There is a possibility that a few non-test packets flowed on the links
+  // while test was running and may have miss the L3 route, so give margin on
+  // l3 miss counter.
+  if (expect_l3_miss) {
+    EXPECT_GE(final_miss_count, initial_miss_count + kPacketsToSend);
+    EXPECT_LE(final_miss_count,
+              initial_miss_count + kPacketsToSend + kNumberOfPacketsMargin);
+  } else {
+    EXPECT_GE(final_miss_count, initial_miss_count);
+    EXPECT_LE(final_miss_count, initial_miss_count + kNumberOfPacketsMargin);
+  }
+}
+
 absl::Status ValidatePortsUp(
     thinkit::Switch& sut, thinkit::ControlDevice& control_device,
     const std::vector<std::string>& sut_interfaces,
@@ -346,16 +381,32 @@ absl::Status ValidatePortsUp(
   return absl::InternalError("PortsUp validation failed.");
 }
 
+void InstallTestEntries(thinkit::Switch& sut,
+                        std::optional<p4::config::v1::P4Info> p4info,
+                        struct AlpmRouteParams& route_params,
+                        IpVersion ip_version) {
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
+                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                           sut, /*gnmi_config=*/std::nullopt, p4info));
+
+  ASSERT_OK_AND_ASSIGN(sai::TableEntries sut_test_entries,
+                       ConstructTestEntries(route_params, ip_version));
+  ASSERT_OK(pdpi::ClearTableEntries(p4_session.get()));
+
+  LOG(INFO) << "Installing entries:" << sut_test_entries.ShortDebugString();
+  ASSERT_OK(pdpi::InstallPdTableEntries(*p4_session, sut_test_entries));
+}
+
 // Tests that when IPv4 L3 route is added and Ipv4 test packets hit the added
 // route, ALPM miss counter doesn't go up.
 TEST_P(AlpmMissCountersTest, Ipv4AlpmRouteHit) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("d9716769-9ca5-477b-b53b-1b96fce60e13"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_brixia,
-                       IsPlatformTypeBrixia(*sut_gnmi_stub_));
-  if (!is_sut_brixia) {
-    GTEST_SKIP() << "Test is not supported on non-Brixia SUT.";
+  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
+                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
+  if (!is_sut_alpm) {
+    GTEST_SKIP() << "Test is not supported on NON_ALPM SUT.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -377,36 +428,13 @@ TEST_P(AlpmMissCountersTest, Ipv4AlpmRouteHit) {
                        GetPortId(*sut_gnmi_stub_, test_sut_interface));
   CreateAlpmRouteParams(route_params_, sut_port_id);
 
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut,
-                           /*gnmi_config=*/std::nullopt, GetParam().p4_info));
+  ASSERT_NO_FATAL_FAILURE(InstallTestEntries(sut, GetParam().p4_info,
+                                             route_params_, IpVersion::kIpv4));
 
-  ASSERT_OK_AND_ASSIGN(sai::TableEntries sut_test_entries,
-                       ConstructTestEntries(route_params_, IpVersion::kIpv4));
-  ASSERT_OK(pdpi::ClearTableEntries(p4_session.get()));
-
-  LOG(INFO) << "Installing entries:" << sut_test_entries.ShortDebugString();
-  ASSERT_OK(pdpi::InstallPdTableEntries(*p4_session, sut_test_entries));
-
-  ASSERT_OK_AND_ASSIGN(uint64_t initial_miss_count,
-                       GetAlpmMissStat(*sut_gnmi_stub_));
-  LOG(INFO) << "Initial miss count: " << initial_miss_count;
-
-  LOG(INFO) << "Sending test packets on port " << test_sut_interface;
-  ASSERT_NO_FATAL_FAILURE(SendPackets(
+  ASSERT_NO_FATAL_FAILURE(SendPacketsAndVerifyResult(
       *sut_gnmi_stub_, control_device, test_sut_interface,
-      sut_to_peer_interface_mapping_[test_sut_interface], IpVersion::kIpv4));
-
-  ASSERT_OK_AND_ASSIGN(uint64_t final_miss_count,
-                       GetAlpmMissStat(*sut_gnmi_stub_));
-  LOG(INFO) << "Final miss count: " << final_miss_count;
-
-  // There is a possibility that a few non-test packets flowed on the links
-  // while test was running and may have miss the L3 route, so give margin on
-  // l3 miss counter.
-  EXPECT_GE(final_miss_count, initial_miss_count);
-  EXPECT_LE(final_miss_count, initial_miss_count + kNumberOfPacketsMargin);
+      sut_to_peer_interface_mapping_[test_sut_interface], IpVersion::kIpv4,
+      /*expect_l3_miss=*/false));
 
   ASSERT_OK(
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
@@ -418,10 +446,10 @@ TEST_P(AlpmMissCountersTest, Ipv4AlpmRouteMiss) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("07dda215-ad21-4c25-b89e-1128b3806c27"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_brixia,
-                       IsPlatformTypeBrixia(*sut_gnmi_stub_));
-  if (!is_sut_brixia) {
-    GTEST_SKIP() << "Test is not supported on non-Brixia SUT.";
+  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
+                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
+  if (!is_sut_alpm) {
+    GTEST_SKIP() << "Test is not supported on NON_ALPM SUT.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -443,38 +471,13 @@ TEST_P(AlpmMissCountersTest, Ipv4AlpmRouteMiss) {
                        GetPortId(*sut_gnmi_stub_, test_sut_interface));
   CreateAlpmRouteParams(route_params_, sut_port_id);
 
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut,
-                           /*gnmi_config=*/std::nullopt, GetParam().p4_info));
+  ASSERT_NO_FATAL_FAILURE(InstallTestEntries(sut, GetParam().p4_info,
+                                             route_params_, IpVersion::kIpv4));
 
-  ASSERT_OK_AND_ASSIGN(sai::TableEntries sut_test_entries,
-                       ConstructTestEntries(route_params_, IpVersion::kIpv4));
-  ASSERT_OK(pdpi::ClearTableEntries(p4_session.get()));
-
-  LOG(INFO) << "Installing entries:" << sut_test_entries.ShortDebugString();
-  ASSERT_OK(pdpi::InstallPdTableEntries(*p4_session, sut_test_entries));
-
-  ASSERT_OK_AND_ASSIGN(uint64_t initial_miss_count,
-                       GetAlpmMissStat(*sut_gnmi_stub_));
-  LOG(INFO) << "Initial miss count: " << initial_miss_count;
-
-  LOG(INFO) << "Sending test packets on port " << test_sut_interface;
-  ASSERT_NO_FATAL_FAILURE(
-      SendPackets(*sut_gnmi_stub_, control_device, test_sut_interface,
-                  sut_to_peer_interface_mapping_[test_sut_interface],
-                  IpVersion::kIpv4, /*l3_miss=*/true));
-
-  ASSERT_OK_AND_ASSIGN(uint64_t final_miss_count,
-                       GetAlpmMissStat(*sut_gnmi_stub_));
-  LOG(INFO) << "Final miss count: " << final_miss_count;
-
-  // There is a possibility that a few non-test packets flowed on the links
-  // while test was running and may have miss the L3 route, so give
-  // margin on l3 miss counter.
-  EXPECT_GE(final_miss_count, initial_miss_count + kPacketsToSend);
-  EXPECT_LE(final_miss_count,
-            initial_miss_count + kPacketsToSend + kNumberOfPacketsMargin);
+  ASSERT_NO_FATAL_FAILURE(SendPacketsAndVerifyResult(
+      *sut_gnmi_stub_, control_device, test_sut_interface,
+      sut_to_peer_interface_mapping_[test_sut_interface], IpVersion::kIpv4,
+      /*expect_l3_miss=*/true));
 
   ASSERT_OK(
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
@@ -486,10 +489,10 @@ TEST_P(AlpmMissCountersTest, Ipv6AlpmRouteHit) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("552ebd5d-fa98-4298-b4ef-efab286bcc89"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_brixia,
-                       IsPlatformTypeBrixia(*sut_gnmi_stub_));
-  if (!is_sut_brixia) {
-    GTEST_SKIP() << "Test is not supported on non-Brixia SUT.";
+  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
+                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
+  if (!is_sut_alpm) {
+    GTEST_SKIP() << "Test is not supported on NON_ALPM SUT.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -511,36 +514,13 @@ TEST_P(AlpmMissCountersTest, Ipv6AlpmRouteHit) {
                        GetPortId(*sut_gnmi_stub_, test_sut_interface));
   CreateAlpmRouteParams(route_params_, sut_port_id);
 
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut,
-                           /*gnmi_config=*/std::nullopt, GetParam().p4_info));
+  ASSERT_NO_FATAL_FAILURE(InstallTestEntries(sut, GetParam().p4_info,
+                                             route_params_, IpVersion::kIpv6));
 
-  ASSERT_OK_AND_ASSIGN(sai::TableEntries sut_test_entries,
-                       ConstructTestEntries(route_params_, IpVersion::kIpv6));
-  ASSERT_OK(pdpi::ClearTableEntries(p4_session.get()));
-
-  LOG(INFO) << "Installing entries:" << sut_test_entries.ShortDebugString();
-  ASSERT_OK(pdpi::InstallPdTableEntries(*p4_session, sut_test_entries));
-
-  ASSERT_OK_AND_ASSIGN(uint64_t initial_miss_count,
-                       GetAlpmMissStat(*sut_gnmi_stub_));
-  LOG(INFO) << "Initial miss count: " << initial_miss_count;
-
-  LOG(INFO) << "Sending test packets on port " << test_sut_interface;
-  ASSERT_NO_FATAL_FAILURE(SendPackets(
+  ASSERT_NO_FATAL_FAILURE(SendPacketsAndVerifyResult(
       *sut_gnmi_stub_, control_device, test_sut_interface,
-      sut_to_peer_interface_mapping_[test_sut_interface], IpVersion::kIpv6));
-
-  ASSERT_OK_AND_ASSIGN(uint64_t final_miss_count,
-                       GetAlpmMissStat(*sut_gnmi_stub_));
-  LOG(INFO) << "Final miss count: " << final_miss_count;
-
-  // There is a possibility that a few non-test packets flowed on the links
-  // while test was running and may have miss the L3 route, so give margin on
-  // l3 miss counter.
-  EXPECT_GE(final_miss_count, initial_miss_count);
-  EXPECT_LE(final_miss_count, initial_miss_count + kNumberOfPacketsMargin);
+      sut_to_peer_interface_mapping_[test_sut_interface], IpVersion::kIpv6,
+      /*expect_l3_miss=*/false));
 
   ASSERT_OK(
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
@@ -552,10 +532,10 @@ TEST_P(AlpmMissCountersTest, Ipv6AlpmRouteMiss) {
   ASSERT_NO_FATAL_FAILURE(
       InitializeTestEnvironment("b8c1ba7f-a8ca-429b-bb8b-9fc479fc7e71"));
 
-  ASSERT_OK_AND_ASSIGN(bool is_sut_brixia,
-                       IsPlatformTypeBrixia(*sut_gnmi_stub_));
-  if (!is_sut_brixia) {
-    GTEST_SKIP() << "Test is not supported on non-Brixia SUT.";
+  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
+                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
+  if (!is_sut_alpm) {
+    GTEST_SKIP() << "Test is not supported on NON_ALPM SUT.";
   }
   if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
     GTEST_SKIP() << "Control device does not support SendPacket";
@@ -577,38 +557,109 @@ TEST_P(AlpmMissCountersTest, Ipv6AlpmRouteMiss) {
                        GetPortId(*sut_gnmi_stub_, test_sut_interface));
   CreateAlpmRouteParams(route_params_, sut_port_id);
 
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
-                       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-                           sut,
-                           /*gnmi_config=*/std::nullopt, GetParam().p4_info));
+  ASSERT_NO_FATAL_FAILURE(InstallTestEntries(sut, GetParam().p4_info,
+                                             route_params_, IpVersion::kIpv6));
 
-  ASSERT_OK_AND_ASSIGN(sai::TableEntries sut_test_entries,
-                       ConstructTestEntries(route_params_, IpVersion::kIpv6));
-  ASSERT_OK(pdpi::ClearTableEntries(p4_session.get()));
+  ASSERT_NO_FATAL_FAILURE(SendPacketsAndVerifyResult(
+      *sut_gnmi_stub_, control_device, test_sut_interface,
+      sut_to_peer_interface_mapping_[test_sut_interface], IpVersion::kIpv6,
+      /*expect_l3_miss=*/true));
 
-  LOG(INFO) << "Installing entries:" << sut_test_entries.ShortDebugString();
-  ASSERT_OK(pdpi::InstallPdTableEntries(*p4_session, sut_test_entries));
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
+}
 
-  ASSERT_OK_AND_ASSIGN(uint64_t initial_miss_count,
-                       GetAlpmMissStat(*sut_gnmi_stub_));
-  LOG(INFO) << "Initial miss count: " << initial_miss_count;
-
-  LOG(INFO) << "Sending test packets on port " << test_sut_interface;
+// Tests that when IPv4 and IPv6 L3 routes are added and sent IPv4 and IPv6 test
+// packets hit the added respective Ipv4/Ipv6 routes, ALPM miss counter does not
+// go up.
+TEST_P(AlpmMissCountersTest, Ipv4AndIpv6AlpmRoutesHit) {
   ASSERT_NO_FATAL_FAILURE(
-      SendPackets(*sut_gnmi_stub_, control_device, test_sut_interface,
-                  sut_to_peer_interface_mapping_[test_sut_interface],
-                  IpVersion::kIpv6, /*l3_miss=*/true));
+      InitializeTestEnvironment("0fa17c84-fd92-4d79-a617-7b51e7b8c9ab"));
 
-  ASSERT_OK_AND_ASSIGN(uint64_t final_miss_count,
-                       GetAlpmMissStat(*sut_gnmi_stub_));
-  LOG(INFO) << "Final miss count: " << final_miss_count;
+  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
+                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
+  if (!is_sut_alpm) {
+    GTEST_SKIP() << "Test is not supported on NON_ALPM SUT.";
+  }
+  if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
+    GTEST_SKIP() << "Control device does not support SendPacket";
+  }
+  // Test requires at least 1 SUT interface.
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "Need at least 1 SUT interface to test but got: "
+                 << sut_interfaces_.size();
+  }
 
-  // There is a possibility that a few non-test packets flowed on the links
-  // while test was running and may have miss the L3 route, so give margin on
-  // l3 miss counter.
-  EXPECT_GE(final_miss_count, initial_miss_count + kPacketsToSend);
-  EXPECT_LE(final_miss_count,
-            initial_miss_count + kPacketsToSend + kNumberOfPacketsMargin);
+  thinkit::Switch& sut = generic_testbed_->Sut();
+  thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
+
+  std::shuffle(sut_interfaces_.begin(), sut_interfaces_.end(), absl::BitGen());
+  std::string test_sut_interface = sut_interfaces_[0];
+  ASSERT_OK_AND_ASSIGN(std::string sut_port_id,
+                       GetPortId(*sut_gnmi_stub_, test_sut_interface));
+  CreateAlpmRouteParams(route_params_, sut_port_id);
+
+  ASSERT_NO_FATAL_FAILURE(InstallTestEntries(
+      sut, GetParam().p4_info, route_params_, IpVersion::kIpv4And6));
+
+  for (IpVersion ip_version : {IpVersion::kIpv4, IpVersion::kIpv6}) {
+    SCOPED_TRACE(absl::StrCat(
+        "Testing ", ip_version == IpVersion::kIpv4 ? "ipv4" : "ipv6"));
+    ASSERT_NO_FATAL_FAILURE(SendPacketsAndVerifyResult(
+        *sut_gnmi_stub_, control_device, test_sut_interface,
+        sut_to_peer_interface_mapping_[test_sut_interface], ip_version,
+        /*expect_l3_miss=*/false));
+  }
+
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
+}
+
+// Tests that when IPv4 and IPv6 L3 routes are added and sent IPv4 and IPv6 test
+// packets miss the added respective Ipv4/Ipv6 routes, ALPM miss counter goes
+// up.
+TEST_P(AlpmMissCountersTest, Ipv4AndIpv6AlpmRoutesMiss) {
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("f2b48a38-bbb3-4ec0-9f91-e596a5d3dac3"));
+
+  ASSERT_OK_AND_ASSIGN(bool is_sut_alpm,
+                       DoesPlatformSupportAlpm(*sut_gnmi_stub_));
+  if (!is_sut_alpm) {
+    GTEST_SKIP() << "Test is not supported on NON_ALPM SUT.";
+  }
+  if (!generic_testbed_->ControlDevice().SupportsSendPacket()) {
+    GTEST_SKIP() << "Control device does not support SendPacket";
+  }
+  // Test requires at least 1 SUT interface.
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "Need at least 1 SUT interface to test but got: "
+                 << sut_interfaces_.size();
+  }
+
+  thinkit::Switch& sut = generic_testbed_->Sut();
+  thinkit::ControlDevice& control_device = generic_testbed_->ControlDevice();
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
+
+  std::shuffle(sut_interfaces_.begin(), sut_interfaces_.end(), absl::BitGen());
+  std::string test_sut_interface = sut_interfaces_[0];
+  ASSERT_OK_AND_ASSIGN(std::string sut_port_id,
+                       GetPortId(*sut_gnmi_stub_, test_sut_interface));
+  CreateAlpmRouteParams(route_params_, sut_port_id);
+
+  ASSERT_NO_FATAL_FAILURE(InstallTestEntries(
+      sut, GetParam().p4_info, route_params_, IpVersion::kIpv4And6));
+
+  for (IpVersion ip_version : {IpVersion::kIpv4, IpVersion::kIpv6}) {
+    SCOPED_TRACE(absl::StrCat(
+        "Testing ", ip_version == IpVersion::kIpv4 ? "ipv4" : "ipv6"));
+    ASSERT_NO_FATAL_FAILURE(SendPacketsAndVerifyResult(
+        *sut_gnmi_stub_, control_device, test_sut_interface,
+        sut_to_peer_interface_mapping_[test_sut_interface], ip_version,
+        /*expect_l3_miss=*/true));
+  }
 
   ASSERT_OK(
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
