@@ -105,6 +105,7 @@ cc_test(
         ":packetlib",
         ":packetlib_cc_proto",
         "//gutil:proto",
+        "//gutil:status",
         "//gutil:testing",
         "//p4_pdpi/string_encodings:readable_byte_string",
         "@com_google_absl//absl/status",

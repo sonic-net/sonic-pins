@@ -24,6 +24,7 @@
 #include "absl/strings/str_cat.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/proto.h"
+#include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -55,13 +56,6 @@ const std::string StatusToStableString(const absl::Status& status) {
     absl::StrAppend(&status_message, ": ", status.message());
   }
   return status_message;
-}
-
-// Pretty prints `StatusOr<T>`, assuming a pretty printer for `T` exists.
-template <class T>
-std::ostream& operator<<(std::ostream& os, const absl::StatusOr<T>& statusor) {
-  if (statusor.ok()) return os << *statusor;
-  return os << StatusToStableString(statusor.status());
 }
 
 // Parses packet from bytes, and if it succeeds, re-serializes the parsed packet
@@ -183,8 +177,9 @@ void RunProtoPacketTest(
   if (bytes != bytes_from_proto) {
     std::cout << "BUG: The two overloads of the Serialize function return "
                  "different results:\n- Serialize(Packet): "
-              << bytes
-              << "\n- Serialize(absl::string_view): " << bytes_from_proto;
+              << gutil::StreamableStatusOr(bytes)
+              << "\n- Serialize(absl::string_view): "
+              << gutil::StreamableStatusOr(bytes_from_proto);
   }
   if (!bytes.ok()) return;
 

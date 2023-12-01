@@ -45,6 +45,37 @@ absl::Status ToAbslStatus(T status) {
       absl::string_view(status.message().data(), status.message().size()));
 }
 
+// A proxy type and function for template type deduction for logging
+// `absl::StatusOr`s.
+//
+// Can be removed once `absl::StatusOr` supports `operator<<`.
+template <class T>
+class StreamableStatusOrProxy {
+ public:
+  explicit StreamableStatusOrProxy(const absl::StatusOr<T>& status_or)
+      : status_or_(status_or) {}
+
+  StreamableStatusOrProxy(const StreamableStatusOrProxy&) = delete;
+  StreamableStatusOrProxy& operator=(const StreamableStatusOrProxy&) = delete;
+
+  friend std::ostream& operator<<(std::ostream& os,
+                                  const StreamableStatusOrProxy& logger) {
+    if (logger.status_or_.ok()) return os << *logger.status_or_;
+    return os << logger.status_or_.status().code() << ": "
+              << logger.status_or_.status().message();
+  }
+
+ private:
+  const absl::StatusOr<T>& status_or_;
+};
+
+template <class T>
+StreamableStatusOrProxy<T> StreamableStatusOr(
+    const absl::StatusOr<T>& status_or) {
+  return StreamableStatusOrProxy<T>(status_or);
+}
+
+// Convert between gRPC and Abseil statuses.
 grpc::Status AbslStatusToGrpcStatus(const absl::Status& status);
 absl::Status GrpcStatusToAbslStatus(const grpc::Status& status);
 
