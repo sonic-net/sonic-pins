@@ -30,6 +30,14 @@ def pins_infra_deps():
                 "https://github.com/google/boringssl/archive/b8a2bffc598f230484ff48a247526a9820facfc2.tar.gz",
             ],
         )
+    if not native.existing_rule("com_github_nelhage_rules_boost"):
+        # This version includes the fix for boost failures due to the xz library issue.
+        http_archive(
+            name = "com_github_nelhage_rules_boost",
+            url = "https://github.com/nelhage/rules_boost/archive/5160325dbdc8c9e499f9d9917d913f35f1785d52.zip",
+            strip_prefix = "rules_boost-5160325dbdc8c9e499f9d9917d913f35f1785d52",
+            sha256 = "feb4b1294684c79df7c1e08f1aec5da0da52021e33db59c88edbe86b4d1a017a",
+        )
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
