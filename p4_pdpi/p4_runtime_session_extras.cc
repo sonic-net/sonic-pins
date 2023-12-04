@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "glog/logging.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -168,6 +169,24 @@ absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
     const google::protobuf::RepeatedPtrField<p4::v1::Update>& updates) {
   return SendPiUpdatesAndReturnPerUpdateStatus(
       p4rt, std::vector<p4::v1::Update>(updates.begin(), updates.end()));
+}
+
+absl::StatusOr<p4::config::v1::P4Info> GetOrSetP4Info(
+    pdpi::P4RuntimeSession& p4rt_session,
+    const p4::config::v1::P4Info& default_p4info) {
+  ASSIGN_OR_RETURN(
+      p4::v1::GetForwardingPipelineConfigResponse forwarding_pipeline_config,
+      pdpi::GetForwardingPipelineConfig(&p4rt_session));
+  if (!forwarding_pipeline_config.config().p4info().tables().empty()) {
+    return forwarding_pipeline_config.config().p4info();
+  }
+
+  LOG(INFO) << "Pushing P4Info to device " << p4rt_session.DeviceId();
+  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      &p4rt_session,
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      default_p4info));
+  return default_p4info;
 }
 
 }  // namespace pdpi
