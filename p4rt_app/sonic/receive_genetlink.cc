@@ -204,7 +204,8 @@ absl::Status ProcessReceiveMessage(struct nl_msg* msg, void* arg) {
 int ProcessReceiveMessageCallback(struct nl_msg* msg, void* arg) {
   auto status = ProcessReceiveMessage(msg, arg);
   if (!status.ok()) {
-    LOG(WARNING) << "Failed to process receive packet: " << status.ToString();
+    LOG_EVERY_T(WARNING, 5)
+        << "Failed to process receive packet: " << status.ToString();
   }
   // Always return OK to move on to the next packet.
   return NL_OK;
