@@ -1329,6 +1329,32 @@ TEST(GetInterfacePortIdMap, InvalidGnmiGetResponse) {
       StatusIs(absl::StatusCode::kInternal, HasSubstr("Invalid response")));
 }
 
+TEST(GetConfigDisabledInterfaces, RpcFails) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(
+      Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(GetConfigDisabledInterfaces(stub),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(GetConfigDisabledInterfaces, RpcSucceeds) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"config\":{\"name\":\"CPU\",\"openconfig-p4rt:id\":4294967293,\"type\":\"iana-if-type:ethernetCsmacd\"},\"name\":\"CPU\",\"subinterfaces\":{\"subinterface\":[{\"config\":{\"index\":0},\"index\":0,\"openconfig-if-ip:ipv4\":{\"config\":{\"enabled\":false}},\"openconfig-if-ip:ipv6\":{\"config\":{\"enabled\":false}}}]}},{\"config\":{\"description\":\"ju1u1m2.sqs11.net.google.com:Ethernet1/1/1 [(not a trunk member)]\",\"enabled\":true,\"google-pins-interfaces:ecmp-hash-algorithm\":\"CRC_32LO\",\"google-pins-interfaces:ecmp-hash-offset\":\"8\",\"google-pins-interfaces:fully-qualified-interface-name\":\"ju1u1m1.sqs11.net.google.com:Ethernet1/1/1\",\"mtu\":9216,\"name\":\"Ethernet1/1/1\",\"openconfig-p4rt:id\":1,\"openconfig-pins-interfaces:health-indicator\":\"GOOD\",\"type\":\"iana-if-type:ethernetCsmacd\"},\"hold-time\":{\"config\":{\"down\":0,\"up\":8000}},\"name\":\"Ethernet1/1/1\",\"openconfig-if-ethernet:ethernet\":{\"config\":{\"fec-mode\":\"openconfig-if-ethernet:FEC_RS544_2X_INTERLEAVE\",\"port-speed\":\"openconfig-if-ethernet:SPEED_400GB\"}},\"subinterfaces\":{\"subinterface\":[{\"config\":{\"enabled\":true,\"index\":0},\"index\":0,\"openconfig-if-ip:ipv4\":{\"config\":{\"enabled\":false}},\"openconfig-if-ip:ipv6\":{\"config\":{\"enabled\":false},\"unnumbered\":{\"config\":{\"enabled\":true}}}}]}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+  EXPECT_THAT(GetConfigDisabledInterfaces(stub),
+              IsOkAndHolds(UnorderedElementsAre("CPU")));
+}
+
 TEST(GetInterfaceOperStatusOverGnmi, RpcFails) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub,
@@ -3042,6 +3068,138 @@ TEST(GetAllInterfaceCounters, WorksWithoutOptionalValues) {
   EXPECT_EQ(counters.out_ipv6_discarded_pkts, 1015);
   EXPECT_EQ(counters.timestamp_ns, 1620348032128305716);
   EXPECT_EQ(counters.carrier_transitions, std::nullopt);
+}
+
+TEST(GetAllInterfaceCounters, FailedWithMissingFieldAndReportsInterface) {
+  static constexpr absl::string_view kInterfaceJson = R"(
+{
+   "openconfig-interfaces:interface":[
+      {
+         "name":"CPU",
+         "state":{
+            "counters":{
+               "in-broadcast-pkts":"0",
+               "in-discards":"134",
+               "in-errors":"0",
+               "in-fcs-errors":"0",
+               "in-multicast-pkts":"0",
+               "in-octets":"0",
+               "in-pkts":"0",
+               "in-unicast-pkts":"0",
+               "in-unknown-protos":"0",
+               "last-clear":"0",
+               "out-broadcast-pkts":"0",
+               "out-discards":"0",
+               "out-errors":"0",
+               "out-multicast-pkts":"0",
+               "out-octets":"0",
+               "out-pkts":"0",
+               "out-unicast-pkts":"0"
+            }
+         },
+         "subinterfaces":{
+            "subinterface":[
+               {
+                  "index":0,
+                  "openconfig-if-ip:ipv4":{
+                     "state":{
+                        "enabled":false
+                     }
+                  },
+                  "openconfig-if-ip:ipv6":{
+                     "state":{
+                        "enabled":false
+                     }
+                  },
+                  "state":{
+                     "index":0
+                  }
+               }
+            ]
+         }
+      },
+      {
+         "name":"Ethernet1/1/1",
+         "openconfig-if-ethernet:ethernet":{
+            "state":{
+               "counters":{
+                  "in-maxsize-exceeded":"1001"
+               }
+            }
+         },
+         "state":{
+            "counters":{
+               "carrier-transitions":"1",
+               "in-broadcast-pkts":"1003",
+               "in-discards":"132",
+               "in-errors":"1004",
+               "in-fcs-errors":"1005",
+               "in-multicast-pkts":"132",
+               "in-octets":"9828",
+               "in-pkts":"132",
+               "in-unicast-pkts":"1006",
+               "in-unknown-protos":"0",
+               "last-clear":"0",
+               "out-broadcast-pkts":"1007",
+               "out-discards":"1008",
+               "out-errors":"1009",
+               "out-multicast-pkts":"134",
+               "out-octets":"9996",
+               "out-pkts":"134",
+               "out-unicast-pkts":"1010"
+            }
+         },
+         "subinterfaces":{
+            "subinterface":[
+               {
+                  "index":0,
+                  "openconfig-if-ip:ipv4":{
+                     "state":{
+                        "counters":{
+                           "in-pkts":"1011",
+                           "out-pkts":"1012"
+                        }
+                     }
+                  },
+                  "openconfig-if-ip:ipv6":{
+                     "state":{
+                        "counters":{
+                           "in-discarded-pkts":"1013",
+                           "in-pkts":"1014",
+                           "out-discarded-pkts":"1015",
+                           "out-pkts":"1016"
+                        }
+                     }
+                  }
+               }
+            ]
+         }
+      }
+   ]
+})";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get(_,
+                        EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                            R"pb(prefix { origin: "openconfig" }
+                                 path {
+                                   elem { name: "interfaces" }
+                                   elem { name: "interface" }
+                                 }
+                                 type: STATE)pb")),
+                        _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(ConstructResponse(
+              "elem { name: \"interfaces\" } elem { name: \"interface\" }",
+              kInterfaceJson)),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetAllInterfaceCounters(stub),
+      StatusIs(
+          absl::StatusCode::kNotFound,
+          AllOf(
+              HasSubstr("Ethernet1/1/1"),
+              HasSubstr(
+                  "google-pins-interfaces:in-buffer-discards not found in"))));
 }
 
 TEST(GetGnmiStateLeafValue, ReturnsStateValue) {
