@@ -338,5 +338,23 @@ TEST(EntryBuilder, AddEntryDecappingAllIpInIpv6PacketsAndSettingVrfAddsEntry) {
   EXPECT_THAT(entities.entities(), SizeIs(3));
 }
 
+TEST(EntryBuilder, AddMirrorSessionTableEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddMirrorSessionTableEntry(MirrorSessionParams{
+              .mirror_session_id = "id",
+              .mirror_egress_port = "0",
+          })
+          .LogPdEntries()
+          // TODO: Remove unsupported once the
+          // switch supports mirroring-related tables.
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry { table_name: "mirror_session_table" }
+              )pb"))));
+}
+
 }  // namespace
 }  // namespace sai

@@ -16,16 +16,18 @@
 // IDs of ACL tables (8 most significant bits = 0x02).
 // Since these IDs are user defined, they need to be separate from the fixed SAI
 // table ID space. We achieve this by starting the IDs at 0x100.
-#define ACL_INGRESS_TABLE_ID 0x02000100               // 33554688
-#define ACL_INGRESS_QOS_TABLE_ID 0x02000107           // 33554695
-#define ACL_INGRESS_COUNTING_TABLE_ID 0x02000109      // 33554697
-#define ACL_INGRESS_SECURITY_TABLE_ID 0x0200010A      // 33554698
-#define ACL_PRE_INGRESS_TABLE_ID 0x02000101           // 33554689
-#define ACL_PRE_INGRESS_VLAN_TABLE_ID 0x02000105      // 33554693
-#define ACL_PRE_INGRESS_METADATA_TABLE_ID 0x02000106  // 33554694
-#define ACL_WBB_INGRESS_TABLE_ID 0x02000103           // 33554691
-#define ACL_EGRESS_TABLE_ID 0x02000104                // 33554692
-#define ACL_EGRESS_DHCP_TO_HOST_TABLE_ID 0x02000108   // 33554696
+#define ACL_INGRESS_TABLE_ID 0x02000100                      // 33554688
+#define ACL_INGRESS_QOS_TABLE_ID 0x02000107                  // 33554695
+#define ACL_INGRESS_COUNTING_TABLE_ID 0x02000109             // 33554697
+#define ACL_INGRESS_SECURITY_TABLE_ID 0x0200010A             // 33554698
+#define ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID 0x0200010B  // 33554699
+#define ACL_PRE_INGRESS_TABLE_ID 0x02000101                  // 33554689
+#define ACL_PRE_INGRESS_VLAN_TABLE_ID 0x02000105             // 33554693
+#define ACL_PRE_INGRESS_METADATA_TABLE_ID 0x02000106         // 33554694
+#define ACL_WBB_INGRESS_TABLE_ID 0x02000103                  // 33554691
+#define ACL_EGRESS_TABLE_ID 0x02000104                       // 33554692
+#define ACL_EGRESS_DHCP_TO_HOST_TABLE_ID 0x02000108          // 33554696
+// Next available table id: 0x0200010C (33554700)
 
 // --- Actions -----------------------------------------------------------------
 // NOLINTBEGIN (to disable macro names of size > 80 cols)

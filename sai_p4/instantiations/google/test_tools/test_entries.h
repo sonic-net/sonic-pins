@@ -72,6 +72,21 @@ void AbslStringify(Sink& sink, const IpVersion& ip_version) {
   }
 }
 
+// Parameters for generating a mirror session table entry with PSAMP
+// encapsulation.
+// TODO: Adds data members with parameters needed for mirror
+// encap.
+struct MirrorSessionParams {
+  std::string mirror_session_id;
+  std::string mirror_egress_port;
+};
+
+// Parameters for generating an ACL table entry to mark packets to be mirrored.
+struct MarkToMirrorParams {
+  std::string ingress_port;
+  std::string mirror_session_id;
+};
+
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
 //
@@ -123,6 +138,8 @@ class EntryBuilder {
   EntryBuilder& AddEntrySettingVlanIdInPreIngress(
       absl::string_view set_vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt);
+  EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
+  EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
 
  private:
   sai::TableEntries entries_;

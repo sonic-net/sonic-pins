@@ -25,8 +25,8 @@
 #include "../../fixed/packet_io.p4"
 #include "../../fixed/routing.p4"
 #include "../../fixed/ipv4_checksum.p4"
-#include "../../fixed/mirroring_encap.p4"
-#include "../../fixed/mirroring_clone.p4"
+#include "../../fixed/ingress_cloning.p4"
+#include "../../fixed/mirroring.p4"
 #include "../../fixed/l3_admit.p4"
 #include "../../fixed/vlan.p4"
 #include "../../fixed/drop_martians.p4"
@@ -62,7 +62,8 @@ control ingress(inout headers_t headers,
       // The INGRESS stage can redirect (e.g. drop, punt or copy) packets, apply
       // rate-limits or modify header data.
       acl_ingress.apply(headers, local_metadata, standard_metadata);
-      mirroring_clone.apply(headers, local_metadata, standard_metadata);
+      mirror_session_lookup.apply(headers, local_metadata, standard_metadata);
+      ingress_cloning.apply(headers, local_metadata, standard_metadata);
     }
   }
 }  // control ingress

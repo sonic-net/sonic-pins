@@ -520,4 +520,34 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddMirrorSessionTableEntry(
+    const MirrorSessionParams& params) {
+  sai::TableEntry pd_entry;
+  sai::MirrorSessionTableEntry& mirror_session_entry =
+      *pd_entry.mutable_mirror_session_table_entry();
+  mirror_session_entry.mutable_match()->set_mirror_session_id(
+      params.mirror_session_id);
+  sai::MirrorWithPsampEncapsulationAction& action =
+      *mirror_session_entry.mutable_action()
+           ->mutable_mirror_with_psamp_encapsulation();
+  action.set_monitor_port(params.mirror_egress_port);
+  // TODO: Fill in PSAMP params in table entry's action.
+  *entries_.add_entries() = std::move(pd_entry);
+
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddMarkToMirrorAclEntry(
+    const MarkToMirrorParams& params) {
+  sai::TableEntry pd_entry;
+  sai::AclIngressMirrorAndRedirectTableEntry& acl_entry =
+      *pd_entry.mutable_acl_ingress_mirror_and_redirect_table_entry();
+  acl_entry.mutable_match()->mutable_in_port()->set_value(params.ingress_port);
+  acl_entry.mutable_action()->mutable_acl_mirror()->set_mirror_session_id(
+      params.mirror_session_id);
+  acl_entry.set_priority(1);
+  *entries_.add_entries() = std::move(pd_entry);
+  return *this;
+}
+
 }  // namespace sai

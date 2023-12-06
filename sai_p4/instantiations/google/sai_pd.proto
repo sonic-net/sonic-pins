@@ -161,7 +161,11 @@ message MirrorSessionTableEntry {
   }
   Match match = 1;
   message Action {
-    MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
+    oneof action {
+      MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
+      // CAUTION: This action is not (yet) supported.
+      MirrorWithPsampEncapsulationAction mirror_with_psamp_encapsulation = 2;
+    }
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -670,6 +674,19 @@ message AclIngressSecurityTableEntry {
   bytes controller_metadata = 8;
 }
 
+message AclIngressMirrorAndRedirectTableEntry {
+  message Match {
+    Optional in_port = 1;  // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    AclMirrorAction acl_mirror = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 // Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
 // of the v1model architecture and is not explicitly present in the P4 program.
 message MulticastGroupTableEntry {
@@ -793,6 +810,11 @@ message SetPortAndSrcMacAndVlanIdAction {
   string vlan_id = 3;  // Format::HEX_STRING / 12 bits
 }
 
+// CAUTION: This action is not (yet) supported.
+message MirrorWithPsampEncapsulationAction {
+  string monitor_port = 1;  // Format::STRING
+}
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -895,6 +917,8 @@ message TableEntry {
     AclEgressDhcpToHostTableEntry acl_egress_dhcp_to_host_table_entry = 264;
     AclIngressCountingTableEntry acl_ingress_counting_table_entry = 265;
     AclIngressSecurityTableEntry acl_ingress_security_table_entry = 266;
+    AclIngressMirrorAndRedirectTableEntry
+        acl_ingress_mirror_and_redirect_table_entry = 267;
     MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }
