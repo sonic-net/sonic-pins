@@ -52,6 +52,7 @@
 // TODO(PINS):
 // #include "swss/component_state_helper_interface.h"
 // #include "swss/intf_translator.h"
+#include "swss/warm_restart.h"
 
 namespace p4rt_app {
 
@@ -207,6 +208,10 @@ public:
   virtual void SetQueueTranslator(std::unique_ptr<QueueTranslator> translator,
                                   const std::string& queue_table_key)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  // Handle warm-boot notification.
+  virtual absl::Status HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification notification);
 
   sonic::PacketIoCounters GetPacketIoCounters()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);

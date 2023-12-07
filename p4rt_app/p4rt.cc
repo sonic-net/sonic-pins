@@ -49,6 +49,7 @@
 #include "p4rt_app/event_monitoring/debug_data_dump_events.h"
 #include "p4rt_app/event_monitoring/state_event_monitor.h"
 #include "p4rt_app/event_monitoring/state_verification_events.h"
+#include "p4rt_app/event_monitoring/warm_boot_events.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
@@ -62,6 +63,7 @@
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/dbconnector.h"
 #include "swss/schema.h"
+#include "swss/warm_restart.h"
 
 using ::grpc::Server;
 using ::grpc::ServerBuilder;
@@ -423,6 +425,13 @@ int main(int argc, char** argv) {
       swss::StateHelperManager::SystemSingleton();
 */
 
+  // Register warm-boot details with NSF Manager.
+  swss::WarmStart::initialize("p4rt", "p4rt");
+  swss::WarmStart::registerWarmBootInfo(/*wait_for_freeze=*/true,
+                                        /*wait_for_checkpoint=*/false,
+                                        /*wait_for_reconciliation=*/true);
+  swss::WarmStart::checkWarmStart("p4rt", "p4rt");
+
   // Open a database connection into the SONiC AppDb.
   swss::DBConnector app_db("APPL_DB", /*timeout=*/0);
   swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
@@ -541,6 +550,13 @@ int main(int argc, char** argv) {
   p4rt_app::DebugDataDumpEventHandler debug_data_dump_event_monitor(
       p4runtime_server, debug_data_dump_notifier, debug_data_dump_responder);
   debug_data_dump_event_monitor.Start();
+
+  // Start listening for warm-boot events.
+  p4rt_app::sonic::ConsumerNotifierAdapter warm_boot_notifier(
+      swss::WarmStart::kNsfManagerNotificationChannel, &state_db);
+  p4rt_app::WarmBootEventHandler warm_boot_event_monitor(p4runtime_server,
+                                                         warm_boot_notifier);
+  warm_boot_event_monitor.Start();
 
   // Report performance statistics every minute.
   absl::Notification stop_stats_logging;

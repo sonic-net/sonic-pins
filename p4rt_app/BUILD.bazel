@@ -47,6 +47,7 @@ cc_binary(
         "//p4rt_app/event_monitoring:config_db_port_table_event",
 	"//p4rt_app/event_monitoring:config_db_queue_table_event",
         "//p4rt_app/event_monitoring:debug_data_dump_events",
+        "//p4rt_app/event_monitoring:warm_boot_events",
         "//p4rt_app/event_monitoring:state_event_monitor",
         "//p4rt_app/event_monitoring:state_verification_events",
         "//p4rt_app/p4runtime:p4runtime_impl",

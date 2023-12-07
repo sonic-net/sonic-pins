@@ -84,6 +84,7 @@
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
 #include <nlohmann/json.hpp>
+#include "swss/warm_restart.h"
 
 namespace p4rt_app {
 namespace {
@@ -1650,6 +1651,14 @@ P4RuntimeImpl::GetOrchAgentWarmStartReconcliationState() const {
     absl::SleepFor(absl::Seconds(1));
   }
   return swss::WarmStart::WarmStartState::WSUNKNOWN;
+}
+
+
+// Handle warm-boot freeze notification.
+absl::Status P4RuntimeImpl::HandleWarmBootNotification(
+    swss::WarmStart::WarmBootNotification notification) {
+  LOG(INFO) << "Handle warm-boot notification.";
+  return absl::OkStatus();
 }
 
 }  // namespace p4rt_app
