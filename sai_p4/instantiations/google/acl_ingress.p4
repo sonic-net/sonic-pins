@@ -426,6 +426,20 @@ control acl_ingress(in headers_t headers,
     size = ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
+  action redirect_to_nexthop(
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    nexthop_id_t nexthop_id) {
+
+    // Set nexthop id.
+    local_metadata.nexthop_id_valid = true;
+    local_metadata.nexthop_id_value = nexthop_id;
+
+    // Cancel other forwarding decisions (if any).
+    local_metadata.wcmp_group_id_valid = false;
+    standard_metadata.mcast_grp = 0;
+  }
+
   // ACL table that mirrors and redirects packets.
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
@@ -483,6 +497,7 @@ control acl_ingress(in headers_t headers,
     }
     actions = {
       @proto_id(1) acl_mirror();
+      @proto_id(2) redirect_to_nexthop();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
