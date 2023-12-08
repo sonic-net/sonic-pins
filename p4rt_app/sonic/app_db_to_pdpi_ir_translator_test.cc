@@ -474,7 +474,7 @@ TEST(TranslateAppDbToPdpiTest, MulticastGroupEntrySuccess) {
       )pb",
       &entry));
 
-  EXPECT_EQ(IrMulticastGroupEntryToAppDbKey(entry), "0x11");
+  EXPECT_EQ(IrMulticastGroupEntryToAppDbKey(entry), "0x0011");
 }
 
 }  // namespace
