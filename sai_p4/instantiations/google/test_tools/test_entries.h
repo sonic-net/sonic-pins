@@ -156,8 +156,6 @@ class EntryBuilder {
       absl::string_view vrf,
       const NexthopRewriteOptions& nexthop_rewrite_options = {},
       std::optional<absl::string_view> vlan_hexstr = std::nullopt);
-  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
-      int multicast_group_id, IpVersion ip_version, absl::string_view vrf);
   EntryBuilder& AddMulticastRoute(absl::string_view vrf,
                                   const netaddr::Ipv4Address& dst_ip,
                                   int multicast_group_id);
@@ -189,6 +187,9 @@ class EntryBuilder {
       std::optional<absl::string_view> vlan_hexstr = std::nullopt);
   EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
       absl::string_view nexthop_id,
+      std::optional<absl::string_view> in_port_match = std::nullopt);
+  EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
+      int multicast_group_id,
       std::optional<absl::string_view> in_port_match = std::nullopt);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
   EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);

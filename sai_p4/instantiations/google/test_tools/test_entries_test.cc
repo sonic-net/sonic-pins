@@ -455,5 +455,53 @@ TEST(EntryBuilder, AddMirrorSessionTableEntry) {
               )pb"))));
 }
 
+TEST(EntryBuilder, AddMarkToMirrorAclEntryTest) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddMarkToMirrorAclEntry(MarkToMirrorParams{
+              .ingress_port = "1",
+              .mirror_session_id = "id",
+          })
+          .LogPdEntries()
+          // TODO: Remove unsupported once the
+          // switch supports mirroring-related tables.
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
+      )pb"))));
+}
+
+TEST(EntryBuilder, AddIngressAclEntryRedirectingToNexthopAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddIngressAclEntryRedirectingToNexthop("nexthop")
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
+      )pb"))));
+}
+
+TEST(EntryBuilder, AddIngressAclEntryRedirectingToMulticastGroupAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIngressAclEntryRedirectingToMulticastGroup(123)
+          .LogPdEntries()
+          // TODO: Remove `allow_unsupported` flag once the switch
+          // supports multicast-related entries.
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
+      )pb"))));
+}
+
 }  // namespace
 }  // namespace sai
