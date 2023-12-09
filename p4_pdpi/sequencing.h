@@ -57,8 +57,16 @@ absl::StatusOr<std::vector<std::vector<int>>> SequencePiUpdatesInPlace(
 
 // Sorts the table entries such that entries that are depended on come first.
 // That is, two entries x and y where x refers to y will be sorted as [y, x].
+ABSL_DEPRECATED("Prefer StableSortEntities")
 absl::Status SortTableEntries(const IrP4Info& info,
                               std::vector<p4::v1::TableEntry>& entries);
+
+// Stably sorts the entities such that entities that may be depended on come
+// first. That is, two entities x and y where x could refer to y will be sorted
+// as [y, x]. This is done based on the dependency rank remain in the same relative order.
+// Any entities with the same dependency rank remain in the same relative order.
+absl::Status StableSortEntities(const IrP4Info& info,
+                          std::vector<p4::v1::Entity>& entities);
 
 // Returns the subset of Entities in `entities` that is not reachable from any
 // root entity in `entities`, where a root entity is determined by the

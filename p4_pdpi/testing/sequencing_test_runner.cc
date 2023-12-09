@@ -99,21 +99,20 @@ void SequenceTest(const pdpi::IrP4Info& info, const std::string& test_name,
 void SortTest(const pdpi::IrP4Info& info, const std::string& test_name,
               const std::vector<std::string> pd_table_entries_strings) {
   // Convert input to PI.
-  std::vector<p4::v1::TableEntry> pi_entries;
+  std::vector<p4::v1::Entity> pi_entities;
   std::vector<pdpi::TableEntry> pd_entries;
   for (const auto& pd_entry_string : pd_table_entries_strings) {
     const auto pd_entry =
         gutil::ParseProtoOrDie<pdpi::TableEntry>(pd_entry_string);
     pd_entries.push_back(pd_entry);
-    const auto pi_entry_or_status =
-        pdpi::PartialPdTableEntryToPiTableEntry(info, pd_entry);
-    if (!pi_entry_or_status.status().ok()) {
-      std::cerr << "Unable to convert TableEntry from PD to PI."
-                << pi_entry_or_status.status() << std::endl;
+    const auto pi_entity_or_status =
+        pdpi::PdTableEntryToPiEntity(info, pd_entry);
+    if (!pi_entity_or_status.status().ok()) {
+      std::cerr << "Unable to convert PD TableEntry to PI Entity."
+                << pi_entity_or_status.status() << std::endl;
       return;
     }
-    const auto& pi_entry = pi_entry_or_status.value();
-    pi_entries.push_back(pi_entry);
+    pi_entities.push_back(*pi_entity_or_status);
   }
 
   // Output input.
@@ -126,7 +125,7 @@ void SortTest(const pdpi::IrP4Info& info, const std::string& test_name,
   }
 
   // Run sorting.
-  absl::Status status = pdpi::SortTableEntries(info, pi_entries);
+  absl::Status status = pdpi::StableSortEntities(info, pi_entities);
   if (!status.ok()) {
     std::cout << "--- Sorting failed (output):" << std::endl;
     std::cout << status << std::endl;
@@ -134,13 +133,14 @@ void SortTest(const pdpi::IrP4Info& info, const std::string& test_name,
   }
 
   // Output results.
-  std::cout << "--- Sorted entries (output):" << std::endl;
-  if (pi_entries.empty()) std::cout << "<empty>" << std::endl << std::endl;
-  for (const auto& entry : pi_entries) {
+  std::cout << "--- Sorted entities (output):" << std::endl;
+  if (pi_entities.empty()) std::cout << "<empty>" << std::endl << std::endl;
+  for (const auto& entry : pi_entities) {
     pdpi::TableEntry pd_entry;
-    if (absl::Status status = pdpi::PiTableEntryToPd(info, entry, &pd_entry);
+    if (absl::Status status =
+            pdpi::PiEntityToPdTableEntry(info, entry, &pd_entry);
         !status.ok()) {
-      std::cerr << "Unable to convert TableEntry from PI to PD." << status
+      std::cerr << "Unable to convert PI Entity to PD TableEntry." << status
                 << std::endl;
       return;
     }
@@ -212,20 +212,7 @@ void GetEntriesUnreachableFromRootsTest(
   }
 }
 
-int main(int argc, char** argv) {
-  // Usage: sequencing_test <p4info file>.
-  if (argc != 2) {
-    std::cerr << "Invalid number of arguments." << std::endl;
-    return 1;
-  }
-  const auto p4info = gutil::ParseProtoFileOrDie<P4Info>(argv[1]);
-  const auto status_or_info = pdpi::CreateIrP4Info(p4info);
-  if (!status_or_info.status().ok()) {
-    std::cerr << "Unable to create IrP4Info." << std::endl;
-    return 1;
-  }
-  const auto& info = status_or_info.value();
-
+void RunSequenceTests(const pdpi::IrP4Info& info) {
   SequenceTest(info, "Empty input", {});
 
   // Test entries that have reference relationships are properly sequenced.
@@ -750,7 +737,206 @@ int main(int argc, char** argv) {
             }
           )pb",
       });
+}  // NOLINT(readability/fn_size)
 
+void RunSortTests(const pdpi::IrP4Info& info) {
+  SortTest(info, "Empty input", {});
+
+  // Test entries that have reference relationships are properly sorted.
+  // A note on notation: A -> B means that A should be sorted ahead of B. E.g.
+  // because B may be dependent on A.
+  SortTest(info,
+           "EntryWithOneKey{key-a} -> "
+           "EntryThatRefersTo{key-a}",
+           {
+               R"pb(
+                 referring_by_action_table_entry {
+                   match { val: "0x001" }
+                   action {
+                     referring_to_one_match_field_action {
+                       referring_id_1: "key-a",
+                     }
+                   }
+                 }
+               )pb",
+               R"pb(
+                 one_match_field_table_entry {
+                   match { id: "key-a" }
+                   action { do_thing_4 {} }
+                 }
+               )pb",
+           });
+
+  SortTest(info, "EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a, 0x002}",
+           {R"pb(
+              referring_by_action_table_entry {
+                match { val: "0x001" }
+                action {
+                  referring_to_two_match_fields_action {
+                    referring_id_1: "key-a",
+                    referring_id_2: "0x002",
+                  }
+                }
+              }
+            )pb",
+            R"pb(
+              one_match_field_table_entry {
+                match { id: "key-a" }
+                action { do_thing_4 {} }
+              }
+            )pb"});
+  SortTest(info,
+           "EntryWithTwoKeys{key-a, 0x002} -> EntryThatRefersTo{key-a, 0x002}",
+           {
+               R"pb(
+                 referring_by_action_table_entry {
+                   match { val: "0x001" }
+                   action {
+                     referring_to_two_match_fields_action {
+                       referring_id_1: "key-a",
+                       referring_id_2: "0x002",
+                     }
+                   }
+                 }
+               )pb",
+               R"pb(
+                 two_match_fields_table_entry {
+                   match { id_1: "key-a", id_2: "0x002" }
+                   action { do_thing_4 {} }
+                 }
+               )pb",
+           });
+
+  // Sorted even if the entries don't necessarily refer to each other.
+  SortTest(info,
+           "EntryThatRefersTo{key-a, 0x002} -> EntryWithTwoKeys{key-c, 0x004}",
+           {
+               R"pb(
+                 referring_by_action_table_entry {
+                   match { val: "0x001" }
+                   action {
+                     referring_to_two_match_fields_action {
+                       referring_id_1: "key-a",
+                       referring_id_2: "0x002",
+                     }
+                   }
+                 }
+               )pb",
+               R"pb(
+                 two_match_fields_table_entry {
+                   match { id_1: "key-c", id_2: "0x004" }
+                   action { do_thing_4 {} }
+                 }
+               )pb",
+           });
+
+  SortTest(info, "Entries at same rank should maintain the original order.",
+           {
+               R"pb(
+                 referring_by_action_table_entry {
+                   match { val: "0x001" }
+                   action {
+                     referring_to_two_match_fields_action {
+                       referring_id_1: "key-a"
+                       referring_id_2: "0x002"
+                     }
+                   }
+                 }
+               )pb",
+               R"pb(
+                 packet_count_and_meter_table_entry {
+                   match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+                   action { packet_count_and_meter {} }
+                 }
+               )pb",
+           });
+
+  // Tests a mix of referred and referring entries and other entries.
+  SortTest(info,
+           "EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a} , another entry",
+           {
+               R"pb(
+                 lpm2_table_entry {
+                   match { ipv6 { value: "ffff::abcd:0:0" prefix_length: 96 } }
+                   action { NoAction {} }
+                 }
+               )pb",
+               R"pb(
+                 referring_by_action_table_entry {
+                   match { val: "0x001" }
+                   action {
+                     referring_to_one_match_field_action {
+                       referring_id_1: "key-a",
+                     }
+                   }
+                 }
+               )pb",
+               R"pb(
+                 one_match_field_table_entry {
+                   match { id: "key-a" }
+                   action { do_thing_4 {} }
+                 }
+               )pb",
+           });
+  SortTest(info,
+           "EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a} ,"
+           "EntryWithOneKey{key-b} -> EntryThatRefersTo{key-b}",
+           {
+               R"pb(
+                 referring_by_action_table_entry {
+                   match { val: "0x001" }
+                   action {
+                     referring_to_one_match_field_action {
+                       referring_id_1: "key-a",
+                     }
+                   }
+                 }
+               )pb",
+               R"pb(
+                 one_match_field_table_entry {
+                   match { id: "key-a" }
+                   action { do_thing_4 {} }
+                 }
+               )pb",
+               R"pb(
+                 referring_by_action_table_entry {
+                   match { val: "0x001" }
+                   action {
+                     referring_to_two_match_fields_action {
+                       referring_id_1: "key-a",
+                       referring_id_2: "0x002",
+                     }
+                   }
+                 }
+               )pb",
+               R"pb(
+                 two_match_fields_table_entry {
+                   match { id_1: "key-c", id_2: "0x004" }
+                   action { do_thing_4 {} }
+                 }
+               )pb",
+           });
+
+  SortTest(
+      info,
+      "two_match_fields_table_entry -> referring_by_match_field_table_entry",
+      {
+          R"pb(
+            referring_by_match_field_table_entry {
+              match { referring_id_1: "key-a" referring_id_2: "0x001" }
+              action { do_thing_4 {} }
+            }
+          )pb",
+          R"pb(
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x001" }
+              action { do_thing_4 {} }
+            }
+          )pb",
+      });
+}  // NOLINT(readability/fn_size)
+
+void RunGetEntriesUnreachableFromRootsTests(const pdpi::IrP4Info& info) {
   GetEntriesUnreachableFromRootsTest(info, "Empty input generates no garbage.",
                                      {});
 
@@ -1329,7 +1515,29 @@ int main(int argc, char** argv) {
             }
           )pb",
       });
+}  // NOLINT(readability/fn_size)
+
+int main(int argc, char** argv) {
+  // Usage: sequencing_test <p4info file>.
+  if (argc != 2) {
+    std::cerr << "Invalid number of arguments." << std::endl;
+    return 1;
+  }
+  const auto p4info = gutil::ParseProtoFileOrDie<P4Info>(argv[1]);
+  const auto status_or_info = pdpi::CreateIrP4Info(p4info);
+  if (!status_or_info.status().ok()) {
+    std::cerr << "Unable to create IrP4Info." << std::endl;
+    return 1;
+  }
+  const auto& info = status_or_info.value();
+
+  RunSequenceTests(info);
+
+  RunSortTests(info);
+
+  RunGetEntriesUnreachableFromRootsTests(info);
+
   // TODO: Add negative test (where updates and P4Info are out of
   // sync).
   return 0;
-}  // NOLINT(readability/fn_size)
+}
