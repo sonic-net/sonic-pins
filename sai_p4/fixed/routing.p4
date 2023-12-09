@@ -171,9 +171,8 @@ control routing_lookup(in headers_t headers,
   @id(ROUTING_SET_MULTICAST_GROUP_ID_ACTION_ID)
   @action_restriction("
     // Disallow 0 since it encodes 'no multicast' in V1Model.
-    multicast_group_id != 0"
-  )
-
+    multicast_group_id != 0;
+  ")
   action set_multicast_group_id(
       @id(1)
       // TODO: Add this once supported by PDPI and its customers.

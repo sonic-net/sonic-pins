@@ -540,6 +540,22 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToMulticastGroup(
+    int multicast_group_id, std::optional<absl::string_view> in_port_match) {
+  sai::AclIngressMirrorAndRedirectTableEntry& entry =
+      *entries_.add_entries()
+           ->mutable_acl_ingress_mirror_and_redirect_table_entry();
+  if (in_port_match.has_value()) {
+    entry.mutable_match()->mutable_in_port()->set_value(*in_port_match);
+  }
+  entry.mutable_action()
+      ->mutable_redirect_to_ipmc_group()
+      ->set_multicast_group_id(pdpi::BitsetToHexString<16>(multicast_group_id));
+  entry.set_priority(1);
+
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddMirrorSessionTableEntry(
     const MirrorSessionParams& params) {
   sai::TableEntry pd_entry;
