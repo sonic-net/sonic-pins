@@ -32,7 +32,12 @@ constexpr absl::string_view kMulticastGroupIdString = "multicast_group_id";
 constexpr absl::string_view kReplicaString = "replica";
 constexpr absl::string_view kReplicaPortString = "replica.port";
 constexpr absl::string_view kReplicaInstanceString = "replica.instance";
+
 }  // namespace
+
+std::string GetMulticastGroupTableName() {
+  return absl::StrCat(kBuiltInPrefix, kMulticastGroupTableString);
+}
 
 bool IsBuiltInTable(absl::string_view table_name) {
   return StringToIrBuiltInTable(table_name).ok();
@@ -97,7 +102,7 @@ absl::StatusOr<IrBuiltInAction> GetBuiltInActionFromBuiltInParameter(
 absl::StatusOr<std::string> IrBuiltInTableToString(IrBuiltInTable table) {
   switch (table) {
     case pdpi::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE: {
-      return absl::StrCat(kBuiltInPrefix, kMulticastGroupTableString);
+      return GetMulticastGroupTableName();
     }
     default: {
       return gutil::InvalidArgumentErrorBuilder() << "Unknown built-in table.";
@@ -146,7 +151,7 @@ absl::StatusOr<std::string> IrBuiltInParameterToString(
 }
 
 absl::StatusOr<IrBuiltInTable> StringToIrBuiltInTable(absl::string_view table) {
-  if (table == absl::StrCat(kBuiltInPrefix, kMulticastGroupTableString)) {
+  if (table == GetMulticastGroupTableName()) {
     return pdpi::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE;
   }
   return gutil::InvalidArgumentErrorBuilder()
