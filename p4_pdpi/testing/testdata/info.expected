@@ -10803,6 +10803,110 @@ built_in_tables {
     }
   }
 }
+dependency_rank_by_table_name {
+  key: "builtin::multicast_group_table"
+  value: -1
+}
+dependency_rank_by_table_name {
+  key: "byte_count_and_meter_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "constrained_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "count_and_meter_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "exact_and_optional_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "exact_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "golden_test_friendly_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "golden_test_friendly_wcmp_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "id_test_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "lpm1_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "lpm2_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "no_action_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "one_match_field_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "optional_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "packet_count_and_meter_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "referenced_by_multicast_replica_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "referring_by_action_table"
+  value: -1
+}
+dependency_rank_by_table_name {
+  key: "referring_by_match_field_table"
+  value: -1
+}
+dependency_rank_by_table_name {
+  key: "referring_to_referring_by_match_field_table"
+  value: -2
+}
+dependency_rank_by_table_name {
+  key: "refers_to_multicast_by_action_table"
+  value: -2
+}
+dependency_rank_by_table_name {
+  key: "refers_to_multicast_by_match_field_table"
+  value: -2
+}
+dependency_rank_by_table_name {
+  key: "ternary_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "two_match_fields_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "unsupported_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "wcmp2_table"
+  value: 0
+}
+dependency_rank_by_table_name {
+  key: "wcmp_table"
+  value: 0
+}
 
 -- pdpi::RemoveUnsupportedEntities diff ---------------------------
 deleted: tables_by_id[33554435].match_fields_by_id[5]: { match_field { id: 5 name: "unsupported_field" annotations: "@unsupported" bitwidth: 1 match_type: TERNARY } is_unsupported: true }
@@ -10815,3 +10919,6 @@ deleted: tables_by_name[ternary_table].entry_actions[1]: { ref { id: 16777223 an
 deleted: tables_by_name[unsupported_table]: { preamble { id: 33554447 name: "ingress.unsupported_table" alias: "unsupported_table" annotations: "@unsupported" } match_fields_by_id { key: 1 value { match_field { id: 1 name: "ipv6" annotations: "@format(IPV6_ADDRESS)" bitwidth: 128 match_type: EXACT } format: IPV6 } } match_fields_by_id { key: 2 value { match_field { id: 2 name: "ipv4" annotations: "@format(IPV4_ADDRESS)" bitwidth: 32 match_type: EXACT } format: IPV4 } } match_fields_by_name { key: "ipv4" value { match_field { id: 2 name: "ipv4" annotations: "@format(IPV4_ADDRESS)" bitwidth: 32 match_type: EXACT } format: IPV4 } } match_fields_by_name { key: "ipv6" value { match_field { id: 1 name: "ipv6" annotations: "@format(IPV6_ADDRESS)" bitwidth: 128 match_type: EXACT } format: IPV6 } } default_only_actions { ref { id: 21257015 annotations: "@defaultonly" scope: DEFAULT_ONLY } action { preamble { id: 21257015 name: "NoAction" alias: "NoAction" annotations: "@noWarn(\"unused\")" } } } size: 1024 const_default_action { preamble { id: 21257015 name: "NoAction" alias: "NoAction" annotations: "@noWarn(\"unused\")" } } is_unsupported: true }
 deleted: actions_by_id[16777223]: { preamble { id: 16777223 name: "unsupported_action" alias: "unsupported_action" annotations: "@unsupported" } is_unsupported: true }
 deleted: actions_by_name[unsupported_action]: { preamble { id: 16777223 name: "unsupported_action" alias: "unsupported_action" annotations: "@unsupported" } is_unsupported: true }
+
+
+DO NOT SUBMIT: P4Info still contains unsupported entities after call to `pdpi::RemoveUnsupportedEntities`

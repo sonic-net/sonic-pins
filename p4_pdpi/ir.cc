@@ -29,18 +29,18 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/ascii.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
-#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/map.h"
 #include "google/protobuf/message.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "google/rpc/code.pb.h"
 #include "google/rpc/status.pb.h"
+#include "grpcpp/support/status.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -1253,6 +1253,68 @@ absl::Status InsertIncomingReferenceInfo(const IrTableReference &reference,
   }
 }
 
+absl::StatusOr<int> SetAndReturnTableDependencyRank(
+    absl::string_view table_name, IrP4Info &info) {
+  auto rank_by_table_name = info.mutable_dependency_rank_by_table_name();
+  // Check whether the table has been processed yet.
+  if (auto iter = rank_by_table_name->find(table_name);
+      iter != rank_by_table_name->end()) {
+    // If the table has been assigned a final rank, return OK.
+    if (iter->second <= 0) {
+      return iter->second;
+    } else {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Dependencies form a cycle, which includes table '"
+             << table_name << "'. No cyclic dependencies are allowed.";
+    }
+  }
+
+  // Insert the table with a temporary mark. If we see that mark again, it means
+  // we have a cycle.
+  (*rank_by_table_name)[table_name] = 1;
+
+  // Get outgoing references.
+  const google::protobuf::RepeatedPtrField<IrTableReference>
+      *outgoing_references;
+  if (IsBuiltInTable(table_name)) {
+    ASSIGN_OR_RETURN(
+        const IrBuiltInTableDefinition *table_def,
+        gutil::FindPtrOrStatus(info.built_in_tables(), table_name));
+    outgoing_references = &table_def->outgoing_references();
+  } else {
+    ASSIGN_OR_RETURN(const IrTableDefinition *table_def,
+                     gutil::FindPtrOrStatus(info.tables_by_name(), table_name));
+    outgoing_references = &table_def->outgoing_references();
+  }
+
+  // Determine the rank of our table based on what it refers to.
+  int rank = 0;
+  for (const IrTableReference &reference : *outgoing_references) {
+    ASSIGN_OR_RETURN(std::string referenced_table_name,
+                     GetNameOfTable(reference.destination_table()));
+    ASSIGN_OR_RETURN(int child_rank, SetAndReturnTableDependencyRank(
+                                         referenced_table_name, info));
+    rank = std::min(rank, child_rank - 1);
+  }
+
+  (*rank_by_table_name)[table_name] = rank;
+  return rank;
+}
+
+// Uses topological sort modified to allow multiple unrelated nodes to be sorted
+// at the same value.
+// Returns INVALID_ARGUMENT_ERROR if the dependencies form a cycle.
+absl::Status ConstructDependencyRankByTableName(IrP4Info &info) {
+  for (const auto &[table_name, table] : info.tables_by_name()) {
+    RETURN_IF_ERROR(SetAndReturnTableDependencyRank(table_name, info).status());
+  }
+  for (const auto &[table_name, table] : info.built_in_tables()) {
+    RETURN_IF_ERROR(SetAndReturnTableDependencyRank(table_name, info).status());
+  }
+
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
@@ -1598,6 +1660,9 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
     RETURN_IF_ERROR(InsertOutgoingReferenceInfo(reference, info));
     RETURN_IF_ERROR(InsertIncomingReferenceInfo(reference, info));
   }
+
+  // Construct table dependency order. Assumes that references form a DAG.
+  RETURN_IF_ERROR(ConstructDependencyRankByTableName(info));
 
   return info;
 }
@@ -2941,6 +3006,94 @@ void RemoveUnsupportedMatchFields(IrP4Info &p4_info) {
     RemoveUnsupportedValues(*table.mutable_match_fields_by_id());
     RemoveUnsupportedValues(*table.mutable_match_fields_by_name());
   }
+}
+
+bool IsPresentInP4Info(const IrTable &table, const IrP4Info &p4_info) {
+  switch (table.table_case()) {
+    case IrTable::kP4Table:
+      return p4_info.tables_by_id().contains(table.p4_table().table_id());
+    case IrTable::kBuiltInTable:
+      // Built-in tables are always present.
+      return true;
+    case IrTable::TABLE_NOT_SET:
+      // This should never happen, but isn't dealt with in this function to
+      // avoid introducing complexity or masking errors (by returning false).
+      return true;
+  }
+  return true;
+}
+
+bool IsPresentInP4Info(const IrActionField &action_field,
+                       const IrP4Info &p4_info) {
+  switch (action_field.action_field_case()) {
+    case IrActionField::kP4ActionField:
+      return p4_info.actions_by_id().contains(
+          action_field.p4_action_field().action_id());
+    case IrActionField::kBuiltInActionField:
+      // Built-in actions are always present.
+      return true;
+    case IrActionField::ACTION_FIELD_NOT_SET:
+      // This should never happen, but isn't dealt with in this function to
+      // avoid introducing complexity or masking errors (by returning false).
+      return true;
+  }
+  return true;
+}
+
+// If a reference is from an unsupported table or any of the action field
+// references are from unsupported actions, then the reference is dangling.
+bool IsDanglingReference(const IrTableReference &reference,
+                         const IrP4Info &p4_info) {
+  // Check if the source table is present.
+  if (!IsPresentInP4Info(reference.source_table(), p4_info)) return true;
+
+  // Check if the source action (if there is one) is present.
+  for (const IrTableReference::FieldReference &field_reference :
+       reference.field_references()) {
+    if (field_reference.source().has_action_field() &&
+        !IsPresentInP4Info(field_reference.source().action_field(), p4_info)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void RemoveDanglingReferences(
+    const IrP4Info &p4_info,
+    google::protobuf::RepeatedPtrField<IrTableReference> &references) {
+  google::protobuf::RepeatedPtrField<IrTableReference> tmp;
+  for (auto &reference : references) {
+    if (!IsDanglingReference(reference, p4_info)) tmp.Add(std::move(reference));
+  }
+  references = std::move(tmp);
+}
+
+// Only deletes references FROM unsupported tables and FROM unsupported actions.
+// Note: Unsupported fields must be optional and optional fields do not yet
+// support references to or from them. If that changes, this should also remove
+// references FROM unsupported fields and references TO an unsupported field
+// from a supported field.
+void RemoveDanglingReferences(IrP4Info &p4_info) {
+  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
+    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
+    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
+  }
+  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
+    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
+    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
+  }
+  for (auto &[name, table] : *p4_info.mutable_built_in_tables()) {
+    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
+    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
+  }
+  google::protobuf::Map<std::string, int32_t> new_dependency_rank_by_table_name;
+  for (auto &[name, value] : *p4_info.mutable_dependency_rank_by_table_name()) {
+    if (IsBuiltInTable(name) || p4_info.tables_by_name().contains(name)) {
+      new_dependency_rank_by_table_name.insert({name, value});
+    }
+  }
+  *p4_info.mutable_dependency_rank_by_table_name() =
+      std::move(new_dependency_rank_by_table_name);
 }
 
 }  // namespace

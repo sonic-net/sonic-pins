@@ -1239,6 +1239,16 @@ one_match_field_table_entry {
 }
 
 --- Sorted entities (output):
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
 referring_by_action_table_entry {
   match {
     val: "0x001"
@@ -1246,16 +1256,6 @@ referring_by_action_table_entry {
   action {
     referring_to_one_match_field_action {
       referring_id_1: "key-a"
-    }
-  }
-}
-
-one_match_field_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
     }
   }
 }
@@ -1288,6 +1288,16 @@ one_match_field_table_entry {
 }
 
 --- Sorted entities (output):
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
 referring_by_action_table_entry {
   match {
     val: "0x001"
@@ -1296,16 +1306,6 @@ referring_by_action_table_entry {
     referring_to_two_match_fields_action {
       referring_id_1: "key-a"
       referring_id_2: "0x002"
-    }
-  }
-}
-
-one_match_field_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
     }
   }
 }
@@ -1339,6 +1339,17 @@ two_match_fields_table_entry {
 }
 
 --- Sorted entities (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x002"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
 referring_by_action_table_entry {
   match {
     val: "0x001"
@@ -1347,17 +1358,6 @@ referring_by_action_table_entry {
     referring_to_two_match_fields_action {
       referring_id_1: "key-a"
       referring_id_2: "0x002"
-    }
-  }
-}
-
-two_match_fields_table_entry {
-  match {
-    id_1: "key-a"
-    id_2: "0x002"
-  }
-  action {
-    do_thing_4 {
     }
   }
 }
@@ -1391,6 +1391,17 @@ two_match_fields_table_entry {
 }
 
 --- Sorted entities (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
 referring_by_action_table_entry {
   match {
     val: "0x001"
@@ -1399,17 +1410,6 @@ referring_by_action_table_entry {
     referring_to_two_match_fields_action {
       referring_id_1: "key-a"
       referring_id_2: "0x002"
-    }
-  }
-}
-
-two_match_fields_table_entry {
-  match {
-    id_1: "key-c"
-    id_2: "0x004"
-  }
-  action {
-    do_thing_4 {
     }
   }
 }
@@ -1445,18 +1445,6 @@ packet_count_and_meter_table_entry {
 }
 
 --- Sorted entities (output):
-referring_by_action_table_entry {
-  match {
-    val: "0x001"
-  }
-  action {
-    referring_to_two_match_fields_action {
-      referring_id_1: "key-a"
-      referring_id_2: "0x002"
-    }
-  }
-}
-
 packet_count_and_meter_table_entry {
   match {
     ipv4 {
@@ -1466,6 +1454,18 @@ packet_count_and_meter_table_entry {
   }
   action {
     packet_count_and_meter {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
     }
   }
 }
@@ -1523,6 +1523,16 @@ lpm2_table_entry {
   }
 }
 
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
 referring_by_action_table_entry {
   match {
     val: "0x001"
@@ -1530,16 +1540,6 @@ referring_by_action_table_entry {
   action {
     referring_to_one_match_field_action {
       referring_id_1: "key-a"
-    }
-  }
-}
-
-one_match_field_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
     }
   }
 }
@@ -1594,6 +1594,27 @@ two_match_fields_table_entry {
 }
 
 --- Sorted entities (output):
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
 referring_by_action_table_entry {
   match {
     val: "0x001"
@@ -1601,16 +1622,6 @@ referring_by_action_table_entry {
   action {
     referring_to_one_match_field_action {
       referring_id_1: "key-a"
-    }
-  }
-}
-
-one_match_field_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
     }
   }
 }
@@ -1623,17 +1634,6 @@ referring_by_action_table_entry {
     referring_to_two_match_fields_action {
       referring_id_1: "key-a"
       referring_id_2: "0x002"
-    }
-  }
-}
-
-two_match_fields_table_entry {
-  match {
-    id_1: "key-c"
-    id_2: "0x004"
-  }
-  action {
-    do_thing_4 {
     }
   }
 }
@@ -1666,10 +1666,10 @@ two_match_fields_table_entry {
 }
 
 --- Sorted entities (output):
-referring_by_match_field_table_entry {
+two_match_fields_table_entry {
   match {
-    referring_id_1: "key-a"
-    referring_id_2: "0x001"
+    id_1: "key-a"
+    id_2: "0x001"
   }
   action {
     do_thing_4 {
@@ -1677,10 +1677,10 @@ referring_by_match_field_table_entry {
   }
 }
 
-two_match_fields_table_entry {
+referring_by_match_field_table_entry {
   match {
-    id_1: "key-a"
-    id_2: "0x001"
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
   }
   action {
     do_thing_4 {
