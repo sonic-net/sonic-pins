@@ -79,8 +79,8 @@ action do_thing_4() {
 }
 
 @id(7) @unsupported
-action unsupported_action() {
-}
+action unsupported_action(@refers_to(exact_table, normal) @id(1) bit<10> normal) 
+{}
 
 
 control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
@@ -341,6 +341,8 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
       key = {
         meta.ipv4 : exact @id(2) @format(IPV4_ADDRESS) @name("ipv4");
         meta.ipv6 : exact @id(1) @format(IPV6_ADDRESS) @name("ipv6");
+        meta.mac : exact @id(3) @format(MAC_ADDRESS) @name("mac")
+          @refers_to(exact_table, mac);
       }
       actions = {
         @defaultonly NoAction();
