@@ -1007,6 +1007,24 @@ tables {
     match_type: TERNARY
   }
   match_fields {
+    id: 8
+    name: "vrf_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)"
+    annotations: "@unsupported"
+    match_type: OPTIONAL
+    type_name {
+      name: "vrf_id_t"
+    }
+  }
+  match_fields {
+    id: 9
+    name: "ipmc_table_hit"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_TABLE_HIT)"
+    annotations: "@unsupported"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
     id: 1
     name: "in_port"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
@@ -1853,7 +1871,6 @@ actions {
     id: 16777239
     name: "ingress.routing_resolution.set_ip_nexthop_and_disable_rewrites"
     alias: "set_ip_nexthop_and_disable_rewrites"
-    annotations: "@unsupported"
   }
   params {
     id: 1

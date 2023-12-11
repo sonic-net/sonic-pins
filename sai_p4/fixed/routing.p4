@@ -277,12 +277,22 @@ control routing_lookup(in headers_t headers,
         // TODO: Rework conditions under which uni/multicast table
         // lookups occur and what happens when both tables are hit.
         ipv4_table.apply();
+
+        // TODO: Use commented out code instead, once p4-symbolic
+        // supports it.
+        // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
         ipv4_multicast_table.apply();
+        local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
       } else if (headers.ipv6.isValid()) {
         // TODO: Rework conditions under which uni/multicast table
         // lookups occur and what happens when both tables are hit.
         ipv6_table.apply();
+
+        // TODO: Use commented out code instead, once p4-symbolic
+        // supports it.
+        // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
         ipv6_multicast_table.apply();
+        local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
       }
     }
   }
@@ -383,9 +393,6 @@ control routing_resolution(in headers_t headers,
   // SAI_NEXT_HOP_ATTR_DISABLE_DST_MAC_REWRITE,
   // SAI_NEXT_HOP_ATTR_DISABLE_DECREMENT_TTL and
   // SAI_NEXT_HOP_ATTR_DISABLE_VLAN_REWRITE based on action parameters.
-  // TODO Remove unsupported annotation once the switch stack
-  // supports this action.
-  @unsupported
   @id(ROUTING_SET_IP_NEXTHOP_AND_DISABLE_REWRITES_ACTION_ID)
   action set_ip_nexthop_and_disable_rewrites(
       @id(1)

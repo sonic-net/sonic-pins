@@ -522,16 +522,28 @@ control acl_ingress(in headers_t headers,
 #endif
 
       // This field is technically only needed on ToR and only included
-      // for middleblock because at least 1 match field is required and the
-      // other middleblock match fields are TBD.
-      // TODO: Make this field TOR-only when we add
-      // middleblock  match fields.
+      // for middleblock because at least 1 match field without `@unsupported`
+      // annotation is required.
+      // TODO: Make this field TOR-only once the
+      // middleblock  match fields are no longer `@unsupported`.
       local_metadata.vlan_id : ternary
         @name("vlan_id")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
         @id(7);
 
-      // TODO: Add match on vrf_id and l3_host_table_hit.
+      local_metadata.vrf_id : optional
+        @name("vrf_id")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)
+        @id(8)
+        // TODO: Remove once the switch supports this field.
+        @unsupported;
+
+      local_metadata.ipmc_table_hit : optional
+        @name("ipmc_table_hit")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_TABLE_HIT)
+        @id(9)
+        // TODO: Remove once the switch supports this field.
+        @unsupported;
     }
     actions = {
       @proto_id(1) acl_mirror();

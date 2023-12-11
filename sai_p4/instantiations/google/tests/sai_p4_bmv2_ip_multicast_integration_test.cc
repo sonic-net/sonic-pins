@@ -405,6 +405,63 @@ TEST_P(IpMulticastTest, AclIngressDropActionOverridesMulticastAction) {
               IsOkAndHolds(IsEmpty()));
 }
 
+// We install two multicast routes:
+// * An exact-match route in the IPMC table.
+// * A default route that only applies if there was no IPMC table hit, in the
+//   ingress ACL table.
+//
+// We then send two packets, one that should hit the IPMC table entry and one
+// that should miss it, and verify that they hit the exact route and default
+// route, respectively.
+TEST(IpMulticastPrefixMatchTest, IpmcTableHitQualifierWorks) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  static constexpr int kExactMatchMulticastGroupId = 1;
+  static constexpr int kDefaultMulticastGroupId = 2;
+  static constexpr netaddr::Ipv4Address kExactMatchIpv4Dst =
+      netaddr::Ipv4Address(10, 0, 0, 42);
+  static constexpr netaddr::Ipv4Address kDefaultMatchIpv4Dst =
+      netaddr::Ipv4Address(10, 0, 0, 24);
+
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddVrfEntry("vrf")
+          .AddEntrySettingVrfForAllPackets("vrf")
+          .AddEntryAdmittingAllPacketsToL3()
+          .AddMulticastRoute("vrf", kExactMatchIpv4Dst,
+                             kExactMatchMulticastGroupId)
+          .AddIngressAclEntryRedirectingToMulticastGroup(
+              kDefaultMulticastGroupId,
+              sai::MirrorAndRedirectMatchFields{
+                  // This rule shall only apply if no multicast route was found.
+                  .ipmc_table_hit = false,
+              })
+          .AddMulticastGroupEntry(kExactMatchMulticastGroupId,
+                                  {
+                                      sai::Replica{.egress_port = "\1"},
+                                  })
+          .AddMulticastGroupEntry(kDefaultMulticastGroupId,
+                                  {
+                                      sai::Replica{.egress_port = "\2"},
+                                      sai::Replica{.egress_port = "\3"},
+                                  })
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+
+  ASSERT_OK_AND_ASSIGN(const packetlib::Packet kExactMatchInputPacket,
+                       GetIpv4TestPacket(kExactMatchIpv4Dst));
+  ASSERT_OK_AND_ASSIGN(const packetlib::Packet kDefaultMatchInputPacket,
+                       GetIpv4TestPacket(kDefaultMatchIpv4Dst));
+  ASSERT_THAT(bmv2.SendPacket(1, kExactMatchInputPacket),
+              IsOkAndHolds(UnorderedElementsAre(Key(1))));
+  ASSERT_THAT(bmv2.SendPacket(1, kDefaultMatchInputPacket),
+              IsOkAndHolds(UnorderedElementsAre(Key(2), Key(3))));
+}
+
 std::vector<TestParams> GetAllTestInstances() {
   std::vector<TestParams> instances;
   for (sai::Instantiation instantiation : sai::AllSaiInstantiations()) {

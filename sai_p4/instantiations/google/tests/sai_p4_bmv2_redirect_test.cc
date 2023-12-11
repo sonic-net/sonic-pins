@@ -273,7 +273,9 @@ TEST(RedirectTest, RedirectToMulticastGroupOverridesMulticastTableAction) {
           .AddMulticastRoute("vrf", ipv4_dst, kDefaultMulticastGroupId)
           .AddIngressAclEntryRedirectingToMulticastGroup(
               kOverrideMulticastGroupId,
-              /*in_port_match=*/kOverrideIngressPortStr)
+              sai::MirrorAndRedirectMatchFields{
+                  .in_port = kOverrideIngressPortStr,
+              })
           .AddMulticastGroupEntry(kDefaultMulticastGroupId,
                                   {
                                       sai::Replica{.egress_port = "\1"},

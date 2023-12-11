@@ -104,6 +104,12 @@ struct Replica {
   int instance = 0;
 };
 
+// Match fields of an ingress mirror or redirect table entry.
+struct MirrorAndRedirectMatchFields {
+  std::optional<absl::string_view> in_port;
+  std::optional<bool> ipmc_table_hit;
+};
+
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
 //
@@ -190,7 +196,7 @@ class EntryBuilder {
       std::optional<absl::string_view> in_port_match = std::nullopt);
   EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
       int multicast_group_id,
-      std::optional<absl::string_view> in_port_match = std::nullopt);
+      const MirrorAndRedirectMatchFields& match_fields = {});
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
   EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
 
