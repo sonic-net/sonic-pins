@@ -269,7 +269,10 @@ message GoldenTestFriendlyWcmpTableEntry {
   }
   Match match = 1;
   message Action {
+  oneof action {
+    OtherGoldenTestFriendlyAction other_golden_test_friendly_action = 2;
     GoldenTestFriendlyAction golden_test_friendly_action = 1;
+  }
   }
   message WcmpAction {
     Action action = 1;
@@ -510,6 +513,11 @@ message ReferringToTwoMatchFieldsAction {
   string referring_id_1 = 1; // Format::STRING
   // Refers to 'two_match_fields_table.id_2'.
   string referring_id_2 = 2; // Format::HEX_STRING / 10 bits
+}
+
+message OtherGoldenTestFriendlyAction {
+  string arg1 = 1; // Format::STRING
+  string arg2 = 2; // Format::STRING
 }
 
 message ReferringToOneMatchFieldAction {

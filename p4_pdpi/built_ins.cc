@@ -25,7 +25,10 @@
 namespace pdpi {
 
 namespace {
+// General string constants.
 constexpr absl::string_view kBuiltInPrefix = "builtin::";
+
+// Multicast group table-related string constants.
 constexpr absl::string_view kMulticastGroupTableString =
     "multicast_group_table";
 constexpr absl::string_view kMulticastGroupIdString = "multicast_group_id";
@@ -33,10 +36,17 @@ constexpr absl::string_view kReplicaString = "replica";
 constexpr absl::string_view kReplicaPortString = "replica.port";
 constexpr absl::string_view kReplicaInstanceString = "replica.instance";
 
+// Clone session table-related string constants.
+constexpr absl::string_view kCloneSessionTableString = "clone_session_table";
+
 }  // namespace
 
 std::string GetMulticastGroupTableName() {
   return absl::StrCat(kBuiltInPrefix, kMulticastGroupTableString);
+}
+
+std::string GetCloneSessionTableName() {
+  return absl::StrCat(kBuiltInPrefix, kCloneSessionTableString);
 }
 
 bool IsBuiltInTable(absl::string_view table_name) {
@@ -94,18 +104,21 @@ absl::StatusOr<IrBuiltInAction> GetBuiltInActionFromBuiltInParameter(
     }
     default: {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Unknown built-in parameter.";
+             << "Unknown built-in parameter: "
+             << IrBuiltInParameter_Name(parameter);
     }
   }
 }
 
 absl::StatusOr<std::string> IrBuiltInTableToString(IrBuiltInTable table) {
   switch (table) {
-    case pdpi::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE: {
+    case pdpi::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE:
       return GetMulticastGroupTableName();
-    }
+    case pdpi::BUILT_IN_TABLE_CLONE_SESSION_TABLE:
+      return GetCloneSessionTableName();
     default: {
-      return gutil::InvalidArgumentErrorBuilder() << "Unknown built-in table.";
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unknown built-in table: " << IrBuiltInTable_Name(table);
     }
   }
 }
@@ -118,7 +131,8 @@ absl::StatusOr<std::string> IrBuiltInMatchFieldToString(
     }
     default: {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Unknown built-in match field.";
+             << "Unknown built-in match field: "
+             << IrBuiltInMatchField_Name(field);
     }
   }
 }
@@ -129,7 +143,8 @@ absl::StatusOr<std::string> IrBuiltInActionToString(IrBuiltInAction action) {
       return absl::StrCat(kBuiltInPrefix, kReplicaString);
     }
     default: {
-      return gutil::InvalidArgumentErrorBuilder() << "Unknown built-in action.";
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unknown built-in action: " << IrBuiltInAction_Name(action);
     }
   }
 }
@@ -145,7 +160,8 @@ absl::StatusOr<std::string> IrBuiltInParameterToString(
     }
     default: {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Unknown built-in parameter.";
+             << "Unknown built-in parameter: "
+             << IrBuiltInParameter_Name(parameter);
     }
   }
 }
@@ -153,6 +169,9 @@ absl::StatusOr<std::string> IrBuiltInParameterToString(
 absl::StatusOr<IrBuiltInTable> StringToIrBuiltInTable(absl::string_view table) {
   if (table == GetMulticastGroupTableName()) {
     return pdpi::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE;
+  }
+  if (table == GetCloneSessionTableName()) {
+    return pdpi::BUILT_IN_TABLE_CLONE_SESSION_TABLE;
   }
   return gutil::InvalidArgumentErrorBuilder()
          << "'" << table << "' is not a built-in table.";

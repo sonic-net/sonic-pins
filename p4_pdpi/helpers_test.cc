@@ -40,10 +40,22 @@ TEST(EntityToTableNameTest, MulticastTableSupported) {
               IsOkAndHolds(multicast_group_table_name));
 }
 
-TEST(EntityToTableNameTest, OtherPacketReplicationEngineUnsupported) {
+TEST(EntityToTableNameTest, CloneSessionTableSupported) {
   p4::v1::Entity entity;
   entity.mutable_packet_replication_engine_entry()
       ->mutable_clone_session_entry();
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string clone_session_table_name,
+      IrBuiltInTableToString(BUILT_IN_TABLE_CLONE_SESSION_TABLE));
+
+  EXPECT_THAT(EntityToTableName(GetTestIrP4Info(), entity),
+              IsOkAndHolds(clone_session_table_name));
+}
+
+TEST(EntityToTableNameTest, EmptyPacketReplicationEngineUnsupported) {
+  p4::v1::Entity entity;
+  entity.mutable_packet_replication_engine_entry();
 
   EXPECT_THAT(EntityToTableName(GetTestIrP4Info(), entity), Not(IsOk()));
 }

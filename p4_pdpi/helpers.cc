@@ -22,14 +22,17 @@ absl::StatusOr<std::string> EntityToTableName(const pdpi::IrP4Info& info,
       return table.preamble().alias();
     }
     case p4::v1::Entity::kPacketReplicationEngineEntry: {
-      if (!entity.packet_replication_engine_entry()
-               .has_multicast_group_entry()) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Expected a `multicast_group_entry`, but got unexpected "
-                  "packet_replication_engine_entry: "
-               << entity.packet_replication_engine_entry().DebugString();
+      if (entity.packet_replication_engine_entry()
+              .has_multicast_group_entry()) {
+        return GetMulticastGroupTableName();
       }
-      return GetMulticastGroupTableName();
+      if (entity.packet_replication_engine_entry().has_clone_session_entry()) {
+        return GetCloneSessionTableName();
+      }
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Expected a `multicast_group_entry` or `clone_session_entry`, "
+                "but got unexpected packet_replication_engine_entry: "
+             << entity.packet_replication_engine_entry().DebugString();
     }
     default:
       return gutil::InvalidArgumentErrorBuilder()
