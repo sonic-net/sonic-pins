@@ -1266,7 +1266,6 @@ actions {
     id: 16777239
     name: "ingress.routing_resolution.set_ip_nexthop_and_disable_rewrites"
     alias: "set_ip_nexthop_and_disable_rewrites"
-    annotations: "@unsupported"
   }
   params {
     id: 1

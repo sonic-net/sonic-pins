@@ -85,7 +85,6 @@ message NexthopTableEntry {
       SetNexthopAction set_nexthop = 1;
       SetP2pTunnelEncapNexthopAction set_p2p_tunnel_encap_nexthop = 2;
       SetIpNexthopAction set_ip_nexthop = 3;
-      // CAUTION: This action is not (yet) supported.
       SetIpNexthopAndDisableRewritesAction set_ip_nexthop_and_disable_rewrites =
           4;
     }
@@ -742,6 +741,11 @@ message AclIngressMirrorAndRedirectTableEntry {
     Ternary dst_ipv6 = 5;      // ternary match / Format::IPV6 / upper 64 bits
     Ternary acl_metadata = 6;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary vlan_id = 7;       // ternary match / Format::HEX_STRING / 12 bits
+    // CAUTION: This match field is not (yet) supported.
+    Optional vrf_id = 8;  // optional match / Format::STRING
+    // CAUTION: This match field is not (yet) supported.
+    Optional ipmc_table_hit =
+        9;  // optional match / Format::HEX_STRING / 1 bits
   }
   Match match = 1;
   message Action {
@@ -856,7 +860,6 @@ message MarkForTunnelDecapAndSetVrfAction {
   string vrf_id = 1;  // Format::STRING
 }
 
-// CAUTION: This action is not (yet) supported.
 message SetIpNexthopAndDisableRewritesAction {
   // Refers to 'router_interface_table.router_interface_id'.
   // Refers to 'neighbor_table.router_interface_id'.
