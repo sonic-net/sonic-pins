@@ -517,7 +517,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         const default_action = NoAction();
   }
 
-  // This action only contains args whose formats are STRING. Values with the 
+  // This action only contains args whose formats are STRING. Values with the
   // STRING format are unchanged when translated from PD to IR/PI making it
   // easy to read values in any representation when golden testing.
   action golden_test_friendly_action(
@@ -526,7 +526,15 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     @id(2)
     string_id_t arg2) {}
 
-  // This table only contains fields whose formats are STRING. Values with the 
+  // Same as `golden_test_friendly_action` but with a different name so
+  // `golden_test_friendly_wcmp_table` can use 2 different actions.
+  action other_golden_test_friendly_action(
+    @id(1)
+    string_id_t arg1,
+    @id(2)
+    string_id_t arg2) {}
+
+  // This table only contains fields whose formats are STRING. Values with the
   // STRING format are unchanged when translated from PD to IR/PI making it
   // easy to read values in any representation when golden testing.
   table golden_test_friendly_table {
@@ -558,6 +566,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     }
     actions = {
       @proto_id(1) golden_test_friendly_action;
+      @proto_id(2) other_golden_test_friendly_action;
     }
     implementation = wcmp_group_selector;
   }

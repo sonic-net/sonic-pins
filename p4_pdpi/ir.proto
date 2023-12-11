@@ -153,6 +153,9 @@ enum IrBuiltInTable {
   // Corresponds to p4::v1::MulticastGroupEntry
   // String representation in annotations: "builtin::multicast_group_table"
   BUILT_IN_TABLE_MULTICAST_GROUP_TABLE = 1;
+  // Corresponds to p4::v1::CloneSessionEntry
+  // String representation in annotations: "builtin::clone_session_table"
+  BUILT_IN_TABLE_CLONE_SESSION_TABLE = 2;
 }
 
 // Uniquely identifies a table in the scope of a P4 program.

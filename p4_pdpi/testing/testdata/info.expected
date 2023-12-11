@@ -1115,6 +1115,10 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 25225410
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1297,6 +1301,27 @@ actions {
     id: 31939749
     name: "ingress.golden_test_friendly_action"
     alias: "golden_test_friendly_action"
+  }
+  params {
+    id: 1
+    name: "arg1"
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  params {
+    id: 2
+    name: "arg2"
+    type_name {
+      name: "string_id_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 25225410
+    name: "ingress.other_golden_test_friendly_action"
+    alias: "other_golden_test_friendly_action"
   }
   params {
     id: 1
@@ -3663,6 +3688,72 @@ tables_by_id {
         }
       }
       proto_id: 1
+    }
+    entry_actions {
+      ref {
+        id: 25225410
+        annotations: "@proto_id(2)"
+      }
+      action {
+        preamble {
+          id: 25225410
+          name: "ingress.other_golden_test_friendly_action"
+          alias: "other_golden_test_friendly_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_id {
+          key: 2
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg1"
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg2"
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 2
     }
     default_only_actions {
       ref {
@@ -6425,6 +6516,72 @@ tables_by_name {
         }
       }
       proto_id: 1
+    }
+    entry_actions {
+      ref {
+        id: 25225410
+        annotations: "@proto_id(2)"
+      }
+      action {
+        preamble {
+          id: 25225410
+          name: "ingress.other_golden_test_friendly_action"
+          alias: "other_golden_test_friendly_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_id {
+          key: 2
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg1"
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg2"
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 2
     }
     default_only_actions {
       ref {
@@ -9811,6 +9968,68 @@ actions_by_id {
   }
 }
 actions_by_id {
+  key: 25225410
+  value {
+    preamble {
+      id: 25225410
+      name: "ingress.other_golden_test_friendly_action"
+      alias: "other_golden_test_friendly_action"
+    }
+    params_by_id {
+      key: 1
+      value {
+        param {
+          id: 1
+          name: "arg1"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_id {
+      key: 2
+      value {
+        param {
+          id: 2
+          name: "arg2"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "arg1"
+      value {
+        param {
+          id: 1
+          name: "arg1"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "arg2"
+      value {
+        param {
+          id: 2
+          name: "arg2"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+  }
+}
+actions_by_id {
   key: 31920929
   value {
     preamble {
@@ -10212,6 +10431,68 @@ actions_by_name {
       id: 31939749
       name: "ingress.golden_test_friendly_action"
       alias: "golden_test_friendly_action"
+    }
+    params_by_id {
+      key: 1
+      value {
+        param {
+          id: 1
+          name: "arg1"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_id {
+      key: 2
+      value {
+        param {
+          id: 2
+          name: "arg2"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "arg1"
+      value {
+        param {
+          id: 1
+          name: "arg1"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "arg2"
+      value {
+        param {
+          id: 2
+          name: "arg2"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+  }
+}
+actions_by_name {
+  key: "other_golden_test_friendly_action"
+  value {
+    preamble {
+      id: 25225410
+      name: "ingress.other_golden_test_friendly_action"
+      alias: "other_golden_test_friendly_action"
     }
     params_by_id {
       key: 1
@@ -10680,6 +10961,12 @@ action_profiles_by_name {
   }
 }
 built_in_tables {
+  key: "builtin::clone_session_table"
+  value {
+    built_in_table: BUILT_IN_TABLE_CLONE_SESSION_TABLE
+  }
+}
+built_in_tables {
   key: "builtin::multicast_group_table"
   value {
     built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
@@ -10802,6 +11089,10 @@ built_in_tables {
       }
     }
   }
+}
+dependency_rank_by_table_name {
+  key: "builtin::clone_session_table"
+  value: 0
 }
 dependency_rank_by_table_name {
   key: "builtin::multicast_group_table"
