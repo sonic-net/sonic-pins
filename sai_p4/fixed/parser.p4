@@ -40,6 +40,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.wcmp_group_id_value = 0;
     local_metadata.nexthop_id_valid = false;
     local_metadata.nexthop_id_value = 0;
+    local_metadata.ipmc_table_hit = false;
     local_metadata.acl_drop = false;
 
   transition select(standard_metadata.ingress_port) {
