@@ -971,10 +971,9 @@ tables {
   match_fields {
     id: 1
     name: "val"
-    bitwidth: 10
     match_type: EXACT
     type_name {
-      name: "normal_id_t"
+      name: "string_id_t"
     }
   }
   action_refs {
@@ -999,14 +998,11 @@ tables {
     id: 1
     name: "group_id"
     annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-    bitwidth: 10
+    bitwidth: 16
     match_type: EXACT
-    type_name {
-      name: "normal_id_t"
-    }
   }
   action_refs {
-    id: 18598416
+    id: 16777221
     annotations: "@proto_id(1)"
   }
   action_refs {
@@ -1025,7 +1021,7 @@ tables {
   }
   match_fields {
     id: 1
-    name: "port_str"
+    name: "port"
     annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
     match_type: EXACT
     type_name {
@@ -1034,12 +1030,10 @@ tables {
   }
   match_fields {
     id: 2
-    name: "instance_str"
+    name: "instance"
     annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+    bitwidth: 16
     match_type: EXACT
-    type_name {
-      name: "string_id_t"
-    }
   }
   action_refs {
     id: 16777221
@@ -1287,9 +1281,7 @@ actions {
     id: 1
     name: "multicast_group_id"
     annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-    type_name {
-      name: "string_id_t"
-    }
+    bitwidth: 16
   }
 }
 actions {
@@ -4077,11 +4069,8 @@ tables_by_id {
           id: 1
           name: "group_id"
           annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-          bitwidth: 10
+          bitwidth: 16
           match_type: EXACT
-          type_name {
-            name: "normal_id_t"
-          }
         }
       }
     }
@@ -4092,52 +4081,21 @@ tables_by_id {
           id: 1
           name: "group_id"
           annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-          bitwidth: 10
+          bitwidth: 16
           match_type: EXACT
-          type_name {
-            name: "normal_id_t"
-          }
         }
       }
     }
     entry_actions {
       ref {
-        id: 18598416
+        id: 16777221
         annotations: "@proto_id(1)"
       }
       action {
         preamble {
-          id: 18598416
-          name: "ingress.refers_to_multicast_action"
-          alias: "refers_to_multicast_action"
-        }
-        params_by_id {
-          key: 1
-          value {
-            param {
-              id: 1
-              name: "multicast_group_id"
-              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-              type_name {
-                name: "string_id_t"
-              }
-            }
-            format: STRING
-          }
-        }
-        params_by_name {
-          key: "multicast_group_id"
-          value {
-            param {
-              id: 1
-              name: "multicast_group_id"
-              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-              type_name {
-                name: "string_id_t"
-              }
-            }
-            format: STRING
-          }
+          id: 16777221
+          name: "do_thing_4"
+          alias: "do_thing_4"
         }
       }
       proto_id: 1
@@ -4191,23 +4149,6 @@ tables_by_id {
           }
         }
       }
-      field_references {
-        source {
-          action_field {
-            p4_action_field {
-              action_name: "refers_to_multicast_action"
-              action_id: 18598416
-              parameter_name: "multicast_group_id"
-              parameter_id: 1
-            }
-          }
-        }
-        destination {
-          match_field {
-            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
-          }
-        }
-      }
     }
   }
 }
@@ -4225,12 +4166,12 @@ tables_by_id {
         match_field {
           id: 1
           name: "val"
-          bitwidth: 10
           match_type: EXACT
           type_name {
-            name: "normal_id_t"
+            name: "string_id_t"
           }
         }
+        format: STRING
       }
     }
     match_fields_by_name {
@@ -4239,12 +4180,12 @@ tables_by_id {
         match_field {
           id: 1
           name: "val"
-          bitwidth: 10
           match_type: EXACT
           type_name {
-            name: "normal_id_t"
+            name: "string_id_t"
           }
         }
+        format: STRING
       }
     }
     entry_actions {
@@ -4265,11 +4206,8 @@ tables_by_id {
               id: 1
               name: "multicast_group_id"
               annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-              type_name {
-                name: "string_id_t"
-              }
+              bitwidth: 16
             }
-            format: STRING
           }
         }
         params_by_name {
@@ -4279,11 +4217,8 @@ tables_by_id {
               id: 1
               name: "multicast_group_id"
               annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-              type_name {
-                name: "string_id_t"
-              }
+              bitwidth: 16
             }
-            format: STRING
           }
         }
       }
@@ -4927,7 +4862,7 @@ tables_by_id {
       value {
         match_field {
           id: 1
-          name: "port_str"
+          name: "port"
           annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
           match_type: EXACT
           type_name {
@@ -4942,37 +4877,31 @@ tables_by_id {
       value {
         match_field {
           id: 2
-          name: "instance_str"
+          name: "instance"
           annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+          bitwidth: 16
           match_type: EXACT
-          type_name {
-            name: "string_id_t"
-          }
         }
-        format: STRING
       }
     }
     match_fields_by_name {
-      key: "instance_str"
+      key: "instance"
       value {
         match_field {
           id: 2
-          name: "instance_str"
+          name: "instance"
           annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+          bitwidth: 16
           match_type: EXACT
-          type_name {
-            name: "string_id_t"
-          }
         }
-        format: STRING
       }
     }
     match_fields_by_name {
-      key: "port_str"
+      key: "port"
       value {
         match_field {
           id: 1
-          name: "port_str"
+          name: "port"
           annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
           match_type: EXACT
           type_name {
@@ -5042,7 +4971,7 @@ tables_by_id {
         destination {
           match_field {
             p4_match_field {
-              field_name: "instance_str"
+              field_name: "instance"
               field_id: 2
             }
           }
@@ -5060,7 +4989,7 @@ tables_by_id {
         destination {
           match_field {
             p4_match_field {
-              field_name: "port_str"
+              field_name: "port"
               field_id: 1
             }
           }
@@ -7289,7 +7218,7 @@ tables_by_name {
       value {
         match_field {
           id: 1
-          name: "port_str"
+          name: "port"
           annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
           match_type: EXACT
           type_name {
@@ -7304,37 +7233,31 @@ tables_by_name {
       value {
         match_field {
           id: 2
-          name: "instance_str"
+          name: "instance"
           annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+          bitwidth: 16
           match_type: EXACT
-          type_name {
-            name: "string_id_t"
-          }
         }
-        format: STRING
       }
     }
     match_fields_by_name {
-      key: "instance_str"
+      key: "instance"
       value {
         match_field {
           id: 2
-          name: "instance_str"
+          name: "instance"
           annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+          bitwidth: 16
           match_type: EXACT
-          type_name {
-            name: "string_id_t"
-          }
         }
-        format: STRING
       }
     }
     match_fields_by_name {
-      key: "port_str"
+      key: "port"
       value {
         match_field {
           id: 1
-          name: "port_str"
+          name: "port"
           annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
           match_type: EXACT
           type_name {
@@ -7404,7 +7327,7 @@ tables_by_name {
         destination {
           match_field {
             p4_match_field {
-              field_name: "instance_str"
+              field_name: "instance"
               field_id: 2
             }
           }
@@ -7422,7 +7345,7 @@ tables_by_name {
         destination {
           match_field {
             p4_match_field {
-              field_name: "port_str"
+              field_name: "port"
               field_id: 1
             }
           }
@@ -8113,12 +8036,12 @@ tables_by_name {
         match_field {
           id: 1
           name: "val"
-          bitwidth: 10
           match_type: EXACT
           type_name {
-            name: "normal_id_t"
+            name: "string_id_t"
           }
         }
+        format: STRING
       }
     }
     match_fields_by_name {
@@ -8127,12 +8050,12 @@ tables_by_name {
         match_field {
           id: 1
           name: "val"
-          bitwidth: 10
           match_type: EXACT
           type_name {
-            name: "normal_id_t"
+            name: "string_id_t"
           }
         }
+        format: STRING
       }
     }
     entry_actions {
@@ -8153,11 +8076,8 @@ tables_by_name {
               id: 1
               name: "multicast_group_id"
               annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-              type_name {
-                name: "string_id_t"
-              }
+              bitwidth: 16
             }
-            format: STRING
           }
         }
         params_by_name {
@@ -8167,11 +8087,8 @@ tables_by_name {
               id: 1
               name: "multicast_group_id"
               annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-              type_name {
-                name: "string_id_t"
-              }
+              bitwidth: 16
             }
-            format: STRING
           }
         }
       }
@@ -8246,11 +8163,8 @@ tables_by_name {
           id: 1
           name: "group_id"
           annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-          bitwidth: 10
+          bitwidth: 16
           match_type: EXACT
-          type_name {
-            name: "normal_id_t"
-          }
         }
       }
     }
@@ -8261,52 +8175,21 @@ tables_by_name {
           id: 1
           name: "group_id"
           annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-          bitwidth: 10
+          bitwidth: 16
           match_type: EXACT
-          type_name {
-            name: "normal_id_t"
-          }
         }
       }
     }
     entry_actions {
       ref {
-        id: 18598416
+        id: 16777221
         annotations: "@proto_id(1)"
       }
       action {
         preamble {
-          id: 18598416
-          name: "ingress.refers_to_multicast_action"
-          alias: "refers_to_multicast_action"
-        }
-        params_by_id {
-          key: 1
-          value {
-            param {
-              id: 1
-              name: "multicast_group_id"
-              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-              type_name {
-                name: "string_id_t"
-              }
-            }
-            format: STRING
-          }
-        }
-        params_by_name {
-          key: "multicast_group_id"
-          value {
-            param {
-              id: 1
-              name: "multicast_group_id"
-              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-              type_name {
-                name: "string_id_t"
-              }
-            }
-            format: STRING
-          }
+          id: 16777221
+          name: "do_thing_4"
+          alias: "do_thing_4"
         }
       }
       proto_id: 1
@@ -8351,23 +8234,6 @@ tables_by_name {
             p4_match_field {
               field_name: "group_id"
               field_id: 1
-            }
-          }
-        }
-        destination {
-          match_field {
-            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
-          }
-        }
-      }
-      field_references {
-        source {
-          action_field {
-            p4_action_field {
-              action_name: "refers_to_multicast_action"
-              action_id: 18598416
-              parameter_name: "multicast_group_id"
-              parameter_id: 1
             }
           }
         }
@@ -9686,11 +9552,8 @@ actions_by_id {
           id: 1
           name: "multicast_group_id"
           annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-          type_name {
-            name: "string_id_t"
-          }
+          bitwidth: 16
         }
-        format: STRING
       }
     }
     params_by_name {
@@ -9700,11 +9563,8 @@ actions_by_id {
           id: 1
           name: "multicast_group_id"
           annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-          type_name {
-            name: "string_id_t"
-          }
+          bitwidth: 16
         }
-        format: STRING
       }
     }
   }
@@ -10446,11 +10306,8 @@ actions_by_name {
           id: 1
           name: "multicast_group_id"
           annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-          type_name {
-            name: "string_id_t"
-          }
+          bitwidth: 16
         }
-        format: STRING
       }
     }
     params_by_name {
@@ -10460,11 +10317,8 @@ actions_by_name {
           id: 1
           name: "multicast_group_id"
           annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
-          type_name {
-            name: "string_id_t"
-          }
+          bitwidth: 16
         }
-        format: STRING
       }
     }
   }
@@ -10705,7 +10559,7 @@ built_in_tables {
         destination {
           match_field {
             p4_match_field {
-              field_name: "instance_str"
+              field_name: "instance"
               field_id: 2
             }
           }
@@ -10723,7 +10577,7 @@ built_in_tables {
         destination {
           match_field {
             p4_match_field {
-              field_name: "port_str"
+              field_name: "port"
               field_id: 1
             }
           }
@@ -10774,23 +10628,6 @@ built_in_tables {
             p4_match_field {
               field_name: "group_id"
               field_id: 1
-            }
-          }
-        }
-        destination {
-          match_field {
-            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
-          }
-        }
-      }
-      field_references {
-        source {
-          action_field {
-            p4_action_field {
-              action_name: "refers_to_multicast_action"
-              action_id: 18598416
-              parameter_name: "multicast_group_id"
-              parameter_id: 1
             }
           }
         }

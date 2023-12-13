@@ -7,6 +7,10 @@ type bit<12> string_id_t;
 // HEX_STRING
 type bit<10> normal_id_t;
 
+// HEX_STRING
+typedef bit<16> multicast_group_id_t;
+typedef bit<16> replica_instance_t;
+
 enum MeterColor_t { GREEN, YELLOW, RED };
 
 // Note: no format annotations, since these don't affect anything
@@ -20,6 +24,9 @@ struct metadata {
   string_id_t str;
   string_id_t str2;
   MeterColor_t color;
+  multicast_group_id_t multicast_group_id;
+  string_id_t replica_port;
+  replica_instance_t replica_instance;
 }
 struct headers {
 }
@@ -171,14 +178,14 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
   @oneshot()
   @weight_proto_id(1)
   table wcmp_table {
-      key = {
-          meta.ipv4 : lpm @id(1) @format(IPV4_ADDRESS) @name("ipv4");
-          wcmp_selector_input : selector;
-      }
-      actions = {
-        @proto_id(2) do_thing_1;
-      }
-      implementation = wcmp_group_selector;
+    key = {
+      meta.ipv4 : lpm @id(1) @format(IPV4_ADDRESS) @name("ipv4");
+      wcmp_selector_input : selector;
+    }
+    actions = {
+      @proto_id(2) do_thing_1;
+    }
+    implementation = wcmp_group_selector;
   }
 
   @id(3)
@@ -216,58 +223,58 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
   @oneshot()
   @weight_proto_id(1)
   table wcmp2_table {
-      key = {
-          meta.ipv4 : lpm @id(1) @format(IPV4_ADDRESS) @name("ipv4");
-          wcmp_selector_input : selector;
-      }
-      actions = {
-        @proto_id(2) do_thing_1;
-        @proto_id(3) do_thing_2;
-      }
-      implementation = wcmp_group_selector;
+    key = {
+        meta.ipv4 : lpm @id(1) @format(IPV4_ADDRESS) @name("ipv4");
+        wcmp_selector_input : selector;
+    }
+    actions = {
+      @proto_id(2) do_thing_1;
+      @proto_id(3) do_thing_2;
+    }
+    implementation = wcmp_group_selector;
   }
 
   // Table with optional matches
   @id(9)
   table optional_table {
-      key = {
-          meta.ipv4 : optional @id(2) @format(IPV4_ADDRESS) @name("ipv4");
-          meta.ipv6 : optional @id(1) @format(IPV6_ADDRESS) @name("ipv6");
-          meta.str : optional @id(3) @name("str");
-          #ifdef PDPI_EXTRA_MATCH_FIELD
-          meta.mac : optional @id(4) @name("mac");
-          #endif
+    key = {
+      meta.ipv4 : optional @id(2) @format(IPV4_ADDRESS) @name("ipv4");
+      meta.ipv6 : optional @id(1) @format(IPV6_ADDRESS) @name("ipv6");
+      meta.str : optional @id(3) @name("str");
+      #ifdef PDPI_EXTRA_MATCH_FIELD
+      meta.mac : optional @id(4) @name("mac");
+      #endif
       }
-      actions = {
-        @proto_id(1) do_thing_1;
-        @defaultonly NoAction();
-      }
-      const default_action = NoAction();
+    actions = {
+      @proto_id(1) do_thing_1;
+      @defaultonly NoAction();
+    }
+    const default_action = NoAction();
   }
 
 
   table two_match_fields_table {
-      key = {
-          meta.str : exact @id(1) @name("id_1");
-          meta.normal : exact @id(2) @name("id_2");
-      }
-      actions = {
-        @proto_id(1) do_thing_4;
-        @proto_id(2) do_thing_1;
-        @defaultonly NoAction();
-      }
-      const default_action = NoAction();
+    key = {
+        meta.str : exact @id(1) @name("id_1");
+        meta.normal : exact @id(2) @name("id_2");
+    }
+    actions = {
+      @proto_id(1) do_thing_4;
+      @proto_id(2) do_thing_1;
+      @defaultonly NoAction();
+    }
+    const default_action = NoAction();
   }
 
   table one_match_field_table {
-      key = {
-          meta.str : exact @id(1) @name("id");
-      }
-      actions = {
-        @proto_id(1) do_thing_4;
-        @defaultonly NoAction();
-      }
-      const default_action = NoAction();
+    key = {
+      meta.str : exact @id(1) @name("id");
+    }
+    actions = {
+      @proto_id(1) do_thing_4;
+      @defaultonly NoAction();
+    }
+    const default_action = NoAction();
   }
 
   // Action that refers to both fields of two_match_fields_table.
@@ -284,31 +291,31 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
                          string_id_t referring_id_1) {}
   // A table whose entries refer to other table entries via action.
   table referring_by_action_table {
-      key = {
-          meta.normal : exact @id(1) @name("val");
-      }
-      actions = {
-        @proto_id(1) referring_to_two_match_fields_action;
-        @proto_id(2) referring_to_one_match_field_action;
-        @defaultonly NoAction();
-      }
-      const default_action = NoAction();
+    key = {
+      meta.normal : exact @id(1) @name("val");
+    }
+    actions = {
+      @proto_id(1) referring_to_two_match_fields_action;
+      @proto_id(2) referring_to_one_match_field_action;
+      @defaultonly NoAction();
+    }
+    const default_action = NoAction();
   }
 
   // A table whose entries refer to other table entries via their own
   // match fields.
   table referring_by_match_field_table {
-      key = {
-          meta.str : exact @id(1) @name("referring_id_1")
-          @refers_to(two_match_fields_table, id_1);
-          meta.normal : exact @id(2) @name("referring_id_2")
-          @refers_to(two_match_fields_table, id_2);
-      }
-      actions = {
-        @proto_id(1) do_thing_4;
-        @defaultonly NoAction();
-      }
-      const default_action = NoAction();
+    key = {
+      meta.str : exact @id(1) @name("referring_id_1")
+      @refers_to(two_match_fields_table, id_1);
+      meta.normal : exact @id(2) @name("referring_id_2")
+      @refers_to(two_match_fields_table, id_2);
+    }
+    actions = {
+      @proto_id(1) do_thing_4;
+      @defaultonly NoAction();
+    }
+    const default_action = NoAction();
   }
 
   // Table with no actions
@@ -412,16 +419,16 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
 
   // Table with both exact and optional matches.
   table exact_and_optional_table {
-        key = {
-            meta.ipv4 : exact @id(2) @format(IPV4_ADDRESS) @name("ipv4");
-            meta.ipv6 : exact @id(1) @format(IPV6_ADDRESS) @name("ipv6");
-            meta.str : optional @id(3) @name("str");
-        }
-        actions = {
-          @proto_id(1) do_thing_4;
-          @defaultonly NoAction();
-        }
-        const default_action = NoAction();
+    key = {
+      meta.ipv4 : exact @id(2) @format(IPV4_ADDRESS) @name("ipv4");
+      meta.ipv6 : exact @id(1) @format(IPV6_ADDRESS) @name("ipv6");
+      meta.str : optional @id(3) @name("str");
+    }
+    actions = {
+      @proto_id(1) do_thing_4;
+      @defaultonly NoAction();
+    }
+    const default_action = NoAction();
     }
 
   // Table with constraints.
@@ -452,69 +459,69 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     referring_str::mask != 0 -> referring_str != 0;
   ")
   table constrained_table {
-        key = {
-            meta.val : optional @id(1) @name("val");
-            meta.normal : exact @id(2) @name("normal");
-            meta.field10bit : ternary @id(8) @name("field10bit");
-            meta.ipv4 : lpm @id(3) @format(IPV4_ADDRESS) @name("ipv4");
-            meta.ipv6 : ternary @id(4) @format(IPV6_ADDRESS) @name("ipv6");
-            meta.mac : ternary @id(5) @format(MAC_ADDRESS) @name("mac");
-            meta.str : optional @id(6) @name("referring_str");
-            meta.str2 : optional @id(7) @name("nonreferring_str");
+    key = {
+      meta.val : optional @id(1) @name("val");
+      meta.normal : exact @id(2) @name("normal");
+      meta.field10bit : ternary @id(8) @name("field10bit");
+      meta.ipv4 : lpm @id(3) @format(IPV4_ADDRESS) @name("ipv4");
+      meta.ipv6 : ternary @id(4) @format(IPV6_ADDRESS) @name("ipv6");
+      meta.mac : ternary @id(5) @format(MAC_ADDRESS) @name("mac");
+      meta.str : optional @id(6) @name("referring_str");
+      meta.str2 : optional @id(7) @name("nonreferring_str");
         }
-        actions = {
-          @proto_id(1) do_thing_4;
-          @defaultonly NoAction();
-        }
-        const default_action = NoAction();
+      actions = {
+        @proto_id(1) do_thing_4;
+        @defaultonly NoAction();
+      }
+      const default_action = NoAction();
     }
 
   action refers_to_multicast_action(
     @id(1)
     @refers_to(builtin::multicast_group_table, multicast_group_id)
-    string_id_t multicast_group_id) {}
+    multicast_group_id_t multicast_group_id) {}
 
   table refers_to_multicast_by_action_table {
-        key = {
-            meta.normal : exact @id(1) @name("val");
-        }
-        actions = {
-          @proto_id(1) refers_to_multicast_action;
-          @defaultonly NoAction();
-        }
+    key = {
+      meta.str : exact @id(1) @name("val");
+    }
+    actions = {
+      @proto_id(1) refers_to_multicast_action;
+      @defaultonly NoAction();
+    }
         const default_action = NoAction();
   }
 
   table refers_to_multicast_by_match_field_table {
-        key = {
-            meta.normal : exact 
-              @id(1) 
-              @name("group_id")
-              @refers_to(builtin::multicast_group_table, multicast_group_id);
-        }
-        actions = {
-          @proto_id(1) refers_to_multicast_action;
-          @defaultonly NoAction();
-        }
-        const default_action = NoAction();
+    key = {
+      meta.multicast_group_id : exact
+        @id(1)
+        @name("group_id")
+        @refers_to(builtin::multicast_group_table, multicast_group_id);
+    }
+    actions = {
+      @proto_id(1) do_thing_4;
+      @defaultonly NoAction();
+    }
+    const default_action = NoAction();
   }
 
   table referenced_by_multicast_replica_table {
-        key = {
-            meta.str : exact
-              @id(1)
-              @name("port_str")
-              @referenced_by(builtin::multicast_group_table, replica.port);
-            meta.str2 : exact
-              @id(2)
-              @name("instance_str")
-              @referenced_by(builtin::multicast_group_table, replica.instance);
-        }
-        actions = {
-          @proto_id(1) do_thing_4;
-          @defaultonly NoAction();
-        }
-        const default_action = NoAction();
+    key = {
+      meta.replica_port : exact
+        @id(1)
+        @name("port")
+        @referenced_by(builtin::multicast_group_table, replica.port);
+      meta.replica_instance : exact
+        @id(2)
+        @name("instance")
+        @referenced_by(builtin::multicast_group_table, replica.instance);
+    }
+    actions = {
+      @proto_id(1) do_thing_4;
+      @defaultonly NoAction();
+    }
+    const default_action = NoAction();
   }
 
   // This action only contains args whose formats are STRING. Values with the 

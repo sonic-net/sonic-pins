@@ -338,11 +338,11 @@ message ConstrainedTableEntry {
 
 message RefersToMulticastByMatchFieldTableEntry {
   message Match {
-    string group_id = 1; // exact match / Format::HEX_STRING / 10 bits
+    string group_id = 1; // exact match / Format::HEX_STRING / 16 bits
   }
   Match match = 1;
   message Action {
-    RefersToMulticastAction refers_to_multicast_action = 1;
+    DoThing4Action do_thing_4 = 1;
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -350,7 +350,7 @@ message RefersToMulticastByMatchFieldTableEntry {
 
 message RefersToMulticastByActionTableEntry {
   message Match {
-    string val = 1; // exact match / Format::HEX_STRING / 10 bits
+    string val = 1; // exact match / Format::STRING
   }
   Match match = 1;
   message Action {
@@ -404,8 +404,8 @@ message ReferringByActionTableEntry {
 
 message ReferencedByMulticastReplicaTableEntry {
   message Match {
-    string port_str = 1; // exact match / Format::STRING
-    string instance_str = 2; // exact match / Format::STRING
+    string port = 1; // exact match / Format::STRING
+    string instance = 2; // exact match / Format::HEX_STRING / 16 bits
   }
   Match match = 1;
   message Action {
@@ -495,7 +495,7 @@ message ByteCountAndMeterAction {
 }
 
 message RefersToMulticastAction {
-  string multicast_group_id = 1; // Format::STRING
+  string multicast_group_id = 1; // Format::HEX_STRING / 16 bits
 }
 
 message NoAction {
