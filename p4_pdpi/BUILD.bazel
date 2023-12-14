@@ -18,6 +18,39 @@ package(
 )
 
 cc_library(
+    name = "references",
+    srcs = ["references.cc"],
+    hdrs = ["references.h"],
+    # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
+    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
+    deps = [
+        ":ir_cc_proto",
+        ":reference_annotations",
+        "//gutil:proto",
+        "//gutil:status",
+        "//p4_pdpi/string_encodings:byte_string",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "references_test",
+    srcs = ["references_test.cc"],
+    deps = [
+        "references",
+        "@com_google_absl//absl/hash:hash_testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "built_ins",
     srcs = [
         "built_ins.cc",
@@ -59,7 +92,6 @@ cc_library(
         ":built_ins",
         ":ir_cc_proto",
         "//gutil:collections",
-        "//gutil:proto",
         "//gutil:status",
         "//p4_pdpi/internal:ordered_map",
         "//p4_pdpi/utils:annotation_parser",

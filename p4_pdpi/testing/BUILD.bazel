@@ -212,6 +212,36 @@ cmd_diff_test(
     tools = [":sequencing_util_test_runner"],
 )
 
+cc_test(
+    name = "references_test_runner",
+    srcs = ["references_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        ":test_p4info_cc",
+        "//gutil:proto",
+        "//gutil:status",
+        "//gutil:testing",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "//p4_pdpi:references",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "references_test",
+    actual_cmd = "$(execpath :references_test_runner) ",
+    expected = "//p4_pdpi/testing/testdata:references.expected",
+    tools = [":references_test_runner"],
+)
+
 # go/golden-test-with-coverage
 cc_test(
     name = "info_test_runner",
