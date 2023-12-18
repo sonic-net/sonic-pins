@@ -25,6 +25,7 @@
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -37,6 +38,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/helpers.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/references.h"
 #include "p4_pdpi/sequencing_util.h"
 
 namespace pdpi {
@@ -396,6 +398,116 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
     absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
         is_root_entity,
     const IrP4Info& ir_p4info) {
+  absl::flat_hash_map<ConcreteTableReference, std::vector<int>>
+      potentially_reachable_entries;
+  absl::flat_hash_set<int> unreachable_indices;
+  // frontier_indices contains indices for entities that are reachable (either
+  // reached by other entities, or are themselves roots) and could potentially
+  // refer to other entities.
+  std::queue<int> frontier_indices;
+
+  for (int i = 0; i < entities.size(); i++) {
+    const p4::v1::Entity& entity = entities[i];
+    ASSIGN_OR_RETURN(bool is_root_entity, is_root_entity(entity));
+    if (is_root_entity) {
+      if (entity.has_packet_replication_engine_entry()) {
+        continue;
+      }
+      frontier_indices.push(i);
+      continue;
+    }
+    if (!entity.has_table_entry()) {
+      return absl::UnimplementedError(
+          absl::StrCat("Only entities of type table_entry can be garbage "
+                       "collected. Entity: ",
+                       entity.DebugString()));
+    }
+    const p4::v1::TableEntry& table_entry = entity.table_entry();
+    // If the table that entries[i] belongs to is referred to, entries[i] is
+    // potentially reachable. Else, entries[i] is not reachable.
+    ASSIGN_OR_RETURN(auto* table_def,
+                     gutil::FindPtrOrStatus(ir_p4info.tables_by_id(),
+                                            table_entry.table_id()));
+    if (table_def->incoming_references().empty()) {
+      LOG(WARNING) << "Found non-root entry that could never be reachable. "
+                      "This probably indicates some mistake in is_root_entry "
+                      "or the ir_p4info. Found entry: "
+                   << table_entry.DebugString();
+      unreachable_indices.insert(i);
+    } else {
+      for (const auto& reference_info : table_def->incoming_references()) {
+        ASSIGN_OR_RETURN(
+            absl::flat_hash_set<ConcreteTableReference> reference_entries,
+            PossibleIncomingConcreteTableReferences(reference_info, entity));
+        for (const ConcreteTableReference& reference_entry :
+             reference_entries) {
+          potentially_reachable_entries[reference_entry].push_back(i);
+        }
+      }
+    }
+  }
+
+  // Expand frontier of reachable entries.
+  // Pop an entry off the frontier and if that entry refers to some entries in
+  // potentially_reachable_entries, move them from
+  // `potentially_reachable_entries` to `frontier_indices`.
+  absl::flat_hash_set<int> reached_indices;
+  while (!frontier_indices.empty()) {
+    const p4::v1::Entity& frontier_entity = entities[frontier_indices.front()];
+    ASSIGN_OR_RETURN(
+        auto* table_def,
+        gutil::FindPtrOrStatus(ir_p4info.tables_by_id(),
+                               frontier_entity.table_entry().table_id()));
+    reached_indices.insert(frontier_indices.front());
+    frontier_indices.pop();
+    for (const auto& reference_info : table_def->outgoing_references()) {
+      ASSIGN_OR_RETURN(
+          absl::flat_hash_set<ConcreteTableReference> reference_entries,
+          OutgoingConcreteTableReferences(reference_info, frontier_entity));
+      for (const auto& reference_entry : reference_entries) {
+        if (auto it = potentially_reachable_entries.find(reference_entry);
+            it != potentially_reachable_entries.end()) {
+          absl::c_for_each(it->second,
+                           [&frontier_indices, &reached_indices](int i) {
+                             if (!reached_indices.contains(i)) {
+                               frontier_indices.push(i);
+                             }
+                           });
+          potentially_reachable_entries.erase(it);
+        }
+      }
+    }
+  }
+  // By the end of frontier expansion all remaining potentially reachable
+  // entries are not reachable.
+  for (const auto& [unused, indices] : potentially_reachable_entries) {
+    absl::c_for_each(indices, [&unreachable_indices, &reached_indices](int i) {
+      if (!reached_indices.contains(i)) {
+        unreachable_indices.insert(i);
+      }
+    });
+  }
+  std::vector<p4::v1::Entity> unreachable_entities;
+  unreachable_entities.reserve(unreachable_indices.size());
+
+  // TODO: verios - remove sort once tests are updated to handle
+  // non-determinism.
+  std::vector<int> sorted_unreachable_indices(unreachable_indices.begin(),
+                                              unreachable_indices.end());
+  std::sort(sorted_unreachable_indices.begin(),
+            sorted_unreachable_indices.end());
+  // Returns unreachable entities in the order of their indices.
+  for (int i : sorted_unreachable_indices) {
+    unreachable_entities.push_back(entities[i]);
+  }
+  return unreachable_entities;
+}
+
+absl::StatusOr<std::vector<p4::v1::Entity>> OldGetEntitiesUnreachableFromRoots(
+    absl::Span<const p4::v1::Entity> entities,
+    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
+        is_root_entity,
+    const IrP4Info& ir_p4info) {
   absl::flat_hash_map<ReferredTableEntry, std::vector<int>>
       potentially_reachable_entries;
   std::vector<int> unreachable_indices;
@@ -409,7 +521,6 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
     const p4::v1::Entity& entity = entities[i];
     ASSIGN_OR_RETURN(bool is_root_entity, is_root_entity(entity));
     if (is_root_entity) {
-      // TODO: b/296443880 - Remove once MRIF entry collection is supported.
       if (entity.has_packet_replication_engine_entry()) {
         continue;
       }
@@ -417,7 +528,6 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
       continue;
     }
     if (!entity.has_table_entry()) {
-      // TODO: b/302346101 - Add support for collection of all entities.
       return absl::UnimplementedError(
           absl::StrCat("Only entities of type table_entry can be garbage "
                        "collected. Entity: ",
