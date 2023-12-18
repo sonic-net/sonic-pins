@@ -150,6 +150,42 @@ cc_library(
 
 # go/golden-test-with-coverage
 cc_test(
+    name = "old_get_entries_unreachable_from_roots_with_matchfield_reference_test_runner",
+    srcs = ["old_get_entries_unreachable_from_roots_with_matchfield_reference_test_runner.cc"],
+    args = ["$(location :main-p4info.pb.txt)"],
+    data = ["main-p4info.pb.txt"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        "//gutil:proto",
+        "//gutil:status",
+        "//gutil:testing",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "//p4_pdpi:sequencing",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "old_get_entries_unreachable_from_roots_with_matchfield_reference_test",
+    actual_cmd = "$(execpath :old_get_entries_unreachable_from_roots_with_matchfield_reference_test_runner) $(location :main-p4info.pb.txt)",
+    expected = "//p4_pdpi/testing/testdata:old_get_entries_unreachable_from_roots_with_matchfield_reference.expected",
+    tools = [
+        "main-p4info.pb.txt",
+        ":old_get_entries_unreachable_from_roots_with_matchfield_reference_test_runner",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
     name = "sequencing_test_runner",
     srcs = ["sequencing_test_runner.cc"],
     args = ["$(location :main-p4info.pb.txt)"],

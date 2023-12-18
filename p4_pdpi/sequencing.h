@@ -19,6 +19,7 @@
 #include <optional>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -80,9 +81,18 @@ absl::Status StableSortUpdates(
 // `is_root_entity` function. An entity `e` is reachable from a root entity `r`
 // if and only if `r` refers to `e`, directly or transitively. The reference
 // info comes from `ir_p4info`.
-// This function only works for TableEntry entity type. Any non TableEntry type
-// in `entities` will cause this function to return UnImplemented error.
 absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
+    absl::Span<const p4::v1::Entity> entities,
+    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
+        is_root_entity,
+    const IrP4Info& ir_p4info);
+
+// Deprecated version of GetEntitiesUnreachableFromRoots.
+// This function only works for TableEntry entity type. Any non TableEntry type
+// in `entities` will be ignored.
+// TODO: b/316428420 - Remove once new implementation is fully rolled out.
+ABSL_DEPRECATED("Prefer GetEntitiesUnreachableFromRoots")
+absl::StatusOr<std::vector<p4::v1::Entity>> OldGetEntitiesUnreachableFromRoots(
     absl::Span<const p4::v1::Entity> entities,
     absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
         is_root_entity,
