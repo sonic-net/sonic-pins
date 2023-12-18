@@ -18,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
@@ -101,6 +102,12 @@ class ControlDevice {
   // it can perform its operations. This can be used to check when the control
   // device is ready after a reboot.
   virtual absl::Status CheckUp() = 0;
+
+  // Return the subset of the given interfaces that, when admin-disabled, do not
+  // cause link flaps on the other interfaces on the same physical port.
+  virtual absl::StatusOr<std::vector<std::string>>
+  FilterCollateralDownOnAdminDownInterfaces(
+      absl::Span<const std::string> interfaces) = 0;
 };
 
 }  // namespace thinkit
