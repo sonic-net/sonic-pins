@@ -16,10 +16,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
-#include <iterator>
 #include <optional>
-#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -28,8 +27,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/collections.h"
@@ -41,8 +40,13 @@
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
+
+// TODO: b/316625656 - Remove death behavior from this file (i.e. remove
+// statements that crash like FindOrDie).
 
 namespace p4_fuzzer {
+namespace {
 
 using ::gutil::FindOrDie;
 using ::gutil::FindPtrOrStatus;
@@ -52,6 +56,125 @@ using ::p4::v1::Update;
 using ::pdpi::IrP4Info;
 using ::pdpi::IrTableEntry;
 
+// Resource utilization for ActionProfiles depends on how the profile is
+// configured. Using SumOfMembers means we only count the number of actions in
+// an action profile. Using SumOfWeights means we count the total weight for all
+// actions combined.
+struct ActionProfileResources {
+  int actions = 0;
+  int total_weight = 0;
+};
+
+ActionProfileResources GetAllActionProfileResourceForTable(
+    const UnorderedTableEntries& table) {
+  ActionProfileResources resources;
+  for (auto& [table_key, table_entry] : table) {
+    for (const p4::v1::ActionProfileAction& action :
+         table_entry.action()
+             .action_profile_action_set()
+             .action_profile_actions()) {
+      resources.total_weight += action.weight();
+    }
+    resources.actions += table_entry.action()
+                             .action_profile_action_set()
+                             .action_profile_actions_size();
+  }
+  return resources;
+}
+
+ActionProfileResources GetAllActionProfileResourceForTableEntry(
+    const p4::v1::TableEntry& pi_table_entry) {
+  ActionProfileResources resources;
+  for (const p4::v1::ActionProfileAction& action :
+       pi_table_entry.action()
+           .action_profile_action_set()
+           .action_profile_actions()) {
+    ++resources.actions;
+    resources.total_weight += action.weight();
+  }
+  return resources;
+}
+
+absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
+    const p4::config::v1::ActionProfile& action_profile,
+    const UnorderedTableEntries& current_table,
+    const p4::v1::TableEntry& pi_table_entry) {
+  ActionProfileResources current_resources =
+      GetAllActionProfileResourceForTable(current_table);
+  ActionProfileResources needed_resources =
+      GetAllActionProfileResourceForTableEntry(pi_table_entry);
+
+  for (const p4::v1::ActionProfileAction& action :
+       pi_table_entry.action()
+           .action_profile_action_set()
+           .action_profile_actions()) {
+    // If action weight is 0 or less, or if it is greater than the
+    // max_member_weight (if non-zero) for SumOfMembers semantics, the server
+    // MUST return an InvalidArgumentError.
+    // Ref: http://screen/6TucRSmmLEytHQK
+    if (action.weight() <= 0) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "The new entry attempts to program a member with weight %d, which is "
+          "never allowed.",
+          action.weight()));
+    } else if (action_profile.sum_of_members().max_member_weight() != 0 &&
+               action.weight() >
+                   action_profile.sum_of_members().max_member_weight()) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "The action profile max_member_weight is %d and the new entry "
+          "programs a member of weight %d.",
+          action_profile.sum_of_members().max_member_weight(),
+          action.weight()));
+    }
+  }
+
+  if (action_profile.has_sum_of_members()) {
+    // If the table entry has too many actions then the current table resources
+    // do not matter. The server must return an InvalidArgumentError.
+    // Ref: http://screen/ANhyq7q6jQHry2W
+    if (needed_resources.actions > action_profile.max_group_size() &&
+        action_profile.max_group_size() != 0) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "The action profile max group size is %d and the new entry needs %d.",
+          action_profile.max_group_size(), needed_resources.actions));
+    }
+    std::string result = absl::StrFormat(
+        "The action profile uses SumOfMembers and currently has %d members "
+        "with space for %d, and the new entry needs %d.",
+        current_resources.actions, action_profile.size(),
+        needed_resources.actions);
+    if (current_resources.actions + needed_resources.actions <=
+        action_profile.size()) {
+      return result;
+    }
+    return absl::ResourceExhaustedError(result);
+  } else {
+    // If the table entry has too much weight then the current table resources
+    // do not matter. The server must return an InvalidArgumentError.
+    // Ref: http://screen/axLMH8UBcGE6GQD
+    if (needed_resources.total_weight > action_profile.max_group_size() &&
+        action_profile.max_group_size() != 0) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "The action profile max group size is %d and the new entry needs %d.",
+          action_profile.max_group_size(), needed_resources.total_weight));
+    }
+    // If the action profile does not use SumOfMembers semantics, then it must
+    // use SumOfWeights since that is both the default and the only other
+    // option.
+    std::string result = absl::StrFormat(
+        "The action profile uses SumOfWeights and has a current total weight "
+        "of %d with space for %d, and the new entry needs %d.",
+        current_resources.total_weight, action_profile.size(),
+        needed_resources.total_weight);
+    if (current_resources.total_weight + needed_resources.total_weight <=
+        action_profile.size()) {
+      return result;
+    }
+    return absl::ResourceExhaustedError(result);
+  }
+}
+
+}  // namespace
 
 absl::StatusOr<TableEntry> CanonicalizeTableEntry(const IrP4Info& info,
                                                   const TableEntry& entry,
@@ -75,11 +198,20 @@ SwitchState::SwitchState(IrP4Info ir_p4info)
   for (auto& [table_id, table] : ir_p4info_.tables_by_id()) {
     ordered_tables_[table_id] = OrderedTableEntries();
     unordered_tables_[table_id] = UnorderedTableEntries();
+    current_resource_statistics_[table_id] = ResourceStatistics();
+    peak_resource_statistics_[table_id] = PeakResourceStatistics();
   }
+  current_entries_ = 0;
+  peak_entries_seen_ = 0;
 }
 
 void SwitchState::ClearTableEntries() {
-  *this = SwitchState(std::move(ir_p4info_));
+  for (auto& [table_id, table] : ir_p4info_.tables_by_id()) {
+    ordered_tables_[table_id] = OrderedTableEntries();
+    unordered_tables_[table_id] = UnorderedTableEntries();
+    current_resource_statistics_[table_id] = ResourceStatistics();
+  }
+  current_entries_ = 0;
 }
 
 bool SwitchState::AllTablesEmpty() const {
@@ -97,15 +229,64 @@ bool SwitchState::IsTableFull(const uint32_t table_id) const {
 }
 
 int64_t SwitchState::GetNumTableEntries(const uint32_t table_id) const {
-  return FindOrDie(ordered_tables_, table_id).size();
+  return FindOrDie(current_resource_statistics_, table_id).entries;
 }
 
-int64_t SwitchState::GetNumTableEntries() const {
-  int result = 0;
-  for (const auto& [key, table] : ordered_tables_) {
-    result += table.size();
+int64_t SwitchState::GetNumTableEntries() const { return current_entries_; }
+
+// For this method to pass we only need 1 of the following checks to fail:
+//   * table is full.
+//   * action profile resources are exhausted. (only applies to action sets)
+absl::Status SwitchState::ResourceExhaustedIsAllowed(
+    const p4::v1::TableEntry& pi_table_entry) const {
+  std::vector<std::string> results;
+  results.reserve(2);
+
+  uint32_t table_id = pi_table_entry.table_id();
+  ASSIGN_OR_RETURN(const pdpi::IrTableDefinition* table_def,
+                   FindPtrOrStatus(ir_p4info_.tables_by_id(), table_id));
+  ASSIGN_OR_RETURN(const UnorderedTableEntries* table,
+                   FindPtrOrStatus(unordered_tables_, table_id));
+
+  // If adding this entry would push the table size beyond what is defined then
+  // ResourceExhausted is allowed.
+  if (table->size() + 1 > table_def->size()) {
+    return absl::OkStatus();
   }
-  return result;
+  results.push_back(
+      absl::StrFormat("The table is holding %d entries, but has space for %d.",
+                      table->size(), table_def->size()));
+
+  // If the table uses an action profile then we also need to verify that the
+  // profile itself has enough space.
+  if (table_def->implementation_id_case() ==
+      pdpi::IrTableDefinition::kActionProfileId) {
+    ASSIGN_OR_RETURN(const pdpi::IrActionProfileDefinition* action_profile_def,
+                     FindPtrOrStatus(ir_p4info_.action_profiles_by_id(),
+                                     table_def->action_profile_id()));
+    const p4::config::v1::ActionProfile& action_profile =
+        action_profile_def->action_profile();
+
+    // Check if we have exhausted our action profile resources.
+    absl::StatusOr<std::string> action_profile_has_space =
+        ReasonActionProfileCanAccommodateTableEntry(action_profile, *table,
+                                                    pi_table_entry);
+
+    if (!action_profile_has_space.ok()) {
+      // If we've exhausted our action profile resources then ResourceExhausted
+      // is allowed, but if we have a different error then something else is
+      // wrong and needs to be reported.
+      return (action_profile_has_space.status().code() ==
+              absl::StatusCode::kResourceExhausted)
+                 ? absl::OkStatus()
+                 : action_profile_has_space.status();
+    }
+    results.push_back(*action_profile_has_space);
+  }
+
+  return absl::FailedPreconditionError(absl::StrFormat(
+      "Table '%s' must accept the entry because: %s",
+      table_def->preamble().alias(), absl::StrJoin(results, " ")));
 }
 
 const std::vector<uint32_t> SwitchState::AllTableIds() const {
@@ -150,7 +331,94 @@ std::optional<TableEntry> SwitchState::GetTableEntry(
     return table_entry;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
+}
+
+absl::StatusOr<PeakResourceStatistics> SwitchState::GetPeakResourceStatistics(
+    int table_id) const {
+  if (!peak_resource_statistics_.contains(table_id)) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Table with id `" << table_id << "` does not exist.";
+  }
+  return peak_resource_statistics_.at(table_id);
+}
+
+absl::Status SwitchState::UpdateResourceStatistics(const TableEntry& entry,
+                                                   p4::v1::Update::Type type) {
+  int table_id = entry.table_id();
+
+  ResourceStatistics& current_resource_statistics =
+      FindOrDie(current_resource_statistics_, table_id);
+  PeakResourceStatistics& peak_resource_statistics =
+      FindOrDie(peak_resource_statistics_, table_id);
+
+  std::optional<ActionProfileResources> group_resources = std::nullopt;
+  if (entry.action().has_action_profile_action_set()) {
+    group_resources = GetAllActionProfileResourceForTableEntry(entry);
+  }
+
+  switch (type) {
+    case Update::INSERT: {
+      current_entries_ += 1;
+      current_resource_statistics.entries += 1;
+      if (group_resources.has_value()) {
+        current_resource_statistics.total_weight +=
+            group_resources->total_weight;
+        current_resource_statistics.total_members += group_resources->actions;
+      }
+      break;
+    }
+    case Update::DELETE: {
+      current_entries_ -= 1;
+      current_resource_statistics.entries -= 1;
+      if (group_resources.has_value()) {
+        current_resource_statistics.total_weight -=
+            group_resources->total_weight;
+        current_resource_statistics.total_members -= group_resources->actions;
+      }
+      break;
+    }
+    case Update::MODIFY: {
+      auto& unordered_table = FindOrDie(unordered_tables_, table_id);
+      auto it = unordered_table.find(pdpi::TableEntryKey(entry));
+      if (it == unordered_table.end()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << " Cannot update resource statistics for MODIFY of "
+                  "non-existent table entry. "
+               << entry.DebugString();
+      }
+      RETURN_IF_ERROR(UpdateResourceStatistics(it->second, Update::DELETE));
+      return UpdateResourceStatistics(entry, Update::INSERT);
+    }
+    default: {
+      return gutil::InternalErrorBuilder()
+             << "Update type must be specified when updating resource "
+                "statistics."
+             << Update_Type_Name(type);
+    }
+  }
+
+  peak_entries_seen_ = std::max(peak_entries_seen_, current_entries_);
+  peak_resource_statistics.entries = std::max(
+      peak_resource_statistics.entries, current_resource_statistics.entries);
+  if (group_resources.has_value()) {
+    // Update weight semantics resources.
+    peak_resource_statistics.total_weight =
+        std::max(peak_resource_statistics.total_weight,
+                 current_resource_statistics.total_weight);
+    peak_resource_statistics.max_group_weight =
+        std::max(peak_resource_statistics.max_group_weight,
+                 group_resources->total_weight);
+
+    // Update member semantics resources.
+    peak_resource_statistics.total_members =
+        std::max(peak_resource_statistics.total_members,
+                 current_resource_statistics.total_members);
+    peak_resource_statistics.max_members_per_group =
+        std::max(peak_resource_statistics.max_members_per_group,
+                 group_resources->actions);
+  }
+  return absl::OkStatus();
 }
 
 absl::Status SwitchState::ApplyUpdate(const Update& update) {
@@ -162,12 +430,14 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
   const TableEntry& table_entry = update.entity().table_entry();
   // TODO: PDPI IR Update translation currently does not properly
   // ignore non-key fields on DELETE updates. Therefore, information to ignore
-  // non-key fields is explitcitly passed for canonicalization.
+  // non-key fields is explicitly passed for canonicalization.
   ASSIGN_OR_RETURN(
       const TableEntry& canonical_table_entry,
       CanonicalizeTableEntry(ir_p4info_, table_entry,
                              /*key_only=*/update.type() == Update::DELETE));
 
+  RETURN_IF_ERROR(
+      UpdateResourceStatistics(canonical_table_entry, update.type()));
   switch (update.type()) {
     case Update::INSERT: {
       auto [ordered_iter, ordered_not_present] = ordered_table.insert(
@@ -265,31 +535,11 @@ absl::Status SwitchState::SetTableEntries(
     absl::Span<const p4::v1::TableEntry> table_entries) {
   ClearTableEntries();
 
+  p4::v1::Update update;
+  update.set_type(p4::v1::Update::INSERT);
   for (const p4::v1::TableEntry& entry : table_entries) {
-    auto ordered_table = ordered_tables_.find(entry.table_id());
-    auto unordered_table = unordered_tables_.find(entry.table_id());
-    bool ordered_present = ordered_table != ordered_tables_.end();
-    bool unordered_present = unordered_table != unordered_tables_.end();
-    if (ordered_present != unordered_present) {
-      return gutil::InternalErrorBuilder() << absl::StrFormat(
-                 "ordered and unordered tables out of sync. Table with ID "
-                 "'%d' %s in ordered tables but '%s' in unordered tables",
-                 entry.table_id(),
-                 (ordered_present ? "present" : "not present"),
-                 (unordered_present ? "present" : "not present"));
-    }
-    if (!ordered_present) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "table entry with unknown table ID '" << entry.table_id()
-             << "'";
-    }
-    ASSIGN_OR_RETURN(
-        TableEntry canonical_entry,
-        CanonicalizeTableEntry(ir_p4info_, entry, /*key_only=*/false));
-    ordered_table->second.insert(
-        {pdpi::TableEntryKey(canonical_entry), canonical_entry});
-    unordered_table->second.insert(
-        {pdpi::TableEntryKey(canonical_entry), canonical_entry});
+    *update.mutable_entity()->mutable_table_entry() = entry;
+    RETURN_IF_ERROR(ApplyUpdate(update));
   }
 
   return absl::OkStatus();
@@ -300,97 +550,89 @@ std::string SwitchState::SwitchStateSummary() const {
   std::string res = "";
   // Ordered is used to get a deterministic order for the summary.
   for (const auto& [table_id, table] : Ordered(ordered_tables_)) {
-    const pdpi::IrTableDefinition& table_def =
+    const pdpi::IrTableDefinition& table_definition =
         FindOrDie(ir_p4info_.tables_by_id(), table_id);
-    const std::string& table_name = table_def.preamble().alias();
-    int max_size = table_def.size();
-    int current_size = table.size();
+    const std::string& table_name = table_definition.preamble().alias();
+    const ResourceStatistics& resource_statistics =
+        FindOrDie(current_resource_statistics_, table_id);
+    const PeakResourceStatistics& peak_resource_statistics =
+        FindOrDie(peak_resource_statistics_, table_id);
 
-    absl::StrAppendFormat(&res, "\n % 12d% 18d    %s", current_size, max_size,
-                          table_name);
+    int guaranteed_size = table_definition.size();
+
+    absl::StrAppendFormat(
+        &res, "\n % 12d% 16d% 18d    %s", resource_statistics.entries,
+        peak_resource_statistics.entries, guaranteed_size, table_name);
 
     // Mark tables where we have exceeded their resource limits.
-    if (current_size > max_size) {
+    if (peak_resource_statistics.entries >= guaranteed_size) {
       absl::StrAppend(&res, "*");
     }
 
     // If the table is a WCMP table, then we also print its total weight,
     // max weight per group, total members, and max members per group. Only WCMP
     // tables using one-shot programming are supported.
-    if (table_def.implementation_id_case() ==
+    if (table_definition.implementation_id_case() ==
         pdpi::IrTableDefinition::kActionProfileId) {
-      int total_weight = 0;
-      int max_weight_per_group = 0;
-      int total_members = 0;
-      int max_members_per_group = 0;
-      for (auto& [_, table_entry] : table) {
-        int this_entry_weight = 0;
-        int this_entry_members = table_entry.action()
-                                     .action_profile_action_set()
-                                     .action_profile_actions_size();
-        for (const p4::v1::ActionProfileAction& action :
-             table_entry.action()
-                 .action_profile_action_set()
-                 .action_profile_actions()) {
-          this_entry_weight += action.weight();
-        }
-        total_weight += this_entry_weight;
-        max_weight_per_group =
-            std::max(max_weight_per_group, this_entry_weight);
-        total_members += this_entry_members;
-        max_members_per_group =
-            std::max(max_members_per_group, this_entry_members);
-      }
-
       const p4::config::v1::ActionProfile& action_profile =
           FindOrDie(ir_p4info_.action_profiles_by_id(),
-                    table_def.action_profile_id())
+                    table_definition.action_profile_id())
               .action_profile();
 
       bool uses_weight_semantics = !action_profile.has_sum_of_members();
-      absl::StrAppendFormat(
-          &res, "\n % 12d% 18d    %s.total_weight", total_weight,
-          uses_weight_semantics ? action_profile.size() : 0, table_name);
+      absl::StrAppendFormat(&res, "\n % 12d% 16d% 18d    %s.total_weight",
+                            resource_statistics.total_weight,
+                            peak_resource_statistics.total_weight,
+                            uses_weight_semantics ? action_profile.size() : 0,
+                            table_name);
       // Mark if we have exceeded the total weight and use weight semantics.
-      if (uses_weight_semantics && total_weight > action_profile.size()) {
+      if (uses_weight_semantics &&
+          peak_resource_statistics.total_weight >= action_profile.size()) {
         absl::StrAppend(&res, "*");
       }
       absl::StrAppendFormat(
-          &res, "\n % 12d% 18d    %s.max_group_weight", max_weight_per_group,
+          &res, "\n % 12s% 16d% 18d    %s.max_group_weight", "N/A",
+          peak_resource_statistics.max_group_weight,
           uses_weight_semantics ? action_profile.max_group_size() : 0,
           table_name);
       // Mark if we have exceeded the max weight for a group and use weight
       // semantics.
-      if (uses_weight_semantics &&
-          max_weight_per_group > action_profile.max_group_size()) {
+      if (uses_weight_semantics && peak_resource_statistics.max_group_weight >=
+                                       action_profile.max_group_size()) {
         absl::StrAppend(&res, "*");
       }
 
       bool uses_member_semantics = action_profile.has_sum_of_members();
-      absl::StrAppendFormat(
-          &res, "\n % 12d% 18d    %s.total_members", total_members,
-          uses_member_semantics ? action_profile.size() : 0, table_name);
+      absl::StrAppendFormat(&res, "\n % 12d% 16d% 18d    %s.total_members",
+                            resource_statistics.total_members,
+                            peak_resource_statistics.total_members,
+                            uses_member_semantics ? action_profile.size() : 0,
+                            table_name);
       // Mark if we have exceeded the total members and use member semantics.
-      if (uses_member_semantics && total_members > action_profile.size()) {
+      if (uses_member_semantics &&
+          peak_resource_statistics.total_members >= action_profile.size()) {
         absl::StrAppend(&res, "*");
       }
       absl::StrAppendFormat(
-          &res, "\n % 12d% 18d    %s.max_members_per_group",
-          max_members_per_group,
+          &res, "\n % 12s% 16d% 18d    %s.max_members_per_group", "N/A",
+          peak_resource_statistics.max_members_per_group,
           uses_member_semantics ? action_profile.max_group_size() : 0,
           table_name);
       // Mark if we have exceeded the max members for a group and use member
       // semantics.
       if (uses_member_semantics &&
-          max_members_per_group > action_profile.max_group_size()) {
+          peak_resource_statistics.max_members_per_group >=
+              action_profile.max_group_size()) {
         absl::StrAppend(&res, "*");
       }
     }
   }
   return absl::StrFormat(
-      "State(\n % 12s% 18s    table_name\n % 12d% 18s    total number of table "
-      "entries%s\n * marks tables where current size > guaranteed size.\n)",
-      "current size", "guaranteed size", GetNumTableEntries(), "N/A", res);
+      "State(\n % 12s% 16s% 18s    table_name\n % 12d% 16d% 18s    total "
+      "number of table entries%s\n * marks tables where max size >= "
+      "guaranteed size.\n)",
+      "current size", "max size seen", "guaranteed size", GetNumTableEntries(),
+      peak_entries_seen_, "N/A", res);
 }
 
 absl::StatusOr<std::vector<ReferableEntry>> SwitchState::GetReferableEntries(
