@@ -1065,8 +1065,6 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
 }
 
 TEST_P(L3MulticastTestFixture, BasicReplicationProgrammingWithAclRedirect) {
-  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-      "f0cae11a-7829-4be3-b84a-497f86d5d7ca");
 
   if (!gpins::TableHasMatchField(
           ir_p4info_, "acl_ingress_mirror_and_redirect_table", "in_port")) {
