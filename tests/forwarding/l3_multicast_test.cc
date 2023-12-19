@@ -639,48 +639,30 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
 
 // TODO: Implement commented multicast test cases
 // TEST_P(L3MulticastTestFixture, UnregisteredParticipantProgramming) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "83344582-5437-48fc-86a9-417c6c48541a");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, FixedDelayProgramming) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "cc779aa4-2728-4d9d-8618-9c858007747b");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, MulticastGroupAssignmentLPMSemantics) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "c5427190-1d1e-4828-a69d-33ad88a8f134");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, InvalidProgrammingUnknownPort) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "d2a041df-fe64-4003-b650-13a8b29fd66e");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, InvalidProgrammingUnknownPortInstance) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "089756a0-5905-461c-9cbd-41e2afe93cfb");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, InvalidProgrammingUnknownMulticastGroup) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "8482872d-28c4-4dcc-a431-2f19ae066d27");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, InvalidProgrammingUnknownVRF) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "f94bb8f0-3924-4f26-8c71-780d85c57773");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, InvalidProgrammingInvalidIpAddress) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "f698d03b-cca2-41cc-954e-c5bec6969872");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, InvalidOrderMulticastGroupBeforeRif) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "be9043bb-45a0-4b58-b375-2629b7215cb6");
 //   const int kNumberRifs = 2;
 //   ASSERT_OK_AND_ASSIGN(
 //       auto sut_ports_ids,
@@ -707,8 +689,6 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
 //                 yet"))));
 // }
 // TEST_P(L3MulticastTestFixture, InvalidOrderIpmcBeforeMulticastGroup) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "92ba000a-77a1-42d5-b9ba-c917dbece6a1");
 //   // Create a VRF.
 //   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> vrf_entities,
 //                        sai::EntryBuilder()
@@ -736,18 +716,12 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
 //   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, vrf_entities));
 // }
 // TEST_P(L3MulticastTestFixture, InvalidOrderDeleteRifWhileInUse) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "9887f929-4e9d-4a68-b48e-6cafcfd6c07f");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, InvalidOrderDeleteMulticastGroupWhileInUse) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "634ca5f6-1a50-4a37-9936-d03d86e7aaeb");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, InvalidOrderDeleteRifEntryBeforeAdded) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "2373038c-1057-4faa-a04f-8f40fe5eb100");
 //   // Unable to delete RIF entry that was not added.
 //   ASSERT_OK_AND_ASSIGN(
 //       auto entities,
@@ -761,8 +735,6 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
 // }
 // TEST_P(L3MulticastTestFixture,
 //        InvalidOrderDeleteMulticastGroupEntryBeforeAdded) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "76c6b7e8-d5a8-430a-b1de-8196cb2f58ed");
 //   const int kNumberRifs = 2;
 //   ASSERT_OK_AND_ASSIGN(
 //       auto sut_ports_ids,
@@ -790,8 +762,6 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
 //                   exist"))));
 // }
 // TEST_P(L3MulticastTestFixture, InvalidOrderDeleteIpmcEntryBeforeAdded) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "c0307840-3fd8-4899-8034-b4379e4fc382");
 //   // TODO: Do we need to create RIF entries, multicast group entry, and VRF
 //   // entry before attempting a delete?
 //   // Unable to delete IPMC entry that was not added.
@@ -821,34 +791,22 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
 //                                        "'ipv6_multicast_table'"))));
 // }
 // TEST_P(L3MulticastTestFixture, CapacityMulticastRifs) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "81099928-4181-4366-9519-885359a2f7e3");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, CapacityMulticastGroupsAndMembers) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "d35ff878-dc12-4623-82d4-81298006482a");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, PerformanceInitializationTime) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "bb3b9c48-30bc-4e63-9bbb-b17dc0f806b9");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, PerformanceMulticastGroupAdjustmentRate) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "89df9e4c-a46a-4a5f-8260-f805e1914bc9");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture, PerformanceReplicaArrivalTimeWithFixedDelay) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "8aef3b3f-a46f-40a7-91d0-b233a1b2f7ac");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 // TEST_P(L3MulticastTestFixture,
 //        PerformanceReplicaArrivalTimeWithUnregisteredParticipants) {
-//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-//       "ed4da65d-3984-432a-955e-a6b9fdb8d8aa");
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
 }  // namespace
