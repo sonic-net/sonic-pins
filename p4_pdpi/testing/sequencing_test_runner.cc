@@ -181,7 +181,8 @@ void GetEntriesUnreachableFromRootsTest(
   // We use the entry metadata to determine whether to treat it as a root entry
   // or not.
   auto is_root = [](const p4::v1::Entity& entity) {
-    return entity.table_entry().metadata() == "Root";
+    return entity.table_entry().metadata() == "Root" ||
+           entity.packet_replication_engine_entry().has_multicast_group_entry();
   };
 
   // Run GetEntriesUnreachableFromRoots.
@@ -1339,6 +1340,35 @@ void RunGetEntriesUnreachableFromRootsTests(const pdpi::IrP4Info& info) {
                 }
               }
               controller_metadata: "Root"
+            }
+          )pb",
+      });
+  // Multicast Root
+  //       |
+  //   Dependency      Garbage
+  GetEntriesUnreachableFromRootsTest(
+      info, "Entries referenced by multicast entries are not garbage collected",
+      {
+          R"pb(
+            multicast_group_table_entry {
+              match { multicast_group_id: "0x0037" }
+              action {
+                replicate { replicas { port: "port_1" instance: "0x0031" } }
+              }
+            }
+          )pb",
+          R"pb(
+            referenced_by_multicast_replica_table_entry {
+              match { port: "port_1" instance: "0x0031" }
+              action { do_thing_4 {} }
+              controller_metadata: "Not Garbage"
+            }
+          )pb",
+          R"pb(
+            referenced_by_multicast_replica_table_entry {
+              match { port: "port_12" instance: "0x0031" }
+              action { do_thing_4 {} }
+              controller_metadata: "Garbage"
             }
           )pb",
       });
