@@ -24,6 +24,7 @@
 #include <thread>  // NOLINT: third_party code.
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/numeric/int128.h"
@@ -368,10 +369,18 @@ absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
     P4RuntimeSession* session,
     const p4::v1::TableEntry& target_entry_signature);
 
+// Checks that a read from `session` returns no entities.
+absl::Status CheckNoEntities(P4RuntimeSession& session);
+
+// Deletes all entities read from `session`.
+absl::Status ClearEntities(P4RuntimeSession& session);
+
 // Checks that there are no table entries.
+ABSL_DEPRECATED("Use CheckNoEntities instead.")
 absl::Status CheckNoTableEntries(P4RuntimeSession* session);
 
 // Clears the table entries.
+ABSL_DEPRECATED("Use ClearEntities instead.")
 absl::Status ClearTableEntries(P4RuntimeSession* session);
 
 // Installs the given PI (program independent) table entry on the switch.

@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -392,11 +393,13 @@ P4RuntimeSession::CreateWithP4InfoAndClearTables(
     const P4RuntimeSessionOptionalArgs& metadata) {
   ASSIGN_OR_RETURN(std::unique_ptr<P4RuntimeSession> session,
                    P4RuntimeSession::Create(thinkit_switch, metadata));
-  RETURN_IF_ERROR(ClearTableEntries(session.get()));
+  RETURN_IF_ERROR(ClearEntities(*session));
   RETURN_IF_ERROR(SetMetadataAndSetForwardingPipelineConfig(
       session.get(),
       p4::v1::SetForwardingPipelineConfigRequest_Action_RECONCILE_AND_COMMIT,
       p4info));
+  RETURN_IF_ERROR(CheckNoEntities(*session)).SetPrepend()
+      << "cleared all entities and set a new forwarding pipeline config: ";
   return session;
 }
 
@@ -518,6 +521,67 @@ absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
          << target_entry_signature.ShortDebugString() << ">";
 }
 
+absl::Status CheckNoEntities(P4RuntimeSession& session) {
+  ASSIGN_OR_RETURN(
+      p4::v1::GetForwardingPipelineConfigResponse response,
+      GetForwardingPipelineConfig(
+          &session,
+          p4::v1::GetForwardingPipelineConfigRequest::P4INFO_AND_COOKIE));
+  // If the switch does not have a p4info, then it cannot have any entities.
+  if (!response.has_config()) return absl::OkStatus();
+
+  // If the switch has a p4info, we read all entities to ensure that there are
+  // none.
+  ASSIGN_OR_RETURN(std::vector<Entity> entities, ReadPiEntities(&session));
+  if (!entities.empty()) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "expected no entities on switch, but " << entities.size()
+           << " entities remain:\n"
+           << absl::StrJoin(entities, "", [](std::string* out, auto& entity) {
+                absl::StrAppend(out, entity.DebugString());
+              });
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status ClearEntities(P4RuntimeSession& session) {
+  // Get P4Info from Switch. It is needed to sequence the delete requests.
+  ASSIGN_OR_RETURN(
+      p4::v1::GetForwardingPipelineConfigResponse response,
+      GetForwardingPipelineConfig(
+          &session, p4::v1::GetForwardingPipelineConfigRequest::ALL));
+
+  // If no p4info has been pushed to the switch, then it cannot have any
+  // entities to clear. Furthermore, reading entities (i.e. part of the
+  // statement after this one) will fail if no p4info has been pushed.
+  if (!response.has_config()) return absl::OkStatus();
+
+  // Get entities.
+  ASSIGN_OR_RETURN(std::vector<Entity> entities, ReadPiEntities(&session));
+
+  // Early return if there is nothing to clear.
+  if (entities.empty()) return absl::OkStatus();
+
+  // Convert into IrP4Info.
+  ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(response.config().p4info()));
+
+  // Sort by dependency order, then reverse since we will be deleting.
+  RETURN_IF_ERROR(pdpi::StableSortEntities(info, entities));
+  absl::c_reverse(entities);
+
+  RETURN_IF_ERROR(
+      SendPiUpdates(&session, CreatePiUpdates(entities, Update::DELETE)))
+      << "when attempting to delete the following entities: "
+      << absl::StrJoin(entities, "\n");
+
+  // Verify that all entities were cleared successfully.
+  RETURN_IF_ERROR(CheckNoEntities(session)).SetPrepend()
+      << "cleared all entities: ";
+
+  return absl::OkStatus();
+}
+
 absl::Status CheckNoTableEntries(P4RuntimeSession* session) {
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,
@@ -532,7 +596,7 @@ absl::Status CheckNoTableEntries(P4RuntimeSession* session) {
   // are none.
   ASSIGN_OR_RETURN(auto table_entries, ReadPiTableEntries(session));
   if (!table_entries.empty()) {
-    return gutil::UnknownErrorBuilder()
+    return gutil::FailedPreconditionErrorBuilder()
            << "expected no table entries on switch, but "
            << table_entries.size() << " entries remain:\n"
            << absl::StrJoin(table_entries, "",
