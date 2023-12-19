@@ -650,8 +650,6 @@ TEST_P(L3MulticastTestFixture, DeleteNonexistentIpmcEntryFails) {
 }
 
 TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
-  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-      "ff124866-d117-418d-bd29-a0740a18043e");
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   const int kNumberMulticastGroupsInTest = 1;
