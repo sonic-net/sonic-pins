@@ -67,6 +67,10 @@ constexpr absl::string_view kExtractedPseudoField = "$extracted$";
 // gets cloned. Not an actual header field, but convenient for analysis.
 constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
 
+// Boolean pseudo header field that is set to true by p4-symbolic if the packet
+// gets recirculated. Not an actual header field, but convenient for analysis.
+constexpr absl::string_view kGotRecirculatedPseudoField = "$got_recirculated$";
+
 // The overall state of our symbolic solver/interpreter.
 // This is returned by our main analysis/interpration function, and is used
 // to find concrete test packets and for debugging.

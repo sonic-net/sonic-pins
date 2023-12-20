@@ -26,6 +26,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x02
@@ -62,6 +63,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x02
@@ -98,6 +100,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x02
@@ -161,6 +164,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -197,6 +201,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -233,6 +238,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -296,6 +302,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -332,6 +339,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -368,6 +376,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -431,6 +440,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -467,6 +477,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -503,6 +514,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -566,6 +578,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -602,6 +615,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -638,6 +652,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -701,6 +716,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -737,6 +753,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -773,6 +790,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -836,6 +854,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -872,6 +891,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -908,6 +928,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -971,6 +992,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1007,6 +1029,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1043,6 +1066,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1106,6 +1130,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1142,6 +1167,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1178,6 +1204,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1241,6 +1268,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1277,6 +1305,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1313,6 +1342,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1376,6 +1406,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1412,6 +1443,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1448,6 +1480,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1511,6 +1544,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1547,6 +1581,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1583,6 +1618,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1646,6 +1682,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1682,6 +1719,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1718,6 +1756,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1781,6 +1820,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1817,6 +1857,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1853,6 +1894,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1916,6 +1958,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1952,6 +1995,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -1988,6 +2032,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2051,6 +2096,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2087,6 +2133,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2123,6 +2170,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2186,6 +2234,7 @@ MyIngress.t => was matched on entry -1
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2222,6 +2271,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2258,6 +2308,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2321,6 +2372,7 @@ MyIngress.t => was matched on entry 0
 
 ingress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = false
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2357,6 +2409,7 @@ standard_metadata.priority = #b000
 
 parsed_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
@@ -2393,6 +2446,7 @@ standard_metadata.priority = #b000
 
 egress_headers:
 $got_cloned$ = false
+$got_recirculated$ = false
 h1.$extracted$ = true
 h1.$valid$ = true
 h1.f1 = #x00
