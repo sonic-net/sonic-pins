@@ -174,7 +174,10 @@ p4_pd_proto(
     # Do not access directly. Use checked in sai_pd.proto instead.
     out = "generated/sai_pd.proto",
     package = "sai",
-    roles = ["sdn_controller"],
+    roles = [
+        "sdn_controller",
+        "v1model_auxiliary_controller",
+    ],
 )
 
 # -- P4Info --------------------------------------------------------------------

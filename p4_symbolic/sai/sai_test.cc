@@ -18,9 +18,9 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include "gutil/proto.h"
 #include "gutil/status_matchers.h"
+#include "gutil/test_artifact_writer.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
@@ -30,6 +30,9 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "z3++.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace p4_symbolic {
 namespace {
@@ -80,51 +83,67 @@ TEST(SaiTranslationChecks, FailsIfInputContainsTranslationForVrfIdType) {
               gutil::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(GetLocalMetadataIngressPortFromModel, IngressPortIsAmongPassedValues) {
-  for (auto instantiation : sai::AllSaiInstantiations()) {
-    // Get config.
-    const auto config = sai::GetNonstandardForwardingPipelineConfig(
-        instantiation, sai::NonstandardPlatform::kP4Symbolic);
-    ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
-                         pdpi::CreateIrP4Info(config.p4info()));
+using GetLocalMetadataIngressPortFromModelTest =
+    testing::TestWithParam<sai::Instantiation>;
 
-    // Note: We need to install a table entry with the given translated field
-    // (in this case, local_metadata.ingress_port) for P4Symbolic to understand
-    // that the field is a translated type.
-    auto pd_entries = gutil::ParseProtoOrDie<sai::TableEntries>(
-        R"pb(entries {
-               acl_pre_ingress_table_entry {
-                 match { in_port { value: "b" } }
-                 action { set_vrf { vrf_id: "vrf-80" } }
-                 priority: 1
-               }
-             })pb");
-    std::vector<p4::v1::TableEntry> pi_entries;
-    for (auto& pd_entry : pd_entries.entries()) {
-      ASSERT_OK_AND_ASSIGN(
-          pi_entries.emplace_back(),
-          pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
-    }
-    symbolic::TranslationPerType translations;
-    translations[kPortIdTypeName] = symbolic::values::TranslationData{
-        .static_mapping = {{"a", 1}, {"b", 2}},
-        .dynamic_translation = false,
-    };
+TEST_P(GetLocalMetadataIngressPortFromModelTest,
+       IngressPortIsAmongPassedValues) {
+  //  Get config.
+  const auto config = sai::GetNonstandardForwardingPipelineConfig(
+      /*instantiation=*/GetParam(), sai::NonstandardPlatform::kP4Symbolic);
 
-    // Evaluate the SAI pipeline.
+  gutil::BazelTestArtifactWriter artifact_writer;
+  ASSERT_OK(artifact_writer.StoreTestArtifact(
+      "p4info.textproto", gutil::PrintTextProto(config.p4info())));
+  ASSERT_OK(artifact_writer.StoreTestArtifact("bmv2.json",
+                                              config.p4_device_config()));
+
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(config.p4info()));
+
+  // Note: We need to install a table entry with the given translated field
+  // (in this case, local_metadata.ingress_port) for P4Symbolic to understand
+  // that the field is a translated type.
+  auto pd_entries = gutil::ParseProtoOrDie<sai::TableEntries>(
+      R"pb(entries {
+             acl_pre_ingress_table_entry {
+               match { in_port { value: "b" } }
+               action { set_vrf { vrf_id: "vrf-80" } }
+               priority: 1
+             }
+           })pb");
+  std::vector<p4::v1::TableEntry> pi_entries;
+  for (auto &pd_entry : pd_entries.entries()) {
     ASSERT_OK_AND_ASSIGN(
-        std::unique_ptr<symbolic::SolverState> state,
-        symbolic::EvaluateP4Program(config, pi_entries, /*ports=*/{1, 2},
-                                    translations));
-
-    // Check local_metadata.ingress_port value.
-    EXPECT_EQ(state->solver->check(), z3::check_result::sat);
-    ASSERT_OK_AND_ASSIGN(const std::string local_metadata_ingress_port,
-                         GetLocalMetadataIngressPortFromModel(*state));
-    EXPECT_THAT(local_metadata_ingress_port,
-                testing::AnyOf(testing::Eq("a"), testing::Eq("b")));
+        pi_entries.emplace_back(),
+        pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
   }
+  symbolic::TranslationPerType translations;
+  translations[kPortIdTypeName] = symbolic::values::TranslationData{
+      .static_mapping = {{"a", 1}, {"b", 2}},
+      .dynamic_translation = false,
+  };
+
+  // Evaluate the SAI pipeline.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<symbolic::SolverState> state,
+                       symbolic::EvaluateP4Program(
+                           config, pi_entries, /*ports=*/{1, 2}, translations));
+
+  // Check local_metadata.ingress_port value.
+  EXPECT_EQ(state->solver->check(), z3::check_result::sat);
+  ASSERT_OK_AND_ASSIGN(const std::string local_metadata_ingress_port,
+                       GetLocalMetadataIngressPortFromModel(*state));
+  EXPECT_THAT(local_metadata_ingress_port,
+              testing::AnyOf(testing::Eq("a"), testing::Eq("b")));
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    GetLocalMetadataIngressPortFromModelTests,
+    GetLocalMetadataIngressPortFromModelTest,
+    testing::ValuesIn(sai::AllSaiInstantiations()),
+    [](const testing::TestParamInfo<sai::Instantiation> &info) -> std::string {
+      return sai::InstantiationToString(info.param);
+    });
 
 }  // namespace
 }  // namespace p4_symbolic

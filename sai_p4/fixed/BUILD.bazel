@@ -29,6 +29,7 @@ filegroup(
         "ingress_cloning.p4",
         "ipv4_checksum.p4",
         "l3_admit.p4",
+        "loopback.p4",
         "metadata.p4",
         "minimum_guaranteed_sizes.p4",
         "mirroring.p4",

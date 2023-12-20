@@ -10,7 +10,8 @@
 // The field list numbers used in @field_list annotations to identify the fields
 // that need to be preserved during clone/recirculation/etc. operations.
 enum bit<8> PreservedFieldList {
-  MIRROR_AND_PACKET_IN_COPY = 8w1
+  MIRROR_AND_PACKET_IN_COPY = 8w1,
+  RECIRCULATE = 8w2
 };
 
 // -- Translated Types ---------------------------------------------------------
@@ -248,6 +249,15 @@ struct local_metadata_t {
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bit<16> mirror_encap_udp_dst_port;
   // -- end of mirroring related fields ----------------------------------------
+
+  // If a packet is send to a port that is designated as a loopback port,
+  // the port is stored in this field and reciculated (see loopback.p4).
+  // This field (which is preserved during recirculation) will be used to set
+  // the ingress port to the loopback port after recirculation (as opposed to
+  // our hardware targets, this does NOT happen by default in v1model targets
+  // such as BMv2).
+  @field_list(PreservedFieldList.RECIRCULATE)
+  bit<PORT_BITWIDTH> loopback_port;
 
   // Packet-in related fields, which we can't group into a struct, because BMv2
   // doesn't support passing structs in clone3.

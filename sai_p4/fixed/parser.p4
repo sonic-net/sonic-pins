@@ -5,6 +5,7 @@
 #include "headers.p4"
 #include "ids.h"
 #include "metadata.p4"
+#include "bmv2_intrinsics.h"
 
 parser packet_parser(packet_in packet, out headers_t headers,
                      inout local_metadata_t local_metadata,
@@ -33,7 +34,6 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.mirror_session_id = 0;
     local_metadata.mirror_egress_port = 0;
     local_metadata.color = MeterColor_t.GREEN;
-    local_metadata.ingress_port = (port_id_t)standard_metadata.ingress_port;
     local_metadata.route_metadata = 0;
     local_metadata.bypass_ingress = false;
     local_metadata.wcmp_group_id_valid = false;
@@ -42,6 +42,16 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.nexthop_id_value = 0;
     local_metadata.ipmc_table_hit = false;
     local_metadata.acl_drop = false;
+
+    // If a packet is recirculated, use `loopback_port` the packet was sent to
+    // (which is preserved during recirculation) as the ingress port.
+    // Otherwise, use `standard_metadata.ingress_port`.
+    if (standard_metadata.instance_type == PKT_INSTANCE_TYPE_RECIRC) {
+      local_metadata.ingress_port = (port_id_t)local_metadata.loopback_port;
+    } else {
+      local_metadata.ingress_port = (port_id_t)standard_metadata.ingress_port;
+    }
+
 
   transition select(standard_metadata.ingress_port) {
       SAI_P4_CPU_PORT: parse_packet_out_header;
