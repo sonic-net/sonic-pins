@@ -25,6 +25,7 @@
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
@@ -36,9 +37,11 @@
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "grpcpp/create_channel.h"
+#include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/helpers.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/sequencing.h"
@@ -545,6 +548,45 @@ absl::Status CheckNoEntities(P4RuntimeSession& session) {
   return absl::OkStatus();
 }
 
+namespace {
+
+absl::StatusOr<int> GetEntityRank(const pdpi::IrP4Info& info,
+                                  const p4::v1::Entity& entity) {
+  ASSIGN_OR_RETURN(std::string table_name, EntityToTableName(info, entity));
+  return gutil::FindOrStatus(info.dependency_rank_by_table_name(), table_name);
+}
+
+// TODO: Move to Sequencing to replace SequencePiUpdates...
+absl::Status SplitSortedUpdatesIntoBatchesAndSend(
+    P4RuntimeSession& session, const pdpi::IrP4Info& info,
+    absl::Span<const p4::v1::Update> updates,
+    std::optional<int> max_batch_size = 5000) {
+  if (max_batch_size.has_value() && *max_batch_size <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Max batch size must be > 0. Max batch size: " << *max_batch_size;
+  }
+
+  std::vector<WriteRequest> requests;
+  WriteRequest request;
+  std::optional<int> last_rank = std::nullopt;
+  for (const p4::v1::Update& update : updates) {
+    ASSIGN_OR_RETURN(int rank, GetEntityRank(info, update.entity()));
+    // If we have reached a new entity rank or the limit of update size, then
+    // start a new request.
+    if ((last_rank.has_value() && *last_rank != rank) ||
+        (max_batch_size.has_value() &&
+         request.updates_size() > *max_batch_size)) {
+      requests.push_back(std::move(request));
+      request = WriteRequest();
+    }
+    *request.add_updates() = update;
+    last_rank = rank;
+  }
+  requests.push_back(std::move(request));
+  return SetMetadataAndSendPiWriteRequests(&session, requests);
+}
+}  // namespace
+
 absl::Status ClearEntities(P4RuntimeSession& session) {
   // Get P4Info from Switch. It is needed to sequence the delete requests.
   ASSIGN_OR_RETURN(
@@ -570,8 +612,11 @@ absl::Status ClearEntities(P4RuntimeSession& session) {
   RETURN_IF_ERROR(pdpi::StableSortEntities(info, entities));
   absl::c_reverse(entities);
 
-  RETURN_IF_ERROR(
-      SendPiUpdates(&session, CreatePiUpdates(entities, Update::DELETE)))
+  // TODO: Due to a switch bug, these need to be sent in batches.
+  // Ideally, whether to use batches or not should be determined by a P4Info
+  // option that will be introduced in b/259194587.
+  RETURN_IF_ERROR(SplitSortedUpdatesIntoBatchesAndSend(
+      session, info, CreatePiUpdates(entities, Update::DELETE)))
       << "when attempting to delete the following entities: "
       << absl::StrJoin(entities, "\n");
 

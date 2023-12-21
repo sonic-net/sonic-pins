@@ -287,7 +287,8 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
 
   action referring_to_one_match_field_action(@id(1)
   @refers_to(one_match_field_table, id)
-  @refers_to(two_match_fields_table, id_1)
+  // TODO: b/263309221 - Uncomment once multiple references are supported.
+  // @refers_to(two_match_fields_table, id_1)
                          string_id_t referring_id_1) {}
   // A table whose entries refer to other table entries via action.
   table referring_by_action_table {
