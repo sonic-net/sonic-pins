@@ -23,6 +23,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 
@@ -67,6 +68,12 @@ absl::Status SortTableEntries(const IrP4Info& info,
 // Any entities with the same dependency rank remain in the same relative order.
 absl::Status StableSortEntities(const IrP4Info& info,
                           std::vector<p4::v1::Entity>& entities);
+
+// Same as StableSortEntities but sorts the repeated `Update` message.
+absl::Status StableSortUpdates(
+    const IrP4Info& info,
+    google::protobuf::RepeatedPtrField<p4::v1::Update>& updates,
+    bool reverse_ordering = false);
 
 // Returns the subset of Entities in `entities` that is not reachable from any
 // root entity in `entities`, where a root entity is determined by the

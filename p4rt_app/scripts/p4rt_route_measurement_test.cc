@@ -54,6 +54,7 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/sequencing.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -950,6 +951,17 @@ absl::StatusOr<P4WriteRequests> ComputeEncapWriteRequests(
                          neighbor, src_ip6.ToString(), router_interface_id));
 
     count++;
+  }
+
+  // Sort the requests based on dependency ordering and keep like entries
+  // together for efficiency. Deletes follow the reverse order.
+  for (auto& insert : requests.inserts) {
+    RETURN_IF_ERROR(
+        pdpi::StableSortUpdates(ir_p4info, *insert.mutable_updates()));
+  }
+  for (auto& deletes : requests.deletes) {
+    RETURN_IF_ERROR(pdpi::StableSortUpdates(
+        ir_p4info, *deletes.mutable_updates(), /*reverse_ordering=*/true));
   }
 
   RETURN_IF_ERROR(VerifyP4WriteRequestSizes(
