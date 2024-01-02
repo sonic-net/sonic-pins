@@ -567,11 +567,11 @@ EntryBuilder& EntryBuilder::AddMirrorSessionTableEntry(
       *pd_entry.mutable_mirror_session_table_entry();
   mirror_session_entry.mutable_match()->set_mirror_session_id(
       params.mirror_session_id);
-  sai::MirrorWithPsampEncapsulationAction& action =
+  sai::MirrorWithIpfixEncapsulationAction& action =
       *mirror_session_entry.mutable_action()
-           ->mutable_mirror_with_psamp_encapsulation();
+           ->mutable_mirror_with_ipfix_encapsulation();
   action.set_monitor_port(params.mirror_egress_port);
-  // TODO: Fill in PSAMP params in table entry's action.
+  // TODO: Fill in IPFIX params in table entry's action.
   *entries_.add_entries() = std::move(pd_entry);
 
   return *this;

@@ -39,16 +39,16 @@ control mirror_session_lookup(inout headers_t headers,
   }
 
   // Sets
-  // * SAI_MIRROR_SESSION_ATTR_TYPE to SAI_MIRROR_SESSION_TYPE_PSAMP
-  // * SAI_MIRROR_SESSION_ATTR_PSAMP_ENCAPSULATION_TYPE to
-  // SAI_PSAMP_ENCAPSULATION_TYPE_EXTENDED
+  // * SAI_MIRROR_SESSION_ATTR_TYPE to SAI_MIRROR_SESSION_TYPE_IPFIX
+  // * SAI_MIRROR_SESSION_ATTR_IPFIX_ENCAPSULATION_TYPE to
+  //   SAI_IPFIX_ENCAPSULATION_TYPE_EXTENDED
   // * SAI_MIRROR_SESSION_ATTR_MONITOR_PORT to `monitor_port`
-  @id(CLONING_MIRROR_WITH_PSAMP_ENCAPSULATION_ACTION_ID)
-  // TODO: Add params needed for PSAMP mirroring.
+  @id(CLONING_MIRROR_WITH_IPFIX_ENCAPSULATION_ACTION_ID)
+  // TODO: Add params needed for IPFIX mirroring.
   // TODO: Remove unsupported annotation once the switch stack
   // supports this table.
   @unsupported
-  action mirror_with_psamp_encapsulation(@id(1) port_id_t monitor_port) {
+  action mirror_with_ipfix_encapsulation(@id(1) port_id_t monitor_port) {
     local_metadata.mirror_egress_port = monitor_port;
   }
 
@@ -63,7 +63,7 @@ control mirror_session_lookup(inout headers_t headers,
     }
     actions = {
       @proto_id(1) mirror_as_ipv4_erspan;
-      @proto_id(2) mirror_with_psamp_encapsulation;
+      @proto_id(2) mirror_with_ipfix_encapsulation;
       @defaultonly NoAction;
     }
 
