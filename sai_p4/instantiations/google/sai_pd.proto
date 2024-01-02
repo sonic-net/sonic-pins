@@ -161,7 +161,7 @@ message MirrorSessionTableEntry {
     oneof action {
       MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
       // CAUTION: This action is not (yet) supported.
-      MirrorWithPsampEncapsulationAction mirror_with_psamp_encapsulation = 2;
+      MirrorWithIpfixEncapsulationAction mirror_with_ipfix_encapsulation = 2;
     }
   }
   Action action = 2;
@@ -905,7 +905,7 @@ message SetPortAndSrcMacAndVlanIdAction {
 }
 
 // CAUTION: This action is not (yet) supported.
-message MirrorWithPsampEncapsulationAction {
+message MirrorWithIpfixEncapsulationAction {
   string monitor_port = 1;  // Format::STRING
 }
 

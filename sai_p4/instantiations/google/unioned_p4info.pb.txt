@@ -2043,8 +2043,8 @@ actions {
 actions {
   preamble {
     id: 16777245
-    name: "ingress.mirror_session_lookup.mirror_with_psamp_encapsulation"
-    alias: "mirror_with_psamp_encapsulation"
+    name: "ingress.mirror_session_lookup.mirror_with_ipfix_encapsulation"
+    alias: "mirror_with_ipfix_encapsulation"
     annotations: "@unsupported"
   }
   params {

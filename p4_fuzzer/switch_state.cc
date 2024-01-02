@@ -48,19 +48,122 @@ using ::p4::v1::Update;
 using ::pdpi::IrP4Info;
 using ::pdpi::IrTableEntry;
 
-/*absl::StatusOr<TableEntry> CanonicalizeTableEntry(const IrP4Info& info,
-                                                  const TableEntry& entry,
-                                                  bool key_only) {
-  ASSIGN_OR_RETURN(IrTableEntry ir_entry,
-                   pdpi::PiTableEntryToIr(info, entry, key_only),
-                   _ << "Could not canonicalize: PiToIr Error\n"
-                     << entry.DebugString());
-  ASSIGN_OR_RETURN(TableEntry canonical_entry,
-                   IrTableEntryToPi(info, ir_entry, key_only),
-                   _ << "Could not canonicalize: IrToPi Error\n"
-                     << entry.DebugString());
-  return canonical_entry;
-}*/
+// Resource utilization for ActionProfiles depends on how the profile is
+// configured. Using SumOfMembers means we only count the number of actions in
+// an action profile. Using SumOfWeights means we count the total weight for all
+// actions combined.
+struct ActionProfileResources {
+  int actions = 0;
+  int total_weight = 0;
+};
+
+ActionProfileResources GetAllActionProfileResourceForTable(
+    const UnorderedTableEntries& table) {
+  ActionProfileResources resources;
+  for (auto& [table_key, table_entry] : table) {
+    for (const p4::v1::ActionProfileAction& action :
+         table_entry.action()
+             .action_profile_action_set()
+             .action_profile_actions()) {
+      resources.total_weight += action.weight();
+    }
+    resources.actions += table_entry.action()
+                             .action_profile_action_set()
+                             .action_profile_actions_size();
+  }
+  return resources;
+}
+
+ActionProfileResources GetAllActionProfileResourceForTableEntry(
+    const p4::v1::TableEntry& pi_table_entry) {
+  ActionProfileResources resources;
+  for (const p4::v1::ActionProfileAction& action :
+       pi_table_entry.action()
+           .action_profile_action_set()
+           .action_profile_actions()) {
+    ++resources.actions;
+    resources.total_weight += action.weight();
+  }
+  return resources;
+}
+
+absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
+    const p4::config::v1::ActionProfile& action_profile,
+    const UnorderedTableEntries& current_table,
+    const p4::v1::TableEntry& pi_table_entry) {
+  ActionProfileResources current_resources =
+      GetAllActionProfileResourceForTable(current_table);
+  ActionProfileResources needed_resources =
+      GetAllActionProfileResourceForTableEntry(pi_table_entry);
+
+  for (const p4::v1::ActionProfileAction& action :
+       pi_table_entry.action()
+           .action_profile_action_set()
+           .action_profile_actions()) {
+    // If action weight is 0 or less, or if it is greater than the
+    // max_member_weight (if non-zero) for SumOfMembers semantics, the server
+    // MUST return an InvalidArgumentError.
+    if (action.weight() <= 0) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "The new entry attempts to program a member with weight %d, which is "
+          "never allowed.",
+          action.weight()));
+    } else if (action_profile.sum_of_members().max_member_weight() != 0 &&
+               action.weight() >
+                   action_profile.sum_of_members().max_member_weight()) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "The action profile max_member_weight is %d and the new entry "
+          "programs a member of weight %d.",
+          action_profile.sum_of_members().max_member_weight(),
+          action.weight()));
+    }
+  }
+
+  if (action_profile.has_sum_of_members()) {
+    // If the table entry has too many actions then the current table resources
+    // do not matter. The server must return an InvalidArgumentError.
+    if (needed_resources.actions > action_profile.max_group_size() &&
+        action_profile.max_group_size() != 0) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "The action profile max group size is %d and the new entry needs %d.",
+          action_profile.max_group_size(), needed_resources.actions));
+    }
+    std::string result = absl::StrFormat(
+        "The action profile uses SumOfMembers and currently has %d members "
+        "with space for %d, and the new entry needs %d.",
+        current_resources.actions, action_profile.size(),
+        needed_resources.actions);
+    if (current_resources.actions + needed_resources.actions <=
+        action_profile.size()) {
+      return result;
+    }
+    return absl::ResourceExhaustedError(result);
+  } else {
+    // If the table entry has too much weight then the current table resources
+    // do not matter. The server must return an InvalidArgumentError.
+    if (needed_resources.total_weight > action_profile.max_group_size() &&
+        action_profile.max_group_size() != 0) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "The action profile max group size is %d and the new entry needs %d.",
+          action_profile.max_group_size(), needed_resources.total_weight));
+    }
+    // If the action profile does not use SumOfMembers semantics, then it must
+    // use SumOfWeights since that is both the default and the only other
+    // option.
+    std::string result = absl::StrFormat(
+        "The action profile uses SumOfWeights and has a current total weight "
+        "of %d with space for %d, and the new entry needs %d.",
+        current_resources.total_weight, action_profile.size(),
+        needed_resources.total_weight);
+    if (current_resources.total_weight + needed_resources.total_weight <=
+        action_profile.size()) {
+      return result;
+    }
+    return absl::ResourceExhaustedError(result);
+  }
+}
+
+}  // namespace
 
 absl::StatusOr<TableEntry> CanonicalizeTableEntry(const IrP4Info& info,
                                                   const TableEntry& entry,

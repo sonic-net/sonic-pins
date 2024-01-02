@@ -82,7 +82,7 @@ void AbslStringify(Sink& sink, const IpVersion& ip_version) {
   }
 }
 
-// Parameters for generating a mirror session table entry with PSAMP
+// Parameters for generating a mirror session table entry with IPFIX
 // encapsulation.
 // TODO: Adds data members with parameters needed for mirror
 // encap.
