@@ -1243,6 +1243,7 @@ actions {
     id: 1
     name: "multicast_group_id"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
   }
 }
