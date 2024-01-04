@@ -165,17 +165,31 @@ TEST(ReadPiCounterDataTest, ReturnsCorrectCounterForSignature) {
                          byte_count: 42
                          packet_count: 10
                        )pb"));
+  ASSERT_OK_AND_ASSIGN(const auto meter_counter_data1,
+                       gutil::ParseTextProto<p4::v1::MeterCounterData>(R"pb(
+                         green { byte_count: 42 packet_count: 10 }
+                         yellow { byte_count: 0 packet_count: 0 }
+                         red { byte_count: 300 packet_count: 100 }
+                       )pb"));
   ASSERT_OK_AND_ASSIGN(const auto counter_data2,
                        gutil::ParseTextProto<p4::v1::CounterData>(R"pb(
                          byte_count: 420
                          packet_count: 100
                        )pb"));
+  ASSERT_OK_AND_ASSIGN(const auto meter_counter_data2,
+                       gutil::ParseTextProto<p4::v1::MeterCounterData>(R"pb(
+                         green { byte_count: 32 packet_count: 12 }
+                         yellow { byte_count: 0 packet_count: 0 }
+                         red { byte_count: 400 packet_count: 150 }
+                       )pb"));
   p4::v1::TableEntry entry1 = ConstructTableEntry();
   *entry1.mutable_counter_data() = counter_data1;
+  *entry1.mutable_meter_counter_data() = meter_counter_data1;
   p4::v1::TableEntry entry2 = ConstructTableEntry();
   // Change the signature of entry2 compared to entry1 in some arbitrary way.
   entry2.add_match()->mutable_exact()->set_value("123");
   *entry2.mutable_counter_data() = counter_data2;
+  *entry2.mutable_meter_counter_data() = meter_counter_data2;
   SetDefaultReadResponse(mock_p4rt_stub, {entry1, entry2});
 
   // Actual test: counters are read back correctly.
@@ -183,18 +197,32 @@ TEST(ReadPiCounterDataTest, ReturnsCorrectCounterForSignature) {
   p4::v1::TableEntry target_entry_signature2 = entry2;
   EXPECT_THAT(ReadPiCounterData(p4rt_session.get(), target_entry_signature1),
               IsOkAndHolds(EqualsProto(counter_data1)));
+  EXPECT_THAT(
+      ReadPiMeterCounterData(p4rt_session.get(), target_entry_signature1),
+      IsOkAndHolds(EqualsProto(meter_counter_data1)));
   EXPECT_THAT(ReadPiCounterData(p4rt_session.get(), target_entry_signature2),
               IsOkAndHolds(EqualsProto(counter_data2)));
+  EXPECT_THAT(
+      ReadPiMeterCounterData(p4rt_session.get(), target_entry_signature2),
+      IsOkAndHolds(EqualsProto(meter_counter_data2)));
   // Clearing the action & counter data in the signature should not matter, as
   // these fields are ignored.
   target_entry_signature1.clear_action();
   target_entry_signature2.clear_action();
   target_entry_signature1.clear_counter_data();
   target_entry_signature2.clear_counter_data();
+  target_entry_signature1.clear_meter_counter_data();
+  target_entry_signature2.clear_meter_counter_data();
   EXPECT_THAT(ReadPiCounterData(p4rt_session.get(), target_entry_signature1),
               gutil::IsOkAndHolds(EqualsProto(counter_data1)));
   EXPECT_THAT(ReadPiCounterData(p4rt_session.get(), target_entry_signature2),
               gutil::IsOkAndHolds(EqualsProto(counter_data2)));
+  EXPECT_THAT(
+      ReadPiMeterCounterData(p4rt_session.get(), target_entry_signature1),
+      IsOkAndHolds(EqualsProto(meter_counter_data1)));
+  EXPECT_THAT(
+      ReadPiMeterCounterData(p4rt_session.get(), target_entry_signature2),
+      IsOkAndHolds(EqualsProto(meter_counter_data2)));
 }
 
 TEST(SetForwardingPipelineConfigTest, BothVersionsProduceSameRequest) {
