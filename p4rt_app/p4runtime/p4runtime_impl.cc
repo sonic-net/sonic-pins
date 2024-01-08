@@ -88,6 +88,7 @@
 /*#include "swss/component_state_helper_interface.h"
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
+#include "swss/warm_restart.h"
 
 namespace p4rt_app {
 namespace {

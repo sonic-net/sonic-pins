@@ -52,6 +52,7 @@
 #include "p4rt_app/event_monitoring/debug_data_dump_events.h"
 #include "p4rt_app/event_monitoring/state_event_monitor.h"
 #include "p4rt_app/event_monitoring/state_verification_events.h"
+#include "p4rt_app/event_monitoring/warm_boot_events.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
