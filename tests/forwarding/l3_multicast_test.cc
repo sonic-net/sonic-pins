@@ -543,8 +543,6 @@ TEST_P(L3MulticastTestFixture, InsertMulticastGroupBeforeRifFails) {
 
 TEST_P(L3MulticastTestFixture,
        InsertIpMulticastEntryBeforeMulticastGroupFails) {
-  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-      "92ba000a-77a1-42d5-b9ba-c917dbece6a1");
   // Create a VRF.
   ASSERT_OK_AND_ASSIGN(const std::vector<p4::v1::Entity> vrf_entities,
                        sai::EntryBuilder()
@@ -576,8 +574,6 @@ TEST_P(L3MulticastTestFixture,
 }
 
 TEST_P(L3MulticastTestFixture, DeleteNonexistentRifEntryFails) {
-  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-      "2373038c-1057-4faa-a04f-8f40fe5eb100");
   // Unable to delete RIF entry that was not added.
   ASSERT_OK_AND_ASSIGN(
       const auto entities,
@@ -618,8 +614,6 @@ TEST_P(L3MulticastTestFixture, DeleteNonexistentMulticastGroupFails) {
 }
 
 TEST_P(L3MulticastTestFixture, DeleteNonexistentIpmcEntryFails) {
-  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
-      "c0307840-3fd8-4899-8034-b4379e4fc382");
   // Unable to delete IPMC entry that was not added.
   const int kMulticastGroupId = 1;
   const std::string vrf_id = "vrf-mcast-1";
