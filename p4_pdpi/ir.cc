@@ -34,6 +34,8 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/types/optional.h"
+#include "absl/types/span.h"
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/map.h"
 #include "google/protobuf/message.h"
@@ -476,7 +478,7 @@ absl::Status CheckParams(const absl::flat_hash_set<std::string> &actual_params,
 // Verifies the contents of the PI representation and translates to the IR
 // message
 StatusOr<IrMatch> PiMatchFieldToIr(
-    const IrP4Info &info, TranslationOptions options,
+    const IrP4Info &info, const TranslationOptions &options,
     const IrMatchFieldDefinition &ir_match_definition,
     const p4::v1::FieldMatch &pi_match) {
   IrMatch match_entry;
@@ -655,7 +657,7 @@ StatusOr<IrMatch> PiMatchFieldToIr(
 
 // Translates the action invocation from its PI form to IR.
 StatusOr<IrActionInvocation> PiActionToIr(
-    const IrP4Info &info, TranslationOptions options,
+    const IrP4Info &info, const TranslationOptions &options,
     const p4::v1::Action &pi_action,
     const google::protobuf::RepeatedPtrField<IrActionReference>
         &valid_actions) {
@@ -735,7 +737,7 @@ StatusOr<IrActionInvocation> PiActionToIr(
 
 // Translates the action set from its PI form to IR.
 StatusOr<IrActionSet> PiActionSetToIr(
-    const IrP4Info &info, TranslationOptions options,
+    const IrP4Info &info, const TranslationOptions &options,
     const p4::v1::ActionProfileActionSet &pi_action_set,
     const google::protobuf::RepeatedPtrField<IrActionReference>
         &valid_actions) {
@@ -778,7 +780,7 @@ StatusOr<IrActionSet> PiActionSetToIr(
 // IrPacketOut}.
 template <typename I, typename O>
 StatusOr<O> PiPacketIoToIr(const IrP4Info &info, const std::string &kind,
-                           const I &packet) {
+                           const I &packet, const TranslationOptions &options) {
   O result;
   result.set_payload(packet.payload());
   absl::flat_hash_set<uint32_t> used_metadata_ids;
@@ -865,7 +867,7 @@ StatusOr<O> PiPacketIoToIr(const IrP4Info &info, const std::string &kind,
 // Verifies the contents of the IR representation and translates to the PI
 // message.
 StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
-    const IrP4Info &info, TranslationOptions options,
+    const IrP4Info &info, const TranslationOptions &options,
     const IrMatchFieldDefinition &ir_match_definition,
     const IrMatch &ir_match) {
   p4::v1::FieldMatch match_entry;
@@ -891,6 +893,7 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
       match_entry.set_field_id(match_field.id());
       const absl::Status &valid =
           ValidateIrValueFormat(ir_match.exact(), ir_match_definition.format());
+
       if (!valid.ok()) {
         invalid_reasons.push_back(absl::StrCat(kNewBullet, valid.message()));
         break;
@@ -1081,7 +1084,7 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
 
 // Translates the action invocation from its IR form to PI.
 StatusOr<p4::v1::Action> IrActionInvocationToPi(
-    const IrP4Info &info, TranslationOptions options,
+    const IrP4Info &info, const TranslationOptions &options,
     const IrActionInvocation &ir_table_action,
     const google::protobuf::RepeatedPtrField<IrActionReference>
         &valid_actions) {
@@ -1170,7 +1173,7 @@ StatusOr<p4::v1::Action> IrActionInvocationToPi(
 
 // Translates the action set from its IR form to PI.
 StatusOr<p4::v1::ActionProfileActionSet> IrActionSetToPi(
-    const IrP4Info &info, TranslationOptions options,
+    const IrP4Info &info, const TranslationOptions &options,
     const IrActionSet &ir_action_set,
     const google::protobuf::RepeatedPtrField<IrActionReference>
         &valid_actions) {
@@ -1216,7 +1219,7 @@ p4::v1::PacketMetadata CreatePaddingMetadata(uint32_t metadata_id) {
 
 template <typename I, typename O>
 StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
-                           const O &packet) {
+                           const O &packet, const TranslationOptions &options) {
   I result;
   std::vector<std::string> invalid_reasons;
   result.set_payload(packet.payload());
@@ -1833,7 +1836,7 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
 
 StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
                                         const p4::v1::TableEntry &pi,
-                                        TranslationOptions options) {
+                                        const TranslationOptions &options) {
   IrTableEntry ir;
   const auto &status_or_table =
       gutil::FindPtrOrStatus(info.tables_by_id(), pi.table_id());
@@ -2042,7 +2045,7 @@ StatusOr<IrReplica> PiReplicaToIr(const IrP4Info &info,
 
 StatusOr<IrMulticastGroupEntry> PiMulticastGroupEntryToIr(
     const IrP4Info &info, const p4::v1::MulticastGroupEntry &pi,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrMulticastGroupEntry ir;
   ir.set_multicast_group_id(pi.multicast_group_id());
 
@@ -2085,7 +2088,7 @@ StatusOr<IrMulticastGroupEntry> PiMulticastGroupEntryToIr(
 
 StatusOr<IrPacketReplicationEngineEntry> PiPacketReplicationEngineEntryToIr(
     const IrP4Info &info, const p4::v1::PacketReplicationEngineEntry &pi,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrPacketReplicationEngineEntry ir;
   switch (pi.type_case()) {
     case p4::v1::PacketReplicationEngineEntry::kMulticastGroupEntry: {
@@ -2103,18 +2106,21 @@ StatusOr<IrPacketReplicationEngineEntry> PiPacketReplicationEngineEntryToIr(
 }
 
 StatusOr<IrPacketIn> PiPacketInToIr(const IrP4Info &info,
-                                    const p4::v1::PacketIn &packet) {
-  return PiPacketIoToIr<p4::v1::PacketIn, IrPacketIn>(info, "packet-in",
-                                                      packet);
+                                    const p4::v1::PacketIn &packet,
+                                    const TranslationOptions &options) {
+  return PiPacketIoToIr<p4::v1::PacketIn, IrPacketIn>(info, "packet-in", packet,
+                                                      options);
 }
 StatusOr<IrPacketOut> PiPacketOutToIr(const IrP4Info &info,
-                                      const p4::v1::PacketOut &packet) {
+                                      const p4::v1::PacketOut &packet,
+                                      const TranslationOptions &options) {
   return PiPacketIoToIr<p4::v1::PacketOut, IrPacketOut>(info, "packet-out",
-                                                        packet);
+                                                        packet, options);
 }
 
 StatusOr<IrReadRequest> PiReadRequestToIr(
-    const IrP4Info &info, const p4::v1::ReadRequest &read_request) {
+    const IrP4Info &info, const p4::v1::ReadRequest &read_request,
+    const TranslationOptions &options) {
   IrReadRequest result;
   std::vector<std::string> invalid_reasons;
   if (read_request.device_id() == 0) {
@@ -2165,7 +2171,7 @@ StatusOr<IrReadRequest> PiReadRequestToIr(
 }
 
 StatusOr<IrEntity> PiEntityToIr(const IrP4Info &info, const p4::v1::Entity &pi,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   IrEntity ir_entity;
   switch (pi.entity_case()) {
     case p4::v1::Entity::kTableEntry: {
@@ -2196,7 +2202,7 @@ StatusOr<IrEntity> PiEntityToIr(const IrP4Info &info, const p4::v1::Entity &pi,
 
 StatusOr<IrEntities> PiEntitiesToIr(const IrP4Info &info,
                                     const absl::Span<const p4::v1::Entity> pi,
-                                    TranslationOptions options) {
+                                    const TranslationOptions &options) {
   IrEntities ir_entities;
   for (auto &entity : pi) {
     ASSIGN_OR_RETURN(*ir_entities.add_entities(),
@@ -2207,7 +2213,7 @@ StatusOr<IrEntities> PiEntitiesToIr(const IrP4Info &info,
 
 StatusOr<IrReadResponse> PiReadResponseToIr(
     const IrP4Info &info, const p4::v1::ReadResponse &read_response,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrReadResponse result;
   std::vector<std::string> invalid_reasons;
   for (const auto &entity : read_response.entities()) {
@@ -2230,7 +2236,7 @@ StatusOr<IrReadResponse> PiReadResponseToIr(
 
 StatusOr<IrUpdate> PiUpdateToIr(const IrP4Info &info,
                                 const p4::v1::Update &update,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   IrUpdate ir_update;
   if (update.type() == p4::v1::Update_Type_UNSPECIFIED) {
     return absl::InvalidArgumentError(
@@ -2244,7 +2250,7 @@ StatusOr<IrUpdate> PiUpdateToIr(const IrP4Info &info,
 
 StatusOr<IrWriteRequest> PiWriteRequestToIr(
     const IrP4Info &info, const p4::v1::WriteRequest &write_request,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrWriteRequest ir_write_request;
 
   std::vector<std::string> invalid_reasons;
@@ -2293,7 +2299,8 @@ StatusOr<IrWriteRequest> PiWriteRequestToIr(
 
 StatusOr<IrStreamMessageRequest> PiStreamMessageRequestToIr(
     const IrP4Info &info,
-    const p4::v1::StreamMessageRequest &stream_message_request) {
+    const p4::v1::StreamMessageRequest &stream_message_request,
+    const TranslationOptions &options) {
   IrStreamMessageRequest ir_stream_message_request;
 
   switch (stream_message_request.update_case()) {
@@ -2303,8 +2310,9 @@ StatusOr<IrStreamMessageRequest> PiStreamMessageRequestToIr(
       break;
     }
     case p4::v1::StreamMessageRequest::kPacket: {
-      ASSIGN_OR_RETURN(*ir_stream_message_request.mutable_packet(),
-                       PiPacketOutToIr(info, stream_message_request.packet()));
+      ASSIGN_OR_RETURN(
+          *ir_stream_message_request.mutable_packet(),
+          PiPacketOutToIr(info, stream_message_request.packet(), options));
       break;
     }
     default: {
@@ -2321,7 +2329,8 @@ StatusOr<IrStreamMessageRequest> PiStreamMessageRequestToIr(
 
 StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
     const IrP4Info &info,
-    const p4::v1::StreamMessageResponse &stream_message_response) {
+    const p4::v1::StreamMessageResponse &stream_message_response,
+    const TranslationOptions &options) {
   IrStreamMessageResponse ir_stream_message_response;
 
   switch (stream_message_response.update_case()) {
@@ -2331,8 +2340,9 @@ StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
       break;
     }
     case p4::v1::StreamMessageResponse::kPacket: {
-      ASSIGN_OR_RETURN(*ir_stream_message_response.mutable_packet(),
-                       PiPacketInToIr(info, stream_message_response.packet()));
+      ASSIGN_OR_RETURN(
+          *ir_stream_message_response.mutable_packet(),
+          PiPacketInToIr(info, stream_message_response.packet(), options));
       break;
     }
     case p4::v1::StreamMessageResponse::kError: {
@@ -2345,7 +2355,8 @@ StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
         case p4::v1::StreamError::kPacketOut: {
           ASSIGN_OR_RETURN(
               *ir_error->mutable_packet_out(),
-              PiPacketOutToIr(info, pi_error.packet_out().packet_out()));
+              PiPacketOutToIr(info, pi_error.packet_out().packet_out(),
+                              options));
           break;
         }
         default: {
@@ -2373,7 +2384,7 @@ StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
 
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     const IrP4Info &info, const IrTableEntries &ir,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   std::vector<p4::v1::TableEntry> pi;
   pi.reserve(ir.entries_size());
   for (const IrTableEntry &ir_entry : ir.entries()) {
@@ -2384,7 +2395,7 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
 }
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     const IrP4Info &info, absl::Span<const IrTableEntry> ir,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   std::vector<p4::v1::TableEntry> pi;
   pi.reserve(ir.size());
   for (const IrTableEntry &ir_entry : ir) {
@@ -2396,7 +2407,7 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
 
 absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
     const IrP4Info &info, absl::Span<const p4::v1::TableEntry> pi,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrTableEntries ir;
   ir.mutable_entries()->Reserve(pi.size());
   for (const auto &pi_entry : pi) {
@@ -2406,9 +2417,9 @@ absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
   return ir;
 }
 
-StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
-                                              const IrTableEntry &ir,
-                                              TranslationOptions options) {
+StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
+    const IrP4Info &info, const IrTableEntry &ir,
+    const TranslationOptions &options) {
   p4::v1::TableEntry pi;
   absl::string_view table_name = ir.table_name();
   const auto &status_or_table =
@@ -2611,7 +2622,7 @@ StatusOr<p4::v1::Replica> IrReplicaToPi(const IrP4Info &info,
 
 StatusOr<p4::v1::MulticastGroupEntry> IrMulticastGroupEntryToPi(
     const IrP4Info &info, const IrMulticastGroupEntry &ir,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   p4::v1::MulticastGroupEntry pi;
   pi.set_multicast_group_id(ir.multicast_group_id());
 
@@ -2654,7 +2665,7 @@ StatusOr<p4::v1::MulticastGroupEntry> IrMulticastGroupEntryToPi(
 StatusOr<p4::v1::PacketReplicationEngineEntry>
 IrPacketReplicationEngineEntryToPi(const IrP4Info &info,
                                    const IrPacketReplicationEngineEntry &ir,
-                                   TranslationOptions options) {
+                                   const TranslationOptions &options) {
   p4::v1::PacketReplicationEngineEntry pi;
   switch (ir.type_case()) {
     case IrPacketReplicationEngineEntry::kMulticastGroupEntry: {
@@ -2671,18 +2682,21 @@ IrPacketReplicationEngineEntryToPi(const IrP4Info &info,
 }
 
 StatusOr<p4::v1::PacketIn> IrPacketInToPi(const IrP4Info &info,
-                                          const IrPacketIn &packet) {
-  return IrPacketIoToPi<p4::v1::PacketIn, IrPacketIn>(info, "packet-in",
-                                                      packet);
+                                          const IrPacketIn &packet,
+                                          const TranslationOptions &options) {
+  return IrPacketIoToPi<p4::v1::PacketIn, IrPacketIn>(info, "packet-in", packet,
+                                                      options);
 }
 StatusOr<p4::v1::PacketOut> IrPacketOutToPi(const IrP4Info &info,
-                                            const IrPacketOut &packet) {
+                                            const IrPacketOut &packet,
+                                            const TranslationOptions &options) {
   return IrPacketIoToPi<p4::v1::PacketOut, IrPacketOut>(info, "packet-out",
-                                                        packet);
+                                                        packet, options);
 }
 
 StatusOr<p4::v1::ReadRequest> IrReadRequestToPi(
-    const IrP4Info &info, const IrReadRequest &read_request) {
+    const IrP4Info &info, const IrReadRequest &read_request,
+    const TranslationOptions &options) {
   p4::v1::ReadRequest result;
   if (read_request.device_id() == 0) {
     return UnimplementedErrorBuilder() << "Device ID missing.";
@@ -2701,7 +2715,7 @@ StatusOr<p4::v1::ReadRequest> IrReadRequestToPi(
 // -- Conversions from IR to PI ------------------------------------------------
 
 StatusOr<p4::v1::Entity> IrEntityToPi(const IrP4Info &info, const IrEntity &ir,
-                                      TranslationOptions options) {
+                                      const TranslationOptions &options) {
   p4::v1::Entity pi_entity;
   switch (ir.entity_case()) {
     case IrEntity::kTableEntry: {
@@ -2731,7 +2745,8 @@ StatusOr<p4::v1::Entity> IrEntityToPi(const IrP4Info &info, const IrEntity &ir,
 }
 
 absl::StatusOr<std::vector<p4::v1::Entity>> IrEntitiesToPi(
-    const IrP4Info &info, const IrEntities &ir, TranslationOptions options) {
+    const IrP4Info &info, const IrEntities &ir,
+    const TranslationOptions &options) {
   std::vector<p4::v1::Entity> pi_entities;
   pi_entities.reserve(ir.entities_size());
   for (auto &entity : ir.entities()) {
@@ -2743,7 +2758,7 @@ absl::StatusOr<std::vector<p4::v1::Entity>> IrEntitiesToPi(
 
 StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
     const IrP4Info &info, const IrReadResponse &read_response,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   p4::v1::ReadResponse result;
   std::vector<std::string> invalid_reasons;
   for (const auto &entity : read_response.entities()) {
@@ -2766,7 +2781,7 @@ StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
 
 StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info &info,
                                       const IrUpdate &update,
-                                      TranslationOptions options) {
+                                      const TranslationOptions &options) {
   p4::v1::Update pi_update;
 
   std::vector<std::string> invalid_reasons;
@@ -2792,7 +2807,7 @@ StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info &info,
 
 StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
     const IrP4Info &info, const IrWriteRequest &ir_write_request,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   p4::v1::WriteRequest pi_write_request;
 
   pi_write_request.set_role_id(0);
@@ -2825,7 +2840,8 @@ StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
 
 StatusOr<p4::v1::StreamMessageRequest> IrStreamMessageRequestToPi(
     const IrP4Info &info,
-    const IrStreamMessageRequest &ir_stream_message_request) {
+    const IrStreamMessageRequest &ir_stream_message_request,
+    const TranslationOptions &options) {
   p4::v1::StreamMessageRequest pi_stream_message_request;
 
   switch (ir_stream_message_request.update_case()) {
@@ -2837,7 +2853,7 @@ StatusOr<p4::v1::StreamMessageRequest> IrStreamMessageRequestToPi(
     case IrStreamMessageRequest::kPacket: {
       ASSIGN_OR_RETURN(
           *pi_stream_message_request.mutable_packet(),
-          IrPacketOutToPi(info, ir_stream_message_request.packet()));
+          IrPacketOutToPi(info, ir_stream_message_request.packet(), options));
       break;
     }
     default: {
@@ -2854,7 +2870,8 @@ StatusOr<p4::v1::StreamMessageRequest> IrStreamMessageRequestToPi(
 
 StatusOr<p4::v1::StreamMessageResponse> IrStreamMessageResponseToPi(
     const IrP4Info &info,
-    const IrStreamMessageResponse &ir_stream_message_response) {
+    const IrStreamMessageResponse &ir_stream_message_response,
+    const TranslationOptions &options) {
   p4::v1::StreamMessageResponse pi_stream_message_response;
 
   switch (ir_stream_message_response.update_case()) {
@@ -2866,7 +2883,7 @@ StatusOr<p4::v1::StreamMessageResponse> IrStreamMessageResponseToPi(
     case IrStreamMessageResponse::kPacket: {
       ASSIGN_OR_RETURN(
           *pi_stream_message_response.mutable_packet(),
-          IrPacketInToPi(info, ir_stream_message_response.packet()));
+          IrPacketInToPi(info, ir_stream_message_response.packet(), options));
       break;
     }
     case IrStreamMessageResponse::kError: {
@@ -2877,7 +2894,7 @@ StatusOr<p4::v1::StreamMessageResponse> IrStreamMessageResponseToPi(
       pi_error->set_message(ir_error.status().message());
 
       ASSIGN_OR_RETURN(*pi_error->mutable_packet_out()->mutable_packet_out(),
-                       IrPacketOutToPi(info, ir_error.packet_out()));
+                       IrPacketOutToPi(info, ir_error.packet_out(), options));
       break;
     }
     default: {

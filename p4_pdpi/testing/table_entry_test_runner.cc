@@ -44,9 +44,10 @@ static void RunPiEntityTest(const pdpi::IrP4Info& info,
                             const p4::v1::Entity& pi,
                             InputValidity validity = INPUT_IS_INVALID) {
   RunGenericPiTest<pdpi::IrEntity, p4::v1::Entity>(
-      info, test_name, pi,
-      [](const pdpi::IrP4Info& info, const p4::v1::Entity& pi) {
-        return pdpi::PiEntityToIr(info, pi);
+      info, test_name, pi, pdpi::TranslationOptions(),
+      [](const pdpi::IrP4Info& info, const p4::v1::Entity& pi,
+         pdpi::TranslationOptions options) {
+        return pdpi::PiEntityToIr(info, pi, options);
       },
       validity);
 }
@@ -57,16 +58,19 @@ static void RunIrEntityTest(const pdpi::IrP4Info& info,
                             IrTestConfig config = IrTestConfig()) {
   RunGenericIrToPiTest<pdpi::IrEntity, p4::v1::Entity>(
       info, absl::StrCat(test_name, " (IR -> PI)"), ir,
-      [](const pdpi::IrP4Info& info, const pdpi::IrEntity& ir) {
-        return pdpi::IrEntityToPi(info, ir);
+      pdpi::TranslationOptions(),
+      [](const pdpi::IrP4Info& info, const pdpi::IrEntity& ir,
+         pdpi::TranslationOptions options) {
+        return pdpi::IrEntityToPi(info, ir, options);
       },
       config.validity);
   if (config.test_ir_to_pd) {
     RunGenericIrToPdTest<pdpi::IrEntity, pdpi::TableEntry>(
         info, absl::StrCat(test_name, " (IR -> PD)"), ir,
+        pdpi::TranslationOptions(),
         [](const pdpi::IrP4Info& info, const pdpi::IrEntity& ir,
-           google::protobuf::Message* pd) {
-          return pdpi::IrEntityToPdTableEntry(info, ir, pd);
+           google::protobuf::Message* pd, pdpi::TranslationOptions options) {
+          return pdpi::IrEntityToPdTableEntry(info, ir, pd, options);
         },
         config.validity);
   }
@@ -83,7 +87,8 @@ static void RunPdTableEntryTest(const pdpi::IrP4Info& info,
       pdpi::IrEntityToPdTableEntry, pdpi::IrEntityToPi, pdpi::PiEntityToIr,
       pdpi::PdTableEntryToPiEntity, pdpi::PiEntityToPdTableEntry, validity,
       /*relevant_pd_fields=*/
-      [&](const pdpi::IrP4Info& info, const pdpi::TableEntry& pd) {
+      [&](const pdpi::IrP4Info& info, const pdpi::TableEntry& pd,
+          pdpi::TranslationOptions options) {
         if (!options.key_only) return pd;
         pdpi::TableEntry key_only_pd;
         absl::Status status =

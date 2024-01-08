@@ -23,8 +23,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "google/rpc/code.pb.h"
-#include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #if !defined(ABSL_IS_LITTLE_ENDIAN)
 #error \

@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cctype>
 #include <string>
 #include <utility>
 #include <vector>
@@ -579,7 +580,7 @@ absl::StatusOr<std::string> P4NameToProtobufFieldName(
 absl::Status PiTableEntryToPd(const IrP4Info &info,
                               const p4::v1::TableEntry &pi,
                               google::protobuf::Message *pd,
-                              TranslationOptions options) {
+                              const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir_entry, PiTableEntryToIr(info, pi, options));
   return IrTableEntryToPd(info, ir_entry, pd, options);
 }
@@ -587,7 +588,7 @@ absl::Status PiTableEntryToPd(const IrP4Info &info,
 absl::Status PiTableEntriesToPd(const IrP4Info &info,
                                 const absl::Span<const p4::v1::TableEntry> &pi,
                                 google::protobuf::Message *pd,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   for (const auto &pi_entry : pi) {
     ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
                      AddRepeatedMutableMessage(pd, "entries"));
@@ -599,14 +600,15 @@ absl::Status PiTableEntriesToPd(const IrP4Info &info,
 absl::Status PiEntityToPdTableEntry(const IrP4Info &info,
                                     const p4::v1::Entity &pi,
                                     google::protobuf::Message *pd_table_entry,
-                                    TranslationOptions options) {
+                                    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir, PiEntityToIr(info, pi, options));
   return IrEntityToPdTableEntry(info, ir, pd_table_entry, options);
 }
 
 absl::Status PiEntitiesToPdTableEntries(
     const IrP4Info &info, const absl::Span<const p4::v1::Entity> &pi,
-    google::protobuf::Message *pd_table_entries, TranslationOptions options) {
+    google::protobuf::Message *pd_table_entries,
+    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir, PiEntitiesToIr(info, pi, options));
   return IrEntitiesToPdTableEntries(info, ir, pd_table_entries, options);
 }
@@ -614,7 +616,7 @@ absl::Status PiEntitiesToPdTableEntries(
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 const IrTableEntries &ir,
                                 google::protobuf::Message *pd,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   for (const auto &ir_entry : ir.entries()) {
     ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
                      AddRepeatedMutableMessage(pd, "entries"));
@@ -625,7 +627,7 @@ absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 absl::Span<const IrTableEntry> ir,
                                 google::protobuf::Message *pd,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   for (const auto &ir_entry : ir) {
     ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
                      AddRepeatedMutableMessage(pd, "entries"));
@@ -636,36 +638,39 @@ absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
 
 absl::Status PiPacketInToPd(const IrP4Info &info,
                             const p4::v1::PacketIn &pi_packet,
-                            google::protobuf::Message *pd_packet) {
-  ASSIGN_OR_RETURN(const auto ir, PiPacketInToIr(info, pi_packet));
-  return IrPacketInToPd(info, ir, pd_packet);
+                            google::protobuf::Message *pd_packet,
+                            const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir, PiPacketInToIr(info, pi_packet, options));
+  return IrPacketInToPd(info, ir, pd_packet, options);
 }
 
 absl::Status PiPacketOutToPd(const IrP4Info &info,
                              const p4::v1::PacketOut &pi_packet,
-                             google::protobuf::Message *pd_packet) {
-  ASSIGN_OR_RETURN(const auto ir, PiPacketOutToIr(info, pi_packet));
-  return IrPacketOutToPd(info, ir, pd_packet);
+                             google::protobuf::Message *pd_packet,
+                             const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir, PiPacketOutToIr(info, pi_packet, options));
+  return IrPacketOutToPd(info, ir, pd_packet, options);
 }
 
 absl::Status PiReadRequestToPd(const IrP4Info &info,
                                const p4::v1::ReadRequest &pi,
-                               google::protobuf::Message *pd) {
-  ASSIGN_OR_RETURN(const auto ir, PiReadRequestToIr(info, pi));
-  return IrReadRequestToPd(info, ir, pd);
+                               google::protobuf::Message *pd,
+                               const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir, PiReadRequestToIr(info, pi, options));
+  return IrReadRequestToPd(info, ir, pd, options);
 }
 
 absl::Status PiReadResponseToPd(const IrP4Info &info,
                                 const p4::v1::ReadResponse &pi,
                                 google::protobuf::Message *pd,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir, PiReadResponseToIr(info, pi, options));
   return IrReadResponseToPd(info, ir, pd, options);
 }
 
 absl::Status PiUpdateToPd(const IrP4Info &info, const p4::v1::Update &pi,
                           google::protobuf::Message *pd,
-                          TranslationOptions options) {
+                          const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir, PiUpdateToIr(info, pi, options));
   return IrUpdateToPd(info, ir, pd, options);
 }
@@ -673,28 +678,31 @@ absl::Status PiUpdateToPd(const IrP4Info &info, const p4::v1::Update &pi,
 absl::Status PiWriteRequestToPd(const IrP4Info &info,
                                 const p4::v1::WriteRequest &pi,
                                 google::protobuf::Message *pd,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir, PiWriteRequestToIr(info, pi, options));
   return IrWriteRequestToPd(info, ir, pd, options);
 }
 
 absl::Status PiStreamMessageRequestToPd(const IrP4Info &info,
                                         const p4::v1::StreamMessageRequest &pi,
-                                        google::protobuf::Message *pd) {
-  ASSIGN_OR_RETURN(const auto ir, PiStreamMessageRequestToIr(info, pi));
-  return IrStreamMessageRequestToPd(info, ir, pd);
+                                        google::protobuf::Message *pd,
+                                        const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir,
+                   PiStreamMessageRequestToIr(info, pi, options));
+  return IrStreamMessageRequestToPd(info, ir, pd, options);
 }
 
 absl::Status PiStreamMessageResponseToPd(
     const IrP4Info &info, const p4::v1::StreamMessageResponse &pi,
-    google::protobuf::Message *pd) {
-  ASSIGN_OR_RETURN(const auto ir, PiStreamMessageResponseToIr(info, pi));
-  return IrStreamMessageResponseToPd(info, ir, pd);
+    google::protobuf::Message *pd, const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir,
+                   PiStreamMessageResponseToIr(info, pi, options));
+  return IrStreamMessageResponseToPd(info, ir, pd, options);
 }
 
 absl::StatusOr<p4::v1::Entity> PdTableEntryToPiEntity(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir_entry,
                    PdTableEntryToIrEntity(info, pd, options));
   return IrEntityToPi(info, ir_entry, options);
@@ -702,14 +710,14 @@ absl::StatusOr<p4::v1::Entity> PdTableEntryToPiEntity(
 
 absl::StatusOr<std::vector<p4::v1::Entity>> PdTableEntriesToPiEntities(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(auto ir, PdTableEntriesToIrEntities(info, pd, options));
   return IrEntitiesToPi(info, ir, options);
 }
 
 absl::StatusOr<p4::v1::TableEntry> PartialPdTableEntryToPiTableEntry(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir_entry,
                    PartialPdTableEntryToIrTableEntry(info, pd, options));
   return IrTableEntryToPi(info, ir_entry, options);
@@ -718,7 +726,7 @@ absl::StatusOr<p4::v1::TableEntry> PartialPdTableEntryToPiTableEntry(
 absl::StatusOr<std::vector<p4::v1::TableEntry>>
 PartialPdTableEntriesToPiTableEntries(const IrP4Info &info,
                                       const google::protobuf::Message &pd,
-                                      TranslationOptions options) {
+                                      const TranslationOptions &options) {
   ASSIGN_OR_RETURN(auto ir,
                    PartialPdTableEntriesToIrTableEntries(info, pd, options));
   return IrTableEntriesToPi(info, ir, options);
@@ -726,7 +734,7 @@ PartialPdTableEntriesToPiTableEntries(const IrP4Info &info,
 
 absl::StatusOr<IrTableEntries> PartialPdTableEntriesToIrTableEntries(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
                    GetRepeatedFieldMessages(pd, "entries"));
   IrTableEntries ir;
@@ -738,80 +746,86 @@ absl::StatusOr<IrTableEntries> PartialPdTableEntriesToIrTableEntries(
 }
 
 absl::StatusOr<p4::v1::PacketIn> PdPacketInToPi(
-    const IrP4Info &info, const google::protobuf::Message &packet) {
-  ASSIGN_OR_RETURN(const auto ir, PdPacketInToIr(info, packet));
-  return IrPacketInToPi(info, ir);
+    const IrP4Info &info, const google::protobuf::Message &packet,
+    const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir, PdPacketInToIr(info, packet, options));
+  return IrPacketInToPi(info, ir, options);
 }
 
 absl::StatusOr<p4::v1::PacketOut> PdPacketOutToPi(
-    const IrP4Info &info, const google::protobuf::Message &packet) {
-  ASSIGN_OR_RETURN(const auto ir, PdPacketOutToIr(info, packet));
-  return IrPacketOutToPi(info, ir);
+    const IrP4Info &info, const google::protobuf::Message &packet,
+    const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir, PdPacketOutToIr(info, packet, options));
+  return IrPacketOutToPi(info, ir, options);
 }
 
 absl::StatusOr<p4::v1::ReadRequest> PdReadRequestToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd) {
-  ASSIGN_OR_RETURN(const auto ir, PdReadRequestToIr(info, pd));
-  return IrReadRequestToPi(info, ir);
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir, PdReadRequestToIr(info, pd, options));
+  return IrReadRequestToPi(info, ir, options);
 }
 
 absl::StatusOr<p4::v1::ReadResponse> PdReadResponseToPi(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir, PdReadResponseToIr(info, pd, options));
   return IrReadResponseToPi(info, ir, options);
 }
 
 absl::StatusOr<p4::v1::Update> PdUpdateToPi(const IrP4Info &info,
                                             const google::protobuf::Message &pd,
-                                            TranslationOptions options) {
+                                            const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir, PdUpdateToIr(info, pd, options));
   return IrUpdateToPi(info, ir, options);
 }
 
 absl::StatusOr<p4::v1::WriteRequest> PdWriteRequestToPi(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir, PdWriteRequestToIr(info, pd, options));
   return IrWriteRequestToPi(info, ir, options);
 }
 
 absl::StatusOr<p4::v1::StreamMessageRequest> PdStreamMessageRequestToPi(
     const IrP4Info &info,
-    const google::protobuf::Message &stream_message_request) {
-  ASSIGN_OR_RETURN(const auto ir,
-                   PdStreamMessageRequestToIr(info, stream_message_request));
-  return IrStreamMessageRequestToPi(info, ir);
+    const google::protobuf::Message &stream_message_request,
+    const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir, PdStreamMessageRequestToIr(
+                                      info, stream_message_request, options));
+  return IrStreamMessageRequestToPi(info, ir, options);
 }
 
 absl::StatusOr<p4::v1::StreamMessageResponse> PdStreamMessageResponseToPi(
     const IrP4Info &info,
-    const google::protobuf::Message &stream_message_response) {
-  ASSIGN_OR_RETURN(const auto ir,
-                   PdStreamMessageResponseToIr(info, stream_message_response));
-  return IrStreamMessageResponseToPi(info, ir);
+    const google::protobuf::Message &stream_message_response,
+    const TranslationOptions &options) {
+  ASSIGN_OR_RETURN(const auto ir, PdStreamMessageResponseToIr(
+                                      info, stream_message_response, options));
+  return IrStreamMessageResponseToPi(info, ir, options);
 }
 
 absl::Status GrpcStatusToPd(const grpc::Status &status,
                             int number_of_updates_in_write_request,
-                            google::protobuf::Message *pd) {
+                            google::protobuf::Message *pd,
+                            const TranslationOptions &options) {
   ASSIGN_OR_RETURN(
       const auto ir_write_rpc_status,
       GrpcStatusToIrWriteRpcStatus(status, number_of_updates_in_write_request));
-  return IrWriteRpcStatusToPd(ir_write_rpc_status, pd);
+  return IrWriteRpcStatusToPd(ir_write_rpc_status, pd, options);
 }
 
 absl::StatusOr<grpc::Status> PdWriteRpcStatusToGrpcStatus(
-    const google::protobuf::Message &pd) {
+    const google::protobuf::Message &pd, const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto ir_write_rpc_status,
-                   pdpi::PdWriteRpcStatusToIr(pd));
+                   pdpi::PdWriteRpcStatusToIr(pd, options));
   return IrWriteRpcStatusToGrpcStatus(ir_write_rpc_status);
 }
 
 // Converts all IR matches to their PD form and stores them in the match field
 // of the PD table entry.
 static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
-                                     TranslationOptions options,
+                                     const TranslationOptions &options,
                                      const IrTableEntry &ir_table_entry,
                                      google::protobuf::Message *pd_match) {
   std::vector<std::string> invalid_reasons;
@@ -962,7 +976,7 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
 // Converts an IR action invocation to its PD form and stores it in the parent
 // message.
 static absl::Status IrActionInvocationToPd(
-    const IrP4Info &ir_p4info, TranslationOptions options,
+    const IrP4Info &ir_p4info, const TranslationOptions &options,
     const IrActionInvocation &ir_action,
     google::protobuf::Message *parent_message) {
   absl::string_view action_name = ir_action.name();
@@ -1020,7 +1034,7 @@ static absl::Status IrActionInvocationToPd(
 // Converts an IR action set to its PD form and stores it in the
 // PD table entry.
 static absl::Status IrActionSetToPd(const IrP4Info &ir_p4info,
-                                    TranslationOptions options,
+                                    const TranslationOptions &options,
                                     const IrTableEntry &ir_table_entry,
                                     google::protobuf::Message *pd_table) {
   const auto &pd_wcmp_action_set_descriptor =
@@ -1075,7 +1089,7 @@ static absl::Status IrActionSetToPd(const IrP4Info &ir_p4info,
 
 absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
                               google::protobuf::Message *pd,
-                              TranslationOptions options) {
+                              const TranslationOptions &options) {
   const auto &status_or_ir_table_info =
       gutil::FindPtrOrStatus(ir_p4info.tables_by_name(), ir.table_name());
   if (!status_or_ir_table_info.ok()) {
@@ -1292,7 +1306,8 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
 template <typename T>
 absl::Status IrPacketIoToPd(const IrP4Info &info, const std::string &kind,
                             const T &packet,
-                            google::protobuf::Message *pd_packet) {
+                            google::protobuf::Message *pd_packet,
+                            const TranslationOptions &options) {
   const std::string &packet_description = absl::StrCat("'", kind, "' message");
   const auto &field_descriptor = GetFieldDescriptor(*pd_packet, "payload");
   if (!field_descriptor.ok()) {
@@ -1376,16 +1391,21 @@ absl::Status IrPacketIoToPd(const IrP4Info &info, const std::string &kind,
 }
 
 absl::Status IrPacketInToPd(const IrP4Info &info, const IrPacketIn &packet,
-                            google::protobuf::Message *pd_packet) {
-  return IrPacketIoToPd<IrPacketIn>(info, "packet-in", packet, pd_packet);
+                            google::protobuf::Message *pd_packet,
+                            const TranslationOptions &options) {
+  return IrPacketIoToPd<IrPacketIn>(info, "packet-in", packet, pd_packet,
+                                    options);
 }
 absl::Status IrPacketOutToPd(const IrP4Info &info, const IrPacketOut &packet,
-                             google::protobuf::Message *pd_packet) {
-  return IrPacketIoToPd<IrPacketOut>(info, "packet-out", packet, pd_packet);
+                             google::protobuf::Message *pd_packet,
+                             const TranslationOptions &options) {
+  return IrPacketIoToPd<IrPacketOut>(info, "packet-out", packet, pd_packet,
+                                     options);
 }
 
 absl::Status IrReadRequestToPd(const IrP4Info &info, const IrReadRequest &ir,
-                               google::protobuf::Message *pd) {
+                               google::protobuf::Message *pd,
+                               const TranslationOptions &options) {
   std::vector<std::string> invalid_reasons;
   if (ir.device_id() == 0) {
     invalid_reasons.push_back(absl::StrCat(kNewBullet, "Device ID missing."));
@@ -1421,7 +1441,7 @@ absl::Status IrReadRequestToPd(const IrP4Info &info, const IrReadRequest &ir,
 
 absl::Status IrReadResponseToPd(const IrP4Info &info, const IrReadResponse &ir,
                                 google::protobuf::Message *read_response,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   std::vector<std::string> invalid_reasons;
   for (const auto &ir_entity : ir.entities()) {
     absl::StatusOr<const FieldDescriptor *> table_entries_descriptor =
@@ -1460,7 +1480,7 @@ absl::Status IrReplicaToPd(const IrP4Info &info, const IrReplica &ir,
 absl::Status IrMulticastGroupEntryToPd(
     const IrP4Info &info, const IrMulticastGroupEntry &ir,
     google::protobuf::Message *pd_multicast_group_entry,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   std::vector<std::string> invalid_reasons;
 
   const absl::StatusOr<google::protobuf::Message *> pd_match =
@@ -1539,7 +1559,7 @@ absl::Status IrMulticastGroupEntryToPd(
 
 absl::Status IrPacketReplicationEngineEntryToPd(
     const IrP4Info &info, const IrPacketReplicationEngineEntry &ir,
-    google::protobuf::Message *pd, TranslationOptions options) {
+    google::protobuf::Message *pd, const TranslationOptions &options) {
   const absl::StatusOr<google::protobuf::Message *> pd_multicast =
       GetMutableMessage(pd, "multicast_group_table_entry");
   if (!pd_multicast.ok()) {
@@ -1553,7 +1573,7 @@ absl::Status IrPacketReplicationEngineEntryToPd(
 
 absl::Status IrEntityToPdTableEntry(const IrP4Info &info, const IrEntity &ir,
                                     google::protobuf::Message *pd_table_entry,
-                                    TranslationOptions options) {
+                                    const TranslationOptions &options) {
   switch (ir.entity_case()) {
     case IrEntity::kTableEntry:
       return IrTableEntryToPd(info, ir.table_entry(), pd_table_entry, options);
@@ -1575,7 +1595,8 @@ absl::Status IrEntityToPdTableEntry(const IrP4Info &info, const IrEntity &ir,
 
 absl::Status IrEntitiesToPdTableEntries(
     const IrP4Info &info, const IrEntities &ir,
-    google::protobuf::Message *pd_table_entries, TranslationOptions options) {
+    google::protobuf::Message *pd_table_entries,
+    const TranslationOptions &options) {
   for (const auto &ir_entity : ir.entities()) {
     ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
                      AddRepeatedMutableMessage(pd_table_entries, "entries"));
@@ -1586,7 +1607,7 @@ absl::Status IrEntitiesToPdTableEntries(
 
 absl::Status IrUpdateToPd(const IrP4Info &info, const IrUpdate &ir,
                           google::protobuf::Message *update,
-                          TranslationOptions options) {
+                          const TranslationOptions &options) {
   ASSIGN_OR_RETURN(const auto *type_descriptor,
                    GetFieldDescriptor(*update, "type"));
   RETURN_IF_ERROR(
@@ -1602,7 +1623,7 @@ absl::Status IrUpdateToPd(const IrP4Info &info, const IrUpdate &ir,
 
 absl::Status IrWriteRequestToPd(const IrP4Info &info, const IrWriteRequest &ir,
                                 google::protobuf::Message *write_request,
-                                TranslationOptions options) {
+                                const TranslationOptions &options) {
   RETURN_IF_ERROR(SetUint64Field(write_request, "device_id", ir.device_id()));
   if (ir.election_id().high() > 0 || ir.election_id().low() > 0) {
     ASSIGN_OR_RETURN(auto *election_id,
@@ -1661,7 +1682,8 @@ static absl::Status IrArbitrationToPd(
 
 absl::Status IrStreamMessageRequestToPd(
     const IrP4Info &info, const IrStreamMessageRequest &ir,
-    google::protobuf::Message *stream_message) {
+    google::protobuf::Message *stream_message,
+    const TranslationOptions &options) {
   switch (ir.update_case()) {
     case IrStreamMessageRequest::kArbitration: {
       RETURN_IF_ERROR(IrArbitrationToPd(ir.arbitration(), stream_message));
@@ -1670,7 +1692,7 @@ absl::Status IrStreamMessageRequestToPd(
     case IrStreamMessageRequest::kPacket: {
       ASSIGN_OR_RETURN(auto *packet_out,
                        GetMutableMessage(stream_message, "packet"));
-      RETURN_IF_ERROR(IrPacketOutToPd(info, ir.packet(), packet_out));
+      RETURN_IF_ERROR(IrPacketOutToPd(info, ir.packet(), packet_out, options));
       break;
     }
     default:
@@ -1684,7 +1706,8 @@ absl::Status IrStreamMessageRequestToPd(
 
 absl::Status IrStreamMessageResponseToPd(
     const IrP4Info &info, const IrStreamMessageResponse &ir,
-    google::protobuf::Message *stream_message) {
+    google::protobuf::Message *stream_message,
+    const TranslationOptions &options) {
   switch (ir.update_case()) {
     case IrStreamMessageResponse::kArbitration: {
       RETURN_IF_ERROR(IrArbitrationToPd(ir.arbitration(), stream_message));
@@ -1693,7 +1716,7 @@ absl::Status IrStreamMessageResponseToPd(
     case IrStreamMessageResponse::kPacket: {
       ASSIGN_OR_RETURN(auto *packet,
                        GetMutableMessage(stream_message, "packet"));
-      RETURN_IF_ERROR(IrPacketInToPd(info, ir.packet(), packet));
+      RETURN_IF_ERROR(IrPacketInToPd(info, ir.packet(), packet, options));
       break;
     }
     case IrStreamMessageResponse::kError: {
@@ -1710,7 +1733,7 @@ absl::Status IrStreamMessageResponseToPd(
       ASSIGN_OR_RETURN(auto *packet_out,
                        GetMutableMessage(error, "packet_out"));
       RETURN_IF_ERROR(
-          IrPacketOutToPd(info, ir.error().packet_out(), packet_out));
+          IrPacketOutToPd(info, ir.error().packet_out(), packet_out, options));
       break;
     }
     default:
@@ -1724,7 +1747,8 @@ absl::Status IrStreamMessageResponseToPd(
 
 static absl::Status IrUpdateStatusToPd(
     const IrUpdateStatus &ir_update_status,
-    google::protobuf::Message *pd_update_status) {
+    google::protobuf::Message *pd_update_status,
+    const TranslationOptions &options) {
   RETURN_IF_ERROR(
       SetEnumField(pd_update_status, "code", ir_update_status.code()));
   RETURN_IF_ERROR(
@@ -1734,7 +1758,8 @@ static absl::Status IrUpdateStatusToPd(
 
 static absl::Status IrWriteResponseToPd(
     const IrWriteResponse &ir_write_response,
-    google::protobuf::Message *pd_rpc_response) {
+    google::protobuf::Message *pd_rpc_response,
+    const TranslationOptions &options) {
   // Iterates through each ir update status and add message to pd via
   // AddRepeatedMutableMessage
   std::vector<std::string> invalid_reasons;
@@ -1747,7 +1772,7 @@ static absl::Status IrWriteResponseToPd(
       continue;
     }
     const absl::Status &pd_update_status =
-        IrUpdateStatusToPd(ir_update_status, *pd_update);
+        IrUpdateStatusToPd(ir_update_status, *pd_update, options);
     if (!pd_update_status.ok()) {
       invalid_reasons.push_back(
           absl::StrCat(kNewBullet, pd_update_status.message()));
@@ -1762,13 +1787,14 @@ static absl::Status IrWriteResponseToPd(
 }
 
 absl::Status IrWriteRpcStatusToPd(const IrWriteRpcStatus &ir_write_status,
-                                  google::protobuf::Message *pd) {
+                                  google::protobuf::Message *pd,
+                                  const TranslationOptions &options) {
   switch (ir_write_status.status_case()) {
     case IrWriteRpcStatus::kRpcResponse: {
       ASSIGN_OR_RETURN(auto *pd_rpc_response,
                        GetMutableMessage(pd, "rpc_response"));
       return IrWriteResponseToPd(ir_write_status.rpc_response(),
-                                 pd_rpc_response);
+                                 pd_rpc_response, options);
     }
     case IrWriteRpcStatus::kRpcWideError: {
       ASSIGN_OR_RETURN(auto *pd_rpc_wide_error,
@@ -1789,7 +1815,7 @@ absl::Status IrWriteRpcStatusToPd(const IrWriteRpcStatus &ir_write_status,
 // Converts all PD matches to their IR form and stores them in the matches
 // field of ir_table_entry.
 static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
-                                     TranslationOptions options,
+                                     const TranslationOptions &options,
                                      const google::protobuf::Message &pd_match,
                                      IrTableEntry *ir_table_entry) {
   // Verify that there are no matches in PD that are not supported by the
@@ -1991,7 +2017,7 @@ static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
 
 // Converts a PD action invocation to its IR form and returns it.
 static absl::StatusOr<IrActionInvocation> PdActionInvocationToIr(
-    const IrP4Info &ir_p4info, TranslationOptions options,
+    const IrP4Info &ir_p4info, const TranslationOptions &options,
     const google::protobuf::Message &pd_action_invocation) {
   const std::vector<std::string> all_fields =
       GetAllFieldNames(pd_action_invocation);
@@ -2063,7 +2089,7 @@ static absl::StatusOr<IrActionInvocation> PdActionInvocationToIr(
 // Converts a PD action set to its IR form and stores it in the
 // ir_table_entry.
 static absl::StatusOr<IrActionSetInvocation> PdActionSetToIr(
-    const IrP4Info &ir_p4info, TranslationOptions options,
+    const IrP4Info &ir_p4info, const TranslationOptions &options,
     const google::protobuf::Message &pd_action_set) {
   IrActionSetInvocation ir_action_set_invocation;
   std::vector<std::string> invalid_reasons;
@@ -2109,7 +2135,7 @@ static absl::StatusOr<IrActionSetInvocation> PdActionSetToIr(
 
 absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrTableEntry ir;
   const auto &pd_table_field_name = gutil::GetOneOfFieldName(pd, "entry");
   if (!pd_table_field_name.ok()) {
@@ -2361,7 +2387,7 @@ absl::StatusOr<IrReplica> PdReplicaToIr(const IrP4Info &info,
 
 absl::StatusOr<IrMulticastGroupEntry> PdMulticastGroupEntryToIr(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrMulticastGroupEntry ir;
   ASSIGN_OR_RETURN(bool has_match, HasField(pd, "match"));
   if (!has_match) {
@@ -2446,7 +2472,7 @@ absl::StatusOr<IrMulticastGroupEntry> PdMulticastGroupEntryToIr(
 
 absl::StatusOr<IrEntity> PdTableEntryToIrEntity(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrEntity ir;
   const auto &pd_table_field_name = gutil::GetOneOfFieldName(pd, "entry");
   if (!pd_table_field_name.ok()) {
@@ -2471,7 +2497,7 @@ absl::StatusOr<IrEntity> PdTableEntryToIrEntity(
 
 absl::StatusOr<IrEntities> PdTableEntriesToIrEntities(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
                    GetRepeatedFieldMessages(pd, "entries"));
   IrEntities ir;
@@ -2486,7 +2512,8 @@ absl::StatusOr<IrEntities> PdTableEntriesToIrEntities(
 // one of {IrPacketIn, IrPacketOut}.
 template <typename T>
 absl::StatusOr<T> PdPacketIoToIr(const IrP4Info &info, const std::string &kind,
-                                 const google::protobuf::Message &packet) {
+                                 const google::protobuf::Message &packet,
+                                 const TranslationOptions &options) {
   T result;
   const std::string &packet_description = absl::StrCat("'", kind, "' message");
   const auto &field_descriptor = GetFieldDescriptor(packet, "payload");
@@ -2557,16 +2584,19 @@ absl::StatusOr<T> PdPacketIoToIr(const IrP4Info &info, const std::string &kind,
 }
 
 absl::StatusOr<IrPacketIn> PdPacketInToIr(
-    const IrP4Info &info, const google::protobuf::Message &packet) {
-  return PdPacketIoToIr<IrPacketIn>(info, "packet-in", packet);
+    const IrP4Info &info, const google::protobuf::Message &packet,
+    const TranslationOptions &options) {
+  return PdPacketIoToIr<IrPacketIn>(info, "packet-in", packet, options);
 }
 absl::StatusOr<IrPacketOut> PdPacketOutToIr(
-    const IrP4Info &info, const google::protobuf::Message &packet) {
-  return PdPacketIoToIr<IrPacketOut>(info, "packet-out", packet);
+    const IrP4Info &info, const google::protobuf::Message &packet,
+    const TranslationOptions &options) {
+  return PdPacketIoToIr<IrPacketOut>(info, "packet-out", packet, options);
 }
 
 absl::StatusOr<IrReadRequest> PdReadRequestToIr(
-    const IrP4Info &info, const google::protobuf::Message &read_request) {
+    const IrP4Info &info, const google::protobuf::Message &read_request,
+    const TranslationOptions &options) {
   IrReadRequest result;
   ASSIGN_OR_RETURN(auto device_id, GetUint64Field(read_request, "device_id"));
   if (device_id == 0) {
@@ -2585,7 +2615,7 @@ absl::StatusOr<IrReadRequest> PdReadRequestToIr(
 
 absl::StatusOr<IrReadResponse> PdReadResponseToIr(
     const IrP4Info &info, const google::protobuf::Message &read_response,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrReadResponse ir_response;
   ASSIGN_OR_RETURN(const auto table_entries_descriptor,
                    GetFieldDescriptor(read_response, "table_entries"));
@@ -2613,7 +2643,7 @@ absl::StatusOr<IrReadResponse> PdReadResponseToIr(
 
 absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
                                       const google::protobuf::Message &update,
-                                      TranslationOptions options) {
+                                      const TranslationOptions &options) {
   IrUpdate ir_update;
   ASSIGN_OR_RETURN(const auto *type_descriptor,
                    GetFieldDescriptor(update, "type"));
@@ -2635,7 +2665,7 @@ absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
 
 absl::StatusOr<IrWriteRequest> PdWriteRequestToIr(
     const IrP4Info &info, const google::protobuf::Message &write_request,
-    TranslationOptions options) {
+    const TranslationOptions &options) {
   IrWriteRequest ir_write_request;
   ASSIGN_OR_RETURN(const auto &device_id,
                    GetUint64Field(write_request, "device_id"));
@@ -2705,7 +2735,8 @@ static absl::StatusOr<p4::v1::MasterArbitrationUpdate> PdArbitrationToIr(
 }
 
 absl::StatusOr<IrStreamMessageRequest> PdStreamMessageRequestToIr(
-    const IrP4Info &info, const google::protobuf::Message &stream_message) {
+    const IrP4Info &info, const google::protobuf::Message &stream_message,
+    const TranslationOptions &options) {
   IrStreamMessageRequest ir_stream_message;
   ASSIGN_OR_RETURN(const std::string update_one_of_name,
                    gutil::GetOneOfFieldName(stream_message, "update"));
@@ -2716,7 +2747,7 @@ absl::StatusOr<IrStreamMessageRequest> PdStreamMessageRequestToIr(
     ASSIGN_OR_RETURN(const auto *packet,
                      GetMessageField(stream_message, "packet"));
     ASSIGN_OR_RETURN(*ir_stream_message.mutable_packet(),
-                     PdPacketOutToIr(info, *packet));
+                     PdPacketOutToIr(info, *packet, options));
   } else {
     return absl::InvalidArgumentError(
         absl::StrCat("Unsupported update: ", update_one_of_name, "."));
@@ -2725,7 +2756,8 @@ absl::StatusOr<IrStreamMessageRequest> PdStreamMessageRequestToIr(
 }
 
 absl::StatusOr<IrStreamMessageResponse> PdStreamMessageResponseToIr(
-    const IrP4Info &info, const google::protobuf::Message &stream_message) {
+    const IrP4Info &info, const google::protobuf::Message &stream_message,
+    const TranslationOptions &options) {
   IrStreamMessageResponse ir_stream_message;
   ASSIGN_OR_RETURN(const std::string update_one_of_name,
                    gutil::GetOneOfFieldName(stream_message, "update"));
@@ -2736,7 +2768,7 @@ absl::StatusOr<IrStreamMessageResponse> PdStreamMessageResponseToIr(
     ASSIGN_OR_RETURN(const auto *packet,
                      GetMessageField(stream_message, "packet"));
     ASSIGN_OR_RETURN(*ir_stream_message.mutable_packet(),
-                     PdPacketInToIr(info, *packet));
+                     PdPacketInToIr(info, *packet, options));
   } else if (update_one_of_name == "error") {
     auto *ir_error = ir_stream_message.mutable_error();
     ASSIGN_OR_RETURN(const auto *error,
@@ -2753,7 +2785,7 @@ absl::StatusOr<IrStreamMessageResponse> PdStreamMessageResponseToIr(
     ASSIGN_OR_RETURN(const auto *packet_out,
                      GetMessageField(*error, "packet_out"));
     ASSIGN_OR_RETURN(*ir_error->mutable_packet_out(),
-                     PdPacketOutToIr(info, *packet_out));
+                     PdPacketOutToIr(info, *packet_out, options));
   } else {
     return absl::InvalidArgumentError(
         absl::StrCat("Unsupported update: ", update_one_of_name, "."));
@@ -2794,7 +2826,7 @@ static absl::StatusOr<IrWriteResponse> PdWriteResponseToIr(
 }
 
 absl::StatusOr<IrWriteRpcStatus> PdWriteRpcStatusToIr(
-    const google::protobuf::Message &pd) {
+    const google::protobuf::Message &pd, const TranslationOptions &options) {
   IrWriteRpcStatus ir_write_rpc_status;
   ASSIGN_OR_RETURN(std::string status_oneof_name,
                    gutil::GetOneOfFieldName(pd, "status"));

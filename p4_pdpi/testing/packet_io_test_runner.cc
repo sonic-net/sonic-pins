@@ -35,7 +35,7 @@ static void RunPiPacketInTest(const pdpi::IrP4Info& info,
                               const p4::v1::PacketIn& pi) {
   RunGenericPiTest<pdpi::IrPacketIn, p4::v1::PacketIn>(
       info, absl::StrCat("PacketIn test: ", test_name), pi,
-      pdpi::PiPacketInToIr);
+      pdpi::TranslationOptions(), pdpi::PiPacketInToIr);
 }
 
 static void RunIrToPiPacketInTest(const pdpi::IrP4Info& info,
@@ -43,7 +43,7 @@ static void RunIrToPiPacketInTest(const pdpi::IrP4Info& info,
                                   const pdpi::IrPacketIn& ir) {
   RunGenericIrToPiTest<pdpi::IrPacketIn, p4::v1::PacketIn>(
       info, absl::StrCat("PacketIn test: ", test_name), ir,
-      pdpi::IrPacketInToPi);
+      pdpi::TranslationOptions(), pdpi::IrPacketInToPi);
 }
 
 static void RunIrToPdPacketInTest(const pdpi::IrP4Info& info,
@@ -51,7 +51,7 @@ static void RunIrToPdPacketInTest(const pdpi::IrP4Info& info,
                                   const pdpi::IrPacketIn& ir) {
   RunGenericIrToPdTest<pdpi::IrPacketIn, pdpi::PacketIn>(
       info, absl::StrCat("PacketIn test: ", test_name), ir,
-      pdpi::IrPacketInToPd);
+      pdpi::TranslationOptions(), pdpi::IrPacketInToPd);
 }
 
 static void RunPdPacketInTest(const pdpi::IrP4Info& info,
@@ -60,9 +60,9 @@ static void RunPdPacketInTest(const pdpi::IrP4Info& info,
                               const InputValidity validity) {
   RunGenericPdTest<pdpi::PacketIn, pdpi::IrPacketIn, p4::v1::PacketIn>(
       info, absl::StrCat("PacketIn test: ", test_name), pd,
-      pdpi::PdPacketInToIr, pdpi::IrPacketInToPd, pdpi::IrPacketInToPi,
-      pdpi::PiPacketInToIr, pdpi::PdPacketInToPi, pdpi::PiPacketInToPd,
-      validity);
+      pdpi::TranslationOptions(), pdpi::PdPacketInToIr, pdpi::IrPacketInToPd,
+      pdpi::IrPacketInToPi, pdpi::PiPacketInToIr, pdpi::PdPacketInToPi,
+      pdpi::PiPacketInToPd, validity);
 }
 
 static void RunPiPacketOutTest(const pdpi::IrP4Info& info,
@@ -70,7 +70,7 @@ static void RunPiPacketOutTest(const pdpi::IrP4Info& info,
                                const p4::v1::PacketOut& pi) {
   RunGenericPiTest<pdpi::IrPacketOut, p4::v1::PacketOut>(
       info, absl::StrCat("PacketOut test: ", test_name), pi,
-      pdpi::PiPacketOutToIr);
+      pdpi::TranslationOptions(), pdpi::PiPacketOutToIr);
 }
 
 static void RunIrToPiPacketOutTest(const pdpi::IrP4Info& info,
@@ -78,7 +78,7 @@ static void RunIrToPiPacketOutTest(const pdpi::IrP4Info& info,
                                    const pdpi::IrPacketOut& ir) {
   RunGenericIrToPiTest<pdpi::IrPacketOut, p4::v1::PacketOut>(
       info, absl::StrCat("PacketOut test: ", test_name), ir,
-      pdpi::IrPacketOutToPi);
+      pdpi::TranslationOptions(), pdpi::IrPacketOutToPi);
 }
 
 static void RunIrToPdPacketOutTest(const pdpi::IrP4Info& info,
@@ -86,7 +86,7 @@ static void RunIrToPdPacketOutTest(const pdpi::IrP4Info& info,
                                    const pdpi::IrPacketOut& ir) {
   RunGenericIrToPdTest<pdpi::IrPacketOut, pdpi::PacketOut>(
       info, absl::StrCat("PacketOut test: ", test_name), ir,
-      pdpi::IrPacketOutToPd);
+      pdpi::TranslationOptions(), pdpi::IrPacketOutToPd);
 }
 
 static void RunPdPacketOutTest(const pdpi::IrP4Info& info,
@@ -95,9 +95,9 @@ static void RunPdPacketOutTest(const pdpi::IrP4Info& info,
                                const InputValidity validity) {
   RunGenericPdTest<pdpi::PacketOut, pdpi::IrPacketOut, p4::v1::PacketOut>(
       info, absl::StrCat("PacketOut test: ", test_name), pd,
-      pdpi::PdPacketOutToIr, pdpi::IrPacketOutToPd, pdpi::IrPacketOutToPi,
-      pdpi::PiPacketOutToIr, pdpi::PdPacketOutToPi, pdpi::PiPacketOutToPd,
-      validity);
+      pdpi::TranslationOptions(), pdpi::PdPacketOutToIr, pdpi::IrPacketOutToPd,
+      pdpi::IrPacketOutToPi, pdpi::PiPacketOutToIr, pdpi::PdPacketOutToPi,
+      pdpi::PiPacketOutToPd, validity);
 }
 
 static void RunPacketInTests(pdpi::IrP4Info info) {
