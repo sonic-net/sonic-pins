@@ -165,7 +165,7 @@ absl::StatusOr<std::vector<std::string>> GetNUpInterfaceIDs(
 }
 
 // Add table entries for multicast_router_interface_table.
-absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
+inline absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
     const pdpi::IrP4Info& ir_p4info, const std::string& port_id,
     const int instance, const netaddr::MacAddress& src_mac) {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
@@ -197,9 +197,11 @@ absl::StatusOr<std::vector<p4::v1::Entity>> CreateMulticastGroupEntities(
 }
 
 // Add table entries for ipv4_multicast_table.
-absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv4MulticastTableEntities(
-    const pdpi::IrP4Info& ir_p4info, const std::string& vrf_id,
-    const netaddr::Ipv4Address& ip_address, int multicast_group_id) {
+inline absl::StatusOr<std::vector<p4::v1::Entity>>
+CreateIpv4MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
+                                 const std::string& vrf_id,
+                                 const netaddr::Ipv4Address& ip_address,
+                                 int multicast_group_id) {
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> entities,
       sai::EntryBuilder()
@@ -210,9 +212,11 @@ absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv4MulticastTableEntities(
 }
 
 // Add table entries for ipv6_multicast_table.
-absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv6MulticastTableEntities(
-    const pdpi::IrP4Info& ir_p4info, const std::string& vrf_id,
-    const netaddr::Ipv6Address& ip_address, int multicast_group_id) {
+inline absl::StatusOr<std::vector<p4::v1::Entity>>
+CreateIpv6MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
+                                 const std::string& vrf_id,
+                                 const netaddr::Ipv6Address& ip_address,
+                                 int multicast_group_id) {
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> entities,
       sai::EntryBuilder()
@@ -558,6 +562,7 @@ TEST_P(L3MulticastTestFixture, InsertMulticastGroupBeforeRifFails) {
                                           /*multicast_group_id=*/2, replicas));
   EXPECT_THAT(
       pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, entities),
+<<<<<<< HEAD
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: NOT_FOUND"),
                      HasSubstr("[OrchAgent] No corresponding "
@@ -611,6 +616,15 @@ TEST_P(L3MulticastTestFixture, DeleteNonexistentRifEntryFails) {
                                        "'multicast_router_interface_table'"))));
 }
 
+=======
+      StatusIs(
+          absl::StatusCode::kUnknown,
+          AllOf(HasSubstr("#1: NOT_FOUND"),
+                HasSubstr("[OrchAgent] Multicast group member"),
+                HasSubstr("does not have an associated RIF available yet"))));
+}
+
+>>>>>>> b3db1682 (Add tests for multicast programming)
 TEST_P(L3MulticastTestFixture, DeleteNonexistentMulticastGroupFails) {
   const int kNumberRifs = 2;
   ASSERT_OK_AND_ASSIGN(
@@ -637,6 +651,7 @@ TEST_P(L3MulticastTestFixture, DeleteNonexistentMulticastGroupFails) {
                   "entry with key of multicast group ID '1' does not exist"))));
 }
 
+<<<<<<< HEAD
 TEST_P(L3MulticastTestFixture, DeleteNonexistentIpmcEntryFails) {
   // Unable to delete IPMC entry that was not added.
   const int kMulticastGroupId = 1;
@@ -985,6 +1000,306 @@ void L3MulticastTestFixture::SetUp() {
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
   // There is no need to push a config to the control switch.
+=======
+TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  const int kNumberMulticastGroupsInTest = 1;
+  const int kPortsToUseInTest = 2;
+  // Collect port IDs.
+  // Get SUT and control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      auto sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+  // --------------------------------------------------------------------------
+  // Add multicast programming.
+  // --------------------------------------------------------------------------
+  LOG(INFO) << "Adding multicast programming.";
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(
+      *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
+      kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
+      sut_ports_ids, entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(
+      auto vectors,
+      BuildTestVectors(sut_ports_ids, kNumberMulticastGroupsInTest,
+                       /*replicas_per_group=*/kPortsToUseInTest,
+                       /*expect_output_packets=*/true));
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultGpinsDataplaneValidationParams();
+  dvaas_params.packet_test_vector_override = vectors;
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+  // --------------------------------------------------------------------------
+  // Modify multicast programming.
+  // --------------------------------------------------------------------------
+  // Send traffic to confirm replicas received.
+  // TODO: Implement commented multicast test cases
+  // --------------------------------------------------------------------------
+  // Delete multicast programming.
+  // --------------------------------------------------------------------------
+  // LOG(INFO) << "Deleting multicast programming.";
+  // Delete operations in the reverse order they were programmed.
+  // std::reverse(entities_created.begin(), entities_created.end());
+  // EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_,
+  // entities_created));
+  // LOG(INFO) << "Deleted " << entities_created.size() << " entities.";
+  // Send traffic and expect no packets received.
+  // ASSERT_OK_AND_ASSIGN(
+  //    auto vectors_del,
+  //    BuildTestVectors(sut_ports_ids, kNumberMulticastGroupsInTest,
+  //                            /*replicas_per_group=*/kPortsToUseInTest,
+  //                            /*expect_output_packets=*/false));
+  // Send test packets.
+  // LOG(INFO) << "Sending traffic to verify deleted multicast programming.";
+  // dvaas::DataplaneValidationParams dvaas_params_del =
+  //    dvaas::DefaultGpinsDataplaneValidationParams();
+  // dvaas_params_del.packet_test_vector_override = vectors_del;
+  // ASSERT_OK_AND_ASSIGN(
+  //     dvaas::ValidationResult validation_result_del,
+  //    GetParam().dvaas->ValidateDataplane(testbed, dvaas_params_del));
+  // Validate traffic.
+  // validation_result_del.LogStatistics();
+  // EXPECT_OK(validation_result_del.HasSuccessRateOfAtLeast(1.0));
+}
+
+// TODO: Implement commented multicast test cases
+// TEST_P(L3MulticastTestFixture, UnregisteredParticipantProgramming) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "83344582-5437-48fc-86a9-417c6c48541a");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, FixedDelayProgramming) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "cc779aa4-2728-4d9d-8618-9c858007747b");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, MulticastGroupAssignmentLPMSemantics) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "c5427190-1d1e-4828-a69d-33ad88a8f134");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, InvalidProgrammingUnknownPort) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "d2a041df-fe64-4003-b650-13a8b29fd66e");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, InvalidProgrammingUnknownPortInstance) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "089756a0-5905-461c-9cbd-41e2afe93cfb");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, InvalidProgrammingUnknownMulticastGroup) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "8482872d-28c4-4dcc-a431-2f19ae066d27");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, InvalidProgrammingUnknownVRF) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "f94bb8f0-3924-4f26-8c71-780d85c57773");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, InvalidProgrammingInvalidIpAddress) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "f698d03b-cca2-41cc-954e-c5bec6969872");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, InvalidOrderMulticastGroupBeforeRif) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "be9043bb-45a0-4b58-b375-2629b7215cb6");
+//   const int kNumberRifs = 2;
+//   ASSERT_OK_AND_ASSIGN(
+//       auto sut_ports_ids,
+//       GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+//                          kNumberRifs));
+//   // If we do not have a RIF, we cannot create multicast group members.
+//   std::vector<ReplicaPair> replicas;
+//   for (int r = 0; r < kNumberRifs; ++r) {
+//     const std::string& port_id = sut_ports_ids.at(r);
+//     replicas.push_back(std::make_pair(port_id, kDefaultInstance));
+//   }
+//   ASSERT_OK_AND_ASSIGN(auto entities, CreateMulticastGroupEntities(
+//                                           ir_p4info_,
+//                                           /*multicast_group_id=*/2,
+//                                           replicas));
+//   EXPECT_THAT(
+//       pdpi::InstallPiEntities(*sut_p4rt_session_, ir_p4info_, entities),
+
+//       StatusIs(
+//           absl::StatusCode::kUnknown,
+//           AllOf(HasSubstr("#1: NOT_FOUND"),
+//                 HasSubstr("[OrchAgent] Multicast group member"),
+//                 HasSubstr("does not have an associated RIF available
+//                 yet"))));
+// }
+// TEST_P(L3MulticastTestFixture, InvalidOrderIpmcBeforeMulticastGroup) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "92ba000a-77a1-42d5-b9ba-c917dbece6a1");
+//   // Create a VRF.
+//   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> vrf_entities,
+//                        sai::EntryBuilder()
+//                            .AddVrfEntry(kDefaultMulticastVrf)
+//                            .LogPdEntries()
+//                            .GetDedupedPiEntities(ir_p4info_));
+//   EXPECT_OK(pdpi::InstallPiEntities(*sut_p4rt_session_,
+//             ir_p4info_, vrf_entities));
+//   // If we have not created a multicast group yet, we cannot create an IPMC
+//   // entry.
+//   const int kMulticastGroupId = 7;
+//   ASSERT_OK_AND_ASSIGN(auto ipv4_address,
+//                        GetIpv4AddressForReplica(kMulticastGroupId));
+//   ASSERT_OK_AND_ASSIGN(
+//       auto entities_v4,
+//       CreateIpv4TableEntities(ir_p4info_, std::string(kDefaultMulticastVrf),
+//                               ipv4_address, kMulticastGroupId));
+//   EXPECT_THAT(
+//       pdpi::InstallPiEntities(*sut_p4rt_session_, ir_p4info_, entities_v4),
+//       StatusIs(
+//           absl::StatusCode::kUnknown,
+//           AllOf(HasSubstr("#1: NOT_FOUND"),
+//                 HasSubstr("[OrchAgent] No multicast group ID found for"))));
+//   // Clean up.
+//   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, vrf_entities));
+// }
+// TEST_P(L3MulticastTestFixture, InvalidOrderDeleteRifWhileInUse) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "9887f929-4e9d-4a68-b48e-6cafcfd6c07f");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, InvalidOrderDeleteMulticastGroupWhileInUse) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "634ca5f6-1a50-4a37-9936-d03d86e7aaeb");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, InvalidOrderDeleteRifEntryBeforeAdded) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "2373038c-1057-4faa-a04f-8f40fe5eb100");
+//   // Unable to delete RIF entry that was not added.
+//   ASSERT_OK_AND_ASSIGN(
+//       auto entities,
+//       CreateRifTableEntities(ir_p4info_, /*port_id=*/"1", kDefaultInstance,
+//                              kOriginalSrcMacAddress));
+//   EXPECT_THAT(ClearEntities(*sut_p4rt_session_, ir_p4info_, entities),
+//               StatusIs(absl::StatusCode::kUnknown,
+//                        AllOf(HasSubstr("#1: NOT_FOUND"),
+//                              HasSubstr("given key does not exist in table "
+//                                        "'multicast_router_interface_table'"))));
+// }
+// TEST_P(L3MulticastTestFixture,
+//        InvalidOrderDeleteMulticastGroupEntryBeforeAdded) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "76c6b7e8-d5a8-430a-b1de-8196cb2f58ed");
+//   const int kNumberRifs = 2;
+//   ASSERT_OK_AND_ASSIGN(
+//       auto sut_ports_ids,
+//       GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+//                          kNumberRifs));
+//   // TODO: Do we need to create RIF entries before attempting a delete?
+//   std::vector<ReplicaPair> replicas;
+//   for (int r = 0; r < kNumberRifs; ++r) {
+//     const std::string& port_id = sut_ports_ids.at(r);
+//     replicas.push_back(std::make_pair(port_id, kDefaultInstance));
+//   }
+//   // Unable to delete multicast group entry that was not added.
+//   ASSERT_OK_AND_ASSIGN(auto entities, CreateMulticastGroupEntities(
+//                                           ir_p4info_,
+//                                           /*multicast_group_id=*/1,
+//                                           replicas));
+//   EXPECT_THAT(
+//       ClearEntities(*sut_p4rt_session_, ir_p4info_, entities),
+//       StatusIs(
+//           absl::StatusCode::kUnknown,
+//           AllOf(
+//               HasSubstr("#1: NOT_FOUND"),
+//               HasSubstr(
+//                   "entry with key of multicast group ID '1' does not
+//                   exist"))));
+// }
+// TEST_P(L3MulticastTestFixture, InvalidOrderDeleteIpmcEntryBeforeAdded) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "c0307840-3fd8-4899-8034-b4379e4fc382");
+//   // TODO: Do we need to create RIF entries, multicast group entry, and VRF
+//   // entry before attempting a delete?
+//   // Unable to delete IPMC entry that was not added.
+//   const int kMulticastGroupId = 1;
+//   const std::string vrf_id = "vrf-mcast-1";
+//   ASSERT_OK_AND_ASSIGN(auto ipv4_address,
+//                        GetIpv4AddressForReplica(kMulticastGroupId));
+//   ASSERT_OK_AND_ASSIGN(auto ipv6_address,
+//                        GetIpv6AddressForReplica(kMulticastGroupId));
+//   ASSERT_OK_AND_ASSIGN(auto entities_v4,
+//                        CreateIpv4TableEntities(ir_p4info_, vrf_id,
+//                        ipv4_address,
+//                                                kMulticastGroupId));
+//   ASSERT_OK_AND_ASSIGN(auto entities_v6,
+//                        CreateIpv6TableEntities(ir_p4info_, vrf_id,
+//                        ipv6_address,
+//                                                kMulticastGroupId));
+//   EXPECT_THAT(ClearEntities(*sut_p4rt_session_, ir_p4info_, entities_v4),
+//               StatusIs(absl::StatusCode::kUnknown,
+//                        AllOf(HasSubstr("#1: NOT_FOUND"),
+//                              HasSubstr("given key does not exist in table "
+//                                        "'ipv4_multicast_table'"))));
+//   EXPECT_THAT(ClearEntities(*sut_p4rt_session_, ir_p4info_, entities_v6),
+//               StatusIs(absl::StatusCode::kUnknown,
+//                        AllOf(HasSubstr("#1: NOT_FOUND"),
+//                              HasSubstr("given key does not exist in table "
+//                                        "'ipv6_multicast_table'"))));
+// }
+// TEST_P(L3MulticastTestFixture, CapacityMulticastRifs) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "81099928-4181-4366-9519-885359a2f7e3");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, CapacityMulticastGroupsAndMembers) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "d35ff878-dc12-4623-82d4-81298006482a");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, PerformanceInitializationTime) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "bb3b9c48-30bc-4e63-9bbb-b17dc0f806b9");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, PerformanceMulticastGroupAdjustmentRate) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "89df9e4c-a46a-4a5f-8260-f805e1914bc9");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture, PerformanceReplicaArrivalTimeWithFixedDelay) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "8aef3b3f-a46f-40a7-91d0-b233a1b2f7ac");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+// TEST_P(L3MulticastTestFixture,
+//        PerformanceReplicaArrivalTimeWithUnregisteredParticipants) {
+//   GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+//       "ed4da65d-3984-432a-955e-a6b9fdb8d8aa");
+//   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
+// }
+}  // namespace
+
+void L3MulticastTestFixture::SetUp() {
+  GetParam().mirror_testbed->SetUp();
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  // Initialize the connection and clear table entries for the SUT and Control
+  // switch.
+  ASSERT_OK_AND_ASSIGN(
+      std::tie(sut_p4rt_session_, control_switch_p4rt_session_),
+      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
+          testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
+          GetParam().p4info));
+>>>>>>> b3db1682 (Add tests for multicast programming)
   ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(*GetParam().p4info));
 }
 
