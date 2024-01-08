@@ -552,6 +552,7 @@ tables {
     name: "ingress.acl_ingress.acl_ingress_mirror_and_redirect_table"
     alias: "acl_ingress_mirror_and_redirect_table"
     annotations: "@sai_acl(INGRESS)"
+    annotations: "@sai_acl_priority(15)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
@@ -636,6 +637,7 @@ tables {
     name: "ingress.acl_ingress.acl_ingress_security_table"
     alias: "acl_ingress_security_table"
     annotations: "@sai_acl(INGRESS)"
+    annotations: "@sai_acl_priority(20)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    src_ip::mask != 0 -> is_ipv4 == 1;\n    src_ipv6::mask != 0 -> is_ipv6 == 1;\n\n  // TODO: This comment is required for the preprocessor to not\n  // spit out nonsense.\n\n\n\n\n\n\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }

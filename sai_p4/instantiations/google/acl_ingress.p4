@@ -391,6 +391,7 @@ control acl_ingress(in headers_t headers,
 
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_INGRESS_COUNTING_TABLE_ID)
+  @sai_acl_priority(7)
   @sai_acl(INGRESS)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
@@ -464,6 +465,7 @@ control acl_ingress(in headers_t headers,
   // ACL table that mirrors and redirects packets.
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
+  @sai_acl_priority(15)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
@@ -552,6 +554,7 @@ control acl_ingress(in headers_t headers,
   // ACL table that only drops or denies packets, and is otherwise a no-op.
   @id(ACL_INGRESS_SECURITY_TABLE_ID)
   @sai_acl(INGRESS)
+  @sai_acl_priority(20)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
