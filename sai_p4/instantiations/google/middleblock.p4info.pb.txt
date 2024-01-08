@@ -317,7 +317,6 @@ tables {
     name: "ingress.routing_lookup.ipv4_multicast_table"
     alias: "ipv4_multicast_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -352,7 +351,6 @@ tables {
     name: "ingress.routing_lookup.ipv6_multicast_table"
     alias: "ipv6_multicast_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -947,7 +945,6 @@ tables {
     id: 33554508
     name: "egress.packet_rewrites.multicast_rewrites.multicast_router_interface_table"
     alias: "multicast_router_interface_table"
-    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }
   match_fields {
@@ -975,7 +972,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 128
+  size: 110
 }
 actions {
   preamble {
@@ -1139,7 +1136,6 @@ actions {
     id: 16777240
     name: "ingress.routing_lookup.set_multicast_group_id"
     alias: "set_multicast_group_id"
-    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
