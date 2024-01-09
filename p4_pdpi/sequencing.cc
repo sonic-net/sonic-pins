@@ -271,6 +271,31 @@ SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
   return requests;
 }
 
+absl::StatusOr<std::vector<p4::v1::WriteRequest>> SplitUpWriteRequest(
+    const p4::v1::WriteRequest& write_request,
+    std::optional<int> max_write_request_size) {
+  if (!max_write_request_size.has_value()) {
+    return std::vector<p4::v1::WriteRequest>{write_request};
+  }
+
+  if (*max_write_request_size < 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Max update size must be > 0. Max update size: "
+           << *max_write_request_size;
+  }
+
+  std::vector<WriteRequest> requests;
+  for (int i = 0; i < write_request.updates_size(); i++) {
+    if (i % *max_write_request_size == 0) {
+      WriteRequest request;
+      requests.push_back(std::move(request));
+    }
+    p4::v1::WriteRequest& request = requests.back();
+    *request.add_updates() = write_request.updates(i);
+  }
+  return requests;
+}
+
 absl::StatusOr<std::vector<std::vector<int>>> SequencePiUpdatesInPlace(
     const IrP4Info& info, absl::Span<const Update> updates) {
   ASSIGN_OR_RETURN(Graph graph, BuildDependencyGraph(info, updates));

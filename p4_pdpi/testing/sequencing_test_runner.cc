@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cmath>
 #include <iostream>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
+#include "absl/strings/substitute.h"
+#include "gtest/gtest.h"
 #include "gutil/proto.h"
-#include "gutil/status.h"
 #include "gutil/testing.h"
+#include "gutils/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
@@ -213,6 +217,106 @@ void GetEntriesUnreachableFromRootsTest(
     }
     std::cout << PrintTextProto(pd_entry) << std::endl;
   }
+}
+
+void SplitUpWriteRequestInvalidAndOptionalInputTest() {
+  p4::v1::Update update;
+  p4::v1::WriteRequest write_request = WriteRequest();
+  *write_request.add_updates() = update;
+  ASSERT_FALSE(pdpi::SplitUpWriteRequest(write_request, 0).ok());
+  ASSERT_FALSE(pdpi::SplitUpWriteRequest(write_request, -1).ok());
+
+  write_request = WriteRequest();
+  *write_request.add_updates() = update;
+  absl::StatusOr<std::vector<p4::v1::WriteRequest>> result =
+      pdpi::SplitUpWriteRequest(write_request, std::nullopt);
+  ASSERT_OK(result.status());
+  ASSERT_EQ(result->size(), 1);
+  EXPECT_EQ(result->front().DebugString(), write_request.DebugString());
+}
+
+void SplitUpWriteRequestTest(int update_size, int max_write_request_size) {
+  std::vector<p4::v1::Update> updates;
+  updates.reserve(update_size);
+  for (int i = 0; i < update_size; i++) {
+    updates.push_back(gutil::ParseProtoOrDie<p4::v1::Update>(
+        absl::Substitute(R"pb(
+                           type: INSERT
+                           entity {
+                             table_entry {
+                               metadata: "$0"
+                               table_id: 1
+                               match {
+                                 field_id: 1
+                                 exact { value: "\123\"" }
+                               }
+                             }
+                           }
+                         )pb",
+                         i)));
+  }
+  p4::v1::WriteRequest write_request = WriteRequest();
+
+  // Add `update_size` number of updates to the write request.
+  for (int i = 0; i < update_size; i++) {
+    *write_request.add_updates() = updates[i];
+  }
+
+  absl::StatusOr<std::vector<p4::v1::WriteRequest>> result =
+      pdpi::SplitUpWriteRequest(write_request, max_write_request_size);
+  if (max_write_request_size < 1) {
+    std::cout << TestHeader(absl::StrCat(
+                     "SplitUpWriteRequestTest: ",
+                     "max_write_request_size smaller than 1 results in error."))
+              << "\n"
+              << result.status().message() << "\n\n";
+    return;
+  }
+  ASSERT_OK(result);
+  if (update_size < max_write_request_size) {
+    std::cout << TestHeader(
+                     absl::StrCat("SplitUpWriteRequestTest: ",
+                                  "No splitting if update_size is "
+                                  "smaller than max_write_request_size."))
+              << "\n";
+  } else {
+    std::cout << TestHeader(absl::StrCat("SplitUpWriteRequestTest: ",
+                                         "Updates split up to have a size of "
+                                         "at most max_write_request_size."))
+              << "\n";
+  }
+  std::cout << "-- SplitUpWriteRequest input:\nupdates size: " << update_size
+            << " max update size: " << max_write_request_size;
+  std::cout << "\n\n-- SplitUpWriteRequest output:\n";
+
+  int expected_size = ceil((float)update_size / (float)max_write_request_size);
+  if (result->size() != expected_size) {
+    std::cout << "The number of requests after splitting doesn't equal to the "
+                 "size dictated by the formula. Expected: "
+              << expected_size << " Actual: " << result->size() << "\n";
+  }
+
+  std::cout << "number of write requests: " << result->size() << "\n";
+  int i = 0;
+  for (const auto& write_request : *result) {
+    for (const auto& update : write_request.updates()) {
+      if (update.entity().table_entry().metadata() != absl::StrCat(i)) {
+        std::cout << "spliting up the write request scrambled the order of "
+                     "updates\n";
+      }
+      i++;
+    }
+  }
+}
+
+void SplitUpWriteRequestTests() {
+  SplitUpWriteRequestInvalidAndOptionalInputTest();
+  SplitUpWriteRequestTest(/*update_size=*/1, /*max_write_request_size=*/0);
+  SplitUpWriteRequestTest(/*update_size=*/1, /*max_write_request_size=*/1);
+  SplitUpWriteRequestTest(/*update_size=*/1, /*max_write_request_size=*/2);
+  SplitUpWriteRequestTest(/*update_size=*/6, /*max_write_request_size=*/2);
+  SplitUpWriteRequestTest(/*update_size=*/123, /*max_write_request_size=*/55);
+  SplitUpWriteRequestTest(/*update_size=*/123, /*max_write_request_size=*/5);
 }
 
 void RunSequenceTests(const pdpi::IrP4Info& info) {
@@ -1569,6 +1673,7 @@ int main(int argc, char** argv) {
 
   RunGetEntriesUnreachableFromRootsTests(info);
 
+  SplitUpWriteRequestTests();
   // TODO: Add negative test (where updates and P4Info are out of
   // sync).
   return 0;
