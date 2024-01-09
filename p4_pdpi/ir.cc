@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,6 +70,165 @@ using ::pdpi::IrP4Info;
 using ::pdpi::IrTableDefinition;
 using ::pdpi::IrTableReference;
 using ::pdpi::ParsedRefersToAnnotation;
+
+namespace {
+
+// -- IrP4Info utilities -------------------------------------------------------
+
+template <class Value>
+bool IsSupported(const Value &value) {
+  return !value.is_unsupported();
+}
+
+bool IsSupported(const IrActionReference &action_ref) {
+  return !action_ref.action().is_unsupported();
+}
+template <class Key, class Value>
+void RemoveUnsupportedValues(google::protobuf::Map<Key, Value> &map) {
+  google::protobuf::Map<Key, Value> tmp;
+  for (auto &[key, value] : map) {
+    if (IsSupported(value)) tmp.insert({key, std::move(value)});
+  }
+  map = std::move(tmp);
+}
+template <class Value>
+void RemoveUnsupportedValues(
+    google::protobuf::RepeatedPtrField<Value> &values) {
+  google::protobuf::RepeatedPtrField<Value> tmp;
+  for (auto &value : values) {
+    if (IsSupported(value)) tmp.Add(std::move(value));
+  }
+  values = std::move(tmp);
+}
+
+void RemoveUnsupportedTables(IrP4Info &p4_info) {
+  RemoveUnsupportedValues(*p4_info.mutable_tables_by_id());
+  RemoveUnsupportedValues(*p4_info.mutable_tables_by_name());
+}
+
+void RemoveUnsupportedActions(IrP4Info &p4_info) {
+  RemoveUnsupportedValues(*p4_info.mutable_actions_by_id());
+  RemoveUnsupportedValues(*p4_info.mutable_actions_by_name());
+  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
+    RemoveUnsupportedValues(*table.mutable_entry_actions());
+    RemoveUnsupportedValues(*table.mutable_default_only_actions());
+  }
+  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
+    RemoveUnsupportedValues(*table.mutable_entry_actions());
+    RemoveUnsupportedValues(*table.mutable_default_only_actions());
+  }
+}
+
+void RemoveUnsupportedMatchFields(IrP4Info &p4_info) {
+  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
+    RemoveUnsupportedValues(*table.mutable_match_fields_by_id());
+    RemoveUnsupportedValues(*table.mutable_match_fields_by_name());
+  }
+  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
+    RemoveUnsupportedValues(*table.mutable_match_fields_by_id());
+    RemoveUnsupportedValues(*table.mutable_match_fields_by_name());
+  }
+}
+
+bool IsPresentInP4Info(const IrTable &table, const IrP4Info &p4_info) {
+  switch (table.table_case()) {
+    case IrTable::kP4Table:
+      return p4_info.tables_by_id().contains(table.p4_table().table_id());
+    case IrTable::kBuiltInTable:
+      // Built-in tables are always present.
+      return true;
+    case IrTable::TABLE_NOT_SET:
+      // This should never happen, but isn't dealt with in this function to
+      // avoid introducing complexity or masking errors (by returning false).
+      return true;
+  }
+  return true;
+}
+
+bool IsPresentInP4Info(const IrActionField &action_field,
+                       const IrP4Info &p4_info) {
+  switch (action_field.action_field_case()) {
+    case IrActionField::kP4ActionField:
+      return p4_info.actions_by_id().contains(
+          action_field.p4_action_field().action_id());
+    case IrActionField::kBuiltInActionField:
+      // Built-in actions are always present.
+      return true;
+    case IrActionField::ACTION_FIELD_NOT_SET:
+      // This should never happen, but isn't dealt with in this function to
+      // avoid introducing complexity or masking errors (by returning false).
+      return true;
+  }
+  return true;
+}
+
+// If a reference is from an unsupported table or any of the action field
+// references are from unsupported actions, then the reference is dangling.
+bool IsDanglingReference(const IrTableReference &reference,
+                         const IrP4Info &p4_info) {
+  // Check if the source table is present.
+  if (!IsPresentInP4Info(reference.source_table(), p4_info)) return true;
+
+  // Check if the source action (if there is one) is present.
+  for (const IrTableReference::FieldReference &field_reference :
+       reference.field_references()) {
+    if (field_reference.source().has_action_field() &&
+        !IsPresentInP4Info(field_reference.source().action_field(), p4_info)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void RemoveDanglingReferences(
+    const IrP4Info &p4_info,
+    google::protobuf::RepeatedPtrField<IrTableReference> &references) {
+  google::protobuf::RepeatedPtrField<IrTableReference> tmp;
+  for (auto &reference : references) {
+    if (!IsDanglingReference(reference, p4_info)) tmp.Add(std::move(reference));
+  }
+  references = std::move(tmp);
+}
+
+// Only deletes references FROM unsupported tables and FROM unsupported actions.
+// Note: Unsupported fields must be optional and optional fields do not yet
+// support references to or from them. If that changes, this should also remove
+// references FROM unsupported fields and references TO an unsupported field
+// from a supported field.
+void RemoveDanglingReferences(IrP4Info &p4_info) {
+  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
+    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
+    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
+  }
+  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
+    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
+    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
+  }
+  for (auto &[name, table] : *p4_info.mutable_built_in_tables()) {
+    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
+    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
+  }
+  google::protobuf::Map<std::string, int32_t> new_dependency_rank_by_table_name;
+  for (auto &[name, value] : *p4_info.mutable_dependency_rank_by_table_name()) {
+    if (IsBuiltInTable(name) || p4_info.tables_by_name().contains(name)) {
+      new_dependency_rank_by_table_name.insert({name, value});
+    }
+  }
+  *p4_info.mutable_dependency_rank_by_table_name() =
+      std::move(new_dependency_rank_by_table_name);
+}
+
+}  // namespace
+
+void RemoveUnsupportedEntities(IrP4Info &p4_info) {
+  RemoveUnsupportedTables(p4_info);
+  RemoveUnsupportedActions(p4_info);
+  RemoveUnsupportedMatchFields(p4_info);
+  // This must be called after the above functions since it uses their results.
+  RemoveDanglingReferences(p4_info);
+}
+
+// -- Conversions from PI to IR ------------------------------------------------
 
 namespace {
 
@@ -2539,6 +2698,8 @@ StatusOr<p4::v1::ReadRequest> IrReadRequestToPi(
   return result;
 }
 
+// -- Conversions from IR to PI ------------------------------------------------
+
 StatusOr<p4::v1::Entity> IrEntityToPi(const IrP4Info &info, const IrEntity &ir,
                                       TranslationOptions options) {
   p4::v1::Entity pi_entity;
@@ -2954,159 +3115,31 @@ absl::Status WriteRpcGrpcStatusToAbslStatus(
          << PrintTextProto(write_rpc_status);
 }
 
-namespace {
+// -- Conversions from IR to IR ------------------------------------------------
 
-template <class Value>
-bool IsSupported(const Value &value) {
-  return !value.is_unsupported();
-}
-
-bool IsSupported(const IrActionReference &action_ref) {
-  return !action_ref.action().is_unsupported();
-}
-template <class Key, class Value>
-void RemoveUnsupportedValues(google::protobuf::Map<Key, Value> &map) {
-  google::protobuf::Map<Key, Value> tmp;
-  for (auto &[key, value] : map) {
-    if (IsSupported(value)) tmp.insert({key, std::move(value)});
-  }
-  map = std::move(tmp);
-}
-template <class Value>
-void RemoveUnsupportedValues(
-    google::protobuf::RepeatedPtrField<Value> &values) {
-  google::protobuf::RepeatedPtrField<Value> tmp;
-  for (auto &value : values) {
-    if (IsSupported(value)) tmp.Add(std::move(value));
-  }
-  values = std::move(tmp);
-}
-
-void RemoveUnsupportedTables(IrP4Info &p4_info) {
-  RemoveUnsupportedValues(*p4_info.mutable_tables_by_id());
-  RemoveUnsupportedValues(*p4_info.mutable_tables_by_name());
-}
-
-void RemoveUnsupportedActions(IrP4Info &p4_info) {
-  RemoveUnsupportedValues(*p4_info.mutable_actions_by_id());
-  RemoveUnsupportedValues(*p4_info.mutable_actions_by_name());
-  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
-    RemoveUnsupportedValues(*table.mutable_entry_actions());
-    RemoveUnsupportedValues(*table.mutable_default_only_actions());
-  }
-  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
-    RemoveUnsupportedValues(*table.mutable_entry_actions());
-    RemoveUnsupportedValues(*table.mutable_default_only_actions());
-  }
-}
-
-void RemoveUnsupportedMatchFields(IrP4Info &p4_info) {
-  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
-    RemoveUnsupportedValues(*table.mutable_match_fields_by_id());
-    RemoveUnsupportedValues(*table.mutable_match_fields_by_name());
-  }
-  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
-    RemoveUnsupportedValues(*table.mutable_match_fields_by_id());
-    RemoveUnsupportedValues(*table.mutable_match_fields_by_name());
-  }
-}
-
-bool IsPresentInP4Info(const IrTable &table, const IrP4Info &p4_info) {
-  switch (table.table_case()) {
-    case IrTable::kP4Table:
-      return p4_info.tables_by_id().contains(table.p4_table().table_id());
-    case IrTable::kBuiltInTable:
-      // Built-in tables are always present.
-      return true;
-    case IrTable::TABLE_NOT_SET:
-      // This should never happen, but isn't dealt with in this function to
-      // avoid introducing complexity or masking errors (by returning false).
-      return true;
-  }
-  return true;
-}
-
-bool IsPresentInP4Info(const IrActionField &action_field,
-                       const IrP4Info &p4_info) {
-  switch (action_field.action_field_case()) {
-    case IrActionField::kP4ActionField:
-      return p4_info.actions_by_id().contains(
-          action_field.p4_action_field().action_id());
-    case IrActionField::kBuiltInActionField:
-      // Built-in actions are always present.
-      return true;
-    case IrActionField::ACTION_FIELD_NOT_SET:
-      // This should never happen, but isn't dealt with in this function to
-      // avoid introducing complexity or masking errors (by returning false).
-      return true;
-  }
-  return true;
-}
-
-// If a reference is from an unsupported table or any of the action field
-// references are from unsupported actions, then the reference is dangling.
-bool IsDanglingReference(const IrTableReference &reference,
-                         const IrP4Info &p4_info) {
-  // Check if the source table is present.
-  if (!IsPresentInP4Info(reference.source_table(), p4_info)) return true;
-
-  // Check if the source action (if there is one) is present.
-  for (const IrTableReference::FieldReference &field_reference :
-       reference.field_references()) {
-    if (field_reference.source().has_action_field() &&
-        !IsPresentInP4Info(field_reference.source().action_field(), p4_info)) {
-      return true;
+absl::StatusOr<pdpi::IrTableEntries> IrEntitiesToTableEntries(
+    const pdpi::IrEntities &control_plane_entries) {
+  pdpi::IrTableEntries ir_table_entries;
+  for (const auto &entry : control_plane_entries.entities()) {
+    if (!entry.has_table_entry()) {
+      return gutil::InternalErrorBuilder()
+             << "This conversion function only supports entities in the form "
+                "of table entries. Received "
+             << absl::StrCat(entry) << ".";
     }
+    *ir_table_entries.add_entries() = entry.table_entry();
   }
-  return false;
+  return ir_table_entries;
 }
 
-void RemoveDanglingReferences(
-    const IrP4Info &p4_info,
-    google::protobuf::RepeatedPtrField<IrTableReference> &references) {
-  google::protobuf::RepeatedPtrField<IrTableReference> tmp;
-  for (auto &reference : references) {
-    if (!IsDanglingReference(reference, p4_info)) tmp.Add(std::move(reference));
+pdpi::IrEntities IrTableEntriesToEntities(
+    const pdpi::IrTableEntries &ir_table_entries) {
+  pdpi::IrEntities ir_entities;
+  for (const auto &entry : ir_table_entries.entries()) {
+    pdpi::IrEntity *entity = ir_entities.add_entities();
+    *entity->mutable_table_entry() = entry;
   }
-  references = std::move(tmp);
-}
-
-// Only deletes references FROM unsupported tables and FROM unsupported actions.
-// Note: Unsupported fields must be optional and optional fields do not yet
-// support references to or from them. If that changes, this should also remove
-// references FROM unsupported fields and references TO an unsupported field
-// from a supported field.
-void RemoveDanglingReferences(IrP4Info &p4_info) {
-  for (auto &[id, table] : *p4_info.mutable_tables_by_id()) {
-    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
-    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
-  }
-  for (auto &[name, table] : *p4_info.mutable_tables_by_name()) {
-    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
-    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
-  }
-  for (auto &[name, table] : *p4_info.mutable_built_in_tables()) {
-    RemoveDanglingReferences(p4_info, *table.mutable_incoming_references());
-    RemoveDanglingReferences(p4_info, *table.mutable_outgoing_references());
-  }
-  google::protobuf::Map<std::string, int32_t> new_dependency_rank_by_table_name;
-  for (auto &[name, value] : *p4_info.mutable_dependency_rank_by_table_name()) {
-    if (IsBuiltInTable(name) || p4_info.tables_by_name().contains(name)) {
-      new_dependency_rank_by_table_name.insert({name, value});
-    }
-  }
-  *p4_info.mutable_dependency_rank_by_table_name() =
-      std::move(new_dependency_rank_by_table_name);
-}
-
-}  // namespace
-
-void RemoveUnsupportedEntities(IrP4Info &p4_info) {
-  RemoveUnsupportedTables(p4_info);
-  RemoveUnsupportedActions(p4_info);
-  RemoveUnsupportedMatchFields(p4_info);
-  // This must be called after the above functions since it uses their results.
-  RemoveDanglingReferences(p4_info);
+  return ir_entities;
 }
 
 }  // namespace pdpi
