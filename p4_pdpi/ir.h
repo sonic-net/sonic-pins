@@ -30,14 +30,18 @@
 
 namespace pdpi {
 
-// Creates IrP4Info and validates that the p4_info has no errors.
-absl::StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info& p4_info);
+// -- IrP4Info utilities -------------------------------------------------------
 
 // Removes all `@unsupported` tables/match fields/actions from the given
 // `p4_info`.
 void RemoveUnsupportedEntities(IrP4Info& p4_info);
 
 // -- Conversions from PI to IR ------------------------------------------------
+
+// Creates IrP4Info for a PI P4Info and validates that the p4_info has no
+// errors.
+absl::StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info& p4_info);
+
 absl::StatusOr<IrEntity> PiEntityToIr(
     const IrP4Info& info, const p4::v1::Entity& pi,
     TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
@@ -162,5 +166,17 @@ absl::StatusOr<grpc::Status> IrWriteRpcStatusToGrpcStatus(
 // least one update failed.
 absl::Status WriteRpcGrpcStatusToAbslStatus(
     const grpc::Status& grpc_status, int number_of_updates_in_write_request);
+
+// -- Conversions from IR to IR ------------------------------------------------
+
+// Converts IrTableEntries to IrEntities.
+pdpi::IrEntities IrTableEntriesToEntities(
+    const pdpi::IrTableEntries& ir_table_entries);
+
+// Convert control plane entries to table entries. Throws an error if there
+// entities presents which are not a table entry.
+absl::StatusOr<pdpi::IrTableEntries> IrEntitiesToTableEntries(
+    const pdpi::IrEntities& control_plane_entries);
+
 }  // namespace pdpi
 #endif  // PINS_P4_PDPI_IR_H_
