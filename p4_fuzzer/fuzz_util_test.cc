@@ -206,6 +206,27 @@ TEST(FuzzUtilTest, FuzzWriteRequestAreReproducibleWithState) {
   }
 }
 
+TEST(FuzzUtilTest, FuzzWriteRequestCanFuzzMulticastGroupEntry) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  absl::BitGen gen;
+  // Ensure a multicast entity is fuzzed.
+  fuzzer_state.config.fuzz_multicast_group_entry_probability = 1.0;
+
+  AnnotatedWriteRequest write_request;
+  // Because there is a non-zero chance to fuzz no updates.
+  while (write_request.updates().empty()) {
+    write_request =
+        FuzzWriteRequest(&gen, fuzzer_state.config, fuzzer_state.switch_state,
+                         /*max_batch_size=*/1);
+  }
+
+  EXPECT_TRUE(write_request.updates(0)
+                  .pi()
+                  .entity()
+                  .packet_replication_engine_entry()
+                  .has_multicast_group_entry());
+}
+
 // This test uses behavior specific to the main.p4 program. In main.p4,
 // `refers_to_multicast_by_action_table` is a table that uses an action whose
 // parameter refers to multicast group id.
@@ -288,18 +309,13 @@ TEST(FuzzUtilTest, FuzzMulticastRespectsReplicaReferences) {
         }
       )pb")));
 
-  pdpi::IrBuiltInTableDefinition multicast_defintion =
-      gutil::FindOrDie(fuzzer_state.config.GetIrP4Info().built_in_tables(),
-                       pdpi::GetMulticastGroupTableName());
-
   absl::BitGen gen;
   p4::v1::MulticastGroupEntry multicast_entry;
   // Fuzz until multicast group entry has the one replica.
   while (multicast_entry.replicas().empty()) {
-    ASSERT_OK_AND_ASSIGN(multicast_entry,
-                         FuzzValidMulticastGroupEntry(&gen, fuzzer_state.config,
-                                                      fuzzer_state.switch_state,
-                                                      multicast_defintion));
+    ASSERT_OK_AND_ASSIGN(multicast_entry, FuzzValidMulticastGroupEntry(
+                                              &gen, fuzzer_state.config,
+                                              fuzzer_state.switch_state));
   }
 
   // Multicast group cannot be 0.
@@ -342,21 +358,18 @@ TEST(FuzzUtilTest, FuzzMulticastAreReproducibleWithState) {
   absl::SeedSeq seed;
   absl::BitGen gen_0(seed);
   absl::BitGen gen_1(seed);
-  pdpi::IrBuiltInTableDefinition multicast_defintion =
-      gutil::FindOrDie(fuzzer_state.config.GetIrP4Info().built_in_tables(),
-                       pdpi::GetMulticastGroupTableName());
 
   // Create 50 instances and verify that they are identical.
   for (int i = 0; i < 20; ++i) {
-    ASSERT_OK_AND_ASSIGN(p4::v1::MulticastGroupEntry entry0,
-                         FuzzValidMulticastGroupEntry(
-                             &gen_0, fuzzer_state.config,
-                             fuzzer_state.switch_state, multicast_defintion));
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::MulticastGroupEntry entry0,
+        FuzzValidMulticastGroupEntry(&gen_0, fuzzer_state.config,
+                                     fuzzer_state.switch_state));
 
-    ASSERT_OK_AND_ASSIGN(p4::v1::MulticastGroupEntry entry1,
-                         FuzzValidMulticastGroupEntry(
-                             &gen_1, fuzzer_state.config,
-                             fuzzer_state.switch_state, multicast_defintion));
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::MulticastGroupEntry entry1,
+        FuzzValidMulticastGroupEntry(&gen_1, fuzzer_state.config,
+                                     fuzzer_state.switch_state));
 
     EXPECT_THAT(entry0, EqualsProto(entry1));
   }
