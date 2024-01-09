@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,6 +49,14 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>>
 SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
                                    absl::Span<const p4::v1::Update> updates,
                                    std::optional<int> max_batch_size = 5000);
+
+// Splits up `write_request` into ceil(write_request.update_size() /
+// max_write_request_size) number of p4::WriteRequest(s). The order of updates
+// across the resulting WriteRequests remains the same as the order of updates
+// in `write_request`.
+absl::StatusOr<std::vector<p4::v1::WriteRequest>> SplitUpWriteRequest(
+    const p4::v1::WriteRequest& write_request,
+    std::optional<int> max_write_request_size = 5000);
 
 // Returns a vector of batches, where each batch is given by a vector of indices
 // into the input vector, such that updates are sequenced correctly when sent

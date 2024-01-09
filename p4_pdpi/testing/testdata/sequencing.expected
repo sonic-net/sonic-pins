@@ -2673,3 +2673,49 @@ two_match_fields_table_entry {
 
 --- Unreachable entries from roots (output):
 <empty>
+
+=========================================================================
+SplitUpWriteRequestTest: max_write_request_size smaller than 1 results in error.
+=========================================================================
+Max update size must be > 0. Max update size: 0
+
+=========================================================================
+SplitUpWriteRequestTest: Updates split up to have a size of at most max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 1 max update size: 1
+
+-- SplitUpWriteRequest output:
+number of write requests: 1
+=========================================================================
+SplitUpWriteRequestTest: No splitting if update_size is smaller than max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 1 max update size: 2
+
+-- SplitUpWriteRequest output:
+number of write requests: 1
+=========================================================================
+SplitUpWriteRequestTest: Updates split up to have a size of at most max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 6 max update size: 2
+
+-- SplitUpWriteRequest output:
+number of write requests: 3
+=========================================================================
+SplitUpWriteRequestTest: Updates split up to have a size of at most max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 123 max update size: 55
+
+-- SplitUpWriteRequest output:
+number of write requests: 3
+=========================================================================
+SplitUpWriteRequestTest: Updates split up to have a size of at most max_write_request_size.
+=========================================================================
+-- SplitUpWriteRequest input:
+updates size: 123 max update size: 5
+
+-- SplitUpWriteRequest output:
+number of write requests: 25
