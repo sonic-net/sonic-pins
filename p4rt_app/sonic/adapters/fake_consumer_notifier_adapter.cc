@@ -33,8 +33,7 @@ FakeConsumerNotifierAdapter::FakeConsumerNotifierAdapter(
 bool FakeConsumerNotifierAdapter::WaitForNotificationAndPop(
     std::string &op, std::string &data, SonicDbEntryList &values,
     int64_t timeout_ms) {
-  sonic_db_table_->GetNextNotification(op, data, values);
-  return true;
+  return sonic_db_table_->GetNextNotification(op, data, values).ok();
 }
 
 void FakeConsumerNotifierAdapter::DrainNotifications() {
