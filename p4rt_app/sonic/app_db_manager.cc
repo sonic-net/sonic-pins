@@ -350,7 +350,7 @@ absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
   kfvKey(kfv) = key;
   kfvOp(kfv) = "SET";
   kfvFieldsValues(kfv) = values;
-  p4rt_table.notification_producer->send({kfv});
+  p4rt_table.producer->send({kfv});
 
   return key;
 
@@ -512,10 +512,11 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
   }
 
   // Send all the P4RT_TABLE updates as one batch.
-  p4rt_table.notification_producer->send(kfv_updates);
-  RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
-      *p4rt_table.notification_consumer, app_db_status));
-
+  if (!kfv_updates.empty()) {
+    p4rt_table.producer->send(kfv_updates);
+    RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
+        *p4rt_table.producer, app_db_status));
+  }
   return absl::OkStatus();
 }
 

@@ -243,8 +243,8 @@ def pins_infra_deps():
     if not native.existing_rule("sonic_swss_common"):
         http_archive(
             name = "sonic_swss_common",
-            url = "https://github.com/azure/sonic-swss-common/archive/f6c1614227f25dfa81ab5ccd0cb8cca265aaad7d.zip",
-            strip_prefix = "sonic-swss-common-f6c1614227f25dfa81ab5ccd0cb8cca265aaad7d",
+            url = "https://github.com/azure/sonic-swss-common/archive/1593cc64305c3df68f504c1555b78f5e1a483e62.zip",
+            strip_prefix = "sonic-swss-common-1593cc64305c3df68f504c1555b78f5e1a483e62",
         )
     if not native.existing_rule("rules_pkg"):
         http_archive(

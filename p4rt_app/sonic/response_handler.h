@@ -24,6 +24,7 @@
 #include "p4_pdpi/utils/ir.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "p4rt_app/sonic/adapters/zmq_producer_state_table_adapter.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -52,7 +53,7 @@ absl::StatusOr<pdpi::IrUpdateStatus> GetAndProcessResponseNotification(
 // OrchAgent respsponse for every key and update it's status. On a failed
 // OrchAgent response it will not try to revert any state.
 absl::Status GetAndProcessResponseNotificationWithoutRevertingState(
-    ConsumerNotifierAdapter &notification_interface,
+    ZmqProducerStateTableAdapter &producer,
     absl::btree_map<std::string, pdpi::IrUpdateStatus *> &key_to_status_map);
 
 // Given a single key this function will wait for an OrchAgent respsponse, and
@@ -60,7 +61,7 @@ absl::Status GetAndProcessResponseNotificationWithoutRevertingState(
 // state.
 absl::StatusOr<pdpi::IrUpdateStatus>
 GetAndProcessResponseNotificationWithoutRevertingState(
-    ConsumerNotifierAdapter &notification_interface, const std::string &key);
+    ZmqProducerStateTableAdapter &producer, const std::string &key);
 
 } // namespace sonic
 } // namespace p4rt_app
