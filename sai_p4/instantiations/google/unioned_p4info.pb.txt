@@ -897,6 +897,7 @@ tables {
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@sai_acl(EGRESS)"
     annotations: "@entry_restriction(\"\n\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    // Only allow IP field matches for IP packets.\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n\n\n\n    // Only allow l4_dst_port matches for TCP/UDP packets.\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+    annotations: "@entry_restriction(\"\n\n\n\n\n\n    // Only allow IP field matches for IP packets.\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n\n\n\n\n\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
     annotations: "@entry_restriction(\"\n\n\n\n\n\n    // Only allow IP field matches for IP packets.\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n\n\n\n\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
@@ -958,19 +959,19 @@ tables {
     match_type: TERNARY
   }
   match_fields {
-    id: 9
-    name: "dst_ipv6"
-    annotations: "@composite_field(@ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3 ) , @ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2 ))"
-    annotations: "@format(IPV6_ADDRESS)"
-    bitwidth: 64
-    match_type: TERNARY
-  }
-  match_fields {
     id: 10
     name: "src_mac"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
     annotations: "@format(MAC_ADDRESS)"
     bitwidth: 48
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 9
+    name: "dst_ipv6"
+    annotations: "@composite_field(@ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3 ) , @ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2 ))"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 64
     match_type: TERNARY
   }
   action_refs {

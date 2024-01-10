@@ -974,6 +974,73 @@ tables {
   }
   size: 110
 }
+tables {
+  preamble {
+    id: 33554692
+    name: "egress.acl_egress.acl_egress_table"
+    alias: "acl_egress_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@sai_acl(EGRESS)"
+    annotations: "@entry_restriction(\"\n\n\n\n\n\n    // Only allow IP field matches for IP packets.\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n\n\n\n\n\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+  }
+  match_fields {
+    id: 2
+    name: "ip_protocol"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 4
+    name: "out_port"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT)"
+    match_type: OPTIONAL
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  match_fields {
+    id: 5
+    name: "is_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 6
+    name: "is_ipv4"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 7
+    name: "is_ipv6"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 10
+    name: "src_mac"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777481
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  direct_resource_ids: 318767364
+  size: 127
+}
 actions {
   preamble {
     id: 21257015
@@ -1592,6 +1659,17 @@ direct_counters {
     unit: BOTH
   }
   direct_table_id: 33554698
+}
+direct_counters {
+  preamble {
+    id: 318767364
+    name: "egress.acl_egress.acl_egress_counter"
+    alias: "acl_egress_counter"
+  }
+  spec {
+    unit: BOTH
+  }
+  direct_table_id: 33554692
 }
 direct_meters {
   preamble {
