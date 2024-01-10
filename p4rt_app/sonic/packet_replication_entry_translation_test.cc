@@ -27,8 +27,6 @@
 #include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
-#include "p4rt_app/sonic/adapters/mock_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_table_adapter.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/rediscommand.h"
@@ -51,32 +49,19 @@ using ::testing::UnorderedElementsAre;
 class PacketReplicationEntryTranslationTest : public ::testing::Test {
  protected:
   PacketReplicationEntryTranslationTest() {
-    auto pre_notification_producer =
-        std::make_unique<MockNotificationProducerAdapter>();
-    auto pre_producer_state =
-        std::make_unique<MockNotificationProducerAdapter>();
-    auto pre_notifier = std::make_unique<MockConsumerNotifierAdapter>();
     auto pre_app_db = std::make_unique<MockTableAdapter>();
     auto pre_counter_db = std::make_unique<MockTableAdapter>();
 
     // Save a pointer so we can test against the mocks.
-    mock_pre_notification_producer_ = pre_notification_producer.get();
-    mock_pre_producer_state_ = pre_producer_state.get();
-    mock_pre_notifier_ = pre_notifier.get();
     mock_pre_app_db_ = pre_app_db.get();
     mock_pre_counter_db_ = pre_counter_db.get();
 
     mock_p4rt_table_ = P4rtTable{
-        .notification_producer = std::move(pre_notification_producer),
-        .notification_consumer = std::move(pre_notifier),
         .app_db = std::move(pre_app_db),
         .counter_db = std::move(pre_counter_db),
     };
   }
 
-  MockNotificationProducerAdapter* mock_pre_notification_producer_;
-  MockNotificationProducerAdapter* mock_pre_producer_state_;
-  MockConsumerNotifierAdapter* mock_pre_notifier_;
   MockTableAdapter* mock_pre_app_db_;
   MockTableAdapter* mock_pre_counter_db_;
   P4rtTable mock_p4rt_table_;
