@@ -27,6 +27,7 @@
 #include "absl/functional/bind_front.h"
 #include "absl/log/initialize.h"
 #include "absl/log/log.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -61,6 +62,7 @@
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
+#include "p4rt_app/sonic/adapters/zmq_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/packetio_impl.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/warm_restart_utility.h"
@@ -69,6 +71,8 @@
 // #include "swss/component_state_helper_interface.h"
 #include "swss/dbconnector.h"
 #include "swss/schema.h"
+#include "swss/warm_restart.h"
+#include "swss/zmqclient.h"
 
 using ::grpc::Server;
 using ::grpc::ServerBuilder;
@@ -209,17 +213,11 @@ namespace p4rt_app {
 namespace {
 
 sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
-                                 swss::DBConnector* counters_db) {
-  const std::string kP4rtResponseChannel =
-      std::string("APPL_DB_") + APP_P4RT_TABLE_NAME + "_RESPONSE_CHANNEL";
-
+                                 swss::DBConnector* counters_db,
+                                 swss::ZmqClient* zmq_client) {
   return sonic::P4rtTable{
-      .notification_producer =
-          absl::make_unique<sonic::NotificationProducerAdapter>(
-              app_db, APP_P4RT_CHANNEL_NAME),
-      .notification_consumer =
-          absl::make_unique<sonic::ConsumerNotifierAdapter>(
-              kP4rtResponseChannel, app_db),
+      .producer = absl::make_unique<sonic::ZmqProducerStateTableAdapter>(
+          app_db, APP_P4RT_TABLE_NAME, *zmq_client),
       .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
           app_db, APP_P4RT_TABLE_NAME),
       .counter_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
@@ -469,9 +467,13 @@ int main(int argc, char** argv) {
   swss::DBConnector state_db("STATE_DB", /*timeout=*/0);
   swss::DBConnector config_db("CONFIG_DB", /*timeout=*/0);
 
+  // Zmq request-reply one-to-one connection with the swss server.
+  swss::ZmqClient zmq_client("ipc:///zmq/zmq_swss_ep",
+                             /*waitTimeMs=*/10 * 60 * 1000);
+
   // Create interfaces to interact with the P4RT_TABLE entries.
   p4rt_app::sonic::P4rtTable p4rt_table =
-      p4rt_app::CreateP4rtTable(&app_db, &counters_db);
+      p4rt_app::CreateP4rtTable(&app_db, &counters_db, &zmq_client);
   p4rt_app::sonic::VrfTable vrf_table =
       p4rt_app::CreateVrfTable(&app_db, &app_state_db);
   p4rt_app::sonic::VlanTable vlan_table =
