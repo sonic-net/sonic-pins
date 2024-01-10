@@ -197,6 +197,7 @@ cc_test(
     srcs = ["fake_sonic_db_table_test.cc"],
     deps = [
         ":fake_sonic_db_table",
+        "//gutil:status_matchers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
@@ -247,6 +248,37 @@ cc_library(
     hdrs = ["mock_warm_boot_state_adapter.h"],
     deps = [
         ":warm_boot_state_adapter",
+        "@com_google_googletest//:gtest",
+        "@sonic_swss_common//:common",
+    ],
+)
+
+cc_library(
+    name = "zmq_producer_state_table_adapter",
+    srcs = ["zmq_producer_state_table_adapter.cc"],
+    hdrs = ["zmq_producer_state_table_adapter.h"],
+    deps = ["@sonic_swss_common//:libswsscommon"],
+)
+
+cc_library(
+    name = "fake_zmq_producer_state_table_adapter",
+    testonly = True,
+    srcs = ["fake_zmq_producer_state_table_adapter.cc"],
+    hdrs = ["fake_zmq_producer_state_table_adapter.h"],
+    deps = [
+        ":fake_sonic_db_table",
+        ":zmq_producer_state_table_adapter",
+        "@com_google_absl//absl/status",
+        "@sonic_swss_common//:common",
+    ],
+)
+
+cc_library(
+    name = "mock_zmq_producer_state_table_adapter",
+    testonly = True,
+    hdrs = ["mock_zmq_producer_state_table_adapter.h"],
+    deps = [
+        ":zmq_producer_state_table_adapter",
         "@com_google_googletest//:gtest",
         "@sonic_swss_common//:common",
     ],

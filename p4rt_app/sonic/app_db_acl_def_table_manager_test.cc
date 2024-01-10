@@ -17,14 +17,14 @@
 
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
-#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
-#include "p4rt_app/sonic/adapters/fake_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
+#include "p4rt_app/sonic/adapters/fake_zmq_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/ir_builder.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 #include <nlohmann/json.hpp>
 
 namespace p4rt_app {
@@ -42,8 +42,8 @@ using ::testing::UnorderedElementsAreArray;
 
 P4rtTable MakeP4rtTable(FakeSonicDbTable& fake_app_db_table) {
   return P4rtTable{
-      .notification_producer =
-          std::make_unique<FakeNotificationProducerAdapter>(&fake_app_db_table),
+      .producer = std::make_unique<FakeZmqProducerStateTableAdapter>(
+          &fake_app_db_table),
   };
 }
 
