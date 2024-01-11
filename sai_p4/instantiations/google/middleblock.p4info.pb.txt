@@ -610,6 +610,10 @@ tables {
     match_type: OPTIONAL
   }
   action_refs {
+    id: 16777475
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
     id: 16777476
     annotations: "@proto_id(1)"
   }

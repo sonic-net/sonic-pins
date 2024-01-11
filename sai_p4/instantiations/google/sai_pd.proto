@@ -748,6 +748,7 @@ message AclIngressMirrorAndRedirectTableEntry {
   Match match = 1;
   message Action {
     oneof action {
+      AclForwardAction acl_forward = 4;
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 2;
       // CAUTION: This action is not (yet) supported.

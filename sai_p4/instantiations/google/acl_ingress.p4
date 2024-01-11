@@ -542,6 +542,7 @@ control acl_ingress(in headers_t headers,
         @unsupported;
     }
     actions = {
+      @proto_id(4) acl_forward();
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
       @proto_id(3) redirect_to_ipmc_group();
