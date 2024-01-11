@@ -61,6 +61,7 @@
 //#include "swss/component_state_helper.h"
 //#include "swss/component_state_helper_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "p4rt_app/utils/warm_restart_utility.h"
 #include "swss/dbconnector.h"
 #include "swss/schema.h"
 #include "swss/warm_restart.h"
@@ -437,6 +438,7 @@ int main(int argc, char** argv) {
   swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
   swss::DBConnector counters_db("COUNTERS_DB", /*timeout=*/0);
   swss::DBConnector state_db("STATE_DB", /*timeout=*/0);
+  swss::DBConnector config_db("CONFIG_DB", /*timeout=*/0);
 
   // Create interfaces to interact with the P4RT_TABLE entries.
   p4rt_app::sonic::P4rtTable p4rt_table =
@@ -475,8 +477,27 @@ int main(int argc, char** argv) {
     p4rt_options.forwarding_config_full_path = save_forwarding_config_file;
   }
 
-  bool is_warm_start = swss::WarmStart::isWarmStart();
+  // LINT.IfChange
+  auto warm_boot_state_adapter =
+      std::make_unique<p4rt_app::sonic::WarmBootStateAdapter>();
+  bool is_warm_start = warm_boot_state_adapter->IsWarmStart();
   p4rt_options.is_freeze_mode = is_warm_start;
+
+  // Initialize WarmRestartUtil
+  auto port_table_config_db =
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db, "PORT");
+  auto cpu_port_table_config_db =
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db, "CPU_PORT");
+  auto port_channel_table_config_db =
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db,
+                                                      "PORTCHANNEL");
+  auto cpu_queue_config_db = std::make_unique<p4rt_app::sonic::TableAdapter>(
+      &config_db, "QUEUE_NAME_TO_ID_MAP");
+  p4rt_app::WarmRestartUtil warm_restart_util(
+      std::move(warm_boot_state_adapter), std::move(port_table_config_db),
+      std::move(cpu_port_table_config_db),
+      std::move(port_channel_table_config_db), std::move(cpu_queue_config_db));
+
   // Create the P4RT server. If boot up in warm start mode, set p4runtime_server
   // in freeze mode to reject requests until unfreeze.
   p4rt_app::P4RuntimeImpl p4runtime_server(
@@ -491,14 +512,33 @@ int main(int argc, char** argv) {
 
   if (is_warm_start) {
     // Set warm-start state to INITIALIZED if boot up in warm-start mode.
-    // TODO: Use warm boot state adaptor.
+    // TODO: Use warm_boot_state_adapter instead of
+    // setWarmStartState().
     swss::WarmStart::setWarmStartState(
         "p4rt", swss::WarmStart::WarmStartState::INITIALIZED);
-    // TODO: Perform Reconciliation.
-    p4runtime_server.GetOrchAgentWarmStartReconcliationState();
-    // TODO: If P4RT and OA is reconciled and SV is
-    // disabled, then unfreeze P4RT server. If SV is enabled, run SV and keep
-    // p4runtimer_server frozen until unfreeze notification is received.
+    auto reconciliation_status = p4runtime_server.RebuildSwStateAfterWarmboot(
+        warm_restart_util.GetPortIdsFromConfigDb(),
+        warm_restart_util.GetCpuQueueIdsFromConfigDb());
+    if (reconciliation_status.ok()) {
+      swss::WarmStart::setWarmStartState(
+          "p4rt", swss::WarmStart::WarmStartState::RECONCILED);
+      // If ShouldWaitForGlobalUnfreeze() == false in DB AND
+      // IsOrchAgentWarmBootReconciled() == true, then unfreeze P4RT server.
+      // Otherwise, keep p4runtimer_server
+      // frozen until unfreeze notification is received.
+      if (!warm_restart_util.ShouldWaitForGlobalUnfreeze() &&
+          warm_restart_util.IsOrchAgentWarmBootReconciled()) {
+        p4runtime_server.SetFreezeMode(/*freeze_mode=*/false);
+      }
+    } else {
+      LOG(ERROR) << "Failed to reconcile P4RT: "
+                 << p4runtime_server
+                        .GrabLockAndEnterCriticalState(
+                            reconciliation_status.message())
+                        .error_message();
+      swss::WarmStart::setWarmStartState(
+          "p4rt", swss::WarmStart::WarmStartState::FAILED);
+    }
   }
 
   // Create a server to listen on the unix socket port.

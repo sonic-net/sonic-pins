@@ -261,17 +261,6 @@ TEST_F(PortNameAndIdTest, CannotRemovePortTranslationWithEmptyValues) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST_F(PortNameAndIdTest, NameTranslationRoundTrip) {
-  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
-  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "1"));
-
-  ASSERT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
-  EXPECT_THAT(pdpi::ReadPiTableEntries(p4rt_session_.get()),
-              IsOkAndHolds(ElementsAre(
-                  EqualsProto(request.updates(0).entity().table_entry()))));
-}
-
 class PortNameAndNameTest : public test_lib::P4RuntimeComponentTestFixture {
  public:
   PortNameAndNameTest()
@@ -298,17 +287,6 @@ TEST_F(PortNameAndNameTest, IgnoresMapping) {
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable(),
               ContainsAppDbEntry(AppDbEntryWithPort("Ethernet0")));
-}
-
-TEST_F(PortNameAndNameTest, NameTranslationRoundTrip) {
-  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
-  ASSERT_OK_AND_ASSIGN(auto request,
-                       WriteRequestWithPort(ir_p4_info_, "Ethernet0"));
-  ASSERT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
-  EXPECT_THAT(pdpi::ReadPiTableEntries(p4rt_session_.get()),
-              IsOkAndHolds(ElementsAre(
-                  EqualsProto(request.updates(0).entity().table_entry()))));
 }
 
 }  // namespace

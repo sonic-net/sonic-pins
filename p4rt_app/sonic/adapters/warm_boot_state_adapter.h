@@ -25,10 +25,13 @@ class WarmBootStateAdapter {
 public:
   explicit WarmBootStateAdapter();
   virtual ~WarmBootStateAdapter() = default;
-
-  virtual swss::WarmStart::WarmStartState GetWarmBootState();
+  // Get P4RT WarmBoot state.
+  virtual swss::WarmStart::WarmStartState GetWarmBootState(void);
+  // Set P4RT WarmBoot state.
   virtual void SetWarmBootState(swss::WarmStart::WarmStartState state);
+  // Check if WarmStart is true.
   virtual bool IsWarmStart(void);
+  virtual bool WaitForUnfreeze(void);
   // Get OrchAgent WarmBoot state.
   virtual swss::WarmStart::WarmStartState GetOrchAgentWarmBootState(void);
 };

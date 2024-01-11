@@ -37,7 +37,8 @@ constexpr char kDelCommand[] = "DEL";
 
 TEST(PortTableIdEventTest, AcceptEthernetPortIds) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("Ethernet1/1/1", "1"))
+  EXPECT_CALL(mock_p4runtime_impl,
+              AddPortTranslation("Ethernet1/1/1", "1", /*update_dbs=*/true))
       .WillOnce(Return(absl::OkStatus()));
   ConfigDbPortTableEventHandler event_handler(&mock_p4runtime_impl);
   EXPECT_OK(
@@ -46,7 +47,8 @@ TEST(PortTableIdEventTest, AcceptEthernetPortIds) {
 
 TEST(PortTableIdEventTest, AcceptPortChannelPortIds) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("PortChannel11", "2001"))
+  EXPECT_CALL(mock_p4runtime_impl,
+              AddPortTranslation("PortChannel11", "2001", /*update_dbs=*/true))
       .WillOnce(Return(absl::OkStatus()));
   ConfigDbPortTableEventHandler event_handler(&mock_p4runtime_impl);
   EXPECT_OK(event_handler.HandleEvent(kSetCommand, "PortChannel11",
@@ -55,7 +57,8 @@ TEST(PortTableIdEventTest, AcceptPortChannelPortIds) {
 
 TEST(PortTableIdEventTest, AcceptCpuPortIds) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("CPU", "3"))
+  EXPECT_CALL(mock_p4runtime_impl,
+              AddPortTranslation("CPU", "3", /*update_dbs=*/true))
       .WillOnce(Return(absl::OkStatus()));
   ConfigDbPortTableEventHandler event_handler(&mock_p4runtime_impl);
   EXPECT_OK(event_handler.HandleEvent(kSetCommand, "CPU", {{"id", "3"}}));
@@ -63,9 +66,11 @@ TEST(PortTableIdEventTest, AcceptCpuPortIds) {
 
 TEST(PortTableIdEventTest, SetMultiplePortIds) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("Ethernet1/1/1", "1"))
+  EXPECT_CALL(mock_p4runtime_impl,
+              AddPortTranslation("Ethernet1/1/1", "1", /*update_dbs=*/true))
       .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("Ethernet2", "2"))
+  EXPECT_CALL(mock_p4runtime_impl,
+              AddPortTranslation("Ethernet2", "2", /*update_dbs=*/true))
       .WillOnce(Return(absl::OkStatus()));
   ConfigDbPortTableEventHandler event_handler(&mock_p4runtime_impl);
   EXPECT_OK(
@@ -75,9 +80,11 @@ TEST(PortTableIdEventTest, SetMultiplePortIds) {
 
 TEST(PortTableIdEventTest, UpdatePortId) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("Ethernet1/1/1", "2"))
+  EXPECT_CALL(mock_p4runtime_impl,
+              AddPortTranslation("Ethernet1/1/1", "2", /*update_dbs=*/true))
       .WillOnce(Return(absl::OkStatus()));
-  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("Ethernet1/1/1", "3"))
+  EXPECT_CALL(mock_p4runtime_impl,
+              AddPortTranslation("Ethernet1/1/1", "3", /*update_dbs=*/true))
       .WillOnce(Return(absl::OkStatus()));
   ConfigDbPortTableEventHandler event_handler(&mock_p4runtime_impl);
   EXPECT_OK(
@@ -117,7 +124,8 @@ TEST(PortTableIdEventTest, UnexpectedOperationReturnsAnError) {
 
 TEST(PortTableIdEventTest, P4RuntimeAddPortTranslationFails) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("Ethernet1/1/1", "1"))
+  EXPECT_CALL(mock_p4runtime_impl,
+              AddPortTranslation("Ethernet1/1/1", "1", /*update_dbs=*/true))
       .WillOnce(Return(absl::InvalidArgumentError("could not add")));
   ConfigDbPortTableEventHandler event_handler(&mock_p4runtime_impl);
   EXPECT_THAT(

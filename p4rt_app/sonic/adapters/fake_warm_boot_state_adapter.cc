@@ -43,10 +43,11 @@ bool FakeWarmBootStateAdapter::IsWarmStart() { return is_warm_start_; }
 void FakeWarmBootStateAdapter::SetWarmStart(bool is_warm_start) {
   is_warm_start_ = is_warm_start;
 }
-
 void FakeWarmBootStateAdapter::SetWaitForUnfreeze(bool wait_for_unfreeze) {
   wait_for_unfreeze_ = wait_for_unfreeze;
 }
+
+bool FakeWarmBootStateAdapter::WaitForUnfreeze() { return wait_for_unfreeze_; }
 
 void FakeWarmBootStateAdapter::SetOrchAgentWarmBootState(
     swss::WarmStart::WarmStartState state) {

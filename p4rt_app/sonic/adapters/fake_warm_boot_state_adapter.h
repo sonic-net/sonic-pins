@@ -15,6 +15,7 @@
 #define PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_WARM_BOOT_STATE_ADAPTER_H_
 
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
+#include "swss/warm_restart.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -30,6 +31,7 @@ public:
   // Test-only accessors
   std::vector<swss::WarmStart::WarmStartState> GetWarmBootStateHistory();
   void SetWarmStart(bool is_warm_start);
+  bool WaitForUnfreeze(void) override;
   void SetWaitForUnfreeze(bool wait_for_unfreeze);
   void SetOrchAgentWarmBootState(swss::WarmStart::WarmStartState);
 

@@ -37,6 +37,7 @@
 //TODO(PINS): Add Component/System state Translator
 // #include "swss/fakes/fake_component_state_helper.h"
 // #include "swss/fakes/fake_system_state_helper.h"
+#include "p4rt_app/utils/warm_restart_utility.h"
 
 namespace p4rt_app {
 namespace test_lib {
@@ -56,8 +57,61 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       fake_hash_table_("AppDb:HASH_TABLE", &fake_hash_state_table_),
       fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_),
       fake_port_table_("AppDb:PORT_TABLE", &fake_port_state_table_),
-      fake_host_stats_table_("StateDb:HOST") {
+      fake_host_stats_table_("StateDb:HOST"),
+      fake_config_db_port_table_("ConfigDb:PORT"),
+      fake_config_db_cpu_port_table_("ConfigDb:CPU_PORT"),
+      fake_config_db_port_channel_table_("ConfigDb:PORTCHANNEL"),
+      fake_config_db_cpu_queue_table_("ConfigDb:QUEUE_NAME_TO_ID_MAP") {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
+  p4runtime_server_ = BuildP4rtServer(options);
+  // Component tests will use an insecure connection for the service.
+  std::string server_address = absl::StrCat("localhost:", GrpcPort());
+  std::shared_ptr<grpc::ServerCredentials> creds =
+      grpc::InsecureServerCredentials();
+
+  // Finally start the gRPC service.
+  grpc::ServerBuilder builder;
+  builder.AddListeningPort(server_address, creds);
+  builder.RegisterService(p4runtime_server_.get());
+  std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+
+  LOG(INFO) << "Server listening on " << server_address;
+  server_ = std::move(server);
+
+  auto fake_port_table_adapter = std::make_shared<sonic::FakeTableAdapter>(
+      &fake_config_db_port_table_, "PORT");
+  auto fake_cpu_port_table_adapter = std::make_shared<sonic::FakeTableAdapter>(
+      &fake_config_db_cpu_port_table_, "CPU_PORT");
+  auto fake_port_channel_table_adapter =
+      std::make_shared<sonic::FakeTableAdapter>(
+          &fake_config_db_port_channel_table_, "PORTCHANNEL");
+  auto fake_cpu_queue_table_adapter = std::make_unique<sonic::FakeTableAdapter>(
+      &fake_config_db_cpu_queue_table_, "QUEUE_NAME_TO_ID_MAP");
+
+  fake_port_table_adapter_ = fake_cpu_port_table_adapter.get();
+  fake_cpu_port_table_adapter_ = fake_cpu_port_table_adapter.get();
+  fake_port_channel_table_adapter_ = fake_port_channel_table_adapter.get();
+  fake_cpu_queue_table_adapter_ = fake_cpu_queue_table_adapter.get();
+  auto fake_warm_boot_state_adapter_for_util =
+      std::make_unique<p4rt_app::sonic::FakeWarmBootStateAdapter>();
+  fake_warm_boot_state_adapter_for_util_only_ =
+      fake_warm_boot_state_adapter_for_util.get();
+
+  warm_restart_util_ = std::make_unique<WarmRestartUtil>(
+      std::move(fake_warm_boot_state_adapter_for_util),
+      std::move(fake_port_table_adapter),
+      std::move(fake_cpu_port_table_adapter),
+      std::move(fake_port_channel_table_adapter),
+      std::move(fake_cpu_queue_table_adapter));
+}
+
+P4RuntimeGrpcService::~P4RuntimeGrpcService() {
+  LOG(INFO) << "Stopping the P4 runtime gRPC service.";
+  if (server_) server_->Shutdown();
+}
+
+std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
+    const P4RuntimeImplOptions& options) {
   const std::string kP4rtTableName = "P4RT_TABLE";
   const std::string kPortTableName = "PORT_TABLE";
   const std::string kVrfTableName = "VRF_TABLE";
@@ -179,7 +233,7 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
   //                                     fake_component_state_helper_);
 
   // Create the P4RT server.
-  p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
+  return absl::make_unique<P4RuntimeImpl>(
       std::move(p4rt_table), std::move(vrf_table), std::move(vlan_table),
       std::move(vlan_member_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
@@ -188,7 +242,11 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
      // TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
      // fake_component_state_helper_, fake_system_state_helper_, fake_netdev_translator_, 
       options);
+}
 
+void P4RuntimeGrpcService::ResetP4rtServer(
+    std::unique_ptr<P4RuntimeImpl> p4runtime_server) {
+  p4runtime_server_ = std::move(p4runtime_server);
   // Component tests will use an insecure connection for the service.
   std::string server_address = absl::StrCat("localhost:", GrpcPort());
   std::shared_ptr<grpc::ServerCredentials> creds =
@@ -202,11 +260,6 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
 
   LOG(INFO) << "Server listening on " << server_address;
   server_ = std::move(server);
-}
-
-P4RuntimeGrpcService::~P4RuntimeGrpcService() {
-  LOG(INFO) << "Stopping the P4 runtime gRPC service.";
-  if (server_) server_->Shutdown();
 }
 
 int P4RuntimeGrpcService::GrpcPort() const { return grpc_port_; }
@@ -282,6 +335,15 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHostStatsStateDbTable() {
 sonic::FakeWarmBootStateAdapter*
 P4RuntimeGrpcService::GetWarmBootStateAdapter() {
   return fake_warm_boot_state_adapter_;
+}
+
+sonic::FakeWarmBootStateAdapter*
+P4RuntimeGrpcService::GetWarmBootStateAdapterForUtilOnly() {
+  return fake_warm_boot_state_adapter_for_util_only_;
+}
+
+WarmRestartUtil& P4RuntimeGrpcService::GetWarmRestartUtil() {
+  return *warm_restart_util_;
 }
 
 sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {

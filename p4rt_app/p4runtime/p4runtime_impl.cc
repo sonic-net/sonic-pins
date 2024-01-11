@@ -67,6 +67,7 @@
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
+#include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
@@ -92,12 +93,6 @@ namespace {
 using EntityMap = absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>;
 using ActionProfileCapacityMap =
     absl::flat_hash_map<std::string, ActionProfileResourceCapacity>;
-
-grpc::Status EnterCriticalState(const std::string& message) {
-  // TODO: report critical state somewhere an don't crash the process.
-  LOG(FATAL) << "Entering critical state: " << message;
-  return grpc::Status::OK;
-}
 
 // Information processed from the forwarding pipeline configuration.
 struct ConfigInfo {
@@ -674,8 +669,10 @@ P4RuntimeImpl::P4RuntimeImpl(
       is_freeze_mode_(p4rt_options.is_freeze_mode) {
   absl::optional<std::string> init_failure;
 
+  // LINT.IfChange
   // Start the controller manager.
   controller_manager_ = absl::make_unique<SdnControllerManager>();
+  // LINT.ThenChange(:reconciliation_precondition)
 
   // Spawn the receiver thread to receive In packets.
   auto status_or = StartReceive(p4rt_options.use_genetlink);
@@ -685,6 +682,18 @@ P4RuntimeImpl::P4RuntimeImpl(
     init_failure = absl::StrCat("Failed to spawn Receive thread, error: ",
                                 status_or.status().ToString());
   }
+}
+
+grpc::Status P4RuntimeImpl::EnterCriticalState(const std::string& message) {
+  // TODO: report critical state somewhere an don't crash the process.
+  LOG(FATAL) << "Entering critical state: " << message;
+  return grpc::Status::OK;
+}
+
+grpc::Status P4RuntimeImpl::GrabLockAndEnterCriticalState(
+    absl::string_view message) {
+  absl::MutexLock l(&server_state_lock_);
+  return EnterCriticalState(std::string(message));
 }
 
 grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
@@ -1159,7 +1168,8 @@ absl::Status P4RuntimeImpl::RemovePacketIoPort(const std::string& port_name) {
 // -----|--------|--------|--------|
 //  "C" | Reject | Reject |  Add   |
 absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
-                                               const std::string& port_id) {
+                                               const std::string& port_id,
+                                               bool update_dbs) {
   absl::MutexLock l(&server_state_lock_);
 
   // Do not allow empty strings.
@@ -1179,8 +1189,10 @@ absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
   const auto name_iter = port_translation_map_.left.find(port_name);
   if (name_iter != port_translation_map_.left.end() &&
       name_iter->second == port_id) {
-    port_table_.app_db->set(port_name, {{"id", port_id}});
-    port_table_.app_state_db->set(port_name, {{"id", port_id}});
+    if (update_dbs) {
+      port_table_.app_db->set(port_name, {{"id", port_id}});
+      port_table_.app_state_db->set(port_name, {{"id", port_id}});
+    }
     return absl::OkStatus();
   }
 
@@ -1199,8 +1211,10 @@ absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
     port_translation_map_.left.erase(name_iter);
   }
   port_translation_map_.insert({port_name, port_id});
-  port_table_.app_db->set(port_name, {{"id", port_id}});
-  port_table_.app_state_db->set(port_name, {{"id", port_id}});
+  if (update_dbs) {
+    port_table_.app_db->set(port_name, {{"id", port_id}});
+    port_table_.app_state_db->set(port_name, {{"id", port_id}});
+  }
   return absl::OkStatus();
 }
 
@@ -1415,15 +1429,16 @@ grpc::Status P4RuntimeImpl::CommitPipelineConfig(
 }
 
 grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
-    const p4::v1::SetForwardingPipelineConfigRequest& request) {
+    const p4::v1::SetForwardingPipelineConfigRequest& request,
+    bool commit_to_hardware) {
+
   auto config_info = PreprocessConfig(request);
   if (!config_info.ok()) {
     return gutil::AbslStatusToGrpcStatus(config_info.status());
   }
-
   // We cannot reconcile any config today so if we see that the new forwarding
   // config is different from the current one we just return an error.
-  std::string diff_report;
+/*  std::string diff_report;
   if (forwarding_pipeline_config_.has_value() &&
       !P4InfoEquals(forwarding_pipeline_config_->p4info(),
                     request.config().p4info(), &diff_report)) {
@@ -1435,7 +1450,7 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
             "supported. Please reboot the device. Configuration "
             "differences:\n",
             diff_report));
-  }
+  } */
 
   // The ForwardingPipelineConfig is still updated in case the cookie value has
   // been changed.
@@ -1444,6 +1459,76 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     LOG(INFO)
         << "Received equivalent ForwardingPipelineConfig. Saving to disk.";
     return SavePipelineConfig(*forwarding_pipeline_config_);
+  }
+
+  // If the IrP4Info hasn't been set then we need to configure the lower layers.
+  if (!ir_p4info_.has_value()) {
+    // Collect any P4RT constraints from the P4Info.
+    auto constraint_info =
+        p4_constraints::P4ToConstraintInfo(request.config().p4info());
+    if (!constraint_info.ok()) {
+      LOG(WARNING) << "Could not get constraint info from P4Info: "
+                   << constraint_info.status();
+      return gutil::AbslStatusToGrpcStatus(
+          absl::Status(constraint_info.status().code(),
+                       absl::StrCat("[P4 Constraint] ",
+                                    constraint_info.status().message())));
+    }
+
+    // Convert the P4Info into an IrP4Info.
+    auto ir_p4info = pdpi::CreateIrP4Info(request.config().p4info());
+    if (!ir_p4info.ok()) {
+      LOG(WARNING) << "Could not convert P4Info into IrP4Info: "
+                   << ir_p4info.status();
+      return gutil::AbslStatusToGrpcStatus(absl::Status(
+          ir_p4info.status().code(),
+          absl::StrCat("[P4RT/PDPI] ", ir_p4info.status().message())));
+    }
+    // Remove `@unsupported` entities so their use in requests will be rejected.
+    pdpi::RemoveUnsupportedEntities(*ir_p4info);
+    TranslateIrP4InfoForOrchAgent(*ir_p4info);
+
+    // Apply ir_p4info to DB if we are committing to DB.
+    if (commit_to_hardware) {
+      // Apply a config if we don't currently have one.
+      absl::Status config_result = ConfigureAppDbTables(*ir_p4info);
+      if (!config_result.ok()) {
+        LOG(ERROR) << "Failed to apply ForwardingPipelineConfig: "
+                   << config_result;
+        // TODO: cleanup P4RT table definitions instead of going
+        // critical.
+        return grpc::Status(grpc::StatusCode::INTERNAL,
+                            config_result.ToString());
+      }
+    }
+
+    // Store resource utilization limits for any ActionProfiles.
+    for (const auto& [action_profile_name, action_profile_def] :
+         ir_p4info->action_profiles_by_name()) {
+      capacity_by_action_profile_name_[action_profile_name] =
+          GetActionProfileResourceCapacity(action_profile_def);
+      LOG(INFO) << "Adding action profile limits for '" << action_profile_name
+                << "': max_weights_for_all_groups="
+                << action_profile_def.action_profile().size();
+    }
+
+    // Update P4RuntimeImpl's state only if we succeed.
+    p4_constraint_info_ = *std::move(constraint_info);
+    ir_p4info_ = *std::move(ir_p4info);
+  }
+
+  // The ForwardingPipelineConfig is still updated in case the cookie value has
+  // been changed.
+  forwarding_pipeline_config_ = request.config();
+
+  // Save the ForwardingPipelineConfig if we are committing.
+  if (commit_to_hardware) {
+    grpc::Status saved = SavePipelineConfig(*forwarding_pipeline_config_);
+    if (!saved.ok()) {
+      LOG(ERROR) << "Successfully applied, but could not save the "
+                 << "ForwardingPipelineConfig: " << saved.error_message();
+      return saved;
+    }
   }
 
   // Configure the lower layers.
@@ -1637,27 +1722,92 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
   return packetio_impl_->StartReceive(SendPacketInToController, use_genetlink);
 }
 
-swss::WarmStart::WarmStartState
-P4RuntimeImpl::GetOrchAgentWarmStartReconcliationState() const {
-  constexpr absl::Duration kPollDuration = absl::Minutes(1);
-  const absl::Time kTimeout = absl::Now() + kPollDuration;
-  swss::WarmStart::WarmStartState oa_wb_state;
-  while (absl::Now() < kTimeout) {
-    swss::WarmStart::getWarmStartState("orchagent", oa_wb_state);
-    if (oa_wb_state == swss::WarmStart::WarmStartState::RECONCILED ||
-        oa_wb_state == swss::WarmStart::WarmStartState::WSDISABLED) {
-      return oa_wb_state;
-    }
-    absl::SleepFor(absl::Seconds(1));
-  }
-  return swss::WarmStart::WarmStartState::WSUNKNOWN;
-}
-
-
 // Handle warm-boot freeze notification.
 absl::Status P4RuntimeImpl::HandleWarmBootNotification(
     swss::WarmStart::WarmBootNotification notification) {
   LOG(INFO) << "Handle warm-boot notification.";
+  return absl::OkStatus();
+}
+
+void P4RuntimeImpl::SetFreezeMode(bool freeze_mode) {
+  absl::MutexLock l(&server_state_lock_);
+  is_freeze_mode_ = freeze_mode;
+}
+
+absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
+    const std::vector<std::pair<std::string, std::string>>& port_ids,
+    const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids) {
+  /**
+   * controller_manager_, packetio_impl_, component_state_, system_state_,
+   * netdev_translator_, forwarding_config_full_path_ are restored in
+   * P4RuntimeImpl contructor.
+   */
+  {
+    absl::MutexLock l(&server_state_lock_);
+    // LINT.IfChange(reconciliation_precondition)
+    // TODO: Check if component_state_, system_state_, netdev_translator_
+    // are initialized. Check if controller_manager_ and packetio_impl_ are
+    // initialized.
+    if (controller_manager_ == nullptr || packetio_impl_ == nullptr) {
+      return absl::FailedPreconditionError(
+          "SdnControllerManager and PacketIoInterface are not initialized.");
+    }
+    // LINT.ThenChange()
+    /**
+     * Load from p4info from forwarding_config_full_path_
+     * */
+    if (!forwarding_config_full_path_.has_value()) {
+      return absl::FailedPreconditionError(
+          "p4info file path is not set during warm reboot reconciliation");
+    }
+    p4::v1::SetForwardingPipelineConfigRequest saved_config;
+    RETURN_IF_ERROR(gutil::ReadProtoFromFile(*forwarding_config_full_path_,
+                                             saved_config.mutable_config()))
+        .LogError();
+
+    /**
+     * Restore forwarding_pipeline_config_, p4_constraint_info_, ir_p4info_ and
+     * capacity_by_action_profile_name_ by ReconcileAndCommitPipelineConfig()
+     * */
+    auto reconcile_status =
+        ReconcileAndCommitPipelineConfig(saved_config,
+                                         /*commit_to_hardware=*/false);
+    if (!reconcile_status.ok()) {
+      LOG(ERROR) << "Failed to rebuild pipeline config and software cache: "
+                 << reconcile_status.error_message();
+      return absl::InternalError(reconcile_status.error_message());
+    }
+  }
+
+  /**
+   * Restore port_translation_map_ and cpu_queue_translator_ from CONFIG
+   * DB
+   * port_translation_map_ and cpu_queue_translator_ are filled up by
+   * P4RuntimeImpl::AddPortTranslation() and
+   * P4RuntimeImpl::SetCpuQueueTranslator()
+   */
+  for (const auto& [key, port_id] : port_ids) {
+    RETURN_IF_ERROR(AddPortTranslation(key, port_id, /*update_dbs=*/false))
+        .LogError();
+  }
+  if (!cpu_queue_ids.empty()) {
+    ASSIGN_OR_RETURN(auto translator,
+                     QueueTranslator::Create(cpu_queue_ids));
+    SetQueueTranslator(std::move(translator), "CPU");
+  }
+
+  /**
+   *  Restore the entity_cache_ cache by RebuildEntityEntryCache()
+   * */
+  {
+    absl::MutexLock l(&server_state_lock_);
+    ASSIGN_OR_RETURN(
+        entity_cache_,
+        RebuildEntityEntryCache(*ir_p4info_, translate_port_ids_,
+                                port_translation_map_, *cpu_queue_translator_,
+                                p4rt_table_, vrf_table_));
+  }
+
   return absl::OkStatus();
 }
 

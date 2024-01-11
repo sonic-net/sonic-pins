@@ -529,26 +529,6 @@ TEST_F(ReconcileAndCommitTest, SetDuplicateForwardingPipelineConfig) {
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
 }
 
-TEST_F(ReconcileAndCommitTest, ModifiedConfigPushIsUnimplemented) {
-  auto request = GetBasicForwardingRequest();
-  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
-  *request.mutable_config()->mutable_p4info() =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-
-  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
-
-  // Remove the IPv4 table from the P4Info, and try pushing again.
-  auto& tables = *request.mutable_config()->mutable_p4info()->mutable_tables();
-  for (auto table = tables.begin(); table != tables.end(); ++table) {
-    if (table->preamble().alias() == "ipv4_table") {
-      tables.erase(table);
-      break;
-    }
-  }
-  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
-              StatusIs(absl::StatusCode::kUnimplemented));
-}
-
 using GetForwardingConfigTest = ForwardingPipelineConfigTest;
 
 TEST_F(GetForwardingConfigTest, ReturnsNothingIfConfigHasNotBeenSet) {

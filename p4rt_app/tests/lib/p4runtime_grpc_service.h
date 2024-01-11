@@ -19,11 +19,13 @@
 #include "grpcpp/server.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
+#include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 // TODO(PINS):
 //  #include "swss/fakes/fake_component_state_helper.h"
 //  #include "swss/fakes/fake_system_state_helper.h"
+#include "p4rt_app/utils/warm_restart_utility.h"
 
 namespace p4rt_app {
 namespace test_lib {
@@ -64,6 +66,14 @@ public:
   // Accessor for WarmBootStateAdapter.
   sonic::FakeWarmBootStateAdapter *GetWarmBootStateAdapter();
 
+  // Accessor for WarmBootStateAdapter for WarmRestartUtil.
+  // This is only used for setting OA warm start state and wairForUnfreeze DB
+  // entry for WarmRestartUtil.
+  sonic::FakeWarmBootStateAdapter* GetWarmBootStateAdapterForUtilOnly();
+
+  // Accessor for WarmRestartUtil.
+  WarmRestartUtil& GetWarmRestartUtil();
+
   // Accessor for PacketIO interface.
   sonic::FakePacketIoInterface &GetFakePacketIoInterface();
 
@@ -75,7 +85,14 @@ public:
   // Accessor for the P4RT server.
   P4RuntimeImpl &GetP4rtServer();
 
-private:
+  // Build P4RT server.
+  std::unique_ptr<P4RuntimeImpl> BuildP4rtServer(
+      const P4RuntimeImplOptions& options);
+
+  // Reset P4RT server.
+  void ResetP4rtServer(std::unique_ptr<P4RuntimeImpl> p4runtime_server);
+
+ private:
   // The TCP port used to  open the P4RT App service. It is chosen randomly in
   // the ctor, and shouldn't be modified otherwise.
   int grpc_port_;
@@ -103,6 +120,22 @@ private:
 
   // Faked StateDb tables.
   sonic::FakeSonicDbTable fake_host_stats_table_;
+
+  // Fake ConfigDb tables.
+  sonic::FakeSonicDbTable fake_config_db_port_table_;
+  sonic::FakeSonicDbTable fake_config_db_cpu_port_table_;
+  sonic::FakeSonicDbTable fake_config_db_port_channel_table_;
+  sonic::FakeSonicDbTable fake_config_db_cpu_queue_table_;
+  // Fake CONFIG DB tables adapters to query (key, port_id) pairs.
+  sonic::FakeTableAdapter* fake_port_table_adapter_;
+  sonic::FakeTableAdapter* fake_cpu_port_table_adapter_;
+  sonic::FakeTableAdapter* fake_port_channel_table_adapter_;
+  // Fake CONFIG DB table adapters to query CPU queues.
+  sonic::FakeTableAdapter* fake_cpu_queue_table_adapter_;
+  sonic::FakeWarmBootStateAdapter* fake_warm_boot_state_adapter_for_util_only_;
+
+  // Fake WarmRestartUntil to help P4RT server warm reboot.
+  std::unique_ptr<WarmRestartUtil> warm_restart_util_;
 
   // Faked warm-boot state.
   sonic::FakeWarmBootStateAdapter *fake_warm_boot_state_adapter_;

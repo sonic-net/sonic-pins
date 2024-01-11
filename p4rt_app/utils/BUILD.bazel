@@ -87,3 +87,29 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "warm_restart_utility",
+    srcs = ["warm_restart_utility.cc"],
+    hdrs = ["warm_restart_utility.h"],
+    deps = [
+        "//p4rt_app/sonic/adapters:table_adapter",
+        "//p4rt_app/sonic/adapters:warm_boot_state_adapter",
+        "@com_google_absl//absl/time",
+        "@sonic_swss_common//:common",
+    ],
+)
+
+cc_test(
+    name = "warm_restart_utility_test",
+    srcs = ["warm_restart_utility_test.cc"],
+    deps = [
+        ":warm_restart_utility",
+        "//p4rt_app/sonic/adapters:fake_table_adapter",
+        "//p4rt_app/sonic/adapters:fake_warm_boot_state_adapter",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:common",
+    ],
+)
+

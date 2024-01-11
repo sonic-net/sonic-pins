@@ -13,6 +13,8 @@
 // limitations under the License.
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 
+#include <string>
+
 #include "swss/warm_restart.h"
 
 namespace p4rt_app {
@@ -42,6 +44,10 @@ WarmBootStateAdapter::GetOrchAgentWarmBootState() {
   swss::WarmStart::getWarmStartState("orchagent", state);
 
   return state;
+}
+
+bool WarmBootStateAdapter::WaitForUnfreeze() {
+  return swss::WarmStart::waitForUnfreeze();
 }
 
 }  // namespace sonic

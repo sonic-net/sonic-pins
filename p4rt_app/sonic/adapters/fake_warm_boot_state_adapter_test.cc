@@ -44,6 +44,26 @@ TEST(FakeWarmBootStateAdapterTest, SetWarmStart) {
   EXPECT_THAT(adapter.IsWarmStart(), false);
 }
 
+TEST(FakeWarmBootStateAdapterTest, WaitForUnfreeze) {
+  FakeWarmBootStateAdapter adapter;
+  EXPECT_THAT(adapter.WaitForUnfreeze(), false);
+  adapter.SetWaitForUnfreeze(true);
+  EXPECT_THAT(adapter.WaitForUnfreeze(), true);
+  adapter.SetWaitForUnfreeze(false);
+  EXPECT_THAT(adapter.WaitForUnfreeze(), false);
+}
+
+TEST(FakeWarmBootStateAdapterTest, SetOrchAgentWarmBootState) {
+  FakeWarmBootStateAdapter adapter;
+  EXPECT_THAT(adapter.GetOrchAgentWarmBootState(), swss::WarmStart::WSUNKNOWN);
+  adapter.SetOrchAgentWarmBootState(
+      swss::WarmStart::WarmStartState::RECONCILED);
+  EXPECT_THAT(adapter.GetOrchAgentWarmBootState(), swss::WarmStart::RECONCILED);
+  adapter.SetOrchAgentWarmBootState(swss::WarmStart::WarmStartState::FROZEN);
+  EXPECT_THAT(adapter.GetOrchAgentWarmBootState(), swss::WarmStart::FROZEN);
+  adapter.SetOrchAgentWarmBootState(swss::WarmStart::WarmStartState::FAILED);
+  EXPECT_THAT(adapter.GetOrchAgentWarmBootState(), swss::WarmStart::FAILED);
+}
 }  // namespace
 }  // namespace sonic
 }  // namespace p4rt_app
