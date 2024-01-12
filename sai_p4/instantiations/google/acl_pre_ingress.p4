@@ -87,31 +87,46 @@ control acl_pre_ingress(in headers_t headers,
   ")
   table acl_pre_ingress_table {
     key = {
-      headers.ipv4.isValid() || headers.ipv6.isValid() : optional @name("is_ip") @id(1)
+      headers.ipv4.isValid() || headers.ipv6.isValid() : optional
+          @id(1) @name("is_ip")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
-      headers.ipv4.isValid() : optional @name("is_ipv4") @id(2)
+      headers.ipv4.isValid() : optional
+          @id(2) @name("is_ipv4")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV4ANY);
-      headers.ipv6.isValid() : optional @name("is_ipv6") @id(3)
+      headers.ipv6.isValid() : optional
+          @id(3) @name("is_ipv6")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
-      headers.ethernet.src_addr : ternary @name("src_mac") @id(4)
+      headers.ethernet.src_addr : ternary
+          @id(4) @name("src_mac")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
 #ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
-      headers.ethernet.dst_addr : ternary @name("dst_mac") @id(9)
+      headers.ethernet.dst_addr : ternary
+          @id(9) @name("dst_mac")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
 #endif
-      headers.ipv4.dst_addr : ternary @name("dst_ip") @id(5)
+      headers.ipv4.dst_addr : ternary
+          @id(5) @name("dst_ip")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP) @format(IPV4_ADDRESS);
-      headers.ipv6.dst_addr[127:64] : ternary @name("dst_ipv6") @id(6)
+      headers.ipv6.dst_addr[127:64] : ternary
+          @id(6) @name("dst_ipv6")
           @composite_field(
               @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3),
               @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2)
           ) @format(IPV6_ADDRESS);
-      dscp : ternary @name("dscp") @id(7)
+      dscp : ternary
+          @id(7) @name("dscp")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP);
-      ecn : ternary @name("ecn") @id(10)
+      ecn : ternary
+          @id(10) @name("ecn")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
-      local_metadata.ingress_port : optional @name("in_port") @id(8)
+      local_metadata.ingress_port : optional
+          @id(8) @name("in_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
+#if defined(SAI_INSTANTIATION_TOR)
+      local_metadata.vlan_id : ternary
+          @id(11) @name("vlan_id")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
+#endif
     }
     actions = {
       @proto_id(1) set_vrf;
@@ -151,9 +166,11 @@ control acl_pre_ingress(in headers_t headers,
       headers.ipv6.isValid() : optional
           @id(3) @name("is_ipv6")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
-      headers.ethernet.ether_type : ternary @name("ether_type") @id(4)
+      headers.ethernet.ether_type : ternary
+          @id(4) @name("ether_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
-      local_metadata.vlan_id : ternary @id(5) @name("vlan_id")
+      local_metadata.vlan_id : ternary
+          @id(5) @name("vlan_id")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
     }
     actions = {
@@ -206,6 +223,11 @@ control acl_pre_ingress(in headers_t headers,
       ecn : ternary
           @id(7) @name("ecn")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
+#if defined(SAI_INSTANTIATION_TOR)
+      local_metadata.ingress_port : optional
+          @id(8) @name("in_port")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
+#endif
     }
     actions = {
       @proto_id(1) set_acl_metadata;
