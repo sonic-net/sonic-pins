@@ -43,6 +43,7 @@
 #include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
+#include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/event_data_tracker.h"
@@ -55,6 +56,7 @@ namespace p4rt_app {
 struct P4RuntimeImplOptions {
   bool use_genetlink = false;
   bool translate_port_ids = true;
+  bool is_freeze_mode = false;
   absl::optional<std::string> forwarding_config_full_path;
 };
 
@@ -90,8 +92,8 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
  public:
   P4RuntimeImpl(sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
                 sonic::HashTable hash_table, sonic::SwitchTable switch_table,
-                sonic::PortTable port_table,
-                sonic::HostStatsTable host_stats_table,
+                sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
+                std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
                 std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
                 //TODO(PINS): To add component_state, system_state and netdev_translator.
                 /* swss::ComponentStateHelperInterface& component_state,
@@ -206,6 +208,12 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   sonic::PacketIoCounters GetPacketIoCounters()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  // TODO: Move to warm boot state adaptor and add tests.
+  // In WarmBoot mode, poll and return OA Reconciliation status, timeout after
+  // 1min. If OA is RECONCILED/FAILED, exit loop early.
+  swss::WarmStart::WarmStartState GetOrchAgentWarmStartReconcliationState()
+      const;
+
  protected:
   // Simple constructor that should only be used for testing purposes.
   P4RuntimeImpl(bool translate_port_ids)
@@ -288,6 +296,8 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::HostStatsTable host_stats_table_ ABSL_GUARDED_BY(server_state_lock_);
+  const std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter_
+      ABSL_GUARDED_BY(server_state_lock_);
 
   // P4RT can accept multiple connections to a single switch for redundancy.
   // When there is >1 connection the switch chooses a primary which is used for
@@ -381,6 +391,9 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // PacketIO debug counters.
   sonic::PacketIoCounters packetio_counters_;
+
+  // Flag to indicate whether P4RT is in warm-boot freeze process.
+  bool is_freeze_mode_ ABSL_GUARDED_BY(server_state_lock_) = false;
 };
 
 }  // namespace p4rt_app
