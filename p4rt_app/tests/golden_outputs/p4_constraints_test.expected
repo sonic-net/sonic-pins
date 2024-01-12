@@ -59,6 +59,52 @@ Field: "is_ipv4" -> Value: Ternary{.value = 0, .mask = 0}
 Field: "is_ipv6" -> Value: Ternary{.value = 0, .mask = 0}
 
 
+=== Test: MulticastGroupIdZeroIsRejected ===
+--- INPUT: WriteRequest ------------------------------------
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_name: "ipv4_multicast_table"
+      matches {
+        name: "ipv4_dst"
+        exact {
+          ipv4: "225.10.20.32"
+        }
+      }
+      matches {
+        name: "vrf_id"
+        exact {
+          str: "vrf-80"
+        }
+      }
+      action {
+        name: "set_multicast_group_id"
+        params {
+          name: "multicast_group_id"
+          value {
+            hex_str: "0x0000"
+          }
+        }
+      }
+    }
+  }
+}
+--- OUTPUT: WriteResponse ----------------------------------
+UNKNOWN: Batch failed, individual results:
+#1: INVALID_ARGUMENT: All actions must satisfy:
+
+In @action_restriction of action 'ingress.routing_lookup.set_multicast_group_id'; at offset line 3, columns 5 to 27:
+  |     // Disallow 0 since it encodes 'no multicast' in V1Model.
+3 |     multicast_group_id != 0;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+But your entry does not.
+>>>Relevant Action Info<<<
+Action Name: "ingress.routing_lookup.set_multicast_group_id"
+Param name: "multicast_group_id" -> Value: 0
+
+
 === Test: AclEgressTableDisallowsIpEtherTypeMatches ===
 --- INPUT: WriteRequest ------------------------------------
 updates {

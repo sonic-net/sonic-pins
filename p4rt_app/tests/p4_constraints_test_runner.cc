@@ -114,6 +114,35 @@ TEST_F(P4ConstraintsTest,
     })pb"));
 }
 
+TEST_F(P4ConstraintsTest, MulticastGroupIdZeroIsRejected) {
+  EXPECT_OK(SendIrWriteRequestAndPrintGoldenOutput(R"pb(
+    updates {
+      type: INSERT
+      entity {
+        table_entry {
+          table_name: "ipv4_multicast_table"
+          priority: 0
+          matches {
+            name: "ipv4_dst"
+            exact { ipv4: "225.10.20.32" }
+          }
+          matches {
+            name: "vrf_id"
+            exact { str: "vrf-80" }
+          }
+          action {
+            name: "set_multicast_group_id"
+            params {
+              name: "multicast_group_id"
+              value { hex_str: "0x0000" }
+            }
+          }
+        }
+      }
+    }
+  )pb"));
+}
+
 // Reproduction of b/223688222.
 TEST_F(P4ConstraintsTest, AclEgressTableDisallowsIpEtherTypeMatches) {
   // Configure P4RT port id "518", so P4RT app allows us to match on it.
@@ -158,7 +187,7 @@ TEST_F(P4ConstraintsTest, AclEgressTableDisallowsIpEtherTypeMatches) {
       }
     })pb"));
 
-  // Corrrected table entry, matching on is_ipv4 = 1 instead.
+  // Corrected table entry, matching on is_ipv4 = 1 instead.
   EXPECT_OK(SendIrWriteRequestAndPrintGoldenOutput(R"pb(
     updates {
       type: INSERT
