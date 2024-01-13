@@ -20,13 +20,13 @@
 
 #include "p4_symbolic/symbolic/table.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -46,7 +46,7 @@
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
@@ -88,8 +88,8 @@ using MatchType = ::p4::config::v1::MatchField::MatchType;
 // - BMv2 - simple_switch.md
 //   https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#table-match-kinds-supported
 //
-std::vector<ir::TableEntry> SortEntries(
-    const ir::Table &table, const std::vector<ir::TableEntry> &entries) {
+std::vector<ir::TableEntry> SortedEntries(const ir::Table &table,
+                                          std::vector<ir::TableEntry> entries) {
   if (entries.empty()) return {};
 
   // Find which *definition* of priority we should use by looking at the
@@ -117,46 +117,36 @@ std::vector<ir::TableEntry> SortEntries(
     }
   }
 
-  // The output array.
-  std::vector<ir::TableEntry> sorted_entries(entries);
-
   // The sort comparator depends on the match types.
   std::function<bool(const ir::TableEntry &, const ir::TableEntry &)>
       comparator;
   if (has_ternary_or_optional) {
     // Sort by explicit priority.
     // Entries with numerically larger priority precede others.
-    comparator = [](const ir::TableEntry &entry1,
-                    const ir::TableEntry &entry2) {
+    comparator = [](const auto &entry1, const auto &entry2) {
       return ir::GetPriority(entry1) > ir::GetPriority(entry2);
     };
   } else if (lpm_match_name.has_value()) {
+    auto get_prefix_length = [&](const ir::TableEntry &entry) -> int {
+      const auto &matches = ir::GetMatches(entry);
+      auto it = absl::c_find_if(matches, [&](const pdpi::IrMatch &match) {
+        return match.name() == *lpm_match_name;
+      });
+      return it == matches.end() ? 0 : it->lpm().prefix_length();
+    };
     // Sort by prefix length.
     // Entries with numerically larger prefix length precede others.
-    comparator = [&lpm_match_name](const ir::TableEntry &entry1,
-                                   const ir::TableEntry &entry2) {
-      auto is_lpm_match =
-          [&lpm_match_name](const pdpi::IrMatch &match) -> bool {
-        return match.name() == *lpm_match_name;
-      };
-
-      auto get_prefix_length =
-          [&is_lpm_match](const ir::TableEntry &entry) -> int {
-        auto &matches = ir::GetMatches(entry);
-        auto it = std::find_if(matches.begin(), matches.end(), is_lpm_match);
-        return it == matches.end() ? 0 : it->lpm().prefix_length();
-      };
-
+    comparator = [=](const auto &entry1, const auto &entry2) {
       return get_prefix_length(entry1) > get_prefix_length(entry2);
     };
   } else {
-    return sorted_entries;
+    return entries;
   }
 
   // Using stable_sort, we preserve the relative order of entries with the same
   // priority.
-  std::stable_sort(sorted_entries.begin(), sorted_entries.end(), comparator);
-  return sorted_entries;
+  absl::c_stable_sort(entries, comparator);
+  return entries;
 }
 
 // Analyzes a single symbolic match of a table entry.
@@ -165,7 +155,7 @@ std::vector<ir::TableEntry> SortEntries(
 absl::StatusOr<z3::expr> EvaluateSymbolicMatch(
     const ir::SymbolicTableEntry &entry, absl::string_view match_name,
     const z3::expr &field_value, const ir::Table &table, SolverState &state) {
-  ASSIGN_OR_RETURN(SymbolicMatchVariables variables,
+  ASSIGN_OR_RETURN(SymbolicMatch variables,
                    GetSymbolicMatch(entry, match_name, table, state.program,
                                     *state.context.z3_context));
   ASSIGN_OR_RETURN(z3::expr masked_field,
@@ -453,20 +443,20 @@ TableEntryPriorityType GetTableEntryPriorityType(const ir::Table &table) {
        table.table_definition().match_fields_by_name()) {
     const auto &pi_match = match_definition.match_field();
     switch (pi_match.match_type()) {
-      case MatchType::MatchField_MatchType_RANGE:
-      case MatchType::MatchField_MatchType_TERNARY:
-      case MatchType::MatchField_MatchType_OPTIONAL: {
-        return TableEntryPriorityType::kPositivePriority;
-      }
-      case MatchType::MatchField_MatchType_LPM: {
-        // Currently the P4 compiler does not allow more than one LPM match in a
-        // table, so assuming there is at most one LPM match, it is sufficient
-        // to return `kLpmWithZeroOrMoreExacts` here. Otherwise, we will need to
-        // count the number of LPM matches.
-        // Reference:
-        // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#table-match-kinds-supported.
-        return TableEntryPriorityType::kPriorityZeroWithSingleLpm;
-      }
+    case p4::config::v1::MatchField::RANGE:
+    case p4::config::v1::MatchField::TERNARY:
+    case p4::config::v1::MatchField::OPTIONAL: {
+      return TableEntryPriorityType::kPositivePriority;
+    }
+    case p4::config::v1::MatchField::LPM: {
+      // Currently the P4 compiler does not allow more than one LPM match in a
+      // table, so assuming there is at most one LPM match, it is sufficient
+      // to return `kLpmWithZeroOrMoreExacts` here. Otherwise, we will need to
+      // count the number of LPM matches.
+      // Reference:
+      // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#table-match-kinds-supported.
+      return TableEntryPriorityType::kPriorityZeroWithSingleLpm;
+    }
       default: {
         // Exact or some other unsupported type, no need to do anything here.
         // For unsupported types, an absl error will be returned during symbolic
@@ -487,7 +477,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   std::vector<ir::TableEntry> sorted_entries;
   if (auto it = state.context.table_entries.find(table_name);
       it != state.context.table_entries.end()) {
-    sorted_entries = SortEntries(table, it->second);
+    sorted_entries = SortedEntries(table, it->second);
   }
 
   // The table semantically is just a bunch of if conditions, one per

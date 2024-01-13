@@ -30,8 +30,8 @@ cc_library(
         "operators.cc",
         "parser.cc",
         "symbolic.cc",
+        "symbolic_table_entry.cc",
         "table.cc",
-        "table_entry.cc",
         "util.cc",
         "v1model.cc",
         "values.cc",
@@ -45,8 +45,8 @@ cc_library(
         "operators.h",
         "parser.h",
         "symbolic.h",
+        "symbolic_table_entry.h",
         "table.h",
-        "table_entry.h",
         "util.h",
         "v1model.h",
         "v1model_intrinsic.h",
@@ -69,8 +69,7 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_github_z3prover_z3//:api",
-        "@com_gnu_gmp//:gmp",
-        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -178,8 +177,8 @@ cc_test(
 )
 
 cc_test(
-    name = "table_entry_test",
-    srcs = ["table_entry_test.cc"],
+    name = "symbolic_table_entry_test",
+    srcs = ["symbolic_table_entry_test.cc"],
     data = [
         "//p4_symbolic/testdata:ipv4-routing/basic.config.json",
         "//p4_symbolic/testdata:ipv4-routing/basic.p4info.pb.txt",
@@ -203,6 +202,5 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf",
     ],
 )

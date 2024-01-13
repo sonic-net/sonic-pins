@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -21,6 +21,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/algorithm/container.h"
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/numeric/bits.h"
@@ -150,7 +151,7 @@ absl::StatusOr<z3::expr> GetZ3Value(const pdpi::IrValue &value,
 // Adds constraints for the specific match types for encoding them as ternary
 // values and masks.
 absl::Status AddMatchTypeConstraintsForSymbolicMatch(
-    const SymbolicMatchVariables &variables, z3::context &z3_context,
+    const SymbolicMatch &variables, z3::context &z3_context,
     z3::solver &solver) {
   // Add type constraints on the symbolic match variables.
   switch (variables.match_type) {
@@ -213,7 +214,7 @@ absl::Status AddMatchTypeConstraintsForSymbolicMatch(
 // not zero, here we add the constraint to avoid synthesizing such entries.
 // Namely, "(value & mask == value)".
 absl::Status AddCanonicityConstraintForSymbolicMatch(
-    const SymbolicMatchVariables &variables, z3::solver &solver) {
+    const SymbolicMatch &variables, z3::solver &solver) {
   ASSIGN_OR_RETURN(z3::expr masked_value,
                    operators::BitAnd(variables.value, variables.mask));
   ASSIGN_OR_RETURN(z3::expr constraint,
@@ -226,7 +227,7 @@ absl::Status AddCanonicityConstraintForSymbolicMatch(
 // concrete parts of the given symbolic `ir_match` of a table entry in the given
 // `table`.
 absl::Status AddConstraintsForConcretePartsOfSymbolicMatch(
-    const SymbolicMatchVariables &variables, const pdpi::IrMatch &ir_match,
+    const SymbolicMatch &variables, const pdpi::IrMatch &ir_match,
     const ir::Table &table, z3::context &z3_context, z3::solver &solver,
     values::P4RuntimeTranslator &translator) {
   // If the symbolic variables are created successfully, it means that a
@@ -437,13 +438,11 @@ absl::StatusOr<SymbolicMatchInfo> GetSymbolicMatchInfo(
 
   // If the specified match of this entry is an explicit wildcard, return an
   // error and no symbolic variable should be created.
-  const auto &entry_matches = ir::GetMatches(symbolic_entry);
-  auto ir_match_it =
-      std::find_if(entry_matches.begin(), entry_matches.end(),
-                   [&match_name](const pdpi::IrMatch &match) -> bool {
-                     return match.name() == match_name;
-                   });
-  if (ir_match_it == entry_matches.end()) {
+  const auto &matches = symbolic_entry.sketch().matches();
+  auto ir_match_it = absl::c_find_if(matches, [&](const pdpi::IrMatch &match) {
+    return match.name() == match_name;
+  });
+  if (ir_match_it == matches.end()) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Match '" << match_name
            << "' is an explicit wildcard. The match is omitted in the IR table "
@@ -583,7 +582,7 @@ absl::StatusOr<SymbolicActionParameterInfo> GetSymbolicActionParameterInfo(
 
 }  // namespace
 
-absl::StatusOr<SymbolicMatchVariables> GetSymbolicMatch(
+absl::StatusOr<SymbolicMatch> GetSymbolicMatch(
     const ir::SymbolicTableEntry &symbolic_entry, absl::string_view match_name,
     const ir::Table &table, const ir::P4Program &program,
     z3::context &z3_context) {
@@ -593,7 +592,7 @@ absl::StatusOr<SymbolicMatchVariables> GetSymbolicMatch(
       GetSymbolicMatchInfo(symbolic_entry, match_name, table, program));
 
   // Construct and return the symbolic variables as Z3 expressions.
-  return SymbolicMatchVariables{
+  return SymbolicMatch{
       .match_type = match.match_type,
       .value = z3_context.bv_const(match.value_variable_name.c_str(),
                                    match.bitwidth),
@@ -627,73 +626,11 @@ absl::StatusOr<z3::expr> GetSymbolicActionParameter(
                              action_param.bitwidth);
 }
 
-absl::StatusOr<ir::SymbolicTableEntry> CreateSymbolicIrTableEntry(
-    int table_entry_index, const ir::Table &table,
-    const TableEntryPriorityParams &priority_params) {
-  // Build a symbolic table entry in P4-Symbolic IR.
-  ir::SymbolicTableEntry result;
-  result.set_index(table_entry_index);
-
-  // Set table name.
-  const std::string &table_name = table.table_definition().preamble().name();
-  result.mutable_sketch()->set_table_name(table_name);
-
-  bool has_ternary_or_optional = false;
-  pdpi::IrMatch *lpm_match = nullptr;
-
-  for (const auto &[match_name, match_definition] :
-       Ordered(table.table_definition().match_fields_by_name())) {
-    // Set match name.
-    pdpi::IrMatch &ir_match = *result.mutable_sketch()->add_matches();
-    ir_match.set_name(match_name);
-
-    const auto &pi_match = match_definition.match_field();
-    switch (pi_match.match_type()) {
-      case MatchType::MatchField_MatchType_TERNARY:
-      case MatchType::MatchField_MatchType_OPTIONAL: {
-        has_ternary_or_optional = true;
-        break;
-      }
-      case MatchType::MatchField_MatchType_LPM: {
-        lpm_match = &ir_match;
-        break;
-      }
-      default: {
-        // Exact or some other unsupported type, no need to do anything here.
-        // An absl error will be returned during symbolic evaluation.
-        break;
-      }
-    }
-  }
-
-  // Set prefix length for single-LPM tables.
-  if (!has_ternary_or_optional && lpm_match != nullptr) {
-    if (!priority_params.prefix_length.has_value()) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Prefix length must be provided for tables with a single LPM"
-                "match.";
-    }
-    lpm_match->mutable_lpm()->set_prefix_length(*priority_params.prefix_length);
-  }
-
-  // Set priority.
-  if (has_ternary_or_optional && priority_params.priority <= 0) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Priority must be greater than 0 for tables with ternary or "
-              "optional matches. Found: "
-           << priority_params.priority;
-  }
-  result.mutable_sketch()->set_priority(
-      has_ternary_or_optional ? priority_params.priority : 0);
-
-  return result;
-}
-
 absl::Status InitializeSymbolicMatches(
     const ir::SymbolicTableEntry &symbolic_entry, const ir::Table &table,
     const ir::P4Program &program, z3::context &z3_context, z3::solver &solver,
     values::P4RuntimeTranslator &translator) {
-  for (const pdpi::IrMatch &match : ir::GetMatches(symbolic_entry)) {
+  for (const pdpi::IrMatch &match : symbolic_entry.sketch().matches()) {
     if (match.name().empty()) {
       return gutil::InvalidArgumentErrorBuilder()
              << "The match name must not be empty. Found: "
@@ -701,7 +638,7 @@ absl::Status InitializeSymbolicMatches(
     }
 
     // Create symbolic variables for the symbolic match.
-    ASSIGN_OR_RETURN(SymbolicMatchVariables variables,
+    ASSIGN_OR_RETURN(SymbolicMatch variables,
                      GetSymbolicMatch(symbolic_entry, match.name(), table,
                                       program, z3_context));
     // Add various constraints for the symbolic match.
@@ -814,7 +751,7 @@ absl::StatusOr<ir::ConcreteTableEntry> ExtractConcreteEntryFromModel(
 
     // Evaluate and set match values.
     ASSIGN_OR_RETURN(
-        SymbolicMatchVariables match_variables,
+        SymbolicMatch match_variables,
         GetSymbolicMatch(entry, match_name, *table, program, z3_context));
     ASSIGN_OR_RETURN(std::string field_name,
                      util::GetFieldNameFromMatch(match_name, *table));
