@@ -34,7 +34,7 @@
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/symbolic/table_entry.h"
+#include "p4_symbolic/symbolic/symbolic_table_entry.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
@@ -203,7 +203,7 @@ absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState &state) {
         }
 
         if (type_name == kVrfIdTypeName) {
-          ASSIGN_OR_RETURN(symbolic::SymbolicMatchVariables match_variables,
+          ASSIGN_OR_RETURN(symbolic::SymbolicMatch match_variables,
                            symbolic::GetSymbolicMatch(
                                symbolic_entry, match_name, *table,
                                state.program, *state.context.z3_context));
@@ -317,7 +317,7 @@ absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState &state) {
     // is_ipv6::mask != 0 -> (is_ipv6 == 1);
     constraints.push_back(is_ipv6.mask == 0 || is_ipv6.value == 1);
     // ::priority < 0x7fffffff;
-    if (int priority = ir::GetPriority(symbolic_entry);
+    if (int priority = symbolic_entry.sketch().priority();
         priority >= 0x7fffffff) {
       return gutil::InvalidArgumentErrorBuilder()
              << "Invalid priority '" << priority << "' for entry #"
