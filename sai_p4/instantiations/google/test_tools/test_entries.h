@@ -84,11 +84,16 @@ void AbslStringify(Sink& sink, const IpVersion& ip_version) {
 
 // Parameters for generating a mirror session table entry with IPFIX
 // encapsulation.
-// TODO: Adds data members with parameters needed for mirror
-// encap.
 struct MirrorSessionParams {
   std::string mirror_session_id;
-  std::string mirror_egress_port;
+  std::string monitor_port;
+  std::string mirror_encap_src_mac;
+  std::string mirror_encap_dst_mac;
+  std::string mirror_encap_vlan_id;
+  std::string mirror_encap_src_ip;
+  std::string mirror_encap_dst_ip;
+  std::string mirror_encap_udp_src_port;
+  std::string mirror_encap_udp_dst_port;
 };
 
 // Parameters for generating an ACL table entry to mark packets to be mirrored.

@@ -141,6 +141,15 @@ struct headers_t {
   // PacketOut header; extracted only for packets received from the controller.
   packet_out_header_t packet_out_header;
 
+  // -- mirroring encap headers ------------------------------------------------
+  ethernet_t mirror_encap_ethernet;
+  vlan_t mirror_encap_vlan;
+  ipv6_t mirror_encap_ipv6;
+  udp_t mirror_encap_udp;
+  ipfix_t ipfix;
+  psamp_extended_t psamp_extended;
+  // -- end of mirroring encap headers -----------------------------------------
+
   ethernet_t ethernet;
   vlan_t vlan;
 
@@ -214,7 +223,7 @@ struct local_metadata_t {
   // pipeline.
   bool marked_to_copy;
 
-  // Mirroring related fields.
+  // -- Mirroring related fields -----------------------------------------------
   // We can't group them into a struct as BMv2 doesn't support passing structs
   // into clone3.
   // If true, the packet needs to be mirrored at the end of the ingress
@@ -224,6 +233,21 @@ struct local_metadata_t {
   // Valid iff marked_to_mirror is true.
   mirror_session_id_t mirror_session_id;
   port_id_t mirror_egress_port;
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
+  ethernet_addr_t mirror_encap_src_mac;
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
+  ethernet_addr_t mirror_encap_dst_mac;
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
+  vlan_id_t mirror_encap_vlan_id;
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
+  ipv6_addr_t mirror_encap_src_ip;
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
+  ipv6_addr_t mirror_encap_dst_ip;
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
+  bit<16> mirror_encap_udp_src_port;
+  @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
+  bit<16> mirror_encap_udp_dst_port;
+  // -- end of mirroring related fields ----------------------------------------
 
   // Packet-in related fields, which we can't group into a struct, because BMv2
   // doesn't support passing structs in clone3.

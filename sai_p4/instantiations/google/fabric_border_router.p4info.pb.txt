@@ -1422,8 +1422,8 @@ actions {
 actions {
   preamble {
     id: 16777245
-    name: "ingress.mirror_session_lookup.mirror_with_ipfix_encapsulation"
-    alias: "mirror_with_ipfix_encapsulation"
+    name: "ingress.mirror_session_lookup.mirror_with_vlan_tag_and_ipfix_encapsulation"
+    alias: "mirror_with_vlan_tag_and_ipfix_encapsulation"
     annotations: "@unsupported"
   }
   params {
@@ -1432,6 +1432,52 @@ actions {
     type_name {
       name: "port_id_t"
     }
+  }
+  params {
+    id: 2
+    name: "monitor_failover_port"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  params {
+    id: 3
+    name: "mirror_encap_src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+  params {
+    id: 4
+    name: "mirror_encap_dst_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+  params {
+    id: 6
+    name: "mirror_encap_vlan_id"
+    bitwidth: 12
+  }
+  params {
+    id: 7
+    name: "mirror_encap_dst_ip"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+  }
+  params {
+    id: 8
+    name: "mirror_encap_src_ip"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+  }
+  params {
+    id: 9
+    name: "mirror_encap_udp_src_port"
+    bitwidth: 16
+  }
+  params {
+    id: 10
+    name: "mirror_encap_udp_dst_port"
+    bitwidth: 16
   }
 }
 actions {

@@ -161,7 +161,8 @@ message MirrorSessionTableEntry {
     oneof action {
       MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
       // CAUTION: This action is not (yet) supported.
-      MirrorWithIpfixEncapsulationAction mirror_with_ipfix_encapsulation = 2;
+      MirrorWithVlanTagAndIpfixEncapsulationAction
+          mirror_with_vlan_tag_and_ipfix_encapsulation = 2;
     }
   }
   Action action = 2;
@@ -892,8 +893,16 @@ message SetPortAndSrcMacAndVlanIdAction {
 }
 
 // CAUTION: This action is not (yet) supported.
-message MirrorWithIpfixEncapsulationAction {
-  string monitor_port = 1;  // Format::STRING
+message MirrorWithVlanTagAndIpfixEncapsulationAction {
+  string monitor_port = 1;                // Format::STRING
+  string monitor_failover_port = 2;       // Format::STRING
+  string mirror_encap_src_mac = 3;        // Format::MAC
+  string mirror_encap_dst_mac = 4;        // Format::MAC
+  string mirror_encap_vlan_id = 6;        // Format::HEX_STRING / 12 bits
+  string mirror_encap_dst_ip = 7;         // Format::IPV6 / 128 bits
+  string mirror_encap_src_ip = 8;         // Format::IPV6 / 128 bits
+  string mirror_encap_udp_src_port = 9;   // Format::HEX_STRING / 16 bits
+  string mirror_encap_udp_dst_port = 10;  // Format::HEX_STRING / 16 bits
 }
 
 message SetVrfAction {
