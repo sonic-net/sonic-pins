@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,25 +23,26 @@
 namespace pins_test {
 
 // Tests that commands can be run on the switch through SSH.
-void TestSSHCommand(thinkit::SSHClient &ssh_client, thinkit::Switch &sut);
+void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut);
 
 // Tests that P4 Sessions can be established with the switch.
-void TestP4Session(thinkit::Switch &sut);
+void TestP4Session(thinkit::Switch& sut);
 
 // Tests that gNMI get interface works fine with SUT.
-void TestGnmiGetInterfaceOperation(thinkit::Switch &sut);
+void TestGnmiGetInterfaceOperation(thinkit::Switch& sut);
 
 // Tests that gNMI get all works fine with SUT.
-void TestGnmiGetAllOperation(thinkit::Switch &sut);
+void TestGnmiGetAllOperation(thinkit::Switch& sut);
 
 // Tests that no gNMI alarms are set.
-void TestGnmiCheckAlarms(thinkit::MirrorTestbed &testbed);
+void TestGnmiCheckAlarms(thinkit::MirrorTestbed& testbed);
 
 // Tests that SUT is updated with a config Blob.
-void TestGnmiConfigBlobSet(thinkit::Switch &sut);
+void TestGnmiConfigBlobSet(thinkit::Switch& sut);
 
 // Tests gNOI Cold Reboot on SUT.
-void TestGnoiSystemColdReboot(thinkit::Switch &sut);
-} // namespace pins_test
+void TestGnoiSystemColdReboot(thinkit::Switch& sut,
+                              absl::Span<const std::string> interfaces = {});
+}  // namespace pins_test
 
-#endif // PINS_TESTS_THINKIT_SANITY_TESTS_H_
+#endif  // PINS_TESTS_THINKIT_SANITY_TESTS_H_
