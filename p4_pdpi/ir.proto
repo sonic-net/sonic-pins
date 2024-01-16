@@ -465,7 +465,10 @@ message IrTableEntry {
 }
 
 // Describes a list of table entries.
+// This list is deprecated and has been replaced by the more general IrEntities.
 message IrTableEntries {
+  option deprecated = true;
+
   repeated IrTableEntry entries = 1;
 }
 

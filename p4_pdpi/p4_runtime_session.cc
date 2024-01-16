@@ -41,9 +41,10 @@
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/helpers.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/names.h"
 #include "p4_pdpi/sequencing.h"
 #include "thinkit/switch.h"
 

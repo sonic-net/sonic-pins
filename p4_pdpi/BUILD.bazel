@@ -166,8 +166,8 @@ cc_library(
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":built_ins",
-        ":helpers",
         ":ir_cc_proto",
+        ":names",
         ":references",
         ":sequencing_util",
         "//gutil:collections",
@@ -381,9 +381,10 @@ cc_library(
         "p4_runtime_session.h",
     ],
     deps = [
-        ":helpers",
+        ":entity_keys",
         ":ir",
         ":ir_cc_proto",
+        ":names",
         ":sequencing",
         "//gutil:collections",
         "//gutil:status",
@@ -560,9 +561,9 @@ cc_test(
 )
 
 cc_library(
-    name = "helpers",
-    srcs = ["helpers.cc"],
-    hdrs = ["helpers.h"],
+    name = "names",
+    srcs = ["names.cc"],
+    hdrs = ["names.h"],
     deps = [
         ":built_ins",
         ":ir_cc_proto",
@@ -572,17 +573,19 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
     ],
 )
 
 cc_test(
-    name = "helpers_test",
-    srcs = ["helpers_test.cc"],
+    name = "names_test",
+    srcs = ["names_test.cc"],
     deps = [
         ":built_ins",
-        ":helpers",
         ":ir_cc_proto",
+        ":names",
         "//gutil:status_matchers",
+        "//gutil:testing",
         "//p4_pdpi/testing:test_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
