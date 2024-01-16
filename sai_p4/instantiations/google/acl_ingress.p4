@@ -207,7 +207,9 @@ control acl_ingress(in headers_t headers,
 #endif
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
+#if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
+#endif
     l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_TOR)
     // Only allow arp_tpa matches for ARP packets.
@@ -278,7 +280,7 @@ control acl_ingress(in headers_t headers,
 #endif
       // Field for v4 IP protocol and v6 next header.
       ip_protocol : ternary
-         @id(13) @name("ip_protocol")
+          @id(13) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
 #if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR)
       headers.icmp.type : ternary
@@ -433,8 +435,8 @@ control acl_ingress(in headers_t headers,
   table acl_ingress_counting_table {
     key = {
       headers.ipv4.isValid() || headers.ipv6.isValid() : optional
-           @id(1) @name("is_ip")
-           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
+          @id(1) @name("is_ip")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
       headers.ipv4.isValid() : optional
           @id(2) @name("is_ipv4")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV4ANY);

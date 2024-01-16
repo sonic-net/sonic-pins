@@ -95,14 +95,6 @@ tables {
     match_type: TERNARY
   }
   match_fields {
-    id: 9
-    name: "dst_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-    match_type: TERNARY
-  }
-  match_fields {
     id: 5
     name: "dst_ip"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP)"
@@ -976,7 +968,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 110
+  size: 128
 }
 tables {
   preamble {

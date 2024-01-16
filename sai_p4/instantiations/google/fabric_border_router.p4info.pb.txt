@@ -877,7 +877,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 110
+  size: 128
 }
 tables {
   preamble {

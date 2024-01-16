@@ -141,6 +141,13 @@ tables {
       name: "port_id_t"
     }
   }
+  match_fields {
+    id: 11
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
+    match_type: TERNARY
+  }
   action_refs {
     id: 16777472
     annotations: "@proto_id(1)"
@@ -887,7 +894,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 110
+  size: 128
 }
 tables {
   preamble {
@@ -1302,6 +1309,15 @@ tables {
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN)"
     bitwidth: 2
     match_type: TERNARY
+  }
+  match_fields {
+    id: 8
+    name: "in_port"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)"
+    match_type: OPTIONAL
+    type_name {
+      name: "port_id_t"
+    }
   }
   action_refs {
     id: 16777483
