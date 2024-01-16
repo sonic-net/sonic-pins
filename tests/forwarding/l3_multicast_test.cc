@@ -615,6 +615,56 @@ TEST_P(L3MulticastTestFixture, DeleteNonexistentRifEntryFails) {
                                        "'multicast_router_interface_table'"))));
 }
 
+TEST_P(L3MulticastTestFixture,
+       InsertIpMulticastEntryBeforeMulticastGroupFails) {
+  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+      "92ba000a-77a1-42d5-b9ba-c917dbece6a1");
+  // Create a VRF.
+  ASSERT_OK_AND_ASSIGN(const std::vector<p4::v1::Entity> vrf_entities,
+                       sai::EntryBuilder()
+                           .AddVrfEntry(kDefaultMulticastVrf)
+                           .LogPdEntries()
+                           .GetDedupedPiEntities(ir_p4info_));
+  EXPECT_OK(pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_,
+                                    vrf_entities));
+
+  // If we have not created a multicast group yet, we cannot create an IPMC
+  // entry.
+  const int kMulticastGroupId = 7;
+  ASSERT_OK_AND_ASSIGN(const auto ipv4_address,
+                       GetIpv4AddressForReplica(kMulticastGroupId));
+
+  ASSERT_OK_AND_ASSIGN(const auto entities_v4,
+                       CreateIpv4MulticastTableEntities(
+                           ir_p4info_, std::string(kDefaultMulticastVrf),
+                           ipv4_address, kMulticastGroupId));
+
+  EXPECT_THAT(
+      pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, entities_v4),
+      StatusIs(
+          absl::StatusCode::kUnknown,
+          AllOf(HasSubstr("#1: NOT_FOUND"),
+                HasSubstr("[OrchAgent] No multicast group ID found for"))));
+  // Clean up.
+  EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, vrf_entities));
+}
+
+TEST_P(L3MulticastTestFixture, DeleteNonexistentRifEntryFails) {
+  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+      "2373038c-1057-4faa-a04f-8f40fe5eb100");
+  // Unable to delete RIF entry that was not added.
+  ASSERT_OK_AND_ASSIGN(
+      const auto entities,
+      CreateRifTableEntities(ir_p4info_, /*port_id=*/"1", kDefaultInstance,
+                             kOriginalSrcMacAddress));
+
+  EXPECT_THAT(ClearEntities(*sut_p4rt_session_, ir_p4info_, entities),
+              StatusIs(absl::StatusCode::kUnknown,
+                       AllOf(HasSubstr("#1: NOT_FOUND"),
+                             HasSubstr("given key does not exist in table "
+                                       "'multicast_router_interface_table'"))));
+}
+
 TEST_P(L3MulticastTestFixture, DeleteNonexistentMulticastGroupFails) {
   const int kNumberRifs = 2;
   ASSERT_OK_AND_ASSIGN(
@@ -672,6 +722,8 @@ TEST_P(L3MulticastTestFixture, DeleteNonexistentIpmcEntryFails) {
 }
 
 TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
+  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+      "ff124866-d117-418d-bd29-a0740a18043e");
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   const int kNumberMulticastGroupsInTest = 1;
