@@ -206,6 +206,7 @@ message VrfTableEntry {
 message Ipv6TunnelTerminationTableEntry {
   message Match {
     Ternary dst_ipv6 = 1;  // ternary match / Format::IPV6 / 128 bits
+    Ternary src_ipv6 = 2;  // ternary match / Format::IPV6 / 128 bits
   }
   Match match = 1;
   message Action {
@@ -592,8 +593,7 @@ message AclIngressQosTableEntry {
     Ternary l4_src_port = 12;   // ternary match / Format::HEX_STRING / 16 bits
     Ternary acl_metadata = 13;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary icmp_type = 14;     // ternary match / Format::HEX_STRING / 8 bits
-    Optional route_metadata =
-        15;  // optional match / Format::HEX_STRING / 6 bits
+    Ternary route_metadata = 15;  // ternary match / Format::HEX_STRING / 6 bits
   }
   Match match = 1;
   message Action {
@@ -744,9 +744,7 @@ message AclIngressMirrorAndRedirectTableEntry {
     Ternary dst_ipv6 = 5;      // ternary match / Format::IPV6 / upper 64 bits
     Ternary acl_metadata = 6;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary vlan_id = 7;       // ternary match / Format::HEX_STRING / 12 bits
-    // CAUTION: This match field is not (yet) supported.
-    Optional vrf_id = 8;  // optional match / Format::STRING
-    // CAUTION: This match field is not (yet) supported.
+    Optional vrf_id = 8;       // optional match / Format::STRING
     Optional ipmc_table_hit =
         9;                // optional match / Format::HEX_STRING / 1 bits
     Ternary dst_ip = 10;  // ternary match / Format::IPV4
@@ -754,10 +752,8 @@ message AclIngressMirrorAndRedirectTableEntry {
   Match match = 1;
   message Action {
     oneof action {
-      AclForwardAction acl_forward = 4;
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 2;
-      // CAUTION: This action is not (yet) supported.
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 3;
     }
   }
@@ -970,7 +966,6 @@ message RedirectToNexthopAction {
   string nexthop_id = 1;  // Format::STRING
 }
 
-// CAUTION: This action is not (yet) supported.
 message RedirectToIpmcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }

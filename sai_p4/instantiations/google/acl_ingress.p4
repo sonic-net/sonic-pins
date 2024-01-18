@@ -373,7 +373,7 @@ control acl_ingress(in headers_t headers,
       headers.icmp.type : ternary
           @id(14) @name("icmp_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE);
-      local_metadata.route_metadata : optional
+      local_metadata.route_metadata : ternary
           @id(15) @name("route_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
 #endif
@@ -454,6 +454,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
   action redirect_to_nexthop(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
     @refers_to(nexthop_table, nexthop_id)
     nexthop_id_t nexthop_id) {
 
@@ -466,9 +467,6 @@ control acl_ingress(in headers_t headers,
     standard_metadata.mcast_grp = 0;
   }
 
-  // TODO: Remove `@unsupported` annotation once the switch stack
-  // supports multicast.
-  @unsupported
   @id(ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_ACTION_ID)
   @action_restriction("
     // Disallow 0 since it encodes 'no multicast' in V1Model.
@@ -476,6 +474,7 @@ control acl_ingress(in headers_t headers,
   ")
   action redirect_to_ipmc_group(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    @sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)
     @refers_to(builtin::multicast_group_table, multicast_group_id)
     multicast_group_id_t multicast_group_id) {
     standard_metadata.mcast_grp = multicast_group_id;
@@ -552,21 +551,13 @@ control acl_ingress(in headers_t headers,
         @id(5);
 
       local_metadata.vrf_id : optional
-        @name("vrf_id")
-        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)
-        @id(8)
-        // TODO: Remove once the switch supports this field.
-        @unsupported;
-
+        @id(8) @name("vrf_id")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID);
       local_metadata.ipmc_table_hit : optional
-        @name("ipmc_table_hit")
-        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_TABLE_HIT)
-        @id(9)
-        // TODO: Remove once the switch supports this field.
-        @unsupported;
+        @id(9) @name("ipmc_table_hit")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT);
     }
     actions = {
-      @proto_id(4) acl_forward();
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
       @proto_id(3) redirect_to_ipmc_group();
