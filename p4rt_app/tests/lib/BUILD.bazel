@@ -69,7 +69,6 @@ cc_library(
         "//p4rt_app/sonic:fake_packetio_interface",
         "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic/adapters:fake_consumer_notifier_adapter",
-        "//p4rt_app/sonic/adapters:fake_notification_producer_adapter",
         "//p4rt_app/sonic/adapters:fake_producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/sonic/adapters:fake_table_adapter",
