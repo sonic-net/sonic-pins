@@ -2,6 +2,7 @@
 #define SAI_ROUTING_P4_
 
 #include <v1model.p4>
+#include "common_actions.p4"
 #include "headers.p4"
 #include "metadata.p4"
 #include "ids.h"
@@ -65,12 +66,6 @@ action set_nexthop_id(inout local_metadata_t local_metadata,
 control routing_lookup(in headers_t headers,
                        inout local_metadata_t local_metadata,
                        inout standard_metadata_t standard_metadata) {
-  // Action that does nothing. Like `NoAction` in `core.p4`, but following
-  // Google's naming conventions.
-  // TODO: Add support for CamlCase actions to the PD generator,
-  // so we can use `NoAction` throughout.
-  @id(ROUTING_NO_ACTION_ACTION_ID)
-  action no_action() {}
   // Programming this table does not affect packet forwarding directly -- the
   // table performs no actions -- but results in the creation/deletion of VRFs.
   // This is a prerequisite to using these VRFs, e.g. in the `ipv4_table` and

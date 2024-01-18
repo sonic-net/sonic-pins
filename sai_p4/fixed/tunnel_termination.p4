@@ -41,6 +41,9 @@ control tunnel_termination_lookup(in headers_t headers,
       // Sets `SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_DST_IP[_MASK]`.
       headers.ipv6.dst_addr : ternary
         @id(1) @name("dst_ipv6") @format(IPV6_ADDRESS);
+      // Sets `SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_SRC_IP[_MASK]`.
+      headers.ipv6.src_addr : ternary
+        @id(2) @name("src_ipv6") @format(IPV6_ADDRESS);
     }
     actions = {
       @proto_id(1) mark_for_tunnel_decap_and_set_vrf;

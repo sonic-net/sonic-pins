@@ -27,6 +27,7 @@
 #include "glog/logging.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
+#include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/test_tools/table_entry_generator_helper.h"
@@ -258,6 +259,28 @@ TableEntryGenerator L3AdmitTableGenerator(
   return generator;
 }
 
+TableEntryGenerator MulticastRouterInterfaceTableGenerator(
+    const pdpi::IrTableDefinition& table_definition) {
+  auto base_entry = gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+    table_name: "multicast_router_interface_table"
+    matches {
+      name: "multicast_replica_port"
+      exact { str: "1" }
+    }
+    action {
+      name: "set_multicast_src_mac"
+      params {
+        name: "src_mac"
+        value { mac: "06:05:04:03:02:01" }
+      }
+    }
+  )pb");
+  return TableEntryGenerator{
+      .generator = IrMatchFieldGenerator(table_definition, base_entry,
+                                         "multicast_replica_instance"),
+  };
+}
+
 const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
   static const auto* const kUnsupportedTables =
       new absl::flat_hash_set<std::string>({
@@ -283,7 +306,6 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "ipv6_tunnel_termination_table",
           // TODO: Add support for these tables once the switch
           // supports it.
-          "multicast_router_interface_table",
           "ipv4_multicast_table",
           "ipv6_multicast_table",
           // TODO: Add support for this table once the switch
@@ -314,6 +336,8 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"ipv4_table", Ipv4TableGenerator},
       {"ipv6_table", Ipv6TableGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
+      {"multicast_router_interface_table",
+       MulticastRouterInterfaceTableGenerator},
   });
 
   const std::string& table_name = table.preamble().alias();

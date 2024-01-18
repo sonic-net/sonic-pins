@@ -407,3 +407,7 @@ cc_test(
     ],
 )
 
+filegroup(
+    name = "sai_p4",
+    srcs = glob(["**/*.p4"]) + glob(["**/*.h"]),
+)

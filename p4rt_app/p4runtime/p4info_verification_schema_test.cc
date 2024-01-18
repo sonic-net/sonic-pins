@@ -883,7 +883,7 @@ class GoogleInstantiationTest
 
 // Tests that P4RT app is always "ahead of" our SAI P4 programs, so we don't
 // accidentally expose features in the program that are not yet supported by
-// P4RT app/GPINS.
+// P4RT app/PINS.
 TEST_P(GoogleInstantiationTest, SchemaSupportsInstantiation) {
   sai::Instantiation instantiation = GetParam();
   pdpi::IrP4Info p4info = sai::GetIrP4Info(instantiation);
