@@ -35,7 +35,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
-#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
@@ -63,6 +62,7 @@
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4_infra/p4_pdpi/translation_options.h"
+#include "p4rt_app/p4runtime/entity_update.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_reconcile.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
@@ -71,7 +71,6 @@
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
-#include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
@@ -151,24 +150,6 @@ absl::Status AllowRoleAccessToTable(const std::string& role_name,
   return absl::OkStatus();
 }
 
-sonic::AppDbTableType GetAppDbTableType(const pdpi::IrEntity& ir_entity) {
-  switch (ir_entity.entity_case()) {
-    case pdpi::IrEntity::kTableEntry:
-      if (ir_entity.table_entry().table_name() == "vrf_table") {
-        return sonic::AppDbTableType::VRF_TABLE;
-      }
-      // By default we assume and AppDb P4RT entry.
-      return sonic::AppDbTableType::P4RT;
-      break;
-    case pdpi::IrEntity::kPacketReplicationEngineEntry:
-      return sonic::AppDbTableType::P4RT;
-      break;
-    default:
-      break;
-  }
-  return sonic::AppDbTableType::UNKNOWN;
-}
-
 // Generates a StreamMessageResponse error based on an absl::Status.
 p4::v1::StreamMessageResponse GenerateErrorResponse(absl::Status status) {
   grpc::Status grpc_status = gutil::AbslStatusToGrpcStatus(status);
@@ -205,7 +186,7 @@ bool IsEquivalent(const pdpi::IrP4Info& left, const pdpi::IrP4Info& right,
 
 absl::Status VerifyEntityCacheForExistence(
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& cache,
-    const sonic::AppDbEntry& entry) {
+    const EntityUpdate& entry) {
   bool exists = false;
   auto iter = cache.find(entry.entity_key);
   if (iter != cache.end()) exists = true;
@@ -273,7 +254,7 @@ absl::Status ValidateTableEntryConstraints(
   return absl::OkStatus();
 }
 
-absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
+absl::StatusOr<EntityUpdate> PiUpdateToEntityUpdate(
     const pdpi::IrP4Info& p4_info, const p4::v1::Update& pi_update,
     const std::string& role_name,
     const p4_constraints::ConstraintInfo& constraint_info,
@@ -341,16 +322,21 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
 
   ASSIGN_OR_RETURN(auto entity_key,
                    pdpi::EntityKey::MakeEntityKey(*normalized_pi_entry));
-  return sonic::AppDbEntry{
+
+  ASSIGN_OR_RETURN(
+      auto app_db_update,
+      sonic::CreateAppDbUpdate(pi_update.type(), *ir_entity, p4_info));
+
+  return EntityUpdate{
       .entry = *ir_entity,
       .update_type = pi_update.type(),
       .pi_entity = *normalized_pi_entry,
       .entity_key = entity_key,
-      .appdb_table = GetAppDbTableType(*ir_entity),
+      .app_db_update = app_db_update,
   };
 }
 
-sonic::AppDbUpdates PiEntityUpdatesToIr(
+std::vector<EntityUpdate> PiEntityUpdatesToIr(
     const p4::v1::WriteRequest& request, const pdpi::IrP4Info& p4_info,
     const EntityMap& entity_cache,
     const ActionProfileCapacityMap& capacity_by_action_profile_name,
@@ -362,7 +348,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
     pdpi::IrWriteResponse* response) {
   absl::flat_hash_set<pdpi::EntityKey> keys_in_request;
   bool has_duplicates = false;
-  sonic::AppDbUpdates ir_updates;
+  std::vector<EntityUpdate> updates;
   absl::flat_hash_map<std::string, int64_t> resources_in_batch;
 
   response->mutable_statuses()->Reserve(request.updates().size());
@@ -372,34 +358,34 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
 
     // If we cannot translate it then we should just report an error (i.e. do
     // not try to handle it in lower layers).
-    absl::StatusOr<sonic::AppDbEntry> app_db_entry = PiUpdateToAppDbEntry(
+    absl::StatusOr<EntityUpdate> update = PiUpdateToEntityUpdate(
         p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
         port_translation_map, cpu_queue_translator,
         front_panel_queue_translator);
-    if (!app_db_entry.ok()) {
-      entry_status = GetIrUpdateStatus(app_db_entry.status());
+    if (!update.ok()) {
+      entry_status = GetIrUpdateStatus(update.status());
       break;
     }
-    if (keys_in_request.contains(app_db_entry->entity_key)) {
+    if (keys_in_request.contains(update->entity_key)) {
       // We will rewrite all responses below; no need to set entry_status here.
       has_duplicates = true;
       break;
     }
-    keys_in_request.insert(app_db_entry->entity_key);
+    keys_in_request.insert(update->entity_key);
 
     // Verify the entry exists (for MODIFY/DELETE) or not exists (for DELETE)
     // against the cache.
     if (absl::Status cache_verification =
-            VerifyEntityCacheForExistence(entity_cache, *app_db_entry);
+            VerifyEntityCacheForExistence(entity_cache, *update);
         !cache_verification.ok()) {
       entry_status = GetIrUpdateStatus(cache_verification);
       break;
     }
 
-    absl::StatusOr<sonic::TableResources> resource_change =
-        VerifyCapacityAndGetTableResourceChange(
-            p4_info, *app_db_entry, entity_cache,
-            capacity_by_action_profile_name, resources_in_batch);
+    absl::StatusOr<TableResources> resource_change =
+        VerifyCapacityAndGetTableResourceChange(p4_info, *update, entity_cache,
+                                                capacity_by_action_profile_name,
+                                                resources_in_batch);
     if (!resource_change.ok()) {
       entry_status = GetIrUpdateStatus(resource_change.status());
       LOG(WARNING) << resource_change.status().message();
@@ -414,10 +400,9 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
       resources_in_batch[resource_change->action_profile->name] +=
           resource_change->action_profile->total_weight;
     }
-    app_db_entry->resource_utilization_change = *resource_change;
-    app_db_entry->rpc_index = response->statuses_size() - 1;
-    ir_updates.entries.push_back(*app_db_entry);
-    ++ir_updates.total_rpc_updates;
+    update->resource_utilization_change = *resource_change;
+    update->status = &*response->mutable_statuses()->rbegin();
+    updates.push_back(*update);
   }
 
   // Abandon the whole write request if any duplicate was found in the batch.
@@ -426,8 +411,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
     *response->add_statuses() = GetIrUpdateStatus(
         absl::StatusCode::kInvalidArgument,
         "[P4RT App] Found duplicated key in the same batch request.");
-    ir_updates.entries.clear();
-    ir_updates.total_rpc_updates = 0;
+    updates.clear();
   }
 
   // Mark any remaining unprocessed updates as aborted.
@@ -437,19 +421,18 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
     *response->add_statuses() = kAborted;
   }
 
-  return ir_updates;
+  return updates;
 }
 
 absl::Status UpdateCacheAndUtilizationState(
     EntityMap& entity_cache,
     ActionProfileCapacityMap& capacity_by_action_profile_name,
-    const sonic::AppDbUpdates& app_db_updates,
+    const std::vector<EntityUpdate>& entity_updates,
     const pdpi::IrWriteResponse& results) {
-  for (const sonic::AppDbEntry& app_db_entry : app_db_updates.entries) {
+  for (const EntityUpdate& app_db_entry : entity_updates) {
     // Lower layers should rervert any state on failure so a failing request
     // should not affect our internal state.
-    if (results.statuses(app_db_entry.rpc_index).code() !=
-        google::rpc::Code::OK) {
+    if (app_db_entry.status->code() != google::rpc::Code::OK) {
       continue;
     }
 
@@ -592,7 +575,7 @@ std::vector<pdpi::IrEntity> GetIrEntitiesFromCache(
       failure_count++;
       continue;
     }
-    if (GetAppDbTableType(*ir_entity) != sonic::AppDbTableType::P4RT) {
+    if (sonic::GetAppDbTableType(*ir_entity) != sonic::AppDbTableType::P4RT) {
       continue;
     }
     ir_entries.push_back(*std::move(ir_entity));
@@ -772,15 +755,21 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     pdpi::IrWriteRpcStatus rpc_status;
     pdpi::IrWriteResponse* rpc_response = rpc_status.mutable_rpc_response();
-    sonic::AppDbUpdates app_db_updates = PiEntityUpdatesToIr(
+    std::vector<EntityUpdate> app_db_updates = PiEntityUpdatesToIr(
         *request, *ir_p4info_, entity_cache_, capacity_by_action_profile_name_,
         *p4_constraint_info_, translate_port_ids_, port_translation_map_,
         *cpu_queue_translator_, *front_panel_queue_translator_, rpc_response);
 
     // Any AppDb update failures should be appended to the `rpc_response`. If
     // UpdateAppDb fails we should go critical.
-    auto app_db_write_status = sonic::UpdateAppDb(
-        p4rt_table_, vrf_table_, app_db_updates, *ir_p4info_, rpc_response);
+    std::vector<std::pair<sonic::AppDbUpdate, pdpi::IrUpdateStatus*>>
+        updates_and_results;
+    updates_and_results.reserve(app_db_updates.size());
+    for (const auto& update : app_db_updates) {
+      updates_and_results.push_back({update.app_db_update, update.status});
+    }
+    auto app_db_write_status = sonic::PerformAppDbUpdates(
+        p4rt_table_, vrf_table_, updates_and_results);
     if (!app_db_write_status.ok()) {
       return EnterCriticalState(
           absl::StrCat("Unexpected error calling UpdateAppDb: ",
@@ -835,7 +824,7 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     absl::Duration write_execution_time = absl::Now() - write_start_time;
     write_batch_requests_ += 1;
-    write_total_requests_ += app_db_updates.total_rpc_updates;
+    write_total_requests_ += app_db_updates.size();
     write_execution_time_ += write_execution_time;
 
     // Log a warning for any batch requests that are taking "too long" so we can
@@ -843,14 +832,14 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     if (write_execution_time > absl::Milliseconds(500)) {
       LOG(WARNING) << absl::StreamFormat(
           "Batch request (%d entries) took >500ms: %lldms ",
-          app_db_updates.total_rpc_updates,
+          app_db_updates.size(),
           absl::ToInt64Milliseconds(write_execution_time));
-      LOG_IF(WARNING, !app_db_updates.entries.empty())
-          << "First entry: "
-          << app_db_updates.entries[0].entry.ShortDebugString();
+      LOG_IF(WARNING, !app_db_updates.empty())
+          << "First entry: " << app_db_updates.at(0).entry.ShortDebugString();
       if (VLOG_IS_ON(1)) {
-        for (const auto& entry : app_db_updates.entries) {
-          LOG(WARNING) << "entry " << entry.rpc_index << ": "
+        int index = 0;
+        for (const auto& entry : app_db_updates) {
+          LOG(WARNING) << "entry " << index++ << ": "
                        << entry.entry.ShortDebugString();
         }
       }

@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "google/rpc/code.pb.h"
@@ -39,12 +40,11 @@ namespace {
 
 using ::google::protobuf::TextFormat;
 using ::gutil::EqualsProto;
-using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
 using ::testing::ContainerEq;
 using ::testing::Eq;
 using ::testing::IsEmpty;
-using ::testing::Not;
 using ::testing::Return;
 using ::testing::UnorderedElementsAre;
 
@@ -93,14 +93,12 @@ TEST_F(PacketReplicationEntryTranslationTest, InsertPacketReplicationEntry) {
       std::make_pair("replicas", json_array),
   };
   const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple(expected_key, "SET", kfv_values)};
+  swss::KeyOpFieldsValuesTuple expected_key_value =
+      std::make_tuple(expected_key, "SET", kfv_values);
 
-  std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
-  ASSERT_THAT(CreatePacketReplicationTableUpdateForAppDb(
-                  mock_p4rt_table_, p4::v1::Update::INSERT, pre_entry, kfvs),
-              IsOkAndHolds(expected_key));
-  EXPECT_THAT(expected_key_value, ContainerEq(kfvs));
+  ASSERT_THAT(CreateAppDbPacketReplicationTableUpdate(p4::v1::Update::INSERT,
+                                                      pre_entry),
+              IsOkAndHolds(expected_key_value));
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, ModifyPacketReplicationEntry) {
@@ -124,14 +122,12 @@ TEST_F(PacketReplicationEntryTranslationTest, ModifyPacketReplicationEntry) {
       std::make_pair("replicas", json_array),
   };
   const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple(expected_key, "SET", kfv_values)};
+  swss::KeyOpFieldsValuesTuple expected_key_value =
+      std::make_tuple(expected_key, "SET", kfv_values);
 
-  std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
-  ASSERT_THAT(CreatePacketReplicationTableUpdateForAppDb(
-                  mock_p4rt_table_, p4::v1::Update::MODIFY, pre_entry, kfvs),
-              IsOkAndHolds(expected_key));
-  EXPECT_THAT(expected_key_value, ContainerEq(kfvs));
+  ASSERT_THAT(CreateAppDbPacketReplicationTableUpdate(p4::v1::Update::INSERT,
+                                                      pre_entry),
+              IsOkAndHolds(expected_key_value));
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, DeletePacketReplicationEntry) {
@@ -147,15 +143,12 @@ TEST_F(PacketReplicationEntryTranslationTest, DeletePacketReplicationEntry) {
   // Expected RedisDB entry.
   const std::vector<std::pair<std::string, std::string>> empty_values;
   const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple("REPLICATION_IP_MULTICAST_TABLE:0x0001", "DEL",
-                      empty_values)};
+  swss::KeyOpFieldsValuesTuple expected_key_value = std::make_tuple(
+      "REPLICATION_IP_MULTICAST_TABLE:0x0001", "DEL", empty_values);
 
-  std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
-  ASSERT_THAT(CreatePacketReplicationTableUpdateForAppDb(
-                  mock_p4rt_table_, p4::v1::Update::DELETE, pre_entry, kfvs),
-              IsOkAndHolds(expected_key));
-  EXPECT_THAT(expected_key_value, ContainerEq(kfvs));
+  ASSERT_THAT(CreateAppDbPacketReplicationTableUpdate(p4::v1::Update::DELETE,
+                                                      pre_entry),
+              IsOkAndHolds(expected_key_value));
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, UnspecifiedOperationFails) {
@@ -169,15 +162,12 @@ TEST_F(PacketReplicationEntryTranslationTest, UnspecifiedOperationFails) {
 
   // Expected RedisDB entry.
   const std::vector<std::pair<std::string, std::string>> empty_values;
-  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple("REPLICATION_IP_MULTICAST_TABLE:0x0001", "SET",
-                      empty_values)};
+  swss::KeyOpFieldsValuesTuple expected_key_value = std::make_tuple(
+      "REPLICATION_IP_MULTICAST_TABLE:0x0001", "SET", empty_values);
 
-  std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
-  EXPECT_THAT(
-      CreatePacketReplicationTableUpdateForAppDb(
-          mock_p4rt_table_, p4::v1::Update::UNSPECIFIED, pre_entry, kfvs),
-      Not(IsOk()));
+  EXPECT_THAT(CreateAppDbPacketReplicationTableUpdate(
+                  p4::v1::Update::UNSPECIFIED, pre_entry),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(PacketReplicationEntryTranslationTest,
