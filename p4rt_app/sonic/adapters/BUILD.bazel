@@ -71,18 +71,6 @@ cc_library(
 )
 
 cc_library(
-    name = "fake_notification_producer_adapter",
-    testonly = True,
-    srcs = ["fake_notification_producer_adapter.cc"],
-    hdrs = ["fake_notification_producer_adapter.h"],
-    deps = [
-        ":fake_sonic_db_table",
-        ":notification_producer_adapter",
-        "@sonic_swss_common//:common",
-    ],
-)
-
-cc_library(
     name = "producer_state_table_adapter",
     srcs = ["producer_state_table_adapter.cc"],
     hdrs = ["producer_state_table_adapter.h"],
