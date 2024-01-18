@@ -710,11 +710,9 @@ TEST_F(ResponsePathTest, RequestWithDuplicateKeysFails) {
                      HasSubstr("#2: ABORTED:"))));
 }
 
-TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorDoesNotAffectVrfTable) {
-  // VRF table entries are written into the VRF_TABLE, while IPv6 table entries
-  // are written into the P4RT table. P4RT App will process all entries for each
-  // table together (i.e. entry 1 & 3 will go to the OrchAgent one after the
-  // other without entry 2 inbetween).
+TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorAffectsVrfTable) {
+  // Although VRF table entries are written into VRF_TABLE and other P4 table
+  // entries are written into the P4RT table, fail-on-first should still apply.
   ASSERT_OK_AND_ASSIGN(
       p4::v1::WriteRequest write_request,
       test_lib::PdWriteRequestToPi(
@@ -749,6 +747,15 @@ TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorDoesNotAffectVrfTable) {
                 }
               }
             }
+            updates {
+              type: INSERT
+              table_entry {
+                vrf_table_entry {
+                  match { vrf_id: "vrf-4" }
+                  action { no_action {} }
+                }
+              }
+            }
           )pb",
           ir_p4_info_));
 
@@ -767,7 +774,8 @@ TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorDoesNotAffectVrfTable) {
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: OK"),
                      HasSubstr("#2: INVALID_ARGUMENT: error with vrf-2"),
-                     HasSubstr("#3: OK"))));
+                     HasSubstr("#3: ABORTED: Not attempted"),
+                     HasSubstr("#4: ABORTED: Not attempted"))));
 }
 
 TEST_F(ResponsePathTest, FailOnFirstErrorInVrfTable) {
