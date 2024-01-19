@@ -58,7 +58,7 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable& GetHostStatsStateDbTable();
 
   // Accessor for WarmBootStateAdapter.
-  sonic::FakeWarmBootStateAdapter& GetWarmBootStateAdapter();
+  sonic::FakeWarmBootStateAdapter* GetWarmBootStateAdapter();
 
   // Accessor for PacketIO interface.
   sonic::FakePacketIoInterface& GetFakePacketIoInterface();
@@ -92,7 +92,7 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable fake_host_stats_table_;
 
   // Faked warm-boot state.
-  sonic::FakeWarmBootStateAdapter fake_warm_boot_state_adapter_;
+  sonic::FakeWarmBootStateAdapter* fake_warm_boot_state_adapter_;
 
   // Faked PacketIO interface.
   sonic::FakePacketIoInterface* fake_packetio_interface_;  // No ownership.

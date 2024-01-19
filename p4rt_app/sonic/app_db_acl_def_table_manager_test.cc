@@ -64,6 +64,17 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
                    name: "in_port"
                    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)")pb",
               pdpi::STRING)
+          .match_field(
+              R"pb(id: 125
+                   name: "vrf_id"
+                   annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)")pb",
+              pdpi::STRING)
+          .match_field(
+              R"pb(id: 126
+                   name: "ipmc_table_hit"
+                   bitwidth: 1
+                   annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT)")pb",
+              pdpi::HEX_STRING)
           .entry_action(
               IrActionDefinitionBuilder()
                   .preamble(
@@ -120,6 +131,62 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
                         annotations: "@sai_action_param(QOS_QUEUE)"
                       )pb",
                       pdpi::STRING))
+          .entry_action(
+              IrActionDefinitionBuilder()
+                  .preamble(
+                      R"pb(
+                        alias: "redirect_action_that_includes_ipmc_type"
+                      )pb")
+                  .param(
+                      R"pb(
+                        id: 1
+                        name: "multicast_group_id"
+                        annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+                        annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
+                      )pb",
+                      pdpi::STRING))
+          .entry_action(
+              IrActionDefinitionBuilder()
+                  .preamble(
+                      R"pb(
+                        alias: "redirect_action_that_includes_l2mc_type"
+                      )pb")
+                  .param(
+                      R"pb(
+                        id: 1
+                        name: "multicast_group_id"
+                        annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+                        annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)"
+                      )pb",
+                      pdpi::STRING))
+          .entry_action(
+              IrActionDefinitionBuilder()
+                  .preamble(
+                      R"pb(
+                        alias: "redirect_action_that_includes_next_hop_type"
+                      )pb")
+                  .param(
+                      R"pb(
+                        id: 1
+                        name: "multicast_group_id"
+                        annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+                        annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)"
+                      )pb",
+                      pdpi::STRING))
+          .entry_action(
+              IrActionDefinitionBuilder()
+                  .preamble(
+                      R"pb(
+                        alias: "redirect_action_that_includes_port_type"
+                      )pb")
+                  .param(
+                      R"pb(
+                        id: 1
+                        name: "multicast_group_id"
+                        annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+                        annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)"
+                      )pb",
+                      pdpi::STRING))
           .size(512)
           .meter_unit(p4::config::v1::MeterSpec::BYTES)
           .counter_unit(p4::config::v1::CounterSpec::BOTH)();
@@ -143,6 +210,17 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
             "format": "STRING",
             "sai_field": "SAI_ACL_TABLE_ATTR_FIELD_IN_PORT"})JSON")
                             .dump()},
+      {"match/vrf_id", nlohmann::json::parse(R"JSON(
+           {"kind": "sai_field",
+            "format": "STRING",
+            "sai_field": "SAI_ACL_TABLE_ATTR_FIELD_VRF_ID"})JSON")
+                           .dump()},
+      {"match/ipmc_table_hit", nlohmann::json::parse(R"JSON(
+           {"kind": "sai_field",
+            "format": "HEX_STRING",
+            "bitwidth": 1,
+            "sai_field": "SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT"})JSON")
+                                   .dump()},
       {"action/single_param_action", nlohmann::json::parse(R"JSON(
            [{"action": "SAI_PACKET_ACTION_FORWARD"},
             {"action": "QOS_QUEUE", "param": "qos"}])JSON")
@@ -167,6 +245,30 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
             {"action": "SAI_PACKET_ACTION_DROP", "packet_color": "SAI_PACKET_COLOR_RED"},
             {"action": "QOS_QUEUE", "param": "qos"}])JSON")
                                                        .dump()},
+      {"action/redirect_action_that_includes_ipmc_type",
+       nlohmann::json::parse(R"JSON(
+           [{"action": "SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT",
+             "param": "multicast_group_id",
+             "object_type": "SAI_OBJECT_TYPE_IPMC_GROUP"}])JSON")
+           .dump()},
+      {"action/redirect_action_that_includes_l2mc_type",
+       nlohmann::json::parse(R"JSON(
+           [{"action": "SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT",
+             "param": "multicast_group_id",
+             "object_type": "SAI_OBJECT_TYPE_L2MC_GROUP"}])JSON")
+           .dump()},
+      {"action/redirect_action_that_includes_next_hop_type",
+       nlohmann::json::parse(R"JSON(
+           [{"action": "SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT",
+             "param": "multicast_group_id",
+             "object_type": "SAI_OBJECT_TYPE_NEXT_HOP"}])JSON")
+           .dump()},
+      {"action/redirect_action_that_includes_port_type",
+       nlohmann::json::parse(R"JSON(
+           [{"action": "SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT",
+             "param": "multicast_group_id",
+             "object_type": "SAI_OBJECT_TYPE_PORT"}])JSON")
+           .dump()},
       {"size", "512"},
       {"meter/unit", "BYTES"},
       {"counter/unit", "BOTH"},
@@ -1447,6 +1549,21 @@ class BadActionParamTest
          R"pb(id: 1
               name: "param"
               annotations: "@sai_action_param(SAI_PACKET_ACTION_DROP)")pb"},
+        {"InvalidRedirectObjectType",
+         R"pb(
+           annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+           annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_INVALID)"
+         )pb"},
+        {"TooManySaiObjectTypeArguments",
+         R"pb(
+           annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+           annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_PORT, SAI_EXTRA)"
+         )pb"},
+        {"MissingSaiObjectTypeArgument",
+         R"pb(
+           annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+           annotations: "@sai_action_param_object_type()"
+         )pb"},
 #ifdef __EXCEPTIONS
         {"UnknownSaiAction",
          R"pb(id: 1
