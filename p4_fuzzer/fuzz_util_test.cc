@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -210,7 +210,7 @@ TEST(FuzzUtilTest, FuzzWriteRequestCanFuzzMulticastGroupEntry) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
   absl::BitGen gen;
   // Ensure a multicast entity is fuzzed.
-  fuzzer_state.config.fuzz_multicast_group_entry_probability = 1.0;
+  fuzzer_state.config.SetFuzzMulticastGroupEntryProbability(1.0);
 
   AnnotatedWriteRequest write_request;
   // Because there is a non-zero chance to fuzz no updates.
@@ -546,11 +546,13 @@ TEST(FuzzUtilTest, FuzzWriteRequestRespectMaxBatchSize) {
 
 TEST(FuzzUtilTest, FuzzWriteRequestRespectsDisallowList) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
-  fuzzer_state.config.disabled_fully_qualified_names = {
-      "ingress.id_test_table", "ingress.exact_table", "ingress.ternary_table"};
+  fuzzer_state.config.SetDisabledFullyQualifiedNames({"ingress.id_test_table",
+                                                      "ingress.exact_table",
+                                                      "ingress.ternary_table"});
 
   absl::flat_hash_set<uint32_t> disallowed_ids;
-  for (const auto& path : fuzzer_state.config.disabled_fully_qualified_names) {
+  for (const auto& path :
+       fuzzer_state.config.GetDisabledFullyQualifiedNames()) {
     std::vector<std::string> parts = absl::StrSplit(path, '.');
     ASSERT_OK_AND_ASSIGN(
         const pdpi::IrTableDefinition& table,
@@ -572,12 +574,12 @@ TEST(FuzzUtilTest, FuzzWriteRequestRespectsDisallowList) {
 
 TEST(FuzzUtilTest, FuzzValidTableEntryRespectsDisallowList) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
-  fuzzer_state.config.disabled_fully_qualified_names = {
+  fuzzer_state.config.SetDisabledFullyQualifiedNames({
       "ingress.ternary_table.ipv6_upper_64_bits",
       "ingress.ternary_table.normal",
       "ingress.ternary_table.mac",
       "ingress.ternary_table.unsupported_field",
-  };
+  });
 
   ASSERT_OK_AND_ASSIGN(
       const pdpi::IrTableDefinition& ternary_table,
@@ -585,7 +587,8 @@ TEST(FuzzUtilTest, FuzzValidTableEntryRespectsDisallowList) {
                           "ternary_table"));
 
   absl::flat_hash_set<uint32_t> disallowed_ids;
-  for (const auto& path : fuzzer_state.config.disabled_fully_qualified_names) {
+  for (const auto& path :
+       fuzzer_state.config.GetDisabledFullyQualifiedNames()) {
     std::vector<std::string> parts = absl::StrSplit(path, '.');
     ASSERT_OK_AND_ASSIGN(
         const pdpi::IrMatchFieldDefinition& match,
@@ -612,8 +615,9 @@ TEST(FuzzUtilTest, FuzzActionRespectsDisallowList) {
       pdpi::IrActionDefinition do_thing_action,
       gutil::FindOrStatus(fuzzer_state.config.GetIrP4Info().actions_by_name(),
                           "do_thing_1"));
-  fuzzer_state.config.disabled_fully_qualified_names = {
-      do_thing_action.preamble().name()};
+  fuzzer_state.config.SetDisabledFullyQualifiedNames({
+      do_thing_action.preamble().name(),
+  });
 
   ASSERT_OK_AND_ASSIGN(
       const pdpi::IrTableDefinition& id_test_table,

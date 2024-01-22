@@ -32,6 +32,7 @@
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -186,17 +187,30 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
     thinkit::TestEnvironment& environment, absl::string_view table_name,
     const EntityPredicate& predicate) {
   Entity entity;
-  ASSIGN_OR_RETURN(
-      const pdpi::IrTableDefinition p4_table_def,
-      gutil::FindOrStatus(config.GetIrP4Info().tables_by_name(), table_name));
+  // As of now, we only support p4 defined tables or the multicast group table.
+  // This means that an empty optional also signals that we have the multicast
+  // group table.
+  std::optional<pdpi::IrTableDefinition> p4_table_def = std::nullopt;
+  if (table_name != pdpi::GetMulticastGroupTableName()) {
+    ASSIGN_OR_RETURN(
+        p4_table_def,
+        gutil::FindOrStatus(config.GetIrP4Info().tables_by_name(), table_name));
+  }
   // Generate new entries until we satisfy our predicates or do not trigger
   // known bugs (if we are masking known failures). Continue trying for at most
   // 10 seconds.
   const absl::Time kDeadline = absl::Now() + absl::Seconds(10);
   bool entry_triggers_known_bug = false;
   do {
-    ASSIGN_OR_RETURN(*entity.mutable_table_entry(),
-                     FuzzValidTableEntry(&gen, config, state, p4_table_def));
+    if (p4_table_def.has_value()) {
+      ASSIGN_OR_RETURN(*entity.mutable_table_entry(),
+                       FuzzValidTableEntry(&gen, config, state, *p4_table_def));
+
+    } else {
+      ASSIGN_OR_RETURN(*entity.mutable_packet_replication_engine_entry()
+                            ->mutable_multicast_group_entry(),
+                       FuzzValidMulticastGroupEntry(&gen, config, state));
+    }
     if (environment.MaskKnownFailures()) {
       RETURN_IF_ERROR(
           ModifyEntityToAvoidKnownBug(config.GetIrP4Info(), entity));
@@ -242,6 +256,56 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
   update.set_type(Update::INSERT);
   *update.mutable_entity() = entity;
   return state.ApplyUpdate(update);
+}
+
+// TODO: b/322007061 - Remove function once built-in multicast group table can
+// be treated like any other table.
+// Installs a multicast group entry with and without replicas.
+absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
+    absl::BitGen& gen, pdpi::P4RuntimeSession& session,
+    const FuzzerConfig& config, SwitchState& state,
+    thinkit::TestEnvironment& environment,
+    const p4::config::v1::P4Info& p4info) {
+  LOG(INFO) << "INSTALLING ENTRIES INTO BUILT-IN MULTICAST GROUP TABLE";
+
+  RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+                      gen, session, config, state, environment,
+                      pdpi::GetMulticastGroupTableName(),
+                      /*predicate=*/
+                      [&](const Entity& entity) {
+                        // Checks that the multicast entry has replicas.
+                        return entity.packet_replication_engine_entry()
+                                   .has_multicast_group_entry() &&
+                               !entity.packet_replication_engine_entry()
+                                    .multicast_group_entry()
+                                    .replicas()
+                                    .empty();
+                      }))
+          .SetPrepend()
+      << "while generating entry for '" << pdpi::GetMulticastGroupTableName()
+      << "': ";
+  LOG(INFO) << absl::Substitute("   -  With $0: Present",
+                                pdpi::GetReplicaActionName());
+
+  RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+                      gen, session, config, state, environment,
+                      pdpi::GetMulticastGroupTableName(),
+                      /*predicate=*/
+                      [&](const Entity& entity) {
+                        // Checks that the multicast entry has no replicas.
+                        return entity.packet_replication_engine_entry()
+                                   .has_multicast_group_entry() &&
+                               entity.packet_replication_engine_entry()
+                                   .multicast_group_entry()
+                                   .replicas()
+                                   .empty();
+                      }))
+          .SetPrepend()
+      << "while generating entry for '" << pdpi::GetMulticastGroupTableName()
+      << "': ";
+  LOG(INFO) << absl::Substitute("   -  With $0: Absent",
+                                pdpi::GetReplicaActionName());
+  return absl::OkStatus();
 }
 
 // For each programmable table, installs a set of table entries covering all
@@ -416,6 +480,8 @@ absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
       "l3_admit_table",
       "vrf_table",
       "router_interface_table",
+      "multicast_router_interface_table",
+      "builtin::multicast_group_table",
       "neighbor_table",
       "tunnel_table",
       "nexthop_table",
@@ -425,11 +491,15 @@ absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
   };
 
   for (const auto& table_name : kOrderedTablesToInsertEntriesInto) {
-    ASSIGN_OR_RETURN(
-        const pdpi::IrTableDefinition& table,
-        gutil::FindOrStatus(config.GetIrP4Info().tables_by_name(), table_name));
+    std::string fully_qualified_name = table_name;
+    if (table_name != pdpi::GetMulticastGroupTableName()) {
+      ASSIGN_OR_RETURN(const pdpi::IrTableDefinition& table,
+                       gutil::FindOrStatus(
+                           config.GetIrP4Info().tables_by_name(), table_name));
+      fully_qualified_name = table.preamble().name();
+    }
 
-    if (IsDisabledForFuzzing(config, table.preamble().name())) {
+    if (IsDisabledForFuzzing(config, fully_qualified_name)) {
       LOG(INFO) << absl::StrCat(table_name,
                                 " was skipped due to being disabled.");
       continue;
@@ -485,6 +555,16 @@ TEST_P(MatchActionCoverageTestFixture,
   EXPECT_OK(AddTableEntryForEachMatchAndEachAction(gen, *p4rt_session, config,
                                                    state, testbed.Environment(),
                                                    GetParam().p4info));
+
+  // TODO: b/322007061 - Remove function once built-in multicast group table can
+  // be treated like any other table.
+  // Generates and installs entries for the built-in multicast group table.
+  if (!config.disabled_fully_qualified_names.contains(
+          pdpi::GetMulticastGroupTableName())) {
+    EXPECT_OK(AddMulticastGroupEntryWithAndWithoutReplicas(
+        gen, *p4rt_session, config, state, testbed.Environment(),
+        GetParam().p4info));
+  }
 }
 
 }  // namespace
