@@ -318,7 +318,7 @@ control acl_ingress(in headers_t headers,
     // Only allow IP field matches for IP packets.
     ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
-    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
+    // Only allow l4_dst_port matches for TCP/UDP packets.
     l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
@@ -329,8 +329,16 @@ control acl_ingress(in headers_t headers,
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
     // Only allow icmp_type matches for ICMP packets
     icmpv6_type::mask != 0 -> ip_protocol == 58;
+#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
+    // Only allow l4_dst_port matches for TCP/UDP packets.
+    l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
+    // Only allow icmp_type matches for ICMP packets
+    icmp_type::mask != 0 -> ip_protocol == 1;
+#endif
+#if defined(SAI_INSTANTIATION_TOR)
     // Only allow arp_tpa matches for ARP packets.
     arp_tpa::mask != 0 -> ether_type == 0x0806;
+#endif
   ")
   table acl_ingress_qos_table {
     key = {
@@ -346,15 +354,6 @@ control acl_ingress(in headers_t headers,
       headers.ethernet.ether_type : ternary
           @id(4) @name("ether_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
-      headers.ethernet.dst_addr : ternary
-          @id(5) @name("dst_mac")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
-      headers.arp.target_proto_addr : ternary
-          @id(6) @name("arp_tpa")
-          @composite_field(
-              @sai_udf(base=SAI_UDF_BASE_L3, offset=24, length=2),
-              @sai_udf(base=SAI_UDF_BASE_L3, offset=26, length=2)
-          ) @format(IPV4_ADDRESS);
       ttl : ternary
           @id(7) @name("ttl")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_TTL);
@@ -367,12 +366,34 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(10) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
+#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
+      local_metadata.l4_src_port : ternary
+          @id(12) @name("l4_src_port")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT);
+      headers.icmp.type : ternary
+          @id(14) @name("icmp_type")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE);
+      local_metadata.route_metadata : optional
+          @id(15) @name("route_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
+#endif
+#if defined(SAI_INSTANTIATION_TOR)
+      headers.ethernet.dst_addr : ternary
+          @id(5) @name("dst_mac")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
+      headers.arp.target_proto_addr : ternary
+          @id(6) @name("arp_tpa")
+          @composite_field(
+              @sai_udf(base=SAI_UDF_BASE_L3, offset=24, length=2),
+              @sai_udf(base=SAI_UDF_BASE_L3, offset=26, length=2)
+          ) @format(IPV4_ADDRESS);
       local_metadata.ingress_port : optional
           @id(11) @name("in_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
       local_metadata.acl_metadata : ternary
           @id(13) @name("acl_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+#endif
     }
     actions = {
       @proto_id(1) set_qos_queue_and_cancel_copy_above_rate_limit();
@@ -666,6 +687,7 @@ control acl_ingress(in headers_t headers,
 #elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     acl_ingress_table.apply();
     acl_ingress_counting_table.apply();
+    acl_ingress_qos_table.apply();
 #elif defined(SAI_INSTANTIATION_TOR)
     // These tables are currently order agnostic, but we should be careful to
     // ensure that the ordering is correct if we add new actions or model

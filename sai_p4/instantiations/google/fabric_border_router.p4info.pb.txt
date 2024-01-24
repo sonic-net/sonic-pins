@@ -561,6 +561,127 @@ tables {
 }
 tables {
   preamble {
+    id: 33554695
+    name: "ingress.acl_ingress.acl_ingress_qos_table"
+    alias: "acl_ingress_qos_table"
+    annotations: "@sai_acl(INGRESS)"
+    annotations: "@sai_acl_priority(10)"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Only allow IP field matches for IP packets.\n    ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port matches for TCP/UDP packets.\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n    // Only allow icmp_type matches for ICMP packets\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n\n    // Only allow l4_dst_port matches for TCP/UDP packets.\n    l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    // Only allow icmp_type matches for ICMP packets\n    icmp_type::mask != 0 -> ip_protocol == 1;\n\n\n\n\n\n  \")"
+  }
+  match_fields {
+    id: 1
+    name: "is_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 2
+    name: "is_ipv4"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 3
+    name: "is_ipv6"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 4
+    name: "ether_type"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE)"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 7
+    name: "ttl"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_TTL)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 8
+    name: "ip_protocol"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 9
+    name: "icmpv6_type"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMPV6_TYPE)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 10
+    name: "l4_dst_port"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT)"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 12
+    name: "l4_src_port"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT)"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 14
+    name: "icmp_type"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 15
+    name: "route_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META)"
+    bitwidth: 6
+    match_type: OPTIONAL
+  }
+  action_refs {
+    id: 16777484
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777486
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777475
+    annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 16777481
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
+    id: 16777488
+    annotations: "@proto_id(5)"
+  }
+  action_refs {
+    id: 16777489
+    annotations: "@proto_id(6)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  direct_resource_ids: 318767367
+  direct_resource_ids: 352321794
+  size: 511
+}
+tables {
+  preamble {
     id: 33554697
     name: "ingress.acl_ingress.acl_ingress_counting_table"
     alias: "acl_ingress_counting_table"
@@ -1200,6 +1321,90 @@ actions {
 }
 actions {
   preamble {
+    id: 16777484
+    name: "ingress.acl_ingress.set_qos_queue_and_cancel_copy_above_rate_limit"
+    alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL , SAI_PACKET_COLOR_RED)"
+  }
+  params {
+    id: 1
+    name: "qos_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777489
+    name: "ingress.acl_ingress.set_cpu_and_multicast_queues_and_deny_above_rate_limit"
+    alias: "set_cpu_and_multicast_queues_and_deny_above_rate_limit"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_RED)"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "cpu_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+  params {
+    id: 2
+    name: "green_multicast_queue"
+    annotations: "@sai_action_param(MULTICAST_QOS_QUEUE , SAI_PACKET_COLOR_GREEN)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+  params {
+    id: 3
+    name: "red_multicast_queue"
+    annotations: "@sai_action_param(MULTICAST_QOS_QUEUE , SAI_PACKET_COLOR_RED)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777486
+    name: "ingress.acl_ingress.set_cpu_queue_and_deny_above_rate_limit"
+    alias: "set_cpu_queue_and_deny_above_rate_limit"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_RED)"
+  }
+  params {
+    id: 1
+    name: "cpu_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777488
+    name: "ingress.acl_ingress.set_cpu_queue"
+    alias: "set_cpu_queue"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "cpu_queue"
+    annotations: "@sai_action_param(QOS_QUEUE)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+}
+actions {
+  preamble {
     id: 16777217
     name: "ingress.routing_resolution.set_dst_mac"
     alias: "set_dst_mac"
@@ -1537,6 +1742,17 @@ direct_counters {
 }
 direct_counters {
   preamble {
+    id: 318767367
+    name: "ingress.acl_ingress.acl_ingress_qos_counter"
+    alias: "acl_ingress_qos_counter"
+  }
+  spec {
+    unit: BOTH
+  }
+  direct_table_id: 33554695
+}
+direct_counters {
+  preamble {
     id: 318767369
     name: "ingress.acl_ingress.acl_ingress_counting_counter"
     alias: "acl_ingress_counting_counter"
@@ -1568,6 +1784,18 @@ direct_meters {
     unit: BYTES
   }
   direct_table_id: 33554688
+}
+direct_meters {
+  preamble {
+    id: 352321794
+    name: "ingress.acl_ingress.acl_ingress_qos_meter"
+    alias: "acl_ingress_qos_meter"
+    annotations: "@mode(single_rate_two_color)"
+  }
+  spec {
+    unit: BYTES
+  }
+  direct_table_id: 33554695
 }
 controller_packet_metadata {
   preamble {
