@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This package contains the interfaces, structs, and enums to be used in PINs NSF tests.
+# This package has the integration tests along with the utilities for testing NSF in PINs.
 
 package(
     default_visibility = ["//visibility:public"],
@@ -20,43 +20,17 @@ package(
 )
 
 cc_library(
-    name = "flow_programmer",
+    name = "util",
     testonly = True,
-    hdrs = ["flow_programmer.h"],
+    srcs = ["util.cc"],
+    hdrs = ["util.h"],
     deps = [
+        "//gutil:status",
+        "//tests/integration/system/nsf/interfaces:component_validator",
         "//thinkit:generic_testbed",
-        "@com_google_absl//absl/status",
-    ],
-)
-
-cc_library(
-    name = "traffic_helper",
-    hdrs = ["traffic_helper.h"],
-    deps = [
-        "//thinkit:generic_testbed",
-        "@com_google_absl//absl/status",
-    ],
-)
-
-cc_library(
-    name = "component_validator",
-    testonly = True,
-    hdrs = ["component_validator.h"],
-    deps = [
-        "//thinkit:generic_testbed",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
-    ],
-)
-
-cc_library(
-    name = "test_params",
-    testonly = True,
-    hdrs = ["test_params.h"],
-    deps = [
-        ":component_validator",
-        ":flow_programmer",
-        ":traffic_helper",
-        "//thinkit:generic_testbed_fixture",
+        "@com_google_absl//absl/types:span",
     ],
 )

@@ -15,6 +15,8 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_TEST_PARAMS_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_INTERFACES_TEST_PARAMS_H_
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -31,10 +33,12 @@ namespace pins_test {
 // parameterized NSF integration test.
 struct NsfTestParams {
   std::string name;
-  FlowProgrammer* flow_programmer;
-  TrafficHelper* traffic_helper;
-  thinkit::GenericTestbedInterface* testbed_interface;
-  std::vector<ComponentValidator*> component_validators;
+  std::function<std::unique_ptr<FlowProgrammer>()> create_flow_programmer;
+  std::function<std::unique_ptr<TrafficHelper>()> create_traffic_helper;
+  std::function<std::unique_ptr<thinkit::GenericTestbedInterface>()>
+      create_testbed_interface;
+  std::function<std::vector<std::unique_ptr<ComponentValidator>>()>
+      create_component_validators;
 };
 
 }  // namespace pins_test
