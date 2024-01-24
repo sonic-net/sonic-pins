@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This package contains the interfaces, structs, and enums to be used in PINs NSF tests.
+# This package implements the various component validators for PINs NSF tests.
+#
+# Note: These are dummy validators added as example of ComponentValidators implementation.
+# Component owners need to have their own implementations and register to be used by the NSF Upgrade
+# tests.
 
 package(
     default_visibility = ["//visibility:public"],
@@ -20,43 +24,40 @@ package(
 )
 
 cc_library(
-    name = "flow_programmer",
+    name = "sai_validator",
     testonly = True,
-    hdrs = ["flow_programmer.h"],
+    hdrs = ["sai_validator.h"],
     deps = [
+        "//tests/integration/system/nsf/interfaces:component_validator",
         "//thinkit:generic_testbed",
-        "@com_google_absl//absl/status",
-    ],
-)
-
-cc_library(
-    name = "traffic_helper",
-    hdrs = ["traffic_helper.h"],
-    deps = [
-        "//thinkit:generic_testbed",
-        "@com_google_absl//absl/status",
-    ],
-)
-
-cc_library(
-    name = "component_validator",
-    testonly = True,
-    hdrs = ["component_validator.h"],
-    deps = [
-        "//thinkit:generic_testbed",
+        "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
     ],
 )
 
 cc_library(
-    name = "test_params",
+    name = "swss_validator",
     testonly = True,
-    hdrs = ["test_params.h"],
+    hdrs = ["swss_validator.h"],
     deps = [
-        ":component_validator",
-        ":flow_programmer",
-        ":traffic_helper",
-        "//thinkit:generic_testbed_fixture",
+        "//tests/integration/system/nsf/interfaces:component_validator",
+        "//thinkit:generic_testbed",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+)
+
+cc_library(
+    name = "syncd_validator",
+    testonly = True,
+    hdrs = ["syncd_validator.h"],
+    deps = [
+        "//tests/integration/system/nsf/interfaces:component_validator",
+        "//thinkit:generic_testbed",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
     ],
 )

@@ -22,8 +22,6 @@
 namespace pins_test {
 
 class OtgHelper : public TrafficHelper {
-  ~OtgHelper() override = default;
-
  public:
   absl::Status StartTraffic(thinkit::GenericTestbed& testbed) override {
     return absl::OkStatus();
