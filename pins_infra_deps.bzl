@@ -33,9 +33,6 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
-            # url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
-            # strip_prefix = "grpc-1.46.0",
-            # sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
             url = "https://github.com/grpc/grpc/archive/v1.58.0.zip",
             strip_prefix = "grpc-1.58.0",
             sha256 = "aa329c7de707a03511c88206ef4483e9346ab6336b6be4378d294060aa7400b3",
@@ -230,8 +227,8 @@ def pins_infra_deps():
     if not native.existing_rule("sonic_swss_common"):
         http_archive(
             name = "sonic_swss_common",
-            url = "https://github.com/azure/sonic-swss-common/archive/e7917acd2d4a9c0121802437e3c899bd513ac888.zip",
-            strip_prefix = "sonic-swss-common-e7917acd2d4a9c0121802437e3c899bd513ac888",
+            url = "https://github.com/azure/sonic-swss-common/archive/f6c1614227f25dfa81ab5ccd0cb8cca265aaad7d.zip",
+            strip_prefix = "sonic-swss-common-f6c1614227f25dfa81ab5ccd0cb8cca265aaad7d",
         )
     if not native.existing_rule("rules_pkg"):
         http_archive(

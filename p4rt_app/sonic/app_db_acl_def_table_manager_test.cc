@@ -141,10 +141,11 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
                       R"pb(
                         id: 1
                         name: "multicast_group_id"
+                        bitwidth: 16
                         annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
                         annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
                       )pb",
-                      pdpi::STRING))
+                      pdpi::HEX_STRING))
           .entry_action(
               IrActionDefinitionBuilder()
                   .preamble(
@@ -155,10 +156,11 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
                       R"pb(
                         id: 1
                         name: "multicast_group_id"
+                        bitwidth: 16
                         annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
                         annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)"
                       )pb",
-                      pdpi::STRING))
+                      pdpi::HEX_STRING))
           .entry_action(
               IrActionDefinitionBuilder()
                   .preamble(
@@ -168,7 +170,7 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
                   .param(
                       R"pb(
                         id: 1
-                        name: "multicast_group_id"
+                        name: "nexthop_id"
                         annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
                         annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)"
                       )pb",
@@ -182,7 +184,7 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
                   .param(
                       R"pb(
                         id: 1
-                        name: "multicast_group_id"
+                        name: "port_id"
                         annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
                         annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_PORT)"
                       )pb",
@@ -260,13 +262,13 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
       {"action/redirect_action_that_includes_next_hop_type",
        nlohmann::json::parse(R"JSON(
            [{"action": "SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT",
-             "param": "multicast_group_id",
+             "param": "nexthop_id",
              "object_type": "SAI_OBJECT_TYPE_NEXT_HOP"}])JSON")
            .dump()},
       {"action/redirect_action_that_includes_port_type",
        nlohmann::json::parse(R"JSON(
            [{"action": "SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT",
-             "param": "multicast_group_id",
+             "param": "port_id",
              "object_type": "SAI_OBJECT_TYPE_PORT"}])JSON")
            .dump()},
       {"size", "512"},
