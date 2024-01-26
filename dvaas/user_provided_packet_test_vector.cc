@@ -19,16 +19,20 @@ namespace dvaas {
 
 namespace {
 
+absl::StatusOr<std::string> LegitimizeParsedPacketAndReturnAsHex(
+    packetlib::Packet& packet) {
+  RETURN_IF_ERROR(packetlib::UpdateMissingComputedFields(packet).status());
+  RETURN_IF_ERROR(packetlib::ValidatePacket(packet));
+  ASSIGN_OR_RETURN(std::string raw_packet,
+                   packetlib::RawSerializePacket(packet));
+  return absl::BytesToHexString(raw_packet);
+}
+
 // Checks that the given `input_packet` is well-formed, returning it with
 // omittable fields filled in if that is the case, or an error otherwise.
 absl::StatusOr<Packet> LegitimizePacket(Packet packet) {
-  RETURN_IF_ERROR(
-      packetlib::UpdateMissingComputedFields(*packet.mutable_parsed())
-          .status());
-  RETURN_IF_ERROR(packetlib::ValidatePacket(packet.parsed()));
-  ASSIGN_OR_RETURN(std::string raw_packet,
-                   packetlib::RawSerializePacket(packet.parsed()));
-  packet.set_hex(absl::BytesToHexString(raw_packet));
+  ASSIGN_OR_RETURN(*packet.mutable_hex(), LegitimizeParsedPacketAndReturnAsHex(
+                                              *packet.mutable_parsed()));
   return packet;
 }
 
@@ -43,24 +47,17 @@ absl::Status LegitimizePacketInMetadata(const PacketIn& packet_in,
     *ir_packet_in.add_metadata() = metadata;
   }
 
-  // Translate IR `packet_in` into PI and translate resulting `packet_in` back
-  // into IR to validate its metadata is well-formed. If not, return an error.
-  ASSIGN_OR_RETURN(p4::v1::PacketIn pi_packet_in,
-                   pdpi::IrPacketInToPi(ir_info, ir_packet_in));
-  return absl::OkStatus();
+  // Translate IR `packet_in` into PI to validate its metadata is well-formed.
+  // If not, return an error.
+  return pdpi::IrPacketInToPi(ir_info, ir_packet_in).status();
 }
 
 absl::StatusOr<PacketIn> LegitimizePacketIn(PacketIn packet_in,
                                             const pdpi::IrP4Info& ir_info) {
-  RETURN_IF_ERROR(
-      packetlib::UpdateMissingComputedFields(*packet_in.mutable_parsed())
-          .status());
-  RETURN_IF_ERROR(packetlib::ValidatePacket(packet_in.parsed()));
-  ASSIGN_OR_RETURN(std::string raw_packet,
-                   packetlib::RawSerializePacket(packet_in.parsed()));
-  packet_in.set_hex(absl::BytesToHexString(raw_packet));
-
   RETURN_IF_ERROR(LegitimizePacketInMetadata(packet_in, ir_info));
+  ASSIGN_OR_RETURN(
+      *packet_in.mutable_hex(),
+      LegitimizeParsedPacketAndReturnAsHex(*packet_in.mutable_parsed()));
   return packet_in;
 }
 
@@ -89,22 +86,19 @@ absl::Status LegitimizeTestVector(
            << "must specify at least 1 acceptable output, but 0 were found";
   }
   for (SwitchOutput& output : *vector.mutable_acceptable_outputs()) {
-    // Punted output packets are not supported for now.
-    if (!output.packet_ins().empty()) {
-      for (int i = 0; i < output.packet_ins().size(); ++i) {
-        PacketIn& output_packet_ins = *output.mutable_packet_ins(i);
-        ASSIGN_OR_RETURN(
-            int output_tag, ExtractTestPacketTag(output_packet_ins.parsed()),
-            _.SetPrepend() << "output packet in #" << (i + 1) << " invalid: ");
-        ASSIGN_OR_RETURN(
-            output_packet_ins, LegitimizePacketIn(output_packet_ins, ir_info),
-            _.SetPrepend() << "output packet in #" << (i + 1) << " invalid: ");
-        if (output_tag != tag) {
-          return gutil::InvalidArgumentErrorBuilder()
-                 << "mismatch of input packet in tag vs output packet in tag "
-                    "for output packet in #"
-                 << (i + 1) << ": " << tag << " vs " << output_tag;
-        }
+    for (int i = 0; i < output.packet_ins().size(); ++i) {
+      PacketIn& output_packet_ins = *output.mutable_packet_ins(i);
+      ASSIGN_OR_RETURN(
+          int output_tag, ExtractTestPacketTag(output_packet_ins.parsed()),
+          _.SetPrepend() << "output packet in #" << (i + 1) << " invalid: ");
+      ASSIGN_OR_RETURN(
+          output_packet_ins, LegitimizePacketIn(output_packet_ins, ir_info),
+          _.SetPrepend() << "output packet in #" << (i + 1) << " invalid: ");
+      if (output_tag != tag) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "mismatch of input packet in tag vs output packet in tag "
+                  "for output packet in #"
+               << (i + 1) << ": " << tag << " vs " << output_tag;
       }
     }
     // Legitimize forwarded output packets.
