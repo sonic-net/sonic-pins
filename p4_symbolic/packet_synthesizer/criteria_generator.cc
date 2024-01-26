@@ -89,6 +89,10 @@ GenerateSynthesisCriteriaFor(const EntryCoverageGoal& goal,
         criteria.mutable_table_entry_reachability_criteria()->set_match_index(
             i);
         criteria_list.push_back(criteria);
+        criteria_list.back()
+            .mutable_metadata()
+            ->mutable_covered_entity_debug_strings()
+            ->Add(entries[i].ShortDebugString());
       }
     }
 

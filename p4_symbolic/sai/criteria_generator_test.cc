@@ -18,7 +18,9 @@
 #include <vector>
 
 #include "absl/types/optional.h"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/message.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
@@ -72,17 +74,25 @@ PacketSynthesisParams GetParams(
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry);
 
   CHECK_OK(pi_entry.status());
-  *params.mutable_pi_entries()->Add() = *pi_entry;
+  *params.add_pi_entities()->mutable_table_entry() = *pi_entry;
 
   return params;
 }
 
 void ExpectEqualCriteriaList(
     const std::vector<PacketSynthesisCriteria>& result,
-    const std::vector<PacketSynthesisCriteria>& expected) {
+    const std::vector<PacketSynthesisCriteria>& expected,
+    bool ignore_metadata = true) {
   ASSERT_EQ(result.size(), expected.size());
   for (int i = 0; i < result.size(); i++) {
-    ASSERT_THAT(result[i], gutil::EqualsProto(expected[i]));
+    PacketSynthesisCriteria result_criteria = result[i];
+    PacketSynthesisCriteria expected_criteria = expected[i];
+    LOG(INFO) << result_criteria.ShortDebugString();
+    if (ignore_metadata) {
+      result_criteria.clear_metadata();
+      expected_criteria.clear_metadata();
+    }
+    ASSERT_THAT(result_criteria, gutil::EqualsProto(expected_criteria));
   }
 }
 

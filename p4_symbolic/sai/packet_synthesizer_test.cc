@@ -65,7 +65,7 @@ PacketSynthesisParams GetParams(
       pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry);
 
   CHECK_OK(pi_entry.status());
-  *params.mutable_pi_entries()->Add() = *pi_entry;
+  *params.add_pi_entities()->mutable_table_entry() = *pi_entry;
 
   return params;
 }

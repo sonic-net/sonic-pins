@@ -36,6 +36,16 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "sai_coverage_goals",
+    testonly = True,
+    hdrs = ["sai_coverage_goals.h"],
+    deps = [
+        "//gutil:testing",
+        "//p4_symbolic/packet_synthesizer:coverage_goal_cc_proto",
+    ],
+)
+
 cc_test(
     name = "sai_test",
     srcs = ["sai_test.cc"],

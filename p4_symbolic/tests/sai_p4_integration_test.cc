@@ -96,7 +96,7 @@ constexpr absl::string_view kTableEntries = R"pb(
   }
 )pb";
 
-class P4SymbolicComponentTest : public testing::Test {
+class P4SymbolicIntegrationTest : public testing::Test {
  public:
   thinkit::TestEnvironment& Environment() { return *environment_; }
 
@@ -122,7 +122,7 @@ absl::StatusOr<std::string> GenerateSmtForSaiPiplelineWithSimpleEntries() {
 
 // Generate SMT constraints for the SAI pipeline from scratch multiple times and
 // make sure the results remain the same.
-TEST_F(P4SymbolicComponentTest,
+TEST_F(P4SymbolicIntegrationTest,
        DISABLED_ConstraintGenerationIsDeterministicForSai) {
   constexpr int kNumberOfRuns = 5;
   ASSERT_OK_AND_ASSIGN(const std::string reference_smt_formula,
@@ -135,7 +135,7 @@ TEST_F(P4SymbolicComponentTest,
   }
 }
 
-TEST_F(P4SymbolicComponentTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
+TEST_F(P4SymbolicIntegrationTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
   // Some constants.
   auto env = thinkit::BazelTestEnvironment(/*mask_known_failures=*/false);
   const auto config = sai::GetNonstandardForwardingPipelineConfig(
