@@ -44,6 +44,14 @@ TEST(FakeWarmBootStateAdapterTest, SetWarmStart) {
   EXPECT_THAT(adapter.IsWarmStart(), false);
 }
 
+TEST(FakeWarmBootStateAdapterTest, SetOrchAgentWarmBootState) {
+  FakeWarmBootStateAdapter adapter;
+  EXPECT_THAT(adapter.GetOrchAgentWarmBootState(), swss::WarmStart::WSUNKNOWN);
+  adapter.SetOrchAgentWarmBootState(
+      swss::WarmStart::WarmStartState::RECONCILED);
+  EXPECT_THAT(adapter.GetOrchAgentWarmBootState(), swss::WarmStart::RECONCILED);
+}
+
 }  // namespace
 }  // namespace sonic
 }  // namespace p4rt_app

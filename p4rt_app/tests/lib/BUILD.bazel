@@ -74,6 +74,7 @@ cc_library(
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/sonic/adapters:fake_table_adapter",
         "//p4rt_app/sonic/adapters:fake_warm_boot_state_adapter",
+        "//p4rt_app/utils:warm_restart_utility",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/memory",
