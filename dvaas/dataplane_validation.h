@@ -104,11 +104,11 @@ struct DataplaneValidationParams {
   // non-standard testbeds only.
   std::optional<MirrorTestbedP4rtPortIdMap> mirror_testbed_port_map_override;
 
-  // The 'time_limit' sets the maximum allowed time for dataplane validation to
-  // synthesize test packets. If nullopt, packet synthesizer runs to completion
-  // for its coverage goals. Otherwise, if packet synthesis timed out, the
-  // synthesis results cover the coverage goals only partially.
-  std::optional<absl::Duration> time_limit = std::nullopt;
+  // Maximum allowed time for dataplane validation to synthesize test packets.
+  // If nullopt, packet synthesizer runs to completion for its coverage goals.
+  // Otherwise, if packet synthesis timed out, the synthesis results cover the
+  // coverage goals only partially.
+  std::optional<absl::Duration> packet_synthesis_time_limit = std::nullopt;
 };
 
 // Forward declaration. See below for description.
@@ -221,7 +221,7 @@ class DataplaneValidationBackend {
   // even open-source yet), so DVaaS takes the synthesis function as an input
   // parameter.
   virtual absl::StatusOr<PacketSynthesisResult> SynthesizePackets(
-      const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntries& ir_entries,
+      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
       const p4::v1::ForwardingPipelineConfig& p4_symbolic_config,
       absl::Span<const pins_test::P4rtPortId> ports,
       const OutputWriterFunctionType& write_stats,
@@ -243,7 +243,7 @@ class DataplaneValidationBackend {
   //  3. The packet will be padded to minimum size and the computed fields
   //     recomputed.
   virtual absl::StatusOr<PacketTestVectorById> GeneratePacketTestVectors(
-      const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntries& ir_entries,
+      const pdpi::IrP4Info& ir_p4info, const pdpi::IrEntities& ir_entities,
       const p4::v1::ForwardingPipelineConfig& bmv2_config,
       absl::Span<const pins_test::P4rtPortId> ports,
       std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>&
