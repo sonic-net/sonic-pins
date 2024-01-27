@@ -34,6 +34,7 @@
 #include "dvaas/user_provided_packet_test_vector.h"
 #include "dvaas/validation_result.h"
 #include "glog/logging.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/test_artifact_writer.h"
 #include "gutil/version.h"
@@ -176,10 +177,10 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "sut_bmv2_config.txt", p4_spec.bmv2_config.DebugString()));
 
-  // Read P4Info and entries from SUT, sorted for determinism.
+  // Read P4Info and control plane entities from SUT, sorted for determinism.
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut.p4rt));
-  ASSIGN_OR_RETURN(pdpi::IrTableEntries entries,
-                   pdpi::ReadIrTableEntriesSorted(*sut.p4rt));
+  ASSIGN_OR_RETURN(pdpi::IrEntities entities,
+                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
 
   // Get enabled Ethernet ports from SUT's GNMI config.
   ASSIGN_OR_RETURN(std::vector<pins_test::P4rtPortId> ports,
@@ -196,12 +197,12 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   LOG(INFO) << "Synthesizing test packets";
   ASSIGN_OR_RETURN(generate_test_vectors_result.packet_synthesis_result,
                    backend.SynthesizePackets(
-                       ir_p4info, entries, p4_spec.p4_symbolic_config, ports,
+                       ir_p4info, entities, p4_spec.p4_symbolic_config, ports,
                        [&](absl::string_view stats) {
                          return writer.AppendToTestArtifact(
                              "test_packet_stats.txt", stats);
                        },
-                       params.time_limit));
+                       params.packet_synthesis_time_limit));
 
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "synthesized_packets.txt",
@@ -213,7 +214,7 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   LOG(INFO) << "Generating test vectors with output prediction";
   ASSIGN_OR_RETURN(generate_test_vectors_result.packet_test_vector_by_id,
                    backend.GeneratePacketTestVectors(
-                       ir_p4info, entries, p4_spec.bmv2_config, ports,
+                       ir_p4info, entities, p4_spec.bmv2_config, ports,
                        generate_test_vectors_result.packet_synthesis_result
                            .synthesized_packets,
                        default_ingress_port));
@@ -234,8 +235,8 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
     ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info,
                      pdpi::GetIrP4Info(*control_switch.p4rt));
 
-    // Clear control switch table entries and install punt entries instead.
-    RETURN_IF_ERROR(pdpi::ClearTableEntries(control_switch.p4rt.get()));
+    // Clear control switch entities and install punt entries instead.
+    RETURN_IF_ERROR(pdpi::ClearEntities(*control_switch.p4rt));
     ASSIGN_OR_RETURN(pdpi::IrEntities punt_entries,
                      backend_->GetEntitiesToPuntAllPackets(ir_info));
     RETURN_IF_ERROR(
@@ -243,10 +244,10 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   }
 
   // Read and store table entries on SUT as an artifact.
-  ASSIGN_OR_RETURN(pdpi::IrTableEntries entries,
-                   pdpi::ReadIrTableEntriesSorted(*sut.p4rt));
-  RETURN_IF_ERROR(writer->AppendToTestArtifact("sut_ir_table_entries.txt",
-                                               entries.DebugString()));
+  ASSIGN_OR_RETURN(pdpi::IrEntities entities,
+                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+  RETURN_IF_ERROR(writer->AppendToTestArtifact(
+      "sut_ir_entities.txtpb", gutil::PrintTextProto(entities)));
 
   // Store port mapping as an artifact (identity if not given a value).
   MirrorTestbedP4rtPortIdMap mirror_testbed_port_map =

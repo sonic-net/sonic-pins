@@ -87,4 +87,8 @@ std::vector<std::string> ValidationResult::GetAllFailures() const {
   return failures;
 }
 
+bool ValidationResult::PacketSynthesizerTimedOut() const {
+  return packet_synthesis_result_.packet_synthesis_timed_out;
+}
+
 }  // namespace dvaas

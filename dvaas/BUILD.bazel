@@ -43,6 +43,7 @@ cc_library(
         ":test_vector_cc_proto",
         ":user_provided_packet_test_vector",
         ":validation_result",
+        "//gutil:proto",
         "//gutil:status",
         "//gutil:test_artifact_writer",
         "//gutil:version",
