@@ -165,7 +165,7 @@ absl::StatusOr<P4Specification> InferP4Specification(
 // Generates and returns test vectors using the backend functions
 // `SynthesizePackets` and `GeneratePacketTestVectors`. Reads the table entries,
 // P4Info, and relevant P4RT port IDs from the switch.
-absl::StatusOr<PacketTestVectorById> GenerateTestVectors(
+absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
     const DataplaneValidationParams& params, SwitchApi& sut,
     DataplaneValidationBackend& backend, gutil::TestArtifactWriter& writer) {
   // Determine the P4 specification to test against.
@@ -190,24 +190,35 @@ absl::StatusOr<PacketTestVectorById> GenerateTestVectors(
   }
   const P4rtPortId& default_ingress_port = ports[0];
 
+  GenerateTestVectorsResult generate_test_vectors_result;
+
   // Synthesize test packets.
   LOG(INFO) << "Synthesizing test packets";
-  ASSIGN_OR_RETURN(
-      std::vector<SynthesizedPacket> synthesized_packets,
-      backend.SynthesizePackets(ir_p4info, entries, p4_spec.p4_symbolic_config,
-                                ports, [&](absl::string_view stats) {
-                                  return writer.AppendToTestArtifact(
-                                      "test_packet_stats.txt", stats);
-                                }));
-  RETURN_IF_ERROR(writer.AppendToTestArtifact("synthesized_packets.txt",
-                                              ToString(synthesized_packets)));
+  ASSIGN_OR_RETURN(generate_test_vectors_result.packet_synthesis_result,
+                   backend.SynthesizePackets(
+                       ir_p4info, entries, p4_spec.p4_symbolic_config, ports,
+                       [&](absl::string_view stats) {
+                         return writer.AppendToTestArtifact(
+                             "test_packet_stats.txt", stats);
+                       },
+                       params.time_limit));
+
+  RETURN_IF_ERROR(writer.AppendToTestArtifact(
+      "synthesized_packets.txt",
+      ToString(generate_test_vectors_result.packet_synthesis_result
+                   .synthesized_packets)));
 
   // Generate test vectors with output prediction from the synthesized
   // packets.
   LOG(INFO) << "Generating test vectors with output prediction";
-  return backend.GeneratePacketTestVectors(
-      ir_p4info, entries, p4_spec.bmv2_config, ports, synthesized_packets,
-      default_ingress_port);
+  ASSIGN_OR_RETURN(generate_test_vectors_result.packet_test_vector_by_id,
+                   backend.GeneratePacketTestVectors(
+                       ir_p4info, entries, p4_spec.bmv2_config, ports,
+                       generate_test_vectors_result.packet_synthesis_result
+                           .synthesized_packets,
+                       default_ingress_port));
+
+  return generate_test_vectors_result;
 }
 
 absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
@@ -246,10 +257,12 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
       mirror_testbed_port_map, *sut.gnmi, *control_switch.gnmi, *writer));
 
   // Generate test vectors.
-  PacketTestVectorById test_vectors;
+  GenerateTestVectorsResult generate_test_vectors_result;
+  PacketTestVectorById& test_vectors =
+      generate_test_vectors_result.packet_test_vector_by_id;
   if (params.packet_test_vector_override.empty()) {
     LOG(INFO) << "Auto-generating test vectors";
-    ASSIGN_OR_RETURN(test_vectors,
+    ASSIGN_OR_RETURN(generate_test_vectors_result,
                      GenerateTestVectors(params, sut, *backend_, *writer));
   } else {
     LOG(INFO) << "Checking user-provided test vectors for well-formedness";
@@ -279,8 +292,9 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   RETURN_IF_ERROR(writer->AppendToTestArtifact("test_runs.textproto",
                                                test_runs.DebugString()));
 
-  ValidationResult validation_result(std::move(test_runs),
-                                     params.switch_output_diff_params);
+  ValidationResult validation_result(
+      std::move(test_runs), params.switch_output_diff_params,
+      generate_test_vectors_result.packet_synthesis_result);
   RETURN_IF_ERROR(writer->AppendToTestArtifact(
       "test_vector_failures.txt",
       absl::StrJoin(validation_result.GetAllFailures(), "\n\n")));
