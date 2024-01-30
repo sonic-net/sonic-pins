@@ -16,21 +16,20 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_TRAFFIC_HELPERS_DVAAS_HELPER_H_
 
 #include "absl/status/status.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
-#include "thinkit/generic_testbed.h"
 
 namespace pins_test {
 
 class DvaasHelper : public TrafficHelper {
  public:
-  absl::Status StartTraffic(thinkit::GenericTestbed& testbed) override {
+  absl::Status StartTraffic(Testbed& testbed) override {
     return absl::OkStatus();
   };
-  absl::Status StopTraffic(thinkit::GenericTestbed& testbed) override {
+  absl::Status StopTraffic(Testbed& testbed) override {
     return absl::OkStatus();
   };
-  absl::Status ValidateTraffic(int error_margin,
-                               thinkit::GenericTestbed& testbed) override {
+  absl::Status ValidateTraffic(int error_margin, Testbed& testbed) override {
     return absl::OkStatus();
   };
 };
