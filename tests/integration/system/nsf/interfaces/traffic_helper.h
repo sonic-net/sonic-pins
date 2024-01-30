@@ -22,6 +22,9 @@ namespace pins_test {
 
 // Interface to control traffic in the given `testbed` during NSF integration
 // test.
+//
+// Note: The caller is responsible for ensuring that exact same testbed is
+// passed throughout the test.
 class TrafficHelper {
  public:
   virtual ~TrafficHelper() = default;
@@ -34,9 +37,11 @@ class TrafficHelper {
   virtual absl::Status StopTraffic(Testbed& testbed) = 0;
 
   // Validates traffic in the testbed.
-  // Needs to be called *after* `StopTraffic()` is called.
-  virtual absl::Status ValidateTraffic(int error_percentage,
-                                       Testbed& testbed) = 0;
+  absl::Status ValidateTraffic(Testbed& testbed) {
+    return ValidateTraffic(testbed, 0);
+  };
+  virtual absl::Status ValidateTraffic(Testbed& testbed,
+                                       int error_percentage) = 0;
 };
 
 }  // namespace pins_test

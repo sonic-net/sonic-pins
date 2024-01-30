@@ -16,16 +16,16 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/strings/string_view.h"
 #include "gtest/gtest.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
-#include "tests/integration/system/nsf/util.h"
 #include "thinkit/ssh_client.h"
 
 namespace pins_test {
@@ -36,8 +36,8 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   void TearDown() override;
 
   // Assumption: Valid config (gNMI and P4Info) has already been pushed.
-  absl::Status NsfUpgrade(absl::string_view prev_version,
-                          absl::string_view version);
+  absl::Status NsfUpgrade(const std::string& prev_version,
+                          const std::string& version);
 
   std::unique_ptr<FlowProgrammer> flow_programmer_;
   std::unique_ptr<TrafficHelper> traffic_helper_;
