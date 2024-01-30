@@ -34,6 +34,8 @@ namespace pins_test {
 // parameterized NSF integration test.
 struct NsfTestParams {
   std::string name;
+  std::string gnmi_config;
+  p4::config::v1::P4Info p4_info;
   std::function<std::unique_ptr<FlowProgrammer>()> create_flow_programmer;
   std::function<std::unique_ptr<TrafficHelper>()> create_traffic_helper;
   std::function<TestbedInterface()> create_testbed_interface;

@@ -28,6 +28,7 @@ cc_library(
         "//gutil:overload",
         "//gutil:status",
         "//gutil:testing",
+        "//lib/gnmi:gnmi_helper",
         "//lib/utils:generic_testbed_utils",
         "//lib/validator:validator_lib",
         "//tests/integration/system/nsf/interfaces:component_validator",

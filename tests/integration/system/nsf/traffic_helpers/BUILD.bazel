@@ -20,17 +20,6 @@ package(
 )
 
 cc_library(
-    name = "dvaas_helper",
-    testonly = True,
-    hdrs = ["dvaas_helper.h"],
-    deps = [
-        "//tests/integration/system/nsf/interfaces:testbed",
-        "//tests/integration/system/nsf/interfaces:traffic_helper",
-        "@com_google_absl//absl/status",
-    ],
-)
-
-cc_library(
     name = "otg_helper",
     testonly = True,
     srcs = ["otg_helper.cc"],

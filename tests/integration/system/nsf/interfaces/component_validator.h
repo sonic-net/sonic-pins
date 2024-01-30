@@ -45,6 +45,9 @@ namespace pins_test {
 //
 // Eg. We can use these methods to track performance by calculating the time
 // difference between function calls.
+//
+// Note: The caller is responsible for ensuring that exact same testbed is
+// passed throughout the test.
 class ComponentValidator {
  public:
   virtual ~ComponentValidator() = default;
@@ -67,8 +70,9 @@ class ComponentValidator {
     return absl::OkStatus();
   }
 
-  // Called after an upgrade is performed on the SUT.
-  virtual absl::Status OnUpgrade(absl::string_view version, Testbed& testbed) {
+  // Called after an image copy is performed on the SUT.
+  virtual absl::Status OnImageCopy(absl::string_view version,
+                                   Testbed& testbed) {
     return absl::OkStatus();
   }
 

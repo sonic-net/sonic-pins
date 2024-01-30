@@ -56,8 +56,10 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
             auto* config = set_config_request.mutable_config();
 
             // Randomly pick source and destination hosts.
-            const std::string otg_src_port = up_links.front().peer_interface;
-            const std::string otg_dst_port = up_links.back().peer_interface;
+            const std::string otg_src_port =
+                up_links.front().peer_traffic_location;
+            const std::string otg_dst_port =
+                up_links.back().peer_traffic_location;
             const std::string otg_src_mac = up_links.front().peer_mac_address;
             const std::string otg_dst_mac = up_links.back().peer_mac_address;
             const std::string otg_src_ip = up_links.front().peer_ipv6_address;
@@ -170,7 +172,8 @@ absl::Status OtgHelper::StopTraffic(Testbed& testbed) {
   return absl::UnimplementedError("Stopping traffic is not implemented.");
 }
 
-absl::Status OtgHelper::ValidateTraffic(int error_margin, Testbed& testbed) {
+absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
+                                        int error_percentage) {
   return std::visit(
       gutil::Overload{
           [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
@@ -207,8 +210,8 @@ absl::Status OtgHelper::ValidateTraffic(int error_margin, Testbed& testbed) {
               bool transmission_stopped =
                   flow_metric.transmit() == otg::FlowMetric::Transmit::stopped;
 
-              if (bytes_drop_percent <= error_margin &&
-                  frames_drop_percent <= error_margin)
+              if (bytes_drop_percent <= error_percentage &&
+                  frames_drop_percent <= error_percentage)
                 continue;
 
               errors.push_back(absl::StrCat(
