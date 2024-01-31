@@ -20,6 +20,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "gutil/collections.h"
@@ -110,6 +111,8 @@ void SdnConnection::SendStreamMessageResponse(
                << grpc_context_ << "': " << response.ShortDebugString();
   }
 }
+
+void SdnConnection::CancelConnection(void) { grpc_context_->TryCancel(); }
 
 grpc::Status SdnControllerManager::HandleArbitrationUpdate(
     const p4::v1::MasterArbitrationUpdate& update, SdnConnection* controller) {
@@ -270,6 +273,35 @@ void SdnControllerManager::Disconnect(SdnConnection* connection) {
        election_id_past_by_role_[connection->GetRoleName()])) {
     InformConnectionsAboutPrimaryChange(connection->GetRoleName());
   }
+}
+
+void SdnControllerManager::DisconnectAll(absl::string_view error_message) {
+  absl::MutexLock l(&lock_);
+
+  LOG(INFO) << "Disconnect all SDN connections.";
+
+  // Iterate through the list of connections to send error message.
+  for (SdnConnection* connection : connections_) {
+    grpc::Status grpc_status(grpc::StatusCode::UNAVAILABLE,
+                             error_message.data());
+    p4::v1::StreamMessageResponse response;
+    auto error = response.mutable_error();
+    error->set_canonical_code(grpc_status.error_code());
+    error->set_message(grpc_status.error_message());
+
+    connection->SendStreamMessageResponse(response);
+
+    // Cancel the call from server.
+    connection->CancelConnection();
+
+    LOG(INFO) << "Dropping SDN connection for role "
+              << PrettyPrintRoleName(connection->GetRoleName())
+              << " with election ID "
+              << PrettyPrintElectionId(connection->GetElectionId()) << ".";
+  }
+
+  // Remove all connections.
+  connections_.clear();
 }
 
 absl::Status SdnControllerManager::SetDeviceId(uint64_t device_id) {

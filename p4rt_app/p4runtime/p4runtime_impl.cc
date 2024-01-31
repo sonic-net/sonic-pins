@@ -24,6 +24,7 @@
 #include <cstring>
 #include <string>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/memory/memory.h"
@@ -99,6 +100,10 @@ struct ConfigInfo {
   pdpi::IrP4Info ir_p4info;
   p4_constraints::ConstraintInfo constraints;
 };
+
+// The error message to controller during warm-boot.
+constexpr absl::string_view kWarmBootMessage =
+    "P4RT is performing warm reboot.";
 
 std::string GetKeyErrorMessage(pdpi::IrEntity entity,
                                const std::string& extra) {
@@ -701,6 +706,10 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
                                   p4::v1::WriteResponse* response) {
   absl::MutexLock l(&server_state_lock_);
 
+  // P4RT is in warm-boot freeze process, return error code UNAVAILABLE.
+  if (IsFreezeMode())
+    return grpc::Status(grpc::StatusCode::UNAVAILABLE, kWarmBootMessage.data());
+
 #ifdef __EXCEPTIONS
   try {
 #endif
@@ -824,6 +833,10 @@ grpc::Status P4RuntimeImpl::Read(
   constexpr int kReadResponseBatchSize = 2500;
   absl::MutexLock l(&server_state_lock_);
 
+  // P4RT is in warm-boot freeze process, return error code UNAVAILABLE.
+  if (IsFreezeMode())
+    return grpc::Status(grpc::StatusCode::UNAVAILABLE, kWarmBootMessage.data());
+
 #ifdef __EXCEPTIONS
   try {
 #endif
@@ -891,6 +904,18 @@ grpc::Status P4RuntimeImpl::StreamChannel(
                           "Context cannot be nullptr.");
     }
 
+    {
+      absl::MutexLock l(&server_state_lock_);
+      if (IsFreezeMode()) {
+        LOG(INFO)
+            << "P4RT in warm-boot freeze process, reject stream from peer '"
+            << context->peer() << "'.";
+        // We are in warm-boot freeze process, return error UNAVAILABLE.
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE,
+                            kWarmBootMessage.data());
+      }
+    }
+
     // We create a unique SDN connection object for every active connection.
     auto sdn_connection = absl::make_unique<SdnConnection>(context, stream);
     LOG(INFO) << "StreamChannel is open with peer '" << context->peer() << "'.";
@@ -899,6 +924,14 @@ grpc::Status P4RuntimeImpl::StreamChannel(
     p4::v1::StreamMessageRequest request;
     while (stream->Read(&request)) {
       absl::MutexLock l(&server_state_lock_);
+
+      if (IsFreezeMode()) {
+        LOG(INFO)
+            << "P4RT in warm-boot freeze process, closing stream to peer '"
+            << context->peer() << "'.";
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE,
+                            kWarmBootMessage.data());
+      }
 
       switch (request.update_case()) {
         case p4::v1::StreamMessageRequest::kArbitration: {
@@ -963,6 +996,13 @@ grpc::Status P4RuntimeImpl::StreamChannel(
     {
       absl::MutexLock l(&server_state_lock_);
       controller_manager_->Disconnect(sdn_connection.get());
+      if (IsFreezeMode()) {
+        LOG(INFO)
+            << "P4RT in warm-boot freeze process, closing stream to peer '"
+            << context->peer() << "'.";
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE,
+                            kWarmBootMessage.data());
+      }
     }
 
     LOG(INFO) << "Closing stream to peer '" << context->peer() << "'.";
@@ -987,6 +1027,10 @@ grpc::Status P4RuntimeImpl::SetForwardingPipelineConfig(
     const p4::v1::SetForwardingPipelineConfigRequest* request,
     p4::v1::SetForwardingPipelineConfigResponse* response) {
   absl::MutexLock l(&server_state_lock_);
+
+  // P4RT is in warm-boot freeze process, return error code UNAVAILABLE.
+  if (IsFreezeMode())
+    return grpc::Status(grpc::StatusCode::UNAVAILABLE, kWarmBootMessage.data());
 
 #ifdef __EXCEPTIONS
   try {
@@ -1076,6 +1120,10 @@ grpc::Status P4RuntimeImpl::GetForwardingPipelineConfig(
     p4::v1::GetForwardingPipelineConfigResponse* response) {
   absl::MutexLock l(&server_state_lock_);
 
+  // P4RT is in warm-boot freeze process, return error code UNAVAILABLE.
+  if (IsFreezeMode())
+    return grpc::Status(grpc::StatusCode::UNAVAILABLE, kWarmBootMessage.data());
+
 #ifdef __EXCEPTIONS
   try {
 #endif
@@ -1138,16 +1186,25 @@ grpc::Status P4RuntimeImpl::GetForwardingPipelineConfig(
 
 absl::Status P4RuntimeImpl::UpdateDeviceId(uint64_t device_id) {
   absl::MutexLock l(&server_state_lock_);
+  sonic::PauseQuiescent warm_boot_pause_quiescence(
+      warm_boot_state_adapter_.get());
+
   return controller_manager_->SetDeviceId(device_id);
 }
 
 absl::Status P4RuntimeImpl::AddPacketIoPort(const std::string& port_name) {
   absl::MutexLock l(&server_state_lock_);
+  sonic::PauseQuiescent warm_boot_pause_quiescence(
+      warm_boot_state_adapter_.get());
+
   return packetio_impl_->AddPacketIoPort(port_name);
 }
 
 absl::Status P4RuntimeImpl::RemovePacketIoPort(const std::string& port_name) {
   absl::MutexLock l(&server_state_lock_);
+  sonic::PauseQuiescent warm_boot_pause_quiescence(
+      warm_boot_state_adapter_.get());
+
   return packetio_impl_->RemovePacketIoPort(port_name);
 }
 
@@ -1171,6 +1228,8 @@ absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
                                                const std::string& port_id,
                                                bool update_dbs) {
   absl::MutexLock l(&server_state_lock_);
+  sonic::PauseQuiescent warm_boot_pause_quiescence(
+      warm_boot_state_adapter_.get());
 
   // Do not allow empty strings.
   if (port_name.empty()) {
@@ -1221,6 +1280,8 @@ absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
 absl::Status P4RuntimeImpl::RemovePortTranslation(
     const std::string& port_name) {
   absl::MutexLock l(&server_state_lock_);
+  sonic::PauseQuiescent warm_boot_pause_quiescence(
+      warm_boot_state_adapter_.get());
 
   // Do not allow empty strings.
   if (port_name.empty()) {
@@ -1258,6 +1319,9 @@ absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
 //absl::Status P4RuntimeImpl::VerifyState(bool update_component_state) {
 absl::Status P4RuntimeImpl::VerifyState() {
   absl::MutexLock l(&server_state_lock_);
+  sonic::PauseQuiescent warm_boot_pause_quiescence(
+      warm_boot_state_adapter_.get());
+
   std::vector<std::string> failures = {"P4RT App State Verification failures:"};
 
   // Verify the P4RT_TABLE entries against the cache.
@@ -1343,6 +1407,8 @@ void P4RuntimeImpl::SetQueueTranslator(
     std::unique_ptr<QueueTranslator> translator,
     const std::string& queue_table_key) {
   absl::MutexLock l(&server_state_lock_);
+  sonic::PauseQuiescent warm_boot_pause_quiescence(
+      warm_boot_state_adapter_.get());
 
   if (queue_table_key == "CPU") {
     cpu_queue_translator_ = std::move(translator);
@@ -1651,6 +1717,18 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
              const std::string& payload) -> absl::Status {
     absl::MutexLock l(&server_state_lock_);
 
+    // Drop packet-in requests when in freeze mode.
+    if (IsFreezeMode()) {
+      VLOG(1) << "P4RT is in warm-boot freeze mode, drop packet-in "
+                 "request.\n Source port name : "
+              << netdev_source_port_name
+              << "\n Target port name: " << netdev_target_port_name
+              << "\n Packet(hex): "
+              << absl::BytesToHexString(payload).substr(
+                     0, std::min<int>(payload.size(), 100));
+      return absl::OkStatus();
+    }
+
     // The callback will have Linux netdev interfaces. So we first need to
     // convert it into a SONiC port name then if needed into the controller port
     // number.
@@ -1722,10 +1800,50 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
   return packetio_impl_->StartReceive(SendPacketInToController, use_genetlink);
 }
 
+void P4RuntimeImpl::UpdateWarmBootState(swss::WarmStart::WarmStartState state)
+    ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_) {
+  warm_boot_state_adapter_->SetWarmBootState(state);
+}
+
+swss::WarmStart::WarmStartState P4RuntimeImpl::GetWarmBootState()
+    ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_) {
+  return warm_boot_state_adapter_->GetWarmBootState();
+}
+
 // Handle warm-boot freeze notification.
 absl::Status P4RuntimeImpl::HandleWarmBootNotification(
     swss::WarmStart::WarmBootNotification notification) {
-  LOG(INFO) << "Handle warm-boot notification.";
+  absl::MutexLock l(&server_state_lock_);
+  absl::Status status;
+
+  if (notification == swss::WarmStart::WarmBootNotification::kFreeze) {
+    if (IsFreezeMode()) {
+      LOG(WARNING) << "P4RT already in freeze mode. Ignoring duplicate freeze "
+                      "notification.";
+      return absl::OkStatus();
+    }
+
+    swss::WarmStart::WarmStartState warm_boot_state = GetWarmBootState();
+    if (warm_boot_state != swss::WarmStart::WarmStartState::RECONCILED) {
+      LOG(WARNING) << "Freeze notification received while warm-boot state is "
+                   << swss::WarmStart::warmStartStateNameMap()
+                          ->at(warm_boot_state)
+                          .c_str()
+                   << "Ignoring.";
+      return absl::OkStatus();
+    }
+
+    LOG(INFO) << "Handle warm-boot notification: freeze.";
+
+    is_freeze_mode_ = true;
+
+    // Disconnect all stream channels, future client write request will fail.
+    controller_manager_->DisconnectAll(kWarmBootMessage);
+
+    UpdateWarmBootState(swss::WarmStart::WarmStartState::FROZEN);
+    UpdateWarmBootState(swss::WarmStart::WarmStartState::QUIESCENT);
+  }
+
   return absl::OkStatus();
 }
 

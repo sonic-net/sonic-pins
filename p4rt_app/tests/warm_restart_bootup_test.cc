@@ -131,8 +131,14 @@ class WarmRestartTest : public testing::Test {
     LOG(INFO) << "Opening P4RT connection to " << address << ".";
     auto stub =
         pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-    ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                        std::move(stub), device_id));
+
+    if (is_freeze_mode) {
+      EXPECT_THAT(pdpi::P4RuntimeSession::Create(std::move(stub), device_id),
+                  StatusIs(absl::StatusCode::kUnavailable));
+    } else {
+      ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+                                          std::move(stub), device_id));
+    }
 
     return absl::OkStatus();
   }

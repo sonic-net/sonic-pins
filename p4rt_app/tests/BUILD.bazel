@@ -425,6 +425,80 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "warm_boot_notification_test",
+    srcs = ["warm_boot_notification_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "warm_boot_controller_rpc_test",
+    srcs = ["warm_boot_controller_rpc_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "warm_boot_packet_in_test",
+    srcs = ["warm_boot_packet_in_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/sonic:packetio_interface",
+        "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "warm_boot_internal_requests_test",
+    srcs = ["warm_boot_internal_requests_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4rt_app/p4runtime:queue_translator",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
 # go/golden-test-with-coverage
 cc_test(
     name = "p4_constraints_test_runner",

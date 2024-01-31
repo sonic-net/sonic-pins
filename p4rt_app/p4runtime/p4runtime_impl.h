@@ -299,6 +299,16 @@ private:
   // Caller should take server_state_lock_.
   grpc::Status EnterCriticalState(const std::string& message);
 
+  // Helper function to check if P4RT is in warm-boot freeze process.
+  inline bool IsFreezeMode(void)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_) {
+    return is_freeze_mode_;
+  };
+
+  void UpdateWarmBootState(swss::WarmStart::WarmStartState state);
+
+  swss::WarmStart::WarmStartState GetWarmBootState();
+
   // Mutex for constraining actions to access and modify server state.
   absl::Mutex server_state_lock_;
 

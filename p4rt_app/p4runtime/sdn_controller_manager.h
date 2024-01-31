@@ -24,6 +24,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "sai_p4/fixed/roles.h"
@@ -50,7 +51,10 @@ public:
   // Sends back StreamMessageResponse to this controller.
   void SendStreamMessageResponse(const p4::v1::StreamMessageResponse &response);
 
-private:
+  // Cancels the context of the connection.
+  void CancelConnection(void);
+
+ private:
   // The SDN connection should be initialized through arbitration before it can
   // be used.
   bool initialized_;
@@ -81,6 +85,9 @@ public:
                           SdnConnection *controller) ABSL_LOCKS_EXCLUDED(lock_);
 
   void Disconnect(SdnConnection *connection) ABSL_LOCKS_EXCLUDED(lock_);
+
+  void DisconnectAll(absl::string_view error_message)
+      ABSL_LOCKS_EXCLUDED(lock_);
 
   absl::Status SetDeviceId(uint64_t device_id) ABSL_LOCKS_EXCLUDED(lock_);
   std::optional<uint64_t> GetDeviceId() const ABSL_LOCKS_EXCLUDED(lock_);

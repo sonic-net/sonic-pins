@@ -36,7 +36,40 @@ public:
   virtual swss::WarmStart::WarmStartState GetOrchAgentWarmBootState(void);
 };
 
-} // namespace sonic
-} // namespace p4rt_app
+// Helper class used by internal request handlers for book keeping warm-boot
+// states during NSF freeze. During NSF freeze, P4RT's internal request
+// handlers should update warm boot state to FROZEN before processing a request
+// and then update the state back to QUIESCENT when finishes.
+// PauseQuiescent helps doing this conveniently by updating warm boot state
+// accordingly in its constructor and destructor.
+
+// This class should always be used after acquiring the server_state_lock_;
+class PauseQuiescent {
+ public:
+  // Constructor
+  PauseQuiescent(sonic::WarmBootStateAdapter* warm_boot_state_adapter)
+      : warm_boot_state_adapter_(warm_boot_state_adapter) {
+    if (warm_boot_state_adapter_->GetWarmBootState() ==
+        swss::WarmStart::WarmStartState::QUIESCENT) {
+      warm_boot_state_adapter_->SetWarmBootState(
+          swss::WarmStart::WarmStartState::FROZEN);
+    }
+  }
+
+  // Destructor
+  ~PauseQuiescent() {
+    if (warm_boot_state_adapter_->GetWarmBootState() ==
+        swss::WarmStart::WarmStartState::FROZEN) {
+      warm_boot_state_adapter_->SetWarmBootState(
+          swss::WarmStart::WarmStartState::QUIESCENT);
+    }
+  }
+
+ private:
+  sonic::WarmBootStateAdapter* warm_boot_state_adapter_;
+};
+
+}  // namespace sonic
+}  // namespace p4rt_app
 
 #endif // PINS_P4RT_APP_SONIC_ADAPTERS_WARM_BOOT_STATE_ADAPTER_H_
