@@ -37,8 +37,14 @@ absl::StatusOr<std::string> CreatePacketReplicationTableUpdateForAppDb(
 std::vector<std::string> GetAllPacketReplicationTableEntryKeys(
     P4rtTable& p4rt_table);
 
-// Returns all the REPLICATION_IP_MULTICAST_TABLE entries currently installed in
+// Returns all packet replication entry keys currently installed in AppDb.
+// Currently, this is only for table REPLICATION_IP_MULTICAST_TABLE.
+std::vector<std::string> GetAllPacketReplicationTableEntryKeys(
+    P4rtTable& p4rt_table);
+
+// Returns all the packet replication entries currently installed in
 // the AppDb.
+// Currently, this is only for table REPLICATION_IP_MULTICAST_TABLE.
 absl::StatusOr<std::vector<pdpi::IrPacketReplicationEngineEntry>>
 GetAllAppDbPacketReplicationTableEntries(P4rtTable& p4rt_table);
 
