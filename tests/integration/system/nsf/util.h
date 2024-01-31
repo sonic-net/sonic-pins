@@ -37,13 +37,16 @@ absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface);
 
 thinkit::Switch& GetSut(Testbed& testbed);
 
-// Performs image copy on the inactive side using gNOI.
+// Performs image copy on the inactive side using gNOI, and returns the upgraded
+// image version on success.
 // Note: This doesn't involve a reboot.
-absl::Status ImageCopy(const std::string& image_label, Testbed& testbed,
-                       thinkit::SSHClient& ssh_client);
+absl::StatusOr<std::string> ImageCopy(const std::string& image_label,
+                                      Testbed& testbed,
+                                      thinkit::SSHClient& ssh_client);
 
 absl::Status InstallRebootPushConfig(const std::string& image_label,
                                      const std::string& gnmi_config,
+                                     const p4::config::v1::P4Info& p4info,
                                      Testbed& testbed,
                                      thinkit::SSHClient& ssh_client);
 
@@ -60,9 +63,13 @@ absl::Status ValidateComponents(
 // Performs NSF Reboot on the SUT in the given testbed.
 absl::Status NsfReboot(Testbed& testbed);
 
-absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client);
+// Waits for the SUT to reboot. If `check_interfaces_up` is `true`, it
+// additionally checks whether all the SUT interfaces are UP after turnup.
+absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
+                           bool check_interfaces_up = true);
 
-absl::Status PushConfig(const std::string& gnmi_config, Testbed& testbed,
+absl::Status PushConfig(const std::string& gnmi_config,
+                        const p4::config::v1::P4Info& p4info, Testbed& testbed,
                         thinkit::SSHClient& ssh_client);
 
 p4::v1::ReadResponse TakeP4FlowSnapshot();
@@ -70,9 +77,9 @@ p4::v1::ReadResponse TakeP4FlowSnapshot();
 absl::Status CompareP4FlowSnapshots(const p4::v1::ReadResponse& a,
                                     const p4::v1::ReadResponse& b);
 
-absl::Status CaptureDbState();
-
-absl::Status ValidateDbState();
+// Stores the healthz debug artifacts of the SUT with the given `prefix` as:
+// "{prefix}_healthz"
+absl::Status StoreSutDebugArtifacts(absl::string_view prefix, Testbed& testbed);
 
 }  // namespace pins_test
 
