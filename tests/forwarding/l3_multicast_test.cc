@@ -1020,7 +1020,15 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   LOG(INFO) << "Sending traffic to verify added multicast programming.";
   dvaas::DataplaneValidationParams dvaas_params =
       dvaas::DefaultGpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      gpins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
   dvaas_params.packet_test_vector_override = vectors;
+
   ASSERT_OK_AND_ASSIGN(
       dvaas::ValidationResult validation_result,
       GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
@@ -1271,13 +1279,12 @@ void L3MulticastTestFixture::SetUp() {
   GetParam().mirror_testbed->SetUp();
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  // Initialize the connection and clear table entries for the SUT and Control
-  // switch.
+  // Initialize the connection and clear table entries for the SUT.
   ASSERT_OK_AND_ASSIGN(
-      std::tie(sut_p4rt_session_, control_switch_p4rt_session_),
-      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
-          testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
-          GetParam().p4info));
+      sut_p4rt_session_,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+  // There is no need to push a config to the control switch.
   ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(*GetParam().p4info));
 }
 
