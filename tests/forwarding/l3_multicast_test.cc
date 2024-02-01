@@ -32,6 +32,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dvaas/dataplane_validation.h"
+#include "dvaas/port_id_map.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
@@ -52,9 +53,11 @@
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/sequencing.h"
 #include "platforms/networking/gpins/testing/blackbox/p4/dvaas/gpins_dvaas.h"
+#include "platforms/networking/gpins/testing/lib/test_util.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/switch.h"
+#include "util/gtl/value_or_die.h"
 
 namespace pins_test {
 namespace {
@@ -65,9 +68,14 @@ using ::testing::AllOf;
 using ::testing::HasSubstr;
 
 // Common programming parameters.
+constexpr int kMaxRifs = 128;
+// TODO: Increase to 512 multicast groups.
+constexpr int kMaxMulticastGroups = 505;
 constexpr absl::string_view kDefaultMulticastVrf = "vrf-mcast";
 constexpr netaddr::MacAddress kOriginalSrcMacAddress(0x00, 0x22, 0x33, 0x44,
                                                      0x55, 0x66);
+constexpr netaddr::MacAddress kDropSrcMacAddress(0x02, 0x2a, 0x10, 0x00, 0x00,
+                                                 0x02);
 constexpr int kDefaultInstance = 0;
 // Pair of port ID and instance.
 struct ReplicaPair {
@@ -164,8 +172,7 @@ inline absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
                             .multicast_replica_instance = instance,
                             .src_mac = src_mac})
                        .LogPdEntries()
-                       .GetDedupedPiEntities(ir_p4info,
-                                             /*allow_unsupported=*/true));
+                       .GetDedupedPiEntities(ir_p4info));
   return entities;
 }
 
@@ -197,8 +204,7 @@ CreateIpv4MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
       sai::EntryBuilder()
           .AddMulticastRoute(vrf_id, ip_address, multicast_group_id)
           .LogPdEntries()
-          .GetDedupedPiEntities(ir_p4info,
-                                /*allow_unsupported=*/true));
+          .GetDedupedPiEntities(ir_p4info));
   return entities;
 }
 
@@ -213,8 +219,7 @@ CreateIpv6MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
       sai::EntryBuilder()
           .AddMulticastRoute(vrf_id, ip_address, multicast_group_id)
           .LogPdEntries()
-          .GetDedupedPiEntities(ir_p4info,
-                                /*allow_unsupported=*/true));
+          .GetDedupedPiEntities(ir_p4info));
   return entities;
 }
 
@@ -674,7 +679,15 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   LOG(INFO) << "Sending traffic to verify added multicast programming.";
   dvaas::DataplaneValidationParams dvaas_params =
       dvaas::DefaultGpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      gpins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
   dvaas_params.packet_test_vector_override = vectors;
+
   ASSERT_OK_AND_ASSIGN(
       dvaas::ValidationResult validation_result,
       GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
@@ -890,13 +903,12 @@ void L3MulticastTestFixture::SetUp() {
   GetParam().mirror_testbed->SetUp();
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
-  // Initialize the connection and clear table entries for the SUT and Control
-  // switch.
+  // Initialize the connection and clear table entries for the SUT.
   ASSERT_OK_AND_ASSIGN(
-      std::tie(sut_p4rt_session_, control_switch_p4rt_session_),
-      pins_test::ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
-          testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
-          GetParam().p4info));
+      sut_p4rt_session_,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+  // There is no need to push a config to the control switch.
   ASSERT_OK_AND_ASSIGN(ir_p4info_, pdpi::CreateIrP4Info(*GetParam().p4info));
 }
 
