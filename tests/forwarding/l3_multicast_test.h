@@ -45,10 +45,9 @@ class L3MulticastTestFixture
   void TearDown() override { GetParam().mirror_testbed->TearDown(); }
 
  protected:
-  // This test runs on a mirror testbed setup so we open a P4RT connection to
-  // both switches.
+  // This test runs on a mirror testbed setup, but we only need to configure
+  // the SUT.
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_switch_p4rt_session_;
   pdpi::IrP4Info ir_p4info_;
 };
 
