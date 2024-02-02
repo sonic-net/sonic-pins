@@ -331,14 +331,10 @@ P4RuntimeSession::GetAllStreamMessagesFor(absl::Duration duration) {
 }
 
 absl::Status P4RuntimeSession::Finish() {
-  ASSIGN_OR_RETURN(std::vector<p4::v1::StreamMessageResponse> responses,
-                   ReadStreamChannelResponsesAndFinish());
-  for (auto& response : responses) {
-    LOG(WARNING) << "dropping unread message from switch on stream channel "
-                    "when trying to Finish P4RuntimeSession: "
-                 << response.DebugString();
-  }
-  return absl::OkStatus();
+  // Discarding unread messages without warning, since finishing with unread
+  // messages is the common case and thus a warning would produce a lot of log
+  // spam.
+  return ReadStreamChannelResponsesAndFinish().status();
 }
 
 absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>

@@ -433,6 +433,26 @@ cc_library(
 )
 
 cc_library(
+    name = "ir_properties",
+    srcs = ["ir_properties.cc"],
+    hdrs = ["ir_properties.h"],
+    deps = [
+        ":ir_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+    ],
+)
+
+cc_test(
+    name = "ir_properties_test",
+    srcs = ["ir_properties_test.cc"],
+    deps = [
+        ":ir_properties",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "ir_tools",
     srcs = ["ir_tools.cc"],
     hdrs = ["ir_tools.h"],

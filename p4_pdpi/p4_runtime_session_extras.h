@@ -96,19 +96,37 @@ absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                absl::string_view entities);
 
+// Reads control plane entities from the switch using `p4rt` and returns them in
+// PI representation in an order determined by `pdpi::EntityKey`.
+absl::StatusOr<std::vector<p4::v1::Entity>> ReadPiEntitiesSorted(
+    P4RuntimeSession& p4rt);
+
 // Reads table entries from the switch using `p4rt` and returns them in PI
-// representation in an order determined by pdpi::TableEntryKey.
+// representation in an order determined by `pdpi::TableEntryKey`.
+ABSL_DEPRECATED("Prefer ReadPiEntitiesSorted instead.")
 absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
     P4RuntimeSession& p4rt);
 
-// Reads table entries from the switch using `p4rt` and returns them in IR
-// representation. Reads the P4Info used in translation from the switch.
-absl::StatusOr<IrTableEntries> ReadIrTableEntries(P4RuntimeSession& p4rt);
+// Reads control plane entities from the switch using `p4rt` and returns them in
+// IR representation. Reads the P4Info used in translation from the switch.
+absl::StatusOr<IrEntities> ReadIrEntities(P4RuntimeSession& p4rt);
 
 // Reads table entries from the switch using `p4rt` and returns them in IR
-// representation in an order determined by pdpi::TableEntryKey on the
+// representation. Reads the P4Info used in translation from the switch.
+ABSL_DEPRECATED("Prefer ReadIrEntities instead.")
+absl::StatusOr<IrTableEntries> ReadIrTableEntries(P4RuntimeSession& p4rt);
+
+// Reads control plane entities from the switch using `p4rt` and returns them in
+// IR representation in an order determined `by pdpi::EntityKey` on the
 // corresponding PI representation. Reads the P4Info used in translation from
 // the switch.
+absl::StatusOr<IrEntities> ReadIrEntitiesSorted(P4RuntimeSession& p4rt);
+
+// Reads table entries from the switch using `p4rt` and returns them in IR
+// representation in an order determined by `pdpi::TableEntryKey` on the
+// corresponding PI representation. Reads the P4Info used in translation from
+// the switch.
+ABSL_DEPRECATED("Prefer ReadIrEntitiesSorted instead.")
 absl::StatusOr<IrTableEntries> ReadIrTableEntriesSorted(P4RuntimeSession& p4rt);
 
 // Constructs a write request with metadata from `p4rt` and sends it to the

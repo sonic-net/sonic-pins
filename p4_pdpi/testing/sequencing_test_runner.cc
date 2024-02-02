@@ -16,6 +16,7 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -217,23 +218,26 @@ void GetEntriesUnreachableFromRootsTest(
   }
 }
 
-void SplitUpWriteRequestInvalidAndOptionalInputTest() {
-  p4::v1::Update update;
+void ExtractWriteRequestsInvalidInputTest() {
   p4::v1::WriteRequest write_request = WriteRequest();
-  *write_request.add_updates() = update;
-  ASSERT_FALSE(pdpi::SplitUpWriteRequest(write_request, 0).ok());
-  ASSERT_FALSE(pdpi::SplitUpWriteRequest(write_request, -1).ok());
+  write_request.add_updates();
+  ASSERT_FALSE(pdpi::ExtractWriteRequests(std::move(write_request), 0).ok());
 
   write_request = WriteRequest();
-  *write_request.add_updates() = update;
-  absl::StatusOr<std::vector<p4::v1::WriteRequest>> result =
-      pdpi::SplitUpWriteRequest(write_request, std::nullopt);
-  ASSERT_OK(result.status());
-  ASSERT_EQ(result->size(), 1);
-  EXPECT_EQ(result->front().DebugString(), write_request.DebugString());
+  write_request.add_updates();
+  ASSERT_FALSE(pdpi::ExtractWriteRequests(std::move(write_request), -1).ok());
 }
 
-void SplitUpWriteRequestTest(int update_size, int max_write_request_size) {
+void ExtractWriteRequestsOmitMaximumBatchSizeTest() {
+  p4::v1::WriteRequest write_request = WriteRequest();
+  write_request.add_updates();
+  absl::StatusOr<std::vector<p4::v1::WriteRequest>> result =
+      pdpi::ExtractWriteRequests(std::move(write_request), std::nullopt);
+  ASSERT_OK(result);
+  ASSERT_EQ(result->size(), 1);
+}
+
+void ExtractWriteRequestsTest(int update_size, int max_write_request_size) {
   std::vector<p4::v1::Update> updates;
   updates.reserve(update_size);
   for (int i = 0; i < update_size; i++) {
@@ -254,14 +258,14 @@ void SplitUpWriteRequestTest(int update_size, int max_write_request_size) {
                          i)));
   }
   p4::v1::WriteRequest write_request = WriteRequest();
-
   // Add `update_size` number of updates to the write request.
   for (int i = 0; i < update_size; i++) {
     *write_request.add_updates() = updates[i];
   }
 
   absl::StatusOr<std::vector<p4::v1::WriteRequest>> result =
-      pdpi::SplitUpWriteRequest(write_request, max_write_request_size);
+      pdpi::ExtractWriteRequests(std::move(write_request),
+                                 max_write_request_size);
   if (max_write_request_size < 1) {
     std::cout << TestHeader(absl::StrCat(
                      "SplitUpWriteRequestTest: ",
@@ -307,14 +311,15 @@ void SplitUpWriteRequestTest(int update_size, int max_write_request_size) {
   }
 }
 
-void SplitUpWriteRequestTests() {
-  SplitUpWriteRequestInvalidAndOptionalInputTest();
-  SplitUpWriteRequestTest(/*update_size=*/1, /*max_write_request_size=*/0);
-  SplitUpWriteRequestTest(/*update_size=*/1, /*max_write_request_size=*/1);
-  SplitUpWriteRequestTest(/*update_size=*/1, /*max_write_request_size=*/2);
-  SplitUpWriteRequestTest(/*update_size=*/6, /*max_write_request_size=*/2);
-  SplitUpWriteRequestTest(/*update_size=*/123, /*max_write_request_size=*/55);
-  SplitUpWriteRequestTest(/*update_size=*/123, /*max_write_request_size=*/5);
+void ExtractWriteRequestsTests() {
+  ExtractWriteRequestsInvalidInputTest();
+  ExtractWriteRequestsOmitMaximumBatchSizeTest();
+  ExtractWriteRequestsTest(/*update_size=*/1, /*max_write_request_size=*/0);
+  ExtractWriteRequestsTest(/*update_size=*/1, /*max_write_request_size=*/1);
+  ExtractWriteRequestsTest(/*update_size=*/1, /*max_write_request_size=*/2);
+  ExtractWriteRequestsTest(/*update_size=*/6, /*max_write_request_size=*/2);
+  ExtractWriteRequestsTest(/*update_size=*/123, /*max_write_request_size=*/55);
+  ExtractWriteRequestsTest(/*update_size=*/123, /*max_write_request_size=*/5);
 }
 
 void RunSequenceTests(const pdpi::IrP4Info& info) {
@@ -1671,7 +1676,7 @@ int main(int argc, char** argv) {
 
   RunGetEntriesUnreachableFromRootsTests(info);
 
-  SplitUpWriteRequestTests();
+  ExtractWriteRequestsTests();
   // TODO: Add negative test (where updates and P4Info are out of
   // sync).
   return 0;

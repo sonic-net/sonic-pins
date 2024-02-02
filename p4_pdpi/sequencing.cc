@@ -271,11 +271,12 @@ SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
   return requests;
 }
 
-absl::StatusOr<std::vector<p4::v1::WriteRequest>> SplitUpWriteRequest(
-    const p4::v1::WriteRequest& write_request,
+absl::StatusOr<std::vector<p4::v1::WriteRequest>> ExtractWriteRequests(
+    p4::v1::WriteRequest&& write_request,
     std::optional<int> max_write_request_size) {
-  if (!max_write_request_size.has_value()) {
-    return std::vector<p4::v1::WriteRequest>{write_request};
+  if (!max_write_request_size.has_value() ||
+      write_request.updates_size() <= *max_write_request_size) {
+    return std::vector<p4::v1::WriteRequest>{std::move(write_request)};
   }
 
   if (*max_write_request_size < 1) {
@@ -291,7 +292,7 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> SplitUpWriteRequest(
       requests.push_back(std::move(request));
     }
     p4::v1::WriteRequest& request = requests.back();
-    *request.add_updates() = write_request.updates(i);
+    *request.add_updates() = std::move(write_request.updates(i));
   }
   return requests;
 }
