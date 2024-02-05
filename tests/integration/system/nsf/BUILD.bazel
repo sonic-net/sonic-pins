@@ -33,6 +33,7 @@ cc_library(
         "//lib/validator:validator_lib",
         "//p4_pdpi:p4_runtime_session",
         "//tests/integration/system/nsf/interfaces:component_validator",
+        "//tests/integration/system/nsf/interfaces:test_params",
         "//tests/integration/system/nsf/interfaces:testbed",
         "//tests/lib:switch_test_setup_helpers",
         "//thinkit:generic_testbed",
@@ -43,13 +44,13 @@ cc_library(
         "//thinkit:switch",
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 

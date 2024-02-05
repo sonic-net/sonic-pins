@@ -20,23 +20,13 @@ package(
 )
 
 cc_library(
-    name = "static_programmer",
-    testonly = True,
-    hdrs = ["static_programmer.h"],
-    deps = [
-        "//tests/integration/system/nsf/interfaces:flow_programmer",
-        "//tests/integration/system/nsf/interfaces:testbed",
-        "@com_google_absl//absl/status",
-    ],
-)
-
-cc_library(
     name = "fuzzer_replay_programmer",
     testonly = True,
     hdrs = ["fuzzer_replay_programmer.h"],
     deps = [
         "//tests/integration/system/nsf/interfaces:flow_programmer",
         "//tests/integration/system/nsf/interfaces:testbed",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
     ],
 )
