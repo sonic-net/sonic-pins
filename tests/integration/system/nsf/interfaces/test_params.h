@@ -28,15 +28,21 @@
 
 namespace pins_test {
 
+// Struct to hold image label and config parameters to be injected in PINs NSF
+// integration tests.
+struct ImageConfigParams {
+  std::string image_label;
+  std::string gnmi_config;
+  p4::config::v1::P4Info p4_info;
+};
+
 // Struct to hold test parameters to be injected in PINs NSF integration tests.
 //
 // Note that the `name` is used as the name of the instantiation of the
 // parameterized NSF integration test.
 struct NsfTestParams {
   std::string name;
-  std::string stack_image_label;
-  std::string gnmi_config;
-  p4::config::v1::P4Info p4_info;
+  std::vector<ImageConfigParams> image_config_params;
   std::function<std::unique_ptr<FlowProgrammer>()> create_flow_programmer;
   std::function<std::unique_ptr<TrafficHelper>()> create_traffic_helper;
   std::function<TestbedInterface()> create_testbed_interface;

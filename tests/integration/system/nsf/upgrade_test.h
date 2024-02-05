@@ -16,7 +16,6 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_UPGRADE_TEST_H_
 
 #include <memory>
-#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -35,9 +34,10 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   void SetUp() override;
   void TearDown() override;
 
-  // Assumption: Valid config (gNMI and P4Info) has already been pushed.
-  absl::Status NsfUpgrade(const std::string& prev_version,
-                          const std::string& version);
+  // Assumption: Valid config (gNMI and P4Info) has been pushed (to avoid
+  // duplicate config push).
+  absl::Status NsfUpgradeOrReboot(const ImageConfigParams& curr_image_config,
+                                  const ImageConfigParams& next_image_config);
 
   std::unique_ptr<FlowProgrammer> flow_programmer_;
   std::unique_ptr<TrafficHelper> traffic_helper_;

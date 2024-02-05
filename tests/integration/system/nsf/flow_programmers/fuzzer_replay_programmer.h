@@ -16,6 +16,7 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_FLOW_PROGRAMMERS_FUZZER_REPLAY_PROGRAMMER_H_
 
 #include "absl/status/status.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 
@@ -23,9 +24,10 @@ namespace pins_test {
 
 class FuzzerReplayProgrammer : public FlowProgrammer {
  public:
-  absl::Status ProgramFlows(Testbed& testbed) override {
-    return absl::OkStatus();
-  };
+   absl::Status ProgramFlows(const p4::config::v1::P4Info &p4_info,
+                             Testbed &testbed) override {
+     return absl::OkStatus();
+   };
   absl::Status ClearFlows(Testbed& testbed) override {
     return absl::OkStatus();
   };
