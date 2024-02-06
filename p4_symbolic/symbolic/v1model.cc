@@ -21,11 +21,15 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "gutil/collections.h"
 #include "gutil/status.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/internal/ordered_map.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/control.h"
@@ -33,7 +37,9 @@
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model_intrinsic.h"
+#include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -166,6 +172,92 @@ absl::Status InitializeIngressHeaders(const ir::P4Program &program,
   return absl::OkStatus();
 }
 
+// Symbolically evaluates the built-in multicast group table, see
+// https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md.
+// A matching group will create 0 or more copies of the packet, 1 per replica,
+// which we model as nondeterministically executing 1 of the replicas.
+absl::Status EvaluateMulticastGroupTable(SolverState &state,
+                                         SymbolicPerPacketState &packet) {
+  // Get multicast group entries, or return if there aren't any.
+  auto &entries = state.context.table_entries;
+  auto it = entries.find(pdpi::GetMulticastGroupTableName());
+  if (it == entries.end()) return absl::OkStatus();
+
+  // Some variables needed for entry evaluation.
+  z3::context &z3 = *state.context.z3_context;
+  ASSIGN_OR_RETURN(
+      values::IdAllocator * port_translator,
+      gutil::FindMutablePtrOrStatus(
+          state.translator.p4runtime_translation_allocators, "port_id_t"));
+  ASSIGN_OR_RETURN(z3::expr mcast_grp,
+                   packet.Get("standard_metadata.mcast_grp"));
+
+  // Bit-widths of packet field we need to assign to.
+  ASSIGN_OR_RETURN(
+      const int kEgressSpecWidth,
+      util::GetFieldBitwidth("standard_metadata.egress_spec", state.program));
+  ASSIGN_OR_RETURN(
+      const int kInstanceTypeWidth,
+      util::GetFieldBitwidth("standard_metadata.instance_type", state.program));
+  ASSIGN_OR_RETURN(
+      const int kMcastGrpWidth,
+      util::GetFieldBitwidth("standard_metadata.mcast_grp", state.program));
+  ASSIGN_OR_RETURN(
+      const int kEgressRidWidth,
+      util::GetFieldBitwidth("standard_metadata.egress_rid", state.program));
+
+  // Evaluate entries one-by-one.
+  for (const ir::TableEntry &entry : it->second) {
+    const pdpi::IrPacketReplicationEngineEntry &pre_entry =
+        entry.concrete_entry()
+            .pdpi_ir_entity()
+            .packet_replication_engine_entry();
+    RET_CHECK(pre_entry.has_multicast_group_entry()) << absl::StrCat(entry);
+    const pdpi::IrMulticastGroupEntry &group =
+        pre_entry.multicast_group_entry();
+    if (group.multicast_group_id() == 0) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "V1Model multicast group IDs must be non-zero, but got: "
+             << absl::StrCat(pre_entry);
+    }
+    z3::expr group_hit =
+        mcast_grp == z3.bv_val(group.multicast_group_id(), kMcastGrpWidth);
+    RETURN_IF_ERROR(
+        packet.Set("standard_metadata.instance_type",
+                   z3.bv_val(PKT_INSTANCE_TYPE_REPLICATION, kInstanceTypeWidth),
+                   group_hit));
+
+    // A free integer variable whose value determines which multicast group
+    // replica is executed: replica i is executed iff `selector == i` or
+    // `selector >= i` and `i` is the final replica (with max `i`).
+    std::string replica_index_name = absl::StrFormat(
+        "replica index of multicast group %d", group.multicast_group_id());
+    z3::expr replica_index =
+        state.context.z3_context->int_const(replica_index_name.c_str());
+    z3::expr no_replica_selected_yet = state.context.z3_context->bool_val(true);
+    for (int i = 0; i < group.replicas_size(); ++i) {
+      const pdpi::IrReplica &replica = group.replicas(i);
+      ASSIGN_OR_RETURN(auto replica_port,
+                       port_translator->AllocateId(replica.port()));
+      bool is_final_replica = i == group.replicas_size() - 1;
+      z3::expr replica_selected =
+          is_final_replica ? no_replica_selected_yet : (replica_index == i);
+      no_replica_selected_yet = no_replica_selected_yet && !replica_selected;
+      RETURN_IF_ERROR(packet.Set("standard_metadata.egress_spec",
+                                 z3.bv_val(replica_port, kEgressSpecWidth),
+                                 group_hit && replica_selected));
+      RETURN_IF_ERROR(packet.Set("standard_metadata.egress_rid",
+                                 z3.bv_val(replica.instance(), kEgressRidWidth),
+                                 group_hit && replica_selected));
+    }
+  }
+
+  return absl::OkStatus();
+}
+
+// See
+// https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md
+// for the canonical documentation of what this block of code should do.
 absl::Status EvaluateV1model(SolverState &state,
                              const std::vector<int> &physical_ports) {
   SymbolicContext &context = state.context;
@@ -210,14 +302,18 @@ absl::Status EvaluateV1model(SolverState &state,
 
   // Evaluate the ingress pipeline.
   // TODO: This is a simplification that omits a lot of features, e.g.
-  // cloning, digests, resubmit, and multicast. The full semantics we should
-  // implement is documented here:
+  // cloning, digests, and resubmit. The full semantics we should implement is
+  // documented here:
   // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#pseudocode-for-what-happens-at-the-end-of-ingress-and-egress-processing
   ASSIGN_OR_RETURN(
       SymbolicTableMatches matches,
       control::EvaluatePipeline("ingress", state, context.egress_headers,
                                 /*guard=*/context.z3_context->bool_val(true)));
-  ASSIGN_OR_RETURN(z3::expr dropped,
+  // Since we don't yet model resubmit, the multicast group table is always
+  // evaluated unconditionally, see
+  // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#pseudocode-for-what-happens-at-the-end-of-ingress-and-egress-processing
+  RETURN_IF_ERROR(EvaluateMulticastGroupTable(state, context.egress_headers));
+  ASSIGN_OR_RETURN(z3::expr ingress_drop,
                    IsDropped(context.egress_headers, *context.z3_context));
 
   // Assign egress_spec to egress_port if the packet is not dropped.
@@ -226,13 +322,13 @@ absl::Status EvaluateV1model(SolverState &state,
                    context.egress_headers.Get("standard_metadata.egress_spec"));
   RETURN_IF_ERROR(context.egress_headers.Set("standard_metadata.egress_port",
                                              egress_spec,
-                                             /*guard=*/!dropped));
+                                             /*guard=*/!ingress_drop));
 
   // Evaluate the egress pipeline.
   ASSIGN_OR_RETURN(
       SymbolicTableMatches egress_matches,
       control::EvaluatePipeline("egress", state, context.egress_headers,
-                                /*guard=*/!dropped));
+                                /*guard=*/!ingress_drop));
   matches.merge(std::move(egress_matches));
 
   // Populate and build the symbolic context.

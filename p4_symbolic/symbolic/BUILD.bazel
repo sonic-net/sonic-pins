@@ -57,6 +57,7 @@ cc_library(
     deps = [
         "//gutil:collections",
         "//gutil:status",
+        "//p4_pdpi:built_ins",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/internal:ordered_map",
         "//p4_pdpi/string_encodings:bit_string",
