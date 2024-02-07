@@ -22,7 +22,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/sonic/app_db_manager.h"
+#include "p4rt_app/p4runtime/entity_update.h"
 
 namespace p4rt_app {
 
@@ -30,7 +30,7 @@ namespace p4rt_app {
 // by that entry. A NOT_FOUND error can be returned if either the table
 // definition cannot be found, or if an action profile definition is used and
 // cannot be found.
-absl::StatusOr<sonic::TableResources>
+absl::StatusOr<TableResources>
 GetResourceUsageForIrTableEntry(const pdpi::IrP4Info &ir_p4info,
                                 const pdpi::IrTableEntry &table_entry);
 
@@ -38,7 +38,7 @@ GetResourceUsageForIrTableEntry(const pdpi::IrP4Info &ir_p4info,
 // by that entry. A NOT_FOUND error can be returned if either the table
 // definition cannot be found, or if an action profile definition is used and
 // cannot be found.
-absl::StatusOr<sonic::TableResources>
+absl::StatusOr<TableResources>
 GetResourceUsageForPiTableEntry(const pdpi::IrP4Info &ir_p4info,
                                 const p4::v1::TableEntry &table_entry);
 
@@ -72,8 +72,8 @@ ActionProfileResourceCapacity GetActionProfileResourceCapacity(
 //
 // Note that this method assumes SumOfWeights today and does not consider
 // SumOfActions selectors.
-absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
-    const pdpi::IrP4Info &ir_p4info, const sonic::AppDbEntry &app_db_entry,
+absl::StatusOr<TableResources> VerifyCapacityAndGetTableResourceChange(
+    const pdpi::IrP4Info &ir_p4info, const EntityUpdate &update,
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> &entity_cache,
     const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
         &capacity_by_action_profile_name,

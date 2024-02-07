@@ -131,6 +131,7 @@ cc_library(
     hdrs = ["p4runtime_impl.h"],
     deps = [
         ":cpu_queue_translator",
+        ":entity_update",
         ":ir_translation",
         ":p4info_verification",
         ":p4runtime_read",
@@ -340,11 +341,11 @@ cc_library(
     srcs = ["resource_utilization.cc"],
     hdrs = ["resource_utilization.h"],
     deps = [
+        ":entity_update",
         "//gutil:collections",
         "//gutil:status",
         "//p4_pdpi:entity_keys",
         "//p4_pdpi:ir_cc_proto",
-        "//p4rt_app/sonic:app_db_manager",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -358,6 +359,7 @@ cc_test(
     name = "resource_utilization_test",
     srcs = ["resource_utilization_test.cc"],
     deps = [
+        ":entity_update",
         ":resource_utilization",
         "//gutil:collections",
         "//gutil:status",
@@ -365,7 +367,6 @@ cc_test(
         "//p4_pdpi:entity_keys",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
-        "//p4rt_app/sonic:app_db_manager",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -399,5 +400,16 @@ cc_test(
         "//gutil:status_matchers",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "entity_update",
+    hdrs = ["entity_update.h"],
+    deps = [
+        "//p4_pdpi:entity_keys",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4rt_app/sonic:app_db_manager",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
     ],
 )
