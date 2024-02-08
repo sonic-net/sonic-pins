@@ -545,4 +545,27 @@ absl::StatusOr<bool> IsSameIpAddressStr(const std::string& ip1,
   return ipv6_adddress_1 == ipv6_adddress_2;
 }
 
-}  // namespace pins
+absl::StatusOr<int> GetSflowCollectorPort(absl::string_view gnmi_config) {
+  ASSIGN_OR_RETURN(auto gnmi_config_json, json_yang::ParseJson(gnmi_config));
+  nlohmann::json& collector_json_array =
+      gnmi_config_json["openconfig-sampling:sampling"]
+                      ["openconfig-sampling-sflow:sflow"]["collectors"]
+                      ["collector"];
+  if (!collector_json_array.empty() &&
+      collector_json_array.type() != nlohmann::json::value_t::array) {
+    return absl::InvalidArgumentError("json collector is not an array.");
+  }
+  if (collector_json_array.empty()) {
+    return 6343;
+  }
+  auto& collector_json = collector_json_array.at(0);
+  if (collector_json["config"].empty() ||
+      collector_json["config"]["port"].empty()) {
+    return absl::InvalidArgumentError(absl::Substitute(
+        "sFlow collector config is not populated correctly. config: $0",
+        json_yang::DumpJson(collector_json["config"])));
+  }
+  return collector_json["config"]["port"];
+}
+
+}  // namespace gpins

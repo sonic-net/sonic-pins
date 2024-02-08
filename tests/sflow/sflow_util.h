@@ -139,5 +139,9 @@ absl::StatusOr<int64_t> GetSflowCollectorPacketsSentCounter(
 absl::StatusOr<bool> IsSameIpAddressStr(const std::string& ip1,
                                         const std::string& ip2);
 
-}  // namespace pins
+// Returns the collector port from `gnmi_config` collector config first
+// collector. Returns 6343 if no collector config is set.
+absl::StatusOr<int> GetSflowCollectorPort(absl::string_view gnmi_config);
+
+}  // namespace gpins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
