@@ -848,6 +848,102 @@ TEST(SflowUtilTest, UpdateSflowInterfaceEnableNotConvergeFail) {
       StatusIs(absl::StatusCode::kDeadlineExceeded));
 }
 
+constexpr absl::string_view kTorSflowGnmiConfig = R"json({
+     "openconfig-sampling:sampling" : {
+        "openconfig-sampling-sflow:sflow" : {
+           "collectors" : {
+              "collector" : [
+                 {
+                    "address" : "2001:4860:f802::be",
+                    "config" : {
+                       "address" : "2001:4860:f802::be",
+                       "port" : 6344
+                    },
+                    "port" : 6344
+                 }
+              ]
+           }
+        }
+     }
+  })json";
+
+TEST(SflowUtilTest, GetSflowCollectorPortTest) {
+  ASSERT_THAT(GetSflowCollectorPort(kTorSflowGnmiConfig), IsOkAndHolds(6344));
+}
+
+constexpr absl::string_view kTorSflowGnmiConfigMissingPort = R"json({
+     "openconfig-sampling:sampling" : {
+        "openconfig-sampling-sflow:sflow" : {
+           "collectors" : {
+              "collector" : [
+                 {
+                    "address" : "2001:4860:f802::be",
+                    "config" : {
+                    },
+                    "port" : 6344
+                 }
+              ]
+           }
+        }
+     }
+  })json";
+
+TEST(SflowUtilTest, GetSflowCollectorPortMissingPortTest) {
+  ASSERT_THAT(
+      GetSflowCollectorPort(kTorSflowGnmiConfigMissingPort),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("sFlow collector config is not populated correctly")));
+}
+
+constexpr absl::string_view kNoCollectorGnmiConfig = R"json({
+  "openconfig-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "bond0",
+        "state": {
+          "openconfig-p4rt:id": 1,
+          "oper-status": "UP"
+        }
+      }
+    ]
+  },
+  "openconfig-sampling:sampling": {
+    "openconfig-sampling-sflow:sflow": {
+      "config": {
+        "agent-id-ipv6": "8002:12::aab0",
+        "enabled": true,
+        "polling-interval": 0,
+        "sample-size": 12
+      },
+      "interfaces": {
+        "interface": [
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet2"
+            },
+            "name": "Ethernet2"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet3"
+            },
+            "name": "Ethernet3"
+          }
+        ]
+      }
+    }
+  }
+})json";
+
+TEST(SflowUtilTest, GetSflowCollectorPortNoCollectorConfigTest) {
+  ASSERT_THAT(GetSflowCollectorPort(kNoCollectorGnmiConfig),
+              IsOkAndHolds(6343));
+}
+
 TEST(SflowDscpTest, ParseTcpdumpResultA1Success) {
   const std::string tcpdump_result =
       R"(tcpdump: listening on lo, link-type EN10MB (Ethernet), capture size "
