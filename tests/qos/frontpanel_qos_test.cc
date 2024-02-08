@@ -985,15 +985,24 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
 
   // Identify round-robin queues and their weights.
   using WeightByQueueName = absl::flat_hash_map<std::string, int64_t>;
-  ASSERT_OK_AND_ASSIGN(const WeightByQueueName kWeightByQueueName,
+  ASSERT_OK_AND_ASSIGN(WeightByQueueName weights_by_queue_name,
                        GetSchedulerPolicyWeightsByQueue(
                            kSutEgressPortSchedulerPolicy, *gnmi_stub));
-  if (kWeightByQueueName.size() < 2) {
+
+  // Remove queues which are not present in the dscp map passed in.
+  for (auto iterator = weights_by_queue_name.begin();
+       iterator != weights_by_queue_name.end();) {
+    auto iterator_copy = iterator++;
+    if (!kDscpsByQueueName.contains(iterator_copy->first)) {
+      weights_by_queue_name.erase(iterator_copy);
+    }
+  }
+  if (weights_by_queue_name.size() < 2) {
     GTEST_SKIP() << "test pre-condition violated: expected at least 2 queues "
                     "with round-robin schedulers";
   }
   absl::btree_set<int> weights;
-  for (auto &[_, weight] : kWeightByQueueName) weights.insert(weight);
+  for (auto &[_, weight] : weights_by_queue_name) weights.insert(weight);
   if (weights.size() < 2) {
     GTEST_SKIP() << "test pre-condition violated: expected at least 2 "
                     "different round-robin weights, but found only "
@@ -1001,7 +1010,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   }
   LOG(INFO)
       << "Testing the following queues and associated round-robin weights:\n- "
-      << absl::StrJoin(kWeightByQueueName, "\n- ",
+      << absl::StrJoin(weights_by_queue_name, "\n- ",
                        [](std::string *out, auto &queue_and_weight) {
                          absl::StrAppendFormat(out, "%s - weight %d",
                                                queue_and_weight.first,
@@ -1061,7 +1070,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   const int64_t kStrictlyPrioritizedPir = .95 * kEgressLineRateInBytesPerSecond;
   {
     absl::flat_hash_map<std::string, SchedulerParameters> params_by_queue_name;
-    for (auto &[queue_name, _] : kWeightByQueueName) {
+    for (auto &[queue_name, _] : weights_by_queue_name) {
       params_by_queue_name[queue_name].committed_information_rate = 0;
       params_by_queue_name[queue_name].peak_information_rate =
           kEgressLineRateInBytesPerSecond;
@@ -1101,8 +1110,8 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   // Configue IPv4 and IPv6 traffic items to all round-robin queues.
   std::vector<std::string> traffic_items;
   absl::flat_hash_map<std::string, std::string> queue_by_traffic_item_name;
-  const int kNumRoundRobinTrafficItems = 2 * kWeightByQueueName.size();
-  for (auto &[queue_name, weight] : kWeightByQueueName) {
+  const int kNumRoundRobinTrafficItems = 2 * weights_by_queue_name.size();
+  for (auto &[queue_name, weight] : weights_by_queue_name) {
     for (bool ipv4 : {true, false}) {
       ASSERT_THAT(kDscpsByQueueName,
                   Contains(Pair(Eq(queue_name), Not(IsEmpty()))));
@@ -1189,10 +1198,10 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   int64_t total_num_rx_frames = 0;
   for (auto &[_, rx] : num_rx_frames_by_queue) total_num_rx_frames += rx;
   int64_t total_weight = 0;
-  for (auto &[_, weight] : kWeightByQueueName) total_weight += weight;
+  for (auto &[_, weight] : weights_by_queue_name) total_weight += weight;
   for (auto &[queue, num_rx_frames] : num_rx_frames_by_queue) {
     ASSERT_OK_AND_ASSIGN(int64_t weight,
-                         gutil::FindOrStatus(kWeightByQueueName, queue));
+                         gutil::FindOrStatus(weights_by_queue_name, queue));
     const double kExpectedFraction = 1. * weight / total_weight;
     const double kActualFraction = 1. * num_rx_frames / total_num_rx_frames;
     const double kAbsoluteError = kActualFraction - kExpectedFraction;

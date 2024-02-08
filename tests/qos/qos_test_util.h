@@ -214,7 +214,6 @@ struct QueueInfoByQueueName {
   int scheduler_be_pkts;              // Burst excess packets.
 };
 
-
 // Updates parameters of the buffer profile of the given name according to
 // `params_by_queue_name` and waits for the updated config to converge, or times
 // out with an Unavailable error if the state does not converge within the given
