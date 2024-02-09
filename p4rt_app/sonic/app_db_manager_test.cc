@@ -47,6 +47,7 @@
 #include "swss/schema.h"
 #include "swss/table.h"
 #include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace p4rt_app {
 namespace sonic {
