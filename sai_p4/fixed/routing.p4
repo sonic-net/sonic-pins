@@ -3,6 +3,7 @@
 
 #include <v1model.p4>
 #include "common_actions.p4"
+#include "drop_martians.p4"
 #include "headers.p4"
 #include "metadata.p4"
 #include "ids.h"
@@ -252,32 +253,40 @@ control routing_lookup(in headers_t headers,
   }
 
   apply {
-    // Drop packets by default, then override in the router_interface_table.
-    // TODO: This should just be the default behavior of v1model:
-    // https://github.com/p4lang/behavioral-model/issues/992
     mark_to_drop(standard_metadata);
     vrf_table.apply();
-    if (local_metadata.admit_to_l3) {
-      if (headers.ipv4.isValid()) {
-        // TODO: Rework conditions under which uni/multicast table
-        // lookups occur and what happens when both tables are hit.
-        ipv4_table.apply();
 
-        // TODO: Use commented out code instead, once p4-symbolic
-        // supports it.
-        // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
-        ipv4_multicast_table.apply();
-        local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
-      } else if (headers.ipv6.isValid()) {
-        // TODO: Rework conditions under which uni/multicast table
-        // lookups occur and what happens when both tables are hit.
-        ipv6_table.apply();
-
-        // TODO: Use commented out code instead, once p4-symbolic
-        // supports it.
-        // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
-        ipv6_multicast_table.apply();
-        local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+    if (headers.ipv4.isValid()) {
+      if (IS_MULTICAST_IPV4(headers.ipv4.dst_addr)) {
+        if (IS_IPV4_MULTICAST_MAC(headers.ethernet.dst_addr)) {
+          ipv4_multicast_table.apply();
+          local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+          // TODO: Use commented out code instead, once p4-symbolic
+          // supports it.
+          // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
+        }
+      } else { // IPv4 unicast.
+        if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
+            local_metadata.admit_to_l3) {
+          ipv4_table.apply();
+        }
+      }
+    } else if (headers.ipv6.isValid()) {
+      if (IS_MULTICAST_IPV6(headers.ipv6.dst_addr)) {
+        if (local_metadata.admit_to_l3 ||
+            // Packets with multicast DMAC are always elligible for IP multicast.
+            IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
+          ipv6_multicast_table.apply();
+          local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+          // TODO: Use commented out code instead, once p4-symbolic
+          // supports it.
+          // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
+        }
+      } else { // IPv6 unicast.
+        if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
+            local_metadata.admit_to_l3) {
+          ipv6_table.apply();
+        }
       }
     }
   }

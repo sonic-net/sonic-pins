@@ -29,6 +29,8 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
                                ethernet_addr_t src_mac) {
     local_metadata.enable_src_mac_rewrite = true;
     local_metadata.packet_rewrites.src_mac = src_mac;
+    // Hard-coded for now. We may make the VLAN ID programmable when needed.
+    local_metadata.packet_rewrites.vlan_id = INTERNAL_VLAN_ID;
   }
 
   // Rewrites the source MAC of the multicast-replicated packet.
