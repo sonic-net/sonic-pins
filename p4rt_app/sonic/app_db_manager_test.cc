@@ -21,10 +21,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "google/rpc/code.pb.h"
-#include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.pb.h"
@@ -37,6 +35,10 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "swss/rediscommand.h"
+#include "swss/schema.h"
+#include "swss/table.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace p4rt_app {
 namespace sonic {
