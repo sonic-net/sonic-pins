@@ -1842,6 +1842,25 @@ absl::Status P4RuntimeImpl::HandleWarmBootNotification(
 
     UpdateWarmBootState(swss::WarmStart::WarmStartState::FROZEN);
     UpdateWarmBootState(swss::WarmStart::WarmStartState::QUIESCENT);
+  } else if (notification == swss::WarmStart::WarmBootNotification::kUnfreeze) {
+    if (!IsFreezeMode()) {
+      LOG(WARNING)
+          << "P4RT already in unfreeze mode. Ignoring duplicate unfreeze "
+             "notification.";
+      return absl::OkStatus();
+    }
+
+    swss::WarmStart::WarmStartState warm_boot_state = GetWarmBootState();
+    if (warm_boot_state != swss::WarmStart::WarmStartState::RECONCILED &&
+        warm_boot_state != swss::WarmStart::WarmStartState::FROZEN &&
+        warm_boot_state != swss::WarmStart::WarmStartState::QUIESCENT) {
+      LOG(WARNING)
+          << "Ignoring unfreeze notification received while warm-boot state is "
+          << swss::WarmStart::warmStartStateNameMap()->at(warm_boot_state);
+      return absl::OkStatus();
+    }
+
+    is_freeze_mode_ = false;
   }
 
   return absl::OkStatus();

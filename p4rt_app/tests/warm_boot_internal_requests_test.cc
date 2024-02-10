@@ -200,5 +200,115 @@ TEST_F(WarmBootInternalRequestsTest,
             swss::WarmStart::WarmStartState::FAILED);
 }
 
+TEST_F(WarmBootInternalRequestsTest,
+       AddRemovePacketIoPortRequestsAreHandledAfterUnfreeze) {
+  // Send freeze notification.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  // Verify the warm boot state is QUIESCENT.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Returning OK means request successfully processed after unfreeze.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPacketIoPort("Ethernet0"));
+
+  EXPECT_OK(p4rt_service_.GetP4rtServer().RemovePacketIoPort("Ethernet0"));
+}
+
+TEST_F(WarmBootInternalRequestsTest,
+       UpdateDeviceIdRequestsAreHandledAfterUnfreeze) {
+  // Send freeze notification.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  // Verify the warm boot state is QUIESCENT.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Returning OK means request successfully processed after unfreeze.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(11223344));
+}
+
+TEST_F(WarmBootInternalRequestsTest,
+       AddRemovePortTranslationRequestsAreHandledAfterUnfreeze) {
+  // Send freeze notification.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  // Verify the warm boot state is QUIESCENT.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Returning OK means request successfully processed after unfreeze.
+  EXPECT_OK(
+      p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1/1/0", "0"));
+
+  EXPECT_OK(
+      p4rt_service_.GetP4rtServer().RemovePortTranslation("Ethernet1/1/0"));
+}
+
+TEST_F(WarmBootInternalRequestsTest,
+       SetQueueTranslatorRequestsAreHandledAfterUnfreeze) {
+  // Send freeze notification.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  // Verify the warm boot state is QUIESCENT.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Returning OK means request successfully processed after unfreeze.
+  p4rt_service_.GetP4rtServer().SetQueueTranslator(
+      QueueTranslator::Empty(), "CPU");
+}
+
+TEST_F(WarmBootInternalRequestsTest,
+       VerifyStateRequestsAreHandledAfterUnfreeze) {
+  // Send freeze notification.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  // Verify the warm boot state is QUIESCENT.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Returning OK means request successfully processed after unfreeze.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().VerifyState());
+}
+
+TEST_F(WarmBootInternalRequestsTest,
+       DumpDebugDataRequestsAreHandledAfterUnfreeze) {
+  // Send freeze notification.
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  // Verify the warm boot state is QUIESCENT.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Returning OK means request successfully processed after unfreeze.
+  EXPECT_OK(
+      p4rt_service_.GetP4rtServer().DumpDebugData(testing::TempDir(), "alert"));
+}
+
 }  // namespace
 }  // namespace p4rt_app

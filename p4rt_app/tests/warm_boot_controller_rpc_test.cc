@@ -73,81 +73,104 @@ absl::StatusOr<p4::v1::StreamMessageResponse> SendStreamRequestAndGetResponse(
 
 class WarmBootControllerRpcTest : public testing::Test {
  protected:
-  WarmBootControllerRpcTest() {
-    std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());
+  void SetUp() override;
 
-    auto primary_channel =
-        grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
-    primary_stub_ = p4::v1::P4Runtime::NewStub(primary_channel);
-    LOG(INFO) << "Created primary P4Runtime::Stub for " << address << ".";
-
-    auto backup_channel =
-        grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
-    backup_stub_ = p4::v1::P4Runtime::NewStub(backup_channel);
-    LOG(INFO) << "Created backup P4Runtime::Stub for " << address << ".";
-  }
-
-  // Opens a P4RT stream, and verifies that it is the primary connection. Note
-  // that the stream can still become a backup if a test updates the election
-  // ID, or opens a new connection.
   absl::StatusOr<std::unique_ptr<P4RuntimeStream>> CreatePrimaryConnection(
       grpc::ClientContext& context, uint64_t device_id,
-      const p4::v1::Uint128 election_id) {
-    context.set_deadline(absl::ToChronoTime(absl::Now() + absl::Seconds(10)));
-    context.set_wait_for_ready(true);
-    auto stream = primary_stub_->StreamChannel(&context);
+      p4::v1::Uint128 election_id);
 
-    // Verify that connection is the primary.
-    p4::v1::StreamMessageRequest request;
-    request.mutable_arbitration()->set_device_id(device_id);
-    *request.mutable_arbitration()->mutable_election_id() = election_id;
-    ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
-                     SendStreamRequestAndGetResponse(*stream, request));
-    if (response.arbitration().status().code() != grpc::StatusCode::OK) {
-      return gutil::UnknownErrorBuilder()
-             << "could not become primary. "
-             << response.arbitration().status().ShortDebugString();
-    }
-
-    return stream;
-  }
-
-  // Opens a P4RT stream without an election ID so it is forced to be a backup.
   absl::StatusOr<std::unique_ptr<P4RuntimeStream>> CreateBackupConnection(
-      grpc::ClientContext& context, uint64_t device_id) {
-    // No test should take more than 10 seconds.
-    context.set_deadline(absl::ToChronoTime(absl::Now() + absl::Seconds(10)));
-    context.set_wait_for_ready(true);
-    auto stream = backup_stub_->StreamChannel(&context);
+      grpc::ClientContext& context, uint64_t device_id);
 
-    // Verify that connection is a backup.
-    p4::v1::StreamMessageRequest request;
-    request.mutable_arbitration()->set_device_id(device_id);
-    ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
-                     SendStreamRequestAndGetResponse(*stream, request));
-    if (response.arbitration().status().code() == grpc::StatusCode::OK) {
-      return gutil::UnknownErrorBuilder()
-             << "could not become backup. "
-             << response.arbitration().status().ShortDebugString();
-    }
-
-    return stream;
-  }
+  static constexpr uint64_t device_id = 11223344;
 
   test_lib::P4RuntimeGrpcService p4rt_service_ =
       test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
+
   std::unique_ptr<p4::v1::P4Runtime::Stub> primary_stub_;
+
   std::unique_ptr<p4::v1::P4Runtime::Stub> backup_stub_;
+
+  std::unique_ptr<p4::v1::P4Runtime::Stub> p4rt_session_stub_;
+
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
 };
 
-TEST_F(WarmBootControllerRpcTest, WriteRpcReceivesUnavailableAfterFreeze) {
-  const uint64_t device_id = 11223344;
+void WarmBootControllerRpcTest::SetUp() {
+  std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());
+
+  auto primary_channel =
+      grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+  primary_stub_ = p4::v1::P4Runtime::NewStub(primary_channel);
+  LOG(INFO) << "Created primary P4Runtime::Stub for " << address << ".";
+
+  auto backup_channel =
+      grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+  backup_stub_ = p4::v1::P4Runtime::NewStub(backup_channel);
+  LOG(INFO) << "Created backup P4Runtime::Stub for " << address << ".";
+
   ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id));
 
-  ASSERT_OK_AND_ASSIGN(p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                          std::move(primary_stub_), device_id));
+  auto p4rt_session_channel =
+      grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+  p4rt_session_stub_ = p4::v1::P4Runtime::NewStub(p4rt_session_channel);
+  LOG(INFO) << "Created P4RT session P4Runtime::Stub for " << address << ".";
 
+  ASSERT_OK_AND_ASSIGN(
+      p4rt_session_,
+      pdpi::P4RuntimeSession::Create(std::move(p4rt_session_stub_), device_id));
+}
+
+// Opens a P4RT stream, and verifies that it is the primary connection. Note
+// that the stream can still become a backup if a test updates the election
+// ID, or opens a new connection.
+absl::StatusOr<std::unique_ptr<P4RuntimeStream>>
+WarmBootControllerRpcTest::CreatePrimaryConnection(
+    grpc::ClientContext& context, uint64_t device_id,
+    const p4::v1::Uint128 election_id) {
+  context.set_deadline(absl::ToChronoTime(absl::Now() + absl::Seconds(10)));
+  context.set_wait_for_ready(true);
+  auto stream = primary_stub_->StreamChannel(&context);
+
+  // Verify that connection is the primary.
+  p4::v1::StreamMessageRequest request;
+  request.mutable_arbitration()->set_device_id(device_id);
+  *request.mutable_arbitration()->mutable_election_id() = election_id;
+  ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
+                   SendStreamRequestAndGetResponse(*stream, request));
+  if (response.arbitration().status().code() != grpc::StatusCode::OK) {
+    return gutil::UnknownErrorBuilder()
+           << "could not become primary. "
+           << response.arbitration().status().ShortDebugString();
+  }
+
+  return stream;
+}
+
+// Opens a P4RT stream without an election ID so it is forced to be a backup.
+absl::StatusOr<std::unique_ptr<P4RuntimeStream>>
+WarmBootControllerRpcTest::CreateBackupConnection(grpc::ClientContext& context,
+                                                  uint64_t device_id) {
+  // No test should take more than 10 seconds.
+  context.set_deadline(absl::ToChronoTime(absl::Now() + absl::Seconds(10)));
+  context.set_wait_for_ready(true);
+  auto stream = backup_stub_->StreamChannel(&context);
+
+  // Verify that connection is a backup.
+  p4::v1::StreamMessageRequest request;
+  request.mutable_arbitration()->set_device_id(device_id);
+  ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
+                   SendStreamRequestAndGetResponse(*stream, request));
+  if (response.arbitration().status().code() == grpc::StatusCode::OK) {
+    return gutil::UnknownErrorBuilder()
+           << "could not become backup. "
+           << response.arbitration().status().ShortDebugString();
+  }
+
+  return stream;
+}
+
+TEST_F(WarmBootControllerRpcTest, WriteRpcReceivesUnavailableAfterFreeze) {
   EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
@@ -188,19 +211,13 @@ TEST_F(WarmBootControllerRpcTest, WriteRpcReceivesUnavailableAfterFreeze) {
 }
 
 TEST_F(WarmBootControllerRpcTest, ReadRpcReceivesUnavailableAfterFreeze) {
-  const uint64_t device_id = 11223344;
-  ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id));
-
-  ASSERT_OK_AND_ASSIGN(p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                          std::move(primary_stub_), device_id));
-
   EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
 
   p4::v1::ReadRequest read_request;
-  read_request.set_device_id(device_id);
+  read_request.set_device_id(p4rt_session_->DeviceId());
   read_request.set_role(p4rt_session_->Role());
   p4::v1::ReadResponse read_response;
 
@@ -235,12 +252,6 @@ TEST_F(WarmBootControllerRpcTest, ReadRpcReceivesUnavailableAfterFreeze) {
 
 TEST_F(WarmBootControllerRpcTest,
        GetForwardingPipelineConfigRpcReceivesUnavailableAfterFreeze) {
-  const uint64_t device_id = 11223344;
-  ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id));
-
-  ASSERT_OK_AND_ASSIGN(p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                          std::move(primary_stub_), device_id));
-
   EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
@@ -248,7 +259,8 @@ TEST_F(WarmBootControllerRpcTest,
 
   p4::v1::GetForwardingPipelineConfigRequest
       get_forwarding_pipeline_config_request;
-  get_forwarding_pipeline_config_request.set_device_id(device_id);
+  get_forwarding_pipeline_config_request.set_device_id(
+      p4rt_session_->DeviceId());
 
   EXPECT_OK(p4rt_session_->GetForwardingPipelineConfig(
       get_forwarding_pipeline_config_request));
@@ -284,12 +296,6 @@ TEST_F(WarmBootControllerRpcTest,
 
 TEST_F(WarmBootControllerRpcTest,
        SetForwardingPipelineConfigRpcReceivesUnavailableAfterFreeze) {
-  const uint64_t device_id = 11223344;
-  ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id));
-
-  ASSERT_OK_AND_ASSIGN(p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                          std::move(primary_stub_), device_id));
-
   EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
@@ -481,6 +487,249 @@ TEST_F(WarmBootControllerRpcTest, NewStreamReceivesUnavailableAfterFreeze) {
 
   EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::WarmStartState::FAILED);
+}
+
+TEST_F(WarmBootControllerRpcTest, WriteRpcSucceedsAfterUnfreeze) {
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)));
+
+  p4::v1::WriteRequest write_request;
+  write_request.set_device_id(p4rt_session_->DeviceId());
+  write_request.set_role(p4rt_session_->Role());
+  *write_request.mutable_election_id() = p4rt_session_->ElectionId();
+
+  EXPECT_OK(p4rt_session_->Write(write_request));
+
+  // Send freeze notification, RPC fails after freeze.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  EXPECT_THAT(p4rt_session_->Write(write_request),
+              StatusIs(absl::StatusCode::kUnavailable,
+                       "P4RT is performing warm reboot."));
+
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Set state to RECONCILED and unfreeze, RPC succeeds after unfreeze.
+  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
+      swss::WarmStart::WarmStartState::RECONCILED);
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::RECONCILED);
+
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Create new P4RT session.
+  std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());
+
+  auto p4rt_session_channel =
+      grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+  p4rt_session_stub_ = p4::v1::P4Runtime::NewStub(p4rt_session_channel);
+  LOG(INFO) << "Created P4RT session P4Runtime::Stub for " << address << ".";
+
+  ASSERT_OK_AND_ASSIGN(
+      p4rt_session_,
+      pdpi::P4RuntimeSession::Create(std::move(p4rt_session_stub_), device_id));
+
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)));
+
+  write_request.set_device_id(p4rt_session_->DeviceId());
+  write_request.set_role(p4rt_session_->Role());
+  *write_request.mutable_election_id() = p4rt_session_->ElectionId();
+
+  EXPECT_OK(p4rt_session_->Write(write_request));
+}
+
+TEST_F(WarmBootControllerRpcTest, ReadRpcSucceedsAfterUnfreeze) {
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)));
+
+  p4::v1::ReadRequest read_request;
+  read_request.set_device_id(p4rt_session_->DeviceId());
+  read_request.set_role(p4rt_session_->Role());
+  p4::v1::ReadResponse read_response;
+
+  EXPECT_OK(p4rt_session_->Read(read_request));
+
+  // Send freeze notification.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  EXPECT_THAT(p4rt_session_->Read(read_request),
+              StatusIs(absl::StatusCode::kUnavailable,
+                       "P4RT is performing warm reboot."));
+
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Set state to RECONCILED and unfreeze, RPC succeeds after unfreeze.
+  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
+      swss::WarmStart::WarmStartState::RECONCILED);
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::RECONCILED);
+
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  EXPECT_OK(p4rt_session_->Read(read_request));
+}
+
+TEST_F(WarmBootControllerRpcTest,
+       GetForwardingPipelineConfigRpcSucceedsAfterUnfreeze) {
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)));
+
+  p4::v1::GetForwardingPipelineConfigRequest
+      get_forwarding_pipeline_config_request;
+  get_forwarding_pipeline_config_request.set_device_id(
+      p4rt_session_->DeviceId());
+
+  EXPECT_OK(p4rt_session_->GetForwardingPipelineConfig(
+      get_forwarding_pipeline_config_request));
+
+  // Send freeze notification.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  EXPECT_THAT(p4rt_session_->GetForwardingPipelineConfig(
+                  get_forwarding_pipeline_config_request),
+              StatusIs(absl::StatusCode::kUnavailable,
+                       "P4RT is performing warm reboot."));
+
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Set state to RECONCILED and unfreeze, RPC succeeds after unfreeze.
+  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
+      swss::WarmStart::WarmStartState::RECONCILED);
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::RECONCILED);
+
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  EXPECT_OK(p4rt_session_->GetForwardingPipelineConfig(
+      get_forwarding_pipeline_config_request));
+}
+
+TEST_F(WarmBootControllerRpcTest,
+       SetForwardingPipelineConfigRpcSucceedsAfterUnfreeze) {
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)));
+
+  // Send freeze notification.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSetForwardingPipelineConfig(
+          p4rt_session_.get(),
+          p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+          sai::GetP4Info(sai::Instantiation::kMiddleblock)),
+      StatusIs(absl::StatusCode::kUnavailable,
+               "P4RT is performing warm reboot."));
+
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Set state to RECONCILED and unfreeze, RPC succeeds after unfreeze.
+  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
+      swss::WarmStart::WarmStartState::RECONCILED);
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::RECONCILED);
+
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Create new P4RT session.
+  std::string address = absl::StrCat("localhost:", p4rt_service_.GrpcPort());
+
+  auto p4rt_session_channel =
+      grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+  p4rt_session_stub_ = p4::v1::P4Runtime::NewStub(p4rt_session_channel);
+  LOG(INFO) << "Created P4RT session P4Runtime::Stub for " << address << ".";
+
+  ASSERT_OK_AND_ASSIGN(
+      p4rt_session_,
+      pdpi::P4RuntimeSession::Create(std::move(p4rt_session_stub_), device_id));
+
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)));
+}
+
+TEST_F(WarmBootControllerRpcTest, StreamRpcSucceedsAfterUnfreeze) {
+  const uint64_t device_id = 11223344;
+  const p4::v1::Uint128 election_id = ElectionId(11);
+
+  // Send freeze notification.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
+      swss::WarmStart::WarmStartState::RECONCILED);
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::RECONCILED);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  // Primary stream RPC.
+  grpc::ClientContext primary_context;
+  std::unique_ptr<P4RuntimeStream> primary_stream;
+  ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id));
+  ASSERT_OK_AND_ASSIGN(
+      primary_stream,
+      CreatePrimaryConnection(primary_context, device_id, election_id));
+
+  p4::v1::StreamMessageRequest primary_request;
+  p4::v1::StreamMessageResponse response;
+  primary_request.mutable_arbitration()->set_device_id(device_id);
+  *primary_request.mutable_arbitration()->mutable_election_id() = election_id;
+
+  ASSERT_OK_AND_ASSIGN(response, SendStreamRequestAndGetResponse(
+                                     *primary_stream, primary_request));
+
+  EXPECT_EQ(response.mutable_error()->canonical_code(), grpc::StatusCode::OK);
+
+  // Backup stream RPC.
+  grpc::ClientContext backup_context;
+  std::unique_ptr<P4RuntimeStream> backup_stream;
+  ASSERT_OK(p4rt_service_.GetP4rtServer().UpdateDeviceId(device_id));
+  ASSERT_OK_AND_ASSIGN(backup_stream,
+                       CreateBackupConnection(backup_context, device_id));
+
+  p4::v1::StreamMessageRequest backup_request;
+  backup_request.mutable_arbitration()->set_device_id(device_id);
+
+  ASSERT_OK_AND_ASSIGN(response, SendStreamRequestAndGetResponse(
+                                     *backup_stream, backup_request));
+
+  EXPECT_EQ(response.mutable_error()->canonical_code(), grpc::StatusCode::OK);
 }
 
 }  // namespace

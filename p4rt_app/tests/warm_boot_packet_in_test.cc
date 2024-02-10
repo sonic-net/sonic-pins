@@ -103,12 +103,55 @@ TEST_F(WarmBootPacketInTest, PacketInEventsDroppedDuringNsfFreeze) {
 
   // Push the expected PacketIn.
   EXPECT_OK(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
-      "Ethernet1_1_0", "Ethernet1_1_1", "test packet1"));
+      "Ethernet1/1/0", "Ethernet1/1/1", "test packet1"));
   EXPECT_OK(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
-      "Ethernet1_1_1", "Ethernet1_1_0", "test packet2"));
+      "Ethernet1/1/1", "Ethernet1/1/0", "test packet2"));
 
   counters = p4rt_service_.GetP4rtServer().GetPacketIoCounters();
   EXPECT_EQ(counters.packet_in_received, 0);
+  EXPECT_EQ(counters.packet_in_errors, 0);
+}
+
+TEST_F(WarmBootPacketInTest, PacketInAfterUnfreezeIsSent) {
+  // Send freeze notification.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
+      swss::WarmStart::WarmStartState::RECONCILED);
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::RECONCILED);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+
+  const std::string address =
+      absl::StrCat("localhost:", p4rt_service_.GrpcPort());
+  auto stub =
+      pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
+  std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session;
+  ASSERT_OK_AND_ASSIGN(p4rt_session, pdpi::P4RuntimeSession::Create(
+                                         std::move(stub), device_id_));
+
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)));
+  ASSERT_OK(AddPacketIoPort("Ethernet1/1/0", "0"));
+  ASSERT_OK(AddPacketIoPort("Ethernet1/1/1", "1"));
+
+  // Push the expected PacketIn.
+  EXPECT_OK(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
+      "Ethernet1/1/0", "Ethernet1/1/1", "test packet1"));
+  EXPECT_OK(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
+      "Ethernet1/1/1", "Ethernet1/1/0", "test packet2"));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 2);
   EXPECT_EQ(counters.packet_in_errors, 0);
 }
 
