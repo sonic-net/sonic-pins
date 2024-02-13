@@ -13,15 +13,22 @@
 // limitations under the License.
 #include "p4rt_app/sonic/hashing.h"
 
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "absl/container/btree_map.h"
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
-#include "absl/strings/str_format.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
-#include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/utils/annotation_parser.h"
@@ -35,6 +42,8 @@ namespace p4rt_app {
 namespace sonic {
 namespace {
 
+static constexpr absl::string_view kHashFieldLabel = "sai_native_hash_field";
+
 // Hashing configurations will be marked at least one hash config annotation.
 // All hash config annotations have the form of: sai_hash_*
 //   Examples: sai_hash_algorithm, sai_hash_offset, sai_hash_seed
@@ -46,23 +55,21 @@ bool ActionHasHashingConfig(const pdpi::IrActionDefinition& action_def) {
   return false;
 }
 
-// Hashing configurations can apply to multiple parts of the dataplane, and
-// depending on the path we need to use different AppDb values.
-enum class HashConfigType { kECMP, kLag };
-
-absl::StatusOr<HashConfigType> GetHashConfigType(
-    absl::string_view action_name) {
-  if (action_name == "select_ecmp_hash_algorithm") return HashConfigType::kECMP;
-  if (action_name == "select_lag_hash_algorithm") return HashConfigType::kLag;
-
-  if (action_name == "compute_ecmp_hash_ipv6") return HashConfigType::kECMP;
-  if (action_name == "compute_lag_hash_ipv6") return HashConfigType::kLag;
-
-  if (action_name == "compute_ecmp_hash_ipv4") return HashConfigType::kECMP;
-  if (action_name == "compute_lag_hash_ipv4") return HashConfigType::kLag;
-
-  return gutil::InvalidArgumentErrorBuilder()
-         << "Unsupported hash configuration '" << action_name << "'.";
+absl::StatusOr<std::string> SwitchTableHashPacketFieldConfigKey(
+    absl::string_view hash_key) {
+  static const auto* const kFieldKeyMap =
+      new absl::flat_hash_map<std::string, std::string>({
+          {"compute_ecmp_hash_ipv4", "ecmp_hash_ipv4"},
+          {"compute_ecmp_hash_ipv6", "ecmp_hash_ipv6"},
+          {"compute_lag_hash_ipv4", "lag_hash_ipv4"},
+          {"compute_lag_hash_ipv6", "lag_hash_ipv6"},
+      });
+  auto result = kFieldKeyMap->find(hash_key);
+  if (result == kFieldKeyMap->end()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Unsupported hash field configuration '" << hash_key << "'.";
+  }
+  return result->second;
 }
 
 // Map of supported SAI hashing algorithms. This is a reverse mapping of
@@ -82,114 +89,112 @@ GetAvailableHashAlgorithms() {
   return *kHashAlgorithms;
 }
 
-absl::StatusOr<swss::FieldValueTuple> GetHashAlgorithm(
-    HashConfigType hash_config, const std::string& algoritm) {
-  auto iter = GetAvailableHashAlgorithms().find(algoritm);
-  if (iter == GetAvailableHashAlgorithms().end()) {
+absl::StatusOr<std::string> AppDbHashAlgorithm(absl::string_view p4_algorithm) {
+  auto result = GetAvailableHashAlgorithms().find(p4_algorithm);
+  if (result == GetAvailableHashAlgorithms().end()) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "[P4RT App] Unsupported hash algorithm '" << algoritm << "'.";
+           << "[P4RT App] Unsupported hash algorithm '" << p4_algorithm << "'.";
   }
-
-  std::string entry_name;
-  switch (hash_config) {
-    case HashConfigType::kECMP:
-      entry_name = "ecmp_hash_algorithm";
-      break;
-    case HashConfigType::kLag:
-      entry_name = "lag_hash_algorithm";
-      break;
-  }
-  return swss::FieldValueTuple{entry_name, iter->second};
+  return result->second;
 }
 
-swss::FieldValueTuple GetHashSeed(HashConfigType hash_config,
-                                  const std::string& seed) {
-  std::string entry_name;
-  switch (hash_config) {
-    case HashConfigType::kECMP:
-      entry_name = "ecmp_hash_seed";
-      break;
-    case HashConfigType::kLag:
-      entry_name = "lag_hash_seed";
-      break;
+absl::StatusOr<std::string> AppDbFieldName(absl::string_view field) {
+  static const auto* const kTranslationMap =
+      new absl::flat_hash_map<std::string, std::string>({
+          {"SAI_NATIVE_HASH_FIELD_SRC_IPV4", "src_ip"},
+          {"SAI_NATIVE_HASH_FIELD_DST_IPV4", "dst_ip"},
+          {"SAI_NATIVE_HASH_FIELD_SRC_IPV6", "src_ip"},
+          {"SAI_NATIVE_HASH_FIELD_DST_IPV6", "dst_ip"},
+          {"SAI_NATIVE_HASH_FIELD_L4_SRC_PORT", "l4_src_port"},
+          {"SAI_NATIVE_HASH_FIELD_L4_DST_PORT", "l4_dst_port"},
+          {"SAI_NATIVE_HASH_FIELD_IPV6_FLOW_LABEL", "ipv6_flow_label"},
+      });
+  auto result = kTranslationMap->find(field);
+  if (result == kTranslationMap->end()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Cannot process unknown hash field: '" << field << "'";
   }
-  return swss::FieldValueTuple{entry_name, seed};
+  return result->second;
 }
 
-swss::FieldValueTuple GetHashOffset(HashConfigType hash_config,
-                                    const std::string& offset) {
-  std::string entry_name;
-  switch (hash_config) {
-    case HashConfigType::kECMP:
-      entry_name = "ecmp_hash_offset";
-      break;
-    case HashConfigType::kLag:
-      entry_name = "lag_hash_offset";
-      break;
-  }
-  return swss::FieldValueTuple{entry_name, offset};
-}
+// Generates a HashPacketFieldConfig from an action name and annotation arg
+// list.
+absl::StatusOr<HashPacketFieldConfig> HashPacketFieldConfigFromAction(
+    absl::string_view action_name,
+    std::vector<std::vector<std::string>> arg_lists) {
+  HashPacketFieldConfig hash_field_config;
+  hash_field_config.key = action_name;
+  ASSIGN_OR_RETURN(hash_field_config.switch_table_key,
+                   SwitchTableHashPacketFieldConfigKey(action_name));
 
-std::string GetIpv4Hash(HashConfigType hash_type) {
-  switch (hash_type) {
-    case HashConfigType::kECMP:
-      return "ecmp_hash_ipv4";
-    case HashConfigType::kLag:
-      return "lag_hash_ipv4";
-  }
-  return "";
-}
-
-std::string GetIpv6Hash(HashConfigType hash_type) {
-  switch (hash_type) {
-    case HashConfigType::kECMP:
-      return "ecmp_hash_ipv6";
-    case HashConfigType::kLag:
-      return "lag_hash_ipv6";
-  }
-  return "";
-}
-
-// Generate the JSON format for HASH_TABLE entries with sai_ecmp_hash and
-// sai_native_hash_field annotations.
-// @sai_ecmp_hash(SAI_SWITCH_ATTR_ECMP_HASH_IPV4)
-// @sai_native_hash_field(SAI_NATIVE_HASH_FIELD_SRC_IPV4)
-// @sai_native_hash_field(SAI_NATIVE_HASH_FIELD_DST_IPV4)
-// @sai_native_hash_field(SAI_NATIVE_HASH_FIELD_L4_SRC_PORT)
-// @sai_native_hash_field(SAI_NATIVE_HASH_FIELD_L4_DST_PORT)
-//
-// JSON:
-// “HASH_TABLE:hash_ipv4_config” = {
-//    “hash_field_list”: [“src_ip”, “dst_ip”, “l4_src_port”, “l4_dst_port”,
-//                        “ip_protocol”],
-// }
-absl::StatusOr<nlohmann::json> GenerateJsonHashFieldEntries(
-    const std::vector<std::vector<std::string>>& parse_results) {
-  const absl::flat_hash_map<std::string, std::string> hash_fields_map = {
-      {"SAI_NATIVE_HASH_FIELD_SRC_IPV4", "src_ip"},
-      {"SAI_NATIVE_HASH_FIELD_DST_IPV4", "dst_ip"},
-      {"SAI_NATIVE_HASH_FIELD_SRC_IPV6", "src_ip"},
-      {"SAI_NATIVE_HASH_FIELD_DST_IPV6", "dst_ip"},
-      {"SAI_NATIVE_HASH_FIELD_L4_SRC_PORT", "l4_src_port"},
-      {"SAI_NATIVE_HASH_FIELD_L4_DST_PORT", "l4_dst_port"},
-      {"SAI_NATIVE_HASH_FIELD_IPV6_FLOW_LABEL", "ipv6_flow_label"},
-  };
-
-  nlohmann::json json;
-
-  for (const auto& fields : parse_results) {
-    if (fields.size() != 1) {
+  for (const auto& hash_args : arg_lists) {
+    if (hash_args.size() != 1) {
       return gutil::InvalidArgumentErrorBuilder()
-             << "Unexpected number of native hash field specified: "
-             << "expected 1, actual " << fields.size();
+             << "@" << kHashFieldLabel
+             << " annotations may only contain one argument. Found invalid "
+             << "annotation body: '" << absl::StrJoin(hash_args, ", ") << "'";
     }
-    ASSIGN_OR_RETURN(
-        auto field_value, gutil::FindOrStatus(hash_fields_map, fields.at(0)),
-        _ << "Unable to find hash field string for " << fields.at(0));
-    json.push_back(field_value);
+    ASSIGN_OR_RETURN(std::string hash_field, AppDbFieldName(hash_args.at(0)));
+    hash_field_config.fields.insert(hash_field);
   }
+  return hash_field_config;
+}
 
-  return json;
+// Inserts a new hash config into the config map.
+//   If the config already exists, returns an error.
+//   If the label is an unknown sai_hash_ label, returns an error.
+//   If this label is not a sai_hash_ label, returns OK and does nothing.
+absl::Status InsertHashParamConfig(absl::string_view label,
+                                   absl::string_view hash_type,
+                                   absl::string_view value,
+                                   HashParamConfigs& configs) {
+  if (!absl::StartsWith(label, "sai_hash_")) return absl::OkStatus();
+  if (label != "sai_hash_seed" && label != "sai_hash_offset" &&
+      label != "sai_hash_algorithm") {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Invalid sai_hash_* annotation '@" << label << "'";
+  }
+  if (!configs
+           .insert({absl::StrCat(hash_type, label.substr(/*sai*/ 3)),
+                    std::string(value)})
+           .second) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Found duplicate '" << hash_type << "' hash config annotation '@"
+           << label << "'";
+  }
+  return absl::OkStatus();
+}
+
+absl::Status UpdateHashParamConfigsFromAction(
+    const pdpi::IrActionDefinition& action, HashParamConfigs& configs) {
+  std::string full_action_name = action.preamble().name();
+  std::string hash_type;
+  if (absl::StrContainsIgnoreCase(full_action_name, "_lag_")) {
+    hash_type = "lag";
+  } else if (absl::StrContainsIgnoreCase(full_action_name, "_ecmp_")) {
+    hash_type = "ecmp";
+  } else {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Unsupported hash configuration '" << full_action_name
+           << "' name refers to neither '_ecmp_' nor '_lag_'.";
+  }
+  for (const auto& annotation :
+       pdpi::GetAllAnnotations(action.preamble().annotations())) {
+    if (annotation.label == "sai_hash_algorithm") {
+      ASSIGN_OR_RETURN(
+          std::string algorithm, AppDbHashAlgorithm(annotation.body),
+          _ << " in action '" << full_action_name << "' annotation '@"
+            << annotation.label << "(" << annotation.body << ")'");
+      RETURN_IF_ERROR(InsertHashParamConfig(annotation.label, hash_type,
+                                            algorithm, configs))
+          << " in action '" << full_action_name << "'";
+    } else {
+      RETURN_IF_ERROR(InsertHashParamConfig(annotation.label, hash_type,
+                                            annotation.body, configs))
+          << " in action '" << full_action_name << "'";
+    }
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace
@@ -202,90 +207,69 @@ bool IsIpv6HashKey(absl::string_view key) {
   return absl::StrContains(key, "ipv6");
 }
 
-// Generate the APP_DB format for hash field entries to be written to
-// HASH_TABLE.
-absl::StatusOr<std::vector<EcmpHashEntry>> GenerateAppDbHashFieldEntries(
+bool operator==(const HashPacketFieldConfig& lhs,
+                const HashPacketFieldConfig& rhs) {
+  if (lhs.key != rhs.key) return false;
+  if (lhs.switch_table_key != rhs.switch_table_key) return false;
+  if (lhs.fields.size() != rhs.fields.size()) return false;
+  absl::btree_set<std::string>::const_iterator lhs_iter, rhs_iter;
+  for (lhs_iter = lhs.fields.begin(), rhs_iter = rhs.fields.begin();
+       lhs_iter != lhs.fields.end() && rhs_iter != rhs.fields.end();
+       ++lhs_iter, ++rhs_iter) {
+    if (*lhs_iter != *rhs_iter) return false;
+  }
+  return true;
+}
+
+bool operator!=(const HashPacketFieldConfig& lhs,
+                const HashPacketFieldConfig& rhs) {
+  return !(lhs == rhs);
+}
+
+std::vector<swss::FieldValueTuple> HashPacketFieldConfig::AppDbContents()
+    const {
+  nlohmann::json field_json;
+  for (const auto& field : fields) field_json.push_back(field);
+  return {{"hash_field_list", field_json.dump()}};
+}
+
+absl::StatusOr<std::vector<HashPacketFieldConfig>>
+ExtractHashPacketFieldConfigs(const pdpi::IrP4Info& ir_p4info) {
+  std::vector<HashPacketFieldConfig> hash_field_configs;
+  for (const auto& [action_name, action_def] : ir_p4info.actions_by_name()) {
+    auto arg_lists = pdpi::GetAllAnnotationsAsArgList(
+        kHashFieldLabel, action_def.preamble().annotations());
+    if (!arg_lists.ok() || arg_lists->empty()) continue;
+    ASSIGN_OR_RETURN(auto config,
+                     HashPacketFieldConfigFromAction(action_name, *arg_lists));
+    hash_field_configs.push_back(std::move(config));
+  }
+  return hash_field_configs;
+}
+
+absl::StatusOr<HashParamConfigs> ExtractHashParamConfigs(
     const pdpi::IrP4Info& ir_p4info) {
-  std::vector<EcmpHashEntry> hash_entries;
-  for (const auto& [action_name, action_def] : ir_p4info.actions_by_name()) {
-    auto parse_results = pdpi::GetAllAnnotationsAsArgList(
-        "sai_native_hash_field", action_def.preamble().annotations());
-    if (!parse_results.ok() || parse_results->empty()) continue;
-    auto json = GenerateJsonHashFieldEntries(*parse_results);
-    if (!json.ok()) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Unable to generate hash field action annotation entries "
-             << json.status();
-    } else {
-      hash_entries.push_back(EcmpHashEntry(
-          {action_name, std::vector<swss::FieldValueTuple>(
-                            {{"hash_field_list", (*json).dump()}})}));
-    }
+  HashParamConfigs configs;
+  for (const auto& [name, action] : ir_p4info.actions_by_name()) {
+    if (!ActionHasHashingConfig(action)) continue;
+    RETURN_IF_ERROR(UpdateHashParamConfigsFromAction(action, configs));
   }
-  return hash_entries;
+  return configs;
 }
 
-absl::StatusOr<std::vector<swss::FieldValueTuple>>
-GenerateAppDbHashValueEntries(const pdpi::IrP4Info& ir_p4info) {
-  absl::flat_hash_set<std::string> hash_values_set;
-  std::vector<swss::FieldValueTuple> hash_value_entries;
-
-  // Go through all the actions from the IrP4Info and if they specify a hashing
-  // configuration generate AppDb entries.
-  for (const auto& [action_name, action_def] : ir_p4info.actions_by_name()) {
-    if (!ActionHasHashingConfig(action_def)) continue;
-
-    // We only support certain types of hashing configs so make sure the action
-    // matches expectations.
-    ASSIGN_OR_RETURN(HashConfigType hash_type, GetHashConfigType(action_name));
-
-    for (const auto& annotation :
-         pdpi::GetAllAnnotations(action_def.preamble().annotations())) {
-      swss::FieldValueTuple fv;
-      if (annotation.label == "sai_hash_algorithm") {
-        ASSIGN_OR_RETURN(fv, GetHashAlgorithm(hash_type, annotation.body),
-                         _.SetAppend()
-                             << " Found in action '" << action_name << "'.");
-      } else if (annotation.label == "sai_hash_seed") {
-        fv = GetHashSeed(hash_type, annotation.body);
-      } else if (annotation.label == "sai_hash_offset") {
-        fv = GetHashOffset(hash_type, annotation.body);
-      } else if (absl::StartsWith(annotation.label, "sai_hash_")) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Invalid sai_hash_* annotation: " << annotation.label << "("
-               << annotation.body << ")";
-      } else {
-        continue;
-      }
-      // Do not allow duplicate configurations.
-      auto [_, success] = hash_values_set.insert(fv.first);
-      if (!success) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Duplicate hash configurations are not allowed for '"
-               << fv.first << "'.";
-      }
-      hash_value_entries.push_back(fv);
-    }
-  }
-  return hash_value_entries;
-}
-
-absl::StatusOr<std::vector<std::string>> ProgramHashFieldTable(
-    HashTable& hash_table, const pdpi::IrP4Info& ir_p4info) {
-  // Get the [key, value] pairs of Hash field APP_DB entries.
-  ASSIGN_OR_RETURN(const auto entries,
-                   GenerateAppDbHashFieldEntries(ir_p4info));
-
-  if (entries.empty()) return std::vector<std::string>();
-  LOG(INFO) << "Applying hash fields: \n  "
-            << absl::StrJoin(entries, "\n  ", EcmpHashEntry::AbslFormatter);
+absl::Status ProgramHashFieldTable(HashTable& hash_table,
+                                   std::vector<HashPacketFieldConfig> configs) {
+  if (configs.empty()) return absl::OkStatus();
+  LOG(INFO) << "Apply hash fields: \n "
+            << absl::StrJoin(configs, "\n  ",
+                             HashPacketFieldConfig::AbslFormatter);
 
   // Write to APP_DB.
   pdpi::IrWriteResponse update_status;
   absl::btree_map<std::string, pdpi::IrUpdateStatus*> status_by_key;
-  for (const auto& entry : entries) {
-    hash_table.producer_state->set(entry.hash_key, entry.hash_value);
-    status_by_key[entry.hash_key] = update_status.add_statuses();
+  for (const auto& config : configs) {
+    hash_table.producer_state->set(config.key, config.AppDbContents());
+    status_by_key[config.key] = update_status.add_statuses();
   }
 
   // Wait for the OrchAgent's response.
@@ -296,57 +280,35 @@ absl::StatusOr<std::vector<std::string>> ProgramHashFieldTable(
 
   // Pickup the hash field keys that were written(and ack'ed) successfully by
   // OrchAgent.
-  std::vector<std::string> hash_field_keys;
   for (const auto& [key, status] : status_by_key) {
-    if (status->code() == google::rpc::Code::OK) {
-      hash_field_keys.push_back(key);
-    } else {
+    if (status->code() != google::rpc::Code::OK) {
       return gutil::InternalErrorBuilder()
              << "Could not write key '" << key
              << "' into the AppDb HASH_TABLE: " << status->message();
     }
   }
-  return hash_field_keys;
+  return absl::OkStatus();
 }
 
-absl::Status ProgramSwitchTable(SwitchTable& switch_table,
-                                const pdpi::IrP4Info& ir_p4info,
-                                const std::vector<std::string>& hash_fields) {
+absl::Status ProgramSwitchTable(
+    SwitchTable& switch_table, const HashParamConfigs& hash_params,
+    const std::vector<HashPacketFieldConfig>& hash_packet_fields) {
   const std::string kSwitchTableEntryKey = "switch";
-  std::vector<swss::FieldValueTuple> switch_table_attrs;
 
-  // Get all the hash value related attributes like algorithm type, offset and
-  // seed value etc.
-  ASSIGN_OR_RETURN(switch_table_attrs,
-                   GenerateAppDbHashValueEntries(ir_p4info));
-
-  // Add the ecmp hash fields for Ipv4 & Ipv6.
-  for (const auto& hash_field_key : hash_fields) {
-    // We only support certain types of hashing configs so make sure the field
-    // matches expectations.
-    ASSIGN_OR_RETURN(HashConfigType hash_type,
-                     GetHashConfigType(hash_field_key));
-
-    if (IsIpv4HashKey(hash_field_key)) {
-      switch_table_attrs.push_back(
-          swss::FieldValueTuple({GetIpv4Hash(hash_type), hash_field_key}));
-    } else if (IsIpv6HashKey(hash_field_key)) {
-      switch_table_attrs.push_back(
-          swss::FieldValueTuple({GetIpv6Hash(hash_type), hash_field_key}));
-    } else {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Invalid hash field key: " << hash_field_key;
-    }
+  std::vector<swss::FieldValueTuple> hash_tuples;
+  for (const auto& [field, value] : hash_params) {
+    hash_tuples.push_back({field, value});
   }
-
-  if (switch_table_attrs.empty()) return absl::OkStatus();
+  for (const auto& field : hash_packet_fields) {
+    hash_tuples.push_back({field.switch_table_key, field.key});
+  }
+  if (hash_tuples.empty()) return absl::OkStatus();
 
   LOG(INFO) << "Applying hash config: \n  "
-            << absl::StrJoin(switch_table_attrs, "\n  ",
-                             absl::PairFormatter(": "));
+            << absl::StrJoin(hash_tuples, "\n  ", absl::PairFormatter(": "));
 
   // Write to switch table and process response.
-  switch_table.producer_state->set(kSwitchTableEntryKey, switch_table_attrs);
+  switch_table.producer_state->set(kSwitchTableEntryKey, hash_tuples);
 
   ASSIGN_OR_RETURN(
       pdpi::IrUpdateStatus status,

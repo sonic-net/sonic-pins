@@ -80,9 +80,11 @@ p4::config::v1::Table* GetSupportedNonAclTable(p4::config::v1::P4Info& p4info) {
   return nullptr;
 }
 
-p4::config::v1::Action* GetSupportedAclAction(p4::config::v1::P4Info& p4info) {
+p4::config::v1::Action* GetRemovableAclAction(p4::config::v1::P4Info& p4info) {
+  // We want an ACL action that is not the only action of any table.
+  // `acl_forward` is currently guaranteed to have this property.
   for (auto& action : *p4info.mutable_actions()) {
-    if (IsAclAction(action) && IsSupported(action)) return &action;
+    if (action.preamble().alias() == "acl_forward") return &action;
   }
   return nullptr;
 }
@@ -271,15 +273,15 @@ TEST(P4InfoVerificationTest, ToleratesUnsupportedNonAclAction) {
   ASSERT_NE(table, nullptr);
   SCOPED_TRACE(absl::StrCat("table = ", table->preamble().name()));
 
-  // Pick a random action that's not already supported by the table.
-  // Any ACL action fits the bill.
-  auto* action = GetSupportedAclAction(p4info);
-  SCOPED_TRACE(absl::StrCat("action = ", action->preamble().name()));
-  ASSERT_NE(action, nullptr);
+  // Choose an action that is both not supported by this table and safe to
+  // remove from the overall P4 program.
+  p4::config::v1::Action* unexpected_action = GetRemovableAclAction(p4info);
+  ASSERT_NE(unexpected_action, nullptr);
+  SCOPED_TRACE(absl::StrCat("action = ", unexpected_action->preamble().name()));
 
   // Add action to table.
   p4::config::v1::ActionRef& action_ref = *table->add_action_refs();
-  action_ref.set_id(action->preamble().id());
+  action_ref.set_id(unexpected_action->preamble().id());
   action_ref.set_scope(p4::config::v1::ActionRef::TABLE_ONLY);
   *action_ref.add_annotations() = "@proto_id(42)";
 
@@ -288,7 +290,7 @@ TEST(P4InfoVerificationTest, ToleratesUnsupportedNonAclAction) {
                                                HasSubstr("unknown action")));
 
   // ...unless we mark the action as @unsupported.
-  *action->mutable_preamble()->add_annotations() = "@unsupported";
+  *unexpected_action->mutable_preamble()->add_annotations() = "@unsupported";
   EXPECT_THAT(ValidateP4Info(p4info), IsOk());
 }
 
