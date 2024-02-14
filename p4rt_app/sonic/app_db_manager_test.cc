@@ -983,6 +983,140 @@ TEST_F(AppDbManagerTest, PerformAppDbUpdatesFailsOnFirstVrfTableError) {
                   HasErrorCode(kRpcAborted)));
 }
 
+TEST(AppDbUpdateTest, EqualsSelf) {
+  AppDbUpdate update;
+  update.table = AppDbTableType::P4RT;
+  kfvOp(update.update) = SET_COMMAND;
+  kfvKey(update.update) = "update_key";
+  kfvFieldsValues(update.update) = {
+      {"field_a", "value_a"},
+      {"field_b", "value_b"},
+      {"field_c", "value_c"},
+  };
+  EXPECT_TRUE(update == update);
+  EXPECT_FALSE(update != update);
+}
+
+TEST(AppDbUpdateTest, TableDiffDoesNotEqual) {
+  AppDbUpdate update;
+  update.table = AppDbTableType::P4RT;
+  kfvOp(update.update) = SET_COMMAND;
+  kfvKey(update.update) = "update_key";
+  kfvFieldsValues(update.update) = {
+      {"field_a", "value_a"},
+      {"field_b", "value_b"},
+      {"field_c", "value_c"},
+  };
+
+  AppDbUpdate update2 = update;
+  update2.table = AppDbTableType::VRF_TABLE;
+
+  EXPECT_FALSE(update == update2);
+  EXPECT_FALSE(update2 == update);
+  EXPECT_TRUE(update != update2);
+  EXPECT_TRUE(update2 != update);
+}
+
+TEST(AppDbUpdateTest, OpDiffDoesNotEqual) {
+  AppDbUpdate update;
+  update.table = AppDbTableType::P4RT;
+  kfvOp(update.update) = SET_COMMAND;
+  kfvKey(update.update) = "update_key";
+  kfvFieldsValues(update.update) = {
+      {"field_a", "value_a"},
+      {"field_b", "value_b"},
+      {"field_c", "value_c"},
+  };
+
+  AppDbUpdate update2 = update;
+  kfvOp(update2.update) = DEL_COMMAND;
+
+  EXPECT_FALSE(update == update2);
+  EXPECT_FALSE(update2 == update);
+  EXPECT_TRUE(update != update2);
+  EXPECT_TRUE(update2 != update);
+}
+
+TEST(AppDbUpdateTest, KeyDiffDoesNotEqual) {
+  AppDbUpdate update;
+  update.table = AppDbTableType::P4RT;
+  kfvOp(update.update) = SET_COMMAND;
+  kfvKey(update.update) = "update_key";
+  kfvFieldsValues(update.update) = {
+      {"field_a", "value_a"},
+      {"field_b", "value_b"},
+      {"field_c", "value_c"},
+  };
+
+  AppDbUpdate update2 = update;
+  kfvKey(update2.update) = "update2_key";
+
+  EXPECT_FALSE(update == update2);
+  EXPECT_FALSE(update2 == update);
+  EXPECT_TRUE(update != update2);
+  EXPECT_TRUE(update2 != update);
+}
+
+TEST(AppDbUpdateTest, FieldCountDiffDoesNotEqual) {
+  AppDbUpdate update;
+  update.table = AppDbTableType::P4RT;
+  kfvOp(update.update) = SET_COMMAND;
+  kfvKey(update.update) = "update_key";
+  kfvFieldsValues(update.update) = {
+      {"field_a", "value_a"},
+      {"field_b", "value_b"},
+      {"field_c", "value_c"},
+  };
+
+  AppDbUpdate update2 = update;
+  kfvFieldsValues(update2.update).push_back({"field_c", "value_c"});
+
+  EXPECT_FALSE(update == update2);
+  EXPECT_FALSE(update2 == update);
+  EXPECT_TRUE(update != update2);
+  EXPECT_TRUE(update2 != update);
+}
+
+TEST(AppDbUpdateTest, FieldDiffDoesNotEqual) {
+  AppDbUpdate update;
+  update.table = AppDbTableType::P4RT;
+  kfvOp(update.update) = SET_COMMAND;
+  kfvKey(update.update) = "update_key";
+  kfvFieldsValues(update.update) = {
+      {"field_a", "value_a"},
+      {"field_b", "value_b"},
+      {"field_c", "value_c"},
+  };
+
+  AppDbUpdate update2 = update;
+  kfvFieldsValues(update2.update)[1].first = "field_d";
+
+  EXPECT_FALSE(update == update2);
+  EXPECT_FALSE(update2 == update);
+  EXPECT_TRUE(update != update2);
+  EXPECT_TRUE(update2 != update);
+}
+
+TEST(AppDbUpdateTest, ValueDiffDoesNotEqual) {
+  AppDbUpdate update;
+  update.table = AppDbTableType::P4RT;
+  kfvOp(update.update) = SET_COMMAND;
+  kfvKey(update.update) = "update_key";
+  kfvFieldsValues(update.update) = {
+      {"field_a", "value_a"},
+      {"field_b", "value_b"},
+      {"field_c", "value_c"},
+  };
+
+  AppDbUpdate update2 = update;
+  kfvFieldsValues(update2.update)[1].second = "value_c";
+
+  EXPECT_FALSE(update == update2);
+  EXPECT_FALSE(update2 == update);
+  EXPECT_TRUE(update != update2);
+  EXPECT_TRUE(update2 != update);
+}
+
 }  // namespace
 }  // namespace sonic
 }  // namespace p4rt_app

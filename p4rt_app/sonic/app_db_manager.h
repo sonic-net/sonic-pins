@@ -52,6 +52,10 @@ struct AppDbUpdate {
     return H::combine(std::move(h), update.table, kfvKey(update.update));
   }
 };
+bool operator==(const AppDbUpdate& lhs, const AppDbUpdate& rhs);
+inline bool operator!=(const AppDbUpdate& lhs, const AppDbUpdate& rhs) {
+  return !(lhs == rhs);
+}
 
 // Creates an AppDB update for the provided entity.
 absl::StatusOr<AppDbUpdate> CreateAppDbUpdate(p4::v1::Update::Type update_type,
