@@ -160,6 +160,9 @@ void SimpleTrafficGenerator::InjectTraffic() {
             .mirror_testbed_port_map =
                 params_.validation_params.mirror_testbed_port_map_override
                     .value_or(MirrorTestbedP4rtPortIdMap::CreateIdentityMap()),
+            .enable_sut_packet_in_collection =
+                !params_.validation_params.switch_output_diff_params
+                     .treat_expected_and_actual_outputs_as_having_no_packet_ins,
         },
         statistics);
     CHECK_OK(test_runs.status());  // Crash OK.
