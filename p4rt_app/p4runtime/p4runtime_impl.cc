@@ -40,6 +40,7 @@
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
+#include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/impl/codegen/status.h"
@@ -168,10 +169,9 @@ p4::v1::StreamMessageResponse GenerateErrorResponse(
   return response;
 }
 
-// Compares two P4Info protobufs and returns true if they represent the
-// same information. Differences are reported in the optional string.
-bool P4InfoEquals(const p4::config::v1::P4Info& left,
-                  const p4::config::v1::P4Info& right,
+// Compares two IrP4Info protobufs and returns true if they represent the same
+// information. Differences are reported in the optional string.
+bool IsEquivalent(const pdpi::IrP4Info& left, const pdpi::IrP4Info& right,
                   std::string* diff_report) {
   google::protobuf::util::MessageDifferencer differencer;
   differencer.set_repeated_field_comparison(
@@ -1475,12 +1475,18 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     return gutil::AbslStatusToGrpcStatus(config_info.status());
   }
 
+  std::string ir_p4info_diff;
+  if (ir_p4info_.has_value() &&
+      IsEquivalent(*ir_p4info_, config_info->ir_p4info, &ir_p4info_diff)) {
+    forwarding_pipeline_config_ = request.config();
+    LOG(INFO)
+        << "Received equivalent ForwardingPipelineConfig. Saving to disk.";
+    return SavePipelineConfig(*forwarding_pipeline_config_);
+  }
+
   // We cannot reconcile any config today so if we see that the new forwarding
   // config is different from the current one we just return an error.
-  std::string diff_report;
-  if (forwarding_pipeline_config_.has_value() &&
-      !P4InfoEquals(forwarding_pipeline_config_->p4info(),
-                    request.config().p4info(), &diff_report)) {
+  if (ir_p4info_.has_value()) {
     LOG(WARNING) << "Cannot modify P4Info once it has been configured.";
     return grpc::Status(
         grpc::StatusCode::UNIMPLEMENTED,
@@ -1488,16 +1494,7 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
             "Modifying a configured forwarding pipeline is not currently "
             "supported. Please reboot the device. Configuration "
             "differences:\n",
-            diff_report));
-  }
-
-  // The ForwardingPipelineConfig is still updated in case the cookie value has
-  // been changed.
-  if (ir_p4info_.has_value()) {
-    forwarding_pipeline_config_ = request.config();
-    LOG(INFO)
-        << "Received equivalent ForwardingPipelineConfig. Saving to disk.";
-    return SavePipelineConfig(*forwarding_pipeline_config_);
+            ir_p4info_diff));
   }
 
   // Configure the lower layers.
