@@ -340,7 +340,28 @@ absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
 
 }
 
-sonic::AppDbTableType GetAppDbTableType(const pdpi::IrEntity& ir_entity) {
+bool operator==(const AppDbUpdate& lhs, const AppDbUpdate& rhs) {
+  if (lhs.table != rhs.table) return false;
+  if (kfvKey(lhs.update) != kfvKey(rhs.update)) return false;
+  if (kfvOp(lhs.update) != kfvOp(rhs.update)) return false;
+  if (kfvFieldsValues(lhs.update).size() !=
+      kfvFieldsValues(rhs.update).size()) {
+    return false;
+  }
+
+  absl::flat_hash_map<std::string, std::string> lhs_values;
+  for (const auto& [field, value] : kfvFieldsValues(lhs.update)) {
+    lhs_values[field] = value;
+  }
+  for (const auto& [field, value] : kfvFieldsValues(rhs.update)) {
+    auto lhs_lookup = lhs_values.find(field);
+    if (lhs_lookup == lhs_values.end()) return false;
+    if (lhs_lookup->second != value) return false;
+  }
+  return true;
+}
+
+AppDbTableType GetAppDbTableType(const pdpi::IrEntity& ir_entity) {
   return ir_entity.table_entry().table_name() == "vrf_table"
              ? sonic::AppDbTableType::VRF_TABLE
              : sonic::AppDbTableType::P4RT;

@@ -424,6 +424,52 @@ std::vector<EntityUpdate> PiEntityUpdatesToIr(
   return updates;
 }
 
+absl::Status IrP4InfoGeneratesEquivalentAppDbRepresentation(
+    const pdpi::IrP4Info& original_ir_p4info,
+    const pdpi::IrP4Info& new_ir_p4info, const p4::v1::Entity& entity,
+    const p4_constraints::ConstraintInfo& constraint_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator) {
+  p4::v1::Update update;
+  update.set_type(p4::v1::Update::INSERT);
+  *update.mutable_entity() = entity;
+  auto new_translation = PiUpdateToEntityUpdate(
+      new_ir_p4info, update, /*role_name=*/"", constraint_info,
+      translate_port_ids, port_translation_map,
+      cpu_queue_translator, front_panel_queue_translator);
+  if (!new_translation.ok()) {
+    LOG(WARNING) << "Rejecting P4Info due to unsupported entity '"
+                 << google::protobuf::ShortFormat(entity)
+                 << "': " << new_translation.status();
+    return gutil::InvalidArgumentErrorBuilder()
+           << "New forwarding pipeline config is incompatible with the current "
+              "forwarding state. Entity '"
+           << google::protobuf::ShortFormat(entity)
+           << "' is not supported: " << new_translation.status().message();
+  }
+  auto old_translation = PiUpdateToEntityUpdate(
+      original_ir_p4info, update, /*role_name=*/"", constraint_info,
+      translate_port_ids, port_translation_map,
+      cpu_queue_translator, front_panel_queue_translator);
+  if (!old_translation.ok()) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Failed to generate entity translation with existing forwarding "
+              "pipeline config. Entity: '"
+           << google::protobuf::ShortFormat(entity)
+           << "'. Error: " << old_translation.status();
+  }
+  if (new_translation->app_db_update != old_translation->app_db_update) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "New forwarding pipeline config is incompatible with the current "
+              "forwarding state. Entity '"
+           << google::protobuf::ShortFormat(entity)
+           << "' has a different OrchAgent representation.";
+  }
+  return absl::OkStatus();
+}
+
 absl::Status UpdateCacheAndUtilizationState(
     EntityMap& entity_cache,
     ActionProfileCapacityMap& capacity_by_action_profile_name,
