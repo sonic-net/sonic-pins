@@ -233,21 +233,15 @@ EntryBuilder& EntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
       << "invalid ip version: " << static_cast<int>(ip_version);
 }
 
-EntryBuilder& EntryBuilder::AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
-    absl::string_view vrf) {
+EntryBuilder& EntryBuilder::AddEntryDecappingAllIpInIpv6Packets() {
   sai::TableEntry& entry = *entries_.add_entries();
   entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
     ipv6_tunnel_termination_table_entry {
       match {}  # Wildcard match
-      action { mark_for_tunnel_decap_and_set_vrf { vrf_id: "" } }
+      action { tunnel_decap {} }
       priority: 1
     }
   )pb");
-  entry.mutable_ipv6_tunnel_termination_table_entry()
-      ->mutable_action()
-      ->mutable_mark_for_tunnel_decap_and_set_vrf()
-      // TODO: Pass string_view directly once proto supports it.
-      ->set_vrf_id(std::string(vrf));
   return *this;
 }
 

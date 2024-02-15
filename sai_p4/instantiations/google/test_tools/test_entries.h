@@ -207,8 +207,7 @@ class EntryBuilder {
                                   int multicast_group_id);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
-  EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
-      absl::string_view vrf);
+  EntryBuilder& AddEntryDecappingAllIpInIpv6Packets();
   EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
   EntryBuilder& AddMulticastGroupEntry(int multicast_group_id,
                                          absl::Span<const Replica> replicas);

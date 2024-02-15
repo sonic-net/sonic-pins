@@ -6,39 +6,6 @@ pkg_info {
 }
 tables {
   preamble {
-    id: 33554507
-    name: "ingress.tunnel_termination_lookup.ipv6_tunnel_termination_table"
-    alias: "ipv6_tunnel_termination_table"
-    annotations: "@unsupported"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-  }
-  match_fields {
-    id: 1
-    name: "dst_ipv6"
-    annotations: "@format(IPV6_ADDRESS)"
-    bitwidth: 128
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 2
-    name: "src_ipv6"
-    annotations: "@format(IPV6_ADDRESS)"
-    bitwidth: 128
-    match_type: TERNARY
-  }
-  action_refs {
-    id: 16777238
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 21257015
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  size: 126
-}
-tables {
-  preamble {
     id: 33554509
     name: "ingress.vlan_untag.disable_vlan_checks_table"
     alias: "disable_vlan_checks_table"
@@ -160,6 +127,40 @@ tables {
   const_default_action_id: 21257015
   direct_resource_ids: 318767361
   size: 254
+}
+tables {
+  preamble {
+    id: 33554507
+    name: "ingress.tunnel_termination.ipv6_tunnel_termination_table"
+    alias: "ipv6_tunnel_termination_table"
+    annotations: "@unsupported"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "dst_ipv6"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 2
+    name: "src_ipv6"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777238
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 126
 }
 tables {
   preamble {
@@ -1127,20 +1128,6 @@ actions {
 }
 actions {
   preamble {
-    id: 16777238
-    name: "ingress.tunnel_termination_lookup.mark_for_tunnel_decap_and_set_vrf"
-    alias: "mark_for_tunnel_decap_and_set_vrf"
-  }
-  params {
-    id: 1
-    name: "vrf_id"
-    type_name {
-      name: "vrf_id_t"
-    }
-  }
-}
-actions {
-  preamble {
     id: 16777242
     name: "ingress.vlan_untag.disable_vlan_checks"
     alias: "disable_vlan_checks"
@@ -1161,6 +1148,14 @@ actions {
     type_name {
       name: "vrf_id_t"
     }
+  }
+}
+actions {
+  preamble {
+    id: 16777238
+    name: "ingress.tunnel_termination.tunnel_decap"
+    alias: "tunnel_decap"
+    annotations: "@unsupported"
   }
 }
 actions {
