@@ -29,6 +29,11 @@ using ::gutil::IsOkAndHolds;
 using ::testing::Eq;
 using ::testing::Not;
 
+TEST(P4rtPortId, DefaultConstructible) {
+  EXPECT_EQ(P4rtPortId().GetOpenConfigEncoding(), 0);
+  EXPECT_EQ(P4rtPortId().GetP4rtEncoding(), "0");
+}
+
 TEST(P4rtPortId, RoundtripsFromInt) {
   constexpr int kP4rtPortIdInt = 42;
   const std::string kP4rtPortIdString = "42";

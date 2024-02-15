@@ -1659,10 +1659,12 @@ std::string UpdateDeviceIdInJsonConfig(absl::string_view gnmi_config,
                                        const std::string& device_id) {
   LOG(INFO) << "Forcing P4RT device ID to be '" << device_id << "'.";
 
-  nlohmann::basic_json<> json =
-      gnmi_config.empty() ? json::object() : json::parse(gnmi_config);
+  absl::StatusOr<nlohmann::json> json = json_yang::ParseJson(gnmi_config);
+  if (!json.ok()) {
+    LOG(FATAL) << "unable to parse gNMI config: " << gnmi_config;  // Crash ok
+  }
   auto oc_component =
-      json.emplace("openconfig-platform:components", json::object()).first;
+      json->emplace("openconfig-platform:components", json::object()).first;
   auto component_list =
       oc_component->emplace("component", nlohmann::json::array()).first;
 
@@ -1685,7 +1687,7 @@ std::string UpdateDeviceIdInJsonConfig(absl::string_view gnmi_config,
         device_id;
     component_list->insert(component_list->end(), component);
   }
-  return json.dump();
+  return json->dump();
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
