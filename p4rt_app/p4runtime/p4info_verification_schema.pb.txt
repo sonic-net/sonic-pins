@@ -110,13 +110,8 @@ tables {
 }
 tables {
   name: "multicast_router_interface_table"
+  match_fields { name: "multicast_replica_instance" bitwidth: 16 type: EXACT }
   match_fields { name: "multicast_replica_port" format: STRING type: EXACT }
-  match_fields {
-    name: "multicast_replica_instance"
-    format: HEX_STRING
-    bitwidth: 16
-    type: EXACT
-  }
   actions {
     name: "set_multicast_src_mac"
     parameters { name: "src_mac" format: MAC }
