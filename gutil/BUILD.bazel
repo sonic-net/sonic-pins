@@ -291,6 +291,12 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "timer",
+    hdrs = ["timer.h"],
+    deps = ["@com_google_absl//absl/time"],
+)
+
 cc_test(
     name = "proto_ordering_test",
     srcs = ["proto_ordering_test.cc"],
@@ -322,4 +328,13 @@ cc_library(
     srcs = ["syslog_sink.cc"],
     hdrs = ["syslog_sink.h"],
     deps = ["@com_github_google_glog//:glog"],
+)
+
+cc_test(
+    name = "timer_test",
+    srcs = ["timer_test.cc"],
+    deps = [
+        ":timer",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
