@@ -20,6 +20,8 @@ import "p4/v1/p4runtime.proto";
 import "p4_pdpi/packetlib/packetlib.proto";
 import "p4_symbolic/packet_synthesizer/packet_synthesis_criteria.proto";
 
+// Protobuf equivalent of the struct in
+// third_party/pins_infra/p4_symbolic/symbolic/values.h.
 message TranslationData {
   // Static mapping between string values and ids.
   message StaticMapping {
@@ -44,11 +46,23 @@ message PacketSynthesisParams {
 // expectation whether the packet gets dropped, punted to the controller, and/or
 // mirrored.
 message SynthesizedPacket {
-  packetlib.Packet packet = 1;
-  string ingress_port = 5;
-  bool drop_expected = 2;
-  bool punt_expected = 3;
-  bool mirror_expected = 4;
+  reserved 1, 2, 3, 4, 5;
+  // Raw packet as returned by p4-symbolic. It may need padding and updating of
+  // checksums and other "computed fields" for pratical use.
+  bytes packet = 6;
+  string ingress_port = 7;
+  bool drop_expected = 8;
+  bool punt_expected = 9;
+  bool mirror_expected = 10;
+  // This data must never be consumed, except for debugging.
+  DebugInfo debug_info = 11;
+
+  message DebugInfo {
+    // Equal to `packetlib::Parse(packet)`, included to ease debugging.
+    // Use with caution, as this field could be stale if the protobuf was cached
+    // on disk and packelib has been updated 
+    packetlib.Packet possibly_stale_parsed_version_of_packet = 1;
+  }
 }
 
 // The output of PacketSynthesizer::SynthesizePacket.
