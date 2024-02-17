@@ -127,7 +127,6 @@ tables {
     alias: "ipv6_tunnel_termination_table"
     annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
