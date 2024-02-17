@@ -30,6 +30,7 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
 #include "gutil/status.h"
+#include "gutil/timer.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
@@ -42,8 +43,8 @@
 #include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic::packet_synthesizer {
-
 namespace {
+
 using ::p4_symbolic::symbolic::SolverState;
 
 // Given a Z3 model, prepares a SynthesizedPacket by extracting the relevant
@@ -212,7 +213,7 @@ absl::Status AddConstraints(const TableEntryReachabilityCriteria& criteria,
 
 absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
     const PacketSynthesisParams& params) {
-  Timer timer;
+  gutil::Timer timer;
 
   // Extract data from params.
   const p4::v1::ForwardingPipelineConfig& config = params.pipeline_config();
@@ -250,7 +251,12 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
 absl::StatusOr<PacketSynthesisResult> PacketSynthesizer::SynthesizePacket(
     const PacketSynthesisCriteria& criteria) {
   PacketSynthesisResult result;
-  Timer timer;
+
+  // Timer to keep end to end time spent in this function.
+  gutil::Timer overall_timer;
+  // Timer used for granular measurement of time spent on the main steps of this
+  // function (gets reset after each step).
+  gutil::Timer granular_timer;
 
   // Add synthesized packet criterion as Z3 assertions. Modify the incremental
   // solver stack accordingly.
