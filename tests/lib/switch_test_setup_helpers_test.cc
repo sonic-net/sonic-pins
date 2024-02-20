@@ -36,12 +36,19 @@ constexpr uint32_t kActionId = 16777217;
 // Any constant is fine here.
 constexpr uint32_t kDeviceId = 100;
 
+<<<<<<< HEAD
 // This is the only action that will work everywhere.
 constexpr p4::v1::SetForwardingPipelineConfigRequest::Action
     kForwardingPipelineAction =
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT;
 
 p4::v1::Uint128 ConstructElectionId(
+=======
+// Sets up expectation that `ClearEntities(mock_switch, metadata)` is
+// called.
+void ExpectCallToClearEntities(
+    thinkit::MockSwitch& mock_switch, const p4::config::v1::P4Info& p4info,
+>>>>>>> cd0e6cb3 ([PDPI] Remove batching of DELETEs in ClearEntities.)
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
   p4::v1::Uint128 election_id;
   election_id.set_high(absl::Uint128High64(metadata.election_id));
@@ -174,6 +181,7 @@ void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
 
   {
     InSequence s;
+<<<<<<< HEAD
     p4::v1::TableEntry table_entry = ConstructTableEntry();
 
     // We return a table entry so that the function exercises the deletion
@@ -190,6 +198,13 @@ void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
     // cleared.
     MockCheckNoEntries(stub, p4info);
   }
+=======
+    auto stub = std::make_unique<::p4::v1::MockP4RuntimeStub>();
+    MockP4RuntimeSessionCreate(*stub, metadata);
+    MockClearEntities(*stub, p4info, metadata);
+    return stub;
+  });
+>>>>>>> cd0e6cb3 ([PDPI] Remove batching of DELETEs in ClearEntities.)
 }
 
 // Mocks a successful `PushGnmiConfig` call.
@@ -316,6 +331,7 @@ void MockConfigureSwitchAndReturnP4RuntimeSession(
 
   {
     InSequence s;
+<<<<<<< HEAD
     // Mocks the first part of a P4RuntimeSession `Create` call.
     EXPECT_CALL(mock_switch, CreateP4RuntimeStub())
         .WillOnce(Return(ByMove(std::move(stub))));
@@ -334,6 +350,15 @@ void MockConfigureSwitchAndReturnP4RuntimeSession(
     // Mocks the first part of a `WaitForGnmiPortIdConvergence`
     EXPECT_CALL(mock_switch, CreateGnmiStub)
         .WillOnce(Return(ByMove(std::move(mock_gnmi_stub_converge))));
+=======
+    ExpectCallToClearEntities(mock_switch, pdpi::GetTestP4Info(), metadata);
+    if (gnmi_config.has_value()) {
+      ExpectCallToPushGnmiConfig(mock_switch);
+    }
+    ExpectCallToCreateP4RuntimeSessionAndOptionallyPushP4Info(mock_switch,
+                                                              p4info, metadata);
+    ExpectCallToWaitForGnmiPortIdConvergence(mock_switch, interfaces);
+>>>>>>> cd0e6cb3 ([PDPI] Remove batching of DELETEs in ClearEntities.)
   }
 }
 

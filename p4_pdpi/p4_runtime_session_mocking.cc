@@ -25,8 +25,6 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "gmock/gmock.h"
-#include "google/protobuf/repeated_field.h"
-#include "grpcpp/impl/call_op_set.h"
 #include "grpcpp/support/status.h"
 #include "grpcpp/test/mock_stream.h"
 #include "gtest/gtest.h"
@@ -34,6 +32,9 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4/v1/p4runtime_mock.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+// TODO: Remove version setting once the version check in
+// `p4_runtime_session.cc` is removed.
+#include "sai_p4/instantiations/google/versions.h"
 
 namespace pdpi {
 
@@ -245,6 +246,12 @@ void MockClearEntities(p4::v1::MockP4RuntimeStub& stub, const P4Info& p4info,
                     p4::v1::GetForwardingPipelineConfigResponse*
                         get_pipeline_response) {
         *get_pipeline_response->mutable_config()->mutable_p4info() = p4info;
+        // TODO: Remove version setting once the version check in
+        // `p4_runtime_session.cc` is removed.
+        get_pipeline_response->mutable_config()
+            ->mutable_p4info()
+            ->mutable_pkg_info()
+            ->set_version(SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST);
         return grpc::Status::OK;
       });
 
@@ -258,27 +265,13 @@ void MockClearEntities(p4::v1::MockP4RuntimeStub& stub, const P4Info& p4info,
     // portion of clearing entities.
     SetNextReadResponse(stub, {table_entity, multicast_entity});
 
-    // Mocks the calls (multiple due to bug) to delete the entities that we have
-    // created, in reverse dependency order.
-    EXPECT_CALL(
-        stub,
-        Write(_,
-              EqualsProto(ConstructDeleteRequest(metadata, {multicast_entity})),
-              _))
+    // Mocks the call to delete the entities that we have created, in reverse
+    // dependency order.
+    EXPECT_CALL(stub, Write(_,
+                            EqualsProto(ConstructDeleteRequest(
+                                metadata, {multicast_entity, table_entity})),
+                            _))
         .Times(1);
-    EXPECT_CALL(
-        stub,
-        Write(_, EqualsProto(ConstructDeleteRequest(metadata, {table_entity})),
-              _))
-        .Times(1);
-
-    // // Mocks the call to delete the entities that we have created, in reverse
-    // // dependency order.
-    // EXPECT_CALL(stub, Write(_,
-    //                         EqualsProto(ConstructDeleteRequest(
-    //                             metadata, {multicast_entity, table_entity})),
-    //                         _))
-    //     .Times(1);
 
     // Mocks a `CheckNoEntities` call, ensuring that the entities are really
     // cleared.
