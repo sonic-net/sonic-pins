@@ -63,6 +63,11 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       fake_config_db_port_channel_table_("ConfigDb:PORTCHANNEL"),
       fake_config_db_cpu_queue_table_("ConfigDb:QUEUE_NAME_TO_ID_MAP") {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
+  // Choose a random gRPC port. While not strictly necessary each test brings up
+  // a new gRPC service, and randomly choosing a TCP port will minimize issues.
+  absl::BitGen gen;
+  grpc_port_ = absl::Uniform<int>(gen, 49152, 65535);
+
   p4runtime_server_ = BuildP4rtServer(options);
   // Component tests will use an insecure connection for the service.
   std::string server_address = absl::StrCat("localhost:", GrpcPort());
@@ -120,11 +125,6 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
   const std::string kHashTableName = "HASH_TABLE";
   const std::string kSwitchTableName = "SWITCH_TABLE";
   const std::string kHostStatsTableName = "HOST_STATS_TABLE";
-
-  // Choose a random gRPC port. While not strictly necessary each test brings up
-  // a new gRPC service, and randomly choosing a TCP port will minimize issues.
-  absl::BitGen gen;
-  grpc_port_ = absl::Uniform<int>(gen, 49152, 65535);
 
   // Create interfaces to access P4RT_TABLE entries.
   sonic::P4rtTable p4rt_table{

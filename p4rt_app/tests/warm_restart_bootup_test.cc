@@ -25,8 +25,12 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
+#include "grpcpp/client_context.h"
+#include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
@@ -35,10 +39,12 @@
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
@@ -55,6 +61,9 @@ using ::testing::ElementsAre;
 using ::testing::ExplainMatchResult;
 using ::testing::HasSubstr;
 using ::testing::UnorderedElementsAreArray;
+using P4RuntimeStream =
+    ::grpc::ClientReaderWriter<p4::v1::StreamMessageRequest,
+                               p4::v1::StreamMessageResponse>;
 
 // Expects a DB to contain the provided port map.
 MATCHER_P2(
@@ -76,6 +85,28 @@ absl::StatusOr<std::string> GetTestTmpDir() {
               "bazel test run?";
   }
   return test_tmpdir;
+}
+
+p4::v1::Uint128 ElectionId(int value) {
+  p4::v1::Uint128 election_id;
+  election_id.set_high(value);
+  election_id.set_low(value);
+  return election_id;
+}
+
+absl::StatusOr<p4::v1::StreamMessageResponse> SendStreamRequestAndGetResponse(
+    P4RuntimeStream& stream, const p4::v1::StreamMessageRequest& request) {
+  if (!stream.Write(request)) {
+    return gutil::InternalErrorBuilder()
+           << "Stream closed : " << stream.Finish().error_message();
+  }
+
+  p4::v1::StreamMessageResponse response;
+  if (!stream.Read(&response)) {
+    return gutil::InternalErrorBuilder() << "Did not receive stream response: "
+                                         << stream.Finish().error_message();
+  }
+  return response;
 }
 
 class WarmRestartTest : public testing::Test {
@@ -100,6 +131,67 @@ class WarmRestartTest : public testing::Test {
     }
   }
 
+  void SetUpControllerRpcStubs() {
+    std::string address = absl::StrCat("localhost:", p4rt_service_->GrpcPort());
+
+    auto primary_channel =
+        grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+    primary_stub_ = p4::v1::P4Runtime::NewStub(primary_channel);
+    LOG(INFO) << "Created primary P4Runtime::Stub for " << address << ".";
+
+    auto backup_channel =
+        grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+    backup_stub_ = p4::v1::P4Runtime::NewStub(backup_channel);
+    LOG(INFO) << "Created backup P4Runtime::Stub for " << address << ".";
+  }
+
+  // Opens a P4RT stream, and verifies that it is the primary connection. Note
+  // that the stream can still become a backup if a test updates the election
+  // ID, or opens a new connection.
+  absl::StatusOr<std::unique_ptr<P4RuntimeStream>> CreatePrimaryConnection(
+      grpc::ClientContext& context, uint64_t device_id,
+      const p4::v1::Uint128 election_id) {
+    context.set_deadline(absl::ToChronoTime(absl::Now() + absl::Seconds(10)));
+    context.set_wait_for_ready(true);
+    auto stream = primary_stub_->StreamChannel(&context);
+
+    // Verify that connection is the primary.
+    p4::v1::StreamMessageRequest request;
+    request.mutable_arbitration()->set_device_id(device_id);
+    *request.mutable_arbitration()->mutable_election_id() = election_id;
+    ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
+                     SendStreamRequestAndGetResponse(*stream, request));
+    if (response.arbitration().status().code() != grpc::StatusCode::OK) {
+      return gutil::UnknownErrorBuilder()
+             << "could not become primary. "
+             << response.arbitration().status().ShortDebugString();
+    }
+
+    return stream;
+  }
+
+  // Opens a P4RT stream without an election ID so it is forced to be a backup.
+  absl::StatusOr<std::unique_ptr<P4RuntimeStream>> CreateBackupConnection(
+      grpc::ClientContext& context, uint64_t device_id) {
+    // No test should take more than 10 seconds.
+    context.set_deadline(absl::ToChronoTime(absl::Now() + absl::Seconds(10)));
+    context.set_wait_for_ready(true);
+    auto stream = backup_stub_->StreamChannel(&context);
+
+    // Verify that connection is a backup.
+    p4::v1::StreamMessageRequest request;
+    request.mutable_arbitration()->set_device_id(device_id);
+    ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
+                     SendStreamRequestAndGetResponse(*stream, request));
+    if (response.arbitration().status().code() == grpc::StatusCode::OK) {
+      return gutil::UnknownErrorBuilder()
+             << "could not become backup. "
+             << response.arbitration().status().ShortDebugString();
+    }
+
+    return stream;
+  }
+
   absl::Status ResetGrpcServerAndClient(bool is_freeze_mode) {
     uint64_t device_id = 100500;
 
@@ -114,6 +206,7 @@ class WarmRestartTest : public testing::Test {
           .is_freeze_mode = true,
           .forwarding_config_full_path = config_save_path_,
       });
+      SetUpControllerRpcStubs();
       p4rt_service_->ResetP4rtServer(std::move(p4runtime_impl));
     } else {
       // Restart a new P4RT service.
@@ -123,6 +216,7 @@ class WarmRestartTest : public testing::Test {
               .is_freeze_mode = is_freeze_mode,
               .forwarding_config_full_path = config_save_path_,
           });
+      SetUpControllerRpcStubs();
     }
     RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(device_id));
 
@@ -175,27 +269,26 @@ class WarmRestartTest : public testing::Test {
 
   // LINT.IfChange(bootup)
   void WarmRestartSwitchUpOperations(
-      bool wait_for_unfreeze, swss::WarmStart::WarmStartState oa_wb_state) {
+      bool wait_for_unfreeze, swss::WarmStart::WarmStartState oa_wb_state,
+      const std::vector<std::pair<std::string, std::string>>& port_ids = {},
+      const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids =
+          {}) {
     // Reset P4RT server
     EXPECT_OK(ResetGrpcServerAndClient(/*is_freeze_mode=*/true));
-    p4rt_service_->GetWarmBootStateAdapter()->SetWarmBootState(
+    p4rt_service_->GetP4rtServer().GrabLockAndUpdateWarmBootState(
         swss::WarmStart::INITIALIZED);
     EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
               swss::WarmStart::INITIALIZED);
     auto p4rt_recon_status =
-        p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot({}, {});
+        p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
+            port_ids, cpu_queue_ids);
     if (p4rt_recon_status.ok()) {
-      p4rt_service_->GetWarmBootStateAdapter()->SetWarmBootState(
+      p4rt_service_->GetP4rtServer().GrabLockAndUpdateWarmBootState(
           swss::WarmStart::RECONCILED);
       EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
                 swss::WarmStart::RECONCILED);
     } else {
-      LOG(ERROR) << "Failed to reconcile P4RT: "
-                 << p4rt_service_->GetP4rtServer()
-                        .GrabLockAndEnterCriticalState(
-                            p4rt_recon_status.message())
-                        .error_message();
-      p4rt_service_->GetWarmBootStateAdapter()->SetWarmBootState(
+      p4rt_service_->GetP4rtServer().GrabLockAndUpdateWarmBootState(
           swss::WarmStart::FAILED);
       EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
                 swss::WarmStart::FAILED);
@@ -224,6 +317,77 @@ class WarmRestartTest : public testing::Test {
   }
   // LINT.ThenChange()
 
+  void VerifyP4rtServerResponseInFreezeMode() {
+    // Grpc requests are rejected in freeze mode.
+    p4::v1::ReadRequest read_request;
+    read_request.set_device_id(p4rt_session_->DeviceId());
+    read_request.set_role(p4rt_session_->Role());
+    EXPECT_THAT(p4rt_session_->Read(read_request),
+                StatusIs(absl::StatusCode::kUnavailable,
+                         "P4RT is performing warm reboot."));
+
+    // Internal requests are processed in freeze mode.
+    EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet1/1/0"));
+    EXPECT_OK(p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/0",
+                                                                "0"));
+    EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet1/1/1"));
+    EXPECT_OK(p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/1",
+                                                                "1"));
+
+    // Packet-in events are ignored in freeze mode.
+    EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().PushPacketIn(
+        "Ethernet1/1/0", "Ethernet1/1/1", "test packet1"));
+    EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().PushPacketIn(
+        "Ethernet1/1/1", "Ethernet1/1/0", "test packet2"));
+
+    sonic::PacketIoCounters counters =
+        p4rt_service_->GetP4rtServer().GetPacketIoCounters();
+    EXPECT_EQ(counters.packet_in_received, 0);
+    EXPECT_EQ(counters.packet_in_errors, 0);
+  }
+
+  void VerifyP4rtServerResponseInUnfreezeMode() {
+    // Grpc requests are processed as P4RT is unfreezed.
+    const uint64_t device_id = 11223344;
+    const p4::v1::Uint128 election_id = ElectionId(11);
+
+    grpc::ClientContext primary_stream_context;
+    std::unique_ptr<P4RuntimeStream> primary_stream;
+    grpc::ClientContext backup_stream_context;
+    std::unique_ptr<P4RuntimeStream> backup_stream;
+    ASSERT_OK(p4rt_service_->GetP4rtServer().UpdateDeviceId(device_id));
+
+    ASSERT_OK_AND_ASSIGN(primary_stream,
+                         CreatePrimaryConnection(primary_stream_context,
+                                                 device_id, election_id));
+    ASSERT_OK_AND_ASSIGN(backup_stream, CreateBackupConnection(
+                                            backup_stream_context, device_id));
+
+    p4::v1::ReadRequest read_request;
+    read_request.set_device_id(device_id);
+    read_request.set_role(p4rt_session_->Role());
+    EXPECT_OK(p4rt_session_->Read(read_request));
+
+    // Internal requests are processed in unfreeze mode.
+    EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet1/1/0"));
+    EXPECT_OK(p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/0",
+                                                                "0"));
+    EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet1/1/1"));
+    EXPECT_OK(p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/1",
+                                                                "1"));
+
+    // Packet-in events are processed as P4RT is unfreezed.
+    EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().PushPacketIn(
+        "Ethernet1/1/0", "Ethernet1/1/1", "test packet1"));
+    EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().PushPacketIn(
+        "Ethernet1/1/1", "Ethernet1/1/0", "test packet2"));
+
+    sonic::PacketIoCounters counters =
+        p4rt_service_->GetP4rtServer().GetPacketIoCounters();
+    EXPECT_EQ(counters.packet_in_received, 2);
+    EXPECT_EQ(counters.packet_in_errors, 0);
+  }
+
   // File path for where the forwarding config is saved.
   std::optional<std::string> config_save_path_;
 
@@ -232,6 +396,9 @@ class WarmRestartTest : public testing::Test {
 
   // A gRPC client session to send and receive gRPC calls.
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
+
+  std::unique_ptr<p4::v1::P4Runtime::Stub> primary_stub_;
+  std::unique_ptr<p4::v1::P4Runtime::Stub> backup_stub_;
 };
 
 TEST_F(WarmRestartTest, ReconciliationSucceeds) {
@@ -382,13 +549,53 @@ TEST_F(WarmRestartTest, ReconciliationFailsP4infoNotFound) {
   EXPECT_THAT(
       p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot({}, {}),
       StatusIs(absl::StatusCode::kInvalidArgument));
-
   // Fails since P4Info file path is not set.
   auto p4runtime_impl = p4rt_service_->BuildP4rtServer(P4RuntimeImplOptions{
       .translate_port_ids = true,
   });
   EXPECT_THAT(p4runtime_impl->RebuildSwStateAfterWarmboot({}, {}),
               StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST_F(WarmRestartTest, ReconciliationFailsWhenDbEntryInvalid) {
+  // Set forwarding config and save P4Info file
+  SetForwardingPipelineConfigRequest pipeline_request =
+      GetBasicForwardingRequest();
+  pipeline_request.set_action(
+      SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *pipeline_request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(pipeline_request));
+  EXPECT_THAT(GetSavedConfig(),
+              IsOkAndHolds(EqualsProto(pipeline_request.config())));
+  EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet1/1/0"));
+  EXPECT_OK(
+      p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/0", "0"));
+  EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet1/1/1"));
+  EXPECT_OK(
+      p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/1", "1"));
+
+  // Insert invalid L3 entries
+  p4rt_service_->GetP4rtAppDbTable().InsertTableEntry(
+      "P4RT:FIXED_ROUTER_INTERFACE_TABLE:invalid", {});
+
+  // If waitForUnfreeze == false in DB and OA succeeded to reconcile, but P4RT
+  // failed to reconcile, then P4RT WarmState state is FAILED and P4RT still in
+  // freeze mode.
+  WarmRestartSwitchUpOperations(
+      /*wait_for_unfreeze=*/false,
+      /*oa_wb_state=*/swss::WarmStart::RECONCILED,
+      /*port_ids=*/{{"Ethernet1/1/0", "0"}, {"Ethernet1/1/1", "1"}});
+  EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::FAILED);
+
+  // State Verification fails
+  EXPECT_THAT(p4rt_service_->GetP4rtServer().VerifyState(),
+              StatusIs(absl::StatusCode::kUnknown,
+                       HasSubstr("EntityCache is missing key: "
+                                 "P4RT:FIXED_ROUTER_INTERFACE_TABLE:invalid")));
+  SCOPED_TRACE("Failed to stay frozen after reconcile error");
+  VerifyP4rtServerResponseInFreezeMode();
 }
 
 TEST_F(WarmRestartTest, WarmBootUpWaitForUnfreeze) {
@@ -399,22 +606,48 @@ TEST_F(WarmRestartTest, WarmBootUpWaitForUnfreeze) {
       sai::GetP4Info(sai::Instantiation::kTor);
 
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
-
   EXPECT_THAT(GetSavedConfig(), IsOkAndHolds(EqualsProto(request.config())));
 
-  // If waitForUnfree == true in DB and OA failed to reconcile, then P4RT warm
+  // If waitForUnfreeze == true in DB and OA failed to reconcile, then P4RT warm
   // boot state is RECONCILED, and p4rt server is still FROZEN.
-  WarmRestartSwitchUpOperations(/*wait_for_unfreeze=*/true,
-                                /*oa_wb_state=*/swss::WarmStart::FAILED);
+  WarmRestartSwitchUpOperations(
+      /*wait_for_unfreeze=*/true,
+      /*oa_wb_state=*/swss::WarmStart::FAILED,
+      /*port_ids=*/{{"Ethernet1/1/0", "0"}, {"Ethernet1/1/1", "1"}});
+  EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::RECONCILED);
+  {
+    SCOPED_TRACE("Expected switch to stay frozen until unfreeze");
+    VerifyP4rtServerResponseInFreezeMode();
+  }
+
+  // If waitForUnfreeze == true in DB and OA succeeded to reconcile, then P4RT
+  // warm boot state is RECONCILED, and p4rt server is still FROZEN.
+  WarmRestartSwitchUpOperations(
+      /*wait_for_unfreeze=*/true,
+      /*oa_wb_state=*/swss::WarmStart::RECONCILED,
+      /*port_ids=*/{{"Ethernet1/1/0", "0"}, {"Ethernet1/1/1", "1"}});
   EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::RECONCILED);
 
-  // If waitForUnfree == true in DB and OA succeeded to reconcile, then P4RT
-  // warm boot state is RECONCILED, and p4rt server is still FROZEN.
-  WarmRestartSwitchUpOperations(/*wait_for_unfreeze=*/true,
-                                /*oa_wb_state=*/swss::WarmStart::RECONCILED);
-  EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
-            swss::WarmStart::RECONCILED);
+  // State Verification
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+
+  {
+    SCOPED_TRACE("Expected switch to stay frozen until unfreeze");
+    VerifyP4rtServerResponseInFreezeMode();
+  }
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_->GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+  // State Verification
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+  {
+    SCOPED_TRACE(
+        "Expected switch to unfreeze after receiving unfreeze notification");
+    VerifyP4rtServerResponseInUnfreezeMode();
+  }
 }
 
 TEST_F(WarmRestartTest, WarmBootUpNoWaitForUnfreeze) {
@@ -425,29 +658,68 @@ TEST_F(WarmRestartTest, WarmBootUpNoWaitForUnfreeze) {
       sai::GetP4Info(sai::Instantiation::kTor);
 
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
-
   EXPECT_THAT(GetSavedConfig(), IsOkAndHolds(EqualsProto(request.config())));
 
-  // If waitForUnfree == false in DB and OA failed to reconcile, then P4RT warm
-  // boot state keeps RECONCILED, and p4rt server is still FROZEN.
-  WarmRestartSwitchUpOperations(/*wait_for_unfreeze=*/false,
-                                /*oa_wb_state=*/swss::WarmStart::FAILED);
+  // If waitForUnfreeze == false in DB and OA is not reconciled yet, then P4RT
+  // warm boot state keeps RECONCILED, and p4rt server is still FROZEN.
+  WarmRestartSwitchUpOperations(
+      /*wait_for_unfreeze=*/false,
+      /*oa_wb_state=*/swss::WarmStart::INITIALIZED,
+      /*port_ids=*/{{"Ethernet1/1/0", "0"}, {"Ethernet1/1/1", "1"}});
   EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::RECONCILED);
+  {
+    SCOPED_TRACE(
+        "Expected switch to stay frozen until OrchAgent is reconciled");
+    VerifyP4rtServerResponseInFreezeMode();
+  }
 
-  // TODO: grpc/internal/packet-in requests are rejected in freeze
-  // mode.
-
-  // If waitForUnfree == false in DB and OA succeeded to reconcile, then P4RT
+  // TODO: Update OA warm boot state and verify P4RT is unfreezed.
+  // If waitForUnfreeze == false in DB and OA succeeded to reconcile, then P4RT
   // warm boot state is RECONCILED, and p4rt server is UNFREEZED.
-  WarmRestartSwitchUpOperations(/*wait_for_unfreeze=*/false,
-                                /*oa_wb_state=*/swss::WarmStart::RECONCILED);
+  WarmRestartSwitchUpOperations(
+      /*wait_for_unfreeze=*/false,
+      /*oa_wb_state=*/swss::WarmStart::RECONCILED,
+      /*port_ids=*/{{"Ethernet1/1/0", "0"}, {"Ethernet1/1/1", "1"}});
   EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::RECONCILED);
 
-  // TODO: grpc/internal/packet-in requests are proceeded as
-  // normal.
+  {
+    SCOPED_TRACE(
+        "Expected switch to unfreeze since OrchAgent is reconciled and no need "
+        "to wait for unfreeze notification.");
+    VerifyP4rtServerResponseInUnfreezeMode();
+  }
+  // State Verification(For testing only)
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+}
 
+TEST_F(WarmRestartTest, WarmBootUpNoWaitForUnfreezeAndOAFailedToReconcile) {
+  // Set forwarding config and save P4Info file
+  SetForwardingPipelineConfigRequest request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kTor);
+
+  ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+  EXPECT_THAT(GetSavedConfig(), IsOkAndHolds(EqualsProto(request.config())));
+
+  // If waitForUnfreeze == false in DB and OA failed to reconcile, then P4RT
+  // warm boot state keeps RECONCILED, and p4rt server is still FROZEN.
+  WarmRestartSwitchUpOperations(
+      /*wait_for_unfreeze=*/false,
+      /*oa_wb_state=*/swss::WarmStart::FAILED,
+      /*port_ids=*/{{"Ethernet1/1/0", "0"}, {"Ethernet1/1/1", "1"}});
+  EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::RECONCILED);
+
+  {
+    SCOPED_TRACE(
+        "Expected switch to stay frozen since OrchAgent failed to reconcile");
+    VerifyP4rtServerResponseInFreezeMode();
+  }
+  // State Verification(For testing only)
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
 }
 
 }  // namespace

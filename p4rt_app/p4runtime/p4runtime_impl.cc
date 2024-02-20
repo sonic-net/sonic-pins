@@ -1800,6 +1800,12 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
   return packetio_impl_->StartReceive(SendPacketInToController, use_genetlink);
 }
 
+void P4RuntimeImpl::GrabLockAndUpdateWarmBootState(
+    swss::WarmStart::WarmStartState state) {
+  absl::MutexLock l(&server_state_lock_);
+  UpdateWarmBootState(state);
+}
+
 void P4RuntimeImpl::UpdateWarmBootState(swss::WarmStart::WarmStartState state)
     ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_) {
   warm_boot_state_adapter_->SetWarmBootState(state);

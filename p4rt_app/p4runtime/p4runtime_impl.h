@@ -230,7 +230,10 @@ public:
   grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-protected:
+  void GrabLockAndUpdateWarmBootState(swss::WarmStart::WarmStartState state)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+ protected:
   // Simple constructor that should only be used for testing purposes.
   P4RuntimeImpl(bool translate_port_ids)
       : translate_port_ids_(translate_port_ids) {}
@@ -305,9 +308,11 @@ private:
     return is_freeze_mode_;
   };
 
-  void UpdateWarmBootState(swss::WarmStart::WarmStartState state);
+  void UpdateWarmBootState(swss::WarmStart::WarmStartState state)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
-  swss::WarmStart::WarmStartState GetWarmBootState();
+  swss::WarmStart::WarmStartState GetWarmBootState()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Mutex for constraining actions to access and modify server state.
   absl::Mutex server_state_lock_;
