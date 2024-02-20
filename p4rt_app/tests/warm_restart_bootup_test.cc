@@ -25,7 +25,11 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "gmock/gmock.h"
+#include "grpcpp/client_context.h"
+#include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
@@ -34,10 +38,12 @@
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
+#include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
@@ -54,6 +60,9 @@ using ::testing::ElementsAre;
 using ::testing::ExplainMatchResult;
 using ::testing::HasSubstr;
 using ::testing::UnorderedElementsAreArray;
+using P4RuntimeStream =
+    ::grpc::ClientReaderWriter<p4::v1::StreamMessageRequest,
+                               p4::v1::StreamMessageResponse>;
 
 // Expects a DB to contain the provided port map.
 MATCHER_P2(
@@ -75,6 +84,28 @@ absl::StatusOr<std::string> GetTestTmpDir() {
               "bazel test run?";
   }
   return test_tmpdir;
+}
+
+p4::v1::Uint128 ElectionId(int value) {
+  p4::v1::Uint128 election_id;
+  election_id.set_high(value);
+  election_id.set_low(value);
+  return election_id;
+}
+
+absl::StatusOr<p4::v1::StreamMessageResponse> SendStreamRequestAndGetResponse(
+    P4RuntimeStream& stream, const p4::v1::StreamMessageRequest& request) {
+  if (!stream.Write(request)) {
+    return gutil::InternalErrorBuilder()
+           << "Stream closed : " << stream.Finish().error_message();
+  }
+
+  p4::v1::StreamMessageResponse response;
+  if (!stream.Read(&response)) {
+    return gutil::InternalErrorBuilder() << "Did not receive stream response: "
+                                         << stream.Finish().error_message();
+  }
+  return response;
 }
 
 class WarmRestartTest : public testing::Test {
@@ -99,6 +130,67 @@ class WarmRestartTest : public testing::Test {
     }
   }
 
+  void SetUpControllerRpcStubs() {
+    std::string address = absl::StrCat("localhost:", p4rt_service_->GrpcPort());
+
+    auto primary_channel =
+        grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+    primary_stub_ = p4::v1::P4Runtime::NewStub(primary_channel);
+    LOG(INFO) << "Created primary P4Runtime::Stub for " << address << ".";
+
+    auto backup_channel =
+        grpc::CreateChannel(address, grpc::InsecureChannelCredentials());
+    backup_stub_ = p4::v1::P4Runtime::NewStub(backup_channel);
+    LOG(INFO) << "Created backup P4Runtime::Stub for " << address << ".";
+  }
+
+  // Opens a P4RT stream, and verifies that it is the primary connection. Note
+  // that the stream can still become a backup if a test updates the election
+  // ID, or opens a new connection.
+  absl::StatusOr<std::unique_ptr<P4RuntimeStream>> CreatePrimaryConnection(
+      grpc::ClientContext& context, uint64_t device_id,
+      const p4::v1::Uint128 election_id) {
+    context.set_deadline(absl::ToChronoTime(absl::Now() + absl::Seconds(10)));
+    context.set_wait_for_ready(true);
+    auto stream = primary_stub_->StreamChannel(&context);
+
+    // Verify that connection is the primary.
+    p4::v1::StreamMessageRequest request;
+    request.mutable_arbitration()->set_device_id(device_id);
+    *request.mutable_arbitration()->mutable_election_id() = election_id;
+    ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
+                     SendStreamRequestAndGetResponse(*stream, request));
+    if (response.arbitration().status().code() != grpc::StatusCode::OK) {
+      return gutil::UnknownErrorBuilder()
+             << "could not become primary. "
+             << response.arbitration().status().ShortDebugString();
+    }
+
+    return stream;
+  }
+
+  // Opens a P4RT stream without an election ID so it is forced to be a backup.
+  absl::StatusOr<std::unique_ptr<P4RuntimeStream>> CreateBackupConnection(
+      grpc::ClientContext& context, uint64_t device_id) {
+    // No test should take more than 10 seconds.
+    context.set_deadline(absl::ToChronoTime(absl::Now() + absl::Seconds(10)));
+    context.set_wait_for_ready(true);
+    auto stream = backup_stub_->StreamChannel(&context);
+
+    // Verify that connection is a backup.
+    p4::v1::StreamMessageRequest request;
+    request.mutable_arbitration()->set_device_id(device_id);
+    ASSIGN_OR_RETURN(p4::v1::StreamMessageResponse response,
+                     SendStreamRequestAndGetResponse(*stream, request));
+    if (response.arbitration().status().code() == grpc::StatusCode::OK) {
+      return gutil::UnknownErrorBuilder()
+             << "could not become backup. "
+             << response.arbitration().status().ShortDebugString();
+    }
+
+    return stream;
+  }
+
   absl::Status ResetGrpcServerAndClient(bool is_freeze_mode) {
     uint64_t device_id = 100500;
 
@@ -113,6 +205,7 @@ class WarmRestartTest : public testing::Test {
           .is_freeze_mode = true,
           .forwarding_config_full_path = config_save_path_,
       });
+      SetUpControllerRpcStubs();
       p4rt_service_->ResetP4rtServer(std::move(p4runtime_impl));
     } else {
       // Restart a new P4RT service.
@@ -122,6 +215,7 @@ class WarmRestartTest : public testing::Test {
               .is_freeze_mode = is_freeze_mode,
               .forwarding_config_full_path = config_save_path_,
           });
+      SetUpControllerRpcStubs();
     }
     RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(device_id));
 
@@ -174,6 +268,9 @@ class WarmRestartTest : public testing::Test {
 
   // A gRPC client session to send and receive gRPC calls.
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
+
+  std::unique_ptr<p4::v1::P4Runtime::Stub> primary_stub_;
+  std::unique_ptr<p4::v1::P4Runtime::Stub> backup_stub_;
 };
 
 TEST_F(WarmRestartTest, ReconciliationSucceeds) {
@@ -221,6 +318,12 @@ TEST_F(WarmRestartTest, ReconciliationFailsWhenDbEntryInvalid) {
   ASSERT_OK(p4rt_session_->SetForwardingPipelineConfig(pipeline_request));
   EXPECT_THAT(GetSavedConfig(),
               IsOkAndHolds(EqualsProto(pipeline_request.config())));
+  EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet1/1/0"));
+  EXPECT_OK(
+      p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/0", "0"));
+  EXPECT_OK(p4rt_service_->GetP4rtServer().AddPacketIoPort("Ethernet1/1/1"));
+  EXPECT_OK(
+      p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/1", "1"));
 
   // Insert invalid L3 entries
   p4rt_service_->GetP4rtAppDbTable().InsertTableEntry(
@@ -231,8 +334,7 @@ TEST_F(WarmRestartTest, ReconciliationFailsWhenDbEntryInvalid) {
               StatusIs(absl::StatusCode::kUnknown,
                        HasSubstr("EntityCache is missing key: "
                                  "P4RT:FIXED_ROUTER_INTERFACE_TABLE:invalid")));
-  // TODO: grpc/internal/packet-in requests are rejected in freeze
-  // mode.
+  SCOPED_TRACE("Failed to stay frozen after reconcile error");
 }
 
 }  // namespace
