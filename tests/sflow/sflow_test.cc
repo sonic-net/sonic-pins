@@ -41,6 +41,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/synchronization/notification.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -114,8 +115,6 @@ constexpr int kDropPort = 256;
 
 // Sflowtool binary name in the collector.
 constexpr absl::string_view kSflowToolName = "sflowtool";
-
-constexpr int kSflowCollectorPort = 6343;
 
 constexpr absl::string_view kSflowtoolLineFormatTemplate =
     "docker exec sflow bash -c \"/usr/bin/sflowtool -l -p 6343 & sleep 1;kill "
@@ -1135,17 +1134,19 @@ void SflowTestFixture::SetUp() {
       testbed_,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
-  int sampling_size, sampling_rate;
   std::vector<std::pair<std::string, int>> collector_address_and_port;
   const std::string& gnmi_config = GetParam().gnmi_config;
   ASSERT_OK(testbed_->Environment().StoreTestArtifact("gnmi_config.txt",
                                                       gnmi_config));
-  sampling_size = kSampleHeaderSize;
-  sampling_rate = kSamplingRateInterval;
+  int sampling_size = kSampleHeaderSize;
+  int sampling_rate = kSamplingRateInterval;
+  // Used for setting collector. It would be set to the same as the config
+  // collector port. If config does not have any collector config, it would be
+  // set to 6343.
+  ASSERT_OK_AND_ASSIGN(int collector_port, GetSflowCollectorPort(gnmi_config));
 
   // Set to localhost ip by default.
-  collector_address_and_port.push_back(
-      {kLocalLoopbackIpv6, kSflowCollectorPort});
+  collector_address_and_port.push_back({kLocalLoopbackIpv6, collector_port});
   ASSERT_OK_AND_ASSIGN(std::string agent_addr_ipv6,
                        GetLoopbackAddrIpv6FromConfig(gnmi_config));
   absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces;
@@ -2014,6 +2015,69 @@ absl::Status SendNPacketsFromSwitch(
   return absl::OkStatus();
 }
 
+// Sends packets at a rate of `traffic_speed` until `notification` has been
+// notified. The packet ipv4_destination field changes based on `port_id`.
+absl::Status SendPacketsFromSwitchUntilNotificationReceived(
+    const absl::Notification& notification, int traffic_speed, int port_id,
+    absl::string_view interface, gnmi::gNMI::StubInterface* sut_gnmi_stub,
+    const pdpi::IrP4Info& ir_p4info, pdpi::P4RuntimeSession& p4_session,
+    thinkit::TestEnvironment& test_environment) {
+  const absl::Time start_time = absl::Now();
+  auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(
+      absl::Substitute(R"pb(
+                         headers {
+                           ethernet_header {
+                             ethernet_destination: "$0"
+                             ethernet_source: "$1"
+                             ethertype: "0x0800"
+                           }
+                         }
+                         headers {
+                           ipv4_header {
+                             version: "0x4"
+                             ihl: "0x5"
+                             dscp: "0x03"
+                             ecn: "0x0"
+                             identification: "0x0000"
+                             flags: "0x0"
+                             fragment_offset: "0x0000"
+                             ttl: "0x20"
+                             protocol: "0x05"
+                             ipv4_source: "$2"
+                             ipv4_destination: "$3"
+                           }
+                         }
+                         payload: "Test packet for Sflow Inband testing")pb",
+                       kDstMac.ToString(), kSourceMac.ToString(),
+                       kIpv4Src.ToString(), GetDstIpv4AddrByPortId(port_id)));
+  ASSIGN_OR_RETURN(auto initial_in_counter,
+                   ReadCounters(std::string(interface), sut_gnmi_stub));
+  ASSIGN_OR_RETURN(std::string raw_packet, SerializePacket(packet));
+  int num_packets = 0;
+  while (!notification.HasBeenNotified()) {
+    num_packets++;
+    // Rate limit to traffic_speed packets per second.
+    RETURN_IF_ERROR(InjectEgressPacket(
+        absl::StrCat(port_id), raw_packet, ir_p4info, &p4_session,
+        /*packet_delay=*/absl::Milliseconds(1000 / traffic_speed)));
+  }
+  ASSIGN_OR_RETURN(auto final_in_counter,
+                   ReadCounters(std::string(interface), sut_gnmi_stub));
+  auto delta = DeltaCounters(initial_in_counter, final_in_counter);
+  LOG(INFO) << "Ingress Deltas (" << interface << "):\n";
+  ShowCounters(delta);
+  // There might be some bearable drop.
+  EXPECT_GE(delta.in_pkts, (double)0.85 * num_packets)
+      << "Sent " << num_packets
+      << " on interface: " << interface << " port_id: " << port_id
+      << ". Received: " << delta.in_pkts;
+  LOG(INFO) << "Sent " << num_packets << " packets in "
+            << (absl::Now() - start_time) << " for port: " << port_id << "."
+            << " Interface: " << interface << ". Packets dst ip: "
+            << GetDstIpv4AddrByPortId(port_id);
+  return absl::OkStatus();
+}
+
 // Sets VRF id for all packets.
 absl::Status SetSwitchVrfForAllPackets(pdpi::P4RuntimeSession& p4_session,
                                        const pdpi::IrP4Info& ir_p4info,
@@ -2272,7 +2336,8 @@ void SflowMirrorTestFixture::SetUp() {
   const std::string& sut_gnmi_config = GetParam().sut_gnmi_config;
   ASSERT_OK(testbed.Environment().StoreTestArtifact("sut_gnmi_config.txt",
                                                     sut_gnmi_config));
-  // TODO: b/313925661 - push correct p4info during sflow mirror test setup
+
+  ASSERT_OK_AND_ASSIGN(collector_port_, GetSflowCollectorPort(sut_gnmi_config));
   ASSERT_OK_AND_ASSIGN(
       sut_p4_session_,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
@@ -2336,6 +2401,220 @@ void SflowMirrorTestFixture::TearDown() {
   GetParam().testbed_interface->TearDown();
 }
 
+// Push config with collector controller_IP:portA to switch.
+// Perform NSF reboot on switch.
+// Push config with collector localhost:portB to switch.
+// Start collector at localhost:portB.
+// Start traffic and verify.
+TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
+  if (!GetParam().nsf_enabled) {
+    GTEST_SKIP()
+        << "Skip TestNsfUpgradeGnpsiCollector since NSF is not enabled.";
+  }
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
+
+  // Configure SUT with control switch loopback0 ip as collector.
+  ASSERT_OK_AND_ASSIGN(
+      auto control_loopback0_ipv6s,
+      pins_test::ParseLoopbackIpv6s(GetParam().control_gnmi_config));
+  ASSERT_GT(control_loopback0_ipv6s.size(), 0)
+      << absl::Substitute("No loopback IP found for $0 testbed.",
+                          testbed.ControlSwitch().ChassisName());
+  const std::string collector_ipv6 = control_loopback0_ipv6s[0].ToString();
+  ASSERT_NE(collector_ipv6, agent_address_);
+
+  std::vector<std::pair<std::string, int>> collector_address_and_port;
+  collector_address_and_port.push_back({collector_ipv6, collector_port_});
+  ASSERT_OK_AND_ASSIGN(Port traffic_port,
+                       GetUnusedUpPort(*sut_gnmi_stub_, /*used_port=*/""));
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces{
+      {traffic_port.interface_name, true}};
+  ASSERT_OK_AND_ASSIGN(
+      auto sut_gnmi_config_with_sflow,
+      UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
+                        collector_address_and_port, sflow_enabled_interfaces,
+                        kInbandSamplingRate, kSampleHeaderSize));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "sut_gnmi_config_with_sflow_before_nsf.txt",
+      json_yang::FormatJsonBestEffort(sut_gnmi_config_with_sflow)));
+  ASSERT_OK(
+      pins_test::PushGnmiConfig(testbed.Sut(), sut_gnmi_config_with_sflow));
+  // Wait until all sFLow gNMI states are converged.
+  ASSERT_OK(pins_test::WaitForCondition(
+      VerifySflowStatesConverged, absl::Seconds(30), sut_gnmi_stub_.get(),
+      agent_address_, kInbandSamplingRate, kSampleHeaderSize,
+      collector_address_and_port, sflow_enabled_interfaces));
+
+  ASSERT_OK_AND_ASSIGN(
+      Port inband_port,
+      GetUnusedUpPort(*sut_gnmi_stub_, traffic_port.interface_name));
+
+  // Program rules to forward sample pkts to control switch loopback0 IPv6
+  // address.
+  // 1. Set a default vrf for all packets
+  // 2. Install a route entry matching on the default vrf and route prefix of
+  // the control switch loopback0 ipv6.
+  // 3. Define the nexthop and dependent objects for the route entry action.
+  const std::string vrf_id = "vrf-50";
+  ASSERT_OK(
+      SetSwitchVrfForAllPackets(*sut_p4_session_, GetSutIrP4Info(), vrf_id));
+
+  ASSERT_OK_AND_ASSIGN(std::string next_hop_id,
+                       ProgramNextHops(*sut_p4_session_, GetSutIrP4Info(),
+                                       absl::StrCat(inband_port.port_id)));
+  ASSERT_OK(ProgramRoutesForIpv6(*sut_p4_session_, GetSutIrP4Info(), vrf_id,
+                                 collector_ipv6, next_hop_id));
+
+  pins_test::Testbed testbed_variant;
+  testbed_variant.emplace<thinkit::MirrorTestbed*>(&testbed);
+  ASSERT_OK(pins_test::NsfReboot(testbed_variant));
+  // Wait until all sFlow gNMI states are converged.
+  ASSERT_OK(pins_test::WaitForCondition(
+      VerifySflowStatesConverged, absl::Seconds(60), sut_gnmi_stub_.get(),
+      agent_address_, kInbandSamplingRate, kSampleHeaderSize,
+      collector_address_and_port, sflow_enabled_interfaces));
+
+  // Sends traffic.
+  ASSERT_OK_AND_ASSIGN(
+      auto control_switch_port_id_per_port_name,
+      pins_test::GetAllUpInterfacePortIdsByName(*control_gnmi_stub_));
+  ASSERT_OK_AND_ASSIGN(
+      int control_switch_port_id,
+      GetPortIdFromInterfaceName(control_switch_port_id_per_port_name,
+                                 traffic_port.interface_name));
+  absl::Notification notification;
+  std::thread traffic_thread = std::thread(
+      [this, control_switch_port_id, traffic_port, &notification, &testbed] {
+        ASSERT_OK(SendPacketsFromSwitchUntilNotificationReceived(
+            notification, kInbandTrafficPps, control_switch_port_id,
+            traffic_port.interface_name, sut_gnmi_stub_.get(),
+            GetControlIrP4Info(), *control_p4_session_, testbed.Environment()));
+      });
+
+  // Push config with both control switch loopback0 IP and local loopback IP
+  // collector.
+  collector_address_and_port.push_back({kLocalLoopbackIpv6, collector_port_});
+  ASSERT_OK_AND_ASSIGN(
+      sut_gnmi_config_with_sflow,
+      UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
+                        collector_address_and_port, sflow_enabled_interfaces,
+                        kInbandSamplingRate, kSampleHeaderSize));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "sut_gnmi_config_with_sflow_after_nsf.txt",
+      json_yang::FormatJsonBestEffort(sut_gnmi_config_with_sflow)));
+  ASSERT_OK(
+      pins_test::PushGnmiConfig(testbed.Sut(), sut_gnmi_config_with_sflow));
+
+  // Wait until all sFLow gNMI states are converged.
+  ASSERT_OK(pins_test::WaitForCondition(
+      VerifySflowStatesConverged, absl::Seconds(30), sut_gnmi_stub_.get(),
+      agent_address_, kInbandSamplingRate, kSampleHeaderSize,
+      collector_address_and_port, sflow_enabled_interfaces));
+
+  // 1. Start sflowtool on control switch.
+  // 2. Start sflowtool on SUT switch.
+  // 3. Get sflowtool result and counters stats.
+  std::string control_sflow_result, sut_sflow_result;
+  {
+    absl::Time start_time = absl::Now();
+    ASSERT_OK_AND_ASSIGN(
+        std::thread control_sflowtool_thread,
+        RunSflowCollectorForNSecs(
+            *GetParam().ssh_client, testbed.ControlSwitch().ChassisName(),
+            kSflowtoolLineFormatTemplate, 30, control_sflow_result));
+    ASSERT_OK_AND_ASSIGN(std::thread sut_sflowtool_thread,
+                         RunSflowCollectorForNSecs(*GetParam().ssh_client,
+                                                   testbed.Sut().ChassisName(),
+                                                   kSflowtoolLineFormatTemplate,
+                                                   30, sut_sflow_result));
+
+    ASSERT_OK_AND_ASSIGN(std::string sflow_queue_name,
+                         GetSflowQueueName(sut_gnmi_stub_.get()));
+    ASSERT_OK_AND_ASSIGN(auto initial_queue_counter,
+                         pins_test::GetGnmiQueueCounters(
+                             "CPU", sflow_queue_name, *sut_gnmi_stub_));
+    ASSERT_OK_AND_ASSIGN(
+        auto sut_initial_in_band_port_counter,
+        ReadCounters(inband_port.interface_name, sut_gnmi_stub_.get()));
+
+    ASSERT_OK_AND_ASSIGN(
+        auto control_initial_in_band_port_counter,
+        ReadCounters(inband_port.interface_name, control_gnmi_stub_.get()));
+    ASSERT_OK_AND_ASSIGN(auto control_initial_cpu_counter,
+                         ReadCounters("CPU", control_gnmi_stub_.get()));
+
+    // Wait for sflowtool to finish and read counter data.
+    absl::Cleanup clean_up([this, initial_queue_counter, start_time,
+                            control_gnmi_stub_raw = control_gnmi_stub_.get(),
+                            &notification, &sut_initial_in_band_port_counter,
+                            &control_initial_in_band_port_counter,
+                            &control_initial_cpu_counter, &inband_port,
+                            &control_sflowtool_thread, &sut_sflowtool_thread,
+                            &traffic_thread, &sflow_queue_name] {
+      if (control_sflowtool_thread.joinable()) {
+        control_sflowtool_thread.join();
+      }
+      if (sut_sflowtool_thread.joinable()) {
+        sut_sflowtool_thread.join();
+      }
+      if (traffic_thread.joinable()) {
+        notification.Notify();
+        traffic_thread.join();
+      }
+
+      // Show counter data after sflowtool is finished. Put this inside clean up
+      // so that we can get the accurate data.
+      ASSERT_OK_AND_ASSIGN(
+          auto final_queue_counter,
+          pins_test::GetGnmiQueueCounters("CPU", sflow_queue_name,
+                                          *(this->sut_gnmi_stub_)));
+      LOG(INFO) << "CPU " << sflow_queue_name << " queue counter delta:\n"
+                << (final_queue_counter - initial_queue_counter)
+                << " \n total time: " << (absl::Now() - start_time);
+
+      ASSERT_OK_AND_ASSIGN(
+          auto sut_final_in_band_port_counter,
+          ReadCounters(inband_port.interface_name, sut_gnmi_stub_.get()));
+      LOG(INFO) << " SUT inband port " << inband_port.interface_name
+                << " counter delta in total time: "
+                << (absl::Now() - start_time);
+      ShowCounters(DeltaCounters(sut_initial_in_band_port_counter,
+                                 sut_final_in_band_port_counter));
+
+      ASSERT_OK_AND_ASSIGN(
+          auto control_final_in_band_port_counter,
+          ReadCounters(inband_port.interface_name, control_gnmi_stub_.get()));
+      LOG(INFO) << " Control switch inband port " << inband_port.interface_name
+                << " counter delta in total time: "
+                << (absl::Now() - start_time);
+      ShowCounters(DeltaCounters(control_initial_in_band_port_counter,
+                                 control_final_in_band_port_counter));
+
+      ASSERT_OK_AND_ASSIGN(auto control_final_cpu_counter,
+                           ReadCounters("CPU", control_gnmi_stub_.get()));
+      LOG(INFO) << " Control switch CPU counter delta in total time: "
+                << (absl::Now() - start_time);
+      ShowCounters(DeltaCounters(control_initial_cpu_counter,
+                                 control_final_cpu_counter));
+    });
+  }
+
+  EXPECT_OK(testbed.Environment().StoreTestArtifact("control_sflow_result.txt",
+                                                    control_sflow_result));
+  EXPECT_OK(testbed.Environment().StoreTestArtifact("sut_sflow_result.txt",
+                                                    sut_sflow_result));
+
+  EXPECT_FALSE(control_sflow_result.empty())
+      << "No samples on " << traffic_port.interface_name;
+  const int control_sflow_samples =
+      GetSflowSamplesOnSut(control_sflow_result, control_switch_port_id);
+  const int sut_sflow_samples =
+      GetSflowSamplesOnSut(sut_sflow_result, control_switch_port_id);
+  EXPECT_GT(control_sflow_samples, 0);
+  EXPECT_GT(sut_sflow_samples, 0);
+}
+
 // 1. Pick an interface and let control switch send some traffic via this
 // interface.
 // 2. Set rules on SUT switch to forward sample to control switch.
@@ -2344,6 +2623,7 @@ void SflowMirrorTestFixture::TearDown() {
 // | control   | -------> |    SUT    |
 // |-----------| Inband   | --------  |
 // | control   | <------- |    SUT    |
+
 TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
@@ -2364,9 +2644,8 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
   std::vector<std::pair<std::string, int>> collector_address_and_port;
 
   // Use main switch Loopback0 Ip address as collector.
-  collector_address_and_port.push_back({collector_ipv6, kSflowCollectorPort});
-  collector_address_and_port.push_back(
-      {kLocalLoopbackIpv6, kSflowCollectorPort});
+  collector_address_and_port.push_back({collector_ipv6, collector_port_});
+  collector_address_and_port.push_back({kLocalLoopbackIpv6, collector_port_});
 
   ASSERT_OK_AND_ASSIGN(Port traffic_port,
                        GetUnusedUpPort(*sut_gnmi_stub_, /*used_port=*/""));
@@ -2542,7 +2821,7 @@ TEST_P(SflowMirrorTestFixture, TestSflowDscpValue) {
   absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces{
       {traffic_port.interface_name, true}};
   std::vector<std::pair<std::string, int>> collector_address_and_port{
-      {kLocalLoopbackIpv6, kSflowCollectorPort}};
+      {kLocalLoopbackIpv6, collector_port_}};
   ASSERT_OK_AND_ASSIGN(
       auto sut_gnmi_config_with_sflow,
       UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
@@ -2656,7 +2935,7 @@ TEST_P(SflowMirrorTestFixture, TestSamplingWorksOnAllInterfaces) {
   }
 
   std::vector<std::pair<std::string, int>> collector_address_and_port{
-      {kLocalLoopbackIpv6, kSflowCollectorPort}};
+      {kLocalLoopbackIpv6, collector_port_}};
   ASSERT_OK_AND_ASSIGN(
       auto sut_gnmi_config_with_sflow,
       UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
@@ -2786,7 +3065,7 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
   }
 
   std::vector<std::pair<std::string, int>> collector_address_and_port{
-      {kLocalLoopbackIpv6, kSflowCollectorPort}};
+      {kLocalLoopbackIpv6, collector_port_}};
   ASSERT_OK_AND_ASSIGN(
       auto sut_gnmi_config_with_sflow,
       UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
@@ -3030,7 +3309,7 @@ TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
   }
 
   std::vector<std::pair<std::string, int>> collector_address_and_port{
-      {kLocalLoopbackIpv6, kSflowCollectorPort}};
+      {kLocalLoopbackIpv6, collector_port_}};
   ASSERT_OK_AND_ASSIGN(
       auto sut_gnmi_config_with_sflow,
       UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
@@ -3109,7 +3388,6 @@ TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
 }
 
 // TODO: Check sFlow sampling could still work after restart.
-// TODO: b/305006464 - Hsflowd restart is raising minor alarms which is
 // affecting the other tests in longevity workflow. Enable the test once the
 // issue related to minor alarms is fixed.
 TEST_P(SflowRebootTestFixture, TestHsflowdRestartSucceed) {
@@ -3171,7 +3449,6 @@ TEST_P(SflowPortBreakoutTest, TestPortbreakoutWorks) {
   ASSERT_GT(control_loopback0_ipv6s.size(), 0)
       << absl::Substitute("No loopback IP found for $0 testbed.",
                           testbed.ControlSwitch().ChassisName());
-  // TODO: b/312207030 - breakout test does not need sFlow to be enabled on
   // control switch.
   ASSERT_OK(SetUpMirrorTestbedWithSflowEnabledOnUpPorts(
       testbed, sut_gnmi_stub_.get(), control_gnmi_stub_.get(),
@@ -3184,7 +3461,7 @@ TEST_P(SflowPortBreakoutTest, TestPortbreakoutWorks) {
       .sampling_header_size = kSampleHeaderSize,
       .agent_addr_ipv6 = agent_address_,
       .collector_ip = kLocalLoopbackIpv6,
-      .collector_port = kSflowCollectorPort,
+      .collector_port = collector_port_,
       .mirror_broken_out = false,
   };
   ASSERT_OK_AND_ASSIGN(
@@ -3202,7 +3479,7 @@ TEST_P(SflowPortBreakoutTest, TestPortbreakoutWorks) {
       .sampling_header_size = kSampleHeaderSize,
       .agent_addr_ipv6 = control_loopback0_ipv6s[0].ToString(),
       .collector_ip = kLocalLoopbackIpv6,
-      .collector_port = kSflowCollectorPort,
+      .collector_port = collector_port_,
       .port_info = sut_breakout_result.port_info,
       .mirror_broken_out = true,
   };
