@@ -115,6 +115,11 @@ class SflowMirrorTestFixture
   std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub_;
 
   std::string agent_address_;
+
+  // Used for setting gNMI collector config. It would be set to the same as the
+  // config collector port. If config does not have any collector config, it
+  // would be set to 6343.
+  int collector_port_;
 };
 
 class SflowRebootTestFixture : public SflowMirrorTestFixture {};
