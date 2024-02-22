@@ -165,7 +165,7 @@ absl::StatusOr<std::vector<std::string>> GetNUpInterfaceIDs(
 }
 
 // Add table entries for multicast_router_interface_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
     const pdpi::IrP4Info& ir_p4info, const std::string& port_id,
     const int instance, const netaddr::MacAddress& src_mac) {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
@@ -197,11 +197,9 @@ absl::StatusOr<std::vector<p4::v1::Entity>> CreateMulticastGroupEntities(
 }
 
 // Add table entries for ipv4_multicast_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>>
-CreateIpv4MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
-                                 const std::string& vrf_id,
-                                 const netaddr::Ipv4Address& ip_address,
-                                 int multicast_group_id) {
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv4MulticastTableEntities(
+    const pdpi::IrP4Info& ir_p4info, const std::string& vrf_id,
+    const netaddr::Ipv4Address& ip_address, int multicast_group_id) {
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> entities,
       sai::EntryBuilder()
@@ -212,11 +210,9 @@ CreateIpv4MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
 }
 
 // Add table entries for ipv6_multicast_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>>
-CreateIpv6MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
-                                 const std::string& vrf_id,
-                                 const netaddr::Ipv6Address& ip_address,
-                                 int multicast_group_id) {
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv6MulticastTableEntities(
+    const pdpi::IrP4Info& ir_p4info, const std::string& vrf_id,
+    const netaddr::Ipv6Address& ip_address, int multicast_group_id) {
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> entities,
       sai::EntryBuilder()
@@ -1008,7 +1004,8 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   ASSERT_OK(SetupDefaultMulticastProgramming(
       *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
       kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
-      sut_ports_ids, entities_created));
+      sut_ports_ids, IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      entities_created));
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
   // Build test packets.
   ASSERT_OK_AND_ASSIGN(
@@ -1067,6 +1064,64 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   // EXPECT_OK(validation_result_del.HasSuccessRateOfAtLeast(1.0));
 }
 
+TEST_P(L3MulticastTestFixture, BasicReplicationProgrammingWithAclRedirect) {
+  GetParam().mirror_testbed->GetMirrorTestbed().Environment().SetTestCaseID(
+      "f0cae11a-7829-4be3-b84a-497f86d5d7ca");
+
+  if (!gpins::TableHasMatchField(
+          ir_p4info_, "acl_ingress_mirror_and_redirect_table", "in_port")) {
+    GTEST_SKIP()
+        << "Skipping because match field 'in_port' is not available in table "
+        << "'acl_ingress_mirror_and_redirect_table'";
+  }
+
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  constexpr int kNumberMulticastGroupsInTest = 1;
+  constexpr int kPortsToUseInTest = 2;
+
+  // Get set of ports on the SUT and control switch to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(
+      *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
+      kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
+      sut_ports_ids, IpmcGroupAssignmentMechanism::kAclRedirect,
+      entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(
+      auto vectors,
+      BuildTestVectors(sut_ports_ids, kNumberMulticastGroupsInTest,
+                       /*replicas_per_group=*/kPortsToUseInTest,
+                       /*expect_output_packets=*/true));
+
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultGpinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      gpins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
+
 // TEST_P(L3MulticastTestFixture, UnregisteredParticipantProgramming) {
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
 // }
@@ -1119,11 +1174,11 @@ TEST_P(L3MulticastTestFixture, AddMulticastReplicaForUnknownPortInstanceFails) {
 
   EXPECT_THAT(
       pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, mc_entities),
-      StatusIs(
-          absl::StatusCode::kUnknown,
-          AllOf(HasSubstr("#1: NOT_FOUND"),
-                HasSubstr("[OrchAgent] Multicast group member"),
-                HasSubstr("does not have an associated RIF available yet"))));
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: NOT_FOUND"),
+                     HasSubstr("[OrchAgent] No corresponding "
+                               "FIXED_MULTICAST_ROUTER_INTERFACE_TABLE"),
+                     HasSubstr("entry found for multicast group"))));
 
   // Clean up.
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, rif_entities));
