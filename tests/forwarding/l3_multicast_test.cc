@@ -165,7 +165,7 @@ absl::StatusOr<std::vector<std::string>> GetNUpInterfaceIDs(
 }
 
 // Add table entries for multicast_router_interface_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
     const pdpi::IrP4Info& ir_p4info, const std::string& port_id,
     const int instance, const netaddr::MacAddress& src_mac) {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
@@ -197,11 +197,9 @@ absl::StatusOr<std::vector<p4::v1::Entity>> CreateMulticastGroupEntities(
 }
 
 // Add table entries for ipv4_multicast_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>>
-CreateIpv4MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
-                                 const std::string& vrf_id,
-                                 const netaddr::Ipv4Address& ip_address,
-                                 int multicast_group_id) {
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv4MulticastTableEntities(
+    const pdpi::IrP4Info& ir_p4info, const std::string& vrf_id,
+    const netaddr::Ipv4Address& ip_address, int multicast_group_id) {
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> entities,
       sai::EntryBuilder()
@@ -212,11 +210,9 @@ CreateIpv4MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
 }
 
 // Add table entries for ipv6_multicast_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>>
-CreateIpv6MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
-                                 const std::string& vrf_id,
-                                 const netaddr::Ipv6Address& ip_address,
-                                 int multicast_group_id) {
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv6MulticastTableEntities(
+    const pdpi::IrP4Info& ir_p4info, const std::string& vrf_id,
+    const netaddr::Ipv6Address& ip_address, int multicast_group_id) {
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> entities,
       sai::EntryBuilder()
