@@ -55,6 +55,7 @@
 #include "platforms/networking/gpins/testing/blackbox/p4/dvaas/gpins_dvaas.h"
 #include "platforms/networking/gpins/testing/lib/test_util.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
+#include "tests/lib/p4info_helper.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/switch.h"
 #include "util/gtl/value_or_die.h"
@@ -82,6 +83,8 @@ struct ReplicaPair {
   std::string port_id;
   int instance;
 };
+
+enum class IpmcGroupAssignmentMechanism { kAclRedirect, kIpMulticastTable };
 
 // Multicast IPv4 addresses of the form 226.10.#.#. The last two bytes
 // are computed based on the multicast group ID.
@@ -162,7 +165,7 @@ absl::StatusOr<std::vector<std::string>> GetNUpInterfaceIDs(
 }
 
 // Add table entries for multicast_router_interface_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateRifTableEntities(
     const pdpi::IrP4Info& ir_p4info, const std::string& port_id,
     const int instance, const netaddr::MacAddress& src_mac) {
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
@@ -195,11 +198,9 @@ absl::StatusOr<std::vector<p4::v1::Entity>> CreateMulticastGroupEntities(
 }
 
 // Add table entries for ipv4_multicast_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>>
-CreateIpv4MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
-                                 const std::string& vrf_id,
-                                 const netaddr::Ipv4Address& ip_address,
-                                 int multicast_group_id) {
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv4MulticastTableEntities(
+    const pdpi::IrP4Info& ir_p4info, const std::string& vrf_id,
+    const netaddr::Ipv4Address& ip_address, int multicast_group_id) {
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> entities,
       sai::EntryBuilder()
@@ -211,11 +212,9 @@ CreateIpv4MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
 }
 
 // Add table entries for ipv6_multicast_table.
-inline absl::StatusOr<std::vector<p4::v1::Entity>>
-CreateIpv6MulticastTableEntities(const pdpi::IrP4Info& ir_p4info,
-                                 const std::string& vrf_id,
-                                 const netaddr::Ipv6Address& ip_address,
-                                 int multicast_group_id) {
+absl::StatusOr<std::vector<p4::v1::Entity>> CreateIpv6MulticastTableEntities(
+    const pdpi::IrP4Info& ir_p4info, const std::string& vrf_id,
+    const netaddr::Ipv6Address& ip_address, int multicast_group_id) {
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> entities,
       sai::EntryBuilder()
@@ -260,6 +259,7 @@ absl::Status SetupDefaultMulticastProgramming(
     pdpi::P4RuntimeSession& session, const pdpi::IrP4Info& ir_p4info,
     const p4::v1::Update_Type& update_type, int number_multicast_groups,
     int replicas_per_group, const std::vector<std::string>& port_ids,
+    IpmcGroupAssignmentMechanism assignment_mechanism,
     std::vector<p4::v1::Entity>& entities_created) {
   if (port_ids.size() < replicas_per_group) {
     return gutil::InternalErrorBuilder()
@@ -317,6 +317,25 @@ absl::Status SetupDefaultMulticastProgramming(
   RETURN_IF_ERROR(pdpi::InstallPiEntities(&session, ir_p4info, mc_entities));
   entities_created.insert(entities_created.end(), mc_entities.begin(),
                           mc_entities.end());
+
+  if (assignment_mechanism == IpmcGroupAssignmentMechanism::kAclRedirect) {
+    // Setup multicast group assignment (ACL redirect).
+    // In the default traffic test setup, we only send traffic on one port
+    // (port_index 0), so we only need to add one ACL entry.
+    const std::string& port_id = port_ids[0];
+    ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> acl_entities,
+                     sai::EntryBuilder()
+                         .AddIngressAclEntryRedirectingToMulticastGroup(
+                             /*multicast_group_id=*/1,
+                             {.in_port = port_id, .ipmc_table_hit = false})
+                         .LogPdEntries()
+                         .GetDedupedPiEntities(ir_p4info));
+    RETURN_IF_ERROR(pdpi::InstallPiEntities(&session, ir_p4info, acl_entities));
+    entities_created.insert(entities_created.end(), acl_entities.begin(),
+                            acl_entities.end());
+    return absl::OkStatus();
+  }
+
   // Setup multicast group assignment (IPMC entries).
   std::vector<p4::v1::Entity> ipmc_entities;
   for (int m = 0; m < number_multicast_groups; ++m) {
@@ -543,11 +562,11 @@ TEST_P(L3MulticastTestFixture, InsertMulticastGroupBeforeRifFails) {
                                           /*multicast_group_id=*/2, replicas));
   EXPECT_THAT(
       pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, entities),
-      StatusIs(
-          absl::StatusCode::kUnknown,
-          AllOf(HasSubstr("#1: NOT_FOUND"),
-                HasSubstr("[OrchAgent] Multicast group member"),
-                HasSubstr("does not have an associated RIF available yet"))));
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: NOT_FOUND"),
+                     HasSubstr("[OrchAgent] No corresponding "
+                               "FIXED_MULTICAST_ROUTER_INTERFACE_TABLE"),
+                     HasSubstr("entry found for multicast group"))));
 }
 
 TEST_P(L3MulticastTestFixture,
@@ -671,7 +690,8 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   ASSERT_OK(SetupDefaultMulticastProgramming(
       *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
       kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
-      sut_ports_ids, entities_created));
+      sut_ports_ids, IpmcGroupAssignmentMechanism::kIpMulticastTable,
+      entities_created));
   LOG(INFO) << "Added " << entities_created.size() << " entities.";
   // Build test packets.
   ASSERT_OK_AND_ASSIGN(
@@ -730,6 +750,61 @@ TEST_P(L3MulticastTestFixture, BasicReplicationProgramming) {
   // EXPECT_OK(validation_result_del.HasSuccessRateOfAtLeast(1.0));
 }
 
+TEST_P(L3MulticastTestFixture, BasicReplicationProgrammingWithAclRedirect) {
+
+  if (!pins::TableHasMatchField(
+          ir_p4info_, "acl_ingress_mirror_and_redirect_table", "in_port")) {
+    GTEST_SKIP()
+        << "Skipping because match field 'in_port' is not available in table "
+        << "'acl_ingress_mirror_and_redirect_table'";
+  }
+
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+  constexpr int kNumberMulticastGroupsInTest = 1;
+  constexpr int kPortsToUseInTest = 2;
+
+  // Get set of ports on the SUT and control switch to test on.
+  ASSERT_OK_AND_ASSIGN(
+      const std::vector<std::string> sut_ports_ids,
+      GetNUpInterfaceIDs(GetParam().mirror_testbed->GetMirrorTestbed().Sut(),
+                         kPortsToUseInTest + 1));
+
+  std::vector<p4::v1::Entity> entities_created;
+  ASSERT_OK(SetupDefaultMulticastProgramming(
+      *sut_p4rt_session_, ir_p4info_, p4::v1::Update::INSERT,
+      kNumberMulticastGroupsInTest, /*replicas_per_group=*/kPortsToUseInTest,
+      sut_ports_ids, IpmcGroupAssignmentMechanism::kAclRedirect,
+      entities_created));
+  LOG(INFO) << "Added " << entities_created.size() << " entities.";
+
+  // Build test packets.
+  ASSERT_OK_AND_ASSIGN(
+      auto vectors,
+      BuildTestVectors(sut_ports_ids, kNumberMulticastGroupsInTest,
+                       /*replicas_per_group=*/kPortsToUseInTest,
+                       /*expect_output_packets=*/true));
+
+  // Send test packets.
+  LOG(INFO) << "Sending traffic to verify added multicast programming.";
+  dvaas::DataplaneValidationParams dvaas_params =
+      dvaas::DefaultPinsDataplaneValidationParams();
+  // Ensure the port map for the control switch can map to the SUT (for
+  // situations where the config differs for SUT and control switch).
+  auto interface_to_peer_entity_map = gtl::ValueOrDie(
+      pins::ControlP4rtPortIdBySutP4rtPortIdFromSwitchConfig());
+  dvaas_params.mirror_testbed_port_map_override = gtl::ValueOrDie(
+      dvaas::MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
+          interface_to_peer_entity_map));
+  dvaas_params.packet_test_vector_override = vectors;
+
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+  // Validate traffic.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+}
 
 // TEST_P(L3MulticastTestFixture, UnregisteredParticipantProgramming) {
 //   GTEST_SKIP() << "Skipping because this test is not implemented yet.";
@@ -783,11 +858,11 @@ TEST_P(L3MulticastTestFixture, AddMulticastReplicaForUnknownPortInstanceFails) {
 
   EXPECT_THAT(
       pdpi::InstallPiEntities(sut_p4rt_session_.get(), ir_p4info_, mc_entities),
-      StatusIs(
-          absl::StatusCode::kUnknown,
-          AllOf(HasSubstr("#1: NOT_FOUND"),
-                HasSubstr("[OrchAgent] Multicast group member"),
-                HasSubstr("does not have an associated RIF available yet"))));
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: NOT_FOUND"),
+                     HasSubstr("[OrchAgent] No corresponding "
+                               "FIXED_MULTICAST_ROUTER_INTERFACE_TABLE"),
+                     HasSubstr("entry found for multicast group"))));
 
   // Clean up.
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, rif_entities));
@@ -960,7 +1035,7 @@ TEST_P(L3MulticastTestFixture, AddIpmcEntryWithInvalidIPv4AddressFails) {
                                       ipmc_entities),
               StatusIs(absl::StatusCode::kUnknown,
                        AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
-                             HasSubstr("[SAI] SWSS_RC_INVALID_PARAM"))));
+                             HasSubstr("All entries must satisfy"))));
 
   // Clean up.
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, vrf_entities));
@@ -1066,11 +1141,10 @@ TEST_P(L3MulticastTestFixture, DeleteMulticastGroupWhileInUseFails) {
   // Attempting to delete multicast group while in use results in an error.
   EXPECT_THAT(
       ClearEntities(*sut_p4rt_session_, ir_p4info_, mc_entities),
-      StatusIs(
-          absl::StatusCode::kUnknown,
-          AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
-                HasSubstr(
-                    "[OrchAgent] Multicast group 0x0001 cannot be deleted"))));
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
+                     HasSubstr("[OrchAgent] Multicast group"),
+                     HasSubstr("cannot be deleted because route entries"))));
 
   // Clean up.
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, ipmc_entities));
