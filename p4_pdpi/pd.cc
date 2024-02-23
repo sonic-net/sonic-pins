@@ -1502,6 +1502,12 @@ absl::Status IrMulticastGroupEntryToPd(
     return absl::OkStatus();
   }
 
+  const auto &metadata =
+      SetBytesField(pd_multicast_group_entry, "metadata", ir.metadata());
+  if (!metadata.ok()) {
+    invalid_reasons.push_back(absl::StrCat(kNewBullet, metadata.message()));
+  }
+
   const absl::StatusOr<google::protobuf::Message *> pd_action =
       GetMutableMessage(pd_multicast_group_entry, "action");
   if (!pd_action.ok()) {
@@ -2423,6 +2429,14 @@ absl::StatusOr<IrMulticastGroupEntry> PdMulticastGroupEntryToIr(
   if (options.key_only) {
     return ir;
   }
+
+  const auto &metadata = GetBytesField(pd, "metadata");
+  if (!metadata.ok()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry",
+        absl::StrCat(kNewBullet, metadata.status().message())));
+  }
+  ir.set_metadata(*metadata);
 
   absl::flat_hash_map<std::string, absl::flat_hash_set<uint32_t>>
       instances_by_port;

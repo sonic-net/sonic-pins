@@ -7054,6 +7054,50 @@ packet_replication_engine_entry {
 
 
 =========================================================================
+valid multicast group entry with metadata
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0001"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0000"
+      }
+    }
+  }
+  metadata: "my_metadata"
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 1
+    replicas {
+      port: "some_port"
+    }
+    metadata: "my_metadata"
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 1
+    replicas {
+      port: "some_port"
+    }
+    metadata: "my_metadata"
+  }
+}
+
+
+=========================================================================
 missing matches with key_only=true
 pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
 =========================================================================

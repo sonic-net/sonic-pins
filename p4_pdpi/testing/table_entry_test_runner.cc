@@ -1160,6 +1160,18 @@ static void RunPdMulticastTest(const pdpi::IrP4Info& info) {
                         }
                       )pb"),
                       /*validity=*/INPUT_IS_VALID);
+  RunPdTableEntryTest(
+      info, "valid multicast group entry with metadata",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match { multicast_group_id: "0x0001" }
+          action {
+            replicate { replicas { port: "some_port" instance: "0x0000" } }
+          }
+          metadata: "my_metadata"
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_VALID);
 }
 
 static void RunIrMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
