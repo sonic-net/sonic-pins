@@ -2043,6 +2043,7 @@ StatusOr<IrMulticastGroupEntry> PiMulticastGroupEntryToIr(
     const TranslationOptions &options) {
   IrMulticastGroupEntry ir;
   ir.set_multicast_group_id(pi.multicast_group_id());
+  ir.set_metadata(pi.metadata());
 
   if (options.key_only) {
     return ir;
@@ -2688,6 +2689,7 @@ StatusOr<p4::v1::MulticastGroupEntry> IrMulticastGroupEntryToPi(
                             ir.multicast_group_id(), "'"),
                absl::StrJoin(invalid_reasons, "\n"));
   }
+  pi.set_metadata(ir.metadata());
   return pi;
 }
 
