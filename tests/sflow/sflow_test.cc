@@ -1222,7 +1222,6 @@ void SflowTestFixture::TearDown() {
 // 2. Collect sFlow samples via sflowtool on SUT.
 // 3. Validate the result is as expected.
 TEST_P(SflowTestFixture, VerifyIngressSamplingForNoMatchPackets) {
-  testbed_->Environment().SetTestCaseID("6c980337-c187-4f19-99a9-e03b6dcf24b5");
 
   const IxiaLink& ingress_link = ready_links_[0];
   Port ingress_port = Port{
@@ -1292,7 +1291,6 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForNoMatchPackets) {
 
 // Verifies ingress sampling could work when forwarding traffic.
 TEST_P(SflowTestFixture, VerifyIngressSamplingForForwardedPackets) {
-  testbed_->Environment().SetTestCaseID("909e2260-d4ca-4018-8c6a-2bd7891ee686");
 
   const IxiaLink& ingress_link = ready_links_[0];
   Port ingress_port = Port{
@@ -1383,7 +1381,6 @@ TEST_P(SflowTestFixture, VerifyIngressSamplingForForwardedPackets) {
 
 // Verifies ingress sampling could work when dropping packets.
 TEST_P(SflowTestFixture, VerifyIngressSamplesForDropPackets) {
-  testbed_->Environment().SetTestCaseID("6d567c91-d018-4fb3-85fc-c75c5f425d15");
 
   const IxiaLink& ingress_link = ready_links_[0];
   Port ingress_port = Port{
@@ -1459,7 +1456,6 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForDropPackets) {
 // 3. Send traffic from Ixia.
 // 4. Validate the packets are all get punted and sFlowtool has expected result.
 TEST_P(SflowTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
-  testbed_->Environment().SetTestCaseID("70a4e3e1-f3ae-416e-99a7-24f259942981");
 
   const IxiaLink& ingress_link = ready_links_[0];
   Port ingress_port = Port{
@@ -1589,7 +1585,6 @@ TEST_P(SflowTestFixture, VerifyIngressSamplesForP4rtPuntTraffic) {
 // Traffic packet size size_a, sFlow sampling size size_b: expects sample header
 // size equals to min(size_a, size_b).
 TEST_P(SampleSizeTest, VerifySamplingSizeWorks) {
-  testbed_->Environment().SetTestCaseID("d1e8ae2a-0595-4b33-9743-7dbff8eaf48a");
 
   const int packet_size = GetParam().packet_size,
             sample_size = GetParam().sample_size;
@@ -1650,7 +1645,6 @@ TEST_P(SampleSizeTest, VerifySamplingSizeWorks) {
 // send traffic to two interfaces with different sampling rate and verifies
 // samples count.
 TEST_P(SampleRateTest, VerifySamplingRateWorks) {
-  testbed_->Environment().SetTestCaseID("a143121e-c90f-4892-bd6b-897c3d9f9ff3");
 
   const IxiaLink& ingress_link = ready_links_[0];
   const int sample_rate = GetParam().sample_rate;
@@ -1734,7 +1728,6 @@ TEST_P(SampleRateTest, VerifySamplingRateWorks) {
 // 3. Send traffic at a normal rate which would not trigger sFlow backoff.
 // Verify that sample rate is still doubled on all interfaces and samples.
 TEST_P(BackoffTest, VerifyBackoffWorks) {
-  testbed_->Environment().SetTestCaseID("58653895-219a-4b9e-b6af-03f6a33b5959");
 
   const IxiaLink& ingress_link = ready_links_[0];
 
@@ -2469,6 +2462,11 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
   pins_test::Testbed testbed_variant;
   testbed_variant.emplace<thinkit::MirrorTestbed*>(&testbed);
   ASSERT_OK(pins_test::NsfReboot(testbed_variant));
+  ASSERT_OK(
+      pins_test::WaitForNsfReboot(testbed_variant, *GetParam().ssh_client));
+  ASSERT_OK(pins_test::ValidateTestbedState(
+      /*version=*/"", testbed_variant, *GetParam().ssh_client,
+      /*gnmi_config=*/std::nullopt));
   // Wait until all sFlow gNMI states are converged.
   ASSERT_OK(pins_test::WaitForCondition(
       VerifySflowStatesConverged, absl::Seconds(60), sut_gnmi_stub_.get(),
@@ -2627,7 +2625,6 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
 TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
-  testbed.Environment().SetTestCaseID("3948ef62-67d9-42e2-8cc6-30dc10cb382f");
 
   const int packets_num = 10000;
 
@@ -2811,7 +2808,6 @@ TEST_P(SflowMirrorTestFixture, TestInbandPathToSflowCollector) {
 TEST_P(SflowMirrorTestFixture, TestSflowDscpValue) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
-  testbed.Environment().SetTestCaseID("38694bb8-2a82-4379-8b85-96dcda824a14");
 
   const int packets_num = 10000;
 
@@ -2918,7 +2914,6 @@ TEST_P(SflowMirrorTestFixture, TestSflowDscpValue) {
 TEST_P(SflowMirrorTestFixture, TestSamplingWorksOnAllInterfaces) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
-  testbed.Environment().SetTestCaseID("03bdb9da-387a-4256-9323-60d4503ce3c0");
 
   const int packets_num = 10000;
   ASSERT_OK_AND_ASSIGN(
@@ -3038,7 +3033,6 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
 
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
-  testbed.Environment().SetTestCaseID("6cd622a1-2d95-4e07-9c7d-77a2faad4bc0");
 
   ASSERT_OK_AND_ASSIGN(
       auto port_id_per_port_name,
@@ -3191,6 +3185,9 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
       VerifySflowStatesConverged, absl::Minutes(2), sut_gnmi_stub_.get(),
       agent_address_, kInbandSamplingRate, kSampleHeaderSize,
       collector_address_and_port, sflow_enabled_interfaces));
+  ASSERT_OK(pins_test::WaitForCondition(
+      CheckStateDbPortIndexTableExists, absl::Minutes(2),
+      *GetParam().ssh_client, testbed.Sut().ChassisName(), interface_names));
 
   for (const auto& [interface_name, unused] : sflow_enabled_interfaces) {
     ASSERT_OK_AND_ASSIGN(packets_sampled_per_interface[interface_name],
@@ -3281,7 +3278,6 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
 TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
-  testbed.Environment().SetTestCaseID("7f765661-840e-4913-b210-8bbf9d5a0e8f");
 
   const absl::string_view kSrcIp6Address = "2001:db8:0:12::1";
   const int packets_num = 3000;
