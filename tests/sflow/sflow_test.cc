@@ -2471,6 +2471,11 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
   pins_test::Testbed testbed_variant;
   testbed_variant.emplace<thinkit::MirrorTestbed*>(&testbed);
   ASSERT_OK(pins_test::NsfReboot(testbed_variant));
+  ASSERT_OK(
+      pins_test::WaitForNsfReboot(testbed_variant, *GetParam().ssh_client));
+  ASSERT_OK(pins_test::ValidateTestbedState(
+      /*version=*/"", testbed_variant, *GetParam().ssh_client,
+      /*gnmi_config=*/std::nullopt));
   // Wait until all sFlow gNMI states are converged.
   ASSERT_OK(pins_test::WaitForCondition(
       VerifySflowStatesConverged, absl::Seconds(60), sut_gnmi_stub_.get(),
@@ -3193,6 +3198,9 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
       VerifySflowStatesConverged, absl::Minutes(2), sut_gnmi_stub_.get(),
       agent_address_, kInbandSamplingRate, kSampleHeaderSize,
       collector_address_and_port, sflow_enabled_interfaces));
+  ASSERT_OK(pins_test::WaitForCondition(
+      CheckStateDbPortIndexTableExists, absl::Minutes(2),
+      *GetParam().ssh_client, testbed.Sut().ChassisName(), interface_names));
 
   for (const auto& [interface_name, unused] : sflow_enabled_interfaces) {
     ASSERT_OK_AND_ASSIGN(packets_sampled_per_interface[interface_name],

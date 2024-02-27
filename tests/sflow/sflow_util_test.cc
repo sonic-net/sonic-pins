@@ -14,20 +14,25 @@
 
 #include "tests/sflow/sflow_util.h"
 
+#include <string>
+#include <vector>
+
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "proto/gnmi/gnmi_mock.grpc.pb.h"
+#include "thinkit/mock_ssh_client.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins {
 namespace {
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
+using ::testing::AllOf;
 using ::testing::DoAll;
 using ::testing::Eq;
 using ::testing::HasSubstr;
@@ -1078,6 +1083,52 @@ TEST(IpAddressTest, SameIpv6AddressDifferentFormat4) {
   EXPECT_THAT(IsSameIpAddressStr("2607:f001:acf::",
                                  "2607:f001:0acf:0000:0000:0000:0000:0000"),
               IsOkAndHolds(true));
+}
+
+TEST(PortIndexTest, SshCommandFailCheckFail) {
+  thinkit::MockSSHClient mock_ssh_client;
+  ON_CALL(mock_ssh_client, RunCommand)
+      .WillByDefault(Return(absl::InternalError("No ssh client")));
+  const std::vector<std::string> port_names = {"Ethernet1/1/1",
+                                               "Ethernet1/1/2"};
+  EXPECT_THAT(
+      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
+      StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(PortIndexTest, SshCommandNoNilCheckSuccess) {
+  thinkit::MockSSHClient mock_ssh_client;
+  ON_CALL(mock_ssh_client, RunCommand)
+      .WillByDefault(Return(R"(PORT_INDEX_TABLE|Ethernet1/10/1
+PORT_INDEX_TABLE|Ethernet1/9/1
+PORT_INDEX_TABLE|Ethernet1/31/1
+PORT_INDEX_TABLE|Ethernet1/2/5
+PORT_INDEX_TABLE|Ethernet1/13/1)"));
+  const std::vector<std::string> port_names = {
+      "Ethernet1/10/1", "Ethernet1/31/1", "Ethernet1/13/1"};
+  EXPECT_OK(CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x",
+                                             port_names));
+}
+
+TEST(PortIndexTest, SshCommandNilCheckFail) {
+  thinkit::MockSSHClient mock_ssh_client;
+  ON_CALL(mock_ssh_client, RunCommand).WillByDefault(Return("nil"));
+  const std::vector<std::string> port_names = {"Ethernet1/1/1",
+                                               "Ethernet1/1/2"};
+  EXPECT_THAT(
+      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
+      StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(PortIndexTest, SshCommandEmptyCheckFail) {
+  thinkit::MockSSHClient mock_ssh_client;
+  ON_CALL(mock_ssh_client, RunCommand).WillByDefault(Return(""));
+  const std::vector<std::string> port_names = {"Ethernet1/1/1",
+                                               "Ethernet1/1/2"};
+  EXPECT_THAT(
+      CheckStateDbPortIndexTableExists(mock_ssh_client, "switch_x", port_names),
+      StatusIs(absl::StatusCode::kFailedPrecondition,
+               AllOf(HasSubstr("Ethernet1/1/1"), HasSubstr("Ethernet1/1/2"))));
 }
 
 }  // namespace

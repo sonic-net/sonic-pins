@@ -16,17 +16,22 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
@@ -36,6 +41,7 @@
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "re2/re2.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins {
 namespace {
@@ -566,6 +572,41 @@ absl::StatusOr<int> GetSflowCollectorPort(absl::string_view gnmi_config) {
         json_yang::DumpJson(collector_json["config"])));
   }
   return collector_json["config"]["port"];
+}
+
+absl::Status
+CheckStateDbPortIndexTableExists(thinkit::SSHClient &ssh_client,
+                                 absl::string_view device_name,
+                                 absl::Span<const std::string> interfaces) {
+  ASSIGN_OR_RETURN(
+      std::string ssh_result,
+      ssh_client.RunCommand(
+          device_name,
+          /*command=*/"/usr/tools/bin/redis-cli -n 6 keys PORT_INDEX_TABLE*",
+          /*timeout=*/absl::Seconds(5)));
+  LOG(INFO) << "ssh_result: " << ssh_result;
+  absl::flat_hash_set<std::string> port_index_table_interfaces;
+  for (absl::string_view interface_str :
+       absl::StrSplit(ssh_result, "PORT_INDEX_TABLE")) {
+    interface_str = absl::StripAsciiWhitespace(interface_str);
+    auto pos = interface_str.find("Ethernet");
+    if (pos == std::string::npos) {
+      continue;
+    }
+    port_index_table_interfaces.insert(std::string(interface_str.substr(pos)));
+  }
+  std::vector<std::string> missing_interfaces;
+  for (const auto &interface : interfaces) {
+    if (!port_index_table_interfaces.contains(interface)) {
+      missing_interfaces.push_back(interface);
+    }
+  }
+  if (missing_interfaces.empty()) {
+    return absl::OkStatus();
+  }
+  return absl::FailedPreconditionError(
+      absl::StrCat("Failed to find PORT_INDEX_TABLE for interface ",
+                   absl::StrJoin(missing_interfaces, ", ")));
 }
 
 }  // namespace gpins

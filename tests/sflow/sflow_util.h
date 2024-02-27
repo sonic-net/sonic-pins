@@ -24,7 +24,9 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "thinkit/ssh_client.h"
 
 namespace pins {
 
@@ -142,6 +144,12 @@ absl::StatusOr<bool> IsSameIpAddressStr(const std::string& ip1,
 // Returns the collector port from `gnmi_config` collector config first
 // collector. Returns 6343 if no collector config is set.
 absl::StatusOr<int> GetSflowCollectorPort(absl::string_view gnmi_config);
+
+// Checks if state db port index table exists for `interfaces`.
+absl::Status
+CheckStateDbPortIndexTableExists(thinkit::SSHClient &ssh_client,
+                                 absl::string_view device_name,
+                                 absl::Span<const std::string> interfaces);
 
 }  // namespace gpins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
