@@ -125,7 +125,6 @@ tables {
     id: 33554507
     name: "ingress.tunnel_termination.ipv6_tunnel_termination_table"
     alias: "ipv6_tunnel_termination_table"
-    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }
   match_fields {

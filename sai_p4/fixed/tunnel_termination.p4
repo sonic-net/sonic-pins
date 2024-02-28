@@ -37,9 +37,6 @@ control tunnel_termination(inout headers_t headers,
 
   // Models SAI_TUNNEL_TERM_TABLE.
   // Currently, we only model IPv6 decap of IP-in-IP packets
-  // TODO: Remove `@unsupported` annotation once the table is
-  // supported by the switch stack.
-  @unsupported
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(IPV6_TUNNEL_TERMINATION_TABLE_ID)
   table ipv6_tunnel_termination_table {
