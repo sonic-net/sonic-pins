@@ -535,6 +535,10 @@ tables {
     annotations: "@proto_id(5)"
   }
   action_refs {
+    id: 16777492
+    annotations: "@proto_id(6)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1273,6 +1277,23 @@ actions {
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
     annotations: "@sai_action(SAI_PACKET_ACTION_DENY)"
+  }
+}
+actions {
+  preamble {
+    id: 16777492
+    name: "ingress.acl_ingress.redirect_to_l2mc_group"
+    alias: "redirect_to_l2mc_group"
+    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "multicast_group_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+    bitwidth: 16
   }
 }
 actions {
