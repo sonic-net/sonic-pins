@@ -61,6 +61,9 @@ proto_library(
 proto_library(
     name = "coverage_goal_proto",
     srcs = ["coverage_goal.proto"],
+    deps = [
+        ":packet_synthesis_criteria_proto",
+    ],
 )
 
 cc_proto_library(
