@@ -29,6 +29,10 @@ constexpr int kArpHeaderBitwidth = 28 * 8;
 constexpr int kIcmpHeaderBitwidth = 8 * 8;
 constexpr int kVlanHeaderBitwidth = 32;
 constexpr int kRfc2784GreHeaderWithoutOptionalsBitwidth = 32;
+constexpr int kSaiP4BMv2PacketInHeaderBitwidth = 24;
+constexpr int kIpfixHeaderBitwidth = 128;
+constexpr int kPsampHeaderBitwidth = 224;
+constexpr int kPtpHeaderBitwidth = 272;
 
 // Ethernet constants.
 constexpr int kEthernetEthertypeBitwidth = 16;
@@ -91,13 +95,11 @@ constexpr int kGreReserved1Bitwidth = 16;
 constexpr int kMinNumBytesInEthernetPayload = 46;
 
 // SAI P4 packet_in header on BMv2 targets constants.
-constexpr int kSaiP4BMv2PacketInHeaderBitwidth = 24;
 constexpr int kSaiP4BMv2PacketInIngressPortBitwidth = 9;
 constexpr int kSaiP4BMv2PacketInTargetEgressPortBitwidth = 9;
 constexpr int kSaiP4BMv2PacketInUnusedPadBitwidth = 6;
 
 // IPFIX constants.
-constexpr int kIpfixHeaderBitwidth = 128;
 constexpr int kIpfixVersionBitwidth = 16;
 constexpr int kIpfixLengthBitwidth = 16;
 constexpr int kIpfixExportTimeBitwidth = 32;
@@ -105,7 +107,6 @@ constexpr int kIpfixSequenceNumberBitwidth = 32;
 constexpr int kIpfixObservationDomainIdBitwidth = 32;
 
 // PSAMP constants
-constexpr int kPsampHeaderBitwidth = 224;
 constexpr int kPsampTemplateIdBitwidth = 16;
 constexpr int kPsampLengthBitwidth = 16;
 constexpr int kPsampObservationTimeBitwidth = 64;
@@ -118,6 +119,23 @@ constexpr int kPsampUserMetaFieldBitwidth = 16;
 constexpr int kPsampDlbIdBitwidth = 8;
 constexpr int kPsampVariableLengthBitwidth = 8;
 constexpr int kPsampPacketSampledLengthBitwidth = 16;
+
+// PTP constants
+constexpr int kPtpTransportSpecificBitwidth = 4;
+constexpr int kPtpMessageTypeBitwidth = 4;
+constexpr int kPtpReserved0Bitwidth = 4;
+constexpr int kPtpVersionPtpBitwidth = 4;
+constexpr int kPtpMessageLengthBitwidth = 16;
+constexpr int kPtpDomainNumberBitwidth = 8;
+constexpr int kPtpReserved1Bitwidth = 8;
+constexpr int kPtpFlagsBitwidth = 16;
+constexpr int kPtpCorrectionFieldBitwidth = 64;
+constexpr int kPtpReserved2Bitwidth = 32;
+constexpr int kPtpSourcePortIdentityBitwidth = 80;
+constexpr int kPtpSequenceIdBitwidth = 16;
+constexpr int kPtpControlFieldBitwidth = 8;
+constexpr int kPtpLogMessageIntervalBitwidth = 8;
+
 } // namespace packetlib
 
 #endif // GOOGLE_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_

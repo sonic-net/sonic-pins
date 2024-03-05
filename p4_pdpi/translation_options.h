@@ -28,6 +28,11 @@ struct TranslationOptions {
   // `@unsupported` annotation. Useful during early-stage testing.
   bool allow_unsupported = false;
 
+  // During validation no error will be thrown
+  // for nodes which have a @format annotation that specifies an other format
+  // (for example, IPv4 or MAC).
+  bool allow_arbitrary_format = false;
+
   template <typename Sink>
   friend void AbslStringify(Sink &sink, TranslationOptions options) {
     absl::Format(
