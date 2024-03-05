@@ -169,7 +169,29 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
 }
 
 absl::Status OtgHelper::StopTraffic(Testbed& testbed) {
-  return absl::UnimplementedError("Stopping traffic is not implemented.");
+  return std::visit(
+      gutil::Overload{
+          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+              -> absl::Status {
+            otg::Openapi::StubInterface* stub = testbed->GetTrafficClient();
+            otg::SetControlStateRequest request;
+            otg::SetControlStateResponse response;
+            ::grpc::ClientContext context;
+            request.mutable_control_state()->set_choice(
+                otg::ControlState::Choice::traffic);
+            request.mutable_control_state()->mutable_traffic()->set_choice(
+                otg::StateTraffic::Choice::flow_transmit);
+            request.mutable_control_state()
+                ->mutable_traffic()
+                ->mutable_flow_transmit()
+                ->set_state(otg::StateTrafficFlowTransmit::State::stop);
+            return gutil::GrpcStatusToAbslStatus(
+                stub->SetControlState(&context, request, &response));
+          },
+          [&](thinkit::MirrorTestbed* testbed) {
+            return absl::UnimplementedError("MirrorTestbed not implemented");
+          }},
+      testbed);
 }
 
 absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
