@@ -2464,9 +2464,8 @@ TEST_P(SflowRebootTestFixture, ChangeCollectorConfigOnNsfReboot) {
   ASSERT_OK(pins_test::NsfReboot(testbed_variant));
   ASSERT_OK(
       pins_test::WaitForNsfReboot(testbed_variant, *GetParam().ssh_client));
-  ASSERT_OK(pins_test::ValidateTestbedState(
-      /*version=*/"", testbed_variant, *GetParam().ssh_client,
-      /*gnmi_config=*/std::nullopt));
+  ASSERT_OK(
+      pins_test::ValidateTestbedState(testbed_variant, *GetParam().ssh_client));
   // Wait until all sFlow gNMI states are converged.
   ASSERT_OK(pins_test::WaitForCondition(
       VerifySflowStatesConverged, absl::Seconds(60), sut_gnmi_stub_.get(),
