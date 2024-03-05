@@ -102,11 +102,9 @@ absl::StatusOr<std::string> GetNameOfField(const IrField &field);
 // Returns error if an unknown or invalid `IrBuiltInActionField` is provided.
 absl::StatusOr<std::string> GetNameOfAction(const IrActionField &field);
 
-// Returns true if 'field' is optional. Only IrP4MatchFields can be optional.
+// Returns true if `field` is optional. Only IrP4MatchFields can be optional.
 // All other fields (including unset fields) will return false.
 bool FieldIsOptional(const IrField &field);
-bool FieldIsOptional(const IrMatchField &match_field);
-bool FieldIsOptional(const IrP4MatchField &p4_match_field);
 
 } // namespace pdpi
 

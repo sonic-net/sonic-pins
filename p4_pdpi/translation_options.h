@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_INFRA_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_
-#define PINS_INFRA_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_
+#ifndef PINS_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_
+#define PINS_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_
 
 #include "absl/strings/str_format.h"
 
@@ -27,6 +27,11 @@ struct TranslationOptions {
   // Allow translation of tables, match fields, and actions with an
   // `@unsupported` annotation. Useful during early-stage testing.
   bool allow_unsupported = false;
+
+  // During validation no error will be thrown
+  // for nodes which have a @format annotation that specifies an other format
+  // (for example, IPv4 or MAC).
+  bool allow_arbitrary_format = false;
 
   template <typename Sink>
   friend void AbslStringify(Sink &sink, TranslationOptions options) {
@@ -69,4 +74,4 @@ struct TranslationOptions {
 
 } // namespace pdpi
 
-#endif // PINS_INFRA_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_
+#endif // PINS_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_

@@ -891,8 +891,8 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
       }
 
       match_entry.set_field_id(match_field.id());
-      const absl::Status &valid =
-          ValidateIrValueFormat(ir_match.exact(), ir_match_definition.format());
+      const absl::Status &valid = ValidateIrValueFormat(
+          ir_match.exact(), ir_match_definition.format(), options);
 
       if (!valid.ok()) {
         invalid_reasons.push_back(absl::StrCat(kNewBullet, valid.message()));
@@ -929,7 +929,7 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
       }
 
       const absl::Status &valid = ValidateIrValueFormat(
-          ir_match.lpm().value(), ir_match_definition.format());
+          ir_match.lpm().value(), ir_match_definition.format(), options);
       if (!valid.ok()) {
         invalid_reasons.push_back(absl::StrCat(kNewBullet, valid.message()));
         break;
@@ -983,14 +983,14 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
       }
 
       const absl::Status &valid_value = ValidateIrValueFormat(
-          ir_match.ternary().value(), ir_match_definition.format());
+          ir_match.ternary().value(), ir_match_definition.format(), options);
       if (!valid_value.ok()) {
         invalid_reasons.push_back(
             absl::StrCat(kNewBullet, valid_value.message()));
         break;
       }
       const absl::Status &valid_mask = ValidateIrValueFormat(
-          ir_match.ternary().mask(), ir_match_definition.format());
+          ir_match.ternary().mask(), ir_match_definition.format(), options);
       if (!valid_mask.ok()) {
         invalid_reasons.push_back(
             absl::StrCat(kNewBullet, valid_mask.message()));
@@ -1048,7 +1048,7 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
 
       match_entry.set_field_id(match_field.id());
       const absl::Status &valid = ValidateIrValueFormat(
-          ir_match.optional().value(), ir_match_definition.format());
+          ir_match.optional().value(), ir_match_definition.format(), options);
       if (!valid.ok()) {
         invalid_reasons.push_back(absl::StrCat(kNewBullet, valid.message()));
         break;
@@ -1136,8 +1136,8 @@ StatusOr<p4::v1::Action> IrActionInvocationToPi(
     const auto *ir_param_definition = *status_or_ir_param_definition;
     p4::v1::Action_Param *param_entry = action.add_params();
     param_entry->set_param_id(ir_param_definition->param().id());
-    const absl::Status &valid =
-        ValidateIrValueFormat(param.value(), ir_param_definition->format());
+    const absl::Status &valid = ValidateIrValueFormat(
+        param.value(), ir_param_definition->format(), options);
     if (!valid.ok()) {
       invalid_reasons.push_back(
           GenerateReason(ParamName(param.name()), valid.message()));
@@ -1271,8 +1271,8 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
 
     p4::v1::PacketMetadata pi_metadata;
     pi_metadata.set_metadata_id(metadata_definition.metadata().id());
-    const absl::Status &valid =
-        ValidateIrValueFormat(metadata.value(), metadata_definition.format());
+    const absl::Status &valid = ValidateIrValueFormat(
+        metadata.value(), metadata_definition.format(), options);
     if (!valid.ok()) {
       invalid_reasons.push_back(
           GenerateReason(MetadataName(name), valid.message()));
