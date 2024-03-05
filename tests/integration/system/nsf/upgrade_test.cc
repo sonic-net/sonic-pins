@@ -45,7 +45,7 @@ ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
 
 namespace pins_test {
 
-using ::p4::v1::Entity;
+using ::p4::v1::ReadResponse;
 
 // Since the validation is while the traffic is in progress, error margin needs
 // to be defined.
@@ -82,8 +82,10 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // P4 snapshot before programming flows and starting the traffic.
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
                "the traffic";
-  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot1,
-                   TakeP4FlowSnapshot(testbed_));
+  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot1, TakeP4FlowSnapshot(testbed_));
+  RETURN_IF_ERROR(
+      SaveP4FlowSnapshot(testbed_, p4flow_snapshot1,
+                         "p4flow_snapshot1_before_programming_flows.txt"));
 
   // Program all the flows.
   LOG(INFO) << "Programming flows before starting the traffic";
@@ -101,8 +103,10 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // P4 snapshot before Upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot before Upgrade and NSF reboot";
-  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot2,
-                   TakeP4FlowSnapshot(testbed_));
+  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot2, TakeP4FlowSnapshot(testbed_));
+  RETURN_IF_ERROR(
+      SaveP4FlowSnapshot(testbed_, p4flow_snapshot2,
+                         "p4flow_snapshot2_before_upgrade_and_nsf.txt"));
 
   LOG(INFO) << "Starting NSF Upgrade";
   // Copy image to the switch for installation.
@@ -130,8 +134,10 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after Upgrade and NSF reboot";
-  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot3,
-                   TakeP4FlowSnapshot(testbed_));
+  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot3, TakeP4FlowSnapshot(testbed_));
+  RETURN_IF_ERROR(
+      SaveP4FlowSnapshot(testbed_, p4flow_snapshot3,
+                         "p4flow_snapshot3_after_upgrade_and_nsf.txt"));
 
   // Push the new config and validate.
   RETURN_IF_ERROR(PushConfig(next_image_config, testbed_, *ssh_client_));
@@ -167,15 +173,16 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // P4 snapshot after cleaning up flows.
   LOG(INFO) << "Capturing P4 snapshot after cleaning up flows";
-  ASSIGN_OR_RETURN(std::vector<Entity> p4flow_snapshot4,
-                   TakeP4FlowSnapshot(testbed_));
+  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot4, TakeP4FlowSnapshot(testbed_));
+  RETURN_IF_ERROR(SaveP4FlowSnapshot(
+      testbed_, p4flow_snapshot4, "p4flow_snapshot4_after_clearing_flows.txt"));
 
   LOG(INFO) << "Comparing P4 snapshots - Before Programming Flows Vs After "
                "Clearing Flows";
-  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3));
+  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4));
   LOG(INFO) << "Comparing P4 snapshots - Before Upgrade + NSF Reboot Vs. After "
                "Upgrade + NSF Reboot";
-  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4));
+  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3));
   LOG(INFO) << "NSF Upgrade from: " << curr_image_config.image_label
             << " to: " << next_image_config.image_label << " is complete.";
   return absl::OkStatus();
