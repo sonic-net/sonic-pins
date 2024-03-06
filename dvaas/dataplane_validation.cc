@@ -185,7 +185,7 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   // Retrieve loopback info from gNMI configuration and create table entries.
   ASSIGN_OR_RETURN(
       pdpi::IrEntities loopback_table_entries,
-      sai::CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+      backend.CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
 
   // Read P4Info and control plane entities from SUT, sorted for determinism.
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
@@ -323,9 +323,21 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
       LOG(INFO) << "Storing packet trace for the first failed test packet";
       const SwitchInput& switch_input =
           test_outcome.test_run().test_vector().input();
-      ASSIGN_OR_RETURN(auto packet_traces,
-                       backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
-                                                 entities, switch_input));
+      // Read P4Info and control plane entities from SUT, sorted for
+      // determinism.
+      ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
+                       pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+      // Retrieve loopback info from gNMI configuration and create table
+      // entries.
+      ASSIGN_OR_RETURN(
+          pdpi::IrEntities loopback_table_entries,
+          backend_->CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+
+      v1model_augmented_entities.MergeFrom(loopback_table_entries);
+      ASSIGN_OR_RETURN(
+          auto packet_traces,
+          backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
+                                    v1model_augmented_entities, switch_input));
       const std::string packet_hex =
           test_outcome.test_run().test_vector().input().packet().hex();
 
@@ -335,18 +347,21 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
             absl::StrCat("Packet trace not found for packet ", packet_hex));
       }
 
-      std::string bmv2_textual_log =
-          packet_traces[packet_hex][0].bmv2_textual_log();
-
+      std::string summarized_packet_trace;
+      for (auto& table_apply : packet_traces[packet_hex][0].table_apply()) {
+        absl::StrAppend(&summarized_packet_trace,
+                        table_apply.hit_or_miss_textual_log(), "\n\n");
+      }
       test_outcome.mutable_test_result()->mutable_failure()->set_description(
-          absl::StrCat(test_outcome.test_result().failure().description(),
-                       "\n== P4 SIMULATION PACKET TRACE "
-                       "==================================================\n",
-                       bmv2_textual_log));
+          absl::StrCat(
+              test_outcome.test_result().failure().description(),
+              "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY "
+              "=========================\n",
+              summarized_packet_trace));
 
       RETURN_IF_ERROR(writer->AppendToTestArtifact(
           "packet_" + packet_hex.substr(packet_hex.length() - 8) + ".trace.txt",
-          bmv2_textual_log));
+          packet_traces[packet_hex][0].bmv2_textual_log()));
       break;
     }
   }
