@@ -495,6 +495,17 @@ absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
                        gutil::FindOrStatus(
                            config.GetIrP4Info().tables_by_name(), table_name));
       fully_qualified_name = table.preamble().name();
+
+      if (table.is_unsupported()) {
+        LOG(WARNING)
+            << table_name
+            << " is currently unsupported and will not be fuzzed. DO NOT add "
+               "aux entries until the table is supported. If the table was "
+               "previously supported and will not be supported in the near "
+               "future, consider removing the aux entry. If support will be "
+               "added again soon disregard this message.";
+        continue;
+      }
     }
 
     if (IsDisabledForFuzzing(config, fully_qualified_name)) {

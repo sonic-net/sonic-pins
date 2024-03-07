@@ -29,6 +29,8 @@ cc_library(
         "//tests/lib:switch_test_setup_helpers",
         "//thinkit:mirror_testbed",
         "//thinkit:mirror_testbed_fixture",
+        "//thinkit:switch",
+        "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest",
     ],
