@@ -233,9 +233,7 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   flow_programming_thread.join();
   nsf_reboot_thread.join();
   ASSERT_OK(nsf_reboot_status) << "Failed to initiate NSF reboot";
-  // TODO: Replace WaitForReboot with WaitForNsfReboot once the
-  // RebootStatus API related issue is fixed.
-  ASSERT_OK(WaitForReboot(testbed_, *ssh_client_));
+  ASSERT_OK(WaitForNsfReboot(testbed_, *ssh_client_));
   ASSERT_OK(ValidateTestbedState(testbed_, *ssh_client_,
                                  &modified_image_config_param));
   ASSERT_OK(StoreSutDebugArtifacts(

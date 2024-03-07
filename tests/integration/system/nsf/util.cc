@@ -14,8 +14,6 @@
 
 #include "tests/integration/system/nsf/util.h"
 
-#include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -28,7 +26,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
@@ -358,6 +355,11 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
 
 absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
                               bool check_interfaces_up) {
+  // TODO: b/327514412 - Remove WaitForReboot once the RebootStatus API related
+  // issue is fixed.
+  LOG(WARNING) << "Using SSH instead of RebootStatus to validate NSF shutdown "
+                  "and bootup.";
+  return WaitForReboot(testbed, ssh_client, check_interfaces_up);
   LOG(INFO) << "Waiting for switch to go down and come back up post NSF reboot";
   // Wait for switch to do NSF reboot.
   thinkit::Switch& sut = GetSut(testbed);
