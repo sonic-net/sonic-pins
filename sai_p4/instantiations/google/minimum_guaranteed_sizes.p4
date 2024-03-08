@@ -98,6 +98,7 @@
 #endif
 
 #define ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 127
+#define ACL_EGRESS_DHCP_TO_HOST_TABLE_MINIMUM_GUARANTEED_SIZE 256
 
 // 1 entry for LLDP, 1 entry for ND, and 6 entries for traceroute: TTL 0,1,2 for
 // IPv4 and IPv6
