@@ -82,7 +82,8 @@ absl::Status SaveProtoToFile(absl::string_view filename,
   // Verifies that the version of the library that we linked against is
   // compatible with the version of the headers we compiled against.
   GOOGLE_PROTOBUF_VERIFY_VERSION;
-  int fd = open(std::string(filename).c_str(), O_WRONLY | O_CREAT, 0644);
+  int fd =
+      open(std::string(filename).c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd < 0) {
     return InvalidArgumentErrorBuilder()
            << "Error opening the file " << filename;
@@ -126,6 +127,14 @@ bool ProtoEqual(const google::protobuf::Message &message1,
   return differ.Compare(message1, message2);
 }
 
+// Calls `ProtoEqual` with default `MessageDifferencer`.
+bool ProtoEqual(const google::protobuf::Message &message1,
+                const google::protobuf::Message &message2) {
+  google::protobuf::util::MessageDifferencer differ =
+      google::protobuf::util::MessageDifferencer();
+  return ProtoEqual(message1, message2, differ);
+}
+
 absl::StatusOr<std::string> GetOneOfFieldName(
     const google::protobuf::Message &message, const std::string &oneof_name) {
   const auto *oneof_descriptor =
@@ -136,7 +145,7 @@ absl::StatusOr<std::string> GetOneOfFieldName(
     return gutil::NotFoundErrorBuilder()
            << "Oneof field \"" << oneof_name << "\" is not set";
   }
-  return field->name();
+  return std::string(field->name());
 }
 
 std::string PrintTextProto(const google::protobuf::Message &message) {
