@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <thread>  // NOLINT
 #include <utility>
 
 #include "absl/status/status.h"
@@ -48,6 +49,7 @@ using gutil::StatusIs;
 using P4RuntimeStream =
     ::grpc::ClientReaderWriter<p4::v1::StreamMessageRequest,
                                p4::v1::StreamMessageResponse>;
+constexpr absl::Duration kFreezeDeadline = absl::Seconds(5);
 
 p4::v1::Uint128 ElectionId(int value) {
   p4::v1::Uint128 election_id;
@@ -730,6 +732,45 @@ TEST_F(WarmBootControllerRpcTest, StreamRpcSucceedsAfterUnfreeze) {
                                      *backup_stream, backup_request));
 
   EXPECT_EQ(response.mutable_error()->canonical_code(), grpc::StatusCode::OK);
+}
+
+TEST_F(WarmBootControllerRpcTest, P4rtFreezeInReasonableTime) {
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      p4rt_session_.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)));
+
+  // Create a thread to send RPC request to P4RT server continuously.
+  std::thread rpc_thread = std::thread(
+      [](pdpi::P4RuntimeSession* p4rt_session) {
+        while (true) {
+          p4::v1::WriteRequest write_request;
+          write_request.set_device_id(p4rt_session->DeviceId());
+          write_request.set_role(p4rt_session->Role());
+          *write_request.mutable_election_id() = p4rt_session->ElectionId();
+
+          // Verify that controller RPC is rejected after warm-boot freeze.
+          absl::Status controller_rpc_status =
+              p4rt_session->Write(write_request);
+          if (!controller_rpc_status.ok()) {
+            EXPECT_THAT(controller_rpc_status,
+                        StatusIs(absl::StatusCode::kUnavailable,
+                                 "P4RT is performing warm reboot."));
+            break;
+          }
+        }
+      },
+      p4rt_session_.get());
+
+  absl::Time start_time = absl::Now();
+  // Send freeze notification.
+  ASSERT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+  EXPECT_LT(absl::Now() - start_time, kFreezeDeadline);
+
+  rpc_thread.join();
 }
 
 }  // namespace

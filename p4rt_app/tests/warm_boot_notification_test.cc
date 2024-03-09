@@ -130,10 +130,45 @@ TEST_F(WarmBootNotificationTest,
   EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::WarmStartState::QUIESCENT);
 
+  // Set warm boot state to RECONCILED.
   p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
       swss::WarmStart::WarmStartState::RECONCILED);
   EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::WarmStartState::RECONCILED);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+}
+
+TEST_F(WarmBootNotificationTest,
+       WarmBootStateFromFrozenToCompletedAfterUnFreeze) {
+  // Freeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  // Verify the warm boot state is QUIESCENT.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
+
+  // Set warm boot state to FROZEN.
+  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
+      swss::WarmStart::WarmStartState::FROZEN);
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::FROZEN);
+
+  // Unfreeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kUnfreeze));
+}
+
+TEST_F(WarmBootNotificationTest,
+       WarmBootStateFromQuiescentToCompletedAfterUnFreeze) {
+  // Freeze P4RT
+  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
+      swss::WarmStart::WarmBootNotification::kFreeze));
+  // Verify the warm boot state is QUIESCENT.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
+            swss::WarmStart::WarmStartState::QUIESCENT);
 
   // Unfreeze P4RT
   EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
