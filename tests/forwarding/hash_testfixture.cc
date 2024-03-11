@@ -26,7 +26,6 @@
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/node_hash_map.h"
-#include "absl/functional/bind_front.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/random/seed_sequences.h"
@@ -43,10 +42,8 @@
 #include "absl/time/time.h"
 #include "absl/utility/utility.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // IWYU pragma: keep
+#include "gutil/status_matchers.h" // IWYU pragma: keep
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -70,6 +67,8 @@
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 
@@ -253,37 +252,26 @@ void InitializeTestbed(thinkit::MirrorTestbed &testbed,
       pdpi::InstallPiTableEntry(control_p4_session.get(), punt_all_pi_entry));
 }
 
-// Receive and record a single packet.
-void ReceivePacket(thinkit::MirrorTestbed *testbed,
-                   const pdpi::IrP4Info *ir_p4info,
-                   p4::v1::StreamMessageResponse pi_response,
+bool ReceivePacket(const pdpi::IrP4Info &ir_p4info,
+                   const p4::v1::StreamMessageResponse &pi_response,
                    HashTest::TestData *test_data) {
   sai::StreamMessageResponse pd_response;
-  ASSERT_OK(
-      pdpi::PiStreamMessageResponseToPd(*ir_p4info, pi_response, &pd_response))
-      << " PacketIn PI to PD failed: ";
+  if (auto status = pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
+                                                      &pd_response);
+      !status.ok()) {
+    ADD_FAILURE() << " PacketIn PI to PD failed: " << status;
+    return false;
+  }
   if (!pd_response.has_packet()) {
     LOG(WARNING) << "Ignoring unexpected stream message for packet in: "
                  << pd_response.DebugString();
+    return false;
   }
 
   absl::string_view raw_packet = pd_response.packet().payload();
   packetlib::Packet packet = packetlib::ParsePacket(raw_packet);
-  test_data->AddPacket(pd_response.packet().metadata().target_egress_port(),
-                       std::move(packet));
-}
-
-// Thread function to receive and record test packets.
-void ReceivePacketsUntilStreamIsClosed(
-    thinkit::MirrorTestbed *testbed, const pdpi::IrP4Info *ir_p4info,
-    pdpi::P4RuntimeSession *control_p4_session, HashTest::TestData *test_data) {
-  p4::v1::StreamMessageResponse pi_response;
-  // The only way to break out of this loop is for the stream channel to
-  // be closed. gRPC does not support selecting on both stream Read and
-  // fiber Cancel.
-  while (control_p4_session->StreamChannelRead(pi_response)) {
-    ReceivePacket(testbed, ir_p4info, pi_response, test_data);
-  }
+  return test_data->AddPacket(
+      pd_response.packet().metadata().target_egress_port(), std::move(packet));
 }
 
 absl::Status SendPacket(const pdpi::IrP4Info &ir_p4info,
@@ -455,18 +443,20 @@ const std::vector<std::string> &NonHashingTestConfigNames() {
   return *kConfigNames;
 }
 
-void HashTest::TestData::AddPacket(absl::string_view egress_port,
+bool HashTest::TestData::AddPacket(absl::string_view egress_port,
                                    packetlib::Packet packet) {
   absl::StatusOr<int> status_or_index = GetPacketIndex(packet);
-  if (status_or_index.ok()) {
-    absl::MutexLock lock(&mutex_);
-    packets_by_port_[egress_port].insert(*status_or_index);
-    received_packets_.push_back({std::string(egress_port), absl::move(packet)});
-  } else {
+  if (!status_or_index.ok()) {
     // Ignore packets that don't match.
     VLOG(1) << "Received unexpected packet: " << packet.ShortDebugString()
             << ". " << status_or_index.status();
+    return false;
   }
+
+  absl::MutexLock lock(&mutex_);
+  packets_by_port_[egress_port].insert(*status_or_index);
+  received_packets_.push_back({std::string(egress_port), std::move(packet)});
+  return true;
 }
 
 absl::Status HashTest::TestData::Log(thinkit::TestEnvironment &environment,
@@ -609,10 +599,6 @@ absl::Status HashTest::SendAndReceivePackets(
       std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
       pdpi::P4RuntimeSession::Create(GetMirrorTestbed().ControlSwitch()));
 
-  std::thread receive_packet_thread(
-      absl::bind_front(ReceivePacketsUntilStreamIsClosed, &GetMirrorTestbed(),
-                       &ir_p4info, control_p4_session.get(), &test_data));
-
   for (const auto &packet : packets) {
     RETURN_IF_ERROR(
         SendPacket(ir_p4info, packet, *control_p4_session, ingress_port_id));
@@ -621,11 +607,14 @@ absl::Status HashTest::SendAndReceivePackets(
              absl::StrCat(record_prefix, "_injected_packets"));
 
   // Wait for all the packets to arrive.
-  if (test_data.PacketCount() > 0) {
-    absl::Time deadline = absl::Now() + absl::Seconds(30);
-    while (test_data.PacketCount() < packets.size() && absl::Now() < deadline) {
-      absl::SleepFor(absl::Seconds(1));
-    }
+  if (absl::Status packet_status =
+          control_p4_session->HandleNextNStreamMessages(
+              [&](const p4::v1::StreamMessageResponse &message) {
+                return ReceivePacket(ir_p4info, message, &test_data);
+              },
+              packets.size(), absl::Minutes(2));
+      !packet_status.ok()) {
+    LOG(WARNING) << packet_status;
   }
   if (auto result =
           test_data.Log(GetMirrorTestbed().Environment(),
@@ -659,7 +648,6 @@ absl::Status HashTest::SendAndReceivePackets(
     errors.push_back(absl::StrCat("Failed control_p4_session->Finish(): ",
                                   finished.message()));
   }
-  receive_packet_thread.join();
   if (!missing_packets.empty()) {
     std::vector<packetlib::Packet> missing_packet_list;
     missing_packet_list.reserve(missing_packets.size());

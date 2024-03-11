@@ -355,11 +355,6 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
 
 absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
                               bool check_interfaces_up) {
-  // TODO: b/327514412 - Remove WaitForReboot once the RebootStatus API related
-  // issue is fixed.
-  LOG(WARNING) << "Using SSH instead of RebootStatus to validate NSF shutdown "
-                  "and bootup.";
-  return WaitForReboot(testbed, ssh_client, check_interfaces_up);
   LOG(INFO) << "Waiting for switch to go down and come back up post NSF reboot";
   // Wait for switch to do NSF reboot.
   thinkit::Switch& sut = GetSut(testbed);
