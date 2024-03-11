@@ -14,13 +14,16 @@
 
 #include "tests/forwarding/util.h"
 
-#include <algorithm>
-#include <sstream>
+#include <functional>
+#include <optional>
+#include <string>
 
+#include "absl/status/status.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/tools/packetio_tools.h"
 
 namespace pins {
@@ -60,11 +63,17 @@ absl::Status InjectEgressPacket(const std::string& port,
   // Rate limit the packets, if specified.
   if (packet_delay.has_value()) absl::SleepFor(*packet_delay);
 
-  return p4rt->StreamChannelWrite(request)
-             ? absl::OkStatus()
-             : gutil::InternalErrorBuilder()
-                   << "Failed to write stream message request: "
-                   << request.ShortDebugString();
+  if (p4rt->StreamChannelWrite(request)) return absl::OkStatus();
+
+  // If the write fails, 'finish' the stream to get the error and return it
+  RETURN_IF_ERROR(p4rt->Finish())
+      << " when attempting to write stream message request: "
+      << request.ShortDebugString();
+
+  return gutil::InternalErrorBuilder()
+         << "Failed to write stream message request, but could not get error "
+            "from finishing stream. Request was: "
+         << request.ShortDebugString();
 }
 
 absl::Status InjectIngressPacket(const std::string& packet,
@@ -84,11 +93,17 @@ absl::Status InjectIngressPacket(const std::string& packet,
   // Rate limit the packets, if specified.
   if (packet_delay.has_value()) absl::SleepFor(*packet_delay);
 
-  return p4rt->StreamChannelWrite(request)
-             ? absl::OkStatus()
-             : gutil::InternalErrorBuilder()
-                   << "Failed to write stream message request: "
-                   << request.ShortDebugString();
+  if (p4rt->StreamChannelWrite(request)) return absl::OkStatus();
+
+  // If the write fails, 'finish' the stream to get the error and return it
+  RETURN_IF_ERROR(p4rt->Finish())
+      << " when attempting to write stream message request: "
+      << request.ShortDebugString();
+
+  return gutil::InternalErrorBuilder()
+         << "Failed to write stream message request, but could not get error "
+            "from finishing stream. Request was: "
+         << request.ShortDebugString();
 }
 
 }  // namespace pins
