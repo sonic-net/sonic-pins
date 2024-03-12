@@ -134,6 +134,7 @@ cc_library(
     deps = [
         ":entity_update",
         ":ir_translation",
+        ":p4info_reconcile",
         ":p4info_verification",
         ":p4runtime_read",
         ":packetio_helpers",
@@ -171,6 +172,7 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/memory",
@@ -353,6 +355,7 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -420,8 +423,11 @@ cc_library(
         "//p4rt_app/sonic:swss_utils",
         "//p4rt_app/utils:table_utility",
         "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -437,6 +443,7 @@ cc_test(
         "//p4rt_app/utils:ir_builder",
         "//p4rt_app/utils:table_utility",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
