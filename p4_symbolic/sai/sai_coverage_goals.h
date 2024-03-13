@@ -74,6 +74,21 @@ inline CoverageGoals SaiDefaultCoverageGoals() {
               # expensive. Remove when these limitations are addressed.
               exclude_empty_tables: true
             }
+            # Avoid L2 broadcast packets.
+            # TODO: Remove when L2 broadcast is modeled
+            custom_criteria_coverage {
+              criteria_list {
+                input_packet_header_criteria {
+                  field_criteria {
+                    negated: true
+                    field_match {
+                      name: "ethernet.dst_addr"
+                      exact { mac: "ff:ff:ff:ff:ff:ff" }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       )pb");

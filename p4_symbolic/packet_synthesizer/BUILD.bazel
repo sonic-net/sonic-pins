@@ -143,6 +143,7 @@ cc_library(
         ":coverage_goal_cc_proto",
         ":packet_synthesis_criteria",
         ":packet_synthesis_criteria_cc_proto",
+        "//gutil:proto",
         "//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/symbolic",
