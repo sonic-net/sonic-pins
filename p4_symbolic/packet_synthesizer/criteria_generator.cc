@@ -21,6 +21,7 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -93,7 +94,7 @@ GenerateSynthesisCriteriaFor(const EntryCoverageGoal& goal,
         criteria_list.back()
             .mutable_metadata()
             ->mutable_covered_entity_debug_strings()
-            ->Add(entries[i].ShortDebugString());
+            ->Add(gutil::PrintTextProto(entries[i]));
       }
     }
 

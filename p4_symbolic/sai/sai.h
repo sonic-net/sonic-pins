@@ -74,6 +74,13 @@ absl::Status AddConstraintsToForbidVrfZero(symbolic::SolverState& state);
 // P4-Constraints is integrated with P4-Symbolic.
 absl::Status AddConstraintsForAclPreIngressTable(symbolic::SolverState& state);
 
+// Adds solver constraints for "acl_ingress_table" (for middleblock).
+// Reference:
+// third_party/pins_infra/sai_p4/instantiations/google/acl_ingress.p4.
+// TODO: Note that this is for testing only and is not needed once
+// P4-Constraints is integrated with P4-Symbolic.
+absl::Status AddConstraintsForAclIngressTable(symbolic::SolverState& state);
+
 }  // namespace p4_symbolic
 
 #endif  // PINS_P4_SYMBOLIC_SAI_SAI_H_
