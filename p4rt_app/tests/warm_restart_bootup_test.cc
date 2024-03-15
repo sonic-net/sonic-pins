@@ -63,6 +63,7 @@ using ::testing::UnorderedElementsAreArray;
 using P4RuntimeStream =
     ::grpc::ClientReaderWriter<p4::v1::StreamMessageRequest,
                                p4::v1::StreamMessageResponse>;
+constexpr uint64_t kDeviceId = 100500;
 
 // Expects a DB to contain the provided port map.
 MATCHER_P2(
@@ -192,8 +193,6 @@ class WarmRestartTest : public testing::Test {
   }
 
   absl::Status ResetGrpcServerAndClient(bool is_freeze_mode) {
-    uint64_t device_id = 100500;
-
     // The P4RT service will wait for the client to close before stopping.
     // Therefore, we need to close the client connection first if it exists.
     if (p4rt_session_ != nullptr) RETURN_IF_ERROR(p4rt_session_->Finish());
@@ -217,15 +216,16 @@ class WarmRestartTest : public testing::Test {
           });
       SetUpControllerRpcStubs();
     }
-    RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(device_id));
+    RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(kDeviceId));
 
     // Reset the P4RT client.
     std::string address = absl::StrCat("localhost:", p4rt_service_->GrpcPort());
     LOG(INFO) << "Opening P4RT connection to " << address << ".";
     auto stub =
         pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-    ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                        std::move(stub), device_id));
+
+      ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
+                                          std::move(stub), kDeviceId));
 
     return absl::OkStatus();
   }

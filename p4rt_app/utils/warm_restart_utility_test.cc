@@ -36,7 +36,9 @@ class WarmRestartUtilityTest : public ::testing::Test {
       : port_table_("ConfigDb:PORT"),
         cpu_port_table_("ConfigDb:CPU_PORT"),
         port_channel_table_("ConfigDb:PORTCHANNEL"),
-        cpu_queue_table_("ConfigDb:QUEUE_NAME_TO_ID_MAP") {
+        cpu_queue_table_("ConfigDb:QUEUE_NAME_TO_ID_MAP"),
+        node_cfg_table_("ConfigDb:NODE_CFG"),
+        send_to_ingress_table_("ConfigDb:SEND_TO_INGRESS") {
     auto port_table_config_db =
         std::make_shared<sonic::FakeTableAdapter>(&port_table_, "PORT");
     auto cpu_port_table_config_db =
@@ -46,6 +48,11 @@ class WarmRestartUtilityTest : public ::testing::Test {
                                                   "PORTCHANNEL");
     auto cpu_queue_table_config_db = std::make_unique<sonic::FakeTableAdapter>(
         &cpu_queue_table_, "QUEUE_NAME_TO_ID_MAP");
+    auto node_cfg_table_config_db =
+        std::make_unique<sonic::FakeTableAdapter>(&node_cfg_table_, "NODE_CFG");
+    auto send_to_ingress_table_config_db =
+        std::make_unique<sonic::FakeTableAdapter>(&send_to_ingress_table_,
+                                                  "SEND_TO_INGRESS_PORT");
     auto warm_boot_state_adapter =
         std::make_unique<sonic::FakeWarmBootStateAdapter>();
     warm_boot_state_adapter_ = warm_boot_state_adapter.get();
@@ -53,12 +60,16 @@ class WarmRestartUtilityTest : public ::testing::Test {
     cpu_port_table_config_db_ = cpu_port_table_config_db.get();
     port_channel_table_config_db_ = port_channel_table_config_db.get();
     cpu_queue_config_db_ = cpu_queue_table_config_db.get();
+    node_cfg_table_config_db_ = node_cfg_table_config_db.get();
+    send_to_ingress_table_config_db_ = send_to_ingress_table_config_db.get();
 
     warm_restart_util_ = std::make_unique<WarmRestartUtil>(
         std::move(warm_boot_state_adapter), std::move(port_table_config_db),
         std::move(cpu_port_table_config_db),
         std::move(port_channel_table_config_db),
-        std::move(cpu_queue_table_config_db));
+        std::move(cpu_queue_table_config_db),
+        std::move(node_cfg_table_config_db),
+        std::move(send_to_ingress_table_config_db));
   }
 
  protected:
@@ -66,12 +77,16 @@ class WarmRestartUtilityTest : public ::testing::Test {
   sonic::FakeSonicDbTable cpu_port_table_;
   sonic::FakeSonicDbTable port_channel_table_;
   sonic::FakeSonicDbTable cpu_queue_table_;
+  sonic::FakeSonicDbTable node_cfg_table_;
+  sonic::FakeSonicDbTable send_to_ingress_table_;
 
   sonic::FakeWarmBootStateAdapter* warm_boot_state_adapter_;
   // CONFIG DB tables to query (key, port_id) pairs.
   sonic::FakeTableAdapter* port_table_config_db_;
   sonic::FakeTableAdapter* cpu_port_table_config_db_;
   sonic::FakeTableAdapter* port_channel_table_config_db_;
+  sonic::FakeTableAdapter* node_cfg_table_config_db_;
+  sonic::FakeTableAdapter* send_to_ingress_table_config_db_;
   // CONFIG DB table to query CPU queues.
   sonic::FakeTableAdapter* cpu_queue_config_db_;
   std::unique_ptr<WarmRestartUtil> warm_restart_util_;
@@ -183,6 +198,32 @@ TEST_F(WarmRestartUtilityTest, GetFrontPanelQueueIdsFromConfigDb) {
           {"BE1", "2"}, {"LLQ1", "0"}, {"LLQ2", "1"}, {"NC1", "7"}};
   EXPECT_THAT(warm_restart_util_->GetFrontPanelQueueIdsFromConfigDb(),
               UnorderedElementsAreArray(expected_front_panel_queue_ids));
+}
+
+TEST_F(WarmRestartUtilityTest, GetDeviceIdFromConfigDb) {
+  EXPECT_FALSE(warm_restart_util_->GetDeviceIdFromConfigDb().has_value());
+  node_cfg_table_config_db_->set("integrated_circuit0", {{"node-id", "1"}});
+  EXPECT_TRUE(warm_restart_util_->GetDeviceIdFromConfigDb().has_value());
+  EXPECT_EQ(warm_restart_util_->GetDeviceIdFromConfigDb().value(), 1);
+}
+
+TEST_F(WarmRestartUtilityTest, GetPortsFromConfigDb) {
+  EXPECT_TRUE(warm_restart_util_->GetPortsFromConfigDb().empty());
+  port_table_config_db_->batch_set(
+      {{"Ethernet0", "SET", {{"alias", "fortyGigE0/0"}, {"id", "1"}}},
+       {"Ethernet4", "SET", {{"alias", "fortyGigE0/4"}, {"id", "2"}}},
+       {"Ethernet8", "SET", {{"alias", "fortyGigE0/8"}, {"id", "3"}}},
+       {"Ethernet12", "SET", {{"alias", "fortyGigE0/12"}, {"id", "4"}}}});
+  std::vector<std::string> expected_ports = {
+      {"Ethernet0"}, {"Ethernet4"}, {"Ethernet8"}, {"Ethernet12"}};
+  EXPECT_THAT(warm_restart_util_->GetPortsFromConfigDb(),
+              UnorderedElementsAreArray(expected_ports));
+
+  send_to_ingress_table_config_db_->set("SEND_TO_INGRESS",
+                                        {{"value", {"NULL", "NULL"}}});
+  expected_ports.push_back({"SEND_TO_INGRESS"});
+  EXPECT_THAT(warm_restart_util_->GetPortsFromConfigDb(),
+              UnorderedElementsAreArray(expected_ports));
 }
 
 }  // namespace

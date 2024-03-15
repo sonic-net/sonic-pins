@@ -18,13 +18,16 @@
 #define PINS_P4RT_APP_UTILS_WARM_RESTART_UTILITY_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
+#include "swss/dbconnector.h"
 
 namespace p4rt_app {
 // Utility class for WarmRestart support.
@@ -37,13 +40,21 @@ class WarmRestartUtil {
       std::shared_ptr<sonic::TableAdapter> port_table_config_db,
       std::shared_ptr<sonic::TableAdapter> cpu_port_table_config_db,
       std::shared_ptr<sonic::TableAdapter> port_channel_table_config_db,
-      std::unique_ptr<sonic::TableAdapter> queue_config_db)
+      std::unique_ptr<sonic::TableAdapter> queue_config_db,
+      std::unique_ptr<sonic::TableAdapter> node_cfg_config_db,
+      std::unique_ptr<sonic::TableAdapter> send_to_ingress_port_config_db)
       : warm_boot_state_adapter_(std::move(warm_boot_state_adapter)),
         port_table_config_db_(std::move(port_table_config_db)),
         cpu_port_table_config_db_(std::move(cpu_port_table_config_db)),
         port_channel_table_config_db_(std::move(port_channel_table_config_db)),
-        queue_config_db_(std::move(queue_config_db)) {}
+        queue_config_db_(std::move(queue_config_db)),
+        node_cfg_config_db_(std::move(node_cfg_config_db)),
+        send_to_ingress_port_config_db_(
+            std::move(send_to_ingress_port_config_db)) {}
   ~WarmRestartUtil() = default;
+
+  // Check if P4RT is in warm start process.
+  bool IsWarmStart();
 
   // Check OA reconciliation state in DB.
   // Poll OA reconciliation state until timeout, exit loop if OA warm restart
@@ -63,15 +74,28 @@ class WarmRestartUtil {
   std::vector<std::pair<std::string, std::string>>
   GetFrontPanelQueueIdsFromConfigDb();
 
+  // Query the device id from Config DB, to update device id during
+  // reconciliation.
+  std::optional<int> GetDeviceIdFromConfigDb();
+
+  // Query all ports from Config DB, to rebuild packetio_impl_->port_to_socket_
+  // during reconciliation.
+  std::vector<std::string> GetPortsFromConfigDb();
+
  private:
   std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter_;
-  // CONFIG DB tables to query (key, port_id) pairs.
+  // CONFIG DB tables to query ports and (key, port_id) pairs.
   std::shared_ptr<sonic::TableAdapter> port_table_config_db_;
   std::shared_ptr<sonic::TableAdapter> cpu_port_table_config_db_;
   std::shared_ptr<sonic::TableAdapter> port_channel_table_config_db_;
   // CONFIG DB table to query CPU queues.
   std::unique_ptr<sonic::TableAdapter> queue_config_db_;
+  // CONFIG DB table to query device id.
+  std::unique_ptr<sonic::TableAdapter> node_cfg_config_db_;
+  // CONFIG DB table to query SEND_TO_INGRESS_PORT.
+  std::unique_ptr<sonic::TableAdapter> send_to_ingress_port_config_db_;
 };
+
 }  // namespace p4rt_app
 
 #endif  // PINS_P4RT_APP_UTILS_WARM_RESTART_UTILITY_H_

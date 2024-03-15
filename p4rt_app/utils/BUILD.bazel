@@ -95,6 +95,9 @@ cc_library(
     deps = [
         "//p4rt_app/sonic/adapters:table_adapter",
         "//p4rt_app/sonic/adapters:warm_boot_state_adapter",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@sonic_swss_common//:common",
     ],
