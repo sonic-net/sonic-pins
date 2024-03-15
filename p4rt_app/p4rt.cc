@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>  // NOLINT
+#include <utility>
 
 #include "absl/flags/parse.h"
 #include "glog/logging.h"
@@ -404,6 +405,21 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
   }
 }
 
+// Create a WarmRestartUtil object and initialize it.
+p4rt_app::WarmRestartUtil MakeWarmRestartUtil(swss::DBConnector& config_db) {
+  return p4rt_app::WarmRestartUtil(
+      std::make_unique<p4rt_app::sonic::WarmBootStateAdapter>(),
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db, "PORT"),
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db, "CPU_PORT"),
+      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db,
+                                                      "PORTCHANNEL"),
+      std::make_unique<p4rt_app::sonic::TableAdapter>(&config_db,
+                                                      "QUEUE_NAME_TO_ID_MAP"),
+      std::make_unique<p4rt_app::sonic::TableAdapter>(&config_db, "NODE_CFG"),
+      std::make_unique<p4rt_app::sonic::TableAdapter>(&config_db,
+                                                      "SEND_TO_INGRESS_PORT"));
+}
+
 }  // namespace
 }  // namespace p4rt_app
 
@@ -478,25 +494,11 @@ int main(int argc, char** argv) {
   }
 
   // LINT.IfChange
-  auto warm_boot_state_adapter =
-      std::make_unique<p4rt_app::sonic::WarmBootStateAdapter>();
-  bool is_warm_start = warm_boot_state_adapter->IsWarmStart();
-  p4rt_options.is_freeze_mode = is_warm_start;
+  p4rt_app::WarmRestartUtil warm_restart_util =
+      p4rt_app::MakeWarmRestartUtil(config_db);
 
-  // Initialize WarmRestartUtil
-  auto port_table_config_db =
-      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db, "PORT");
-  auto cpu_port_table_config_db =
-      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db, "CPU_PORT");
-  auto port_channel_table_config_db =
-      std::make_shared<p4rt_app::sonic::TableAdapter>(&config_db,
-                                                      "PORTCHANNEL");
-  auto cpu_queue_config_db = std::make_unique<p4rt_app::sonic::TableAdapter>(
-      &config_db, "QUEUE_NAME_TO_ID_MAP");
-  p4rt_app::WarmRestartUtil warm_restart_util(
-      std::move(warm_boot_state_adapter), std::move(port_table_config_db),
-      std::move(cpu_port_table_config_db),
-      std::move(port_channel_table_config_db), std::move(cpu_queue_config_db));
+  bool is_warm_start = warm_restart_util.IsWarmStart();
+  p4rt_options.is_freeze_mode = is_warm_start;
 
   // Create the P4RT server. If boot up in warm start mode, set p4runtime_server
   // in freeze mode to reject requests until unfreeze.
@@ -516,7 +518,9 @@ int main(int argc, char** argv) {
         swss::WarmStart::WarmStartState::INITIALIZED);
     auto reconciliation_status = p4runtime_server.RebuildSwStateAfterWarmboot(
         warm_restart_util.GetPortIdsFromConfigDb(),
-        warm_restart_util.GetCpuQueueIdsFromConfigDb());
+        warm_restart_util.GetCpuQueueIdsFromConfigDb(),
+        warm_restart_util.GetDeviceIdFromConfigDb(),
+        warm_restart_util.GetPortsFromConfigDb());
     if (reconciliation_status.ok()) {
       p4runtime_server.GrabLockAndUpdateWarmBootState(
           swss::WarmStart::WarmStartState::RECONCILED);

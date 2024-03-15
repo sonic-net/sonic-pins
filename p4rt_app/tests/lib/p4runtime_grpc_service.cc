@@ -92,6 +92,11 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
           &fake_config_db_port_channel_table_, "PORTCHANNEL");
   auto fake_cpu_queue_table_adapter = std::make_unique<sonic::FakeTableAdapter>(
       &fake_config_db_cpu_queue_table_, "QUEUE_NAME_TO_ID_MAP");
+  auto fake_node_cfg_table_adapter = std::make_unique<sonic::FakeTableAdapter>(
+      &fake_config_db_node_cfg_table_, "NODE_CFG");
+  auto fake_send_to_ingress_port_table_adapter =
+      std::make_unique<p4rt_app::sonic::FakeTableAdapter>(
+          &fake_config_db_send_to_ingress_port_table_, "SEND_TO_INGRESS_PORT");
 
   fake_port_table_adapter_ = fake_cpu_port_table_adapter.get();
   fake_cpu_port_table_adapter_ = fake_cpu_port_table_adapter.get();
@@ -107,7 +112,9 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       std::move(fake_port_table_adapter),
       std::move(fake_cpu_port_table_adapter),
       std::move(fake_port_channel_table_adapter),
-      std::move(fake_cpu_queue_table_adapter));
+      std::move(fake_cpu_queue_table_adapter),
+      std::move(fake_node_cfg_table_adapter),
+      std::move(fake_send_to_ingress_port_table_adapter));
 }
 
 P4RuntimeGrpcService::~P4RuntimeGrpcService() {

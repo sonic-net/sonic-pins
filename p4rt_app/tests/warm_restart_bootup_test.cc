@@ -64,6 +64,7 @@ using ::testing::UnorderedElementsAreArray;
 using P4RuntimeStream =
     ::grpc::ClientReaderWriter<p4::v1::StreamMessageRequest,
                                p4::v1::StreamMessageResponse>;
+constexpr uint64_t kDeviceId = 100500;
 
 // Expects a DB to contain the provided port map.
 MATCHER_P2(
@@ -193,8 +194,6 @@ class WarmRestartTest : public testing::Test {
   }
 
   absl::Status ResetGrpcServerAndClient(bool is_freeze_mode) {
-    uint64_t device_id = 100500;
-
     // The P4RT service will wait for the client to close before stopping.
     // Therefore, we need to close the client connection first if it exists.
     if (p4rt_session_ != nullptr) RETURN_IF_ERROR(p4rt_session_->Finish());
@@ -218,7 +217,7 @@ class WarmRestartTest : public testing::Test {
           });
       SetUpControllerRpcStubs();
     }
-    RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(device_id));
+    RETURN_IF_ERROR(p4rt_service_->GetP4rtServer().UpdateDeviceId(kDeviceId));
 
     // Reset the P4RT client.
     std::string address = absl::StrCat("localhost:", p4rt_service_->GrpcPort());
@@ -227,11 +226,11 @@ class WarmRestartTest : public testing::Test {
         pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
 
     if (is_freeze_mode) {
-      EXPECT_THAT(pdpi::P4RuntimeSession::Create(std::move(stub), device_id),
+      EXPECT_THAT(pdpi::P4RuntimeSession::Create(std::move(stub), kDeviceId),
                   StatusIs(absl::StatusCode::kUnavailable));
     } else {
       ASSIGN_OR_RETURN(p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                          std::move(stub), device_id));
+                                          std::move(stub), kDeviceId));
     }
 
     return absl::OkStatus();
@@ -272,7 +271,8 @@ class WarmRestartTest : public testing::Test {
       bool wait_for_unfreeze, swss::WarmStart::WarmStartState oa_wb_state,
       const std::vector<std::pair<std::string, std::string>>& port_ids = {},
       const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids =
-          {}) {
+          {},
+      int device_id = kDeviceId, const std::vector<std::string>& ports = {}) {
     // Reset P4RT server
     EXPECT_OK(ResetGrpcServerAndClient(/*is_freeze_mode=*/true));
     p4rt_service_->GetP4rtServer().GrabLockAndUpdateWarmBootState(
@@ -281,7 +281,7 @@ class WarmRestartTest : public testing::Test {
               swss::WarmStart::INITIALIZED);
     auto p4rt_recon_status =
         p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
-            port_ids, cpu_queue_ids);
+            port_ids, cpu_queue_ids, kDeviceId, ports);
     if (p4rt_recon_status.ok()) {
       p4rt_service_->GetP4rtServer().GrabLockAndUpdateWarmBootState(
           swss::WarmStart::RECONCILED);
@@ -348,23 +348,22 @@ class WarmRestartTest : public testing::Test {
 
   void VerifyP4rtServerResponseInUnfreezeMode() {
     // Grpc requests are processed as P4RT is unfreezed.
-    const uint64_t device_id = 11223344;
     const p4::v1::Uint128 election_id = ElectionId(11);
 
     grpc::ClientContext primary_stream_context;
     std::unique_ptr<P4RuntimeStream> primary_stream;
     grpc::ClientContext backup_stream_context;
     std::unique_ptr<P4RuntimeStream> backup_stream;
-    ASSERT_OK(p4rt_service_->GetP4rtServer().UpdateDeviceId(device_id));
+    ASSERT_OK(p4rt_service_->GetP4rtServer().UpdateDeviceId(kDeviceId));
 
     ASSERT_OK_AND_ASSIGN(primary_stream,
                          CreatePrimaryConnection(primary_stream_context,
-                                                 device_id, election_id));
+                                                 kDeviceId, election_id));
     ASSERT_OK_AND_ASSIGN(backup_stream, CreateBackupConnection(
-                                            backup_stream_context, device_id));
+                                            backup_stream_context, kDeviceId));
 
     p4::v1::ReadRequest read_request;
-    read_request.set_device_id(device_id);
+    read_request.set_device_id(kDeviceId);
     read_request.set_role(p4rt_session_->Role());
     EXPECT_OK(p4rt_session_->Read(read_request));
 
@@ -433,10 +432,29 @@ TEST_F(WarmRestartTest, ReconciliationSucceeds) {
   // Perform reconciliation
   EXPECT_OK(p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
       {{"Ethernet0", "1"}, {"Ethernet4", "2"}},
-      {{"CONTROLLER_PRIORITY_1", "32"}, {"CONTROLLER_PRIORITY_2", "33"}}));
+      {{"CONTROLLER_PRIORITY_1", "32"}, {"CONTROLLER_PRIORITY_2", "33"}},
+      kDeviceId, {"Ethernet0", "Ethernet4", "SEND_TO_INGRESS"}));
+  // State Verification
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
+
+  // Verify that the ports are added by AddPacketIoPort during reconciliation.
+  EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().SendPacketOut(
+      "Ethernet0", "test packet"));
+  EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().SendPacketOut(
+      "Ethernet4", "test packet"));
+  EXPECT_OK(p4rt_service_->GetFakePacketIoInterface().SendPacketOut(
+      "SEND_TO_INGRESS", "test packet"));
 
   // Unfreeze p4runtime server
   p4rt_service_->GetP4rtServer().SetFreezeMode(false);
+
+  // Verify that UpdateDeviceId() succeded during reconciliation.
+  const p4::v1::Uint128 election_id = ElectionId(11);
+  grpc::ClientContext primary_stream_context;
+  std::unique_ptr<P4RuntimeStream> primary_stream;
+  ASSERT_OK_AND_ASSIGN(
+      primary_stream,
+      CreatePrimaryConnection(primary_stream_context, kDeviceId, election_id));
 }
 
 TEST_F(WarmRestartTest, ReconciliationSucceedsWithAclEntries) {
@@ -484,7 +502,9 @@ TEST_F(WarmRestartTest, ReconciliationSucceedsWithAclEntries) {
   EXPECT_OK(ResetGrpcServerAndClient(/*is_freeze_mode=*/true));
   // Perform reconciliation
   EXPECT_OK(p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
-      {{"Ethernet4", "2"}}, {}));
+      {{"Ethernet4", "2"}}, {}, kDeviceId, {"Ethernet4", "SEND_TO_INGRESS"}));
+  // State Verification
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
 }
 
 TEST_F(WarmRestartTest, ReconciliationSucceedsWithFixedL3Entries) {
@@ -541,19 +561,22 @@ TEST_F(WarmRestartTest, ReconciliationSucceedsWithFixedL3Entries) {
   EXPECT_OK(ResetGrpcServerAndClient(/*is_freeze_mode=*/true));
   // Perform reconciliation
   EXPECT_OK(p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot(
-      {{"Ethernet4", "2"}}, {}));
+      {{"Ethernet4", "2"}}, {}, kDeviceId, {"Ethernet4", "SEND_TO_INGRESS"}));
+  // State Verification
+  EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
 }
 
 TEST_F(WarmRestartTest, ReconciliationFailsP4infoNotFound) {
   // Fails since P4Info is not saved in the file system.
   EXPECT_THAT(
-      p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot({}, {}),
+      p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot({}, {}, 1, {}),
       StatusIs(absl::StatusCode::kInvalidArgument));
   // Fails since P4Info file path is not set.
   auto p4runtime_impl = p4rt_service_->BuildP4rtServer(P4RuntimeImplOptions{
       .translate_port_ids = true,
   });
-  EXPECT_THAT(p4runtime_impl->RebuildSwStateAfterWarmboot({}, {}),
+  EXPECT_THAT(p4runtime_impl->RebuildSwStateAfterWarmboot({}, {}, kDeviceId,
+                                                          {"SEND_TO_INGRESS"}),
               StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 

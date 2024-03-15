@@ -1879,7 +1879,9 @@ void P4RuntimeImpl::SetFreezeMode(bool freeze_mode) {
 
 absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
     const std::vector<std::pair<std::string, std::string>>& port_ids,
-    const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids) {
+    const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
+    const std::optional<int>& device_id,
+    const std::vector<std::string>& ports) {
   /**
    * controller_manager_, packetio_impl_, component_state_, system_state_,
    * netdev_translator_, forwarding_config_full_path_ are restored in
@@ -1923,11 +1925,10 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
   }
 
   /**
-   * Restore port_translation_map_ and cpu_queue_translator_ from CONFIG
-   * DB
-   * port_translation_map_ and cpu_queue_translator_ are filled up by
-   * P4RuntimeImpl::AddPortTranslation() and
-   * P4RuntimeImpl::SetCpuQueueTranslator()
+   * Restore port_translation_map_ , cpu_queue_translator_,
+   * controller_manager_->device_id_ and packetio_impl_->port_to_socket_from
+   * CONFIG DB by calling AddPortTranslation(), SetCpuQueueTranslator(),
+   * UpdateDeviceId() and AddPacketIoPort().
    */
   for (const auto& [key, port_id] : port_ids) {
     RETURN_IF_ERROR(AddPortTranslation(key, port_id, /*update_dbs=*/false))
@@ -1937,6 +1938,15 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
     ASSIGN_OR_RETURN(auto translator,
                      QueueTranslator::Create(cpu_queue_ids));
     SetQueueTranslator(std::move(translator), "CPU");
+  }
+
+  // Ignore if no valid device ID found in configDB.
+  if (device_id.has_value()) {
+    RETURN_IF_ERROR(UpdateDeviceId(device_id.value())).LogError();
+  }
+
+  for (const auto& port : ports) {
+    RETURN_IF_ERROR(AddPacketIoPort(port)).LogError();
   }
 
   /**

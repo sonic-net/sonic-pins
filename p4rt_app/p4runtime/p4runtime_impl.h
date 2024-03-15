@@ -222,7 +222,9 @@ public:
   // entries and cached p4info file.
   absl::Status RebuildSwStateAfterWarmboot(
       const std::vector<std::pair<std::string, std::string>>& port_ids,
-      const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids)
+      const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
+      const std::optional<int>& device_id,
+      const std::vector<std::string>& ports)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   void SetFreezeMode(bool freeze_mode) ABSL_LOCKS_EXCLUDED(server_state_lock_);
