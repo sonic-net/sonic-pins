@@ -30,6 +30,7 @@
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {
@@ -329,6 +330,10 @@ GetAllTrafficItemStats(absl::string_view href,
 
 // Computes average rate (bytes/s) at which traffic was received back by Ixia.
 inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
+  // If the first timestamp is 0, this means no traffic has been received.
+  if (stats.first_time_stamp() == 0.0) {
+    return 0.0;
+  }
   return stats.rx_bytes() /
          (stats.last_time_stamp() - stats.first_time_stamp());
 }

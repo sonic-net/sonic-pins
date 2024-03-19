@@ -2035,4 +2035,16 @@ absl::StatusOr<std::string> ParseJsonValue(absl::string_view json) {
   return parsed_json.begin().value();
 }
 
+absl::StatusOr<uint64_t> GetGnmiSystemUpTime(gnmi::gNMI::StubInterface &stub) {
+  ASSIGN_OR_RETURN(auto uptime_str, pins_test::GetGnmiStatePathInfo(
+                                        &stub, "/system/state/up-time",
+                                        "openconfig-system:up-time"));
+  uint64_t uptime;
+  if (!absl::SimpleAtoi(std::string(pins_test::StripQuotes(uptime_str)),
+                        &uptime)) {
+    return absl::InternalError(absl::StrCat("Unable to parse up-time: ", uptime,
+                                            ". Not a valid integer."));
+  }
+  return uptime;
+}
 }  // namespace pins_test

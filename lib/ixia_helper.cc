@@ -14,11 +14,11 @@
 
 #include "lib/ixia_helper.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
-#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -46,6 +46,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/ixia_helper.pb.h"
 #include "lib/utils/json_utils.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {
@@ -1213,20 +1214,14 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
     {
       ASSIGN_OR_RETURN(std::string raw, gutil::FindOrStatus(value_by_caption,
                                                             "First TimeStamp"));
-      if (raw.empty()) {
-        return gutil::UnavailableErrorBuilder()
-               << "'First TimeStamp' not available yet";
-      }
-      ASSIGN_OR_RETURN(auto value,
-                       ParseTimeStampAsSeconds(raw, "First TimeStamp"));
-      parsed_row.set_first_time_stamp(value);
+      parsed_row.set_first_time_stamp(
+          ParseTimeStampAsSeconds(raw, "First TimeStamp").value_or(0.0));
     }
     {
       ASSIGN_OR_RETURN(std::string raw,
                        gutil::FindOrStatus(value_by_caption, "Last TimeStamp"));
-      ASSIGN_OR_RETURN(auto value,
-                       ParseTimeStampAsSeconds(raw, "Last TimeStamp"));
-      parsed_row.set_last_time_stamp(value);
+      parsed_row.set_last_time_stamp(
+          ParseTimeStampAsSeconds(raw, "Last TimeStamp").value_or(0.0));
     }
   }
 

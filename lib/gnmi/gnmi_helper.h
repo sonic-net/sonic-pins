@@ -560,5 +560,8 @@ void StripSymbolFromString(std::string &str, char symbol);
 //   {"field":"value"}
 absl::StatusOr<std::string> ParseJsonValue(absl::string_view json);
 
+// Gets switch up time over gNMI since the last reboot.
+absl::StatusOr<uint64_t> GetGnmiSystemUpTime(gnmi::gNMI::StubInterface &stub);
+
 } // namespace pins_test
 #endif // PINS_LIB_GNMI_GNMI_HELPER_H_
