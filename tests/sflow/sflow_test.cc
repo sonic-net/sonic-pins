@@ -3242,10 +3242,11 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
   std::vector<std::pair<std::string, std::string>>
       traffic_interfaces_and_port_ids;
   for (const auto& [interface_name, port_id] : port_id_per_port_name) {
-    sflow_enabled_interfaces[interface_name] = true;
-    traffic_interfaces_and_port_ids.push_back({interface_name, port_id});
-    if (sflow_enabled_interfaces.size() >= 5) {
-      break;
+    if (sflow_enabled_interfaces.size() < 5) {
+      sflow_enabled_interfaces[interface_name] = true;
+      traffic_interfaces_and_port_ids.push_back({interface_name, port_id});
+    } else {
+      sflow_enabled_interfaces[interface_name] = false;
     }
   }
 
@@ -3271,7 +3272,7 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
   const int num_packets = 10000;
 
   absl::flat_hash_map<std::string, int64_t> packets_sampled_per_interface;
-  for (const auto& [interface_name, unused] : sflow_enabled_interfaces) {
+  for (const auto& [interface_name, unused] : traffic_interfaces_and_port_ids) {
     ASSERT_OK_AND_ASSIGN(packets_sampled_per_interface[interface_name],
                          GetSflowInterfacePacketsSampledCounter(
                              sut_gnmi_stub_.get(), interface_name));
@@ -3362,7 +3363,7 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
     pins_test::TestGnoiSystemColdReboot(testbed.Sut());
   }
   std::vector<std::string> interface_names;
-  for (const auto& [interface_name, unused] : sflow_enabled_interfaces) {
+  for (const auto& [interface_name, unused] : traffic_interfaces_and_port_ids) {
     interface_names.push_back(interface_name);
   }
   ASSERT_OK(pins_test::WaitForCondition(pins_test::PortsUp, absl::Minutes(3),
@@ -3421,6 +3422,9 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
 
   EXPECT_OK(testbed.Environment().StoreTestArtifact(
       "sflow_result_after_reboot.txt", sflow_result));
+
+  EXPECT_OK(IsExpectedSampleRateFromSamples(sflow_result, kInbandSamplingRate))
+      << " Sample rate not as expected after reboot.";
 
   // Validate sflowtool result.
   for (const auto& [interface_name, port_id_str] :

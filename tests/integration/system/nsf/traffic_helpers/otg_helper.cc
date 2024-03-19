@@ -43,7 +43,7 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
               -> absl::Status {
             ASSIGN_OR_RETURN(std::vector<InterfaceLink> up_links,
                              GetUpLinks(GetAllTrafficGeneratorLinks, *testbed));
-            if (up_links.size() <= 2) {
+            if (up_links.size() < 2) {
               return absl::InvalidArgumentError(
                   "Test requires at least 2 SUT ports connected to a Software "
                   "(Host) or Hardware (Ixia) Traffic Generator");
@@ -109,7 +109,7 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
 
             // Set transmission rate.
             flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
-            flow->mutable_rate()->set_percentage(10);
+            flow->mutable_rate()->set_percentage(5);
 
             // Set capture metrics.
             flow->mutable_metrics()->set_enable(true);
