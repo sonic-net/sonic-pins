@@ -25,7 +25,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "google/protobuf/message.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
@@ -72,9 +71,9 @@ absl::StatusOr<std::string> ImageCopy(const std::string& image_label,
                                       Testbed& testbed,
                                       thinkit::SSHClient& ssh_client);
 
-absl::Status InstallRebootPushConfig(
-    const ImageConfigParams& image_config_param, Testbed& testbed,
-    thinkit::SSHClient& ssh_client);
+absl::Status
+InstallRebootPushConfig(Testbed &testbed, thinkit::SSHClient &ssh_client,
+                        const ImageConfigParams &image_config_param);
 
 // Validates P4, gNMI, SSH connections and port status of the SUT and Control
 // Switch (if present) along with validating the stack version of the SUT.
@@ -82,12 +81,15 @@ absl::Status InstallRebootPushConfig(
 // `image_config_param` is provided.
 absl::Status ValidateTestbedState(
     Testbed &testbed, thinkit::SSHClient &ssh_client,
-    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr);
+    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    bool check_interfaces_up = true);
 
 absl::Status ValidateComponents(
-    absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed&),
+    absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed &,
+                                                 thinkit::SSHClient &),
     absl::Span<const std::unique_ptr<ComponentValidator>> validators,
-    absl::string_view version, Testbed& testbed);
+    absl::string_view version, Testbed &testbed,
+    thinkit::SSHClient &ssh_client);
 
 // Performs NSF Reboot on the SUT in the given testbed.
 absl::Status NsfReboot(Testbed& testbed);
@@ -99,13 +101,20 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
 
 // Waits for the SUT to warm reboot. If `check_interfaces_up` is `true`, it
 // additionally checks whether all the SUT interfaces are UP after turnup.
-absl::Status WaitForNsfReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
-                              bool check_interfaces_up = true);
+absl::Status WaitForNsfReboot(
+    Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    bool check_interfaces_up = true);
 
-absl::Status PushConfig(absl::string_view gnmi_config, Testbed& testbed,
-                        thinkit::SSHClient& ssh_client);
+// Performs NSF Reboot and waits for the SUT to be ready.
+absl::Status DoNsfRebootAndWaitForSwitchReady(
+    Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param = nullptr,
+    bool check_interfaces_up = true);
+
 absl::Status PushConfig(const ImageConfigParams& image_config_param,
-                        Testbed& testbed, thinkit::SSHClient& ssh_client);
+                        Testbed& testbed, thinkit::SSHClient& ssh_client,
+                        bool is_fresh_install = false);
 
 absl::StatusOr<::p4::v1::ReadResponse> TakeP4FlowSnapshot(Testbed& testbed);
 

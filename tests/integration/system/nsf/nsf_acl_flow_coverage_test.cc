@@ -48,7 +48,6 @@ using ::p4::v1::ReadResponse;
 // Since the validation is while the traffic is in progress, error margin needs
 // to be defined.
 constexpr int kErrorPercentage = 1;
-constexpr absl::Duration kTrafficRunDuration = absl::Minutes(15);
 
 void NsfAclFlowCoverageTestFixture::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
@@ -129,9 +128,6 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   thinkit::Switch& sut = GetSut(testbed_);
 
   ASSERT_OK(ValidateTestbedState(testbed_, *ssh_client_, &image_config_param));
-  ASSERT_OK(StoreSutDebugArtifacts(
-      absl::StrCat(image_config_param.image_label, "_before_nsf_reboot"),
-      testbed_));
 
   // P4 snapshot before programming flows and starting the traffic.
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
@@ -161,14 +157,8 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
       testbed_, p4flow_snapshot2,
       absl::StrCat(sut.ChassisName(), "p4flow_snapshot2_before_nsf.txt")));
 
-  LOG(INFO) << "Initiating NSF reboot";
-  ASSERT_OK(pins_test::NsfReboot(testbed_));
-  ASSERT_OK(WaitForNsfReboot(testbed_, *ssh_client_));
-
-  ASSERT_OK(ValidateTestbedState(testbed_, *ssh_client_, &image_config_param));
-  ASSERT_OK(StoreSutDebugArtifacts(
-      absl::StrCat(image_config_param.image_label, "_after_nsf_reboot"),
-      testbed_));
+  ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed_, *ssh_client_,
+                                             &image_config_param));
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after NSF reboot";
