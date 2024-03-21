@@ -2055,13 +2055,11 @@ TEST_P(BackoffTest, VerifyBackOffWorksAfterNsf) {
       // GenericTestbed
       testbed_ = std::move(std::get<0>(testbed_variant));
     });
-    ASSERT_OK(pins_test::NsfReboot(testbed_variant));
-    ASSERT_OK(pins_test::WaitForNsfReboot(testbed_variant, *ssh_client_));
     pins_test::ImageConfigParams image_config_params{
         .gnmi_config = gnmi_config_with_sflow_,
     };
-    ASSERT_OK(pins_test::ValidateTestbedState(
-        testbed_variant, *GetParam().ssh_client, &image_config_params));
+    ASSERT_OK(pins_test::DoNsfRebootAndWaitForSwitchReady(
+        testbed_variant, *ssh_client_, &image_config_params));
     LOG(INFO) << "NSF reboot finished.";
   }
 
@@ -2547,13 +2545,10 @@ absl::Status SflowMirrorTestFixture::NsfRebootAndWaitForConvergence(
   testbed_variant.emplace<thinkit::MirrorTestbed*>(&testbed);
   ASSIGN_OR_RETURN(::p4::v1::ReadResponse p4flow_snapshot_before_nsf,
                    pins_test::TakeP4FlowSnapshot(testbed_variant));
-  RETURN_IF_ERROR(pins_test::NsfReboot(testbed_variant));
-  RETURN_IF_ERROR(
-      pins_test::WaitForNsfReboot(testbed_variant, *GetParam().ssh_client));
   pins_test::ImageConfigParams image_config_params{
       .gnmi_config = std::string(gnmi_config),
   };
-  RETURN_IF_ERROR(pins_test::ValidateTestbedState(
+  RETURN_IF_ERROR(pins_test::DoNsfRebootAndWaitForSwitchReady(
       testbed_variant, *GetParam().ssh_client, &image_config_params));
   CollectSflowDebugs(GetParam().ssh_client, testbed.Sut().ChassisName(),
                      /*prefix=*/"post_nsf_", testbed.Environment());
@@ -3464,6 +3459,164 @@ TEST_P(SflowRebootTestFixture, TestSamplingWorksAfterReboot) {
     EXPECT_LE(sflow_interface_packets_sampled_counter_diff,
               sample_count * (1 + kTolerance));
   }
+}
+
+// 1. Set sFlow config on SUT for all interfaces. Disable some of them and
+// enable the rest.
+// 2. Send traffic from control switch on the disabled interfaces.
+// 3. Verify samples are *not* generated for these interfaces.
+// 5. Reboot SUT and wait for interfaces to be UP.
+// 6. Send traffic from control switch on the disabled interfaces.
+// 7. Verify samples are *not* generated for these interfaces.
+TEST_P(SflowRebootTestFixture, TestNoSamplesOnDisabledInterfacesAfterReboot) {
+  GetParam().testbed_interface->ExpectLinkFlaps();
+
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
+
+  ASSERT_OK_AND_ASSIGN(
+      auto port_id_per_port_name,
+      pins_test::GetAllUpInterfacePortIdsByName(*sut_gnmi_stub_));
+  const int kDisabledInterfaceNumber = 3;
+  ASSERT_GE(port_id_per_port_name.size(), kDisabledInterfaceNumber)
+      << "Not enough up interfaces. Need " << kDisabledInterfaceNumber
+      << ". Actual up interfaces: " << port_id_per_port_name.size() << ".";
+  ASSERT_OK_AND_ASSIGN(
+      auto control_switch_port_id_per_port_name,
+      pins_test::GetAllUpInterfacePortIdsByName(*control_gnmi_stub_));
+
+  absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces;
+  // We do not want to send traffic on all ports since that would cost a lot of
+  // time. Send traffic on few ports would be enough in our reboot test since
+  // other test cases already cover sampling on all interfaces.
+  std::vector<std::string> traffic_interfaces;
+  for (const auto& [interface_name, port_id] : port_id_per_port_name) {
+    if (sflow_enabled_interfaces.size() < kDisabledInterfaceNumber) {
+      sflow_enabled_interfaces[interface_name] = false;
+      traffic_interfaces.push_back(interface_name);
+    } else {
+      sflow_enabled_interfaces[interface_name] = true;
+    }
+  }
+
+  std::vector<std::pair<std::string, int>> collector_address_and_port{
+      {kLocalLoopbackIpv6, collector_port_}};
+  ASSERT_OK_AND_ASSIGN(
+      auto sut_gnmi_config_with_sflow,
+      UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
+                        collector_address_and_port, sflow_enabled_interfaces,
+                        kInbandSamplingRate, kSampleHeaderSize));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "sut_gnmi_config_with_sflow.txt",
+      json_yang::FormatJsonBestEffort(sut_gnmi_config_with_sflow)));
+  ASSERT_OK(
+      pins_test::PushGnmiConfig(testbed.Sut(), sut_gnmi_config_with_sflow));
+
+  // Wait until all sFLow gNMI states are converged.
+  ASSERT_OK(pins_test::WaitForCondition(
+      VerifySflowStatesConverged, absl::Seconds(30), sut_gnmi_stub_.get(),
+      agent_address_, kInbandSamplingRate, kSampleHeaderSize,
+      collector_address_and_port, sflow_enabled_interfaces));
+  ASSERT_OK(pins_test::WaitForCondition(
+      CheckStateDbPortIndexTableExists, absl::Seconds(30),
+      *GetParam().ssh_client, testbed.Sut().ChassisName(), traffic_interfaces));
+
+  const int num_packets = 10000;
+  std::string sflow_result;
+  {
+    // Start sflowtool on SUT.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        RunSflowCollectorNonStop(
+            *GetParam().ssh_client, testbed.Sut().ChassisName(),
+            kSflowtoolLineFormatNonStopTemplate, sflow_result));
+
+    // Wait for sflowtool to finish.
+    auto clean_up = absl::Cleanup(
+        [&sflow_tool_thread, &chassis_name = testbed.Sut().ChassisName()] {
+          StopSflowtool(*GetParam().ssh_client, chassis_name, kSflowToolName);
+          if (sflow_tool_thread.joinable()) {
+            sflow_tool_thread.join();
+          }
+        });
+
+    // Send packets from control switch on picked interfaces.
+    for (const auto& interface_name : traffic_interfaces) {
+      ASSERT_OK_AND_ASSIGN(
+          auto control_switch_port_id,
+          GetPortIdFromInterfaceName(control_switch_port_id_per_port_name,
+                                     interface_name));
+      ASSERT_OK(SendNPacketsFromSwitch(
+          num_packets, kInbandTrafficPps, control_switch_port_id,
+          interface_name, sut_gnmi_stub_.get(), GetControlIrP4Info(),
+          *control_p4_session_, testbed.Environment()));
+    }
+    // Sleep 10s before stopping sflowtool.
+    absl::SleepFor(absl::Seconds(10));
+  }
+
+  ASSERT_TRUE(sflow_result.empty())
+      << "sFlow result is not empty on disabled interfaces before reboot.";
+
+  // Reboot the switch and wait for interfaces to be up.
+  if (sut_p4_session_ != nullptr) {
+    EXPECT_OK(sut_p4_session_->Finish());
+    sut_p4_session_ = nullptr;
+  }
+  if (GetParam().nsf_enabled) {
+    ASSERT_OK(
+        NsfRebootAndWaitForConvergence(testbed, sut_gnmi_config_with_sflow));
+  } else {
+    pins_test::TestGnoiSystemColdReboot(testbed.Sut());
+  }
+  ASSERT_OK(pins_test::WaitForCondition(pins_test::PortsUp, absl::Minutes(3),
+                                        testbed.Sut(), traffic_interfaces,
+                                        /*with_healthz=*/false));
+  ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_, testbed.Sut().CreateGnmiStub());
+  // Wait until all sFLow gNMI states are converged.
+  ASSERT_OK(pins_test::WaitForCondition(
+      VerifySflowStatesConverged, absl::Minutes(2), sut_gnmi_stub_.get(),
+      agent_address_, kInbandSamplingRate, kSampleHeaderSize,
+      collector_address_and_port, sflow_enabled_interfaces));
+  ASSERT_OK(pins_test::WaitForCondition(
+      CheckStateDbPortIndexTableExists, absl::Minutes(2),
+      *GetParam().ssh_client, testbed.Sut().ChassisName(), traffic_interfaces));
+  LOG(INFO) << "Sflow states are converged after reboot.";
+
+  {
+    // Start sflowtool on SUT.
+    ASSERT_OK_AND_ASSIGN(
+        std::thread sflow_tool_thread,
+        RunSflowCollectorNonStop(
+            *GetParam().ssh_client, testbed.Sut().ChassisName(),
+            kSflowtoolLineFormatNonStopTemplate, sflow_result));
+
+    // Wait for sflowtool to finish.
+    auto clean_up = absl::Cleanup(
+        [&sflow_tool_thread, &chassis_name = testbed.Sut().ChassisName()] {
+          StopSflowtool(*GetParam().ssh_client, chassis_name, kSflowToolName);
+          if (sflow_tool_thread.joinable()) {
+            sflow_tool_thread.join();
+          }
+        });
+
+    // Send packets from control switch on picked interfaces.
+    for (const auto& interface_name : traffic_interfaces) {
+      ASSERT_OK_AND_ASSIGN(
+          auto control_switch_port_id,
+          GetPortIdFromInterfaceName(control_switch_port_id_per_port_name,
+                                     interface_name));
+      ASSERT_OK(SendNPacketsFromSwitch(
+          num_packets, kInbandTrafficPps, control_switch_port_id,
+          interface_name, sut_gnmi_stub_.get(), GetControlIrP4Info(),
+          *control_p4_session_, testbed.Environment()));
+    }
+    // Sleep 10s before stopping sflowtool.
+    absl::SleepFor(absl::Seconds(10));
+  }
+
+  ASSERT_TRUE(sflow_result.empty())
+      << "sFlow result is not empty on disabled interfaces after reboot.";
 }
 
 // 1. Set sFlow config on SUT for one interface.
