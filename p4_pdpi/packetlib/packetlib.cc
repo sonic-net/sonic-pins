@@ -128,10 +128,8 @@ absl::StatusOr<NextHeader> GetNextHeader(const Ipv6Header& header) {
 absl::StatusOr<NextHeader> GetNextHeader(const UdpHeader& header) {
   ASSIGN_OR_RETURN(auto dest_port,
                    pdpi::HexStringToInt32(header.destination_port()));
-  if (dest_port == kIpfixUdpDestPort)
-    return Header::kIpfixHeader;
-  if (dest_port == 319)
-    return Header::kPtpHeader;
+  if (dest_port == kIpfixUdpDestPort) return Header::kIpfixHeader;
+  if (dest_port == 319) return Header::kPtpHeader;
   return Header::HEADER_NOT_SET;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const TcpHeader& header) {
@@ -149,7 +147,7 @@ absl::StatusOr<NextHeader> GetNextHeader(const IpfixHeader& header) {
 absl::StatusOr<NextHeader> GetNextHeader(const PsampHeader& header) {
   return Header::HEADER_NOT_SET;
 }
-absl::StatusOr<NextHeader> GetNextHeader(const PtpHeader &header) {
+absl::StatusOr<NextHeader> GetNextHeader(const PtpHeader& header) {
   return Header::HEADER_NOT_SET;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
@@ -529,7 +527,7 @@ absl::StatusOr<PsampHeader> ParsePsampHeader(pdpi::BitString& data) {
   return header;
 }
 
-absl::StatusOr<PtpHeader> ParsePtpHeader(pdpi::BitString &data) {
+absl::StatusOr<PtpHeader> ParsePtpHeader(pdpi::BitString& data) {
   if (data.size() < kPtpHeaderBitwidth) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Packet is too short to parse a PTP header next. Only "
@@ -1451,10 +1449,10 @@ void PsampHeaderInvalidReasons(const PsampHeader& header,
   }
 }
 
-void PtpHeaderInvalidReasons(const PtpHeader &header,
-                             const std::string &field_prefix,
-                             const Packet &packet, int header_index,
-                             std::vector<std::string> &output) {
+void PtpHeaderInvalidReasons(const PtpHeader& header,
+                             const std::string& field_prefix,
+                             const Packet& packet, int header_index,
+                             std::vector<std::string>& output) {
   HexStringInvalidReasons<kPtpTransportSpecificBitwidth>(
       header.transport_specific(),
       absl::StrCat(field_prefix, "transport_specific"), output);
@@ -1944,8 +1942,8 @@ absl::Status SerializePsampHeader(const PsampHeader& header,
   return absl::OkStatus();
 }
 
-absl::Status SerializePtpHeader(const PtpHeader &header,
-                                pdpi::BitString &output) {
+absl::Status SerializePtpHeader(const PtpHeader& header,
+                                pdpi::BitString& output) {
   RETURN_IF_ERROR(SerializeBits<kPtpTransportSpecificBitwidth>(
       header.transport_specific(), output));
   RETURN_IF_ERROR(
@@ -2282,7 +2280,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         break;
       }
       case Header::kPtpHeader: {
-        PtpHeader &ptp_header = *header.mutable_ptp_header();
+        PtpHeader& ptp_header = *header.mutable_ptp_header();
         if (ptp_header.message_length().empty() || overwrite) {
           ASSIGN_OR_RETURN(int size, PacketSizeInBytes(packet, header_index),
                            _.SetPrepend() << error_prefix << "length: ");
