@@ -66,6 +66,7 @@ message Header {
     SaiP4BMv2PacketInHeader sai_p4_bmv2_packet_in_header = 10;
     IpfixHeader ipfix_header = 11;
     PsampHeader psamp_header = 12;
+    PtpHeader ptp_header = 13;
   }
 }
 
@@ -227,4 +228,22 @@ message PsampHeader {
   // Variable packet length identifier - 0xFF.
   string variable_length = 11;        // 8 bits (computed field)
   string packet_sampled_length = 12;  // 16 bits (computed field)
+}
+
+// Precision Time Protocol header (RFC 1588-2008)
+message PtpHeader {
+  string transport_specific = 1;
+  string message_type = 2;
+  string reserved0 = 3;
+  string version_ptp = 4;
+  string message_length = 5;
+  string domain_number = 6;
+  string reserved1 = 7;
+  string flags = 8;
+  string correction_field = 9;
+  string reserved2 = 10;
+  string source_port_identity = 11;
+  string sequence_id = 12;
+  string control_field = 13;
+  string log_message_interval = 14;
 }
