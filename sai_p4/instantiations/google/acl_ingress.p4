@@ -179,6 +179,19 @@ control acl_ingress(in headers_t headers,
       @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
   }
 
+  // Forwards packets normally. Sets Multicast queue depending on packet color.
+  @id(ACL_INGRESS_SET_MULTICAST_QUEUES_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  // TODO: Remove @unsupported annotation.
+  @unsupported
+  action set_multicast_queues(
+      @id(1) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
+        qos_queue_t green_multicast_queue,
+      @id(2) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_multicast_queue) {
+    acl_ingress_qos_meter.read(local_metadata.color);
+  }
+
   // Drops the packet at the end of the the pipeline and ensures that it is not
   // copied to the CPU. See `acl_drop` for more information on the mechanism of
   // the drop.
@@ -336,6 +349,7 @@ control acl_ingress(in headers_t headers,
   @sai_acl(INGRESS)
   @sai_acl_priority(10)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @nonessential_for_upgrade
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
@@ -390,6 +404,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary
           @id(10) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
+      local_metadata.route_metadata : ternary
+          @id(15) @name("route_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
 #ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
       local_metadata.l4_src_port : ternary
           @id(12) @name("l4_src_port")
@@ -397,9 +414,6 @@ control acl_ingress(in headers_t headers,
       headers.icmp.type : ternary
           @id(14) @name("icmp_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE);
-      local_metadata.route_metadata : ternary
-          @id(15) @name("route_metadata")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
 #endif
 #if defined(SAI_INSTANTIATION_TOR)
       headers.ethernet.dst_addr : ternary
@@ -426,6 +440,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(4) acl_drop(local_metadata);
       @proto_id(5) set_cpu_queue();
       @proto_id(6) set_dscp_and_queues_and_deny_above_rate_limit();
+      @proto_id(7) set_multicast_queues();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
