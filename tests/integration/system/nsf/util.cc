@@ -290,11 +290,15 @@ absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface) {
 
 thinkit::Switch& GetSut(Testbed& testbed) {
   return std::visit(
-      gutil::Overload{[&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-                          -> thinkit::Switch& { return testbed->Sut(); },
-                      [&](thinkit::MirrorTestbed* testbed) -> thinkit::Switch& {
-                        return testbed->Sut();
-                      }},
+      [&](auto &&testbed) -> thinkit::Switch & { return testbed->Sut(); },
+      testbed);
+}
+
+thinkit::TestEnvironment &GetTestEnvironment(Testbed &testbed) {
+  return std::visit(
+      [&](auto &&testbed) -> thinkit::TestEnvironment & {
+        return testbed->Environment();
+      },
       testbed);
 }
 
@@ -492,16 +496,8 @@ absl::Status CompareP4FlowSnapshots(ReadResponse snapshot_1,
 
 absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
                                 absl::string_view file_name) {
-  thinkit::TestEnvironment& environment = std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> thinkit::TestEnvironment& { return testbed->Environment(); },
-          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
-            return testbed->Environment();
-          }},
-      testbed);
-
-  return environment.StoreTestArtifact(file_name, snapshot.DebugString());
+  return GetTestEnvironment(testbed).StoreTestArtifact(file_name,
+                                                       snapshot.DebugString());
 }
 
 absl::Status StoreSutDebugArtifacts(absl::string_view prefix,

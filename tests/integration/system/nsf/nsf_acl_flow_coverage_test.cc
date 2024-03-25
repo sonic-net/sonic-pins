@@ -19,15 +19,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "absl/types/variant.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "gutil/overload.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
 #include "gutil/testing.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -36,12 +31,13 @@
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
-#include "thinkit/generic_testbed.h"
-#include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
+
 using ::p4::v1::Entity;
 using ::p4::v1::ReadResponse;
 
@@ -110,14 +106,7 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
 }  // namespace
 
 TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
-  thinkit::TestEnvironment& environment = std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> thinkit::TestEnvironment& { return testbed->Environment(); },
-          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
-            return testbed->Environment();
-          }},
-      testbed_);
+  thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
 
   // The test needs at least 1 image_config_param to run.
   if (GetParam().image_config_params.empty()) {
