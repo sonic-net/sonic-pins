@@ -1,6 +1,14 @@
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 
+#include <algorithm>
+#include <optional>
+#include <string>
+
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_replace.h"
+#include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -13,13 +21,20 @@ namespace {
 
 using ::p4::config::v1::P4Info;
 
+// Return the base (no suffix) name of the instantiation p4info file.
+std::string InstantiationName(Instantiation instantiation) {
+  return InstantiationToString(instantiation);
+}
+
+// Return the name of the P4Config JSON file.
 std::string P4ConfigName(Instantiation instantiation, NonstandardPlatform platform) {
-  return absl::StrFormat("sai_%s_%s.config.json", InstantiationToString(instantiation),
+  return absl::StrFormat("sai_%s_%s.config.json",  InstantiationName(instantiation),
                          PlatformName(platform));
 }
 
-std::string P4infoName(Instantiation instantiation, NonstandardPlatform platform) {
-  return absl::StrFormat("sai_%s_%s.p4info.pb.txt", InstantiationToString(instantiation),
+// Return the name of the P4Info protobuf file.
+std::string P4InfoName(Instantiation instantiation, NonstandardPlatform platform) {
+  return absl::StrFormat("sai_%s_%s.p4info.pb.txt",  InstantiationName(instantiation),
                          PlatformName(platform));
 }
 
@@ -53,7 +68,7 @@ std::string GetNonstandardP4Config(Instantiation instantiation,
 P4Info GetNonstandardP4Info(Instantiation instantiation, NonstandardPlatform platform) {
   P4Info p4info;
   const gutil::FileToc* toc = sai_nonstandard_platforms_embed_create();
-  std::string key = P4infoName(instantiation, platform);
+  std::string key = P4InfoName(instantiation, platform);
   for (int i = 0; i < sai_nonstandard_platforms_embed_size(); ++i) {
     if (toc[i].name == key) {
       CHECK(  // Crash ok: TAP rules out failures.
@@ -77,6 +92,16 @@ p4::v1::ForwardingPipelineConfig GetNonstandardForwardingPipelineConfig(
       GetNonstandardP4Config(instantiation, platform);
   *config.mutable_p4info() = GetNonstandardP4Info(instantiation, platform);
   return config;
+}
+
+std::string PreprocessedInstantiationFileName(
+    Instantiation role,
+    std::optional<NonstandardPlatform> nonstandard_platform) {
+  return "preprocessed_" +
+         (nonstandard_platform.has_value()
+              ? PlatformName(nonstandard_platform.value())
+              : "standard") +
+         "_" + InstantiationName(role) + ".p4";
 }
 
 }  // namespace sai
