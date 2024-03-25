@@ -30,6 +30,7 @@
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
+#include "thinkit/test_environment.h"
 
 namespace pins_test {
 
@@ -43,6 +44,8 @@ void TearDownTestbed(TestbedInterface& testbed_interface);
 absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface);
 
 thinkit::Switch& GetSut(Testbed& testbed);
+
+thinkit::TestEnvironment &GetTestEnvironment(Testbed &testbed);
 
 // Returns the list of connected interfaces for the SUT.
 std::vector<std::string> GetConnectedInterfacesForSut(Testbed& testbed);
