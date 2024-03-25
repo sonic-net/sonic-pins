@@ -523,6 +523,7 @@ message AclPreIngressVlanTableEntry {
     Optional is_ipv6 = 3;    // optional match / Format::HEX_STRING / 1 bits
     Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
     Ternary vlan_id = 5;     // ternary match / Format::HEX_STRING / 12 bits
+    Optional in_port = 6;    // optional match / Format::STRING
   }
   Match match = 1;
   message Action {

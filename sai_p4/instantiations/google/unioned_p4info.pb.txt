@@ -1248,6 +1248,10 @@ tables {
     match_type: TERNARY
   }
   action_refs {
+    id: 16777475
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
     id: 16777476
     annotations: "@proto_id(1)"
   }
@@ -1880,7 +1884,7 @@ actions {
   params {
     id: 2
     name: "green_multicast_queue"
-    annotations: "@sai_action_param(MULTICAST_QOS_QUEUE , SAI_PACKET_COLOR_GREEN)"
+    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
       name: "qos_queue_t"
     }
@@ -1888,7 +1892,7 @@ actions {
   params {
     id: 3
     name: "red_multicast_queue"
-    annotations: "@sai_action_param(MULTICAST_QOS_QUEUE , SAI_PACKET_COLOR_RED)"
+    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
       name: "qos_queue_t"
     }

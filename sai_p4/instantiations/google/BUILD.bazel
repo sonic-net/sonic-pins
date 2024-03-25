@@ -334,6 +334,25 @@ build_test(
     ],
 )
 
+# P4 info and config for non-standard platforms, accessible via C++ API.
+cc_library(
+    name = "sai_nonstandard_platforms_cc",
+    srcs = ["sai_nonstandard_platforms.cc"],
+    hdrs = ["sai_nonstandard_platforms.h"],
+    deps = [
+        ":instantiations",
+        ":sai_nonstandard_platforms_embed",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
 cc_library(
     name = "clos_stage",
     srcs = ["clos_stage.cc"],
@@ -356,24 +375,6 @@ cc_test(
         "//gutil:testing",
         "@com_google_googletest//:gtest_main",
     ],
-)
-
-# P4 info and config for non-standard platforms, accessible via C++ API.
-cc_library(
-    name = "sai_nonstandard_platforms_cc",
-    srcs = ["sai_nonstandard_platforms.cc"],
-    hdrs = ["sai_nonstandard_platforms.h"],
-    visibility = ["//visibility:public"],
-    deps = [
-	":instantiations",
-	":sai_nonstandard_platforms_embed",
-        "//p4_pdpi:ir_cc_proto",
-        "@com_github_google_glog//:glog",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_protobuf//:protobuf",
-	],
 )
 
 # Auxiliary target, see go/totw/128.
@@ -410,4 +411,58 @@ cc_test(
 filegroup(
     name = "sai_p4",
     srcs = glob(["**/*.p4"]) + glob(["**/*.h"]),
+)
+
+[
+    # In cases where we are unable to access P4C's internal preprocessor ('cc') we need to
+    # preprocess the P4 program of a particular instantiation.
+    genrule(
+        name = "preprocessed_%s_%s" % (platform, instantiation),
+        srcs = [
+            "@com_github_p4lang_p4c//:p4include",
+            "@com_github_p4lang_p4c//:p4include/v1model.p4",
+            "//sai_p4/instantiations/google:%s.p4" % instantiation,
+            "//sai_p4/instantiations/google:sai_p4",
+            "//sai_p4/fixed",
+        ],
+        outs = ["preprocessed_%s_%s.p4" % (platform, instantiation)],
+        cmd = """
+              # This command mimicks the command found at
+              # https://github.com/p4lang/p4c/blob/a274a5bab0e63e01935c46593bc490852ec385bd/frontends/common/parser_options.cpp#L410
+              # genrules do not support retrieval of directories from dependencies, so we need to use a workaround. 
+              # We depend on v1model.p4 and retrieve its parent directory. 
+              # TODO: Maybe there is a better way to do this?
+              P4INCLUDE_DIR=$$(dirname $(location @com_github_p4lang_p4c//:p4include/v1model.p4))
+              $(CC) -E -x c -Wno-comment -C -undef -nostdinc -x assembler-with-cpp -I$$P4INCLUDE_DIR -I. %s \
+              $(location //sai_p4/instantiations/google:%s.p4) > $(OUTS)
+              """ % (
+            "-D" + MACRO_BY_NONSTANDARD_PLATFORM_NAME[platform] if platform in MACRO_BY_NONSTANDARD_PLATFORM_NAME else "",
+            instantiation,
+        ),
+        toolchains = ["@bazel_tools//tools/cpp:current_cc_toolchain"],
+    )
+    for (instantiation, deps) in INSTANTIATIONS
+    for platform in ("standard", "bmv2")
+]
+
+filegroup(
+    name =
+        "preprocessed_sai_programs",
+    srcs = [
+        "//sai_p4/instantiations/google:preprocessed_%s_%s.p4" % (platform, instantiation)
+        for (instantiation, _) in INSTANTIATIONS
+        for platform in ("standard", "bmv2")
+    ],
+)
+
+cc_test(
+    name = "preprocessed_sai_programs_test",
+    srcs = ["preprocessed_sai_programs_test.cc"],
+    data = [":preprocessed_sai_programs"],
+    deps = [
+        ":instantiations",
+        ":sai_nonstandard_platforms_cc",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
