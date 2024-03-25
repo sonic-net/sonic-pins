@@ -14,8 +14,7 @@
 #include "tests/integration/system/nsf/nsf_concurrent_config_push_flow_programming_test.h"
 
 #include <memory>
-#include <thread>  // NOLINT
-#include <variant>
+#include <thread> // NOLINT
 #include <vector>
 
 #include "absl/status/status.h"
@@ -24,11 +23,8 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include "gutil/overload.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"  // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
+#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4_pdpi/ir.h"
@@ -42,6 +38,8 @@
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 using ::p4::v1::Entity;
@@ -120,14 +118,7 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
 
 TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
        NsfConcurrentConfigPushFlowProgrammingTest) {
-  thinkit::TestEnvironment& environment = std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
-              -> thinkit::TestEnvironment& { return testbed->Environment(); },
-          [&](thinkit::MirrorTestbed* testbed) -> thinkit::TestEnvironment& {
-            return testbed->Environment();
-          }},
-      testbed_);
+  thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
 
   // The test needs at least 1 image_config_param to run.
   if (GetParam().image_config_params.empty()) {

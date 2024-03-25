@@ -22,6 +22,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -39,19 +40,23 @@
 #include "diag/diag.grpc.pb.h"
 #include "diag/diag.pb.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "grpcpp/client_context.h"
-#include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "system/system.grpc.pb.h"
+#include "system/system.pb.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "tests/integration/system/nsf/util.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/switch.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
           "Seed to randomly generate interface index.");
@@ -65,10 +70,15 @@ ABSL_FLAG(std::vector<std::string>, interfaces, std::vector<std::string>(),
           "will be chosen.");
 
 namespace bert {
+namespace {
 
 using ::google::protobuf::util::MessageDifferencer;
+using ::gutil::IsOkAndHolds;
 using ::testing::HasSubstr;
 using ::testing::SizeIs;
+
+using ::gnoi::system::RebootStatusRequest;
+using ::gnoi::system::RebootStatusResponse;
 
 // BERT test duration.
 constexpr absl::Duration kTestDuration = absl::Seconds(180);
@@ -93,6 +103,8 @@ constexpr uint8_t kMaxAllowedInterfacesToRunBert = 96;
 
 constexpr char kEnabledFalse[] = "{\"enabled\":false}";
 constexpr char kEnabledTrue[] = "{\"enabled\":true}";
+
+constexpr absl::Duration kNsfActiveTimeout = absl::Minutes(3);
 
 std::string BuildPerPortStartBertRequest(
     absl::string_view interface_name,
@@ -570,6 +582,33 @@ gnoi::diag::GetBERTResultRequest GetBertResultRequestFromStartRequest(
   return result_request;
 }
 
+static void GetAndVerifyResultForSuccess(
+    gnoi::diag::StartBERTRequest &bert_start_request_sut,
+    gnoi::diag::StartBERTRequest &bert_start_request_control_switch,
+    gnoi::diag::Diag::StubInterface &sut_diag_stub,
+    thinkit::ControlDevice &control_device, absl::Duration test_duration) {
+  LOG(INFO) << "Verify BERT results on SUT interfaces.";
+  grpc::ClientContext context;
+  gnoi::diag::GetBERTResultResponse bert_result_response_sut;
+  ASSERT_OK(sut_diag_stub.GetBERTResult(
+      &context, GetBertResultRequestFromStartRequest(bert_start_request_sut),
+      &bert_result_response_sut));
+
+  std::vector<std::string> admin_down_interfaces = {};
+  ASSERT_NO_FATAL_FAILURE(GetAndVerifyBertResultsWithAdminDownInterfaces(
+      bert_start_request_sut, bert_result_response_sut, admin_down_interfaces,
+      admin_down_interfaces, test_duration));
+
+  LOG(INFO) << "Verify BERT results on control switch interfaces.";
+  ASSERT_OK_AND_ASSIGN(
+      gnoi::diag::GetBERTResultResponse bert_result_response_control_switch,
+      control_device.GetBERTResult(GetBertResultRequestFromStartRequest(
+          bert_start_request_control_switch)));
+  ASSERT_NO_FATAL_FAILURE(GetAndVerifyBertResultsWithAdminDownInterfaces(
+      bert_start_request_control_switch, bert_result_response_control_switch,
+      admin_down_interfaces, admin_down_interfaces, test_duration));
+}
+
 void VerifyOperStatusOnSetOfSutInterfaces(gnmi::gNMI::StubInterface& gnmi_stub,
                                           std::vector<std::string>& interfaces,
                                           absl::string_view oper_status) {
@@ -621,6 +660,75 @@ bool IsListPartOfInterfaceList(const std::vector<std::string>& list,
     }
   }
   return true;
+}
+
+static absl::Status
+WaitForNsfRebootActive(gnoi::system::System::StubInterface &gnoi_system_stub) {
+  absl::Time start_time = absl::Now();
+  constexpr absl::Duration kFasterPoll = absl::Seconds(2);
+  // Start polling to check for NSF reboot being active.
+  while (absl::Now() < (start_time + kNsfActiveTimeout)) {
+    absl::SleepFor(kFasterPoll);
+    grpc::ClientContext context;
+    RebootStatusRequest request;
+    RebootStatusResponse response;
+
+    // Invoke the RPC and validate the results.
+    auto reboot_status =
+        gnoi_system_stub.RebootStatus(&context, request, &response);
+
+    if (!reboot_status.ok()) {
+      LOG(WARNING) << "Reboot Status, error_message: "
+                   << reboot_status.error_message()
+                   << " error_code: " << reboot_status.error_code();
+      continue;
+    }
+
+    if (!response.active()) {
+      LOG(WARNING) << "Reboot Status Response: " << response.ShortDebugString();
+      continue;
+    }
+
+    return absl::OkStatus();
+  }
+
+  return absl::DeadlineExceededError("Couldn't get NSF reboot active.");
+}
+
+static void AddStartBertRequestForLink(
+    gnoi::diag::StartBERTRequest *bert_request_sut,
+    gnoi::diag::StartBERTRequest *bert_request_control_switch,
+    absl::string_view sut_interface, absl::string_view control_switch_interface,
+    absl::string_view op_id) {
+  bert_request_sut->set_bert_operation_id(op_id);
+  *(bert_request_sut->add_per_port_requests()) =
+      gutil::ParseProtoOrDie<gnoi::diag::StartBERTRequest::PerPortRequest>(
+          BuildPerPortStartBertRequest(sut_interface));
+  bert_request_control_switch->set_bert_operation_id(op_id);
+  *(bert_request_control_switch->add_per_port_requests()) =
+      gutil::ParseProtoOrDie<gnoi::diag::StartBERTRequest::PerPortRequest>(
+          BuildPerPortStartBertRequest(control_switch_interface));
+}
+
+static void
+StartBertOnLink(gnoi::diag::StartBERTRequest &bert_request_sut,
+                gnoi::diag::StartBERTRequest &bert_request_control_switch,
+                gnoi::diag::Diag::StubInterface &sut_diag_stub,
+                thinkit::ControlDevice &control_device) {
+  LOG(INFO) << "Sending StartBERT request on SUT:";
+  ASSERT_NO_FATAL_FAILURE(
+      SendStartBertRequestSuccessfullyOnSut(bert_request_sut, sut_diag_stub));
+
+  LOG(INFO) << "Sending StartBERT request on control switch:";
+  ASSERT_NO_FATAL_FAILURE(SendStartBertRequestSuccessfullyOnControlSwitch(
+      bert_request_control_switch, control_device));
+}
+
+// Get max poll count for polling to get BERT completion result.
+static int GetMaxPollCount(absl::Time start_time) {
+  return 1 + static_cast<int>((kDelayDuration + kWaitTime + kTestDuration -
+                               (absl::Now() - start_time) - absl::Seconds(1)) /
+                              kPollInterval);
 }
 
 // Test StartBERT with invalid request parameters.
@@ -1479,4 +1587,161 @@ TEST_P(BertTest, StopBertSucceeds) {
       ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
 }
 
+// Tests that if BERT is in progress, NSF reboot request is rejected.
+// If NSF reboot is in progress, BERT start request is rejected.
+// After NSF reboot is successfully completed, LQ should run properly.
+TEST_P(BertTest, BertWithNsf) {
+  ASSERT_NO_FATAL_FAILURE(
+      InitializeTestEnvironment("1319dffa-2931-4e2e-9b31-27ab163d4fc4"));
+
+  if (!GetParam().nsf_supported) {
+    GTEST_SKIP() << "NSF is not supported.";
+  }
+
+  // Test requires one SUT interface.
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "No SUT interfaces to test";
+  }
+  thinkit::Switch &sut = generic_testbed_->Sut();
+  thinkit::ControlDevice &control_device = generic_testbed_->ControlDevice();
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
+
+  // Select one operational state "up" port.
+  std::string interface = absl::GetFlag(FLAGS_interface);
+  if (!interface.empty()) {
+    // Verify that provided interfaces are part of SUT's UP interfaces.
+    ASSERT_TRUE(IsInterfaceInList(interface, sut_interfaces_))
+        << "SUT test interface selected for test: "
+        << interface << "./n UP interfaces on SUT: "
+        << absl::StrJoin(sut_interfaces_, ",");
+  } else {
+    sut_test_interfaces_ = SelectNInterfacesFromList(1, sut_interfaces_);
+    interface = sut_test_interfaces_[0];
+  }
+  ASSERT_OK_AND_ASSIGN(peer_test_interfaces_,
+                       GetPeerInterfacesForSutInterfaces(sut_test_interfaces_));
+  std::string peer_interface = peer_test_interfaces_[0];
+  LOG(INFO) << "Selected {SUT, control interface}: {" << interface << ", "
+            << peer_interface
+            << "}. To repeat the test with same SUT interface, use "
+            << "--test_arg=--interface=" << interface << " in test arguments.";
+
+  gnoi::diag::StartBERTRequest bert_request_sut;
+  gnoi::diag::StartBERTRequest bert_request_control_switch;
+  std::string op_id = absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now()));
+
+  ASSERT_NO_FATAL_FAILURE(AddStartBertRequestForLink(
+      &bert_request_sut, &bert_request_control_switch, interface,
+      peer_interface, op_id));
+
+  ASSERT_NO_FATAL_FAILURE(StartBertOnLink(bert_request_sut,
+                                          bert_request_control_switch,
+                                          *sut_diag_stub_, control_device));
+
+  // Get start timestamp.
+  absl::Time start_time = absl::Now();
+  // Wait before reading the oper status.
+  absl::SleepFor(kWaitToReadOperStatus);
+
+  // Verify that SUT port should be in TESTING mode now.
+  {
+    ASSERT_OK_AND_ASSIGN(
+        pins_test::OperStatus oper_status,
+        pins_test::GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub_, interface));
+    ASSERT_EQ(oper_status, pins_test::OperStatus::kTesting);
+  }
+
+  // Request NSF on SUT and it should be rejected.
+  pins_test::Testbed testbed_variant = std::move(generic_testbed_);
+  EXPECT_THAT(pins_test::NsfReboot(testbed_variant),
+              gutil::StatusIs(absl::StatusCode::kUnavailable));
+
+  // Wait for BERT to finish on test interface or timeout.
+  int max_poll_count = GetMaxPollCount(start_time);
+
+  ASSERT_NO_FATAL_FAILURE(WaitForBertToCompleteOnInterfaces(
+      *sut_gnmi_stub_, {interface}, control_device,
+      GetBertResultRequestFromStartRequest(bert_request_control_switch),
+      max_poll_count));
+
+  ASSERT_NO_FATAL_FAILURE(GetAndVerifyResultForSuccess(
+      bert_request_sut, bert_request_control_switch, *sut_diag_stub_,
+      control_device, kTestDuration));
+  // Request NSF on SUT and it should be accepted.
+  ASSERT_OK(pins_test::NsfReboot(testbed_variant));
+
+  ASSERT_OK_AND_ASSIGN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
+  absl::Status status = WaitForNsfRebootActive(*sut_gnoi_system_stub);
+  EXPECT_OK(status);
+
+  // Request BERT start request while NSF is in progress, it should be rejected.
+  if (status.ok()) {
+    gnoi::diag::StartBERTRequest sut_request_during_nsf;
+    sut_request_during_nsf.set_bert_operation_id(
+        absl::StrCat("Id-", absl::ToUnixMicros(absl::Now())));
+    *(sut_request_during_nsf.add_per_port_requests()) =
+        gutil::ParseProtoOrDie<gnoi::diag::StartBERTRequest::PerPortRequest>(
+            BuildPerPortStartBertRequest(interface));
+
+    gnoi::diag::StartBERTResponse sut_response;
+    grpc::ClientContext context;
+    LOG(INFO) << "Sending StartBERT request: "
+              << sut_request_during_nsf.ShortDebugString();
+    EXPECT_THAT(
+        gutil::GrpcStatusToAbslStatus(sut_diag_stub_->StartBERT(
+            &context, sut_request_during_nsf, &sut_response)),
+        gutil::StatusIs(absl::StatusCode::kUnavailable, HasSubstr("NSF")))
+        << "Response: " << sut_response.ShortDebugString();
+  }
+
+  // Wait for NSF reboot to complete.
+  EXPECT_OK(
+      pins_test::WaitForNsfReboot(testbed_variant, *GetParam().ssh_client));
+  ASSERT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
+
+  // Verify BERT is still working after NSF reboot.
+  gnoi::diag::StartBERTRequest bert_request_sut_after_nsf;
+  gnoi::diag::StartBERTRequest bert_request_control_switch_after_nsf;
+  op_id = absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now()));
+
+  ASSERT_NO_FATAL_FAILURE(AddStartBertRequestForLink(
+      &bert_request_sut_after_nsf, &bert_request_control_switch_after_nsf,
+      interface, peer_interface, op_id));
+
+  ASSERT_NO_FATAL_FAILURE(StartBertOnLink(bert_request_sut_after_nsf,
+                                          bert_request_control_switch_after_nsf,
+                                          *sut_diag_stub_, control_device));
+
+  // Get start timestamp.
+  start_time = absl::Now();
+
+  // Wait before reading the oper status on the port.
+  absl::SleepFor(kWaitToReadOperStatus);
+  ASSERT_THAT(
+      pins_test::GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub_, interface),
+      IsOkAndHolds(pins_test::OperStatus::kTesting));
+
+  // Wait for BERT to finish on test interface or timeout.
+  max_poll_count = GetMaxPollCount(start_time);
+
+  ASSERT_NO_FATAL_FAILURE(WaitForBertToCompleteOnInterfaces(
+      *sut_gnmi_stub_, {interface}, control_device,
+      GetBertResultRequestFromStartRequest(
+          bert_request_control_switch_after_nsf),
+      max_poll_count));
+
+  ASSERT_NO_FATAL_FAILURE(GetAndVerifyResultForSuccess(
+      bert_request_sut_after_nsf, bert_request_control_switch_after_nsf,
+      *sut_diag_stub_, control_device, kTestDuration));
+
+  // Wait for some time before checking the port status.
+  absl::SleepFor(kPortsUpWaitTime);
+
+  EXPECT_OK(
+      ValidatePortsUp(sut, control_device, sut_interfaces_, peer_interfaces_));
+}
+
+} // namespace
 }  // namespace bert

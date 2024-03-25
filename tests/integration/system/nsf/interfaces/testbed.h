@@ -12,9 +12,6 @@
 
 namespace pins_test {
 
-constexpr size_t kGenericTestbedIndex = 0;
-constexpr size_t kMirrorTestbedIndex = 1;
-
 using Testbed = std::variant<std::unique_ptr<thinkit::GenericTestbed>,
                              thinkit::MirrorTestbed*>;
 using TestbedInterface =
