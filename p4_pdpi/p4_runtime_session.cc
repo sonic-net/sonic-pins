@@ -487,7 +487,17 @@ absl::Status SetMetadataAndSendPiWriteRequests(
 absl::StatusOr<std::vector<Entity>> ReadPiEntities(P4RuntimeSession* session) {
   ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  read_request.add_entities()->mutable_packet_replication_engine_entry();
+  // Currently, `ReadPiEntities()` cannot read all PRE entities due to ambiguity
+  // expanded upon here
+  // (https://github.com/p4lang/PI/pull/610#issuecomment-2011101546). Until the
+  // P4RT App bug is fixed, it will only read
+  // `multicast_group_entry`, but we will eventually want to read
+  // `clone_session_entry` again.
+  // TODO: Remove the workaround that allows `ReadPiEntities()`
+  // read entities without failing.
+  read_request.add_entities()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry();
   ASSIGN_OR_RETURN(ReadResponse read_response,
                    SetMetadataAndSendPiReadRequest(session, read_request));
 

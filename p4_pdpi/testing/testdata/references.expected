@@ -2699,3 +2699,160 @@ ConcreteTableReference{
     ConcreteFieldReference{ source field: 'other_field', destination field: 'multicast_group_id', value: '7' },
   }
 }
+
+=========================================================================
+UnsatisfiedReferences: Unsatisfied reference
+=========================================================================
+-- INPUT --------------------------------------------------------------
+-- PD table entries --
+entries {
+  refers_to_multicast_by_action_table_entry {
+    match {
+      val: "dragon"
+    }
+    action {
+      refers_to_multicast_action {
+        multicast_group_id: "0x0037"
+      }
+    }
+    controller_metadata: "Has unsatisfied reference"
+  }
+}
+
+-- OUTPUT -------------------------------------------------------------
+-- Entity with Unsatisfied References --
+table_entry {
+  table_id: 45367444
+  match {
+    field_id: 1
+    exact {
+      value: "dragon"
+    }
+  }
+  action {
+    action {
+      action_id: 18598416
+      params {
+        param_id: 1
+        value: "7"
+      }
+    }
+  }
+  metadata: "Has unsatisfied reference"
+}
+-- Unsatisfied References--
+ConcreteTableReference{
+  source table: 'refers_to_multicast_by_action_table'
+  destination table: 'builtin::multicast_group_table'
+  fields: {
+    ConcreteFieldReference{ source field: 'refers_to_multicast_action.multicast_group_id', destination field: 'multicast_group_id', value: '7' },
+  }
+}
+
+=========================================================================
+UnsatisfiedReferences: Satisfied and unsatisfied references
+=========================================================================
+-- INPUT --------------------------------------------------------------
+-- PD table entries --
+entries {
+  refers_to_multicast_by_action_table_entry {
+    match {
+      val: "dragon"
+    }
+    action {
+      refers_to_multicast_action {
+        multicast_group_id: "0x0037"
+      }
+    }
+    controller_metadata: "References satisfied"
+  }
+}
+entries {
+  multicast_group_table_entry {
+    match {
+      multicast_group_id: "0x0037"
+    }
+    action {
+      replicate {
+        replicas {
+          port: "some_port"
+          instance: "0x0031"
+        }
+      }
+    }
+    metadata: "Has unsatisfied reference"
+  }
+}
+
+-- OUTPUT -------------------------------------------------------------
+-- Entity with Unsatisfied References --
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 55
+    replicas {
+      instance: 49
+      port: "some_port"
+    }
+    metadata: "Has unsatisfied reference"
+  }
+}
+-- Unsatisfied References--
+ConcreteTableReference{
+  source table: 'builtin::multicast_group_table'
+  destination table: 'referenced_by_multicast_replica_table'
+  fields: {
+    ConcreteFieldReference{ source field: 'replica.instance', destination field: 'instance', value: '1' },
+    ConcreteFieldReference{ source field: 'replica.port', destination field: 'port', value: 'some_port' },
+  }
+}
+
+=========================================================================
+UnsatisfiedReferences: Satisfied references
+=========================================================================
+-- INPUT --------------------------------------------------------------
+-- PD table entries --
+entries {
+  refers_to_multicast_by_action_table_entry {
+    match {
+      val: "dragon"
+    }
+    action {
+      refers_to_multicast_action {
+        multicast_group_id: "0x0037"
+      }
+    }
+    controller_metadata: "References satisfied"
+  }
+}
+entries {
+  multicast_group_table_entry {
+    match {
+      multicast_group_id: "0x0037"
+    }
+    action {
+      replicate {
+        replicas {
+          port: "some_port"
+          instance: "0x0031"
+        }
+      }
+    }
+    metadata: "References satisfied"
+  }
+}
+entries {
+  referenced_by_multicast_replica_table_entry {
+    match {
+      port: "some_port"
+      instance: "0x0031"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+    controller_metadata: "Has no references"
+  }
+}
+
+-- OUTPUT -------------------------------------------------------------
+<empty>
