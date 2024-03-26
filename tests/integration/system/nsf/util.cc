@@ -240,27 +240,11 @@ absl::Status Reboot(RebootMethod method, Testbed& testbed) {
 }
 
 void SetupTestbed(TestbedInterface& testbed_interface) {
-  std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbedInterface>& testbed) {
-            return testbed->SetUp();
-          },
-          [&](std::unique_ptr<thinkit::MirrorTestbedInterface>& testbed) {
-            return testbed->SetUp();
-          }},
-      testbed_interface);
+  std::visit([](auto &&testbed) { testbed->SetUp(); }, testbed_interface);
 }
 
 void TearDownTestbed(TestbedInterface& testbed_interface) {
-  std::visit(
-      gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbedInterface>& testbed) {
-            return testbed->TearDown();
-          },
-          [&](std::unique_ptr<thinkit::MirrorTestbedInterface>& testbed) {
-            return testbed->TearDown();
-          }},
-      testbed_interface);
+  std::visit([](auto &&testbed) { testbed->TearDown(); }, testbed_interface);
 }
 
 absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface) {
@@ -290,16 +274,22 @@ absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface) {
 
 thinkit::Switch& GetSut(Testbed& testbed) {
   return std::visit(
-      [&](auto &&testbed) -> thinkit::Switch & { return testbed->Sut(); },
+      [](auto &&testbed) -> thinkit::Switch & { return testbed->Sut(); },
       testbed);
 }
 
 thinkit::TestEnvironment &GetTestEnvironment(Testbed &testbed) {
   return std::visit(
-      [&](auto &&testbed) -> thinkit::TestEnvironment & {
+      [](auto &&testbed) -> thinkit::TestEnvironment & {
         return testbed->Environment();
       },
       testbed);
+}
+
+void ExpectLinkFlaps(TestbedInterface &testbed_interface) {
+  std::visit(
+      [](auto &&testbed_interface) { testbed_interface->ExpectLinkFlaps(); },
+      testbed_interface);
 }
 
 absl::StatusOr<std::string> ImageCopy(const std::string& image_label,
@@ -459,14 +449,17 @@ absl::Status DoNsfRebootAndWaitForSwitchReady(
   return absl::OkStatus();
 }
 
-absl::Status PushConfig(const ImageConfigParams& image_config_param,
-                        Testbed& testbed, thinkit::SSHClient& ssh_client,
-                        bool is_fresh_install) {
+absl::Status PushConfig(const ImageConfigParams &image_config_param,
+                        Testbed &testbed, thinkit::SSHClient &ssh_client,
+                        bool is_fresh_install, bool check_interfaces_up) {
   thinkit::Switch& sut = GetSut(testbed);
   LOG(INFO) << "Pushing config on " << sut.ChassisName();
   RETURN_IF_ERROR(PushSwitchConfig(sut, image_config_param, is_fresh_install));
-  return WaitForSwitchState(sut, SwitchState::kReady, kTurnUpTimeout,
-                            ssh_client, GetConnectedInterfacesForSut(testbed));
+  return WaitForSwitchState(
+      sut,
+      check_interfaces_up ? SwitchState::kReady
+                          : SwitchState::kReadyWithoutInterfacesUp,
+      kTurnUpTimeout, ssh_client, GetConnectedInterfacesForSut(testbed));
 }
 
 absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {

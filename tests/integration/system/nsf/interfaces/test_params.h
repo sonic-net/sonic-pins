@@ -42,6 +42,7 @@ struct ImageConfigParams {
 // parameterized NSF integration test.
 struct NsfTestParams {
   std::string name;
+  std::string test_case_id;
   std::vector<ImageConfigParams> image_config_params;
   std::function<std::unique_ptr<FlowProgrammer>()> create_flow_programmer;
   std::function<std::unique_ptr<TrafficHelper>()> create_traffic_helper;
@@ -49,6 +50,9 @@ struct NsfTestParams {
   std::function<std::vector<std::unique_ptr<ComponentValidator>>()>
       create_component_validators;
   std::function<std::unique_ptr<thinkit::SSHClient>()> create_ssh_client;
+  // TODO: This is a temporary workaround and
+  // needs to be removed once the testbeds are ready.
+  bool enable_interface_validation_during_nsf = true;
 };
 
 }  // namespace pins_test

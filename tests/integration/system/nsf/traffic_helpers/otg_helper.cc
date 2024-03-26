@@ -39,7 +39,7 @@ namespace pins_test {
 absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
   return std::visit(
       gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbed>& testbed)
+          [this](std::unique_ptr<thinkit::GenericTestbed>& testbed)
               -> absl::Status {
             ASSIGN_OR_RETURN(std::vector<InterfaceLink> up_links,
                              GetUpLinks(GetAllTrafficGeneratorLinks, *testbed));
@@ -109,7 +109,11 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
 
             // Set transmission rate.
             flow->mutable_rate()->set_choice(otg::FlowRate::Choice::percentage);
-            flow->mutable_rate()->set_percentage(5);
+            if (enable_linerate_) {
+              flow->mutable_rate()->set_percentage(98);
+            } else {
+              flow->mutable_rate()->set_percentage(5);
+            }
 
             // Set capture metrics.
             flow->mutable_metrics()->set_enable(true);
@@ -221,6 +225,21 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
             std::vector<std::string> errors;
             for (const auto& flow_metric :
                  metrics_res.metrics_response().flow_metrics()) {
+              bool transmission_stopped =
+                  flow_metric.transmit() == otg::FlowMetric::Transmit::stopped;
+
+              if (flow_metric.bytes_tx() == 0 || flow_metric.frames_tx() == 0) {
+                errors.push_back(
+                    absl::StrCat("Flow name:\t\t", flow_metric.name(),
+                                 "\nFrames Tx:\t\t", flow_metric.frames_tx(),
+                                 "\nBytes Tx:\t\t", flow_metric.bytes_tx(),
+                                 transmission_stopped
+                                     ? ""
+                                     : "\nTransmission not completed within "
+                                       "the expected time."));
+                continue;
+              }
+
               uint64_t bytes_drop =
                   flow_metric.bytes_tx() - flow_metric.bytes_rx();
               uint64_t frames_drop =
@@ -229,8 +248,6 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
                   (bytes_drop / flow_metric.bytes_tx()) * 100;
               float_t frames_drop_percent =
                   (frames_drop / flow_metric.frames_tx()) * 100;
-              bool transmission_stopped =
-                  flow_metric.transmit() == otg::FlowMetric::Transmit::stopped;
 
               if (bytes_drop_percent <= error_percentage &&
                   frames_drop_percent <= error_percentage)
