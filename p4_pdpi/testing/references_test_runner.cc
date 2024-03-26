@@ -1480,6 +1480,126 @@ absl::Status PossibleIncomingConcreteTableReferencesTest() {
   return absl::OkStatus();
 }
 
+struct UnsatisfiedReferencesTestCase {
+  std::string description;
+  // PD representation of PI entity used to generate outgoing/possible-incoming
+  // table references. Valid entities must meet the following requirements:
+  // - Entity must be valid for main.p4 program.
+  pdpi::TableEntries entities;
+};
+
+std::vector<UnsatisfiedReferencesTestCase> UnsatisfiedReferencesTestCases() {
+  return {
+      UnsatisfiedReferencesTestCase{
+          .description = "Unsatisfied reference",
+          .entities = gutil::ParseProtoOrDie<pdpi::TableEntries>(R"pb(
+            entries {
+              refers_to_multicast_by_action_table_entry {
+                match { val: "dragon" }
+                action {
+                  refers_to_multicast_action { multicast_group_id: "0x0037" }
+                }
+                controller_metadata: "Has unsatisfied reference"
+              }
+            }
+          )pb")},
+      UnsatisfiedReferencesTestCase{
+          .description = "Satisfied and unsatisfied references",
+          .entities = gutil::ParseProtoOrDie<pdpi::TableEntries>(R"pb(
+            entries {
+              refers_to_multicast_by_action_table_entry {
+                match { val: "dragon" }
+                action {
+                  refers_to_multicast_action { multicast_group_id: "0x0037" }
+                }
+                controller_metadata: "References satisfied"
+              }
+            }
+            entries {
+              multicast_group_table_entry {
+                match { multicast_group_id: "0x0037" }
+                action {
+                  replicate {
+                    replicas { port: "some_port" instance: "0x0031" }
+                  }
+                }
+                metadata: "Has unsatisfied reference"
+              }
+            }
+          )pb")},
+      UnsatisfiedReferencesTestCase{
+          .description = "Satisfied references",
+          .entities = gutil::ParseProtoOrDie<pdpi::TableEntries>(R"pb(
+            entries {
+              refers_to_multicast_by_action_table_entry {
+                match { val: "dragon" }
+                action {
+                  refers_to_multicast_action { multicast_group_id: "0x0037" }
+                }
+                controller_metadata: "References satisfied"
+              }
+
+            }
+            entries {
+              multicast_group_table_entry {
+                match { multicast_group_id: "0x0037" }
+                action {
+                  replicate {
+                    replicas { port: "some_port" instance: "0x0031" }
+                  }
+                }
+                metadata: "References satisfied"
+              }
+            }
+            entries {
+              referenced_by_multicast_replica_table_entry {
+                match { port: "some_port" instance: "0x0031" }
+                action { do_thing_4 {} }
+                controller_metadata: "Has no references"
+              }
+            }
+          )pb")},
+  };
+}
+
+absl::Status UnsatisfiedReferencesTest() {
+  for (const auto& test_case : UnsatisfiedReferencesTestCases()) {
+    std::cout << TestHeader(absl::StrCat("UnsatisfiedReferences: ",
+                                         test_case.description))
+              << "\n";
+
+    std::cout << kInputBanner << "-- PD table entries --\n";
+    std::cout << gutil::PrintTextProto(test_case.entities) << "\n";
+
+    ASSIGN_OR_RETURN(
+        const std::vector<p4::v1::Entity> pi_entities,
+        PdTableEntriesToPiEntities(GetTestIrP4Info(), test_case.entities));
+
+    ASSIGN_OR_RETURN(
+        const std::vector<EntityWithUnsatisfiedReferences>
+            entity_with_unsatisfied_references,
+        UnsatisfiedOutgoingReferences(pi_entities, GetTestIrP4Info()));
+
+    std::cout << kOutputBanner;
+    if (entity_with_unsatisfied_references.empty()) {
+      std::cout << "<empty>\n\n";
+    } else {
+      for (const auto& entity_with_unsatisfied_references :
+           entity_with_unsatisfied_references) {
+        std::cout
+            << "-- Entity with Unsatisfied References --\n"
+            << gutil::PrintTextProto(entity_with_unsatisfied_references.entity)
+            << "-- Unsatisfied References--\n"
+            << absl::StrJoin(
+                   entity_with_unsatisfied_references.unsatisfied_references,
+                   "\n")
+            << "\n";
+      }
+    }
+  }
+  return absl::OkStatus();
+}
+
 void main(int argc, char** argv) {
   if (absl::Status test = OutgoingConcreteTableReferencesTest(); !test.ok()) {
     std::cout << "OutgoingConcreteTableReferencesTest failed.\n" << test;
@@ -1489,6 +1609,10 @@ void main(int argc, char** argv) {
       !test.ok()) {
     std::cout << "PossibleIncomingConcreteTableReferencesTest failed.\n"
               << test;
+  }
+
+  if (absl::Status test = UnsatisfiedReferencesTest(); !test.ok()) {
+    std::cout << "UnsatisfiedReferencesTest failed.\n" << test;
   }
 }
 

@@ -9,9 +9,12 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "google/protobuf/repeated_ptr_field.h"
+#include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/reference_annotations.h"
 #include "p4_pdpi/string_encodings/byte_string.h"
@@ -428,6 +431,100 @@ OutgoingConcreteTableReferences(const IrTableReference& reference_info,
     }
   }
   return result;
+}
+
+// Returns incoming table references from `info` that are associated with
+// `entity`. Returns error if `entity` is unsupported or unknown.
+absl::StatusOr<google::protobuf::RepeatedPtrField<IrTableReference>>
+GetIncomingTableReferences(const IrP4Info& info, const p4::v1::Entity& entity) {
+  if (entity.has_table_entry()) {
+    ASSIGN_OR_RETURN(auto* table_def,
+                     gutil::FindPtrOrStatus(info.tables_by_id(),
+                                            entity.table_entry().table_id()));
+    return table_def->incoming_references();
+  }
+  if (entity.packet_replication_engine_entry().has_multicast_group_entry()) {
+    ASSIGN_OR_RETURN(
+        std::string multicast_table,
+        IrBuiltInTableToString(BUILT_IN_TABLE_MULTICAST_GROUP_TABLE));
+    ASSIGN_OR_RETURN(
+        auto* multicast_group_def,
+        gutil::FindPtrOrStatus(info.built_in_tables(), multicast_table));
+    return multicast_group_def->incoming_references();
+  }
+
+  return gutil::InvalidArgumentErrorBuilder()
+         << "Unsupported entity type: " << entity.DebugString();
+}
+
+absl::StatusOr<google::protobuf::RepeatedPtrField<IrTableReference>>
+GetOutgoingTableReferences(const IrP4Info& info, const p4::v1::Entity& entity) {
+  if (entity.has_table_entry()) {
+    ASSIGN_OR_RETURN(auto* table_def,
+                     gutil::FindPtrOrStatus(info.tables_by_id(),
+                                            entity.table_entry().table_id()));
+    return table_def->outgoing_references();
+  }
+  if (entity.packet_replication_engine_entry().has_multicast_group_entry()) {
+    ASSIGN_OR_RETURN(
+        std::string multicast_table,
+        IrBuiltInTableToString(BUILT_IN_TABLE_MULTICAST_GROUP_TABLE));
+    ASSIGN_OR_RETURN(
+        auto* multicast_group_def,
+        gutil::FindPtrOrStatus(info.built_in_tables(), multicast_table));
+    return multicast_group_def->outgoing_references();
+  }
+
+  return gutil::InvalidArgumentErrorBuilder()
+         << "Unsupported entity type: " << entity.DebugString();
+}
+
+absl::StatusOr<std::vector<EntityWithUnsatisfiedReferences>>
+UnsatisfiedOutgoingReferences(const std::vector<::p4::v1::Entity>& pi_entities,
+                              const pdpi::IrP4Info& info) {
+  // The set of all possible references that can be satisfied by `entities`
+  absl::flat_hash_set<ConcreteTableReference> satisfiable_references;
+  for (const auto& pi_entity : pi_entities) {
+    ASSIGN_OR_RETURN(auto incoming_table_references,
+                     GetIncomingTableReferences(info, pi_entity));
+    for (const IrTableReference& incoming_reference :
+         incoming_table_references) {
+      ASSIGN_OR_RETURN(auto incoming_concrete_table_references,
+                       PossibleIncomingConcreteTableReferences(
+                           incoming_reference, pi_entity));
+      satisfiable_references.insert(incoming_concrete_table_references.begin(),
+                                    incoming_concrete_table_references.end());
+    }
+  }
+
+  std::vector<EntityWithUnsatisfiedReferences>
+      entity_with_unsatisfied_references;
+  for (const auto& pi_entity : pi_entities) {
+    ASSIGN_OR_RETURN(auto outgoing_table_references,
+                     GetOutgoingTableReferences(info, pi_entity));
+    std::vector<ConcreteTableReference> unsatisfied_references;
+    for (const IrTableReference& outgoing_table_reference :
+         outgoing_table_references) {
+      ASSIGN_OR_RETURN(
+          auto outgoing_concrete_table_references,
+          OutgoingConcreteTableReferences(outgoing_table_reference, pi_entity));
+      for (const ConcreteTableReference& outgoing_table_concrete_reference :
+           outgoing_concrete_table_references) {
+        if (!satisfiable_references.contains(
+                outgoing_table_concrete_reference)) {
+          unsatisfied_references.push_back(outgoing_table_concrete_reference);
+        }
+      }
+    }
+    if (!unsatisfied_references.empty()) {
+      entity_with_unsatisfied_references.push_back(
+          EntityWithUnsatisfiedReferences{
+              .entity = pi_entity,
+              .unsatisfied_references = std::move(unsatisfied_references),
+          });
+    }
+  }
+  return entity_with_unsatisfied_references;
 }
 
 absl::StatusOr<absl::flat_hash_set<ConcreteTableReference>>
