@@ -49,6 +49,7 @@
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "glog/logging.h"
 #include "google/protobuf/any.pb.h"
+#include "google/protobuf/text_format.h"
 #include "grpcpp/client_context.h"
 #include "gutil/collections.h"
 #include "gutil/proto.h"
