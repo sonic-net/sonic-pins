@@ -32,6 +32,7 @@
 #include "absl/types/span.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/text_format.h"
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
@@ -392,6 +393,9 @@ TEST(ParseAlarms, InvalidInput) {
 // path and the `gnmi_config` as the response value.
 gnmi::GetResponse ConstructResponse(absl::string_view oc_path,
                                     absl::string_view gnmi_config) {
+  std::string path_textproto;
+  google::protobuf::TextFormat::PrintToString(ConvertOCStringToPath(oc_path),
+                                              &path_textproto);
   std::string response = absl::Substitute(
       R"pb(notification {
              timestamp: 1620348032128305716
@@ -401,7 +405,7 @@ gnmi::GetResponse ConstructResponse(absl::string_view oc_path,
                val { json_ietf_val: "$1" }
              }
            })pb",
-      ConvertOCStringToPath(oc_path).DebugString(), absl::CEscape(gnmi_config));
+      path_textproto, absl::CEscape(gnmi_config));
   return gutil::ParseProtoOrDie<gnmi::GetResponse>(response);
 }
 
