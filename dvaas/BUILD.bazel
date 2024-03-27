@@ -25,10 +25,11 @@ package(
 DVAAS_USER_ALLOW_LIST = [
     "//platforms/networking/gpins/testing/blackbox/p4:__subpackages__",
     "//platforms/networking/gpins/testing/blackbox/replay:__subpackages__",
+    "//platforms/networking/gpins/testing/blackbox/experimental:__subpackages__",
     "//platforms/networking/gpins/testing/ondatra/thinkit/tests:__pkg__",
     "//tests/forwarding:__pkg__",
     "//tests/ondatra/thinkit:__pkg__",
-    "//p4testgen:__pkg__",
+    "//p4testgen:__subpackages__",
     "//platforms/networking/gpins/testing/lib/nsf/traffic_helpers:__subpackages__",
 ]
 
@@ -71,7 +72,6 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -203,7 +203,7 @@ proto_library(
     name = "packet_trace_proto",
     testonly = False,
     srcs = ["packet_trace.proto"],
-
+    deps = ["//p4_pdpi:ir_proto"],
 )
 
 cc_proto_library(
