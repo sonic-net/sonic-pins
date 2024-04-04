@@ -960,7 +960,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 200
+  size: 190
 }
 tables {
   preamble {
@@ -1160,7 +1160,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 128
+  size: 1024
 }
 tables {
   preamble {
@@ -1569,14 +1569,20 @@ actions {
 actions {
   preamble {
     id: 16777489
-    name: "ingress.acl_ingress.set_cpu_and_multicast_queues_and_deny_above_rate_limit"
-    alias: "set_cpu_and_multicast_queues_and_deny_above_rate_limit"
+    name: "ingress.acl_ingress.set_dscp_and_queues_and_deny_above_rate_limit"
+    alias: "set_dscp_and_queues_and_deny_above_rate_limit"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_RED)"
     annotations: "@unsupported"
   }
   params {
     id: 1
+    name: "dscp"
+    annotations: "@sai_action_param(SAI_ACL_ACTION_TYPE_SET_DSCP)"
+    bitwidth: 6
+  }
+  params {
+    id: 2
     name: "cpu_queue"
     annotations: "@sai_action_param(QOS_QUEUE)"
     type_name {
@@ -1584,7 +1590,7 @@ actions {
     }
   }
   params {
-    id: 2
+    id: 3
     name: "green_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
@@ -1592,9 +1598,25 @@ actions {
     }
   }
   params {
-    id: 3
+    id: 4
     name: "red_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+  params {
+    id: 5
+    name: "green_unicast_queue"
+    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+  params {
+    id: 6
+    name: "red_unicast_queue"
+    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
       name: "qos_queue_t"
     }
