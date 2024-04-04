@@ -135,21 +135,26 @@ control acl_ingress(in headers_t headers,
     //  * This action should model behaviors.
   }
 
-  // Forwards green packets normally. Otherwise, drops packets and ensures that
-  // they are not copied to the CPU.
-  // Also sets CPU queue and Multicast queue, with different multicast queues
-  // set depending on packet color.
-  @id(ACL_INGRESS_SET_CPU_AND_MULTICAST_QUEUES_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID)
+  // Forwards green packets normally and sets their DSCP to the given value.
+  // Otherwise, drops packets and ensures that they are not copied to the CPU.
+  // Also sets CPU queue, Multicast queue, and Unicast queue, with different
+  // multicast queues set depending on packet color.
+  @id(ACL_INGRESS_SET_DSCP_AND_QUEUES_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_RED)
   // TODO: Remove @unsupported annotation.
   @unsupported
-  action set_cpu_and_multicast_queues_and_deny_above_rate_limit(
-      @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
-      @id(2) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
+  action set_dscp_and_queues_and_deny_above_rate_limit(
+      @id(1) @sai_action_param(SAI_ACL_ACTION_TYPE_SET_DSCP) bit<6> dscp,
+      @id(2) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
+      @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
         qos_queue_t green_multicast_queue,
-      @id(3) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_multicast_queue) {
+      @id(4) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_multicast_queue,
+      @id(5) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_GREEN)
+        qos_queue_t green_unicast_queue,
+      @id(6) @sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_unicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
@@ -420,8 +425,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(3) acl_forward();
       @proto_id(4) acl_drop(local_metadata);
       @proto_id(5) set_cpu_queue();
-      @proto_id(6)
-        set_cpu_and_multicast_queues_and_deny_above_rate_limit();
+      @proto_id(6) set_dscp_and_queues_and_deny_above_rate_limit();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
