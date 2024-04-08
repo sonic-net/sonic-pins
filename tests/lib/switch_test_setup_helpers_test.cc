@@ -14,25 +14,20 @@
 
 #include "tests/lib/switch_test_setup_helpers.h"
 
-#include <cstdlib>
 #include <memory>
 #include <optional>
-#include <queue>
 #include <string>
 #include <vector>
 
 #include "absl/memory/memory.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
-#include "gmock/gmock.h"
 #include "grpcpp/test/mock_stream.h"
-#include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
+#include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -46,14 +41,20 @@
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/mock_switch.h"
+#include "third_party/json/include/nlohmann/json_fwd.hpp"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins_test {
 namespace {
 
 using ::gutil::EqualsProto;
 using ::testing::AnyNumber;
+using ::testing::Eq;
+using ::testing::ExplainMatchResult;
 using ::testing::InSequence;
 using ::testing::Not;
+using ::testing::Pointwise;
 using ::testing::Return;
 using ::testing::ReturnRef;
 using ::testing::StrictMock;
@@ -443,6 +444,105 @@ TEST(RewritePortsForTableEntriesTest, GnmiConfigWorks) {
   ASSERT_OK(RewritePortsInTableEntries(fbr_info, gnmi_config, entries));
 
   ASSERT_EQ(entries[0].action().params(0).value().str(), "1");
+}
+
+struct MirroredPortTestInterface {
+  std::string port_name;
+  int port_id;
+  bool up;
+};
+
+std::string MirrorPortOpenConfigInterfaces(
+    const std::vector<MirroredPortTestInterface> &interfaces) {
+  std::vector<nlohmann::json> port_configs;
+  for (const auto &interface : interfaces) {
+    port_configs.push_back({
+        {"name", interface.port_name},
+        {
+            "state",
+            {
+                {"openconfig-p4rt:id", interface.port_id},
+                {"oper-status", interface.up ? "UP" : "DOWN"},
+                {"type", "iana-if-type:ethernetCsmacd"},
+            },
+        },
+    });
+  }
+
+  nlohmann::json open_config{
+      {"openconfig-interfaces:interfaces", {{"interface", port_configs}}}};
+  return open_config.dump();
+}
+
+MATCHER(MirroredPortIs, "") {
+  const MirroredPort &actual = std::get<0>(arg);
+  const MirroredPort &expected = std::get<1>(arg);
+  return ExplainMatchResult(Eq(expected.interface), actual.interface,
+                            result_listener) &&
+         ExplainMatchResult(Eq(expected.sut.GetP4rtEncoding()),
+                            actual.sut.GetP4rtEncoding(), result_listener) &&
+         ExplainMatchResult(Eq(expected.control_switch.GetP4rtEncoding()),
+                            actual.control_switch.GetP4rtEncoding(),
+                            result_listener);
+}
+
+TEST(MirroredPortstest, ReturnsMirroredPorts) {
+  auto mock_sut_stub = absl::make_unique<gnmi::MockgNMIStub>();
+  auto mock_control_switch_stub = absl::make_unique<gnmi::MockgNMIStub>();
+
+  EXPECT_CALL(*mock_sut_stub, Get)
+      .WillRepeatedly([=](auto, auto, gnmi::GetResponse *response) {
+        *response->add_notification()
+             ->add_update()
+             ->mutable_val()
+             ->mutable_json_ietf_val() = MirrorPortOpenConfigInterfaces({
+            {.port_name = "Ethernet1/1/1", .port_id = 1, .up = true},
+            {.port_name = "Ethernet1/1/5", .port_id = 2, .up = true},
+            {.port_name = "Ethernet1/4/1", .port_id = 7, .up = true},
+            {.port_name = "Ethernet1/4/5", .port_id = 8, .up = false},
+            {.port_name = "Ethernet1/5/1", .port_id = 9, .up = true},
+        });
+        return grpc::Status::OK;
+      });
+
+  EXPECT_CALL(*mock_control_switch_stub, Get)
+      .WillRepeatedly([=](auto, auto, gnmi::GetResponse *response) {
+        *response->add_notification()
+             ->add_update()
+             ->mutable_val()
+             ->mutable_json_ietf_val() = MirrorPortOpenConfigInterfaces({
+            {.port_name = "Ethernet1/1/1", .port_id = 1, .up = true},
+            {.port_name = "Ethernet1/1/5", .port_id = 3, .up = true},
+            {.port_name = "Ethernet1/3/1", .port_id = 7, .up = true},
+            {.port_name = "Ethernet1/4/5", .port_id = 8, .up = false},
+            {.port_name = "Ethernet1/5/1", .port_id = 9, .up = true},
+        });
+        return grpc::Status::OK;
+      });
+  ASSERT_OK_AND_ASSIGN(
+      auto mirrored_ports,
+      MirroredPorts(*mock_sut_stub, *mock_control_switch_stub));
+  EXPECT_THAT(
+      mirrored_ports,
+      Pointwise(
+          MirroredPortIs(),
+          std::vector<MirroredPort>({
+              {
+                  .interface = "Ethernet1/1/1",
+                  .sut = P4rtPortId::MakeFromOpenConfigEncoding(1),
+                  .control_switch = P4rtPortId::MakeFromOpenConfigEncoding(1),
+              },
+              {
+                  .interface = "Ethernet1/1/5",
+                  .sut = P4rtPortId::MakeFromOpenConfigEncoding(2),
+                  .control_switch = P4rtPortId::MakeFromOpenConfigEncoding(3),
+              },
+              {
+                  .interface = "Ethernet1/5/1",
+                  .sut = P4rtPortId::MakeFromOpenConfigEncoding(9),
+                  .control_switch = P4rtPortId::MakeFromOpenConfigEncoding(9),
+              },
+          })));
 }
 
 }  // namespace
