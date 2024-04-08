@@ -152,6 +152,32 @@ cc_library(
 )
 
 cc_library(
+    name = "nsf_dynamic_state_update_test",
+    testonly = True,
+    srcs = ["nsf_dynamic_state_update_test.cc"],
+    hdrs = ["nsf_dynamic_state_update_test.h"],
+    deps = [
+        ":util",
+        "//gutil:status_matchers",
+        "//lib/gnmi:gnmi_helper",
+        "//tests/gnmi:util",
+        "//tests/integration/system/nsf/interfaces:testbed",
+        "//thinkit:generic_testbed_fixture",
+        "//thinkit:mirror_testbed",
+        "//thinkit:mirror_testbed_fixture",
+        "//thinkit:ssh_client",
+        "//thinkit:switch",
+        "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
     name = "nsf_concurrent_config_push_flow_programming_test",
     testonly = True,
     srcs = ["nsf_concurrent_config_push_flow_programming_test.cc"],
