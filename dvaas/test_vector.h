@@ -26,6 +26,9 @@
 
 namespace dvaas {
 
+// A map of packet tags to corresponding test vectors.
+using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
+
 // Returns a string that must be included in the payload of test packets.
 // This "tag" encodes the given test packet ID, which must be:
 // * Uniform across all packets within a packet test vector, incl. input &
@@ -47,8 +50,6 @@ std::ostream &operator<<(std::ostream &os, const SwitchOutput &output);
 // (input, acceptable outputs) in the given `packet_test_vectr`. Returns an
 // error if the packets are not already tagged.
 absl::Status UpdateTestTag(PacketTestVector &packet_test_vector, int new_tag);
-
-using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
 
 } // namespace dvaas
 
