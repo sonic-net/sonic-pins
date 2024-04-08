@@ -1110,13 +1110,6 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
-  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    pins_test::Testbed testbed = &Testbed();
-    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
-  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
-    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
-  }
-
   std::vector<PacketAndExpectedTargetQueue> test_packets =
       GetParam().test_packet_generator_function(
           sut_gnmi_config, absl::GetFlag(FLAGS_switch_instantiation));
@@ -1124,6 +1117,9 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
   ASSERT_FALSE(test_packets.empty())
       << "No packets to test, maybe no loopback IP is configured on switch?";
 
+  // Clear table entries and install l3 admit entry.
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+  absl::flat_hash_set<std::string> added_dst_mac;
   for (const PacketAndExpectedTargetQueue &test_packet : test_packets) {
     std::string_view target_queue = test_packet.target_queue;
     SCOPED_TRACE(absl::StrCat("Packet: ", test_packet.packet_name,
@@ -1131,28 +1127,57 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
     LOG(INFO) << absl::StrCat("Packet: ", test_packet.packet_name,
                               ", Target queue: ", target_queue);
 
-    // Clear table entries and install l3 admit entry.
-    ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
     ASSERT_GT(test_packet.packet.headers().size(), 0);
     ASSERT_TRUE(test_packet.packet.headers(0).has_ethernet_header());
-    ASSERT_OK(pdpi::InstallPdTableEntry<sai::TableEntry>(
-        *sut_p4rt_session,
-        absl::Substitute(
-            R"pb(
-              l3_admit_table_entry {
-                match { dst_mac { value: "$0" mask: "FF:FF:FF:FF:FF:FF" } }
-                action { admit_to_l3 {} }
-                priority: 1
-              }
-            )pb",
-            test_packet.packet.headers(0)
-                .ethernet_header()
-                .ethernet_destination())));
+    LOG(INFO) << "Packet dst mac: "
+              << test_packet.packet.headers(0)
+                     .ethernet_header()
+                     .ethernet_destination();
 
+    // Install l3 admit entry only once per dst mac.
+    if (!added_dst_mac.contains(test_packet.packet.headers(0)
+                                    .ethernet_header()
+                                    .ethernet_destination())) {
+      LOG(INFO) << "Installing l3 admit entry for "
+                << test_packet.packet.headers(0)
+                       .ethernet_header()
+                       .ethernet_destination();
+      ASSERT_OK(pdpi::InstallPdTableEntry<sai::TableEntry>(
+          *sut_p4rt_session,
+          absl::Substitute(
+              R"pb(
+                l3_admit_table_entry {
+                  match { dst_mac { value: "$0" mask: "FF:FF:FF:FF:FF:FF" } }
+                  action { admit_to_l3 {} }
+                  priority: 1
+                }
+              )pb",
+              test_packet.packet.headers(0)
+                  .ethernet_header()
+                  .ethernet_destination())));
+      added_dst_mac.insert(test_packet.packet.headers(0)
+                               .ethernet_header()
+                               .ethernet_destination());
+    }
     // Certain unsolicited packets may be sent, which should be filtered out
     // before evaluating queues.
     ASSERT_OK(
         InstallAclEntriesToFilterOutUnsolicitedPackets(*sut_p4rt_session));
+  }
+
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    pins_test::Testbed testbed = &Testbed();
+    ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
+
+  for (const PacketAndExpectedTargetQueue &test_packet : test_packets) {
+    std::string_view target_queue = test_packet.target_queue;
+    SCOPED_TRACE(absl::StrCat("Packet: ", test_packet.packet_name,
+                              ", Target queue: ", target_queue));
+    LOG(INFO) << absl::StrCat("Packet: ", test_packet.packet_name,
+                              ", Target queue: ", target_queue);
 
     // Read counters of the target queue.
     ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
@@ -1198,7 +1223,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToSwitchInbandGetsMappedToCorrectQueues) {
     // We terminate early if this fails, as that can cause this loop to get
     // out of sync when counters increment after a long delay, resulting in
     // confusing error messages where counters increment by 2.
-    ASSERT_THAT(TotalPacketsForQueue(queue_counters_after_test_packet),
+    EXPECT_THAT(TotalPacketsForQueue(queue_counters_after_test_packet),
                 AllOf(Ge(expected_queue_counters_after_test_packets),
                       Le(expected_queue_counters_after_test_packets +
                          kMaxAllowedUnsolicitedPackets)))
@@ -1223,7 +1248,6 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
     int packets;                  // Number of packets to send to this Queue.
     netaddr::Ipv4Address dst_ip;  // Unique dest IP of packets to this Queue.
   };
-
 
   // Initialize and clear the SUT.
   const p4::config::v1::P4Info &p4info = GetParam().p4info;
@@ -1301,6 +1325,12 @@ TEST_P(CpuQosTestWithoutIxia, P4CpuQueueMappingByNameIsCorrect) {
   if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
     pins_test::Testbed testbed = &Testbed();
     ASSERT_OK(NsfRebootHelper(testbed, GetParam().ssh_client_for_nsf));
+    // Create a new P4rt session after NSF Reboot
+    ASSERT_OK_AND_ASSIGN(sut_p4rt_session,
+                         pdpi::P4RuntimeSession::Create(Sut()));
+    // Reset initial state of queues after NSF Reboot
+    ASSERT_OK_AND_ASSIGN(initial_state,
+                         GetCpuQueueStateViaGnmi(*sut_gnmi_stub));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
@@ -1426,7 +1456,6 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
       std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
-
   ASSERT_GT(GetParam().control_plane_bandwidth_bytes_per_second, 0);
 
   thinkit::Switch &sut = generic_testbed->Sut();
@@ -1504,19 +1533,6 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   ASSERT_OK(pins_test::ixia::SetDestIPv6(traffic_ref, dest_ip.ToString(),
                                          *generic_testbed));
 
-  // Listen for punted packets from the SUT.
-  PacketReceiveInfo packet_receive_info;
-
-  PacketInReceiver receiver(*sut_p4_session, [&packet_receive_info](auto) {
-    absl::MutexLock lock(&packet_receive_info.mutex);
-    if (packet_receive_info.num_packets_punted == 0) {
-      packet_receive_info.time_first_packet_punted = absl::Now();
-    }
-    packet_receive_info.time_last_packet_punted = absl::Now();
-    packet_receive_info.num_packets_punted++;
-    return;
-  });
-
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
                                         /*port=*/"CPU", sut_gnmi_config));
@@ -1535,9 +1551,24 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
     // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
     // however take control of the testbed object.
     ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
+    // Create a new P4rt session after NSF Reboot
+    ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
+
+  // Listen for punted packets from the SUT.
+  PacketReceiveInfo packet_receive_info;
+
+  PacketInReceiver receiver(*sut_p4_session, [&packet_receive_info](auto) {
+    absl::MutexLock lock(&packet_receive_info.mutex);
+    if (packet_receive_info.num_packets_punted == 0) {
+      packet_receive_info.time_first_packet_punted = absl::Now();
+    }
+    packet_receive_info.time_last_packet_punted = absl::Now();
+    packet_receive_info.num_packets_punted++;
+    return;
+  });
 
   for (auto test_case : {kPuntOnlyTest, kPuntTtl0Test}) {
     LOG(INFO) << "\n\nTesting case: " << test_case;
@@ -1815,23 +1846,6 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
           .priority = ixia::IpPriority{.dscp = 0, .ecn = 0},
       }};
 
-  // Listen for punted packets from the SUT.
-  PacketReceiveInfo packet_receive_info;
-  {
-    absl::MutexLock lock(&packet_receive_info.mutex);
-    packet_receive_info.num_packets_punted = 0;
-  }
-
-  PacketInReceiver receiver(*sut_p4_session, [&packet_receive_info](auto) {
-    absl::MutexLock lock(&packet_receive_info.mutex);
-    if (packet_receive_info.num_packets_punted == 0) {
-      packet_receive_info.time_first_packet_punted = absl::Now();
-    }
-    packet_receive_info.time_last_packet_punted = absl::Now();
-    packet_receive_info.num_packets_punted++;
-    return;
-  });
-
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
                                         /*port=*/"CPU", sut_gnmi_config));
@@ -1859,9 +1873,28 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
     // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
     // however take control of the testbed object.
     ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
+    // Create a new P4rt session after NSF Reboot
+    ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
   } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
     FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
   }
+
+  // Listen for punted packets from the SUT.
+  PacketReceiveInfo packet_receive_info;
+  {
+    absl::MutexLock lock(&packet_receive_info.mutex);
+    packet_receive_info.num_packets_punted = 0;
+  }
+
+  PacketInReceiver receiver(*sut_p4_session, [&packet_receive_info](auto) {
+    absl::MutexLock lock(&packet_receive_info.mutex);
+    if (packet_receive_info.num_packets_punted == 0) {
+      packet_receive_info.time_first_packet_punted = absl::Now();
+    }
+    packet_receive_info.time_last_packet_punted = absl::Now();
+    packet_receive_info.num_packets_punted++;
+    return;
+  });
 
   for (auto &[queue_name, queue_info] : queues) {
     // Skip unconfigured queues.
@@ -2252,6 +2285,20 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
   ASSERT_OK(pins_test::ixia::SetSrcIPv4(traffic_ref, source_ip.ToString(),
                                         *generic_testbed));
 
+  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
+    Testbed testbed_variant = std::move(generic_testbed);
+    absl::Cleanup restore_testbed([&] {
+      generic_testbed = std::move(std::get<0>(testbed_variant));
+    });
+    // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
+    // however take control of the testbed object.
+    ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
+    // Create a new P4rt session after NSF Reboot
+    ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
+  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
+    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
+  }
+
   // Listen for punted packets from the SUT.
   PacketReceiveInfo packet_receive_info;
   {
@@ -2268,20 +2315,6 @@ TEST_P(CpuQosTestWithIxia, CpuQosBurstyTraffic) {
     packet_receive_info.num_packets_punted++;
     return;
   });
-
-  if (GetParam().nsf_reboot && GetParam().ssh_client_for_nsf) {
-    Testbed testbed_variant = std::move(generic_testbed);
-    absl::Cleanup restore_testbed([&] {
-      // NSF `Testbed` should use raw pointer of
-      // GenericTestbed
-      generic_testbed = std::move(std::get<0>(testbed_variant));
-    });
-    // NsfRebootHelper only uses the unique_ptr of generic_testbed, it doesn't
-    // however take control of the testbed object.
-    ASSERT_OK(NsfRebootHelper(testbed_variant, GetParam().ssh_client_for_nsf));
-  } else if (GetParam().nsf_reboot && !GetParam().ssh_client_for_nsf) {
-    FAIL() << "ssh_client parameter needed for NSF Reboot is not provided";
-  }
 
   // Get Queues.
   ASSERT_OK_AND_ASSIGN(auto queues, ExtractQueueInfoViaGnmiConfig(
