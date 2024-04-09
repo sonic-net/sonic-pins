@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -43,6 +44,7 @@
 #include "boost/bimap.hpp"
 #include "google/protobuf/util/json_util.h"
 #include "google/protobuf/message.h"
+#include "google/protobuf/util/json_util.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/impl/codegen/status.h"
@@ -257,7 +259,7 @@ absl::Status ValidateTableEntryConstraints(
 absl::StatusOr<EntityUpdate> PiUpdateToEntityUpdate(
     const pdpi::IrP4Info& p4_info, const p4::v1::Update& pi_update,
     const std::string& role_name,
-    const p4_constraints::ConstraintInfo& constraint_info,
+    std::optional<const p4_constraints::ConstraintInfo*> constraint_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     const QueueTranslator& cpu_queue_translator,
@@ -297,10 +299,12 @@ absl::StatusOr<EntityUpdate> PiUpdateToEntityUpdate(
     // Skip the constraint check for DELETE requests because existing entries
     // already satisfy constraints, and the request may also omit actions.
     if (pi_update.type() != p4::v1::Update::DELETE) {
-      // If the constraints are not met then we should just report an error
-      // (i.e. do not try to handle the entry in lower layers).
-      RETURN_IF_ERROR(ValidateTableEntryConstraints(
-          pi_update.entity().table_entry(), constraint_info));
+      if (constraint_info.has_value()) {
+        // If the constraints are not met then we should just report an error
+        // (i.e. do not try to handle the entry in lower layers).
+        RETURN_IF_ERROR(ValidateTableEntryConstraints(
+            pi_update.entity().table_entry(), **constraint_info));
+      }
     }
 
     // Verify the table entry can be written to the table.
@@ -359,8 +363,8 @@ std::vector<EntityUpdate> PiEntityUpdatesToIr(
     // If we cannot translate it then we should just report an error (i.e. do
     // not try to handle it in lower layers).
     absl::StatusOr<EntityUpdate> update = PiUpdateToEntityUpdate(
-        p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
-        port_translation_map, cpu_queue_translator,
+        p4_info, pi_update, request.role(), &constraint_info,
+        translate_port_ids, port_translation_map, cpu_queue_translator,
         front_panel_queue_translator);
     if (!update.ok()) {
       entry_status = GetIrUpdateStatus(update.status());
@@ -436,23 +440,23 @@ absl::Status IrP4InfoGeneratesEquivalentAppDbRepresentation(
   update.set_type(p4::v1::Update::INSERT);
   *update.mutable_entity() = entity;
   auto new_translation = PiUpdateToEntityUpdate(
-      new_ir_p4info, update, /*role_name=*/"", constraint_info,
-      translate_port_ids, port_translation_map,
-      cpu_queue_translator, front_panel_queue_translator);
+      new_ir_p4info, update, /*role_name=*/"", &constraint_info,
+      translate_port_ids, port_translation_map, cpu_queue_translator,
+      front_panel_queue_translator);
   if (!new_translation.ok()) {
     LOG(WARNING) << "Rejecting P4Info due to unsupported entity '"
                  << google::protobuf::ShortFormat(entity)
                  << "': " << new_translation.status();
-    return gutil::InvalidArgumentErrorBuilder()
+    return gutil::FailedPreconditionErrorBuilder()
            << "New forwarding pipeline config is incompatible with the current "
               "forwarding state. Entity '"
            << google::protobuf::ShortFormat(entity)
            << "' is not supported: " << new_translation.status().message();
   }
   auto old_translation = PiUpdateToEntityUpdate(
-      original_ir_p4info, update, /*role_name=*/"", constraint_info,
-      translate_port_ids, port_translation_map,
-      cpu_queue_translator, front_panel_queue_translator);
+      original_ir_p4info, update, /*role_name=*/"", &constraint_info,
+      translate_port_ids, port_translation_map, cpu_queue_translator,
+      front_panel_queue_translator);
   if (!old_translation.ok()) {
     return gutil::InternalErrorBuilder().LogError()
            << "Failed to generate entity translation with existing forwarding "
@@ -461,7 +465,7 @@ absl::Status IrP4InfoGeneratesEquivalentAppDbRepresentation(
            << "'. Error: " << old_translation.status();
   }
   if (new_translation->app_db_update != old_translation->app_db_update) {
-    return gutil::InvalidArgumentErrorBuilder()
+    return gutil::FailedPreconditionErrorBuilder()
            << "New forwarding pipeline config is incompatible with the current "
               "forwarding state. Entity '"
            << google::protobuf::ShortFormat(entity)
@@ -700,6 +704,57 @@ PreprocessConfig(const p4::v1::SetForwardingPipelineConfigRequest &request) {
   };
 }
 
+std::vector<p4::v1::Entity> GetCachedEntitiesInTable(
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
+    int table_id) {
+  std::vector<p4::v1::Entity> entities;
+  for (const auto& [key, entity] : entity_cache) {
+    if (entity.table_entry().table_id() == table_id) entities.push_back(entity);
+  }
+  return entities;
+}
+
+std::vector<p4::v1::Entity> GetCachedEntitiesInTable(
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
+    const pdpi::IrP4Info& ir_p4info, absl::string_view table_name) {
+  auto lookup = ir_p4info.tables_by_name().find(table_name);
+  if (lookup == ir_p4info.tables_by_name().end()) return {};
+  return GetCachedEntitiesInTable(entity_cache, lookup->second.preamble().id());
+}
+
+// Returns FailedPreconditionError for transitions that should be supported but
+// currently aren't due to bugs.
+absl::Status IsSupportedTransition(
+    const P4InfoReconcileTransition& transition) {
+  // TODO: Enable this transition when supported by SWSS.
+  constexpr auto kContainsAclPreIngressTable =
+      [](const std::vector<std::string>& tables) {
+        for (const auto& table : tables) {
+          if (table == "acl_pre_ingress_table") return true;
+        }
+        return false;
+      };
+  if (kContainsAclPreIngressTable(transition.acl_tables_to_delete) ||
+      kContainsAclPreIngressTable(transition.essential_acl_tables_to_modify) ||
+      kContainsAclPreIngressTable(
+          transition.nonessential_acl_tables_to_modify)) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "Updating table 'acl_pre_ingress_table' is not currently "
+              "supported.";
+  }
+
+  // TODO: Enable this transition when supported by SWSS.
+  for (const std::string& field :
+       transition.hashing_packet_field_configs_to_delete) {
+    if (field == "compute_lag_hash_ipv4" || field == "compute_lag_hash_ipv6") {
+      return gutil::FailedPreconditionErrorBuilder()
+             << "Updating hash config '" << field
+             << "' is not currently supported.";
+    }
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 std::ostream& operator<<(std::ostream& os, QueueType qt) {
@@ -715,6 +770,225 @@ std::ostream& operator<<(std::ostream& os, QueueType qt) {
       break;
   }
   return os;
+}
+
+absl::Status P4RuntimeImpl::RemoveAclTableFromAppDb(
+    absl::string_view table_name, const std::vector<p4::v1::Entity>& entities) {
+  if (!entities.empty()) {
+    LOG(INFO) << "Removing " << entities.size() << " entities from table '"
+              << table_name << "'";
+    std::vector<pdpi::IrUpdateStatus> update_statuses(entities.size());
+    std::vector<std::pair<sonic::AppDbUpdate, pdpi::IrUpdateStatus*>>
+        update_results;
+    update_results.reserve(entities.size());
+    auto status = update_statuses.begin();
+    for (const auto& entity : entities) {
+      p4::v1::Update update;
+      update.set_type(p4::v1::Update::DELETE);
+      *update.mutable_entity() = entity;
+      ASSIGN_OR_RETURN(
+          EntityUpdate entity_update,
+          PiUpdateToEntityUpdate(*ir_p4info_, update, /*role_name=*/"",
+                                 /*constraint_info=*/std::nullopt,
+                                 translate_port_ids_, port_translation_map_,
+                                 *cpu_queue_translator_,
+                                 *front_panel_queue_translator_));
+      update_results.push_back(
+          std::make_pair(std::move(entity_update.app_db_update), &*status++));
+    }
+    ASSIGN_OR_RETURN(
+        bool success,
+        sonic::PerformAppDbUpdates(p4rt_table_, vrf_table_, update_results));
+    if (!success) {
+      for (int i = 0; i < entities.size(); ++i) {
+        if (update_statuses[i].code() != google::rpc::Code::OK) {
+          return gutil::InternalErrorBuilder()
+                 << "Failed to remove entity '"
+                 << google::protobuf::ShortFormat(entities[i])
+                 << "': " << update_statuses[i].message();
+        }
+      }
+    }
+  }
+  LOG(INFO) << "Removing ACL table definition for table '" << table_name << "'";
+  return sonic::RemoveAclTableDefinition(p4rt_table_, table_name);
+}
+
+absl::Status P4RuntimeImpl::UpdateAppDbEntities(
+    const std::vector<p4::v1::Entity>& entities,
+    const pdpi::IrP4Info& ir_p4info, p4::v1::Update::Type update_type) {
+  std::vector<pdpi::IrUpdateStatus> update_statuses(entities.size());
+  std::vector<std::pair<sonic::AppDbUpdate, pdpi::IrUpdateStatus*>>
+      update_results;
+  update_results.reserve(entities.size());
+
+  auto status = update_statuses.begin();
+  for (const auto& entity : entities) {
+    p4::v1::Update update;
+    update.set_type(update_type);
+    *update.mutable_entity() = entity;
+    ASSIGN_OR_RETURN(EntityUpdate entity_update,
+                     PiUpdateToEntityUpdate(
+                         ir_p4info, update, /*role_name=*/"",
+                         /*constraint_info=*/std::nullopt, translate_port_ids_,
+                         port_translation_map_, *cpu_queue_translator_,
+                         *front_panel_queue_translator_));
+    update_results.push_back(
+        std::make_pair(std::move(entity_update.app_db_update), &*status++));
+  }
+  ASSIGN_OR_RETURN(bool success, sonic::PerformAppDbUpdates(
+                                     p4rt_table_, vrf_table_, update_results));
+  if (!success) {
+    for (int i = 0; i < update_results.size(); ++i) {
+      if (update_results.at(i).second->code() != google::rpc::Code::OK) {
+        return gutil::InternalErrorBuilder()
+               << "Failed to perform " << p4::v1::Update::Type_Name(update_type)
+               << " << in AppDB for entity: ["
+               << google::protobuf::ShortFormat(entities.at(i))
+               << "]. Error: " << update_results.at(i).second->message();
+      }
+    }
+  }
+  return absl::OkStatus();
+}
+
+absl::Status P4RuntimeImpl::ReplaceTableInAppDb(
+    absl::string_view table_name, const std::vector<p4::v1::Entity>& entities,
+    const pdpi::IrP4Info& new_ir_p4info) {
+  pdpi::IrP4Info temp_ir_p4info = *ir_p4info_;
+  ASSIGN_OR_RETURN(std::string dup_table_name,
+                   DuplicateTable(temp_ir_p4info, table_name));
+
+  LOG(INFO) << "Creating duplicate table definition for '" << table_name
+            << "': " << dup_table_name;
+  RETURN_IF_ERROR(
+      sonic::InsertAclTableDefinition(
+          p4rt_table_, temp_ir_p4info.tables_by_name().at(dup_table_name)))
+          .SetPrepend()
+      << "Failed to insert duplicate table for '" << table_name << "': ";
+
+  LOG(INFO) << "Populating duplicate table entries in table '" << dup_table_name
+            << "'";
+  int dup_table_id =
+      temp_ir_p4info.tables_by_name().at(dup_table_name).preamble().id();
+  std::vector<p4::v1::Entity> temp_entities = entities;
+  for (auto& entity : temp_entities) {
+    entity.mutable_table_entry()->set_table_id(dup_table_id);
+  }
+  RETURN_IF_ERROR(UpdateAppDbEntities(temp_entities, temp_ir_p4info,
+                                      p4::v1::Update::INSERT))
+          .SetPrepend()
+      << "Failed to insert entities into duplicate table '" << dup_table_name
+      << "': ";
+
+  LOG(INFO) << "Removing entries in original table '" << table_name << "'";
+  RETURN_IF_ERROR(
+      UpdateAppDbEntities(entities, *ir_p4info_, p4::v1::Update::DELETE))
+          .SetPrepend()
+      << "Failed to delete entities from original table '" << table_name << "'";
+
+  LOG(INFO) << "Removing original ACL table definition '" << table_name << "'";
+  RETURN_IF_ERROR(sonic::RemoveAclTableDefinition(p4rt_table_, table_name))
+      << "Failed to original duplicate ACL table '" << dup_table_name << "'";
+
+  LOG(INFO) << "Adding new ACL table definition '" << table_name << "'";
+  RETURN_IF_ERROR(sonic::InsertAclTableDefinition(
+      p4rt_table_, new_ir_p4info.tables_by_name().at(table_name)))
+      << "Failed to insert new ACL table '" << table_name << "'";
+
+  LOG(INFO) << "Populating new ACL table '" << table_name << "'";
+  RETURN_IF_ERROR(
+      UpdateAppDbEntities(entities, new_ir_p4info, p4::v1::Update::INSERT))
+          .SetPrepend()
+      << "Failed to insert entities into new table '" << table_name;
+
+  LOG(INFO) << "Removing duplicate ACL table entries in '" << dup_table_name
+            << "'";
+  RETURN_IF_ERROR(UpdateAppDbEntities(temp_entities, temp_ir_p4info,
+                                      p4::v1::Update::DELETE))
+          .SetPrepend()
+      << "Failed to delete entities from duplicate table '" << dup_table_name
+      << "'";
+
+  LOG(INFO) << "Removing duplicate ACL table definition ''" << dup_table_name
+            << "'";
+  RETURN_IF_ERROR(sonic::RemoveAclTableDefinition(p4rt_table_, dup_table_name))
+      << "Failed to remove duplicate ACL table '" << dup_table_name << "'";
+
+  return absl::OkStatus();
+}
+
+absl::Status P4RuntimeImpl::TransitionAcls(
+    const P4InfoReconcileTransition& transition,
+    const pdpi::IrP4Info& new_ir_p4info) {
+  absl::flat_hash_map<std::string, std::vector<p4::v1::Entity>>
+      removed_entities;
+
+  for (const auto& table : transition.essential_acl_tables_to_modify) {
+    removed_entities[table] =
+        GetCachedEntitiesInTable(entity_cache_, *ir_p4info_, table);
+  }
+  for (const auto& table : transition.nonessential_acl_tables_to_modify) {
+    removed_entities[table] =
+        GetCachedEntitiesInTable(entity_cache_, *ir_p4info_, table);
+  }
+
+  for (const auto& table : transition.acl_tables_to_delete) {
+    LOG(INFO) << "Removing deleted ACL table '" << table << "'";
+    RETURN_IF_ERROR(sonic::RemoveAclTableDefinition(
+                        p4rt_table_, ir_p4info_->tables_by_name().at(table)))
+            .SetPrepend()
+        << "Could not remove ACL table '" << table << "' from AppDb: ";
+  }
+
+  std::vector<const pdpi::IrTableDefinition*> tables_to_add;
+  tables_to_add.reserve(transition.acl_tables_to_add.size());
+  for (const auto& table : transition.acl_tables_to_add) {
+    tables_to_add.push_back(&new_ir_p4info.tables_by_name().at(table));
+  }
+
+  for (const auto& table : transition.nonessential_acl_tables_to_modify) {
+    LOG(INFO) << "Removing modified nonessential ACL table '" << table << "'";
+    RETURN_IF_ERROR(RemoveAclTableFromAppDb(table, removed_entities[table]))
+            .SetPrepend()
+        << "Could not remove ACL table '" << table << "' from AppDb: ";
+    tables_to_add.push_back(&new_ir_p4info.tables_by_name().at(table));
+  }
+
+  std::vector<std::string> populated_essential_tables;
+  for (const auto& table : transition.essential_acl_tables_to_modify) {
+    if (removed_entities[table].empty()) {
+      LOG(INFO) << "Removing empty essential ACL table '" << table << "'";
+      RETURN_IF_ERROR(sonic::RemoveAclTableDefinition(p4rt_table_, table))
+              .SetPrepend()
+          << "Could not remove ACL table '" << table << "' from AppDb: ";
+      tables_to_add.push_back(&new_ir_p4info.tables_by_name().at(table));
+    } else {
+      populated_essential_tables.push_back(table);
+    }
+  }
+  for (const auto& table : populated_essential_tables) {
+    RETURN_IF_ERROR(
+        ReplaceTableInAppDb(table, removed_entities[table], new_ir_p4info))
+            .SetPrepend()
+        << "Failed to modify essential ACL table '" << table << ": ";
+  }
+
+  OrderTablesBySize(tables_to_add);
+  for (const pdpi::IrTableDefinition* table : tables_to_add) {
+    std::string table_name = table->preamble().alias();
+    LOG(INFO) << "Inserting ACL table '" << table_name << "'";
+    RETURN_IF_ERROR(sonic::InsertAclTableDefinition(p4rt_table_, *table))
+        << "Failed to insert new ACL table '" << table_name;
+    auto& entities = removed_entities[table_name];
+    if (!entities.empty()) {
+      RETURN_IF_ERROR(
+          UpdateAppDbEntities(entities, new_ir_p4info, p4::v1::Update::INSERT))
+              .SetPrepend()
+          << "Failed to repopulate modified ACL table '" << table_name << "'";
+    }
+  }
+  return absl::OkStatus();
 }
 
 P4RuntimeImpl::P4RuntimeImpl(
@@ -819,7 +1093,7 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     if (!app_db_write_status.ok()) {
       return EnterCriticalState(
           absl::StrCat("Unexpected error calling UpdateAppDb: ",
-                       app_db_write_status.ToString()));
+                       app_db_write_status.status().ToString()));
     }
 
     // We do a bit of bookkeeping, before sending our final response to the
@@ -1572,25 +1846,16 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     return SavePipelineConfig(*forwarding_pipeline_config_);
   }
 
+  // We cannot reconcile any config today so if we see that the new forwarding
+  // config is different from the current one we just return an error.
   if (ir_p4info_.has_value()) {
     auto transition = CalculateTransition(*ir_p4info_, config_info->ir_p4info);
     if (!transition.ok()) {
       return gutil::AbslStatusToGrpcStatus(transition.status());
     }
-
-    // We cannot reconcile ACL configs today so if we see that the new ACL
-    // config is different from the current one we just return an error.
-    if (!transition->acl_tables_to_add.empty() ||
-        !transition->acl_tables_to_delete.empty() ||
-        !transition->acl_tables_to_modify.empty()) {
-      LOG(WARNING) << "Cannot modify P4Info ACL once it has been configured.";
-      return grpc::Status(
-          grpc::StatusCode::UNIMPLEMENTED,
-          absl::StrCat(
-              "Modifying a configured forwarding pipeline is not currently "
-              "supported. Please reboot the device. Configuration "
-              "differences:\n",
-              ir_p4info_diff));
+    auto supported = IsSupportedTransition(*transition);
+    if (!supported.ok()) {
+      return gutil::AbslStatusToGrpcStatus(supported);
     }
 
     auto capacity = GetUpdatedResourceCapacities(
@@ -1605,6 +1870,13 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
           *transition, config_info->hash_packet_field_configs,
           config_info->hash_param_configs);
       if (!hash_transition.ok()) return hash_transition;
+    }
+    LOG(INFO) << "Updating ACL tables for new ForwardingPipelineConfig.";
+    auto result = TransitionAcls(*transition, config_info->ir_p4info);
+    if (!result.ok()) {
+      return EnterCriticalState(absl::StrCat(
+          "Failed to reconcile ACL tables in new ForwardingPipelineConfig: ",
+          result.message()));
     }
 
     capacity_by_action_profile_name_ = std::move(*capacity);
@@ -1631,17 +1903,35 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
     }
   }
 
-  // Update P4RuntimeImpl's state only if we succeed.
+  // Configure the lower layers.
+  // Apply ir_p4info to DB if we are committing to DB.
+  // Apply a config if we don't currently have one.
+  absl::Status config_result = ConfigureAppDbTables(config_info->ir_p4info);
+  if (!config_result.ok()) {
+    return EnterCriticalState(
+        absl::StrCat("Failed to apply ForwardingPipelineConfig: ",
+                     config_result.ToString()));
+  }
+
+    // Store resource utilization limits for any ActionProfiles.
+  for (const auto &[action_profile_name, action_profile_def] :
+       config_info->ir_p4info.action_profiles_by_name()) {
+    capacity_by_action_profile_name_[action_profile_name] =
+        GetActionProfileResourceCapacity(action_profile_def);
+    LOG(INFO) << "Adding action profile limits for '" << action_profile_name
+              << "': max_weights_for_all_groups="
+              << action_profile_def.action_profile().size();
+  }
+
+    // Update P4RuntimeImpl's state only if we succeed.
   p4_constraint_info_ = std::move(config_info->constraints);
   ir_p4info_ = std::move(config_info->ir_p4info);
   forwarding_pipeline_config_ = request.config();
 
   // Save the ForwardingPipelineConfig if we are committing.
-  if (commit_to_hardware) {
-    LOG(INFO)
-        << "ForwardingPipelineConfig was successfully applied. Saving to disk.";
-    return SavePipelineConfig(*forwarding_pipeline_config_);
-  }
+  LOG(INFO)
+      << "ForwardingPipelineConfig was successfully applied. Saving to disk.";
+  return SavePipelineConfig(*forwarding_pipeline_config_);
   return grpc::Status::OK;
 }
 
@@ -1666,31 +1956,18 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
   nlohmann::json ext_tables_json = {};
 
   // Setup definitions for each each P4 ACL table.
-  for (const pdpi::IrTableDefinition& table :
+  for (const pdpi::IrTableDefinition* table :
        OrderTablesBySize(ir_p4info.tables_by_name())) {
-    std::string table_name = table.preamble().alias();
-    ASSIGN_OR_RETURN(table::Type table_type, GetTableType(table),
+    std::string table_name = table->preamble().alias();
+    ASSIGN_OR_RETURN(table::Type table_type, GetTableType(*table),
                      _ << "Failed to configure table " << table_name << ".");
 
     // Add ACL table definition to AppDb (if applicable).
     if (table_type == table::Type::kAcl) {
       LOG(INFO) << "Configuring ACL table: " << table_name;
-      ASSIGN_OR_RETURN(std::string acl_key,
-                       sonic::InsertAclTableDefinition(p4rt_table_, table),
-                       _ << "Failed to add ACL table definition '" << table_name
-                         << "' to AppDb.");
-
-      // Wait for OA to confirm it can realize the table updates.
-      ASSIGN_OR_RETURN(
-          pdpi::IrUpdateStatus status,
-          sonic::GetAndProcessResponseNotificationWithoutRevertingState(
-              *p4rt_table_.producer, acl_key));
-
-      // Any issue with the forwarding config should be sent back to the
-      // controller as an INVALID_ARGUMENT.
-      if (status.code() != google::rpc::OK) {
-        return gutil::InvalidArgumentErrorBuilder() << status.message();
-      }
+      RETURN_IF_ERROR(sonic::InsertAclTableDefinition(p4rt_table_, *table))
+          << "Failed to add ACL table definition '" << table_name
+          << "' to AppDb.";
     }
     if (!ext_tables_json.dump().empty()) {
        // Publish all tables at once and get one success/failure response for them
@@ -1728,17 +2005,10 @@ grpc::Status P4RuntimeImpl::TransitionHashConfig(
     const absl::btree_set<sonic::HashPacketFieldConfig>&
         hash_packet_field_configs,
     const sonic::HashParamConfigs& hash_param_configs) {
-  if (!transition.hashing_packet_field_configs_to_delete.empty()) {
-    absl::Status status = sonic::RemoveFromHashFieldTable(
-        hash_table_, transition.hashing_packet_field_configs_to_delete);
-    if (!status.ok()) {
-      return EnterCriticalState(
-          absl::StrCat("Could not update hash settings. Failed to delete "
-                       "packet field configs: ",
-                       status.message()));
-    }
-  }
   if (!transition.hashing_packet_field_configs_to_set.empty()) {
+    LOG(INFO) << "Adding new hash field configs: \n  "
+              << absl::StrJoin(transition.hashing_packet_field_configs_to_set,
+                               "\n  ");
     absl::Status status =
         sonic::ProgramHashFieldTable(hash_table_, hash_packet_field_configs);
     if (!status.ok()) {
@@ -1748,7 +2018,21 @@ grpc::Status P4RuntimeImpl::TransitionHashConfig(
                        status.message()));
     }
   }
+  if (!transition.hashing_packet_field_configs_to_delete.empty()) {
+    LOG(INFO) << "Removing hash field configs: \n  "
+              << absl::StrJoin(
+                     transition.hashing_packet_field_configs_to_delete, "\n  ");
+    absl::Status status = sonic::RemoveFromHashFieldTable(
+        hash_table_, transition.hashing_packet_field_configs_to_delete);
+    if (!status.ok()) {
+      return EnterCriticalState(
+          absl::StrCat("Could not update hash settings. Failed to delete "
+                       "packet field configs: ",
+                       status.message()));
+    }
+  }
   if (transition.update_switch_table) {
+    LOG(INFO) << "Updating switch table.";
     absl::Status status = sonic::ProgramSwitchTable(
         switch_table_, hash_param_configs, hash_packet_field_configs);
     if (!status.ok()) {
