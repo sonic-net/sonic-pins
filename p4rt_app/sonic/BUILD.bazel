@@ -22,17 +22,19 @@ cc_library(
     hdrs = ["app_db_acl_def_table_manager.h"],
     deps = [
         ":redis_connections",
+        ":response_handler",
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/utils:annotation_parser",
         "//p4rt_app/utils:table_utility",
         "@com_github_google_glog//:glog",
         "@com_github_nlohmann_json//:nlohmann_json",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:span",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 

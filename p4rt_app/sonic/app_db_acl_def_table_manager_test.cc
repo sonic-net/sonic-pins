@@ -1661,7 +1661,7 @@ INSTANTIATE_TEST_SUITE_P(
       return info.param.first;
     });
 
-TEST(AppDbAclTableManagerTest, Insert_ConsistentActionOrder) {
+TEST(InsertAclTableDefinition, UsesAConsistentActionOrder) {
   IrTableDefinitionBuilder table_template;
   table_template
       .preamble(R"pb(alias: "Table" annotations: "@sai_acl(INGRESS)")pb")
@@ -1717,7 +1717,32 @@ TEST(AppDbAclTableManagerTest, Insert_ConsistentActionOrder) {
               UnorderedElementsAreArray(incremental_result));
 }
 
-TEST(AppDbAclTableManagerTest, Remove) {
+TEST(InsertAclTableDefinition, ReturnsInvalidArgumentForProgramingFailure) {
+  pdpi::IrTableDefinition table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(alias: "Table" annotations: "@sai_acl(INGRESS)")pb")
+          .match_field(
+              R"pb(id: 123
+                   name: "match_field"
+                   annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)")pb",
+              pdpi::STRING)
+          .entry_action(IrActionDefinitionBuilder().preamble(
+              R"pb(alias: "entry_action"
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))();
+
+  FakeSonicDbTable fake_table;
+  FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
+  P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
+  fake_appdb_table.SetResponseForKey("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE",
+                                     "SWSS_RC_UNKNOWN", "swss error");
+
+  ASSERT_OK(VerifyAclTableDefinition(table));
+  EXPECT_THAT(
+      InsertAclTableDefinition(fake_db, table),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("swss error")));
+}
+
+TEST(RemoveAclTableDefinition, RemovesTheTableDefinition) {
   pdpi::IrTableDefinition table = IrTableDefinitionBuilder().preamble(
       R"pb(alias: "Table" annotations: "@sai_acl(INGRESS)")pb")();
 
@@ -1729,6 +1754,44 @@ TEST(AppDbAclTableManagerTest, Remove) {
   ASSERT_OK(RemoveAclTableDefinition(fake_db, table));
   EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               StatusIs(absl::StatusCode::kNotFound));
+}
+
+TEST(RemoveAclTableDefinition, RemovesTheTableDefinitionByName) {
+  FakeSonicDbTable fake_table;
+  FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
+  P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
+  fake_table.InsertTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE",
+                              {{"a", "a"}});
+  ASSERT_OK(RemoveAclTableDefinition(fake_db, "Table"));
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
+              StatusIs(absl::StatusCode::kNotFound));
+}
+
+TEST(RemoveAclTableDefinition, ReturnsInvalidArgumentForDeletionFailure) {
+  pdpi::IrTableDefinition table = IrTableDefinitionBuilder().preamble(
+      R"pb(alias: "Table" annotations: "@sai_acl(INGRESS)")pb")();
+
+  FakeSonicDbTable fake_table;
+  FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
+  P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
+  fake_appdb_table.SetResponseForKey("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE",
+                                     "SWSS_RC_UNKNOWN", "swss error");
+
+  EXPECT_THAT(
+      RemoveAclTableDefinition(fake_db, table),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("swss error")));
+}
+
+TEST(RemoveAclTableDefinition, ReturnsInvalidArgumentForDeletionFailureByName) {
+  FakeSonicDbTable fake_table;
+  FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
+  P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
+  fake_appdb_table.SetResponseForKey("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE",
+                                     "SWSS_RC_UNKNOWN", "swss error");
+
+  EXPECT_THAT(
+      RemoveAclTableDefinition(fake_db, "Table"),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("swss error")));
 }
 
 }  // namespace
