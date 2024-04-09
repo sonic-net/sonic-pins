@@ -300,6 +300,7 @@ private:
   absl::Status ConfigureAppDbTables(const pdpi::IrP4Info &ir_p4info)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
+  // Transitions the hash settings from the current config to the new config.
   grpc::Status TransitionHashConfig(
       const P4InfoReconcileTransition& transition,
       const absl::btree_set<sonic::HashPacketFieldConfig>&
@@ -307,9 +308,24 @@ private:
       const sonic::HashParamConfigs& hash_param_configs)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
-  // Checks whether ther P4Info transition is supported or not.
-  absl::Status IsSupportedTransition(
-      const P4InfoReconcileTransition& transition)
+  // Transitions the ACL tables from the current config to the new config.
+  absl::Status RemoveAclTableFromAppDb(
+      absl::string_view table_name, const std::vector<p4::v1::Entity>& entities)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  // Update AppDB by applying the provided operation for each entity.
+  absl::Status UpdateAppDbEntities(const std::vector<p4::v1::Entity>& entities,
+                                   const pdpi::IrP4Info& ir_p4info,
+                                   p4::v1::Update::Type update_type)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  absl::Status ReplaceTableInAppDb(absl::string_view table_name,
+                                   const std::vector<p4::v1::Entity>& entities,
+                                   const pdpi::IrP4Info& new_ir_p4info)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  absl::Status TransitionAcls(const P4InfoReconcileTransition& transition,
+                              const pdpi::IrP4Info& new_ir_p4info)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Defines the callback lambda function to be invoked for receive packets
