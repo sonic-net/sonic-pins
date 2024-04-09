@@ -421,6 +421,7 @@ cc_library(
         "//gutil/gutil:collections",
         "//gutil/gutil:status",
         "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/utils:annotation_parser",
         "//p4rt_app/sonic:app_db_acl_def_table_manager",
         "//p4rt_app/sonic:hashing",
         "//p4rt_app/sonic:swss_utils",
