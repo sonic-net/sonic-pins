@@ -21,6 +21,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -32,6 +34,8 @@
 #include "gutil/gutil/status.h"
 #include "include/nlohmann/json.hpp"
 #include "p4_pdpi/utils/annotation_parser.h"
+#include "p4rt_app/sonic/redis_connections.h"
+#include "p4rt_app/sonic/response_handler.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/rediscommand.h"
 #include "swss/saiaclschema.h"
@@ -83,6 +87,13 @@ bool IsValidRedirectObjectType(absl::string_view type) {
          type == "SAI_OBJECT_TYPE_SYSTEM_PORT";
 }
 
+// Generates the AppDB DEFINITION:ACL_* Entry key for an ACL table name.
+std::string GenerateSonicDbKeyFromTableName(absl::string_view table_name) {
+  return absl::Substitute("$0:ACL_$1",
+                          table::TypeName(table::Type::kAclDefinition),
+                          absl::AsciiStrToUpper(table_name));
+}
+
 // Generates the AppDB DEFINITION:ACL_* Entry key for an ACL table.
 StatusOr<std::string> GenerateSonicDbKeyFromIrTable(
     const IrTableDefinition& table) {
@@ -90,9 +101,7 @@ StatusOr<std::string> GenerateSonicDbKeyFromIrTable(
     return InvalidArgumentErrorBuilder()
            << "Table [" << table.ShortDebugString() << "] is missing an alias.";
   }
-  return absl::Substitute("$0:ACL_$1",
-                          table::TypeName(table::Type::kAclDefinition),
-                          absl::AsciiStrToUpper(table.preamble().alias()));
+  return GenerateSonicDbKeyFromTableName(table.preamble().alias());
 }
 
 // Generates the AppDB DEFINITION:ACL_ Entry tuple value for stage.
@@ -879,6 +888,20 @@ StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
   return values;
 }
 
+absl::Status RemoveAclTableDefinitionByKey(P4rtTable& p4rt_table,
+                                           absl::string_view key) {
+  swss::KeyOpFieldsValuesTuple kfv;
+  kfvKey(kfv) = key;
+  kfvOp(kfv) = "DEL";
+  p4rt_table.producer->send({kfv});
+
+  ASSIGN_OR_RETURN(pdpi::IrUpdateStatus status,
+                   GetAndProcessResponseNotificationWithoutRevertingState(
+                       *p4rt_table.producer, kfvKey(kfv)));
+  if (status.code() == google::rpc::OK) return absl::OkStatus();
+  return gutil::InvalidArgumentErrorBuilder() << status.message();
+}
+
 }  // namespace
 
 StatusOr<swss::KeyOpFieldsValuesTuple> AppDbAclTableDefinition(
@@ -890,24 +913,33 @@ StatusOr<swss::KeyOpFieldsValuesTuple> AppDbAclTableDefinition(
   return kfv;
 }
 
-StatusOr<std::string> InsertAclTableDefinition(
-    P4rtTable& p4rt_table, const IrTableDefinition& ir_table) {
+absl::Status InsertAclTableDefinition(P4rtTable& p4rt_table,
+                                      const IrTableDefinition& ir_table) {
   swss::KeyOpFieldsValuesTuple kfv;
   ASSIGN_OR_RETURN(kfvKey(kfv), GenerateSonicDbKeyFromIrTable(ir_table));
   kfvOp(kfv) = "SET";
   ASSIGN_OR_RETURN(kfvFieldsValues(kfv),
                    GenerateSonicDbValuesFromIrTable(ir_table));
   p4rt_table.producer->send({kfv});
-  return kfvKey(kfv);
+
+  ASSIGN_OR_RETURN(pdpi::IrUpdateStatus status,
+                   GetAndProcessResponseNotificationWithoutRevertingState(
+                       *p4rt_table.producer, kfvKey(kfv)));
+  if (status.code() == google::rpc::OK) return absl::OkStatus();
+  return gutil::InvalidArgumentErrorBuilder() << status.message();
 }
 
 absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
                                       const IrTableDefinition& ir_table) {
   swss::KeyOpFieldsValuesTuple kfv;
-  ASSIGN_OR_RETURN(kfvKey(kfv), GenerateSonicDbKeyFromIrTable(ir_table));
-  kfvOp(kfv) = "DEL";
-  p4rt_table.producer->send({kfv});
-  return absl::OkStatus();
+  ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
+  return RemoveAclTableDefinitionByKey(p4rt_table, key);
+}
+
+absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
+                                      absl::string_view table_name) {
+  return RemoveAclTableDefinitionByKey(
+      p4rt_table, GenerateSonicDbKeyFromTableName(table_name));
 }
 
 }  // namespace sonic
