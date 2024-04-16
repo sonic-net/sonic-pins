@@ -29,10 +29,24 @@
 
 namespace pins_test {
 
+// NSF Upgrade test scenarios related to gNMI config push and P4 flow
+// programming.
+enum class NsfUpgradeScenario {
+  kNoConfigPush,
+  kOnlyConfigPush,
+  kConfigPushBeforeAclFlowProgram,
+  kConfigPushAfterAclFlowProgram,
+  kNumNsfUpgradeScenarios,
+};
+
 class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
  protected:
   void SetUp() override;
   void TearDown() override;
+
+  absl::Status PushConfigAndValidate(
+      const ImageConfigParams& image_config_params,
+      bool enable_interface_validation_during_nsf);
 
   // Assumption: Valid config (gNMI and P4Info) has been pushed (to avoid
   // duplicate config push).
@@ -40,8 +54,9 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   // Note: In case the flow programmer returns a gNMI config, then that will
   // override the `next_image_config.gnmi_config` and will used for subsequent
   // validations.
-  absl::Status NsfUpgradeOrReboot(const ImageConfigParams &curr_image_config,
-                                  ImageConfigParams &next_image_config,
+  absl::Status NsfUpgradeOrReboot(NsfUpgradeScenario scenario,
+                                  const ImageConfigParams& curr_image_config,
+                                  ImageConfigParams& next_image_config,
                                   bool enable_interface_validation_during_nsf);
 
   std::unique_ptr<FlowProgrammer> flow_programmer_;

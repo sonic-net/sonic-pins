@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "absl/flags/flag.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
@@ -44,6 +45,7 @@ ABSL_FLAG(pins_test::NsfMilestone, milestone, pins_test::NsfMilestone::kAll,
           "The NSF milestone to test.");
 
 namespace pins_test {
+namespace {
 
 using ::p4::v1::ReadResponse;
 
@@ -51,7 +53,16 @@ using ::p4::v1::ReadResponse;
 // to be defined.
 constexpr int kErrorPercentage = 1;
 
-// TODO: Compare and look into possibility of using a better
+NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
+  absl::BitGen gen;
+  int random_index = absl::Uniform(
+      gen, 0, static_cast<int>(NsfUpgradeScenario::kNumNsfUpgradeScenarios));
+
+  return static_cast<NsfUpgradeScenario>(random_index);
+}
+
+}  // namespace
+
 // approach than using std::variant (eg. type-erasure or typed tests).
 void NsfUpgradeTest::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
@@ -67,9 +78,23 @@ void NsfUpgradeTest::SetUp() {
 }
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
+absl::Status NsfUpgradeTest::PushConfigAndValidate(
+    const ImageConfigParams& image_config_param,
+    bool enable_interface_validation_during_nsf) {
+  RETURN_IF_ERROR(PushConfig(image_config_param, testbed_, *ssh_client_,
+                             /*clear_config=*/false,
+                             enable_interface_validation_during_nsf));
+  RETURN_IF_ERROR(ValidateTestbedState(testbed_, *ssh_client_,
+                                       &image_config_param,
+                                       enable_interface_validation_during_nsf));
+  return ValidateComponents(
+      &ComponentValidator::OnConfigPush, component_validators_,
+      image_config_param.image_label, testbed_, *ssh_client_);
+}
+
 absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
-    const ImageConfigParams &curr_image_config,
-    ImageConfigParams &next_image_config,
+    NsfUpgradeScenario scenario, const ImageConfigParams& curr_image_config,
+    ImageConfigParams& next_image_config,
     bool enable_interface_validation_during_nsf) {
   LOG(INFO) << "Initiating NSF Upgrade from: " << curr_image_config.image_label
             << " to: " << next_image_config.image_label;
@@ -140,16 +165,33 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       SaveP4FlowSnapshot(testbed_, p4flow_snapshot3,
                          "p4flow_snapshot3_after_upgrade_and_nsf.txt"));
 
-  // Push the new config and validate.
-  RETURN_IF_ERROR(PushConfig(next_image_config, testbed_, *ssh_client_,
-                             /*is_fresh_install=*/false,
-                             enable_interface_validation_during_nsf));
-  RETURN_IF_ERROR(ValidateTestbedState(testbed_, *ssh_client_,
-                                       &next_image_config,
-                                       enable_interface_validation_during_nsf));
-  RETURN_IF_ERROR(ValidateComponents(
-      &ComponentValidator::OnConfigPush, component_validators_,
-      next_image_config.image_label, testbed_, *ssh_client_));
+  switch (scenario) {
+    case NsfUpgradeScenario::kNoConfigPush:
+      LOG(INFO) << "Proceeding with no config push scenario";
+      break;
+    case NsfUpgradeScenario::kOnlyConfigPush:
+      LOG(INFO) << "Proceeding with only config push";
+      RETURN_IF_ERROR(PushConfigAndValidate(
+          next_image_config, enable_interface_validation_during_nsf));
+      break;
+    case NsfUpgradeScenario::kConfigPushAfterAclFlowProgram:
+      LOG(INFO) << "Proceeding with config push after ACL flow program";
+      RETURN_IF_ERROR(
+          ProgramAclFlows(GetSut(testbed_), curr_image_config.p4_info));
+      RETURN_IF_ERROR(PushConfigAndValidate(
+          next_image_config, enable_interface_validation_during_nsf));
+      break;
+    case NsfUpgradeScenario::kConfigPushBeforeAclFlowProgram:
+      LOG(INFO) << "Proceeding with config push before ACL flow program";
+      RETURN_IF_ERROR(PushConfigAndValidate(
+          next_image_config, enable_interface_validation_during_nsf));
+      RETURN_IF_ERROR(
+          ProgramAclFlows(GetSut(testbed_), next_image_config.p4_info));
+      break;
+    case NsfUpgradeScenario::kNumNsfUpgradeScenarios:
+      return absl::InvalidArgumentError("Invalid NSF Upgrade scenario.");
+      break;
+  }
 
   // Stop and validate traffic
   LOG(INFO) << "Stopping the traffic";
@@ -206,27 +248,28 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
     GTEST_SKIP() << "No image config params provided";
   }
 
+  NsfUpgradeScenario scenario = GetRandomNsfUpgradeScenario();
+
   // The first element of the given `image_config_params` is considered
   // as the "base" image that will be installed and configured on the
   // SUT before going ahead with NSF Upgrade/Reboot for the following
   // `image_config_params` (if present) in order.
-  ASSERT_OK(
-      InstallRebootPushConfig(testbed_, *ssh_client_, image_config_params[0]));
-  // If only a single config param is provided, we do an N to N upgrade.
-  if (image_config_params.size() == 1) {
-    ASSERT_OK(
-        NsfUpgradeOrReboot(image_config_params[0], image_config_params[0],
-                           GetParam().enable_interface_validation_during_nsf));
-    return;
-  }
-  // If multiple config params are provided, we do N - 1 to N upgrades.
+  ASSERT_OK(InstallRebootPushConfig(testbed_, *ssh_client_,
+                                    image_config_params.front()));
+
+  // N - 1 to N upgrades
   for (auto image_config_param = image_config_params.begin();
        image_config_param + 1 != image_config_params.end();
        ++image_config_param) {
-    ASSERT_OK(
-        NsfUpgradeOrReboot(*image_config_param, *(image_config_param + 1),
-                           GetParam().enable_interface_validation_during_nsf));
+    ASSERT_OK(NsfUpgradeOrReboot(
+        scenario, *image_config_param, *(image_config_param + 1),
+        GetParam().enable_interface_validation_during_nsf));
   }
+
+  // N to N upgrade
+  ASSERT_OK(NsfUpgradeOrReboot(
+      scenario, image_config_params.back(), image_config_params.back(),
+      GetParam().enable_interface_validation_during_nsf));
 }
 
 }  // namespace pins_test
