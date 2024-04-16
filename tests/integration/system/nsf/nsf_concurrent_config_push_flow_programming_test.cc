@@ -14,28 +14,20 @@
 #include "tests/integration/system/nsf/nsf_concurrent_config_push_flow_programming_test.h"
 
 #include <memory>
-#include <thread> // NOLINT
+#include <thread> 
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h" // NOLINT: Need to add status_matchers.h for using `ASSERT_OK` in upstream code.
-#include "gutil/testing.h"
+#include "gutil/status_matchers.h"  
 #include "lib/gnmi/gnmi_helper.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/p4_runtime_session.h"
-#include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/interfaces/test_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
-#include "thinkit/generic_testbed.h"
-#include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
 #include "gmock/gmock.h"
@@ -68,53 +60,6 @@ void NsfConcurrentConfigPushFlowProgrammingTestFixture::TearDown() {
   }
   TearDownTestbed(testbed_interface_);
 }
-
-namespace {
-
-absl::StatusOr<sai::TableEntries> GetAclFlowEntries() {
-  return gutil::ParseProtoOrDie<sai::TableEntries>(
-      R"pb(
-        entries {
-          acl_ingress_table_entry {
-            match { ether_type { value: "0x88cc" mask: "0xffff" } }
-            action { acl_trap { qos_queue: "INBAND_PRIORITY_4" } }
-            priority: 2050
-          }
-        }
-        entries {
-          acl_ingress_qos_table_entry {
-            match { ether_type { value: "0x88cc" mask: "0xffff" } }
-            action {
-              set_qos_queue_and_cancel_copy_above_rate_limit {
-                qos_queue: "INBAND_PRIORITY_4"
-              }
-            }
-            priority: 4600
-            meter_config { bytes_per_second: 28000 burst_bytes: 7000 }
-            controller_metadata: "orion_type: LLDP_PUNTFLOW orion_cookie: 9223372036856217610"
-          }
-        }
-      )pb");
-}
-
-absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
-                             const p4::config::v1::P4Info& p4_info) {
-  ASSIGN_OR_RETURN(sai::TableEntries kTableEntries, GetAclFlowEntries());
-  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
-                   pdpi::P4RuntimeSession::Create(thinkit_switch));
-  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4_info));
-  std::vector<p4::v1::Entity> pi_entities;
-  pi_entities.reserve(kTableEntries.entries_size());
-  for (const sai::TableEntry& entry : kTableEntries.entries()) {
-    ASSIGN_OR_RETURN(pi_entities.emplace_back(),
-                     pdpi::PdTableEntryToPiEntity(ir_p4info, entry));
-  }
-  LOG(INFO) << "Installing PI table entries on "
-            << thinkit_switch.ChassisName();
-  return pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
-}
-
-}  // namespace
 
 TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
        NsfConcurrentConfigPushFlowProgrammingTest) {
