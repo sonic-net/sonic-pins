@@ -15,10 +15,12 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
@@ -84,13 +86,18 @@ absl::StatusOr<p4::v1::Update> IpTableUpdate(const pdpi::IrP4Info& ir_p4_info,
   std::string action_name;
   switch (ip_options.action) {
     case IpTableOptions::Action::kDrop:
-      action_name = "drop";
+      action_name =
+          ip_options.metadata.has_value() ? "set_metadata_and_drop" : "drop";
       break;
     case IpTableOptions::Action::kSetNextHopId:
-      action_name = "set_nexthop_id";
+      action_name = ip_options.metadata.has_value()
+                        ? "set_nexthop_id_and_metadata"
+                        : "set_nexthop_id";
       break;
     case pins::IpTableOptions::Action::kSetWcmpGroupId:
-      action_name = "set_wcmp_group_id";
+      action_name = ip_options.metadata.has_value()
+                        ? "set_wcmp_group_id_and_metadata"
+                        : "set_wcmp_group_id";
       break;
   }
   auto* action = ir_table_entry->mutable_action();
@@ -107,11 +114,50 @@ absl::StatusOr<p4::v1::Update> IpTableUpdate(const pdpi::IrP4Info& ir_p4_info,
     param->set_name("wcmp_group_id");
     param->mutable_value()->set_str(*ip_options.wcmp_group_id);
   }
+  if (ip_options.metadata.has_value()) {
+    auto* param = action->add_params();
+    param->set_name("route_metadata");
+    param->mutable_value()->set_hex_str(
+        absl::StrFormat("%#04x", *ip_options.metadata));
+  }
 
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
 }  // namespace
+
+std::string IpTableOptions::ToString() const {
+  std::vector<std::string> result_lines = {
+      absl::StrFormat("vrf_id: %s", vrf_id)};
+  if (dst_addr_lpm.has_value()) {
+    result_lines.push_back(absl::StrFormat(
+        "dst_addr_lpm:  %s/%d", dst_addr_lpm->first, dst_addr_lpm->second));
+  }
+  std::string action_str;
+  switch (action) {
+    case Action::kDrop:
+      result_lines.push_back("action: kDrop");
+      break;
+    case Action::kSetNextHopId:
+      result_lines.push_back("action: kSetNextHopId");
+      break;
+    case Action::kSetWcmpGroupId:
+      result_lines.push_back("action: kSetWcmpGroupId");
+      break;
+  }
+  if (nexthop_id.has_value()) {
+    result_lines.push_back(absl::StrFormat("nexthop_id: %s", *nexthop_id));
+  }
+  if (wcmp_group_id.has_value()) {
+    result_lines.push_back(
+        absl::StrFormat("wcmp_group_id: %s", *wcmp_group_id));
+  }
+  if (metadata.has_value()) {
+    result_lines.push_back(absl::StrFormat("metadata: %d", *metadata));
+  }
+
+  return absl::StrJoin(result_lines, "\n");
+}
 
 absl::StatusOr<p4::v1::Update> RouterInterfaceTableUpdate(
     const pdpi::IrP4Info& ir_p4_info, p4::v1::Update::Type type,
