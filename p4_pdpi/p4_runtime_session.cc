@@ -32,8 +32,6 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/sequencing.h"
-#include "p4_pdpi/utils/ir.h"
-#include "sai_p4/fixed/roles.h"
 
 namespace pdpi {
 
@@ -142,6 +140,51 @@ std::unique_ptr<P4RuntimeSession> P4RuntimeSession::Default(
       new P4RuntimeSession(device_id, std::move(stub), device_id, role));
 }
 
+absl::Status P4RuntimeSession::Write(const p4::v1::WriteRequest& request) {
+  return WriteRpcGrpcStatusToAbslStatus(WriteAndReturnGrpcStatus(request),
+                                        request.updates_size());
+}
+
+grpc::Status P4RuntimeSession::WriteAndReturnGrpcStatus(
+    const p4::v1::WriteRequest& request) {
+  grpc::ClientContext context;
+  p4::v1::WriteResponse response;
+  return stub_->Write(&context, request, &response);
+}
+
+absl::StatusOr<p4::v1::ReadResponse> P4RuntimeSession::Read(
+    const p4::v1::ReadRequest& request) {
+  grpc::ClientContext context;
+  auto reader = stub_->Read(&context, request);
+
+  p4::v1::ReadResponse result;
+  p4::v1::ReadResponse response;
+  while (reader->Read(&response)) {
+    result.MergeFrom(response);
+  }
+
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(reader->Finish()));
+  return result;
+}
+
+absl::Status P4RuntimeSession::SetForwardingPipelineConfig(
+    const p4::v1::SetForwardingPipelineConfigRequest& request) {
+  grpc::ClientContext context;
+  p4::v1::SetForwardingPipelineConfigResponse response;
+  return gutil::GrpcStatusToAbslStatus(
+      stub_->SetForwardingPipelineConfig(&context, request, &response));
+}
+
+absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
+P4RuntimeSession::GetForwardingPipelineConfig(
+    const p4::v1::GetForwardingPipelineConfigRequest& request) {
+  grpc::ClientContext context;
+  p4::v1::GetForwardingPipelineConfigResponse response;
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+      stub_->GetForwardingPipelineConfig(&context, request, &response)));
+  return response;
+}
+
 absl::Status P4RuntimeSession::Finish() {
   stream_channel_->WritesDone();
 
@@ -171,31 +214,7 @@ absl::StatusOr<ReadResponse> SetMetadataAndSendPiReadRequest(
     P4RuntimeSession* session, ReadRequest& read_request) {
   read_request.set_device_id(session->DeviceId());
   read_request.set_role(session->Role());
-  grpc::ClientContext context;
-  auto reader = session->Stub().Read(&context, read_request);
-
-  ReadResponse response;
-  ReadResponse partial_response;
-  while (reader->Read(&partial_response)) {
-    response.MergeFrom(partial_response);
-  }
-
-  grpc::Status reader_status = reader->Finish();
-  if (!reader_status.ok()) {
-    return gutil::GrpcStatusToAbslStatus(reader_status);
-  }
-  return response;
-}
-
-absl::Status SendPiWriteRequest(P4Runtime::StubInterface* stub,
-                                const p4::v1::WriteRequest& request) {
-  grpc::ClientContext context;
-  // Empty message; intentionally discarded.
-  WriteResponse pi_response;
-  RETURN_IF_ERROR(WriteRpcGrpcStatusToAbslStatus(
-      stub->Write(&context, request, &pi_response), request.updates_size()))
-      << "Failed write request: " << request.DebugString();
-  return absl::OkStatus();
+  return session->Read(read_request);
 }
 
 absl::Status SetMetadataAndSendPiWriteRequest(P4RuntimeSession* session,
@@ -204,7 +223,7 @@ absl::Status SetMetadataAndSendPiWriteRequest(P4RuntimeSession* session,
   write_request.set_role(session->Role());
   *write_request.mutable_election_id() = session->ElectionId();
 
-  return SendPiWriteRequest(&session->Stub(), write_request);
+  return session->Write(write_request);
 }
 
 absl::Status SetMetadataAndSendPiWriteRequests(
@@ -364,7 +383,7 @@ absl::Status InstallPiTableEntries(P4RuntimeSession* session,
   return SetMetadataAndSendPiWriteRequests(session, sequenced_write_requests);
 }
 
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::v1::ForwardingPipelineConfig& config) {
@@ -375,15 +394,10 @@ absl::Status SetForwardingPipelineConfig(
   request.set_action(action);
   *request.mutable_config() = config;
 
-  // Empty message; intentionally discarded.
-  SetForwardingPipelineConfigResponse response;
-  grpc::ClientContext context;
-  return gutil::GrpcStatusToAbslStatus(
-      session->Stub().SetForwardingPipelineConfig(&context, request,
-                                                  &response));
+  return session->SetForwardingPipelineConfig(request);
 }
 
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const P4Info& p4info, absl::optional<absl::string_view> p4_device_config) {
@@ -393,7 +407,7 @@ absl::Status SetForwardingPipelineConfig(
     *config.mutable_p4_device_config() = *p4_device_config;
   }
 
-  return SetForwardingPipelineConfig(session, action, config);
+  return SetMetadataAndSetForwardingPipelineConfig(session, action, config);
 }
 
 absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
@@ -404,14 +418,7 @@ GetForwardingPipelineConfig(
   request.set_device_id(session->DeviceId());
   request.set_response_type(type);
 
-  grpc::ClientContext context;
-  p4::v1::GetForwardingPipelineConfigResponse response;
-  grpc::Status response_status =
-      session->Stub().GetForwardingPipelineConfig(&context, request, &response);
-  if (!response_status.ok()) {
-    return gutil::GrpcStatusToAbslStatus(response_status);
-  }
-  return response;
+  return session->GetForwardingPipelineConfig(request);
 }
 
 }  // namespace pdpi

@@ -30,6 +30,7 @@
 #include "gutil/io.h"
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -223,7 +224,7 @@ class P4rtRouteTest : public Test {
                              p4::v1::GetForwardingPipelineConfigRequest::ALL));
     // Push P4 Info Config, only if not present.
     if (!response.has_config()) {
-      ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+      ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
           p4rt_session_.get(),
           p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
           sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -292,19 +293,13 @@ class P4rtRouteTest : public Test {
 
     absl::Duration total_execution_time;
     for (const auto& request : requests) {
-      grpc::ClientContext context;
-      p4::v1::WriteResponse response;
-
       // Send a batch of requests to the server and measure the response time.
       absl::Time start = absl::Now();
-      grpc::Status grpc_status =
-          p4rt_session_->Stub().Write(&context, request, &response);
-      total_execution_time += absl::Now() - start;
 
       // We don't expect any errors in the test. So if we see one we invalidate
       // the run.
-      RETURN_IF_ERROR(pdpi::WriteRpcGrpcStatusToAbslStatus(
-          grpc_status, request.updates_size()));
+      RETURN_IF_ERROR(p4rt_session_->Write(request));
+      total_execution_time += absl::Now() - start;
     }
 
     return total_execution_time;
