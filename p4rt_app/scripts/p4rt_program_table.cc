@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
 
   // Push P4 Info Config file if specified.
   if (FLAGS_push_config) {
-    auto push_p4info_status = pdpi::SetForwardingPipelineConfig(
+    auto push_p4info_status = pdpi::SetMetadataAndSetForwardingPipelineConfig(
         p4rt_session.get(),
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
         p4info);

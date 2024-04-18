@@ -223,7 +223,7 @@ class P4rtRouteTest : public Test {
                              p4::v1::GetForwardingPipelineConfigRequest::ALL));
     // Push P4 Info Config, only if not present.
     if (!response.has_config()) {
-      ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+      ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
           p4rt_session_.get(),
           p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
           sai::GetP4Info(sai::Instantiation::kMiddleblock)));
