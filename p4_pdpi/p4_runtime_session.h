@@ -26,6 +26,7 @@
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
@@ -71,12 +72,15 @@ inline grpc::ChannelArguments GrpcChannelArgumentsForP4rt() {
   return args;
 }
 
-// Returns the gRPC ChannelArguments for P4Runtime by setting
-// `GRPC_ARG_KEEPALIVE_TIME_MS` to 1s to avoid connection problems and serve as
-// reverse path signalling.
-// `GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA` to 0 to allow KeepAlive ping without
-// traffic in the transport.
-// `GRPC_ARG_MAX_METADATA_SIZE` to P4GRPCMaxMetadataSize because P4RT returns
+// Returns the gRPC ChannelArguments for P4Runtime by setting the following:
+// - `GRPC_ARG_KEEPALIVE_TIME_MS` to 1s to avoid connection problems and serve
+// as reverse path signalling.
+// - `GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA` to 0 to allow KeepAlive ping
+// without traffic in the transport,
+// - `GRPC_ARG_KEEPALIVE_TIMEOUT_MS` to 10s,
+// - `GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS` to 1 to allow keepalive on
+// grpc::Channel without ongoing RPCs,
+// - `GRPC_ARG_MAX_METADATA_SIZE` to P4GRPCMaxMetadataSize because P4RT returns
 // batch element status in the grpc::Status, which can require a large metadata
 // size.
 inline grpc::ChannelArguments
@@ -85,7 +89,9 @@ GrpcChannelArgumentsForP4rtWithAggressiveKeepAlive() {
   args.SetInt(GRPC_ARG_MAX_METADATA_SIZE, P4GRPCMaxMetadataSize());
   // Allows grpc::channel to send keepalive ping without on-going traffic.
   args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
-  args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1000 /*1 second*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 10'000 /*10 seconds*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1'000 /*1 second*/);
   return args;
 }
 
@@ -135,29 +141,60 @@ class P4RuntimeSession {
   P4RuntimeSession(P4RuntimeSession&&) = default;
   P4RuntimeSession& operator=(P4RuntimeSession&&) = default;
 
+  // Sends the write request, and returns OK if all requests in the batch were
+  // handled successfully. If you need to evaluate the result of each request
+  // individually consider using WriteAndReturnGrpcStatus.
+  absl::Status Write(const p4::v1::WriteRequest& request);
+
+  // Sends the write request, and returns the raw gRPC response from the switch.
+  // Notice that the status only means the request was sent and handled
+  // correctly, but NOT that the flow was successfully programmed.
+  //
+  // https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-error-reporting
+  grpc::Status WriteAndReturnGrpcStatus(const p4::v1::WriteRequest& request);
+
+  // Sends the read request, and aggregates all the read responses into a
+  // single response. Will return an error if an issue is detected with the
+  // stream.
+  absl::StatusOr<p4::v1::ReadResponse> Read(const p4::v1::ReadRequest& request);
+
+  // Set/Get methods for the forwarding pipeline.
+  absl::Status SetForwardingPipelineConfig(
+      const p4::v1::SetForwardingPipelineConfigRequest& request);
+  absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
+  GetForwardingPipelineConfig(
+      const p4::v1::GetForwardingPipelineConfigRequest& request);
+
   // Returns the id of the node that this session belongs to.
   uint32_t DeviceId() const { return device_id_; }
   // Returns the election id that has been used to perform arbitration.
   p4::v1::Uint128 ElectionId() const { return election_id_; }
   // Returns the role of this session.
   std::string Role() const { return role_; }
-  // Returns the P4Runtime stub.
-  p4::v1::P4Runtime::StubInterface& Stub() { return *stub_; }
-  // Reads back stream message response.
+  // Thread-safe wrapper around the stream channel's `Read` method.
   ABSL_MUST_USE_RESULT bool StreamChannelRead(
-      p4::v1::StreamMessageResponse& response) {
-    return stream_channel_->Read(&response);
-  }
-  // Writes stream message request.
+      p4::v1::StreamMessageResponse& response)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
+  // Thread-safe wrapper around the stream channel's `Write` method.
   ABSL_MUST_USE_RESULT bool StreamChannelWrite(
-      const p4::v1::StreamMessageRequest& request) {
-    return stream_channel_->Write(request);
-  }
+      const p4::v1::StreamMessageRequest& request)
+      ABSL_LOCKS_EXCLUDED(stream_write_lock_);
+
   // Cancels the RPC. It is done in a best-effort fashion.
+  // WARNING: This is not thread-safe.
+  // TODO: Remove once clients have migrated to using Finish.
   void TryCancel() { stream_channel_context_->TryCancel(); }
-  // Closes the RPC connection by telling the server it is done writing. Once
-  // the server finishes handling all outstanding writes it will close.
-  absl::Status Finish();
+
+  // Closes the RPC connection by telling the server it is done writing, then
+  // reads and logs any outstanding messages from the server. Once the server
+  // finishes handling all outstanding writes it will close.
+  absl::Status Finish()
+      ABSL_LOCKS_EXCLUDED(stream_write_lock_, stream_read_lock_);
+
+  // Like `Finish`, but returns any outstanding message from the server.
+  absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+  ReadStreamChannelResponsesAndFinish()
+      ABSL_LOCKS_EXCLUDED(stream_write_lock_, stream_read_lock_);
 
  private:
   P4RuntimeSession(uint32_t device_id,
@@ -187,6 +224,11 @@ class P4RuntimeSession {
   std::unique_ptr<grpc::ClientReaderWriterInterface<
       p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse>>
       stream_channel_;
+
+  // Used to ensure atomic reads and writes on the stream channel. Write lock
+  // must be acquired before read lock in cases where both locks are acquired.
+  absl::Mutex stream_read_lock_;
+  absl::Mutex stream_write_lock_ ABSL_ACQUIRED_BEFORE(stream_read_lock_);
 };
 
 // Create P4Runtime stub.
@@ -210,10 +252,6 @@ absl::StatusOr<p4::v1::ReadResponse> SetMetadataAndSendPiReadRequest(
 // And sends a PI (program independent) write request.
 absl::Status SetMetadataAndSendPiWriteRequest(
     P4RuntimeSession* session, p4::v1::WriteRequest& write_request);
-
-// Sends a PI (program independent) write request with given stub.
-absl::Status SendPiWriteRequest(p4::v1::P4Runtime::StubInterface* stub,
-                                const p4::v1::WriteRequest& request);
 
 // Sets the requests' metadata (i.e. device id, role and election id). And sends
 // PI (program independent) write requests.
@@ -260,14 +298,14 @@ absl::Status SendPiUpdates(P4RuntimeSession* session,
 
 // Sets the forwarding pipeline to the given P4 info and, optionally, device
 // configuration.
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::config::v1::P4Info& p4info,
     absl::optional<absl::string_view> p4_device_config = absl::nullopt);
 
 // Sets the forwarding pipeline to the given one.
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::v1::ForwardingPipelineConfig& config);
