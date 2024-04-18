@@ -2,52 +2,84 @@ name: "build"
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
+  schedule:
+    # Run daily at midnight to ensure we catch regressions.
+    # https://crontab.guru/#0_0_*_*_*
+    - cron: "0 0 * * *"
 
 jobs:
   build:
-    name: Bazel Build and Test
-    # We use Ubuntu 20.04 as it comes with GCC v9.3 by default.
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
-      BAZEL_CACHE_USER: github
-      BAZEL_CACHE_PWD: ${{ secrets.BAZEL_CACHE_PWD }}
-      BAZEL_CACHE_URL: pins-bazel-cache.onf.dev:9090
+      BAZEL: bazelisk-linux-amd64
+      SWSS: https://x-token-auth:${{ secrets.PINS_SWSS_COMMON_ACCESS_TOKEN }}@github.com/pins/sonic-swss-common.git
 
     steps:
-    - uses: actions/checkout@v2
-
-    - name: Mount bazel cache
-      uses: actions/cache@v2
-      with:
-        # See https://docs.bazel.build/versions/master/output_directories.html
-        path: "/tmp/repo-cache"
-        # See https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
-        key: bazel-repo-cache-v1-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc', '.bazelversion', 'WORKSPACE.bazel') }}
-        restore-keys: |
-          bazel-repo-cache-v1-${{ runner.os }}-
+    - uses: actions/checkout@v3
 
     - name: Install system dependencies
       run: ./install_dependencies.sh
 
     - name: Install bazelisk
       run: |
-        ARCH=$(dpkg --print-architecture)
-        sudo curl -fsSL -o /usr/local/bin/bazel \
-          https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-${ARCH}
-        sudo chmod +x /usr/local/bin/bazel
+        curl -LO "https://github.com/bazelbuild/bazelisk/releases/download/v1.17.0/$BAZEL"
+        chmod +x $BAZEL
 
-    # Authentication is enabled for R/W access for builds on main and branch PRs
-    # Unauthenticated reads are allowed for PRs from forks
-    - name: Build and Test
+    - name: Set up GitHub credentials for private repos
+      run: git config --global url."${SWSS}".InsteadOf "git@github.com:pins/sonic-swss-common.git"
+
+    - name: Mount bazel cache
+      uses: actions/cache/restore@v3
+      with:
+        path: "~/.cache/bazel"
+        key: ci-${{ hashFiles('**/*_deps.bzl', '.bazelrc') }}-${{ github.ref_name }}
+        # The last key, `test-Linux`, is there just for boostrapping-purposes -- it matches the
+        # cache key schema prior to 2023-06-29. It can be revoved in a subsequent PR.
+        restore-keys: |
+          ci-${{ hashFiles('**/*_deps.bzl', '.bazelrc') }}
+          ci
+          test-Linux
+
+    - name: Save start time
+      uses: josStorer/get-current-time@v2
+      id: start-time
+      with:
+        # Unix timestamp -- seconds since 1970.
+        format: X
+
+    - name: Build
+      run: ./$BAZEL build --test_output=errors //...
+
+    - name: Test
+      run: ./$BAZEL test --test_output=errors //...
+
+    - name: Save end time
+      uses: josStorer/get-current-time@v2
+      id: end-time
+      with:
+        # Unix timestamp -- seconds since 1970.
+        format: X
+
+    - name: Calculate build duration
       run: |
-        mkdir -p /tmp/repo-cache
-        BAZEL_OPTS="--repository_cache=/tmp/repo-cache"
-        [ ! -z "$BAZEL_CACHE_USER" ] && [ ! -z "$BAZEL_CACHE_PWD" ] && \
-          AUTH="${BAZEL_CACHE_USER}:${BAZEL_CACHE_PWD}@"
-        BAZEL_OPTS+=" --remote_cache=https://${AUTH}${BAZEL_CACHE_URL}"
-        BAZEL_OPTS+=" --remote_download_minimal"
-        bazel build ${BAZEL_OPTS} //...
-        bazel test ${BAZEL_OPTS} //...
+        START=${{ steps.start-time.outputs.formattedTime }}
+        END=${{ steps.end-time.outputs.formattedTime }}
+        DURATION=$(( $END - $START ))
+        echo "duration=$DURATION" | tee "$GITHUB_ENV"
+
+    - name: Compress cache
+      # This deletes cached archives while keeping the build cache.
+      run: rm -rf $(./$BAZEL info repository_cache)
+
+    - name: Save bazel cache
+      uses: actions/cache/save@v3
+      # We create a new cache entry if either of the following is true:
+      # - We are on the master branch.
+      # - It took more than 5 minutes to build and test.
+      if: github.ref_name == 'master' || env.duration > 300
+      with:
+        path: "~/.cache/bazel"
+        key: ci-${{ hashFiles('**/*_deps.bzl', '.bazelrc') }}-${{ github.ref_name }}-${{ github.run_id }}
