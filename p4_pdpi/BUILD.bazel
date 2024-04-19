@@ -213,6 +213,7 @@ cc_library(
     ],
     deps = [
         ":ir",
+	"Test2"
         ":ir_cc_proto",
         ":sequencing",
         "//gutil:status",
