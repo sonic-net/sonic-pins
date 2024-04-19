@@ -212,6 +212,7 @@ cc_library(
         "p4_runtime_session.h",
     ],
     deps = [
+        #"Test case"
         ":ir",
         ":ir_cc_proto",
         ":sequencing",
