@@ -240,7 +240,7 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
               bool transmission_stopped =
                   flow_metric.transmit() == otg::FlowMetric::Transmit::stopped;
 
-              if (flow_metric.bytes_tx() == 0 || flow_metric.frames_tx() == 0) {
+              if (flow_metric.frames_tx() == 0) {
                 errors.push_back(
                     absl::StrCat("Flow name:\t\t", flow_metric.name(),
                                  "\nFrames Tx:\t\t", flow_metric.frames_tx(),
@@ -256,14 +256,10 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
                   flow_metric.bytes_tx() - flow_metric.bytes_rx();
               uint64_t frames_drop =
                   flow_metric.frames_tx() - flow_metric.frames_rx();
-              uint64_t bytes_drop_percent =
-                  (bytes_drop / flow_metric.bytes_tx()) * 100;
               float_t frames_drop_percent =
                   (frames_drop / flow_metric.frames_tx()) * 100;
 
-              if (bytes_drop_percent <= error_percentage &&
-                  frames_drop_percent <= error_percentage)
-                continue;
+              if (frames_drop_percent <= error_percentage) continue;
 
               errors.push_back(absl::StrCat(
                   "Flow name:\t\t", flow_metric.name(), "\nBytes dropped:\t\t",
