@@ -108,7 +108,6 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "//gutil:collections",
-        "//gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:pd",
         "//p4_pdpi/utils:ir",
@@ -171,30 +170,11 @@ cc_library(
     ],
 )
 
-cc_test(
-    name = "fuzzer_showcase_test",
-    srcs = [
-        "fuzzer_showcase_test.cc",
-    ],
-    data = ["sai_main_info.pb.txt"],
-    deps = [
-        ":annotation_util",
-        ":fuzzer_cc_proto",
-        ":mutation_and_fuzz_util",
-        "//gutil:proto",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:pd",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
 
 cc_library(
     name = "p4_programs/sai-p4-google/ids",
     hdrs = ["p4_programs/sai-p4-google/ids.h"],
 )
-
-
 p4_library(
     name = "single_table_single_entry",
     src = "p4_programs/single_table_single_entry.p4",

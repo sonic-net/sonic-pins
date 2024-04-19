@@ -340,6 +340,14 @@ p4::v1::FieldMatch FuzzExactFieldMatch(absl::BitGen* gen, int bits) {
   return match;
 }
 
+p4::v1::FieldMatch FuzzOptionalFieldMatch(absl::BitGen* gen, int bits) {
+  p4::v1::FieldMatch match;
+  if (absl::Bernoulli(*gen, 0.5)) {
+    match.mutable_optional()->set_value(FuzzBits(gen, bits));
+  }
+  return match;
+}
+
 p4::v1::FieldMatch FuzzExactFieldMatch(absl::BitGen* gen, int bits, int bytes) {
   p4::v1::FieldMatch match;
   // Note that exact messages have to be provided, even if the value is 0.
@@ -363,6 +371,9 @@ p4::v1::FieldMatch FuzzFieldMatch(
       break;
     case p4::config::v1::MatchField::EXACT:
       match_field = FuzzExactFieldMatch(gen, match_field_info.bitwidth());
+      break;
+    case p4::config::v1::MatchField::OPTIONAL:
+      match_field = FuzzOptionalFieldMatch(gen, match_field_info.bitwidth());
       break;
     default:
       LOG(FATAL) << "Unsupported match: " << match_field_info.DebugString();
