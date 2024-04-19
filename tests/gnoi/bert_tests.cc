@@ -77,9 +77,6 @@ using ::gutil::IsOkAndHolds;
 using ::testing::HasSubstr;
 using ::testing::SizeIs;
 
-using ::gnoi::system::RebootStatusRequest;
-using ::gnoi::system::RebootStatusResponse;
-
 // BERT test duration.
 constexpr absl::Duration kTestDuration = absl::Seconds(180);
 constexpr absl::Duration kLongTestDuration = absl::Seconds(360);
@@ -662,37 +659,29 @@ bool IsListPartOfInterfaceList(const std::vector<std::string>& list,
   return true;
 }
 
-static absl::Status
-WaitForNsfRebootActive(gnoi::system::System::StubInterface &gnoi_system_stub) {
+static absl::Status WaitForGnoiToBeUnavailable(
+    gnoi::system::System::StubInterface& gnoi_system_stub) {
   absl::Time start_time = absl::Now();
   constexpr absl::Duration kFasterPoll = absl::Seconds(2);
-  // Start polling to check for NSF reboot being active.
+
+  // Poll using Time() RPC to check if target is available: Time() is typically
+  // used to test if a target is actually responding.
   while (absl::Now() < (start_time + kNsfActiveTimeout)) {
     absl::SleepFor(kFasterPoll);
     grpc::ClientContext context;
-    RebootStatusRequest request;
-    RebootStatusResponse response;
+    gnoi::system::TimeRequest request;
+    gnoi::system::TimeResponse response;
 
-    // Invoke the RPC and validate the results.
-    auto reboot_status =
-        gnoi_system_stub.RebootStatus(&context, request, &response);
+    // Invoke the RPC.
+    auto status = gnoi_system_stub.Time(&context, request, &response);
 
-    if (!reboot_status.ok()) {
-      LOG(WARNING) << "Reboot Status, error_message: "
-                   << reboot_status.error_message()
-                   << " error_code: " << reboot_status.error_code();
-      continue;
+    if (gutil::GrpcStatusToAbslStatus(status).code() ==
+        absl::StatusCode::kUnavailable) {
+      return absl::OkStatus();
     }
-
-    if (!response.active()) {
-      LOG(WARNING) << "Reboot Status Response: " << response.ShortDebugString();
-      continue;
-    }
-
-    return absl::OkStatus();
   }
 
-  return absl::DeadlineExceededError("Couldn't get NSF reboot active.");
+  return absl::DeadlineExceededError("Timed-out to get GNOI unavailable.");
 }
 
 static void AddStartBertRequestForLink(
@@ -1672,7 +1661,7 @@ TEST_P(BertTest, BertWithNsf) {
   ASSERT_OK(pins_test::NsfReboot(testbed_variant));
 
   ASSERT_OK_AND_ASSIGN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
-  absl::Status status = WaitForNsfRebootActive(*sut_gnoi_system_stub);
+  absl::Status status = WaitForGnoiToBeUnavailable(*sut_gnoi_system_stub);
   EXPECT_OK(status);
 
   // Request BERT start request while NSF is in progress, it should be rejected.
