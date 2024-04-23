@@ -29,6 +29,8 @@ public:
   void SetWarmBootState(swss::WarmStart::WarmStartState state) override;
   swss::WarmStart::WarmStartState GetOrchAgentWarmBootState(void) override;
   bool IsWarmStart(void) override;
+  void UpdateWarmBootStageStart(swss::WarmStart::WarmBootStage) override;
+  void UpdateWarmBootStageEndOnFailure(swss::WarmStart::WarmBootStage) override;
 
   // Test-only accessors
   std::vector<swss::WarmStart::WarmStartState> GetWarmBootStateHistory();
@@ -36,6 +38,8 @@ public:
   bool WaitForUnfreeze(void) override;
   void SetWaitForUnfreeze(bool wait_for_unfreeze);
   void SetOrchAgentWarmBootState(swss::WarmStart::WarmStartState);
+  swss::WarmStart::WarmBootStage GetWarmBootStage(void);
+  bool GetWarmBootStageFailureFlag(void);
 
  private:
   // History of warm-boot states.
@@ -44,6 +48,9 @@ public:
   bool wait_for_unfreeze_ = false;
   swss::WarmStart::WarmStartState oa_state_ =
       swss::WarmStart::WarmStartState::WSUNKNOWN;
+  swss::WarmStart::WarmBootStage warm_boot_stage_ =
+      swss::WarmStart::WarmBootStage::STAGE_UNFREEZE;
+  bool warm_boot_stage_failure_flag_ = false;
 };
 
 } // namespace sonic

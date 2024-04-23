@@ -539,6 +539,8 @@ int main(int argc, char** argv) {
                         .error_message();
       p4runtime_server.GrabLockAndUpdateWarmBootState(
           swss::WarmStart::WarmStartState::FAILED);
+      p4runtime_server.GrabLockAndUpdateWarmBootStageEndOnFailure(
+          swss::WarmStart::WarmBootStage::STAGE_RECONCILIATION);
     }
   }
 

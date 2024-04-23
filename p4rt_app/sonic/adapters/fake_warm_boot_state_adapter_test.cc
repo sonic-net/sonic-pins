@@ -64,6 +64,32 @@ TEST(FakeWarmBootStateAdapterTest, SetOrchAgentWarmBootState) {
   adapter.SetOrchAgentWarmBootState(swss::WarmStart::WarmStartState::FAILED);
   EXPECT_THAT(adapter.GetOrchAgentWarmBootState(), swss::WarmStart::FAILED);
 }
+
+TEST(FakeWarmBootStateAdapterTest, UpdateWarmBootStage) {
+  FakeWarmBootStateAdapter adapter;
+  EXPECT_THAT(adapter.GetWarmBootStage(),
+              swss::WarmStart::WarmBootStage::STAGE_UNFREEZE);
+  EXPECT_THAT(adapter.GetWarmBootStageFailureFlag(), false);
+
+  adapter.UpdateWarmBootStageStart(
+      swss::WarmStart::WarmBootStage::STAGE_FREEZE);
+  EXPECT_THAT(adapter.GetWarmBootStage(),
+              swss::WarmStart::WarmBootStage::STAGE_FREEZE);
+  EXPECT_THAT(adapter.GetWarmBootStageFailureFlag(), false);
+
+  adapter.UpdateWarmBootStageStart(
+      swss::WarmStart::WarmBootStage::STAGE_UNFREEZE);
+  EXPECT_THAT(adapter.GetWarmBootStage(),
+              swss::WarmStart::WarmBootStage::STAGE_UNFREEZE);
+  EXPECT_THAT(adapter.GetWarmBootStageFailureFlag(), false);
+
+  adapter.UpdateWarmBootStageEndOnFailure(
+      swss::WarmStart::WarmBootStage::STAGE_RECONCILIATION);
+  EXPECT_THAT(adapter.GetWarmBootStage(),
+              swss::WarmStart::WarmBootStage::STAGE_RECONCILIATION);
+  EXPECT_THAT(adapter.GetWarmBootStageFailureFlag(), true);
+}
+
 }  // namespace
 }  // namespace sonic
 }  // namespace p4rt_app

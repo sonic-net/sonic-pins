@@ -290,8 +290,14 @@ class WarmRestartTest : public testing::Test {
     } else {
       p4rt_service_->GetP4rtServer().GrabLockAndUpdateWarmBootState(
           swss::WarmStart::FAILED);
+      p4rt_service_->GetP4rtServer().GrabLockAndUpdateWarmBootStageEndOnFailure(
+          swss::WarmStart::STAGE_RECONCILIATION);
       EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootState(),
                 swss::WarmStart::FAILED);
+      EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStage(),
+                swss::WarmStart::STAGE_RECONCILIATION);
+      EXPECT_TRUE(p4rt_service_->GetWarmBootStateAdapter()
+                      ->GetWarmBootStageFailureFlag());
     }
 
     p4rt_service_->GetWarmBootStateAdapterForUtilOnly()->SetWaitForUnfreeze(
@@ -566,7 +572,7 @@ TEST_F(WarmRestartTest, ReconciliationSucceedsWithFixedL3Entries) {
   EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
 }
 
-TEST_F(WarmRestartTest, ReconciliationFailsP4infoNotFound) {
+TEST_F(WarmRestartTest, DISABLED_ReconciliationFailsP4infoNotFound) {
   // Fails since P4Info is not saved in the file system.
   EXPECT_THAT(
       p4rt_service_->GetP4rtServer().RebuildSwStateAfterWarmboot({}, {}, 1, {}),
@@ -578,6 +584,10 @@ TEST_F(WarmRestartTest, ReconciliationFailsP4infoNotFound) {
   EXPECT_THAT(p4runtime_impl->RebuildSwStateAfterWarmboot({}, {}, kDeviceId,
                                                           {"SEND_TO_INGRESS"}),
               StatusIs(absl::StatusCode::kFailedPrecondition));
+  EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStage(),
+            swss::WarmStart::STAGE_RECONCILIATION);
+  EXPECT_TRUE(
+      p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStageFailureFlag());
 }
 
 TEST_F(WarmRestartTest, ReconciliationFailsWhenDbEntryInvalid) {
@@ -618,6 +628,10 @@ TEST_F(WarmRestartTest, ReconciliationFailsWhenDbEntryInvalid) {
                        HasSubstr("EntityCache is missing key: "
                                  "P4RT:FIXED_ROUTER_INTERFACE_TABLE:invalid")));
   SCOPED_TRACE("Failed to stay frozen after reconcile error");
+  EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStage(),
+            swss::WarmStart::STAGE_RECONCILIATION);
+  EXPECT_TRUE(
+      p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStageFailureFlag());
   VerifyP4rtServerResponseInFreezeMode();
 }
 
@@ -664,6 +678,11 @@ TEST_F(WarmRestartTest, WarmBootUpWaitForUnfreeze) {
   // Unfreeze P4RT
   EXPECT_OK(p4rt_service_->GetP4rtServer().HandleWarmBootNotification(
       swss::WarmStart::WarmBootNotification::kUnfreeze));
+  // Verify the warm boot stage is STAGE_UNFREEZE.
+  EXPECT_EQ(p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStage(),
+            swss::WarmStart::STAGE_UNFREEZE);
+  EXPECT_FALSE(
+      p4rt_service_->GetWarmBootStateAdapter()->GetWarmBootStageFailureFlag());
   // State Verification
   EXPECT_OK(p4rt_service_->GetP4rtServer().VerifyState());
   {

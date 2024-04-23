@@ -34,6 +34,9 @@ public:
   virtual bool WaitForUnfreeze(void);
   // Get OrchAgent WarmBoot state.
   virtual swss::WarmStart::WarmStartState GetOrchAgentWarmBootState(void);
+  // Set P4RT WarmBoot stage.
+  virtual void UpdateWarmBootStageStart(swss::WarmStart::WarmBootStage);
+  virtual void UpdateWarmBootStageEndOnFailure(swss::WarmStart::WarmBootStage);
 };
 
 // Helper class used by internal request handlers for book keeping warm-boot

@@ -47,6 +47,9 @@ TEST_F(WarmBootNotificationTest,
   // Verify the warm boot state is QUIESCENT.
   EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::WarmStartState::QUIESCENT);
+  // Verify the warm boot stage is STAGE_FREEZE.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootStage(),
+            swss::WarmStart::WarmBootStage::STAGE_FREEZE);
 }
 
 TEST_F(WarmBootNotificationTest,
@@ -113,66 +116,18 @@ TEST_F(WarmBootNotificationTest, DuplicateFreezeNotificationIsIgnored) {
       swss::WarmStart::WarmBootNotification::kFreeze));
   EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::WarmStartState::QUIESCENT);
+  // Verify the warm boot stage is STAGE_FREEZE.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootStage(),
+            swss::WarmStart::WarmBootStage::STAGE_FREEZE);
 
   EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
       swss::WarmStart::WarmBootNotification::kFreeze));
   // Verify the warm boot state is not changed by duplicate freeze notification.
   EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::WarmStartState::QUIESCENT);
-}
-
-TEST_F(WarmBootNotificationTest,
-       WarmBootStateFromReconciledToCompletedAfterUnFreeze) {
-  // Freeze P4RT
-  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
-      swss::WarmStart::WarmBootNotification::kFreeze));
-  // Verify the warm boot state is QUIESCENT.
-  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
-            swss::WarmStart::WarmStartState::QUIESCENT);
-
-  // Set warm boot state to RECONCILED.
-  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
-      swss::WarmStart::WarmStartState::RECONCILED);
-  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
-            swss::WarmStart::WarmStartState::RECONCILED);
-
-  // Unfreeze P4RT
-  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
-      swss::WarmStart::WarmBootNotification::kUnfreeze));
-}
-
-TEST_F(WarmBootNotificationTest,
-       WarmBootStateFromFrozenToCompletedAfterUnFreeze) {
-  // Freeze P4RT
-  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
-      swss::WarmStart::WarmBootNotification::kFreeze));
-  // Verify the warm boot state is QUIESCENT.
-  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
-            swss::WarmStart::WarmStartState::QUIESCENT);
-
-  // Set warm boot state to FROZEN.
-  p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
-      swss::WarmStart::WarmStartState::FROZEN);
-  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
-            swss::WarmStart::WarmStartState::FROZEN);
-
-  // Unfreeze P4RT
-  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
-      swss::WarmStart::WarmBootNotification::kUnfreeze));
-}
-
-TEST_F(WarmBootNotificationTest,
-       WarmBootStateFromQuiescentToCompletedAfterUnFreeze) {
-  // Freeze P4RT
-  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
-      swss::WarmStart::WarmBootNotification::kFreeze));
-  // Verify the warm boot state is QUIESCENT.
-  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
-            swss::WarmStart::WarmStartState::QUIESCENT);
-
-  // Unfreeze P4RT
-  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
-      swss::WarmStart::WarmBootNotification::kUnfreeze));
+  // Verify the warm boot stage is STAGE_FREEZE.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootStage(),
+            swss::WarmStart::WarmBootStage::STAGE_FREEZE);
 }
 
 TEST_F(WarmBootNotificationTest, DuplicateUnfreezeNotificationIsIgnored) {
@@ -182,6 +137,9 @@ TEST_F(WarmBootNotificationTest, DuplicateUnfreezeNotificationIsIgnored) {
   // Verify the warm boot state is QUIESCENT.
   EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootState(),
             swss::WarmStart::WarmStartState::QUIESCENT);
+  // Verify the warm boot stage is STAGE_FREEZE.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootStage(),
+            swss::WarmStart::WarmBootStage::STAGE_FREEZE);
 
   p4rt_service_.GetWarmBootStateAdapter()->SetWarmBootState(
       swss::WarmStart::WarmStartState::RECONCILED);
@@ -191,10 +149,9 @@ TEST_F(WarmBootNotificationTest, DuplicateUnfreezeNotificationIsIgnored) {
   // Unfreeze P4RT
   EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
       swss::WarmStart::WarmBootNotification::kUnfreeze));
-
-  // Unfreeze P4RT
-  EXPECT_OK(p4rt_service_.GetP4rtServer().HandleWarmBootNotification(
-      swss::WarmStart::WarmBootNotification::kUnfreeze));
+  // Verify the warm boot stage is STAGE_UNFREEZE.
+  EXPECT_EQ(p4rt_service_.GetWarmBootStateAdapter()->GetWarmBootStage(),
+            swss::WarmStart::WarmBootStage::STAGE_UNFREEZE);
 }
 
 TEST_F(WarmBootNotificationTest,

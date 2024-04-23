@@ -1816,6 +1816,18 @@ swss::WarmStart::WarmStartState P4RuntimeImpl::GetWarmBootState()
   return warm_boot_state_adapter_->GetWarmBootState();
 }
 
+void P4RuntimeImpl::UpdateWarmBootStageStart(
+    const swss::WarmStart::WarmBootStage stage)
+    ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_) {
+  warm_boot_state_adapter_->UpdateWarmBootStageStart(stage);
+}
+
+void P4RuntimeImpl::GrabLockAndUpdateWarmBootStageEndOnFailure(
+    const swss::WarmStart::WarmBootStage stage) {
+  absl::MutexLock l(&server_state_lock_);
+  warm_boot_state_adapter_->UpdateWarmBootStageEndOnFailure(stage);
+}
+
 // Handle warm-boot freeze notification.
 absl::Status P4RuntimeImpl::HandleWarmBootNotification(
     swss::WarmStart::WarmBootNotification notification) {
@@ -1841,6 +1853,7 @@ absl::Status P4RuntimeImpl::HandleWarmBootNotification(
 
     LOG(INFO) << "Handle warm-boot notification: freeze.";
 
+    UpdateWarmBootStageStart(swss::WarmStart::WarmBootStage::STAGE_FREEZE);
     is_freeze_mode_ = true;
 
     // Disconnect all stream channels, future client write request will fail.
@@ -1866,6 +1879,7 @@ absl::Status P4RuntimeImpl::HandleWarmBootNotification(
       return absl::OkStatus();
     }
 
+    UpdateWarmBootStageStart(swss::WarmStart::WarmBootStage::STAGE_UNFREEZE);
     is_freeze_mode_ = false;
   }
 

@@ -50,5 +50,15 @@ bool WarmBootStateAdapter::WaitForUnfreeze() {
   return swss::WarmStart::waitForUnfreeze();
 }
 
+void WarmBootStateAdapter::UpdateWarmBootStageStart(
+    const swss::WarmStart::WarmBootStage stage) {
+  swss::WarmStart::updateAppWarmBootStageStart(stage, "p4rt");
+}
+
+void WarmBootStateAdapter::UpdateWarmBootStageEndOnFailure(
+    const swss::WarmStart::WarmBootStage stage) {
+  swss::WarmStart::updateAppWarmBootStageEndOnFailure(stage, "p4rt");
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app

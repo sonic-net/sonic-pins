@@ -59,5 +59,26 @@ FakeWarmBootStateAdapter::GetOrchAgentWarmBootState() {
   return oa_state_;
 }
 
+void FakeWarmBootStateAdapter::UpdateWarmBootStageStart(
+    const swss::WarmStart::WarmBootStage stage) {
+  warm_boot_stage_ = stage;
+  warm_boot_stage_failure_flag_ = false;
+}
+
+void FakeWarmBootStateAdapter::UpdateWarmBootStageEndOnFailure(
+    const swss::WarmStart::WarmBootStage stage) {
+  warm_boot_stage_ = stage;
+  warm_boot_stage_failure_flag_ = true;
+}
+
+swss::WarmStart::WarmBootStage FakeWarmBootStateAdapter::GetWarmBootStage(
+    void) {
+  return warm_boot_stage_;
+}
+
+bool FakeWarmBootStateAdapter::GetWarmBootStageFailureFlag(void) {
+  return warm_boot_stage_failure_flag_;
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app

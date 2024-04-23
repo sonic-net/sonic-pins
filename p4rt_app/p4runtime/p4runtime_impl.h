@@ -235,6 +235,9 @@ public:
   void GrabLockAndUpdateWarmBootState(swss::WarmStart::WarmStartState state)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  void GrabLockAndUpdateWarmBootStageEndOnFailure(
+      swss::WarmStart::WarmBootStage) ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
  protected:
   // Simple constructor that should only be used for testing purposes.
   P4RuntimeImpl(bool translate_port_ids)
@@ -314,6 +317,9 @@ private:
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   swss::WarmStart::WarmStartState GetWarmBootState()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
+
+  void UpdateWarmBootStageStart(swss::WarmStart::WarmBootStage)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(server_state_lock_);
 
   // Mutex for constraining actions to access and modify server state.
