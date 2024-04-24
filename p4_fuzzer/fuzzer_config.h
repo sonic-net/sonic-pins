@@ -46,6 +46,9 @@ struct ConfigParams {
   std::string role = "sdn_controller";
   // The probability of performing a mutation on a given table entry.
   float mutate_update_probability = 0.1;
+  // The probability of using a wildcard for a ternary, optional, or lpm match
+  // field.
+  float match_field_wildcard_probability = 0.05;
   // The probability of fuzzing a multicast group entry when fuzzing an update.
   // TODO: b/316926338 - Remove once switch state transitions to entities and
   // fuzzer can use weighted distribution for multicast.
@@ -128,6 +131,9 @@ public:
   std::string GetRole() const { return params_.role; }
   float GetMutateUpdateProbability() const {
     return params_.mutate_update_probability;
+  }
+  float GetMatchFieldWildcardProbability() const {
+    return params_.match_field_wildcard_probability;
   }
   float GetFuzzMulticastGroupEntryProbability() const {
     return params_.fuzz_multicast_group_entry_probability;
