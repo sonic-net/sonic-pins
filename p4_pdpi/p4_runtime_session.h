@@ -135,14 +135,36 @@ class P4RuntimeSession {
   P4RuntimeSession(P4RuntimeSession&&) = default;
   P4RuntimeSession& operator=(P4RuntimeSession&&) = default;
 
+  // Sends the write request, and returns OK if all requests in the batch were
+  // handled successfully. If you need to evaluate the result of each request
+  // individually consider using WriteAndReturnGrpcStatus.
+  absl::Status Write(const p4::v1::WriteRequest& request);
+
+  // Sends the write request, and returns the raw gRPC response from the switch.
+  // Notice that the status only means the request was sent and handled
+  // correctly, but NOT that the flow was successfully programmed.
+  //
+  // https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-error-reporting
+  grpc::Status WriteAndReturnGrpcStatus(const p4::v1::WriteRequest& request);
+
+  // Sends the read request, and aggregates all the read responses into a
+  // single response. Will return an error if an issue is detected with the
+  // stream.
+  absl::StatusOr<p4::v1::ReadResponse> Read(const p4::v1::ReadRequest& request);
+
+  // Set/Get methods for the forwarding pipeline.
+  absl::Status SetForwardingPipelineConfig(
+      const p4::v1::SetForwardingPipelineConfigRequest& request);
+  absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
+  GetForwardingPipelineConfig(
+      const p4::v1::GetForwardingPipelineConfigRequest& request);
+
   // Returns the id of the node that this session belongs to.
   uint32_t DeviceId() const { return device_id_; }
   // Returns the election id that has been used to perform arbitration.
   p4::v1::Uint128 ElectionId() const { return election_id_; }
   // Returns the role of this session.
   std::string Role() const { return role_; }
-  // Returns the P4Runtime stub.
-  p4::v1::P4Runtime::StubInterface& Stub() { return *stub_; }
   // Reads back stream message response.
   ABSL_MUST_USE_RESULT bool StreamChannelRead(
       p4::v1::StreamMessageResponse& response) {
@@ -210,10 +232,6 @@ absl::StatusOr<p4::v1::ReadResponse> SetMetadataAndSendPiReadRequest(
 // And sends a PI (program independent) write request.
 absl::Status SetMetadataAndSendPiWriteRequest(
     P4RuntimeSession* session, p4::v1::WriteRequest& write_request);
-
-// Sends a PI (program independent) write request with given stub.
-absl::Status SendPiWriteRequest(p4::v1::P4Runtime::StubInterface* stub,
-                                const p4::v1::WriteRequest& request);
 
 // Sets the requests' metadata (i.e. device id, role and election id). And sends
 // PI (program independent) write requests.
