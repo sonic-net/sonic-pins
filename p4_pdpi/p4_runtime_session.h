@@ -287,14 +287,14 @@ absl::Status SendPiUpdates(P4RuntimeSession* session,
 
 // Sets the forwarding pipeline to the given P4 info and, optionally, device
 // configuration.
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::config::v1::P4Info& p4info,
     absl::optional<absl::string_view> p4_device_config = absl::nullopt);
 
 // Sets the forwarding pipeline to the given one.
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::v1::ForwardingPipelineConfig& config);
