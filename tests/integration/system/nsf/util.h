@@ -37,6 +37,9 @@
 
 namespace pins_test {
 
+// Percentage of error margin allowed for traffic loss during NSF reboot.
+constexpr int kNsfTrafficLossErrorPercentage = 0;
+
 struct PinsSoftwareInfo {
   std::string name;
   std::string oper_status;
