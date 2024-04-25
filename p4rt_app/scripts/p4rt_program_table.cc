@@ -30,9 +30,12 @@
 
 DEFINE_bool(push_config, false, "Push P4 Info config file");
 DEFINE_bool(cleanup, false, "Clean the entries that were programmed");
+DEFINE_bool(cleanall, false, "Clean all the entries that exist in the switch");
 DEFINE_string(
     input_file, "",
     "Input file in SAI PD format(sai::Update proto), see go/p4rt-sample-entry");
+DEFINE_uint64(p4rt_device_id, 1, "P4RT device ID");
+
 namespace {
 
 // Read input file and group PD table entries, split by the special
@@ -71,10 +74,21 @@ absl::StatusOr<std::vector<sai::Update>> ConvertToPdEntries(
 class P4rtTableWriter {
  public:
   P4rtTableWriter(std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
-                  bool cleanup)
-      : p4rt_session_(std::move(p4rt_session)), cleanup_(cleanup) {}
+                  bool cleanup, bool cleanall)
+      : p4rt_session_(std::move(p4rt_session)),
+        cleanup_(cleanup),
+        cleanall_(cleanall) {}
 
   ~P4rtTableWriter() {
+    // Cleanup all entries, if specified.
+    if (cleanall_) {
+      auto status = pdpi::ClearTableEntries(p4rt_session_.get());
+      if (!status.ok()) {
+        LOG(ERROR) << "Unable to clear enries on the switch: "
+                   << status.ToString();
+      }
+      return;
+    }
     // Cleanup the entries in reverse order, if specified.
     if (cleanup_) {
       for (auto it = pi_entries_.rbegin(); it != pi_entries_.rend(); ++it) {
@@ -96,6 +110,7 @@ class P4rtTableWriter {
                                    const sai::Update& pd_entry) {
     ASSIGN_OR_RETURN(auto pi_entry, pdpi::PdUpdateToPi(ir_p4info, pd_entry));
     p4::v1::WriteRequest write_request;
+    write_request.set_device_id(p4rt_session_->DeviceId());
     *write_request.add_updates() = pi_entry;
     RETURN_IF_ERROR(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                            write_request));
@@ -107,6 +122,7 @@ class P4rtTableWriter {
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
   std::vector<p4::v1::Update> pi_entries_;
   bool cleanup_ = false;
+  bool cleanall_ = false;
 };
 
 int main(int argc, char** argv) {
@@ -117,8 +133,7 @@ int main(int argc, char** argv) {
   auto stub = pdpi::CreateP4RuntimeStub(
       "unix:/sock/p4rt.sock", grpc::experimental::LocalCredentials(UDS));
   auto p4rt_session_or =
-      pdpi::P4RuntimeSession::Create(std::move(stub),
-                                     /*device_id=*/183807201);
+      pdpi::P4RuntimeSession::Create(std::move(stub), FLAGS_p4rt_device_id);
   if (!p4rt_session_or.ok()) {
     LOG(ERROR) << "Failed to create P4Runtime session, error : "
                << p4rt_session_or.status();
@@ -153,7 +168,8 @@ int main(int argc, char** argv) {
   }
   std::vector<sai::Update> pd_entries = std::move(*pd_entries_or);
 
-  P4rtTableWriter writer(std::move(p4rt_session), FLAGS_cleanup);
+  P4rtTableWriter writer(std::move(p4rt_session), FLAGS_cleanup,
+                         FLAGS_cleanall);
   absl::Status status;
   // Convert to PI and program the entries on the switch.
   for (const auto& pd_entry : pd_entries) {
