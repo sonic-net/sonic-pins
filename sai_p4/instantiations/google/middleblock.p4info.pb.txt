@@ -598,6 +598,7 @@ tables {
   match_fields {
     id: 8
     name: "vrf_id"
+    annotations: "@refers_to(vrf_table , vrf_id)"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)"
     match_type: OPTIONAL
     type_name {
@@ -1641,7 +1642,6 @@ actions {
     id: 16777247
     name: "egress.packet_rewrites.multicast_rewrites.l2_multicast_passthrough"
     alias: "l2_multicast_passthrough"
-    annotations: "@unsupported"
   }
 }
 action_profiles {

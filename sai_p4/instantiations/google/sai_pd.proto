@@ -224,7 +224,6 @@ message MulticastRouterInterfaceTableEntry {
   message Action {
     oneof action {
       SetMulticastSrcMacAction set_multicast_src_mac = 1;
-      // CAUTION: This action is not (yet) supported.
       L2MulticastPassthroughAction l2_multicast_passthrough = 2;
     }
   }
@@ -623,7 +622,7 @@ message AclIngressQosTableEntry {
       SetDscpAndQueuesAndDenyAboveRateLimitAction
           set_dscp_and_queues_and_deny_above_rate_limit = 6;
       // CAUTION: This action is not (yet) supported.
-      SetMulticastQueuesAction set_multicast_queues = 7;
+      SetForwardingQueuesAction set_forwarding_queues = 7;
     }
   }
   Action action = 2;
@@ -760,7 +759,8 @@ message AclIngressMirrorAndRedirectTableEntry {
     Ternary dst_ipv6 = 5;      // ternary match / Format::IPV6 / upper 64 bits
     Ternary acl_metadata = 6;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary vlan_id = 7;       // ternary match / Format::HEX_STRING / 12 bits
-    Optional vrf_id = 8;       // optional match / Format::STRING
+    // Refers to 'vrf_table.vrf_id'.
+    Optional vrf_id = 8; // optional match / Format::STRING
     Optional ipmc_table_hit =
         9;                // optional match / Format::HEX_STRING / 1 bits
     Ternary dst_ip = 10;  // ternary match / Format::IPV4
@@ -908,7 +908,8 @@ message MirrorWithVlanTagAndIpfixEncapsulationAction {
   string mirror_encap_udp_dst_port = 10;  // Format::HEX_STRING / 16 bits
 }
 
-// CAUTION: This action is not (yet) supported.
+message EgressLoopbackAction {}
+
 message L2MulticastPassthroughAction {}
 
 message SetVrfAction {
@@ -988,9 +989,11 @@ message RedirectToL2mcGroupAction {
 }
 
 // CAUTION: This action is not (yet) supported.
-message SetMulticastQueuesAction {
+message SetForwardingQueuesAction {
   string green_multicast_queue = 1;  // Format::STRING
   string red_multicast_queue = 2;    // Format::STRING
+  string green_unicast_queue = 3;    // Format::STRING
+  string red_unicast_queue = 4;      // Format::STRING
 }
 
 message NoAction {}

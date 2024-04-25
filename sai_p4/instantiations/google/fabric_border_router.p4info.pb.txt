@@ -1442,8 +1442,8 @@ actions {
 actions {
   preamble {
     id: 16777493
-    name: "ingress.acl_ingress.set_multicast_queues"
-    alias: "set_multicast_queues"
+    name: "ingress.acl_ingress.set_forwarding_queues"
+    alias: "set_forwarding_queues"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
     annotations: "@unsupported"
   }
@@ -1459,6 +1459,22 @@ actions {
     id: 2
     name: "red_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+  params {
+    id: 3
+    name: "green_unicast_queue"
+    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
+    type_name {
+      name: "qos_queue_t"
+    }
+  }
+  params {
+    id: 4
+    name: "red_unicast_queue"
+    annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
       name: "qos_queue_t"
     }
@@ -1789,7 +1805,6 @@ actions {
     id: 16777247
     name: "egress.packet_rewrites.multicast_rewrites.l2_multicast_passthrough"
     alias: "l2_multicast_passthrough"
-    annotations: "@unsupported"
   }
 }
 action_profiles {
