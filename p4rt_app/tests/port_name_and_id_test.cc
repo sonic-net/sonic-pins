@@ -148,7 +148,7 @@ TEST_F(PortNameAndIdTest, ExpectingName) {
   // Connect to the P4RT server and push a P4Info file.
   ASSERT_OK_AND_ASSIGN(auto p4rt_session,
                        StartP4rtSession(p4rt_service, device_id_));
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));
@@ -188,7 +188,7 @@ TEST_F(PortNameAndIdTest, ExpectingIdGetId) {
   // Connect to the P4RT server and push a P4Info file.
   ASSERT_OK_AND_ASSIGN(auto p4rt_session,
                        StartP4rtSession(p4rt_service, device_id_));
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));
@@ -228,7 +228,7 @@ TEST_F(PortNameAndIdTest, ExpectingIdGetName) {
   // Connect to the P4RT server and push a P4Info file.
   ASSERT_OK_AND_ASSIGN(auto p4rt_session,
                        StartP4rtSession(p4rt_service, device_id_));
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));

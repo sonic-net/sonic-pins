@@ -26,6 +26,7 @@
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
@@ -165,21 +166,24 @@ class P4RuntimeSession {
   p4::v1::Uint128 ElectionId() const { return election_id_; }
   // Returns the role of this session.
   std::string Role() const { return role_; }
-  // Reads back stream message response.
+  // Thread-safe wrapper around the stream channel's `Read` method.
   ABSL_MUST_USE_RESULT bool StreamChannelRead(
-      p4::v1::StreamMessageResponse& response) {
-    return stream_channel_->Read(&response);
-  }
-  // Writes stream message request.
+      p4::v1::StreamMessageResponse& response)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
+  // Thread-safe wrapper around the stream channel's `Write` method.
   ABSL_MUST_USE_RESULT bool StreamChannelWrite(
-      const p4::v1::StreamMessageRequest& request) {
-    return stream_channel_->Write(request);
-  }
+      const p4::v1::StreamMessageRequest& request)
+      ABSL_LOCKS_EXCLUDED(stream_write_lock_);
+
   // Cancels the RPC. It is done in a best-effort fashion.
+  // WARNING: This is not thread-safe.
+  // TODO: Remove once clients have migrated to using Finish.
   void TryCancel() { stream_channel_context_->TryCancel(); }
-  // Closes the RPC connection by telling the server it is done writing. Once
-  // the server finishes handling all outstanding writes it will close.
-  absl::Status Finish();
+  // Closes the RPC connection by telling the server it is done writing, then
+  // reads and logs any outstanding messages from the server. Once the server
+  // finishes handling all outstanding writes it will close.
+  absl::Status Finish()
+      ABSL_LOCKS_EXCLUDED(stream_write_lock_, stream_read_lock_);
 
  private:
   P4RuntimeSession(uint32_t device_id,
@@ -209,6 +213,11 @@ class P4RuntimeSession {
   std::unique_ptr<grpc::ClientReaderWriterInterface<
       p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse>>
       stream_channel_;
+
+  // Used to ensure atomic reads and writes on the stream channel. Write lock
+  // must be acquired before read lock in cases where both locks are acquired.
+  absl::Mutex stream_read_lock_;
+  absl::Mutex stream_write_lock_ ABSL_ACQUIRED_BEFORE(stream_read_lock_);
 };
 
 // Create P4Runtime stub.
@@ -278,14 +287,14 @@ absl::Status SendPiUpdates(P4RuntimeSession* session,
 
 // Sets the forwarding pipeline to the given P4 info and, optionally, device
 // configuration.
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::config::v1::P4Info& p4info,
     absl::optional<absl::string_view> p4_device_config = absl::nullopt);
 
 // Sets the forwarding pipeline to the given one.
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::v1::ForwardingPipelineConfig& config);
