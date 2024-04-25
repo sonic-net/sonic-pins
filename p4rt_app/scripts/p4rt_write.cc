@@ -66,10 +66,7 @@ absl::Status SendWriteRequest(pdpi::P4RuntimeSession& session,
   *pi_write_request.mutable_election_id() = session.ElectionId();
   pi_write_request.set_role(session.Role());
 
-  grpc::ClientContext context;
-  p4::v1::WriteResponse pi_write_response;
-  return gutil::GrpcStatusToAbslStatus(
-      session.Stub().Write(&context, pi_write_request, &pi_write_response));
+  return session.Write(pi_write_request);
 }
 
 absl::Status Main() {
