@@ -125,7 +125,8 @@ absl::Status Main() {
 
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
                    CreateP4rtSession());
-  return pdpi::SetForwardingPipelineConfig(session.get(), action, config);
+  return pdpi::SetMetadataAndSetForwardingPipelineConfig(session.get(), action,
+                                                         config);
 }
 
 }  // namespace
