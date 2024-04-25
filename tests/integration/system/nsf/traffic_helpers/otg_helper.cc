@@ -25,17 +25,31 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "artifacts/otg.grpc.pb.h"
 #include "artifacts/otg.pb.h"
 #include "grpcpp/client_context.h"
 #include "gutil/overload.h"
 #include "gutil/status.h"
 #include "lib/utils/generic_testbed_utils.h"
+#include "lib/validator/validator_lib.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace pins_test {
+namespace {
+
+absl::Status SetOtgConfig(otg::Openapi::StubInterface* stub,
+                          const otg::SetConfigRequest& request,
+                          otg::SetConfigResponse& response) {
+  grpc::ClientContext context;
+  return gutil::GrpcStatusToAbslStatus(
+      stub->SetConfig(&context, request, &response));
+}
+
+}  // namespace
 
 absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
   return std::visit(
@@ -60,7 +74,6 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
             // Create config.
             otg::SetConfigRequest set_config_request;
             otg::SetConfigResponse set_config_response;
-            grpc::ClientContext set_config_context;
             auto* config = set_config_request.mutable_config();
 
             // Randomly pick source and destination hosts.
@@ -159,9 +172,10 @@ absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
 
             // Set the config.
             otg::Openapi::StubInterface* stub = testbed->GetTrafficClient();
-            RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
-                stub->SetConfig(&set_config_context, set_config_request,
-                                &set_config_response)));
+
+            RETURN_IF_ERROR(WaitForCondition(SetOtgConfig, absl::Minutes(5),
+                                             stub, set_config_request,
+                                             set_config_response));
 
             // Start the traffic.
             otg::SetControlStateRequest request;
@@ -226,6 +240,12 @@ absl::Status OtgHelper::ValidateTraffic(Testbed& testbed,
             RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
                 stub->GetMetrics(&metrics_ctx, metrics_req, &metrics_res)));
 
+            RETURN_IF_ERROR(testbed->Environment().StoreTestArtifact(
+                absl::StrCat("OTG_Traffic_Metrics_",
+                             absl::FormatTime("%H_%M_%S", absl::Now(),
+                                              absl::LocalTimeZone()),
+                             ".txt"),
+                metrics_res.DebugString()));
             // Verify flow metrics is not empty.
             if (metrics_res.metrics_response().flow_metrics().empty()) {
               return absl::InternalError(

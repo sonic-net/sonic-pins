@@ -28,8 +28,9 @@ namespace pins_test {
 // Component owners need to have their own implementations and register to be
 // used by the NSF Upgrade tests.
 class SwssValidator : public ComponentValidator {
-  absl::Status OnInit(absl::string_view version, Testbed &testbed,
-                      thinkit::SSHClient &ssh_client) override {
+ public:
+  absl::Status OnInit(absl::string_view version, Testbed& testbed,
+                      thinkit::SSHClient& ssh_client) override {
     LOG(INFO) << "Swss Init";
     return absl::OkStatus();
   }
@@ -38,6 +39,8 @@ class SwssValidator : public ComponentValidator {
     LOG(INFO) << "Swss Flow Program";
     return absl::OkStatus();
   }
+  absl::Status OnNsfReboot(absl::string_view version, Testbed& testbed,
+                           thinkit::SSHClient& ssh_client) override;
 };
 
 }  // namespace pins_test
