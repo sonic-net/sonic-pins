@@ -50,10 +50,6 @@ namespace {
 
 using ::p4::v1::ReadResponse;
 
-// Since the validation is while the traffic is in progress, error margin needs
-// to be defined.
-constexpr int kErrorPercentage = 1;
-
 NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
   absl::BitGen gen;
   int random_index = absl::Uniform(
@@ -235,7 +231,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // good-to-have feature and we will update the skeleton to validate traffic
   // while injection is ongoing once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(testbed_, kErrorPercentage));
+  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(
+      testbed_, kNsfTrafficLossErrorPercentage));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnStopTraffic, component_validators_,
       next_image_config.image_label, testbed_, *ssh_client_));
