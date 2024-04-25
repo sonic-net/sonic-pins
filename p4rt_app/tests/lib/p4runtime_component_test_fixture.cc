@@ -51,7 +51,7 @@ void P4RuntimeComponentTestFixture::SetUp() {
   LOG(INFO) << "Opening P4RT connection to " << address << ".";
 
   // Push a P4Info file to enable the reading, and writing of entries.
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));
