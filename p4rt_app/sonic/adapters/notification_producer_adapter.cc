@@ -17,6 +17,7 @@
 
 #include "swss/dbconnector.h"
 #include "swss/notificationproducer.h"
+#include "swss/json.h" 
 
 namespace p4rt_app {
 namespace sonic {
