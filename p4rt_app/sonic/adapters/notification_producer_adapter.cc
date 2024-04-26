@@ -28,7 +28,6 @@ NotificationProducerAdapter::NotificationProducerAdapter(
 
 void NotificationProducerAdapter::send(
     const std::vector<swss::KeyOpFieldsValuesTuple>& kofv) {
-  notification_producer_->experimental_send(kofv);
 }
 
 }  // namespace sonic
