@@ -7,6 +7,7 @@
 #include "gutil/proto_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session_mocking.h"
@@ -22,6 +23,7 @@ using ::p4::config::v1::P4Info;
 using ::p4::v1::GetForwardingPipelineConfigResponse;
 using ::p4::v1::WriteRequest;
 using ::testing::ElementsAre;
+
 using ::testing::status::IsOkAndHolds;
 
 TEST(InstallPdTableEntries,

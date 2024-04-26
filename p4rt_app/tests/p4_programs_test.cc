@@ -85,7 +85,7 @@ class P4ProgramsTest : public testing::TestWithParam<sai::Instantiation> {
 };
 
 TEST_P(P4ProgramsTest, CanPushP4InfoWithoutFailure) {
-  EXPECT_OK(pdpi::SetForwardingPipelineConfig(
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(GetParam())));
@@ -104,7 +104,7 @@ TEST_P(P4ProgramsTest, CompositeUdfFieldsShouldAlwaysUseHexStrings) {
   };
 
   // Push the P4Info for the instance under test.
-  EXPECT_OK(pdpi::SetForwardingPipelineConfig(
+  EXPECT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info));
