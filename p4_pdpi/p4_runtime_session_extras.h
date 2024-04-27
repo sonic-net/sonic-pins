@@ -24,6 +24,8 @@
 #ifndef GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
 #define GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
 
+#include <vector>
+
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/message.h"
@@ -63,6 +65,11 @@ absl::Status InstallPdTableEntry(
 template <typename T>
 absl::Status InstallPdTableEntry(P4RuntimeSession& p4rt,
                                  absl::string_view pd_table_entry);
+
+// Reads table entries from the switch using `p4rt` and returns them in IR
+// representation. Reads the P4Info used in translation from the switch.
+absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntries(
+    P4RuntimeSession& p4rt);
 
 // == END OF PUBLIC INTERFACE ==================================================
 
