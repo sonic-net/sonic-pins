@@ -229,7 +229,7 @@ TEST_F(RoleTest, DISABLED_RolesEnforceReadWriteOnTables) {
                          }));
 
   // Either primary connection can set the forwarding config.
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       controller.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));
@@ -313,7 +313,7 @@ TEST_F(RoleTest, DefaultRoleCanWriteAndReadAnyTable) {
           p4rt_grpc_address_, grpc::InsecureChannelCredentials(),
           p4rt_device_id_, pdpi::P4RuntimeSessionOptionalArgs{.role = ""}));
 
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       default_role.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));
