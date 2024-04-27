@@ -163,29 +163,11 @@ absl::Status RestoreApplDb(TableAdapter& app_db_table,
   return absl::OkStatus();
 }
 
-}  // namespace
-
-absl::Status GetAndProcessResponseNotification(
-    ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
-    TableAdapter& state_db_table,
+absl::Status UpdateResponsesAndRestoreState(
     absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map,
-    ResponseTimeMonitor event_monitor) {
-  absl::Time start = absl::Now();
-  ASSIGN_OR_RETURN(
-      auto response_status_map,
-      GetAppDbResponses(key_to_status_map.size(), notification_interface));
-  absl::Duration response_time = absl::Now() - start;
-
-  // Get the event monitor and increment it if present.
-  EventExecutionTimeMonitor* execution_time_monitor =
-      GetEventMonitor(event_monitor);
-  if (execution_time_monitor) {
-    absl::Status status =
-        execution_time_monitor->IncrementEventCountWithDuration(
-            key_to_status_map.size(), response_time);
-    LOG_IF(WARNING, !status.ok()) << status;
-  }
-
+    const absl::btree_map<std::string, pdpi::IrUpdateStatus>&
+        response_status_map,
+    TableAdapter* app_db_table, TableAdapter* state_db_table) {
   // We have a map of all the keys we expect to have a response for, and a map
   // of all the keys returned by the OrchAgent. If anything doesn't match up
   // then we have a problem, and should raise an internal error because of it.
@@ -226,8 +208,10 @@ absl::Status GetAndProcessResponseNotification(
         LOG(WARNING) << "OrchAgent could not handle AppDb entry '"
                      << response_key << "'. Failed with: "
                      << response_status.ShortDebugString();
-        RETURN_IF_ERROR(
-            RestoreApplDb(app_db_table, state_db_table, response_key));
+        if (app_db_table != nullptr && state_db_table != nullptr) {
+          RETURN_IF_ERROR(
+              RestoreApplDb(*app_db_table, *state_db_table, response_key));
+        }
       }
       ++expected_iter;
       ++response_iter;
@@ -254,6 +238,33 @@ absl::Status GetAndProcessResponseNotification(
   return absl::OkStatus();
 }
 
+}  // namespace
+
+absl::Status GetAndProcessResponseNotification(
+    ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
+    TableAdapter& state_db_table,
+    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map,
+    ResponseTimeMonitor event_monitor) {
+  absl::Time start = absl::Now();
+  ASSIGN_OR_RETURN(
+      auto response_status_map,
+      GetAppDbResponses(key_to_status_map.size(), notification_interface));
+  absl::Duration response_time = absl::Now() - start;
+
+  // Get the event monitor and increment it if present.
+  EventExecutionTimeMonitor* execution_time_monitor =
+      GetEventMonitor(event_monitor);
+  if (execution_time_monitor) {
+    absl::Status status =
+        execution_time_monitor->IncrementEventCountWithDuration(
+            key_to_status_map.size(), response_time);
+    LOG_IF(WARNING, !status.ok()) << status;
+  }
+
+  return UpdateResponsesAndRestoreState(key_to_status_map, response_status_map,
+                                        &app_db_table, &state_db_table);
+}
+
 absl::StatusOr<pdpi::IrUpdateStatus> GetAndProcessResponseNotification(
     ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
     TableAdapter& state_db_table, const std::string& key,
@@ -266,6 +277,30 @@ absl::StatusOr<pdpi::IrUpdateStatus> GetAndProcessResponseNotification(
       notification_interface, app_db_table, state_db_table, key_to_status_map,
       event_monitor));
 
+  return local_status;
+}
+
+absl::Status GetAndProcessResponseNotificationWithoutRevertingState(
+    ConsumerNotifierAdapter& notification_interface,
+    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map) {
+  ASSIGN_OR_RETURN(
+      auto response_status_map,
+      GetAppDbResponses(key_to_status_map.size(), notification_interface));
+
+  return UpdateResponsesAndRestoreState(key_to_status_map, response_status_map,
+                                        /*app_db_table=*/nullptr,
+                                        /*state_db_table=*/nullptr);
+}
+
+absl::StatusOr<pdpi::IrUpdateStatus>
+GetAndProcessResponseNotificationWithoutRevertingState(
+    ConsumerNotifierAdapter& notification_interface, const std::string& key) {
+  pdpi::IrUpdateStatus local_status;
+  absl::btree_map<std::string, pdpi::IrUpdateStatus*> key_to_status_map;
+  key_to_status_map[key] = &local_status;
+
+  RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
+      notification_interface, key_to_status_map));
   return local_status;
 }
 

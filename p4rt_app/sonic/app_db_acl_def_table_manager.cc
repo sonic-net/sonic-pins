@@ -16,12 +16,12 @@
 
 #include <iterator>
 #include <list>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
@@ -31,9 +31,10 @@
 #include "gutil/status.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/utils/table_utility.h"
-#include "swss/json.h"
 #include <nlohmann/json.hpp>
+#include "swss/rediscommand.h"
 #include "swss/saiaclschema.h"
+#include "swss/table.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -844,17 +845,21 @@ Status VerifyAclTableDefinition(const IrTableDefinition& ir_table) {
 
 StatusOr<std::string> InsertAclTableDefinition(
     P4rtTable& p4rt_table, const IrTableDefinition& ir_table) {
-  ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
-  ASSIGN_OR_RETURN(std::vector<swss::FieldValueTuple> values,
+  swss::KeyOpFieldsValuesTuple kfv;
+  ASSIGN_OR_RETURN(kfvKey(kfv), GenerateSonicDbKeyFromIrTable(ir_table));
+  kfvOp(kfv) = "SET";
+  ASSIGN_OR_RETURN(kfvFieldsValues(kfv),
                    GenerateSonicDbValuesFromIrTable(ir_table));
-  p4rt_table.producer_state->set(key, values);
-  return key;
+  p4rt_table.notification_producer->send({kfv});
+  return kfvKey(kfv);
 }
 
 absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
                                       const IrTableDefinition& ir_table) {
-  ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
-  p4rt_table.producer_state->del(key);
+  swss::KeyOpFieldsValuesTuple kfv;
+  ASSIGN_OR_RETURN(kfvKey(kfv), GenerateSonicDbKeyFromIrTable(ir_table));
+  kfvOp(kfv) = "DEL";
+  p4rt_table.notification_producer->send({kfv});
   return absl::OkStatus();
 }
 

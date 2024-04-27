@@ -29,6 +29,7 @@
 #include "gutil/status_matchers.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/fake_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
@@ -55,12 +56,11 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
 
   // Create interfaces to access P4RT_TABLE entries.
   sonic::P4rtTable p4rt_table{
-      .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
-          &fake_p4rt_table_),
+      .notification_producer =
+          std::make_unique<sonic::FakeNotificationProducerAdapter>(
+              &fake_p4rt_table_),
       .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
           &fake_p4rt_table_),
-      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_p4rt_table_,
-                                                           kP4rtTableName),
       .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
           &fake_p4rt_state_table_, kP4rtTableName),
       .counter_db = absl::make_unique<sonic::FakeTableAdapter>(
