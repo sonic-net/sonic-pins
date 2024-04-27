@@ -21,6 +21,8 @@
 
 #include "absl/numeric/int128.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/notification.h"
+#include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/repeated_field.h"
@@ -36,6 +38,7 @@ namespace pdpi {
 
 namespace {
 
+using ::p4::config::v1::P4Info;
 using ::testing::_;
 using ::testing::EqualsProto;
 using ::testing::InSequence;
@@ -119,6 +122,15 @@ void MockP4RuntimeSessionCreate(p4::v1::MockP4RuntimeStub& stub,
       p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse>();
   EXPECT_CALL(stub, StreamChannelRaw).WillOnce(Return(stream));
 
+  // To ensure "causality", i.e. that the switch's arbitration response is only
+  // sent after receiving an arbitration request, we need to synchronize the
+  // following `Write`/`Read` EXPECT_CALL/ON_CALL expectations.
+  // We do so via thread-safe notifications wrapped in shared pointers, which
+  // the expectations capture by value, to ensure the expectations will not
+  // outlive the notifications.
+  auto sent_arbitration = std::make_shared<absl::Notification>();
+  auto sent_arbitration_response = std::make_shared<absl::Notification>();
+
   // A valid MasterArbitrationUpdate sent as request and response.
   auto master_arbitration_update = ConstructMasterArbitrationUpdate(metadata);
 
@@ -126,11 +138,21 @@ void MockP4RuntimeSessionCreate(p4::v1::MockP4RuntimeStub& stub,
   p4::v1::StreamMessageRequest arbitration_request;
   *arbitration_request.mutable_arbitration() = master_arbitration_update;
   EXPECT_CALL(*stream, Write(EqualsProto(arbitration_request), _))
-      .WillOnce(Return(true));
+      .WillOnce([=](auto, auto) {
+        sent_arbitration->Notify();
+        return true;
+      });
 
   // ... and return a valid response.
-  EXPECT_CALL(*stream, Read(_))
-      .WillOnce([=](p4::v1::StreamMessageResponse* arbitration_response) {
+  ON_CALL(*stream, Read(_))
+      .WillByDefault([=](p4::v1::StreamMessageResponse* arbitration_response) {
+        // Send arbitration reponse exactly once...
+        if (sent_arbitration_response->HasBeenNotified()) return false;
+        sent_arbitration_response->Notify();
+        // ... and only after the arbitration request has been received.
+        EXPECT_TRUE(
+            sent_arbitration->WaitForNotificationWithTimeout(absl::Seconds(15)))
+            << "expected arbitration request did not occur within 15 seconds";
         *arbitration_response->mutable_arbitration() =
             master_arbitration_update;
         return true;
@@ -160,13 +182,14 @@ p4::v1::WriteRequest ConstructDeleteRequest(
 }
 
 void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
-                        const p4::config::v1::P4Info& p4info) {
+                        std::optional<P4Info> p4info) {
   // We need to return a valid p4info to get to the stage where we read tables.
   EXPECT_CALL(stub, GetForwardingPipelineConfig)
-      .WillOnce([&](auto, auto,
+      .WillOnce([=](auto, auto,
                     p4::v1::GetForwardingPipelineConfigResponse*
                         get_pipeline_response) {
-        *get_pipeline_response->mutable_config()->mutable_p4info() = p4info;
+        *get_pipeline_response->mutable_config()->mutable_p4info() =
+            p4info.value_or(P4Info());
         return grpc::Status::OK;
       });
 
@@ -174,7 +197,7 @@ void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
 }
 
 void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
-                           const p4::config::v1::P4Info& p4info,
+                           const P4Info& p4info,
                            const P4RuntimeSessionOptionalArgs& metadata) {
   // We need to return a valid p4info to get to the stage where we read tables.
   EXPECT_CALL(stub, GetForwardingPipelineConfig)
@@ -207,8 +230,7 @@ void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
 
 p4::v1::SetForwardingPipelineConfigRequest
 ConstructForwardingPipelineConfigRequest(
-    const P4RuntimeSessionOptionalArgs& metadata,
-    const p4::config::v1::P4Info& p4info,
+    const P4RuntimeSessionOptionalArgs& metadata, const P4Info& p4info,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     absl::optional<absl::string_view> p4_device_config) {
   p4::v1::SetForwardingPipelineConfigRequest request;
