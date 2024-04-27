@@ -38,6 +38,7 @@
 #include "sai_p4/fixed/roles.h"
 
 namespace pdpi {
+
 // The maximum metadata size that a P4Runtime client should accept.  This is
 // necessary, because the P4Runtime protocol returns individual errors to
 // requests in a batch all wrapped in a single status, which counts towards the

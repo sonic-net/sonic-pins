@@ -24,7 +24,7 @@ absl::Status InstallPdTableEntries(
 
 absl::Status InstallPdTableEntry(
     P4RuntimeSession& p4rt, const google::protobuf::Message& pd_table_entry) {
-  // Convert entry to PI representation.
+  // Convert entries to PI representation.
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
