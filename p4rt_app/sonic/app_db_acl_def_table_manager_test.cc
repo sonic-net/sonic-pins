@@ -25,7 +25,6 @@
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/ir_builder.h"
-#include "swss/json.h"
 #include <nlohmann/json.hpp>
 
 namespace p4rt_app {

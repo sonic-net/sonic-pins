@@ -188,6 +188,11 @@ TEST_F(FixedL3TableTest, SupportNexthopTableRouterInterfaceActionFlows) {
       IsOkAndHolds(UnorderedElementsAreArray(nexthop_entry.GetValueMap())));
 }
 
+// TODO: To be addressed in Nov Release
+// commented out code
+
+//Test cases SupportNexthopTableTunnelActionFlows & SupportTunnelTableFlows will be included in November release.
+
 TEST_F(FixedL3TableTest, SupportMyStationFlowWithPort) {
   ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet4", "2"));
 
