@@ -26,9 +26,18 @@ NotificationProducerAdapter::NotificationProducerAdapter(
     : notification_producer_(
           std::make_unique<swss::NotificationProducer>(db, channel)) {}
 
-void NotificationProducerAdapter::send(
-    const std::vector<swss::KeyOpFieldsValuesTuple>& kofv) {
-  notification_producer_->experimental_send(kofv);
+void NotificationProducerAdapter::experimental_send(
+     const std::vector<swss::KeyOpFieldsValuesTuple>& values)
+{   
+     std::vector<swss::FieldValueTuple> new_values;
+     for (const auto &value: values) {
+         if (kfvOp(value) == SET_COMMAND) {
+          new_values.push_back(swss::FieldValueTuple{kfvKey(value), swss::JSon::buildJson(kfvFieldsValues(value))});
+         } else {
+             new_values.push_back(swss::FieldValueTuple{kfvKey(value), ""});
+         }
+     }
+     notification_producer_->send("", "", new_values);
 }
 
 }  // namespace sonic

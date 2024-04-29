@@ -26,8 +26,8 @@ namespace sonic {
 class MockNotificationProducerAdapter final
     : public NotificationProducerAdapter {
  public:
-  MOCK_METHOD(void, send,
-              (const std::vector<swss::KeyOpFieldsValuesTuple>& kofv),
+   MOCK_METHOD(void, experimental_send,
+              (const std::vector<swss::KeyOpFieldsValuesTuple>& value),
               (override));
 };
 
