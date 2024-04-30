@@ -384,34 +384,6 @@ absl::Status AppendExtTableDefinition(
   return absl::OkStatus();
 }
 
-// Publish set of tables in json formatted string to AppDb
-absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
-    const nlohmann::json &tables_json,
-    uint64_t cookie,
-    P4rtTable& p4rt_table) {
-
-  nlohmann::json json_key;
-  std::ostringstream oss;
-  oss << cookie;
-
-  json_key["context"] = oss.str();
-
-  std::string key = absl::Substitute("$0:$1",
-                          table::TypeName(table::Type::kTblsDefinitionSet),
-                          json_key.dump());
-
-  nlohmann::json info_json = nlohmann::json({});
-  info_json.push_back(
-        nlohmann::json::object_t::value_type("tables", tables_json));
-
-  std::vector<swss::FieldValueTuple> values;
-  values.push_back(std::make_pair("info", info_json.dump()));
-
-  p4rt_table.producer_state->set(key, values);
-
-  return key;
-}
-
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key) {
