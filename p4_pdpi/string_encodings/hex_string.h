@@ -147,9 +147,8 @@ absl::StatusOr<std::bitset<num_bits>> HexStringToBitset(
     if (num_hex_chars != expected_num_hex_chars) {
       return gutil::InvalidArgumentErrorBuilder()
              << "illegal conversion from hex string '" << hex_string << "' to "
-             << num_bits << " bits; expected between "
-             << (num_hex_chars * 4 - 3) << " and " << (num_hex_chars * 4)
-             << " bits";
+             << num_bits << " bits; expected " << expected_num_hex_chars
+             << " hex digits but got " << num_hex_chars;
     }
   }
   return HexStringToAnyLargeEnoughBitset<num_bits>(hex_string);
