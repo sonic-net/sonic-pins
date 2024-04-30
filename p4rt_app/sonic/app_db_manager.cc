@@ -405,7 +405,7 @@ absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(ir_table_entry, p4info));
   return AppendCounterData(ir_table_entry,
                            p4rt_table.counter_db->get(absl::StrCat(
-                               p4rt_table.app_db->getTablePrefix(), key)));
+                               p4rt_table.app_state_db->getTablePrefix(), key)));
 }
 
 std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
@@ -446,12 +446,6 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table,
       return gutil::InternalErrorBuilder()
              << "Could not determine AppDb table type for entry: "
              << entry.entry.ShortDebugString();
-    } else if (entry.appdb_table == AppDbTableType::VRF_TABLE) {
-      // Update non AppDb:P4RT entries (e.g. VRF_TABLE).
-      RETURN_IF_ERROR(UpdateAppDbVrfTable(vrf_table, entry.update_type,
-                                          entry.rpc_index, entry.entry,
-                                          *response));
-      continue;
     }
 
     // Otherwise we default to updating the P4RT table.
