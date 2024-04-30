@@ -850,7 +850,7 @@ StatusOr<std::string> InsertAclTableDefinition(
   kfvOp(kfv) = "SET";
   ASSIGN_OR_RETURN(kfvFieldsValues(kfv),
                    GenerateSonicDbValuesFromIrTable(ir_table));
-  p4rt_table.notification_producer->send({kfv});
+  p4rt_table.notification_producer->experimental_send({kfv});
   return kfvKey(kfv);
 }
 
@@ -859,7 +859,7 @@ absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
   swss::KeyOpFieldsValuesTuple kfv;
   ASSIGN_OR_RETURN(kfvKey(kfv), GenerateSonicDbKeyFromIrTable(ir_table));
   kfvOp(kfv) = "DEL";
-  p4rt_table.notification_producer->send({kfv});
+  p4rt_table.notification_producer->experimental_send({kfv});
   return absl::OkStatus();
 }
 
