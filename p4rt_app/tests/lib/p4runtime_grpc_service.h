@@ -31,17 +31,28 @@ class P4RuntimeGrpcService {
   explicit P4RuntimeGrpcService(const P4RuntimeImplOptions& options);
   ~P4RuntimeGrpcService();
 
+  absl::Status VerifyState();
+
   int GrpcPort() const;
 
   // Accessors for AppDb tables.
   sonic::FakeSonicDbTable& GetP4rtAppDbTable();
+  sonic::FakeSonicDbTable& GetVrfAppDbTable();
+  sonic::FakeSonicDbTable& GetHashAppDbTable();
+  sonic::FakeSonicDbTable& GetSwitchAppDbTable();
   sonic::FakeSonicDbTable& GetPortAppDbTable();
 
   // Accessors for AppStateDb tables.
   sonic::FakeSonicDbTable& GetP4rtAppStateDbTable();
+  sonic::FakeSonicDbTable& GetVrfAppStateDbTable();
+  sonic::FakeSonicDbTable& GetHashAppStateDbTable();
+  sonic::FakeSonicDbTable& GetSwitchAppStateDbTable();
 
   // Accessors for CounterDb tables.
   sonic::FakeSonicDbTable& GetP4rtCountersDbTable();
+
+  // Accessors for StateDb tables.
+  sonic::FakeSonicDbTable& GetP4rtStateDbTable();
 
   // Accessor for PacketIO interface.
   sonic::FakePacketIoInterface& GetFakePacketIoInterface();
@@ -56,9 +67,15 @@ class P4RuntimeGrpcService {
 
   // Faked StateDb tables.
   sonic::FakeSonicDbTable fake_p4rt_state_table_;
+  sonic::FakeSonicDbTable fake_vrf_state_table_;
+  sonic::FakeSonicDbTable fake_hash_state_table_;
+  sonic::FakeSonicDbTable fake_switch_state_table_;
 
   // Faked AppDb tables.
   sonic::FakeSonicDbTable fake_p4rt_table_;
+  sonic::FakeSonicDbTable fake_vrf_table_;
+  sonic::FakeSonicDbTable fake_hash_table_;
+  sonic::FakeSonicDbTable fake_switch_table_;
   sonic::FakeSonicDbTable fake_port_table_;
 
   // Faked CountersDb tables.

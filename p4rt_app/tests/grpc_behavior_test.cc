@@ -39,11 +39,16 @@ constexpr char kServerAddr[] = "localhost:9999";
 P4RuntimeImpl DummyP4RuntimeImpl() {
   // Dummy RedisDB tables.
   sonic::P4rtTable dummy_p4rt_table;
+  sonic::VrfTable dummy_vrf_table;
+  sonic::HashTable dummy_hash_table;
+  sonic::SwitchTable dummy_switch_table;
 
   // Dummy PacketIO.
   auto packet_io = std::make_unique<sonic::FakePacketIoInterface>();
 
-  return P4RuntimeImpl(std::move(dummy_p4rt_table), std::move(packet_io),
+  return P4RuntimeImpl(std::move(dummy_p4rt_table), std::move(dummy_vrf_table),
+                       std::move(dummy_hash_table),
+                       std::move(dummy_switch_table), std::move(packet_io),
                        P4RuntimeImplOptions{});
 }
 

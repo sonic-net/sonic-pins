@@ -394,10 +394,14 @@ absl::Status CacheWriteResults(
 }  // namespace
 
 P4RuntimeImpl::P4RuntimeImpl(
-    sonic::P4rtTable p4rt_table,
+    sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
+    sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
     const P4RuntimeImplOptions& p4rt_options)
     : p4rt_table_(std::move(p4rt_table)),
+      vrf_table_(std::move(vrf_table)),
+      hash_table_(std::move(hash_table)),
+      switch_table_(std::move(switch_table)),
       forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
       translate_port_ids_(p4rt_options.translate_port_ids) {
@@ -854,6 +858,33 @@ absl::Status P4RuntimeImpl::VerifyState() {
   if (!p4rt_table_failures.empty()) {
     failures.insert(failures.end(), p4rt_table_failures.begin(),
                     p4rt_table_failures.end());
+  }
+
+   // Verify the VRF_TABLE entries.
+  std::vector<std::string> vrf_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*vrf_table_.app_state_db,
+                                             *vrf_table_.app_db);
+  if (!vrf_table_failures.empty()) {
+    failures.insert(failures.end(), vrf_table_failures.begin(),
+                    vrf_table_failures.end());
+  }
+
+  // Verify the HASH_TABLE entries.
+  std::vector<std::string> hash_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*hash_table_.app_state_db,
+                                             *hash_table_.app_db);
+  if (!hash_table_failures.empty()) {
+    failures.insert(failures.end(), hash_table_failures.begin(),
+                    hash_table_failures.end());
+  }
+
+  // Verify the SWITCH_TABLE entries.
+  std::vector<std::string> switch_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*switch_table_.app_state_db,
+                                             *switch_table_.app_db);
+  if (!switch_table_failures.empty()) {
+    failures.insert(failures.end(), switch_table_failures.begin(),
+                    switch_table_failures.end());
   }
 
   if (failures.size() > 1) {

@@ -303,6 +303,19 @@ cc_test(
 )
 
 cc_test(
+    name = "state_verification_test",
+    srcs = ["state_verification_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "grpc_behavior_test",
     timeout = "short",
     srcs = ["grpc_behavior_test.cc"],
