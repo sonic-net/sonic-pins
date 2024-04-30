@@ -479,7 +479,7 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table,
   }
 
   // Send all the P4RT_TABLE updates as one batch.
-  p4rt_table.notification_producer->send(kfv_updates);
+  p4rt_table.notification_producer->experimental_send(kfv_updates);
   RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
       *p4rt_table.notifier, app_db_status));
 
