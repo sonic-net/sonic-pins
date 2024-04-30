@@ -61,6 +61,8 @@ class FakeSonicDbTable {
                          const std::string &message);
 
   void PushNotification(const std::string &key);
+  void PushNotification(const std::string &key, const std::string &op,
+                        const SonicDbEntryMap &values);
   void GetNextNotification(std::string &op, std::string &data,
                            SonicDbEntryList &values);
 
@@ -80,6 +82,8 @@ class FakeSonicDbTable {
   void InsertStateDbTableEntry(const std::string &key,
                                const SonicDbEntryMap &values);
   void DeleteStateDbTableEntry(const std::string &key);
+
+  bool UpdateAppStateDb(const std::string &key);
 
   // Debug table name is used in log messages to help distinguish messages.
   std::string debug_table_name_;

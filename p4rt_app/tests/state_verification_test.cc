@@ -89,11 +89,11 @@ TEST_F(StateVerificationTest, EntryDoesNotExistInAppStateDbFails) {
 }
 
 TEST_F(StateVerificationTest, EntryValuesAreDifferentFails) {
-  p4rt_service_.GetP4rtAppStateDbTable().InsertTableEntry(
-      /*key=*/"p4rt_match",
+  p4rt_service_.GetHashAppStateDbTable().InsertTableEntry(
+      /*key=*/"hash_match",
       /*values=*/{{"action", "state_action"}});
-  p4rt_service_.GetP4rtAppDbTable().InsertTableEntry(
-      /*key=*/"p4rt_match",
+  p4rt_service_.GetHashAppDbTable().InsertTableEntry(
+      /*key=*/"hash_match",
       /*values=*/{{"action", "different_action"}});
 
   EXPECT_THAT(p4rt_service_.VerifyState(),

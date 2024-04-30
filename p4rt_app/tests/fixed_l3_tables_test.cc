@@ -96,7 +96,8 @@ TEST_F(FixedL3TableTest, SupportRouterInterfaceTableFlows) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
 
   // Sanity check that port_id_t translations are read back correctly.
@@ -143,7 +144,8 @@ TEST_F(FixedL3TableTest, SupportNeighborTableFlows) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(neighbor_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          neighbor_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(neighbor_entry.GetValueMap())));
 }
 
@@ -181,9 +183,14 @@ TEST_F(FixedL3TableTest, SupportNexthopTableRouterInterfaceActionFlows) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(nexthop_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          nexthop_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(nexthop_entry.GetValueMap())));
 }
+// TODO: To be addressed in Nov Release 
+// To add SupportNexthopTableTunnelActionFlows and SupportTunnelTableFlows in November release.
+// TODO: To be addressed in Nov Release 
+// To add SupportNexthopTableTunnelActionFlows and SupportTunnelTableFlows in November release.
 
 TEST_F(FixedL3TableTest, SupportMyStationFlowWithPort) {
   ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet4", "2"));
@@ -223,10 +230,11 @@ TEST_F(FixedL3TableTest, SupportMyStationFlowWithPort) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
 
-  p4rt_service_.GetP4rtAppDbTable().DebugState();
+  p4rt_service_.GetP4rtAppStateDbTable().DebugState();
 }
 
 TEST_F(FixedL3TableTest, SupportMyStationFlowWithoutPort) {
@@ -263,10 +271,11 @@ TEST_F(FixedL3TableTest, SupportMyStationFlowWithoutPort) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
 
-  p4rt_service_.GetP4rtAppDbTable().DebugState();
+  p4rt_service_.GetP4rtAppStateDbTable().DebugState();
 }
 
 TEST_F(FixedL3TableTest, InvalidPortIdFails) {
@@ -455,7 +464,8 @@ TEST_P(L3LpmTableTest, SupportIpv4TableFlow) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
 }
 
@@ -493,7 +503,8 @@ TEST_P(L3LpmTableTest, SupportIpv6TableFlow) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
 }
 

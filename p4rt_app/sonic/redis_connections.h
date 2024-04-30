@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 
@@ -26,14 +27,11 @@ namespace p4rt_app {
 namespace sonic {
 
 // The P4RT app needs to:
-//   * Write P4RT_TABLE entries into the AppDb.
+//   * Write P4RT_TABLE entries into a notification channel .
 //   * Read P4RT_TABLE entries out out of the AppStateDb and CountersDb.
-//   * Support failed updates through the response path.
-//   * Support state verification between the AppDb and AppStateDb.
 struct P4rtTable {
-  std::unique_ptr<ProducerStateTableAdapter> producer_state;
+  std::unique_ptr<NotificationProducerAdapter> notification_producer;
   std::unique_ptr<ConsumerNotifierAdapter> notifier;
-  std::unique_ptr<TableAdapter> app_db;
   std::unique_ptr<TableAdapter> app_state_db;
   std::unique_ptr<TableAdapter> counter_db;
 };

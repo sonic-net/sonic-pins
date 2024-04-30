@@ -50,6 +50,36 @@ cc_library(
 )
 
 cc_library(
+    name = "notification_producer_adapter",
+    srcs = ["notification_producer_adapter.cc"],
+    hdrs = ["notification_producer_adapter.h"],
+    deps = ["@sonic_swss_common//:libswsscommon"],
+)
+
+cc_library(
+    name = "mock_notification_producer_adapter",
+    testonly = True,
+    hdrs = ["mock_notification_producer_adapter.h"],
+    deps = [
+        ":notification_producer_adapter",
+        "@com_google_googletest//:gtest",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_library(
+    name = "fake_notification_producer_adapter",
+    testonly = True,
+    srcs = ["fake_notification_producer_adapter.cc"],
+    hdrs = ["fake_notification_producer_adapter.h"],
+    deps = [
+        ":fake_sonic_db_table",
+        ":notification_producer_adapter",
+        "@sonic_swss_common//:common",
+    ],
+)
+
+cc_library(
     name = "producer_state_table_adapter",
     srcs = ["producer_state_table_adapter.cc"],
     hdrs = ["producer_state_table_adapter.h"],
@@ -140,7 +170,6 @@ cc_library(
     deps = [
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/meta:type_traits",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

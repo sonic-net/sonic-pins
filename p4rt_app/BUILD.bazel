@@ -36,6 +36,7 @@ cc_binary(
         "//p4rt_app/sonic:packetio_impl",
         "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:notification_producer_adapter",
         "//p4rt_app/sonic/adapters:producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:system_call_adapter",
         "//p4rt_app/sonic/adapters:table_adapter",

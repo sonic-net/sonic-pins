@@ -851,16 +851,7 @@ absl::Status P4RuntimeImpl::VerifyState() {
 
   std::vector<std::string> failures = {"P4RT App State Verification failures:"};
 
-  // Verify the P4RT entries.
-  std::vector<std::string> p4rt_table_failures =
-      sonic::VerifyAppStateDbAndAppDbEntries(*p4rt_table_.app_state_db,
-                                             *p4rt_table_.app_db);
-  if (!p4rt_table_failures.empty()) {
-    failures.insert(failures.end(), p4rt_table_failures.begin(),
-                    p4rt_table_failures.end());
-  }
-
-   // Verify the VRF_TABLE entries.
+  // Verify the VRF_TABLE entries.
   std::vector<std::string> vrf_table_failures =
       sonic::VerifyAppStateDbAndAppDbEntries(*vrf_table_.app_state_db,
                                              *vrf_table_.app_db);
@@ -1077,48 +1068,18 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
                          << "' to AppDb.");
 
       // Wait for OA to confirm it can realize the table updates.
-      ASSIGN_OR_RETURN(pdpi::IrUpdateStatus status,
-                       sonic::GetAndProcessResponseNotification(
-                           *p4rt_table_.notifier, *p4rt_table_.app_db,
-                           *p4rt_table_.app_state_db, acl_key,
-                           sonic::ResponseTimeMonitor::kNone));
+      ASSIGN_OR_RETURN(
+          pdpi::IrUpdateStatus status,
+          sonic::GetAndProcessResponseNotificationWithoutRevertingState(
+              *p4rt_table_.notifier, acl_key));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.
       if (status.code() != google::rpc::OK) {
         return gutil::InvalidArgumentErrorBuilder() << status.message();
       }
-    } else if (table_type == table::Type::kExt) {
-      // Add table definition
-      // For now send only Extension tables.In future when required, Fixed table
-      //   definitions also can be inserted here
-      LOG(INFO) << "Add Table Definition for " << table_name;
-      sonic::AppendExtTableDefinition(ext_tables_json, table);
-    }
   }
-
-  if (!ext_tables_json.dump().empty()) {
-     // Publish all tables at once and get one success/failure response for them
-    ASSIGN_OR_RETURN(
-          std::string key,
-          sonic::PublishExtTablesDefinitionToAppDb(ext_tables_json, (uint64_t)0,
-                     p4rt_table_),
-          _ << "Could not publish Table Definition Set to APPDB");
-
-    ASSIGN_OR_RETURN(
-          pdpi::IrUpdateStatus status,
-          sonic::GetAndProcessResponseNotification(
-                           *p4rt_table_.notifier, *p4rt_table_.app_db,
-                           *p4rt_table_.app_state_db, key,
-                           sonic::ResponseTimeMonitor::kNone));
-
-    // Any issue with the forwarding config should be sent back to the
-    // controller as an INVALID_ARGUMENT.
-    if (status.code() != google::rpc::OK) {
-      return gutil::InvalidArgumentErrorBuilder() << status.message();
-    }
-  }
-
+}
   return absl::OkStatus();
 }
 
