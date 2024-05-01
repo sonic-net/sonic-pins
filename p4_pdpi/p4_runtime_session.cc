@@ -14,6 +14,7 @@
 
 #include "p4_pdpi/p4_runtime_session.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -358,7 +359,8 @@ absl::Status CheckNoTableEntries(P4RuntimeSession* session) {
   return absl::OkStatus();
 }
 
-absl::Status ClearTableEntries(P4RuntimeSession* session) {
+absl::Status ClearTableEntries(P4RuntimeSession* session,
+                               std::optional<int> max_batch_size) {
   // Get P4Info from Switch. It is needed to sequence the delete requests.
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,
@@ -379,22 +381,19 @@ absl::Status ClearTableEntries(P4RuntimeSession* session) {
   // Convert into IrP4Info.
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(response.config().p4info()));
 
-  RETURN_IF_ERROR(RemovePiTableEntries(session, info, table_entries));
+  std::vector<Update> pi_updates =
+      CreatePiUpdates(table_entries, Update::DELETE);
+  ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_clear_requests,
+                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates,
+                                                            max_batch_size));
+  RETURN_IF_ERROR(
+      SetMetadataAndSendPiWriteRequests(session, sequenced_clear_requests));
 
   // Verify that all entries were cleared successfully.
   RETURN_IF_ERROR(CheckNoTableEntries(session)).SetPrepend()
       << "cleared all table entries: ";
 
   return absl::OkStatus();
-}
-
-absl::Status RemovePiTableEntries(P4RuntimeSession* session,
-                                  const IrP4Info& info,
-                                  absl::Span<const TableEntry> pi_entries) {
-  std::vector<Update> pi_updates = CreatePiUpdates(pi_entries, Update::DELETE);
-  ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_clear_requests,
-                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
-  return SetMetadataAndSendPiWriteRequests(session, sequenced_clear_requests);
 }
 
 absl::Status InstallPiTableEntry(P4RuntimeSession* session,
