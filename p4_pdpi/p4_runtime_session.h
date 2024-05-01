@@ -19,10 +19,13 @@
 
 #include <memory>
 #include <optional>
+#include <queue>
 #include <string>
+#include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/memory/memory.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
@@ -135,6 +138,10 @@ class P4RuntimeSession {
       uint32_t device_id,
       const std::string& role = "P4RUNTIME_ROLE_SDN_CONTROLLER");
 
+  // Cleanly closes the P4RT stream connection if it hasn't already been
+  // stopped.
+  ~P4RuntimeSession();
+
   // Disables copy semantics.
   P4RuntimeSession(const P4RuntimeSession&) = delete;
   P4RuntimeSession& operator=(const P4RuntimeSession&) = delete;
@@ -182,10 +189,6 @@ class P4RuntimeSession {
       const p4::v1::StreamMessageRequest& request)
       ABSL_LOCKS_EXCLUDED(stream_write_lock_);
 
-  // Cancels the RPC. It is done in a best-effort fashion.
-  // WARNING: This is not thread-safe.
-  // TODO: Remove once clients have migrated to using Finish.
-  void TryCancel() { stream_channel_context_->TryCancel(); }
   // Closes the RPC connection by telling the server it is done writing, then
   // reads and logs any outstanding messages from the server. Once the server
   // finishes handling all outstanding writes it will close.
@@ -200,15 +203,20 @@ class P4RuntimeSession {
  private:
   P4RuntimeSession(uint32_t device_id,
                    std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
-                   absl::uint128 election_id, const std::string& role)
-      : device_id_(device_id),
-        role_(role),
-        stub_(std::move(stub)),
-        stream_channel_context_(absl::make_unique<grpc::ClientContext>()),
-        stream_channel_(stub_->StreamChannel(stream_channel_context_.get())) {
-    election_id_.set_high(absl::Uint128High64(election_id));
-    election_id_.set_low(absl::Uint128Low64(election_id));
-  }
+                   absl::uint128 election_id, const std::string& role);
+
+  // Updates the internal state for RPC stream. Logs any changes (e.g. up->down,
+  // down->up, but not up->up).
+  void set_is_stream_up(bool value)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(stream_read_lock_);
+
+  // This method should:
+  //   * Be Only run inside the `stream_read_thread_`.
+  //   * Be the only place where stream_channel_->Read() is called.
+  //
+  // Collects all messages sent from the server to the client in a queue.
+  // Clients can then consume them as needed.
+  void CollectStreamReadMessages() ABSL_LOCKS_EXCLUDED(stream_read_lock_);
 
   // The id of the node that this session belongs to.
   uint32_t device_id_;
@@ -226,10 +234,31 @@ class P4RuntimeSession {
       p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse>>
       stream_channel_;
 
-  // Used to ensure atomic reads and writes on the stream channel. Write lock
-  // must be acquired before read lock in cases where both locks are acquired.
+  // Used to ensure atomic reads & writes on the stream_messages_ and writes on
+  // the stream channel_. Write lock must be acquired before read lock in cases
+  // where both locks are acquired.
   absl::Mutex stream_read_lock_;
   absl::Mutex stream_write_lock_ ABSL_ACQUIRED_BEFORE(stream_read_lock_);
+
+  // Indicates that `WritesDone` and `Finish` have previously been called on the
+  // stream channel. We track this since precisely a single call to these
+  // methods is allowed.
+  bool is_finished_ ABSL_GUARDED_BY(stream_write_lock_) = false;
+
+  // Indicates that the `stream_read_thread_` is active, and still collecting
+  // messages from the device.
+  bool is_stream_up_ ABSL_GUARDED_BY(stream_read_lock_) = false;
+
+  // We spawn a thread to handle stream read events which arrive asynchronously
+  // from the device. It should only ever be running the
+  // CollectStreamReadMessages() function.
+  std::thread stream_read_thread_;
+
+  // All stream messages are queued by the P4RuntimeSession (ensuring the gRPC
+  // stream is flushed and can be cleanly closed) for users to read at their
+  // discression.
+  std::queue<p4::v1::StreamMessageResponse> stream_messages_
+      ABSL_GUARDED_BY(stream_read_lock_);
 };
 
 // Create P4Runtime stub.
