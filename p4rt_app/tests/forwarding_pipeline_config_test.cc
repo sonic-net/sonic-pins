@@ -508,7 +508,7 @@ TEST_F(ForwardingPipelineConfigTest,
   p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
       "DEFINITION:ACL_ACL_PRE_INGRESS_TABLE", "SWSS_RC_INVALID_PARAM",
       "my error message");
-  ASSERT_THAT(pdpi::SetForwardingPipelineConfig(
+  ASSERT_THAT(pdpi::SetMetadataAndSetForwardingPipelineConfig(
                   p4rt_session_.get(),
                   SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
                   sai::GetP4Info(sai::Instantiation::kMiddleblock)),
