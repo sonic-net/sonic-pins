@@ -38,6 +38,7 @@
 #include "sai_p4/fixed/roles.h"
 
 namespace pdpi {
+
 // The maximum metadata size that a P4Runtime client should accept.  This is
 // necessary, because the P4Runtime protocol returns individual errors to
 // requests in a batch all wrapped in a single status, which counts towards the
@@ -184,7 +185,6 @@ class P4RuntimeSession {
   // WARNING: This is not thread-safe.
   // TODO: Remove once clients have migrated to using Finish.
   void TryCancel() { stream_channel_context_->TryCancel(); }
-
   // Closes the RPC connection by telling the server it is done writing, then
   // reads and logs any outstanding messages from the server. Once the server
   // finishes handling all outstanding writes it will close.
@@ -298,14 +298,14 @@ absl::Status SendPiUpdates(P4RuntimeSession* session,
 
 // Sets the forwarding pipeline to the given P4 info and, optionally, device
 // configuration.
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::config::v1::P4Info& p4info,
     absl::optional<absl::string_view> p4_device_config = absl::nullopt);
 
 // Sets the forwarding pipeline to the given one.
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::v1::ForwardingPipelineConfig& config);

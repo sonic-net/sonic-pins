@@ -131,7 +131,7 @@ absl::Status Main() {
     p4info = response.config().p4info();
   } else {
     p4info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
-    RETURN_IF_ERROR(pdpi::SetForwardingPipelineConfig(
+    RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
         p4rt_session.get(),
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
         p4info));
