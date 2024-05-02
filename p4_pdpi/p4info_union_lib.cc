@@ -196,17 +196,14 @@ absl::Status UnionFirstPkgInfoIntoSecond(
   if (gutil::IsEmptyProto(unioned_info)) {
     unioned_info = info;
     unioned_info.set_name(absl::StrCat("Union of ", info.name()));
-    unioned_info.set_version(absl::StrCat("Versions ", info.version()));
     return absl::OkStatus();
   }
 
-  // Take union of `name` and `version` fields.
+  // Take union of `name` fields.
   absl::StrAppend(unioned_info.mutable_name(), ", ", info.name());
-  absl::StrAppend(unioned_info.mutable_version(), ", ", info.version());
 
   // Ensure all other fields are equal.
-  if (auto diff = DiffMessages(info, unioned_info,
-			       /*ignored_fields=*/{"name", "version"});
+  if (auto diff = DiffMessages(info, unioned_info, /*ignored_fields=*/{"name"});
       diff.has_value()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "PkgInfos are incompatible. Relevant differences: ", *diff));
