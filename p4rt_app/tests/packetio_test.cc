@@ -134,7 +134,7 @@ class FakePacketIoTest : public testing::Test {
 };
 
 TEST_F(FakePacketIoTest, VerifyPacketIn) {
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -177,7 +177,7 @@ TEST_F(FakePacketIoTest, VerifyPacketIn) {
 }
 
 TEST_F(FakePacketIoTest, VerifyPacketInFailAfterPortRemove) {
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -191,7 +191,7 @@ TEST_F(FakePacketIoTest, VerifyPacketInFailAfterPortRemove) {
 }
 
 TEST_F(FakePacketIoTest, PacketInFailsWithoutPortTranslation) {
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -244,7 +244,7 @@ TEST_F(FakePacketIoTest, PacketOutFailBeforeP4InfoPush) {
 }
 
 TEST_F(FakePacketIoTest, PacketOutFailAfterPortRemoval) {
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -308,7 +308,7 @@ TEST_F(FakePacketIoTest, PacketOutFailForSecondary) {
 
 TEST_F(FakePacketIoTest, VerifyPacketOut) {
   // Needed for PacketOut.
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -336,7 +336,7 @@ TEST_F(FakePacketIoTest, VerifyPacketOut) {
 }
 
 TEST_F(FakePacketIoTest, VerifyPacketInWithPortNames) {
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
@@ -380,7 +380,7 @@ TEST_F(FakePacketIoTest, PacketInMessageFailsWhenNoPrimaryExists) {
 TEST_F(FakePacketIoTest, PacketInCanBeSentToMultiplePrimaries) {
   // p4rt_session_ is a primary client with role: "sdn_controller".
   // Use that client to push the pipeline config.
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       sai::GetP4Info(sai::Instantiation::kMiddleblock)));
