@@ -95,7 +95,7 @@ GrpcChannelArgumentsForP4rtWithAggressiveKeepAlive() {
   // Allows grpc::channel to send keepalive ping without on-going traffic.
   args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
   args.SetInt(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
-  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 10'000 /*10 seconds*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 4'000 /*4 seconds*/);
   args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1'000 /*1 second*/);
   return args;
 }
@@ -181,8 +181,11 @@ class P4RuntimeSession {
   // Returns the role of this session.
   std::string Role() const { return role_; }
   // Thread-safe wrapper around the stream channel's `Read` method.
+  // It blocks until the stream message queue is non-empty, the
+  // stream channel is closed, or (if specified) the `timeout` is expired .
   ABSL_MUST_USE_RESULT bool StreamChannelRead(
-      p4::v1::StreamMessageResponse& response)
+      p4::v1::StreamMessageResponse& response,
+      std::optional<absl::Duration> timeout = std::nullopt)
       ABSL_LOCKS_EXCLUDED(stream_read_lock_);
   // Thread-safe wrapper around the stream channel's `Write` method.
   ABSL_MUST_USE_RESULT bool StreamChannelWrite(
