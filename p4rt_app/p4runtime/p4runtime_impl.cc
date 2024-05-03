@@ -1116,13 +1116,6 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       if (status.code() != google::rpc::OK) {
         return gutil::InvalidArgumentErrorBuilder() << status.message();
       }
-    } else if (table_type == table::Type::kExt) {
-      // Add table definition
-      // For now send only Extension tables.In future when required, Fixed table
-      //   definitions also can be inserted here
-      LOG(INFO) << "Add Table Definition for " << table_name;
-      sonic::AppendExtTableDefinition(ext_tables_json, table);
-    }
   }
   if (!ext_tables_json.dump().empty()) {
      // Publish all tables at once and get one success/failure response for them

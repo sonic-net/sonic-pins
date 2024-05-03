@@ -62,6 +62,20 @@ absl::StatusOr<pdpi::IrUpdateStatus>
 GetAndProcessResponseNotificationWithoutRevertingState(
     ConsumerNotifierAdapter& notification_interface, const std::string& key);
 
+// Given a mapping of keys to IR statuses this function will wait for an
+// OrchAgent respsponse for every key and update it's status. On a failed
+// OrchAgent response it will not try to revert any state.
+absl::Status GetAndProcessResponseNotificationWithoutRevertingState(
+    ConsumerNotifierAdapter& notification_interface,
+    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map);
+
+// Given a single key this function will wait for an OrchAgent respsponse, and
+// return it. On a failed OrchAgent response it will not try to revert any
+// state.
+absl::StatusOr<pdpi::IrUpdateStatus>
+GetAndProcessResponseNotificationWithoutRevertingState(
+    ConsumerNotifierAdapter& notification_interface, const std::string& key);
+
 }  // namespace sonic
 }  // namespace p4rt_app
 
