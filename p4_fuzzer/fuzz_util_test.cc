@@ -154,6 +154,8 @@ TEST(FuzzUtilTest, FuzzUint64LargeInRange) {
 
 TEST(FuzzUtilTest, FuzzWriteRequestAreReproducible) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  // Ensure multicast entries can be fuzzed.
+  fuzzer_state.config.SetFuzzMulticastGroupEntryProbability(0.1);
 
   // Use the same sequence seed for both generators.
   absl::SeedSeq seed;
@@ -172,6 +174,8 @@ TEST(FuzzUtilTest, FuzzWriteRequestAreReproducible) {
 
 TEST(FuzzUtilTest, FuzzWriteRequestAreReproducibleWithState) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  // Ensure multicast entries can be fuzzed.
+  fuzzer_state.config.SetFuzzMulticastGroupEntryProbability(0.1);
 
   absl::BitGen init_gen;
   // Generate some random table entries:

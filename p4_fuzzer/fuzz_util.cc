@@ -18,6 +18,7 @@
 #include <functional>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -241,7 +242,7 @@ CreateReferenceMapping(
                 "router_interface_table" &&
             reference.source_table().p4_table().table_name() !=
                 "neighbor_table") {
-          // TODO: b/317404235 - Remove once a less "baked-in" way of masking
+          // TODO: - Remove once a less "baked-in" way of masking
           // this is found. This is a mask that is consistent with
           // `CheckReferenceAssumptions`, which is used when creating the
           // `FuzzerConfig`.
@@ -327,7 +328,7 @@ absl::Status MatchFieldReferenceOverride(absl::BitGen* gen,
 
     if (auto it = reference_map.find(match_field_name);
         it != reference_map.end()) {
-      // TODO: b/324943837 - Move to when creating a FuzzerConfig
+      // TODO: - Move to when creating a FuzzerConfig
       if (match_field_info.match_field().match_type() !=
               p4::config::v1::MatchField::EXACT &&
           match_field_info.match_field().match_type() !=
@@ -607,27 +608,36 @@ bool ModifiableTableExists(const FuzzerConfig& config,
 // Randomly generates an update type.
 Update::Type FuzzUpdateType(absl::BitGen* gen, const FuzzerConfig& config,
                             const SwitchState& state, bool is_multicast) {
-  if (is_multicast ? state.GetMulticastGroupEntries().empty()
-                   : state.AllTablesEmpty()) {
-    // Insert if there are no entries to delete.
-    return Update::INSERT;
-  } else {
+  if (!is_multicast) {
     // The probability of inserting a entry is larger than the probability of
     // removing one, which means that eventually the switch fills up. 0.7 is a
     // nice number because it causes the switch to fill up quickly, but there is
-    // still a good chance to get a couple of deletes in a row.
-    if (absl::Bernoulli(*gen, 0.7)) {
+    // still a good chance to get a couple of deletes in a row. If all tables
+    // are empty, then we must use INSERT.
+    if (absl::Bernoulli(*gen, 0.7) || state.AllTablesEmpty()) {
       return Update::INSERT;
-    } else {
-      // Equally split the rest between modify and delete.
-      if ((is_multicast || ModifiableTableExists(config, state)) &&
-          absl::Bernoulli(*gen, 0.5)) {
-        // Multicast entities are always modifiable, otherwise we need to ensure
-        // that a modifiable table is non-empty.
-        return Update::MODIFY;
-      }
-      return Update::DELETE;
     }
+
+    // Equally split the rest between modify and delete. If it's not possible
+    // to choose modify, delete will be selected.
+    if (absl::Bernoulli(*gen, 0.5) && ModifiableTableExists(config, state)) {
+      return Update::MODIFY;
+    }
+
+    return Update::DELETE;
+  } else {
+    // Same as non-multicast logic except multicast specific functions are used.
+    if (absl::Bernoulli(*gen, 0.7) ||
+        state.GetMulticastGroupEntries().empty()) {
+      return Update::INSERT;
+    }
+
+    if (absl::Bernoulli(*gen, 0.5) &&
+        IsModifiableTable(config, pdpi::GetMulticastGroupTableName())) {
+      return Update::MODIFY;
+    }
+
+    return Update::DELETE;
   }
 }
 
@@ -688,11 +698,11 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
                       const SwitchState& switch_state,
                       MulticastGroupEntry* multicast_group_entry) {
   multicast_group_entry->clear_replicas();
-  // Fuzz 0-64 unique replicas
-  // TODO: b/286413264 - Replace how iteration count is chosen with information
+  // Fuzz 0-8 unique replicas
+  // TODO: - Replace how iteration count is chosen with information
   // from p4 info or config once multicast resource limits are finalized and
   // modeled.
-  int replica_fuzz_iterations = FuzzUint64(gen, /*bits=*/6);
+  int replica_fuzz_iterations = FuzzUint64(gen, /*bits=*/3);
   absl::flat_hash_set<std::pair<int, std::string>> unique_replicas;
   // Depending on references, the number of unique replicas can be capped so
   // replicas generated can be less than `replica_fuzz_iterations`.
@@ -1489,15 +1499,16 @@ absl::StatusOr<p4::v1::MulticastGroupEntry> FuzzValidMulticastGroupEntry(
 absl::StatusOr<TableEntry> FuzzValidTableEntry(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
-    const pdpi::IrTableDefinition& ir_table_info) {
+    const pdpi::IrTableDefinition& ir_table_info,
+    std::optional<absl::string_view> additional_constraint) {
   // If the table uses p4-constraints, then we call out to a different
   // generation function that uses an SMT solver.
   if (UsesP4Constraints(ir_table_info, config) &&
       !config.GetIgnoreConstraintsOnTables().contains(
           ir_table_info.preamble().name())) {
-    ASSIGN_OR_RETURN(auto entry,
-                     FuzzValidConstrainedTableEntry(config, switch_state,
-                                                    ir_table_info, *gen));
+    ASSIGN_OR_RETURN(auto entry, FuzzValidConstrainedTableEntry(
+                                     config, switch_state, ir_table_info, *gen,
+                                     additional_constraint));
     RETURN_IF_ERROR(ReferenceOverride(gen, config, switch_state, entry));
     return entry;
   }
@@ -1559,13 +1570,14 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
   return table_entry;
 }
 
-absl::StatusOr<TableEntry> FuzzValidTableEntry(absl::BitGen* gen,
-                                               const FuzzerConfig& config,
-                                               const SwitchState& switch_state,
-                                               const uint32_t table_id) {
+absl::StatusOr<TableEntry> FuzzValidTableEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state, const uint32_t table_id,
+    std::optional<absl::string_view> additional_constraint) {
   return FuzzValidTableEntry(
       gen, config, switch_state,
-      gutil::FindOrDie(config.GetIrP4Info().tables_by_id(), table_id));
+      gutil::FindOrDie(config.GetIrP4Info().tables_by_id(), table_id),
+      additional_constraint);
 }
 
 std::vector<AnnotatedTableEntry> ValidForwardingEntries(
