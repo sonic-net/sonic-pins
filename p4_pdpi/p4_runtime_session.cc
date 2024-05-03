@@ -14,7 +14,11 @@
 
 #include "p4_pdpi/p4_runtime_session.h"
 
+#include <memory>
+#include <optional>
 #include <string>
+#include <thread>  // NOLINT: third_party code.
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -84,8 +88,7 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
   p4::v1::StreamMessageResponse response;
   if (!session->StreamChannelRead(response)) {
     return gutil::InternalErrorBuilder()
-           << "P4RT stream closed while awaiting arbitration response: "
-           << gutil::GrpcStatusToAbslStatus(session->stream_channel_->Finish());
+           << "P4RT stream closed while awaiting arbitration response.";
   }
   if (response.update_case() != p4::v1::StreamMessageResponse::kArbitration) {
     return gutil::InternalErrorBuilder()
@@ -142,6 +145,31 @@ std::unique_ptr<P4RuntimeSession> P4RuntimeSession::Default(
       new P4RuntimeSession(device_id, std::move(stub), device_id, role));
 }
 
+P4RuntimeSession::P4RuntimeSession(
+    uint32_t device_id, std::unique_ptr<p4::v1::P4Runtime::StubInterface> stub,
+    absl::uint128 election_id, const std::string& role)
+    : device_id_(device_id),
+      role_(role),
+      stub_(std::move(stub)),
+      stream_channel_context_(std::make_unique<grpc::ClientContext>()),
+      stream_channel_(stub_->StreamChannel(stream_channel_context_.get())) {
+  election_id_.set_high(absl::Uint128High64(election_id));
+  election_id_.set_low(absl::Uint128Low64(election_id));
+
+  // The stream_read_thread_ relies on the stream_channel_ so it must be
+  // created after it.
+  set_is_stream_up(true);
+  stream_read_thread_ =
+      std::thread(&P4RuntimeSession::CollectStreamReadMessages, this);
+}
+
+P4RuntimeSession::~P4RuntimeSession() {
+  absl::Status final_status = Finish();
+  if (!final_status.ok()) {
+    LOG(WARNING) << "P4RuntimeSession did not close cleanly: " << final_status;
+  }
+}
+
 absl::Status P4RuntimeSession::Write(const p4::v1::WriteRequest& request) {
   return WriteRpcGrpcStatusToAbslStatus(WriteAndReturnGrpcStatus(request),
                                         request.updates_size());
@@ -188,42 +216,96 @@ P4RuntimeSession::GetForwardingPipelineConfig(
 }
 
 bool P4RuntimeSession::StreamChannelRead(
-    p4::v1::StreamMessageResponse& response) {
+    p4::v1::StreamMessageResponse& response,
+    std::optional<absl::Duration> timeout) {
   absl::MutexLock lock(&stream_read_lock_);
-  return stream_channel_->Read(&response);
+  auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
+    return !stream_messages_.empty() || !is_stream_up_;
+  };
+  if (timeout.has_value()) {
+    stream_read_lock_.AwaitWithTimeout(absl::Condition(&cond), *timeout);
+  } else {
+    stream_read_lock_.Await(absl::Condition(&cond));
+  }
+
+  if (!stream_messages_.empty()) {
+    response = stream_messages_.front();
+    stream_messages_.pop();
+    return true;
+  }
+  return false;
 }
 
 bool P4RuntimeSession::StreamChannelWrite(
     const p4::v1::StreamMessageRequest& request) {
   absl::MutexLock lock(&stream_write_lock_);
+  if (is_finished_) {
+    LOG(WARNING) << "Cannot write to a stream channel after WritesDone() has "
+                    "been called.";
+    return false;
+  }
   return stream_channel_->Write(request);
 }
 
 absl::Status P4RuntimeSession::Finish() {
-  absl::MutexLock write_lock(&stream_write_lock_);
-  stream_channel_->WritesDone();
-
-  // Finish will block if there are unread messages in the channel. Therefore,
-  // we read any outstanding messages and log their existence before calling it.
-  // Multiple threads reading at once should be ok as it only causes an
-  // undefined ordering of responses.
-  p4::v1::StreamMessageResponse response;
-  absl::MutexLock read_lock(&stream_read_lock_);
-  while (stream_channel_->Read(&response)) {
+  ASSIGN_OR_RETURN(std::vector<p4::v1::StreamMessageResponse> responses,
+                   ReadStreamChannelResponsesAndFinish());
+  for (auto& response : responses) {
     LOG(WARNING) << "dropping unread message from switch on stream channel "
                     "when trying to Finish P4RuntimeSession: "
                  << response.DebugString();
   }
+  return absl::OkStatus();
+}
 
-  grpc::Status finish = stream_channel_->Finish();
-  // WritesDone() or TryCancel() can close the stream with a CANCELLED status.
-  // Because this case is expected we treat CANCELED as OKAY.
-  // TODO: Stop treating CANCELLED as an acceptable error after
-  // migrating tests away from using it as such.
-  if (finish.error_code() == grpc::StatusCode::CANCELLED) {
-    return absl::OkStatus();
+absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+P4RuntimeSession::ReadStreamChannelResponsesAndFinish() {
+  std::vector<p4::v1::StreamMessageResponse> responses;
+
+  // Signal server to close down the connection.
+  absl::MutexLock write_lock(&stream_write_lock_);
+  // Prevent `GRPC_CALL_ERROR_TOO_MANY_OPERATIONS` by returning early if stream
+  // is already finished.
+  if (is_finished_) return responses;
+  is_finished_ = true;
+  stream_channel_->WritesDone();
+
+  // Join the read stream so that we can collect any outstanding messages.
+  if (stream_read_thread_.joinable()) {
+    stream_read_thread_.join();
   }
-  return gutil::GrpcStatusToAbslStatus(finish);
+
+  // Finish will block if there are unread messages in the channel. Therefore,
+  // we read any outstanding messages before calling it.
+  absl::MutexLock read_lock(&stream_read_lock_);
+  p4::v1::StreamMessageResponse response;
+  while (!stream_messages_.empty()) {
+    responses.push_back(std::move(stream_messages_.front()));
+    stream_messages_.pop();
+  }
+
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(stream_channel_->Finish()));
+  return responses;
+}
+
+void P4RuntimeSession::set_is_stream_up(bool value) {
+  if (is_stream_up_ && !value) {
+    LOG(INFO) << "P4RT stream is now inactive.";
+  } else if (!is_stream_up_ && value) {
+    LOG(INFO) << "P4RT stream is now active.";
+  }
+  is_stream_up_ = value;
+}
+
+void P4RuntimeSession::CollectStreamReadMessages() {
+  p4::v1::StreamMessageResponse response;
+  while (stream_channel_->Read(&response)) {
+    absl::MutexLock mu(&stream_read_lock_);
+    stream_messages_.push(response);
+  }
+
+  absl::MutexLock mu(&stream_read_lock_);
+  set_is_stream_up(false);
 }
 
 std::vector<Update> CreatePiUpdates(absl::Span<const TableEntry> pi_entries,
@@ -345,7 +427,8 @@ absl::Status CheckNoTableEntries(P4RuntimeSession* session) {
   return absl::OkStatus();
 }
 
-absl::Status ClearTableEntries(P4RuntimeSession* session) {
+absl::Status ClearTableEntries(P4RuntimeSession* session,
+                               std::optional<int> max_batch_size) {
   // Get P4Info from Switch. It is needed to sequence the delete requests.
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,
@@ -366,22 +449,19 @@ absl::Status ClearTableEntries(P4RuntimeSession* session) {
   // Convert into IrP4Info.
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(response.config().p4info()));
 
-  RETURN_IF_ERROR(RemovePiTableEntries(session, info, table_entries));
+  std::vector<Update> pi_updates =
+      CreatePiUpdates(table_entries, Update::DELETE);
+  ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_clear_requests,
+                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates,
+                                                            max_batch_size));
+  RETURN_IF_ERROR(
+      SetMetadataAndSendPiWriteRequests(session, sequenced_clear_requests));
 
   // Verify that all entries were cleared successfully.
   RETURN_IF_ERROR(CheckNoTableEntries(session)).SetPrepend()
       << "cleared all table entries: ";
 
   return absl::OkStatus();
-}
-
-absl::Status RemovePiTableEntries(P4RuntimeSession* session,
-                                  const IrP4Info& info,
-                                  absl::Span<const TableEntry> pi_entries) {
-  std::vector<Update> pi_updates = CreatePiUpdates(pi_entries, Update::DELETE);
-  ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_clear_requests,
-                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
-  return SetMetadataAndSendPiWriteRequests(session, sequenced_clear_requests);
 }
 
 absl::Status InstallPiTableEntry(P4RuntimeSession* session,
