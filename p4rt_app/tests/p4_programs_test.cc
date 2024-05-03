@@ -129,7 +129,7 @@ TEST_P(P4ProgramsTest, CompositeUdfFieldsShouldAlwaysUseHexStrings) {
   // Ensure all the identified fields are using a HEX_STRING.
   for (const AppDbField& app_db_field : composite_udf_fields) {
     ASSERT_OK_AND_ASSIGN(auto app_db_definition,
-                         p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(
+                         p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
                              app_db_field.table_name));
     ASSERT_THAT(app_db_definition, Contains(Key(app_db_field.field_name)));
     const std::string& composite_udf_field =

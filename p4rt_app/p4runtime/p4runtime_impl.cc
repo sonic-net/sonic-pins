@@ -169,7 +169,7 @@ absl::Status AppendTableEntryReads(
     const std::string& role_name, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::P4rtTable& p4rt_table) {
+    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
   // Fetch the table defintion since it will inform how we process the read
   // request.
   auto table_def = ir_p4_info.tables_by_id().find(cached_entry.table_id());
@@ -209,10 +209,10 @@ absl::Status AppendTableEntryReads(
 }
 
 absl::StatusOr<p4::v1::ReadResponse> DoRead(
+    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table,
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
     const TableEntryMap& table_entry_cache, bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::P4rtTable& p4rt_table) {
+    const boost::bimap<std::string, std::string>& port_translation_map) {
   p4::v1::ReadResponse response;
   for (const auto& entity : request.entities()) {
     LOG(INFO) << "Read request: " << entity.ShortDebugString();
@@ -222,7 +222,7 @@ absl::StatusOr<p4::v1::ReadResponse> DoRead(
         for (const auto& [_, entry] : table_entry_cache) {
           RETURN_IF_ERROR(AppendTableEntryReads(
               response, entry, request.role(), ir_p4_info, translate_port_ids,
-              port_translation_map, p4rt_table));
+              port_translation_map, p4rt_table, vrf_table));
         }
         break;
       }
@@ -450,7 +450,7 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     // Any AppDb update failures should be appended to the `rpc_response`. If
     // UpdateAppDb fails we should go critical.
     auto app_db_write_status = sonic::UpdateAppDb(
-        p4rt_table_, app_db_updates, *ir_p4info_, rpc_response);
+        p4rt_table_, vrf_table_, app_db_updates, *ir_p4info_, rpc_response);
     if (!app_db_write_status.ok()) {
       return EnterCriticalState(
           absl::StrCat("Unexpected error calling UpdateAppDb: ",
@@ -514,8 +514,8 @@ grpc::Status P4RuntimeImpl::Read(
     }
 
     auto response_status =
-        DoRead(*request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
-               port_translation_map_, p4rt_table_);
+        DoRead(p4rt_table_, vrf_table_, *request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
+               port_translation_map_);
     if (!response_status.ok()) {
       LOG(WARNING) << "Read failure: " << response_status.status();
       return grpc::Status(
@@ -851,16 +851,7 @@ absl::Status P4RuntimeImpl::VerifyState() {
 
   std::vector<std::string> failures = {"P4RT App State Verification failures:"};
 
-  // Verify the P4RT entries.
-  std::vector<std::string> p4rt_table_failures =
-      sonic::VerifyAppStateDbAndAppDbEntries(*p4rt_table_.app_state_db,
-                                             *p4rt_table_.app_db);
-  if (!p4rt_table_failures.empty()) {
-    failures.insert(failures.end(), p4rt_table_failures.begin(),
-                    p4rt_table_failures.end());
-  }
-
-   // Verify the VRF_TABLE entries.
+  // Verify the VRF_TABLE entries.
   std::vector<std::string> vrf_table_failures =
       sonic::VerifyAppStateDbAndAppDbEntries(*vrf_table_.app_state_db,
                                              *vrf_table_.app_db);
@@ -1077,48 +1068,18 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
                          << "' to AppDb.");
 
       // Wait for OA to confirm it can realize the table updates.
-      ASSIGN_OR_RETURN(pdpi::IrUpdateStatus status,
-                       sonic::GetAndProcessResponseNotification(
-                           *p4rt_table_.notifier, *p4rt_table_.app_db,
-                           *p4rt_table_.app_state_db, acl_key,
-                           sonic::ResponseTimeMonitor::kNone));
+      ASSIGN_OR_RETURN(
+          pdpi::IrUpdateStatus status,
+          sonic::GetAndProcessResponseNotificationWithoutRevertingState(
+              *p4rt_table_.notifier, acl_key));
 
       // Any issue with the forwarding config should be sent back to the
       // controller as an INVALID_ARGUMENT.
       if (status.code() != google::rpc::OK) {
         return gutil::InvalidArgumentErrorBuilder() << status.message();
       }
-    } else if (table_type == table::Type::kExt) {
-      // Add table definition
-      // For now send only Extension tables.In future when required, Fixed table
-      //   definitions also can be inserted here
-      LOG(INFO) << "Add Table Definition for " << table_name;
-      sonic::AppendExtTableDefinition(ext_tables_json, table);
-    }
   }
-
-  if (!ext_tables_json.dump().empty()) {
-     // Publish all tables at once and get one success/failure response for them
-    ASSIGN_OR_RETURN(
-          std::string key,
-          sonic::PublishExtTablesDefinitionToAppDb(ext_tables_json, (uint64_t)0,
-                     p4rt_table_),
-          _ << "Could not publish Table Definition Set to APPDB");
-
-    ASSIGN_OR_RETURN(
-          pdpi::IrUpdateStatus status,
-          sonic::GetAndProcessResponseNotification(
-                           *p4rt_table_.notifier, *p4rt_table_.app_db,
-                           *p4rt_table_.app_state_db, key,
-                           sonic::ResponseTimeMonitor::kNone));
-
-    // Any issue with the forwarding config should be sent back to the
-    // controller as an INVALID_ARGUMENT.
-    if (status.code() != google::rpc::OK) {
-      return gutil::InvalidArgumentErrorBuilder() << status.message();
-    }
-  }
-
+}
   return absl::OkStatus();
 }
 

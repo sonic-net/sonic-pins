@@ -34,11 +34,14 @@
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
+#include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
 #include <nlohmann/json.hpp>
+#include "swss/rediscommand.h"
 #include "swss/schema.h"
+#include "swss/table.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -81,13 +84,14 @@ absl::flat_hash_set<std::string> FindDuplicateKeys(
   return duplicates;
 }
 
-// Validates the AppDb entry to be deleted and updates the p4rt_deletes (to be
-// deleted in a batch later). On success the P4RT key to be deleted is returned.
-absl::StatusOr<std::string> CreateEntryForAppDbDelete(
+// Translates the IR entry into a format understood by the OA layer. Also
+// verifies that the entry can be deleted (i.e. alreay exist). On success the
+// P4RT key is returned.
+absl::StatusOr<std::string> CreateEntryForDelete(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
     const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
-    std::vector<std::string>& p4rt_deletes) {
+    std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_deletes) {
   VLOG(1) << "Delete PDPI IR entry: " << entry.ShortDebugString();
 
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
@@ -99,27 +103,31 @@ absl::StatusOr<std::string> CreateEntryForAppDbDelete(
   }
 
   // Check that key exists in the table.
-  if (!p4rt_table.app_db->exists(key)) {
+  if (!p4rt_table.app_state_db->exists(key)) {
     LOG(WARNING) << "Could not delete missing entry: " << key;
     return gutil::NotFoundErrorBuilder()
            << "[P4RT App] Table entry with the given key does not exist in '"
            << entry.table_name() << "'.";
   }
 
-  // Get table entry from the APP_DB (before delete) instead of the one from the
-  // request.
+  // Get table entry from the AppStateDB (before delete) instead of the one from
+  // the request.
   ASSIGN_OR_RETURN(auto ir_table_entry,
                    AppDbKeyAndValuesToIrTableEntry(
-                       p4_info, key, p4rt_table.app_db->get(key)));
+                       p4_info, key, p4rt_table.app_state_db->get(key)));
 
   LOG(INFO) << "Delete AppDb entry: " << key;
-  p4rt_deletes.push_back(key);
+  swss::KeyOpFieldsValuesTuple key_value;
+  kfvKey(key_value) = key;
+  kfvOp(key_value) = "DEL";
+  p4rt_deletes.push_back(key_value);
   return key;
 }
 
-// Formats the IR entry as a AppDb entry and updates the p4rt_inserts (to be
-// inserted in a batch later). On success the P4RT key is returned.
-absl::StatusOr<std::string> CreateEntryForAppDbInsert(
+// Translates the IR entry into a format understood by the OA layer. Also
+// verifies that the entry can be inserted (i.e. doesn't alreay exist). On
+// success the P4RT key is returned.
+absl::StatusOr<std::string> CreateEntryForInsert(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
     const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
@@ -135,7 +143,7 @@ absl::StatusOr<std::string> CreateEntryForAppDbInsert(
   }
 
   // Check that key does not already exist in the table.
-  if (p4rt_table.app_db->exists(key)) {
+  if (p4rt_table.app_state_db->exists(key)) {
     LOG(WARNING) << "Could not insert duplicate entry: " << key;
     return gutil::AlreadyExistsErrorBuilder()
            << "[P4RT App] Table entry with the given key already exist in '"
@@ -145,15 +153,17 @@ absl::StatusOr<std::string> CreateEntryForAppDbInsert(
   LOG(INFO) << "Insert AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
+  kfvOp(key_value) = "SET";
   ASSIGN_OR_RETURN(kfvFieldsValues(key_value),
                    IrTableEntryToAppDbValues(entry));
   p4rt_inserts.push_back(std::move(key_value));
   return key;
 }
 
-// Formats the IR entry as a AppDb entry and updates the p4rt_modifies (to be
-// modified in a batch later). On success the P4RT key is returned.
-absl::StatusOr<std::string> CreateEntryForAppDbModify(
+// Translates the IR entry into a format understood by the OA layer. Also
+// verifies that the entry can be modified (i.e. alreay exist). On success the
+// P4RT key is returned.
+absl::StatusOr<std::string> CreateEntryForModify(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
     const pdpi::IrP4Info& p4_info,
     const absl::flat_hash_set<std::string>& duplicate_keys,
@@ -169,7 +179,7 @@ absl::StatusOr<std::string> CreateEntryForAppDbModify(
   }
 
   // Check that key already exist in the table.
-  if (!p4rt_table.app_db->exists(key)) {
+  if (!p4rt_table.app_state_db->exists(key)) {
     LOG(WARNING) << "Could not modify missing entry: " << key;
     return gutil::NotFoundErrorBuilder()
            << "[P4RT App] Table entry with the given key does not exist in '"
@@ -179,6 +189,7 @@ absl::StatusOr<std::string> CreateEntryForAppDbModify(
   LOG(INFO) << "Modify AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
+  kfvOp(key_value) = "SET";
   ASSIGN_OR_RETURN(kfvFieldsValues(key_value),
                    IrTableEntryToAppDbValues(entry));
   p4rt_modifies.push_back(std::move(key_value));
@@ -215,33 +226,6 @@ absl::Status AppendCounterData(
   }
 
   return absl::OkStatus();
-}
-
-// Writes into the APP_DB Producer Table using the bulk option.
-void WriteBatchToAppDb(
-    P4rtTable& p4rt_table,
-    const std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts,
-    const std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies,
-    const std::vector<std::string>& p4rt_deletes) {
-  if (!p4rt_inserts.empty()) p4rt_table.producer_state->batch_set(p4rt_inserts);
-
-  if (!p4rt_modifies.empty()) {
-    std::vector<std::string> del_keys(p4rt_modifies.size());
-    for (int i = 0; i < p4rt_modifies.size(); ++i) {
-      del_keys[i] = kfvKey(p4rt_modifies[i]);
-    }
-
-    // On modify we need to first remove the existing entries to get rid of any
-    // action paramters that may be replaced with a new action. Doing this
-    // through the app_db_client will not invoke an action in the OrchAgent.
-    p4rt_table.app_db->batch_del(del_keys);
-
-    // Then we re-insert the entries through the ProducerStateTable which will
-    // inoke an update action in the OrchAgent.
-    p4rt_table.producer_state->batch_set(p4rt_modifies);
-  }
-
-  if (!p4rt_deletes.empty()) p4rt_table.producer_state->batch_del(p4rt_deletes);
 }
 
 }  // namespace
@@ -400,34 +384,6 @@ absl::Status AppendExtTableDefinition(
   return absl::OkStatus();
 }
 
-// Publish set of tables in json formatted string to AppDb
-absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
-    const nlohmann::json &tables_json,
-    uint64_t cookie,
-    P4rtTable& p4rt_table) {
-
-  nlohmann::json json_key;
-  std::ostringstream oss;
-  oss << cookie;
-
-  json_key["context"] = oss.str();
-
-  std::string key = absl::Substitute("$0:$1",
-                          table::TypeName(table::Type::kTblsDefinitionSet),
-                          json_key.dump());
-
-  nlohmann::json info_json = nlohmann::json({});
-  info_json.push_back(
-        nlohmann::json::object_t::value_type("tables", tables_json));
-
-  std::vector<swss::FieldValueTuple> values;
-  values.push_back(std::make_pair("info", info_json.dump()));
-
-  p4rt_table.producer_state->set(key, values);
-
-  return key;
-}
-
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key) {
@@ -439,7 +395,7 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
   // CounterDb entries will include the full AppDb entry key.
   RETURN_IF_ERROR(AppendCounterData(
       table_entry, p4rt_table.counter_db->get(absl::StrCat(
-                       p4rt_table.app_db->getTablePrefix(), key))));
+                       p4rt_table.app_state_db->getTablePrefix(), key))));
   return table_entry;
 }
 
@@ -449,7 +405,7 @@ absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
   ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(ir_table_entry, p4info));
   return AppendCounterData(ir_table_entry,
                            p4rt_table.counter_db->get(absl::StrCat(
-                               p4rt_table.app_db->getTablePrefix(), key)));
+                               p4rt_table.app_state_db->getTablePrefix(), key)));
 }
 
 std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
@@ -471,7 +427,7 @@ std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
   return p4rt_keys;
 }
 
-absl::Status UpdateAppDb(P4rtTable& p4rt_table,
+absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
                          const AppDbUpdates& updates,
                          const pdpi::IrP4Info& p4_info,
                          pdpi::IrWriteResponse* response) {
@@ -480,37 +436,38 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table,
   absl::flat_hash_set<std::string> duplicate_keys =
       FindDuplicateKeys(updates, p4_info);
 
-  // We break the requests up by type (i.e. INSERT/MODIFY/DELETE), but P4Runtime
-  // error reporting requires the response ordering to match the request
-  // ordering. So we keep a mapping of the statuses.
-  std::vector<swss::KeyOpFieldsValuesTuple> p4rt_inserts;
-  std::vector<swss::KeyOpFieldsValuesTuple> p4rt_modifies;
-  std::vector<std::string> p4rt_deletes;
+  std::vector<swss::KeyOpFieldsValuesTuple> kfv_updates;
   absl::btree_map<std::string, pdpi::IrUpdateStatus*> app_db_status;
 
   for (const auto& entry : updates.entries) {
-    // If we cannot determine the table type then something went wrong with the
-    // IR translation, and we should not continue with this request.
     if (entry.appdb_table == AppDbTableType::UNKNOWN) {
+      // If we cannot determine the table type then something went wrong with
+      // the IR translation, and we should not continue with this request.
       return gutil::InternalErrorBuilder()
              << "Could not determine AppDb table type for entry: "
              << entry.entry.ShortDebugString();
+    } else if (entry.appdb_table == AppDbTableType::VRF_TABLE) {
+      // Update non AppDb:P4RT entries (e.g. VRF_TABLE).
+      RETURN_IF_ERROR(UpdateAppDbVrfTable(vrf_table, entry.update_type,
+                                          entry.rpc_index, entry.entry,
+                                          *response));
+      continue;
     }
 
     // Otherwise we default to updating the P4RT table.
     absl::StatusOr<std::string> key;
     switch (entry.update_type) {
       case p4::v1::Update::INSERT:
-        key = CreateEntryForAppDbInsert(p4rt_table, entry.entry, p4_info,
-                                        duplicate_keys, p4rt_inserts);
+        key = CreateEntryForInsert(p4rt_table, entry.entry, p4_info,
+                                   duplicate_keys, kfv_updates);
         break;
       case p4::v1::Update::MODIFY:
-        key = CreateEntryForAppDbModify(p4rt_table, entry.entry, p4_info,
-                                        duplicate_keys, p4rt_modifies);
+        key = CreateEntryForModify(p4rt_table, entry.entry, p4_info,
+                                   duplicate_keys, kfv_updates);
         break;
       case p4::v1::Update::DELETE:
-        key = CreateEntryForAppDbDelete(p4rt_table, entry.entry, p4_info,
-                                        duplicate_keys, p4rt_deletes);
+        key = CreateEntryForDelete(p4rt_table, entry.entry, p4_info,
+                                   duplicate_keys, kfv_updates);
         break;
       default:
         key = gutil::InvalidArgumentErrorBuilder()
@@ -527,10 +484,10 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table,
     app_db_status[*key] = response->mutable_statuses(entry.rpc_index);
   }
 
-  WriteBatchToAppDb(p4rt_table, p4rt_inserts, p4rt_modifies, p4rt_deletes);
-  RETURN_IF_ERROR(GetAndProcessResponseNotification(
-      *p4rt_table.notifier, *p4rt_table.app_db, *p4rt_table.app_state_db,
-      app_db_status, ResponseTimeMonitor::kP4rtTableWrite));
+  // Send all the P4RT_TABLE updates as one batch.
+  p4rt_table.notification_producer->send(kfv_updates);
+  RETURN_IF_ERROR(GetAndProcessResponseNotificationWithoutRevertingState(
+      *p4rt_table.notifier, app_db_status));
 
   return absl::OkStatus();
 }

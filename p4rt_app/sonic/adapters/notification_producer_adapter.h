@@ -31,7 +31,7 @@ class NotificationProducerAdapter {
                                        const std::string& channel);
   virtual ~NotificationProducerAdapter() = default;
 
-  virtual void experimental_send(const std::vector<swss::KeyOpFieldsValuesTuple>& values);
+  virtual void send(const std::vector<swss::KeyOpFieldsValuesTuple>& values);
  protected:
   // Test only constructor used to construct Mock & Fake classes.
   NotificationProducerAdapter() = default;

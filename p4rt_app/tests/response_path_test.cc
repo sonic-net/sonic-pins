@@ -95,7 +95,8 @@ TEST_F(ResponsePathTest, TableEntryInsertReadAndRemove) {
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    write_request));
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
       IsOkAndHolds(UnorderedElementsAreArray(expected_entry.GetValueMap())));
 
   // Reading back the entry should result in the same table_entry.
@@ -121,9 +122,9 @@ TEST_F(ResponsePathTest, TableEntryInsertReadAndRemove) {
   // should no longer exist in the P4RT AppDb table.
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    write_request));
-  EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
-      StatusIs(absl::StatusCode::kNotFound));
+  EXPECT_THAT(p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+                  expected_entry.GetKey()),
+              StatusIs(absl::StatusCode::kNotFound));
 
   // Reading back the entry should result in nothing being returned.
   ASSERT_OK_AND_ASSIGN(read_response, pdpi::SetMetadataAndSendPiReadRequest(
@@ -162,11 +163,11 @@ TEST_F(ResponsePathTest, TableEntryModify) {
   // should exist in the P4RT AppDb table.
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    write_request));
-  ASSERT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
-      IsOkAndHolds(
-          UnorderedElementsAre(std::make_pair("action", "set_nexthop_id"),
-                               std::make_pair("param/nexthop_id", "20"))));
+  ASSERT_THAT(p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+                  expected_entry.GetKey()),
+              IsOkAndHolds(UnorderedElementsAre(
+                  std::make_pair("action", "set_nexthop_id"),
+                  std::make_pair("param/nexthop_id", "20"))));
 
   // Update the request with a new action.
   write_request.mutable_updates(0)->set_type(p4::v1::Update::MODIFY);
@@ -181,11 +182,11 @@ TEST_F(ResponsePathTest, TableEntryModify) {
           ->mutable_action()));
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    write_request));
-  EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
-      IsOkAndHolds(
-          UnorderedElementsAre(std::make_pair("action", "set_wcmp_group_id"),
-                               std::make_pair("param/wcmp_group_id", "30"))));
+  EXPECT_THAT(p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+                  expected_entry.GetKey()),
+              IsOkAndHolds(UnorderedElementsAre(
+                  std::make_pair("action", "set_wcmp_group_id"),
+                  std::make_pair("param/wcmp_group_id", "30"))));
 }
 
 TEST_F(ResponsePathTest, DuplicateTableEntryInsertFails) {
@@ -393,7 +394,7 @@ TEST_F(ResponsePathTest, ModifyRequestFails) {
                             .SetPriority(10)
                             .AddMatchField("is_ip", "0x1");
   ASSERT_OK_AND_ASSIGN(sonic::SonicDbEntryMap actual_entry,
-                       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(
+                       p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
                            expected_entry.GetKey()));
 
   // Update the Fake AppDb table so the next request for this key fails.
@@ -423,7 +424,8 @@ TEST_F(ResponsePathTest, ModifyRequestFails) {
 
   // Verify that the original entry was not modified.
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
       gutil::IsOkAndHolds(testing::UnorderedElementsAreArray(actual_entry)));
 
   // Verify that we can still read back the original insert.
@@ -464,7 +466,7 @@ TEST_F(ResponsePathTest, DeleteRequestFails) {
                             .AddMatchField("is_ip", "0x1");
 
   ASSERT_OK_AND_ASSIGN(sonic::SonicDbEntryMap actual_entry,
-                       p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(
+                       p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
                            expected_entry.GetKey()));
 
   // Update the Fake AppDb table so the next request for this key fails.
@@ -494,7 +496,8 @@ TEST_F(ResponsePathTest, DeleteRequestFails) {
 
   // Verify that the original entry was not modified.
   EXPECT_THAT(
-      p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_entry.GetKey()),
+      p4rt_service_.GetP4rtAppStateDbTable().ReadTableEntry(
+          expected_entry.GetKey()),
       gutil::IsOkAndHolds(testing::UnorderedElementsAreArray(actual_entry)));
 
   // Verify that we can still read back the original insert.

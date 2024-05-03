@@ -11,27 +11,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_NOTIFICATION_PRODUCER_ADAPTER_H_
-#define GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_NOTIFICATION_PRODUCER_ADAPTER_H_
+#ifndef GOOGLE_P4RT_APP_SONIC_ADAPTERS_FAKE_NOTIFICATION_PRODUCER_ADAPTER_H_
+#define GOOGLE_P4RT_APP_SONIC_ADAPTERS_FAKE_NOTIFICATION_PRODUCER_ADAPTER_H_
+
+#include <bits/types/FILE.h>
 
 #include <vector>
 
-#include "gmock/gmock.h"
+#include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
 #include "swss/rediscommand.h"
 
 namespace p4rt_app {
 namespace sonic {
 
-class MockNotificationProducerAdapter final
+class FakeNotificationProducerAdapter final
     : public NotificationProducerAdapter {
  public:
-    MOCK_METHOD(void, send,
-              (const std::vector<swss::KeyOpFieldsValuesTuple>& values),
-              (override));
+  explicit FakeNotificationProducerAdapter(FakeSonicDbTable *sonic_db_table_);
+
+ // void send(const std::vector<swss::KeyOpFieldsValuesTuple> &updates) override;
+ virtual  void send(const std::vector<swss::KeyOpFieldsValuesTuple> &updates);
+
+ private:
+  FakeSonicDbTable &sonic_db_table_;
 };
 
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_NOTIFICATION_PRODUCER_ADAPTER_H_
+#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_FAKE_NOTIFICATION_PRODUCER_ADAPTER_H_
