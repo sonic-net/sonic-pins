@@ -38,8 +38,6 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/sequencing.h"
-#include "p4_pdpi/utils/ir.h"
-#include "sai_p4/fixed/roles.h"
 
 namespace pdpi {
 
@@ -494,7 +492,7 @@ absl::Status InstallPiTableEntries(P4RuntimeSession* session,
   return SetMetadataAndSendPiWriteRequests(session, sequenced_write_requests);
 }
 
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const p4::v1::ForwardingPipelineConfig& config) {
@@ -508,7 +506,7 @@ absl::Status SetForwardingPipelineConfig(
   return session->SetForwardingPipelineConfig(request);
 }
 
-absl::Status SetForwardingPipelineConfig(
+absl::Status SetMetadataAndSetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::SetForwardingPipelineConfigRequest::Action action,
     const P4Info& p4info, absl::optional<absl::string_view> p4_device_config) {
@@ -518,7 +516,7 @@ absl::Status SetForwardingPipelineConfig(
     *config.mutable_p4_device_config() = *p4_device_config;
   }
 
-  return SetForwardingPipelineConfig(session, action, config);
+  return SetMetadataAndSetForwardingPipelineConfig(session, action, config);
 }
 
 absl::StatusOr<p4::v1::GetForwardingPipelineConfigResponse>
