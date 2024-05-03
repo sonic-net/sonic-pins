@@ -28,9 +28,12 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "google/protobuf/message.h"
+#include "google/protobuf/repeated_field.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
 namespace pdpi {
@@ -81,6 +84,15 @@ absl::Status InstallIrTableEntry(pdpi::P4RuntimeSession& p4rt,
 // representation. Reads the P4Info used in translation from the switch.
 absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntries(
     P4RuntimeSession& p4rt);
+
+// Constructs a write request with metadata from `p4rt` and sends it to the
+// switch, returning a response containing the per-update status (in the same
+// order as the input `updates`).
+absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+    P4RuntimeSession& p4rt, absl::Span<const p4::v1::Update> updates);
+absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+    P4RuntimeSession& p4rt,
+    const google::protobuf::RepeatedPtrField<p4::v1::Update>& updates);
 
 // == END OF PUBLIC INTERFACE ==================================================
 
