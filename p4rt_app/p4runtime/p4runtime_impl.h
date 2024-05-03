@@ -50,7 +50,8 @@ struct P4RuntimeImplOptions {
 
 class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
  public:
-  P4RuntimeImpl(sonic::P4rtTable p4rt_table,
+  P4RuntimeImpl(sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
+                sonic::HashTable hash_table, sonic::SwitchTable switch_table,
                 std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
                 const P4RuntimeImplOptions& p4rt_options);
   ~P4RuntimeImpl() override = default;
@@ -198,6 +199,9 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // Interfaces which are used to update entries in the RedisDB tables.
   sonic::P4rtTable p4rt_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::VrfTable vrf_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::HashTable hash_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
 
   // P4RT can accept multiple connections to a single switch for redundancy.
   // When there is >1 connection the switch chooses a primary which is used for
