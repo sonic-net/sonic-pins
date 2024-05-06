@@ -43,10 +43,19 @@ namespace test_lib {
 
 P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
     : fake_p4rt_state_table_("AppStateDb:P4RT_TABLE"),
-      fake_p4rt_table_("AppDb:P4RT_TABLE", &fake_p4rt_state_table_) {
+      fake_vrf_state_table_("AppStateDb:VRF_TABLE"),
+      fake_hash_state_table_("AppStateDb:HASH_TABLE"),
+      fake_switch_state_table_("AppStateDb:SWITCH_TABLE"),
+      fake_p4rt_table_("AppDb:P4RT_TABLE", &fake_p4rt_state_table_),
+      fake_vrf_table_("AppDb:VRF_TABLE", &fake_vrf_state_table_),
+      fake_hash_table_("AppDb:HASH_TABLE", &fake_hash_state_table_),
+      fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_) {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
   const std::string kP4rtTableName = "P4RT_TABLE";
   const std::string kPortTableName = "PORT_TABLE";
+  const std::string kVrfTableName = "VRF_TABLE";
+  const std::string kHashTableName = "HASH_TABLE";
+  const std::string kSwitchTableName = "SWITCH_TABLE";
 
   // Choose a random gRPC port. While not strictly necessary each test brings up
   // a new gRPC service, and randomly choosing a TCP port will minimize issues.
@@ -67,6 +76,39 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
           &fake_p4rt_counters_table_, kP4rtTableName),
   };
 
+  // Create interfaces to access VRF_TABLE entries.
+  sonic::VrfTable vrf_table{
+      .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
+          &fake_vrf_table_),
+      .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+          &fake_vrf_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_vrf_table_, kVrfTableName),
+      .app_state_db =
+          absl::make_unique<sonic::FakeTableAdapter>(&fake_vrf_state_table_, kVrfTableName),
+  };
+
+  // Create interfaces to access HASH_TABLE entries.
+  sonic::HashTable hash_table{
+      .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
+          &fake_hash_table_),
+      .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+          &fake_hash_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_hash_table_, kHashTableName),
+      .app_state_db =
+          absl::make_unique<sonic::FakeTableAdapter>(&fake_hash_state_table_, kHashTableName),
+  };
+
+  // Create interfaces to access SWITCH_TABLE entries.
+  sonic::SwitchTable switch_table{
+      .producer_state = std::make_unique<sonic::FakeProducerStateTableAdapter>(
+          &fake_switch_table_),
+      .notifier = absl::make_unique<sonic::FakeConsumerNotifierAdapter>(
+          &fake_switch_table_),
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_switch_table_, kSwitchTableName),
+      .app_state_db =
+          absl::make_unique<sonic::FakeTableAdapter>(&fake_switch_state_table_, kSwitchTableName),
+  };
+
   // Create FakePacketIoInterface and save the pointer.
   auto fake_packetio_interface =
       absl::make_unique<sonic::FakePacketIoInterface>();
@@ -74,7 +116,8 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
 
   // Create the P4RT server.
   p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
-      std::move(p4rt_table), std::move(fake_packetio_interface),
+      std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
+      std::move(switch_table), std::move(fake_packetio_interface),
       options);
 
   // Component tests will use an insecure connection for the service.
@@ -99,8 +142,24 @@ P4RuntimeGrpcService::~P4RuntimeGrpcService() {
 
 int P4RuntimeGrpcService::GrpcPort() const { return grpc_port_; }
 
+absl::Status P4RuntimeGrpcService::VerifyState() {
+  return p4runtime_server_->VerifyState();
+}
+
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtAppDbTable() {
   return fake_p4rt_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVrfAppDbTable() {
+  return fake_vrf_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHashAppDbTable() {
+  return fake_hash_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetSwitchAppDbTable() {
+  return fake_switch_table_;
 }
 
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppDbTable() {
@@ -111,8 +170,24 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtAppStateDbTable() {
   return fake_p4rt_state_table_;
 }
 
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetVrfAppStateDbTable() {
+  return fake_vrf_state_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHashAppStateDbTable() {
+  return fake_hash_state_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetSwitchAppStateDbTable() {
+  return fake_switch_state_table_;
+}
+
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtCountersDbTable() {
   return fake_p4rt_counters_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtStateDbTable() {
+  return fake_p4rt_state_table_;
 }
 
 sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
