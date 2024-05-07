@@ -16,15 +16,13 @@
 
 #include <iterator>
 #include <memory>
-#include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "absl/flags/flag.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
-#include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
@@ -34,7 +32,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "tests/integration/system/nsf/milestone.h"
@@ -60,7 +58,6 @@ NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
 
   return static_cast<NsfUpgradeScenario>(random_index);
 }
-
 }  // namespace
 
 // approach than using std::variant (eg. type-erasure or typed tests).
@@ -118,17 +115,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // Program all the flows.
   LOG(INFO) << "Programming flows before starting the traffic";
-  ASSIGN_OR_RETURN(std::optional<std::string> updated_gnmi_config,
-                   flow_programmer_->ProgramFlows(curr_image_config.p4_info,
-                                                  testbed_, *ssh_client_));
-  if (updated_gnmi_config.has_value()) {
-    // Both are currently initialised to same config as
-    // the replay infrastructure generates config only using mainline. Once
-    // the replay infra has the capability to generate the config based on
-    // MPM, update the below configs accordingly.
-    next_image_config.gnmi_config = updated_gnmi_config.value();
-    curr_image_config.gnmi_config = updated_gnmi_config.value();
-  }
+  RETURN_IF_ERROR(flow_programmer_->ProgramFlows(curr_image_config, testbed_,
+                                                 *ssh_client_));
   thinkit::Switch& sut = GetSut(testbed_);
   std::vector<std::string> interfaces_before_config_push;
   RETURN_IF_ERROR(ValidateTestbedState(
