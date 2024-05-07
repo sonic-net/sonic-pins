@@ -50,7 +50,7 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "system/system.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/generic_testbed.h"

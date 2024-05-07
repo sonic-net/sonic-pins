@@ -69,6 +69,9 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   Testbed testbed_;
   std::vector<std::unique_ptr<ComponentValidator>> component_validators_;
   std::unique_ptr<thinkit::SSHClient> ssh_client_;
+
+ private:
+  bool is_first_iter_ = true;
 };
 
 }  // namespace pins_test
