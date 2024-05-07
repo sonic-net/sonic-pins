@@ -40,6 +40,18 @@ updates {
 }
 --- OUTPUT: WriteResponse ----------------------------------
 UNKNOWN: Batch failed, individual results:
-#1: INVALID_ARGUMENT: Does not meet constraints required for the table entry.
+#1: INVALID_ARGUMENT: All entries must satisfy:
 
+In @entry_restriction of table 'ingress.acl_ingress.acl_ingress_table'; at offset line 9, columns 5 to 65:
+  |     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+9 |     ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+But your entry does not.
+>>>Relevant Entry Info<<<
+Table Name: "ingress.acl_ingress.acl_ingress_table"
+Priority:1
+Field: "ecn" -> Value: Ternary{.value = 3, .mask = 3}
+Field: "is_ip" -> Value: Ternary{.value = 0, .mask = 0}
+Field: "is_ipv4" -> Value: Ternary{.value = 0, .mask = 0}
+Field: "is_ipv6" -> Value: Ternary{.value = 0, .mask = 0}

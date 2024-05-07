@@ -152,6 +152,10 @@ absl::StatusOr<grpc::Status> PdWriteRpcStatusToGrpcStatus(
 absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
                               google::protobuf::Message *pd,
                               bool key_only = false);
+absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
+                                absl::Span<const IrTableEntry> ir,
+                                google::protobuf::Message *pd,
+                                bool key_only = false);
 
 absl::Status IrPacketInToPd(const IrP4Info &info, const IrPacketIn &packet,
                             google::protobuf::Message *pd_packet);
@@ -188,6 +192,9 @@ absl::Status IrWriteRpcStatusToPd(const IrWriteRpcStatus &ir_write_status,
 // -- Conversions from PD to IR (intermediate representation) ------------------
 
 absl::StatusOr<IrTableEntry> PdTableEntryToIr(
+    const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
+    bool key_only = false);
+absl::StatusOr<std::vector<IrTableEntry>> PdTableEntriesToIr(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
     bool key_only = false);
 
