@@ -193,6 +193,52 @@ sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
           counters_db, COUNTERS_TABLE),
   };
 }
+  sonic::VrfTable CreateVrfTable(swss::DBConnector* app_db,
+                               swss::DBConnector* app_state_db) {
+  const std::string kVrfResponseChannel = "APPL_DB_VRF_TABLE_RESPONSE_CHANNEL";
+
+  return sonic::VrfTable{
+      .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
+          app_db, APP_VRF_TABLE_NAME),
+      .notifier = absl::make_unique<sonic::ConsumerNotifierAdapter>(
+          kVrfResponseChannel, app_db),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(app_db, APP_VRF_TABLE_NAME),
+      .app_state_db =
+          absl::make_unique<p4rt_app::sonic::TableAdapter>(app_state_db, APP_VRF_TABLE_NAME),
+  };
+}
+  sonic::HashTable CreateHashTable(swss::DBConnector* app_db,
+                                 swss::DBConnector* app_state_db) {
+  const std::string kAppHashTableName = "HASH_TABLE";
+  const std::string kHashResponseChannel =
+      "APPL_DB_HASH_TABLE_RESPONSE_CHANNEL";
+
+  return sonic::HashTable{
+      .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
+          app_db, kAppHashTableName),
+      .notifier = absl::make_unique<sonic::ConsumerNotifierAdapter>(
+          kHashResponseChannel, app_db),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(app_db, kAppHashTableName),
+      .app_state_db =
+          absl::make_unique<p4rt_app::sonic::TableAdapter>(app_state_db, kAppHashTableName),
+  };
+}
+  sonic::SwitchTable CreateSwitchTable(swss::DBConnector* app_db,
+                                     swss::DBConnector* app_state_db) {
+  const std::string kAppSwitchTableName = "SWITCH_TABLE";
+  const std::string kSwitchResponseChannel =
+      "APPL_DB_SWITCH_TABLE_RESPONSE_CHANNEL";
+
+  return sonic::SwitchTable{
+      .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
+          app_db, kAppSwitchTableName),
+      .notifier = absl::make_unique<sonic::ConsumerNotifierAdapter>(
+          kSwitchResponseChannel, app_db),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(app_db, kAppSwitchTableName),
+      .app_state_db =
+          absl::make_unique<p4rt_app::sonic::TableAdapter>(app_state_db, kAppSwitchTableName),
+  };
+}
 
 void WaitForPortInitDone() {
   // Open a RedisDB connection to the AppDB.
@@ -224,6 +270,12 @@ int main(int argc, char** argv) {
   // Create interfaces to interact with the P4RT_TABLE entries.
   p4rt_app::sonic::P4rtTable p4rt_table =
       p4rt_app::CreateP4rtTable(&app_db, &app_state_db, &counters_db);
+  p4rt_app::sonic::VrfTable vrf_table =
+      p4rt_app::CreateVrfTable(&app_db, &app_state_db);
+  p4rt_app::sonic::HashTable hash_table =
+      p4rt_app::CreateHashTable(&app_db, &app_state_db);
+  p4rt_app::sonic::SwitchTable switch_table =
+      p4rt_app::CreateSwitchTable(&app_db, &app_state_db);
 
   // Create PacketIoImpl for Packet I/O.
   auto packetio_impl = std::make_unique<p4rt_app::sonic::PacketIoImpl>(
@@ -246,7 +298,8 @@ int main(int argc, char** argv) {
 
   // Create the P4RT server.
   p4rt_app::P4RuntimeImpl p4runtime_server(
-      std::move(p4rt_table), std::move(packetio_impl), p4rt_options);
+      std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
+      std::move(switch_table), std::move(packetio_impl), p4rt_options);
 
   // Create a server to listen on the unix socket port.
   std::thread internal_server_thread;
