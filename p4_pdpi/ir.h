@@ -21,6 +21,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "grpcpp/grpcpp.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -34,8 +35,11 @@ absl::StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info& p4_info);
 
 // -- Conversions from PI to IR ------------------------------------------------
 absl::StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info& info,
-                                              const p4::v1::TableEntry& p,
+                                              const p4::v1::TableEntry& pi,
                                               bool key_only = false);
+absl::StatusOr<std::vector<IrTableEntry>> PiTableEntriesToIr(
+    const IrP4Info& info, absl::Span<const p4::v1::TableEntry> pi,
+    bool key_only = false);
 
 absl::StatusOr<IrPacketIn> PiPacketInToIr(const IrP4Info& info,
                                           const p4::v1::PacketIn& packet);
@@ -67,6 +71,9 @@ absl::StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
 absl::StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info& info,
                                                     const IrTableEntry& ir,
                                                     bool key_only = false);
+absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
+    const IrP4Info& info, absl::Span<const IrTableEntry> ir,
+    bool key_only = false);
 
 absl::StatusOr<p4::v1::PacketIn> IrPacketInToPi(const IrP4Info& info,
                                                 const IrPacketIn& packet);
