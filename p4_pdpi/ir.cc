@@ -1800,6 +1800,29 @@ StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
   return ir_stream_message_response;
 }
 
+absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
+    const IrP4Info &info, absl::Span<const IrTableEntry> ir, bool key_only) {
+  std::vector<p4::v1::TableEntry> pi;
+  pi.reserve(ir.size());
+  for (const IrTableEntry &ir_entry : ir) {
+    ASSIGN_OR_RETURN(pi.emplace_back(),
+                     IrTableEntryToPi(info, ir_entry, key_only));
+  }
+  return pi;
+}
+
+absl::StatusOr<std::vector<IrTableEntry>> PiTableEntriesToIr(
+    const IrP4Info &info, absl::Span<const p4::v1::TableEntry> pi,
+    bool key_only) {
+  std::vector<IrTableEntry> ir;
+  ir.reserve(pi.size());
+  for (const auto &pi_entry : pi) {
+    ASSIGN_OR_RETURN(ir.emplace_back(),
+                     PiTableEntryToIr(info, pi_entry, key_only));
+  }
+  return ir;
+}
+
 StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
                                               const IrTableEntry &ir,
                                               bool key_only /*=false*/) {

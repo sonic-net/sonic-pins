@@ -588,10 +588,21 @@ absl::Status PiTableEntryToPd(const IrP4Info &info,
 absl::Status PiTableEntriesToPd(const IrP4Info &info,
                                 const absl::Span<const p4::v1::TableEntry> &pi,
                                 google::protobuf::Message *pd, bool key_only) {
-  for (auto const &pi_entry : pi) {
+  for (const auto &pi_entry : pi) {
     ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
                      AddRepeatedMutableMessage(pd, "entries"));
     RETURN_IF_ERROR(PiTableEntryToPd(info, pi_entry, pd_entry, key_only));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
+                                absl::Span<const IrTableEntry> ir,
+                                google::protobuf::Message *pd, bool key_only) {
+  for (const auto &ir_entry : ir) {
+    ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
+                     AddRepeatedMutableMessage(pd, "entries"));
+    RETURN_IF_ERROR(IrTableEntryToPd(ir_p4info, ir_entry, pd_entry, key_only));
   }
   return absl::OkStatus();
 }
@@ -659,15 +670,22 @@ absl::StatusOr<p4::v1::TableEntry> PdTableEntryToPi(
 
 absl::StatusOr<std::vector<p4::v1::TableEntry>> PdTableEntriesToPi(
     const IrP4Info &info, const google::protobuf::Message &pd, bool key_only) {
+  ASSIGN_OR_RETURN(auto ir, PdTableEntriesToIr(info, pd, key_only));
+  return IrTableEntriesToPi(info, ir, key_only);
+}
+
+absl::StatusOr<std::vector<IrTableEntry>> PdTableEntriesToIr(
+    const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
+    bool key_only) {
   ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
                    GetRepeatedFieldMessages(pd, "entries"));
-  std::vector<p4::v1::TableEntry> pi_entries;
-  pi_entries.reserve(pd_entries.size());
+  std::vector<IrTableEntry> ir;
+  ir.reserve(pd_entries.size());
   for (auto *pd_entry : pd_entries) {
-    ASSIGN_OR_RETURN(pi_entries.emplace_back(),
-                     PdTableEntryToPi(info, *pd_entry));
+    ASSIGN_OR_RETURN(ir.emplace_back(),
+                     PdTableEntryToIr(ir_p4info, *pd_entry, key_only));
   }
-  return pi_entries;
+  return ir;
 }
 
 absl::StatusOr<p4::v1::PacketIn> PdPacketInToPi(
