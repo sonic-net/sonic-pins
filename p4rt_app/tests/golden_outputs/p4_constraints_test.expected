@@ -41,5 +41,3 @@ updates {
 --- OUTPUT: WriteResponse ----------------------------------
 UNKNOWN: Batch failed, individual results:
 #1: INVALID_ARGUMENT: Does not meet constraints required for the table entry.
-
-
