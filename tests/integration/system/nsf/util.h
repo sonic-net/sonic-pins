@@ -29,7 +29,7 @@
 #include "absl/types/span.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
