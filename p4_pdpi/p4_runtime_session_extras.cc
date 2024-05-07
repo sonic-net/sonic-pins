@@ -87,4 +87,24 @@ absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntries(
   return ir_table_entries;
 }
 
+absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+    P4RuntimeSession& p4rt, absl::Span<const p4::v1::Update> updates) {
+  p4::v1::WriteRequest request;
+  request.set_device_id(p4rt.DeviceId());
+  request.set_role(p4rt.Role());
+  *request.mutable_election_id() = p4rt.ElectionId();
+
+  for (const auto& update : updates) *request.add_updates() = update;
+
+  return pdpi::GrpcStatusToIrWriteRpcStatus(
+      p4rt.WriteAndReturnGrpcStatus(request), request.updates_size());
+}
+
+absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+    P4RuntimeSession& p4rt,
+    const google::protobuf::RepeatedPtrField<p4::v1::Update>& updates) {
+  return SendPiUpdatesAndReturnPerUpdateStatus(
+      p4rt, std::vector<p4::v1::Update>(updates.begin(), updates.end()));
+}
+
 }  // namespace pdpi

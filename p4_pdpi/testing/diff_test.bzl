@@ -33,7 +33,7 @@ def execpath(path):
 def rootpath(path):
     return "$(rootpath %s)" % path
 
-def _diff_test_script(ctx):
+def _diff_test_script(ctx, actual_file):
     """Returns bash script to be executed by the diff_test target."""
     return """
 if [[ "$1" == "--update" || "$1" == "--test" ]]; then
@@ -62,16 +62,40 @@ else
         cat << EOF
 
 Output not as expected. To update $(basename {expected}), run the following command:
-bazel run {target} -- --update
+
+  bazel run {target} -- --update
+
 EOF
     fi
     exit 1
 fi
     """.format(
-        actual = ctx.file.actual.short_path,
+        actual = actual_file,
         expected = ctx.file.expected.short_path,
         target = ctx.label,
     )
+
+def _cmd_diff_test_script(ctx):
+    """Returns bash script to be executed by the cmd_diff_test target."""
+
+    # Some massaging is needed to correctly expand `$(location <target>)` references
+    # in the user-provided `actual_cmd` string.
+    actual_cmd = ctx.expand_location(
+        ctx.attr.actual_cmd,
+        targets = ctx.attr.tools + ctx.attr.data,
+    ).replace(ctx.var["BINDIR"] + "/", "")
+
+    # Run user-provided `actual_cmd` and write its output to a temporary file...
+    pre_script = """\
+ACTUAL="${{TEST_UNDECLARED_OUTPUTS_DIR}}/actual_cmd.output"
+echo "$({actual_cmd})" > "$ACTUAL"
+""".format(actual_cmd = actual_cmd)
+
+    # ...then run the diff test script on that file.
+    return "\n".join([
+        pre_script,
+        _diff_test_script(ctx, actual_file = '"${ACTUAL}"'),
+    ])
 
 def _diff_test_impl(ctx):
     """Computes diff of two files, checking that they agree.
@@ -84,7 +108,7 @@ def _diff_test_impl(ctx):
     # Write test script that will be executed by 'bazel test'.
     ctx.actions.write(
         output = ctx.outputs.executable,
-        content = _diff_test_script(ctx),
+        content = _diff_test_script(ctx, actual_file = ctx.file.actual.short_path),
         is_executable = True,
     )
 
@@ -119,19 +143,62 @@ To auto-generate or update, run `bazel run <target> -- --update`.
     },
 )
 
-def cmd_diff_test(name, actual_cmd, expected, tools = [], data = [], visibility = None):
-    """Runs a command to get the actual output, to compare against `expected`."""
-    native.genrule(
-        name = name + "_output",
-        visibility = visibility,
-        srcs = data,
-        outs = [name + ".actual"],
-        tools = tools,
-        cmd = actual_cmd + " > '$@'",
-        testonly = True,
+def _cmd_diff_test_impl(ctx):
+    """Implementation of `cmd_diff_test`, see the latter for details.
+    """
+
+    # Write test script that will be executed by 'bazel test'.
+    ctx.actions.write(
+        output = ctx.outputs.executable,
+        content = _cmd_diff_test_script(ctx),
+        is_executable = True,
     )
-    diff_test(
-        name = name,
-        actual = name + ".actual",
-        expected = expected,
+
+    # Make test script dependencies available at runtime.
+    return DefaultInfo(
+        runfiles = ctx.runfiles(ctx.files.tools + ctx.files.data + [ctx.file.expected]),
     )
+
+cmd_diff_test = rule(
+    doc = """Runs a command to get "actual" output and diffs it against `expected`.
+
+    Typically used to test that the output of some command looks as expected.
+    To update the expected file, run `bazel run <target> -- --update`.
+    """,
+    implementation = _cmd_diff_test_impl,
+    test = True,
+    attrs = {
+        "actual_cmd": attr.string(
+            doc = """\
+Shell command whose stdout will be diffed against 'expected'.
+Subject to $(location) substitution.
+""",
+            mandatory = True,
+        ),
+        "expected": attr.label(
+            doc = """\
+Expected file (aka golden file), containing the expected output.
+To auto-generate or update, run `bazel run <target> -- --update`.
+""",
+            mandatory = True,
+            allow_single_file = True,
+        ),
+        "tools": attr.label_list(
+            doc = """\
+List of executables that can be run as part of `actual_cmd`.
+For non-executables, prefer using the `data` attribute.
+""",
+            allow_files = True,
+            # Executables that are used at runtime (e.g., as part of a test) must be built for the
+            # target configuration.
+            cfg = "target",
+        ),
+        "data": attr.label_list(
+            doc = """\
+List of non-executable files that can be accessed by `actual_cmd`.
+For executables, prefer using the `tools` attribute.
+""",
+            allow_files = True,
+        ),
+    },
+)
