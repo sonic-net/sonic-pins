@@ -1802,10 +1802,10 @@ payload: "A somewhat longer payload."
 -- OUTPUT ----------------------------------------------------------------------
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in Ipv4Header headers[1]: ihl: missing
-- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
-- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected 1 hex digits but got 2
-- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected 1 hex digits but got 3
-- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected 4 hex digits but got 13
+- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
+- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected between 5 and 8 bits
+- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected between 9 and 12 bits
+- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected between 49 and 52 bits
 - in Ipv4Header headers[1]: ipv4_source: invalid format: Invalid IPv4 address: '0x0a000001'
 - in Ipv4Header headers[1]: ipv4_destination: invalid format: Invalid IPv4 address: '0x14000003'
 - in Ipv4Header headers[1]: total_length: Must be 0x0032, but was 0x0034 instead.
@@ -1843,24 +1843,24 @@ headers {
 payload: "A somewhat longer payload."
 
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
-- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected 1 hex digits but got 2
-- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected 1 hex digits but got 3
-- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected 4 hex digits but got 13
+- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
+- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected between 5 and 8 bits
+- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected between 9 and 12 bits
+- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected between 49 and 52 bits
 - in Ipv4Header headers[1]: ipv4_source: invalid format: Invalid IPv4 address: '0x0a000001'
 - in Ipv4Header headers[1]: ipv4_destination: invalid format: Invalid IPv4 address: '0x14000003'
 - in Ipv4Header headers[1]: total_length: Must be 0x0032, but was 0x0034 instead.
-- in Ipv4Header headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
+- in Ipv4Header headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
 
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
-- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected 1 hex digits but got 2
-- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected 1 hex digits but got 3
-- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected 4 hex digits but got 13
+- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
+- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected between 5 and 8 bits
+- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected between 9 and 12 bits
+- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected between 49 and 52 bits
 - in Ipv4Header headers[1]: ipv4_source: invalid format: Invalid IPv4 address: '0x0a000001'
 - in Ipv4Header headers[1]: ipv4_destination: invalid format: Invalid IPv4 address: '0x14000003'
 - in Ipv4Header headers[1]: total_length: Must be 0x0032, but was 0x0034 instead.
-- in Ipv4Header headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
+- in Ipv4Header headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
 
 ================================================================================
 Proto packet test: IPv4 with various invalid fields
@@ -1894,7 +1894,7 @@ payload: "Hi"
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in EthernetHeader headers[0]: ethernet_source: missing
 - in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 22
-- in Ipv4Header headers[1]: ihl: invalid format: illegal conversion from hex string '0x6k' to 4 bits; expected 1 hex digits but got 2
+- in Ipv4Header headers[1]: ihl: invalid format: illegal conversion from hex string '0x6k' to 4 bits; expected between 5 and 8 bits
 - in Ipv4Header headers[1]: total_length: missing
 - in Ipv4Header headers[1]: checksum: missing
 - in Ipv4Header headers[1]: ipv4_source: invalid format: Invalid IPv4 address: 'ffff:1::'
@@ -1903,9 +1903,9 @@ ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reas
 PadPacketToMinimumSize(packet) = true
 new payload: "Hi\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
 
-UpdateMissingComputedFields(packet) = INVALID_ARGUMENT: Ipv4Header: failed to compute packet.headers[1].checksum: illegal conversion from hex string '0x6k' to 4 bits; expected 1 hex digits but got 2
+UpdateMissingComputedFields(packet) = INVALID_ARGUMENT: Ipv4Header: failed to compute packet.headers[1].checksum: illegal conversion from hex string '0x6k' to 4 bits; expected between 5 and 8 bits
 
-Serialize(Packet) = INVALID_ARGUMENT: Ipv4Header: failed to compute packet.headers[1].checksum: illegal conversion from hex string '0x6k' to 4 bits; expected 1 hex digits but got 2
+Serialize(Packet) = INVALID_ARGUMENT: Ipv4Header: failed to compute packet.headers[1].checksum: illegal conversion from hex string '0x6k' to 4 bits; expected between 5 and 8 bits
 
 ================================================================================
 Proto packet test: IPv6 without computed fields
@@ -2000,9 +2000,9 @@ payload: "I am the payload"
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in Ipv6Header headers[1]: dscp: invalid format: missing '0x'-prefix in hexadecimal string: '1b'
 - in Ipv6Header headers[1]: ecn: invalid format: missing '0x'-prefix in hexadecimal string: '0b01'
-- in Ipv6Header headers[1]: flow_label: invalid format: illegal conversion from hex string '0x1234' to 20 bits; expected 5 hex digits but got 4
-- in Ipv6Header headers[1]: next_header: invalid format: illegal conversion from hex string '0x050' to 8 bits; expected 2 hex digits but got 3
-- in Ipv6Header headers[1]: hop_limit: invalid format: illegal conversion from hex string '0x1' to 8 bits; expected 2 hex digits but got 1
+- in Ipv6Header headers[1]: flow_label: invalid format: illegal conversion from hex string '0x1234' to 20 bits; expected between 13 and 16 bits
+- in Ipv6Header headers[1]: next_header: invalid format: illegal conversion from hex string '0x050' to 8 bits; expected between 9 and 12 bits
+- in Ipv6Header headers[1]: hop_limit: invalid format: illegal conversion from hex string '0x1' to 8 bits; expected between 1 and 4 bits
 - in Ipv6Header headers[1]: ipv6_source: invalid format: invalid IPv6 address: '20.0.0.3'
 - in Ipv6Header headers[1]: ipv6_destination: invalid format: invalid IPv6 address: ':'
 - in Ipv6Header headers[1]: version: Must be 0x6, but was 0x4 instead.
@@ -2015,9 +2015,9 @@ UpdateMissingComputedFields(packet) = false
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in Ipv6Header headers[1]: dscp: invalid format: missing '0x'-prefix in hexadecimal string: '1b'
 - in Ipv6Header headers[1]: ecn: invalid format: missing '0x'-prefix in hexadecimal string: '0b01'
-- in Ipv6Header headers[1]: flow_label: invalid format: illegal conversion from hex string '0x1234' to 20 bits; expected 5 hex digits but got 4
-- in Ipv6Header headers[1]: next_header: invalid format: illegal conversion from hex string '0x050' to 8 bits; expected 2 hex digits but got 3
-- in Ipv6Header headers[1]: hop_limit: invalid format: illegal conversion from hex string '0x1' to 8 bits; expected 2 hex digits but got 1
+- in Ipv6Header headers[1]: flow_label: invalid format: illegal conversion from hex string '0x1234' to 20 bits; expected between 13 and 16 bits
+- in Ipv6Header headers[1]: next_header: invalid format: illegal conversion from hex string '0x050' to 8 bits; expected between 9 and 12 bits
+- in Ipv6Header headers[1]: hop_limit: invalid format: illegal conversion from hex string '0x1' to 8 bits; expected between 1 and 4 bits
 - in Ipv6Header headers[1]: ipv6_source: invalid format: invalid IPv6 address: '20.0.0.3'
 - in Ipv6Header headers[1]: ipv6_destination: invalid format: invalid IPv6 address: ':'
 - in Ipv6Header headers[1]: version: Must be 0x6, but was 0x4 instead.
