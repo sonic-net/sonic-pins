@@ -172,7 +172,7 @@ TEST_F(VerifyTest, DoesNotUpdateAppDbState) {
       << "Is the p4info_verification_schema updated? If not, run: "
       << "p4rt_app/scripts/"
       << "update_p4info_verification_schema.sh";
-  EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), IsEmpty());
+  EXPECT_THAT(p4rt_service_->GetP4rtAppStateDbTable().GetAllKeys(), IsEmpty());
 }
 
 TEST_F(VerifyTest, FailsWhenNoConfigIsSet) {
@@ -206,8 +206,10 @@ TEST_F(VerifyAndCommitTest, UpdatesAppDbState) {
 
   // Since we're both verifying and committing the config we expect to see
   // changes to the AppDb tables.
+
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
-  EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), Not(IsEmpty()));
+  EXPECT_THAT(p4rt_service_->GetP4rtAppStateDbTable().GetAllKeys(),
+              Not(IsEmpty()));
 }
 
 TEST_F(VerifyAndCommitTest, FailsWhenNoConfigIsSet) {
@@ -542,7 +544,8 @@ TEST_P(PerConfigTest, VerifyAndCommitSucceeds) {
       sai::FetchP4Info(std::get<0>(GetParam()), std::get<1>(GetParam()));
 
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
-  EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), Not(IsEmpty()));
+  EXPECT_THAT(p4rt_service_->GetP4rtAppStateDbTable().GetAllKeys(),
+              Not(IsEmpty()));
 }
 
 TEST_P(PerConfigTest, ReconcileAndCommitSucceeds) {
@@ -552,10 +555,12 @@ TEST_P(PerConfigTest, ReconcileAndCommitSucceeds) {
       sai::FetchP4Info(std::get<0>(GetParam()), std::get<1>(GetParam()));
 
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
-  EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), Not(IsEmpty()));
+  EXPECT_THAT(p4rt_service_->GetP4rtAppStateDbTable().GetAllKeys(),
+               Not(IsEmpty()));
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request))
-      << "Failed second commit (expected no-op)";
-  EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), Not(IsEmpty()));
+        << "Failed second commit (expected no-op)";
+  EXPECT_THAT(p4rt_service_->GetP4rtAppStateDbTable().GetAllKeys(),
+              Not(IsEmpty()));
 }
 
 // Generate the test case name for an <Instantiation, ClosStage> tuple.

@@ -46,6 +46,7 @@
 #include "p4rt_app/event_monitoring/state_verification_events.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
@@ -58,6 +59,7 @@ using ::grpc::Server;
 using ::grpc::ServerBuilder;
 using ::grpc::ServerCredentials;
 
+#define APP_P4RT_CHANNEL_NAME "P4rt_Channel"
 // By default the P4RT App will run on TCP port 9559. Which is the IANA port
 // reserved for P4Runtime.
 // https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml?search=9559
@@ -181,12 +183,11 @@ sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
       std::string("APPL_DB_") + APP_P4RT_TABLE_NAME + "_RESPONSE_CHANNEL";
 
   return sonic::P4rtTable{
-      .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
-          app_db, APP_P4RT_TABLE_NAME),
+      .notification_producer =
+          absl::make_unique<sonic::NotificationProducerAdapter>(
+              app_db, APP_P4RT_CHANNEL_NAME),
       .notifier = absl::make_unique<sonic::ConsumerNotifierAdapter>(
           kP4rtResponseChannel, app_db),
-      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
-          app_db, APP_P4RT_TABLE_NAME),
       .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
           app_state_db, APP_P4RT_TABLE_NAME),
       .counter_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(

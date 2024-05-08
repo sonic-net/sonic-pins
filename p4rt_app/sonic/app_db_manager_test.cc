@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/memory/memory.h"
 #include "absl/status/statusor.h"
 #include "glog/logging.h"
 #include "google/protobuf/text_format.h"
@@ -26,15 +25,15 @@
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/mock_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_table_adapter.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
-#include "p4rt_app/utils/table_utility.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "swss/rediscommand.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -61,36 +60,41 @@ GetSuccessfulResponseValues() {
 class AppDbManagerTest : public ::testing::Test {
  protected:
   AppDbManagerTest() {
-    auto p4rt_producer_state =
-        std::make_unique<MockProducerStateTableAdapter>();
+    auto p4rt_notification_producer =
+        std::make_unique<MockNotificationProducerAdapter>();
     auto p4rt_notifier = std::make_unique<MockConsumerNotifierAdapter>();
-    auto p4rt_app_db = std::make_unique<MockTableAdapter>();
     auto p4rt_app_state_db = std::make_unique<MockTableAdapter>();
     auto p4rt_counter_db = std::make_unique<MockTableAdapter>();
+    auto vrf_producer_state = std::make_unique<MockProducerStateTableAdapter>();
 
     // Save a pointer so we can test against the mocks.
-    mock_p4rt_producer_state_ = p4rt_producer_state.get();
+    mock_p4rt_notification_producer_ = p4rt_notification_producer.get();
     mock_p4rt_notifier_ = p4rt_notifier.get();
-    mock_p4rt_app_db_ = p4rt_app_db.get();
     mock_p4rt_app_state_db_ = p4rt_app_state_db.get();
     mock_p4rt_counter_db_ = p4rt_counter_db.get();
 
     mock_p4rt_table_ = P4rtTable{
-        .producer_state = std::move(p4rt_producer_state),
+        .notification_producer = std::move(p4rt_notification_producer),
         .notifier = std::move(p4rt_notifier),
-        .app_db = std::move(p4rt_app_db),
         .app_state_db = std::move(p4rt_app_state_db),
         .counter_db = std::move(p4rt_counter_db),
+    };
+
+    mock_vrf_table_ = VrfTable{
+        .producer_state = std::move(vrf_producer_state),
+        .notifier = std::make_unique<MockConsumerNotifierAdapter>(),
+        .app_db = std::make_unique<MockTableAdapter>(),
+        .app_state_db = std::make_unique<MockTableAdapter>(),
     };
   }
 
   // Mock AppDb tables.
-  MockProducerStateTableAdapter* mock_p4rt_producer_state_;
+  MockNotificationProducerAdapter* mock_p4rt_notification_producer_;
   MockConsumerNotifierAdapter* mock_p4rt_notifier_;
-  MockTableAdapter* mock_p4rt_app_db_;
   MockTableAdapter* mock_p4rt_app_state_db_;
   MockTableAdapter* mock_p4rt_counter_db_;
   P4rtTable mock_p4rt_table_;
+  VrfTable mock_vrf_table_;
 };
 
 TEST_F(AppDbManagerTest, InsertTableEntry) {
@@ -133,8 +137,8 @@ TEST_F(AppDbManagerTest, InsertTableEntry) {
                             .AddActionParam("port", "Ethernet28/5")
                             .AddActionParam("src_mac", "00:02:03:04:05:06");
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple(expected.GetKey(), "", expected.GetValueList())};
-  EXPECT_CALL(*mock_p4rt_producer_state_, batch_set(expected_key_value))
+      std::make_tuple(expected.GetKey(), "SET", expected.GetValueList())};
+  EXPECT_CALL(*mock_p4rt_notification_producer_, send(expected_key_value))
       .Times(1);
 
   // Expected OrchAgent response.
@@ -146,7 +150,7 @@ TEST_F(AppDbManagerTest, InsertTableEntry) {
 
   pdpi::IrWriteResponse response;
   response.add_statuses();
-  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, updates,
+  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, mock_vrf_table_, updates,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                         &response));
   ASSERT_EQ(response.statuses_size(), 1);
@@ -187,7 +191,7 @@ TEST_F(AppDbManagerTest, InsertWithUnknownAppDbTableTypeFails) {
   updates.total_rpc_updates = 1;
 
   pdpi::IrWriteResponse response;
-  EXPECT_THAT(UpdateAppDb(mock_p4rt_table_, updates,
+  EXPECT_THAT(UpdateAppDb(mock_p4rt_table_, mock_vrf_table_, updates,
                           sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                           &response),
               StatusIs(absl::StatusCode::kInternal));
@@ -229,12 +233,12 @@ TEST_F(AppDbManagerTest, InsertDuplicateTableEntryFails) {
                             .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
                             .SetPriority(123)
                             .AddMatchField("router_interface_id", "16");
-  EXPECT_CALL(*mock_p4rt_app_db_, exists(Eq(expected.GetKey())))
+  EXPECT_CALL(*mock_p4rt_app_state_db_, exists(Eq(expected.GetKey())))
       .WillOnce(Return(true));
 
   pdpi::IrWriteResponse response;
   response.add_statuses();
-  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, updates,
+  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, mock_vrf_table_, updates,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                         &response));
   EXPECT_EQ(response.statuses(0).code(), google::rpc::ALREADY_EXISTS);
@@ -281,13 +285,10 @@ TEST_F(AppDbManagerTest, ModifyTableEntry) {
 
   // RedisDB returns that the entry exists so it can be modified.
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple(expected.GetKey(), "", expected.GetValueList())};
-  EXPECT_CALL(*mock_p4rt_app_db_, exists(expected.GetKey()))
+      std::make_tuple(expected.GetKey(), "SET", expected.GetValueList())};
+  EXPECT_CALL(*mock_p4rt_app_state_db_, exists(expected.GetKey()))
       .WillOnce(Return(true));
-  EXPECT_CALL(*mock_p4rt_app_db_,
-              batch_del(std::vector<std::string>{expected.GetKey()}))
-      .Times(1);
-  EXPECT_CALL(*mock_p4rt_producer_state_, batch_set(expected_key_value))
+  EXPECT_CALL(*mock_p4rt_notification_producer_, send(expected_key_value))
       .Times(1);
 
   // OrchAgent returns success.
@@ -299,7 +300,7 @@ TEST_F(AppDbManagerTest, ModifyTableEntry) {
 
   pdpi::IrWriteResponse response;
   response.add_statuses();
-  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, updates,
+  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, mock_vrf_table_, updates,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                         &response));
   ASSERT_EQ(response.statuses_size(), 1);
@@ -342,12 +343,12 @@ TEST_F(AppDbManagerTest, ModifyNonExistentTableEntryFails) {
                             .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
                             .SetPriority(123)
                             .AddMatchField("router_interface_id", "16");
-  EXPECT_CALL(*mock_p4rt_app_db_, exists(Eq(expected.GetKey())))
+  EXPECT_CALL(*mock_p4rt_app_state_db_, exists(Eq(expected.GetKey())))
       .WillOnce(Return(false));
 
   pdpi::IrWriteResponse response;
   response.add_statuses();
-  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, updates,
+  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, mock_vrf_table_, updates,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                         &response));
   EXPECT_EQ(response.statuses(0).code(), google::rpc::NOT_FOUND);
@@ -390,10 +391,12 @@ TEST_F(AppDbManagerTest, DeleteTableEntry) {
                             .AddMatchField("router_interface_id", "16");
 
   // RedisDB returns that the entry exists so it can be deleted.
-  EXPECT_CALL(*mock_p4rt_app_db_, exists(expected.GetKey()))
+  const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
+      std::make_tuple(expected.GetKey(), "DEL",
+                      std::vector<swss::FieldValueTuple>{})};
+  EXPECT_CALL(*mock_p4rt_app_state_db_, exists(expected.GetKey()))
       .WillOnce(Return(true));
-  EXPECT_CALL(*mock_p4rt_producer_state_,
-              batch_del(std::vector<std::string>{expected.GetKey()}))
+  EXPECT_CALL(*mock_p4rt_notification_producer_, send(expected_key_value))
       .Times(1);
 
   // OrchAgent returns success.
@@ -405,7 +408,7 @@ TEST_F(AppDbManagerTest, DeleteTableEntry) {
 
   pdpi::IrWriteResponse response;
   response.add_statuses();
-  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, updates,
+  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, mock_vrf_table_, updates,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                         &response));
   ASSERT_EQ(response.statuses_size(), 1);
@@ -448,12 +451,12 @@ TEST_F(AppDbManagerTest, DeleteNonExistentTableEntryFails) {
                             .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
                             .SetPriority(123)
                             .AddMatchField("router_interface_id", "16");
-  EXPECT_CALL(*mock_p4rt_app_db_, exists(Eq(expected.GetKey())))
+  EXPECT_CALL(*mock_p4rt_app_state_db_, exists(Eq(expected.GetKey())))
       .WillOnce(Return(false));
 
   pdpi::IrWriteResponse response;
   response.add_statuses();
-  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, updates,
+  EXPECT_OK(UpdateAppDb(mock_p4rt_table_, mock_vrf_table_, updates,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
                         &response));
   EXPECT_EQ(response.statuses(0).code(), google::rpc::NOT_FOUND);

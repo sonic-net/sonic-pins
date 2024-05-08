@@ -15,8 +15,7 @@
 #define GOOGLE_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_
 
 #include "absl/status/status.h"
-#include "absl/strings/ascii.h"
-#include "gutil/status.h"
+#include "absl/status/statusor.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 

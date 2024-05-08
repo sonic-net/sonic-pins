@@ -71,6 +71,7 @@ absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
 // translates them so that they are consumable by the AppDb. It will also
 // create, or remove, any VRF IDs as needed.
 absl::Status UpdateAppDb(P4rtTable& p4rt_table,
+                         VrfTable& vrf_table,
                          const AppDbUpdates& updates,
                          const pdpi::IrP4Info& p4_info,
                          pdpi::IrWriteResponse* response);

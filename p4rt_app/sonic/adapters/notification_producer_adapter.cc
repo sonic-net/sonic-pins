@@ -27,7 +27,7 @@ NotificationProducerAdapter::NotificationProducerAdapter(
     : notification_producer_(
           std::make_unique<swss::NotificationProducer>(db, channel)) {}
 
-void NotificationProducerAdapter::experimental_send(
+void NotificationProducerAdapter::send(
      const std::vector<swss::KeyOpFieldsValuesTuple>& values)
 {   
      std::vector<swss::FieldValueTuple> new_values;
