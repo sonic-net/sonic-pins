@@ -14,6 +14,7 @@
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -66,13 +67,6 @@ grpc::Status EnterCriticalState(const std::string& message) {
   // TODO: report critical state somewhere an don't crash the process.
   LOG(FATAL) << "Entering critical state: " << message;
   return grpc::Status::OK;
-}
-
-EventExecutionTimeMonitor& GetWriteTimeMonitor() {
-  static EventExecutionTimeMonitor* const kMonitor =
-      new EventExecutionTimeMonitor("p4rt_app::Write()",
-                                    /*log_threshold=*/10000);
-  return *kMonitor;
 }
 
 absl::Status SupportedTableEntryRequest(const p4::v1::TableEntry& table_entry) {
@@ -423,10 +417,11 @@ P4RuntimeImpl::P4RuntimeImpl(
 grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
                                   const p4::v1::WriteRequest* request,
                                   p4::v1::WriteResponse* response) {
+  absl::MutexLock l(&server_state_lock_);
+
 #ifdef __EXCEPTIONS
   try {
 #endif
-    absl::MutexLock l(&server_state_lock_);
     absl::Time write_start_time = absl::Now();
 
     // Verify the request comes from the primary connection.
@@ -472,10 +467,23 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     }
 
     absl::Duration write_execution_time = absl::Now() - write_start_time;
-    absl::Status monitor_status =
-        GetWriteTimeMonitor().IncrementEventCountWithDuration(
-            app_db_updates.total_rpc_updates, write_execution_time);
-    LOG_IF(ERROR, !monitor_status.ok()) << monitor_status;
+    write_batch_requests_ += 1;
+    write_total_requests_ += app_db_updates.total_rpc_updates;
+    write_execution_time_ += write_execution_time;
+
+    // Log a warning for any batch requests that are taking "too long" so we can
+    // have an accurate time of when it happened.
+    if (write_execution_time > absl::Milliseconds(100)) {
+      LOG(WARNING) << absl::StreamFormat(
+          "Batch request (%d entries) took >100ms: %lldms",
+          app_db_updates.total_rpc_updates,
+          absl::ToInt64Milliseconds(write_execution_time));
+      for (const auto& entry : app_db_updates.entries) {
+        LOG(WARNING) << "entry " << entry.rpc_index << ": "
+                     << entry.entry.ShortDebugString();
+      }
+    }
+
     return *grpc_status;
 #ifdef __EXCEPTIONS
   } catch (const std::exception& e) {
@@ -492,9 +500,12 @@ grpc::Status P4RuntimeImpl::Read(
     grpc::ServerContext* context, const p4::v1::ReadRequest* request,
     grpc::ServerWriter<p4::v1::ReadResponse>* response_writer) {
   absl::MutexLock l(&server_state_lock_);
+
 #ifdef __EXCEPTIONS
   try {
 #endif
+    absl::Time read_start_time = absl::Now();
+
     auto connection_status = controller_manager_->AllowRequest(*request);
     if (!connection_status.ok()) {
       return connection_status;
@@ -524,6 +535,11 @@ grpc::Status P4RuntimeImpl::Read(
     }
 
     response_writer->Write(response_status.value());
+
+    absl::Duration read_execution_time = absl::Now() - read_start_time;
+    read_total_requests_ += 1;
+    read_execution_time_ += read_execution_time;
+
     return grpc::Status::OK;
 #ifdef __EXCEPTIONS
   } catch (const std::exception& e) {
@@ -640,10 +656,11 @@ grpc::Status P4RuntimeImpl::SetForwardingPipelineConfig(
     grpc::ServerContext* context,
     const p4::v1::SetForwardingPipelineConfigRequest* request,
     p4::v1::SetForwardingPipelineConfigResponse* response) {
+  absl::MutexLock l(&server_state_lock_);
+
 #ifdef __EXCEPTIONS
   try {
 #endif
-    absl::MutexLock l(&server_state_lock_);
     LOG(INFO)
         << "Received SetForwardingPipelineConfig request from election id: "
         << request->election_id().ShortDebugString();
@@ -719,6 +736,7 @@ grpc::Status P4RuntimeImpl::GetForwardingPipelineConfig(
     const p4::v1::GetForwardingPipelineConfigRequest* request,
     p4::v1::GetForwardingPipelineConfigResponse* response) {
   absl::MutexLock l(&server_state_lock_);
+
 #ifdef __EXCEPTIONS
   try {
 #endif
@@ -882,6 +900,26 @@ absl::Status P4RuntimeImpl::VerifyState() {
     return gutil::UnknownErrorBuilder() << absl::StrJoin(failures, "\n  ");
   }
   return absl::OkStatus();
+}
+
+absl::StatusOr<FlowProgrammingStatistics>
+P4RuntimeImpl::GetFlowProgrammingStatistics() {
+  absl::MutexLock l(&server_state_lock_);
+
+  std::optional<absl::Duration> max_write_time =
+      write_execution_time_.ReadMaxValue();
+  FlowProgrammingStatistics stats{
+      .write_batch_count = write_batch_requests_.ReadDataAndReset(),
+      .write_requests_count = write_total_requests_.ReadDataAndReset(),
+      .write_time = write_execution_time_.ReadDataAndReset(),
+      .read_request_count = read_total_requests_.ReadDataAndReset(),
+      .read_time = read_execution_time_.ReadDataAndReset(),
+  };
+
+  if (max_write_time.has_value()) {
+    stats.max_write_time = *max_write_time;
+  }
+  return stats;
 }
 
 absl::Status P4RuntimeImpl::HandlePacketOutRequest(
@@ -1098,7 +1136,7 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
           pdpi::IrUpdateStatus status,
           sonic::GetAndProcessResponseNotificationWithoutRevertingState(
                *p4rt_table_.notification_consumer, acl_key));
- 
+
     // Any issue with the forwarding config should be sent back to the
     // controller as an INVALID_ARGUMENT.
     if (status.code() != google::rpc::OK) {

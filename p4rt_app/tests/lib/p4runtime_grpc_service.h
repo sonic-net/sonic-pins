@@ -22,6 +22,8 @@
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
+// #include "swss/fakes/fake_component_state_helper.h"
+// #include "swss/fakes/fake_system_state_helper.h"
 
 namespace p4rt_app {
 namespace test_lib {
