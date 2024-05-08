@@ -50,8 +50,34 @@ cc_library(
     srcs = ["auxiliary_entries_for_v1model_targets.cc"],
     hdrs = ["auxiliary_entries_for_v1model_targets.h"],
     deps = [
+        "//lib/gnmi:gnmi_helper",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
         "//sai_p4/fixed:p4_ids",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "auxiliary_entries_for_v1model_targets_test",
+    srcs = ["auxiliary_entries_for_v1model_targets_test.cc"],
+    deps = [
+        ":auxiliary_entries_for_v1model_targets",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:ir_cc_proto",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 

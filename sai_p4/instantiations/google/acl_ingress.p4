@@ -231,6 +231,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_TABLE_ID)
   @sai_acl(INGRESS)
   @sai_acl_priority(5)
+  @nonessential_for_upgrade
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
