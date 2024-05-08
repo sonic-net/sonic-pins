@@ -74,6 +74,8 @@ struct P4Specification {
 struct FailureEnhancementOptions {
   int num_of_replication_attempts_per_failure = 1000;
   int max_failures_to_attempt_to_replicate = 10;
+  // If true, print the packet's trace.
+  bool print_packet_trace = true;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
