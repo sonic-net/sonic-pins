@@ -307,8 +307,8 @@ absl::StatusOr<std::vector<std::string>> ProgramHashFieldTable(
   // Wait for the OrchAgent's repsonse.
   pdpi::IrWriteResponse ir_write_response;
   RETURN_IF_ERROR(GetAndProcessResponseNotification(
-      *hash_table.notifier, *hash_table.app_db, *hash_table.app_state_db,
-      status_by_key, ResponseTimeMonitor::kNone));
+      *hash_table.notification_consumer, *hash_table.app_db,
+      *hash_table.app_state_db, status_by_key, ResponseTimeMonitor::kNone));
 
   // Pickup the hash field keys that were written(and ack'ed) successfully by
   // OrchAgent.
@@ -360,9 +360,9 @@ absl::Status ProgramSwitchTable(SwitchTable& switch_table,
 
   ASSIGN_OR_RETURN(pdpi::IrUpdateStatus status,
                    GetAndProcessResponseNotification(
-                       *switch_table.notifier, *switch_table.app_db,
-                       *switch_table.app_state_db, kSwitchTableEntryKey,
-                       ResponseTimeMonitor::kNone));
+                       *switch_table.notification_consumer,
+                       *switch_table.app_db, *switch_table.app_state_db,
+                       kSwitchTableEntryKey, ResponseTimeMonitor::kNone));
 
   // Failing to program the switch table should never happen so we return an
   // internal error.

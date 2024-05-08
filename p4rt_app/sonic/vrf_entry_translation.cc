@@ -127,8 +127,8 @@ absl::Status UpdateAppDbVrfTable(VrfTable& vrf_table,
     ASSIGN_OR_RETURN(
         *response.mutable_statuses(rpc_index),
         GetAndProcessResponseNotification(
-            *vrf_table.notifier, *vrf_table.app_db, *vrf_table.app_state_db,
-            *update_key, ResponseTimeMonitor::kNone));
+            *vrf_table.notification_consumer, *vrf_table.app_db,
+            *vrf_table.app_state_db, *update_key, ResponseTimeMonitor::kNone));
   } else {
     LOG(WARNING) << "Could not update in AppDb: " << update_key.status();
     *response.mutable_statuses(rpc_index) =

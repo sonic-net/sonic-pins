@@ -186,29 +186,34 @@ sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
       .notification_producer =
           absl::make_unique<sonic::NotificationProducerAdapter>(
               app_db, APP_P4RT_CHANNEL_NAME),
-      .notifier = absl::make_unique<sonic::ConsumerNotifierAdapter>(
-          kP4rtResponseChannel, app_db),
+      .notification_consumer =
+          absl::make_unique<sonic::ConsumerNotifierAdapter>(
+              kP4rtResponseChannel, app_db),
       .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
           app_state_db, APP_P4RT_TABLE_NAME),
       .counter_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
           counters_db, COUNTERS_TABLE),
   };
 }
-  sonic::VrfTable CreateVrfTable(swss::DBConnector* app_db,
+
+sonic::VrfTable CreateVrfTable(swss::DBConnector* app_db,
                                swss::DBConnector* app_state_db) {
   const std::string kVrfResponseChannel = "APPL_DB_VRF_TABLE_RESPONSE_CHANNEL";
 
   return sonic::VrfTable{
       .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
           app_db, APP_VRF_TABLE_NAME),
-      .notifier = absl::make_unique<sonic::ConsumerNotifierAdapter>(
-          kVrfResponseChannel, app_db),
-      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(app_db, APP_VRF_TABLE_NAME),
-      .app_state_db =
-          absl::make_unique<p4rt_app::sonic::TableAdapter>(app_state_db, APP_VRF_TABLE_NAME),
+      .notification_consumer =
+          absl::make_unique<sonic::ConsumerNotifierAdapter>(
+              kVrfResponseChannel, app_db),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_db, APP_VRF_TABLE_NAME),
+      .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_state_db, APP_VRF_TABLE_NAME),
   };
 }
-  sonic::HashTable CreateHashTable(swss::DBConnector* app_db,
+
+sonic::HashTable CreateHashTable(swss::DBConnector* app_db,
                                  swss::DBConnector* app_state_db) {
   const std::string kAppHashTableName = "HASH_TABLE";
   const std::string kHashResponseChannel =
@@ -217,14 +222,17 @@ sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
   return sonic::HashTable{
       .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
           app_db, kAppHashTableName),
-      .notifier = absl::make_unique<sonic::ConsumerNotifierAdapter>(
-          kHashResponseChannel, app_db),
-      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(app_db, kAppHashTableName),
-      .app_state_db =
-          absl::make_unique<p4rt_app::sonic::TableAdapter>(app_state_db, kAppHashTableName),
+      .notification_consumer =
+          absl::make_unique<sonic::ConsumerNotifierAdapter>(
+              kHashResponseChannel, app_db),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_db, kAppHashTableName),
+      .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_state_db, kAppHashTableName),
   };
 }
-  sonic::SwitchTable CreateSwitchTable(swss::DBConnector* app_db,
+
+sonic::SwitchTable CreateSwitchTable(swss::DBConnector* app_db,
                                      swss::DBConnector* app_state_db) {
   const std::string kAppSwitchTableName = "SWITCH_TABLE";
   const std::string kSwitchResponseChannel =
@@ -233,11 +241,13 @@ sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
   return sonic::SwitchTable{
       .producer_state = absl::make_unique<sonic::ProducerStateTableAdapter>(
           app_db, kAppSwitchTableName),
-      .notifier = absl::make_unique<sonic::ConsumerNotifierAdapter>(
-          kSwitchResponseChannel, app_db),
-      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(app_db, kAppSwitchTableName),
-      .app_state_db =
-          absl::make_unique<p4rt_app::sonic::TableAdapter>(app_state_db, kAppSwitchTableName),
+      .notification_consumer =
+          absl::make_unique<sonic::ConsumerNotifierAdapter>(
+              kSwitchResponseChannel, app_db),
+      .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_db, kAppSwitchTableName),
+      .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          app_state_db, kAppSwitchTableName),
   };
 }
 
