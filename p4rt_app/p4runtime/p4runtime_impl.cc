@@ -1137,7 +1137,7 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
           sonic::GetAndProcessResponseNotificationWithoutRevertingState(
                *p4rt_table_.notification_consumer, acl_key));
 
-   // Any issue with the forwarding config should be sent back to the
+    // Any issue with the forwarding config should be sent back to the
     // controller as an INVALID_ARGUMENT.
     if (status.code() != google::rpc::OK) {
       return gutil::InvalidArgumentErrorBuilder() << status.message();
