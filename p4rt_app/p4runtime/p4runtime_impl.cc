@@ -1144,8 +1144,6 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
     }
   }
 }
-  return absl::OkStatus();
-}
 
 absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
     const bool use_genetlink) {
