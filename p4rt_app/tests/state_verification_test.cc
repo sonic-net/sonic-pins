@@ -33,7 +33,7 @@ class StateVerificationTest : public test_lib::P4RuntimeComponentTestFixture {
 
 TEST_F(StateVerificationTest, VerifyEntriesInP4rtAndVrfTables) {
   // Add P4RT entries.
-  p4rt_service_.GetP4rtAppStateDbTable().InsertTableEntry(
+  p4rt_service_.GetP4rtAppDbTable().InsertTableEntry(
       /*key=*/"p4rt_match",
       /*values=*/{{"action", "action0"}});
   p4rt_service_.GetP4rtAppDbTable().InsertTableEntry(
@@ -69,8 +69,8 @@ TEST_F(StateVerificationTest, VerifyEntriesInP4rtAndVrfTables) {
 }
 
 TEST_F(StateVerificationTest, EntryDoesNotExistInAppDbFails) {
-  p4rt_service_.GetP4rtAppStateDbTable().InsertTableEntry(/*key=*/"foo",
-                                                          /*values=*/{});
+  p4rt_service_.GetP4rtAppDbTable().InsertTableEntry(/*key=*/"foo",
+                                                     /*values=*/{});
   p4rt_service_.GetVrfAppStateDbTable().InsertTableEntry(/*key=*/"bar",
                                                          /*values=*/{});
   EXPECT_THAT(
@@ -101,8 +101,8 @@ TEST_F(StateVerificationTest, EntryValuesAreDifferentFails) {
 }
 
 TEST_F(StateVerificationTest, StateVerificationFailureRaisesAlarm) {
-  p4rt_service_.GetP4rtAppStateDbTable().InsertTableEntry(/*key=*/"foo",
-                                                          /*values=*/{});
+  p4rt_service_.GetP4rtAppDbTable().InsertTableEntry(/*key=*/"foo",
+                                                     /*values=*/{});
   p4rt_service_.GetVrfAppStateDbTable().InsertTableEntry(/*key=*/"bar",
                                                          /*values=*/{});
   EXPECT_THAT(

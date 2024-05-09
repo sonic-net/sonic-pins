@@ -60,8 +60,10 @@ class FakeSonicDbTable {
   void SetResponseForKey(const std::string &key, const std::string &code,
                          const std::string &message);
 
-  void PushNotification(const std::string &key);
-  void PushNotification(const std::string &key, const std::string &op,
+  // Adds a success/fail notification to the response queue. Returns true if the
+  // fake acts like the OA succeeded, and false otherwise.
+  bool PushNotification(const std::string &key);
+  bool PushNotification(const std::string &key, const std::string &op,
                         const SonicDbEntryMap &values);
   void GetNextNotification(std::string &op, std::string &data,
                            SonicDbEntryList &values);
