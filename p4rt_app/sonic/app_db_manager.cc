@@ -22,7 +22,6 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -37,7 +36,10 @@
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
+#include "swss/json.h"
+#include <nlohmann/json.hpp>
 #include "swss/rediscommand.h"
+#include "swss/schema.h"
 #include "swss/table.h"
 
 namespace p4rt_app {
@@ -379,6 +381,37 @@ absl::Status AppendExtTableDefinition(
   tables.push_back(table_json);
 
   return absl::OkStatus();
+}
+
+// Publish set of tables in json formatted string to AppDb
+absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
+    const nlohmann::json &tables_json,
+    uint64_t cookie,
+    P4rtTable& p4rt_table) {
+
+  nlohmann::json json_key;
+  std::ostringstream oss;
+  swss::KeyOpFieldsValuesTuple kfv;
+  oss << cookie;
+
+  json_key["context"] = oss.str();
+
+  std::string key = absl::Substitute("$0:$1",
+                          table::TypeName(table::Type::kTblsDefinitionSet),
+                          json_key.dump());
+
+  nlohmann::json info_json = nlohmann::json({});
+  info_json.push_back(
+        nlohmann::json::object_t::value_type("tables", tables_json));
+  std::vector<swss::FieldValueTuple> values;
+  values.push_back(std::make_pair("info", info_json.dump()));
+  kfvKey(kfv) = key;
+  kfvOp(kfv) = "SET";
+  kfvFieldsValues(kfv) = values;
+  p4rt_table.notification_producer->send({kfv});
+
+  return key;
+
 }
 
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
