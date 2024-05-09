@@ -174,14 +174,19 @@ control acl_pre_ingress(in headers_t headers,
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
     is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
     is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
-    // DSCP is only allowed on IP traffic.
-    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
-    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Forbid unsupported combinations of IP_TYPE fields.
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
+#if defined(SAI_INSTANTIATION_TOR) 
+    // DSCP is only allowed on IP traffic.
+    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow icmp_type matches for ICMP packets
     icmpv6_type::mask != 0 -> ip_protocol == 58;
+#elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
+    dst_ip::mask != 0 -> is_ipv4 == 1;
+    dst_ipv6::mask != 0 -> is_ipv6 == 1;
+#endif
   ")
   table acl_pre_ingress_metadata_table {
     key = {
@@ -194,9 +199,12 @@ control acl_pre_ingress(in headers_t headers,
       headers.ipv6.isValid() : optional
           @id(3) @name("is_ipv6")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
+      // Not required for FBR but provided to maintain a common and moderately
+      // wide match field for testing.
       ip_protocol : ternary
           @id(4) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
+#if defined(SAI_INSTANTIATION_TOR) 
       headers.icmp.type : ternary
           @id(5) @name("icmpv6_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMPV6_TYPE);
@@ -206,14 +214,32 @@ control acl_pre_ingress(in headers_t headers,
       ecn : ternary
           @id(7) @name("ecn")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
+#if defined(SAI_INSTANTIATION_TOR)
+      local_metadata.ingress_port : optional
+          @id(8) @name("in_port")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
+#endif
+#elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
+      headers.ipv4.dst_addr : ternary
+          @id(9) @name("dst_ip")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP) @format(IPV4_ADDRESS);
+      headers.ipv6.dst_addr[127:64] : ternary
+          @id(10) @name("dst_ipv6")
+          @composite_field(
+              @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3),
+              @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2))
+          @format(IPV6_ADDRESS);
+#endif
     }
     actions = {
       @proto_id(1) set_acl_metadata;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
+#if !defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     counters = acl_pre_ingress_metadata_counter;
-    size = ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
+#endif
+    size = ACL_PRE_INGRESS_METADATA_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
   apply {
@@ -230,6 +256,7 @@ control acl_pre_ingress(in headers_t headers,
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_pre_ingress_table.apply();
 #elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
+    acl_pre_ingress_metadata_table.apply();
     acl_pre_ingress_table.apply();
 #elif defined(SAI_INSTANTIATION_TOR) 
     acl_pre_ingress_vlan_table.apply();
