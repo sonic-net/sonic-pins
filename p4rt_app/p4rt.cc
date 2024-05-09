@@ -190,13 +190,8 @@ sonic::P4rtTable CreateP4rtTable(swss::DBConnector* app_db,
       .notification_consumer =
           absl::make_unique<sonic::ConsumerNotifierAdapter>(
               kP4rtResponseChannel, app_db),
-<<<<<<< HEAD
       .app_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
           app_db, APP_P4RT_TABLE_NAME),
-=======
-      .app_state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
-          app_state_db, APP_P4RT_TABLE_NAME),
->>>>>>> 2fec2e89 (rename 'notifier' to 'notification_consumer')
       .counter_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
           counters_db, COUNTERS_TABLE),
   };

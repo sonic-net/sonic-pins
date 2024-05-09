@@ -32,7 +32,7 @@ namespace sonic {
 struct P4rtTable {
   std::unique_ptr<NotificationProducerAdapter> notification_producer;
   std::unique_ptr<ConsumerNotifierAdapter> notification_consumer;
-  std::unique_ptr<TableAdapter> app_state_db;
+  std::unique_ptr<TableAdapter> app_db;
   std::unique_ptr<TableAdapter> counter_db;
 };
 

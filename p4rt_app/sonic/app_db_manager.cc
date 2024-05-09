@@ -36,7 +36,10 @@
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
+#include "swss/json.h"
+#include <nlohmann/json.hpp>
 #include "swss/rediscommand.h"
+#include "swss/schema.h"
 #include "swss/table.h"
 
 namespace p4rt_app {
