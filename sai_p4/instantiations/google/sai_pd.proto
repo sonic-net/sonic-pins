@@ -343,9 +343,15 @@ message AclIngressTableEntry {
     Ternary arp_tpa = 16;      // ternary match / Format::IPV4
     Optional in_port = 17;     // optional match / Format::STRING
     Optional route_metadata =
-        18;                    // optional match / Format::HEX_STRING / 6 bits
-    Ternary icmp_type = 19;    // ternary match / Format::HEX_STRING / 8 bits
-    Ternary l4_src_port = 20;  // ternary match / Format::HEX_STRING / 16 bits
+        18;                     // optional match / Format::HEX_STRING / 6 bits
+    Ternary icmp_type = 19;     // ternary match / Format::HEX_STRING / 8 bits
+    Ternary l4_src_port = 20;   // ternary match / Format::HEX_STRING / 16 bits
+    Ternary acl_metadata = 21;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary psp_next_header =
+        22;                 // ternary match / Format::HEX_STRING / 8 bits
+    Ternary psp_info = 23;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary inner_psp_udp_dst =
+        24;  // ternary match / Format::HEX_STRING / 16 bits
   }
   Match match = 1;
   message Action {
@@ -539,14 +545,11 @@ message AclPreIngressVlanTableEntry {
 //   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
 //   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
 //   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
-// ## DSCP is only allowed on IP traffic.
-//   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
-//   ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 // ## Forbid unsupported combinations of IP_TYPE fields.
 //   is_ipv4::mask != 0 -> (is_ipv4 == 1);
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
-// ## Only allow icmp_type matches for ICMP packets
-//   icmpv6_type::mask != 0 -> ip_protocol == 58;
+//   dst_ip::mask != 0 -> is_ipv4 == 1;
+//   dst_ipv6::mask != 0 -> is_ipv6 == 1;
 message AclPreIngressMetadataTableEntry {
   message Match {
     Optional is_ip = 1;       // optional match / Format::HEX_STRING / 1 bits
@@ -557,6 +560,8 @@ message AclPreIngressMetadataTableEntry {
     Ternary dscp = 6;         // ternary match / Format::HEX_STRING / 6 bits
     Ternary ecn = 7;          // ternary match / Format::HEX_STRING / 2 bits
     Optional in_port = 8;     // optional match / Format::STRING
+    Ternary dst_ip = 9;       // ternary match / Format::IPV4
+    Ternary dst_ipv6 = 10;    // ternary match / Format::IPV6 / upper 64 bits
   }
   Match match = 1;
   message Action {
