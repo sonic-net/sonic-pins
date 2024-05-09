@@ -45,6 +45,7 @@
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/optional.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
@@ -80,6 +81,7 @@
 #include "tests/qos/qos_test_util.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mirror_testbed.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
 
@@ -578,6 +580,18 @@ TEST_P(FrontpanelQosTest,
   DscpsByQueueName kDscpsByUnicastQueueName;
   DscpsByQueueName kDscpsByMulticastQueueName;
 
+  // Before we update the scheduler config, save the current config and
+  // prepare to restore it at the end of the test.
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kInitialSchedulerConfig,
+      GetSchedulerPolicyConfig(kSutEgressPortScheduler, *gnmi_stub));
+  const auto kRestoreSchedulerConfig = absl::Cleanup([&] {
+    EXPECT_OK(UpdateSchedulerPolicyConfig(kSutEgressPortScheduler,
+                                          kInitialSchedulerConfig, *gnmi_stub))
+        << "failed to restore initial scheduler config -- switch config may "
+           "be "
+           "corrupted, causing subsequent test to fail";
+  });
   if (GetParam().queue_by_dscp.has_value()) {
     ASSERT_OK_AND_ASSIGN(kDscpsByUnicastQueueName,
                          GetQueueToDscpsMapping(*GetParam().queue_by_dscp));
@@ -591,15 +605,6 @@ TEST_P(FrontpanelQosTest,
   std::vector<TestOperations> test_operations;
 
   test_operations.push_back(TestOperations::TrafficTest);
-
-  if (GetParam().nsf_reboot) {
-    Testbed testbed_variant = std::move(testbed);
-    absl::Cleanup restore_testbed([&] {
-      testbed = std::move(std::get<0>(testbed_variant));
-    });
-    ASSERT_OK(NsfReboot(testbed_variant));
-    test_operations.push_back(TestOperations::NsfRebootAndTrafficTest);
-  }
 
   for (const DscpsByQueueName kDscpsByQueueName :
        {kDscpsByUnicastQueueName, kDscpsByMulticastQueueName}) {
@@ -640,25 +645,6 @@ TEST_P(FrontpanelQosTest,
           << "test packet speed is too low to meaningfully exceed PIR";
     }
 
-    // Before we update the scheduler config, save the current config and
-    // prepare to restore it at the end of the test.
-    ASSERT_OK_AND_ASSIGN(
-        const std::string kInitialSchedulerConfig,
-        GetSchedulerPolicyConfig(kSutEgressPortScheduler, *gnmi_stub));
-    const auto kRestoreSchedulerConfig = absl::Cleanup([&] {
-      // TODO: The switch does not currently accept its own config
-      // on the write path, we need to fix it first. Remove this workaround once
-      // the issue is addressed.
-      std::string fixed_config = absl::StrReplaceAll(
-          kInitialSchedulerConfig, {
-                                       {R"(,"weight":"0")", ""},
-                                   });
-      EXPECT_OK(UpdateSchedulerPolicyConfig(kSutEgressPortScheduler,
-                                            fixed_config, *gnmi_stub))
-          << "failed to restore initial scheduler config -- switch config may "
-             "be "
-             "corrupted, causing subsequent test to fail";
-    });
     // Update scheduler config.
     {
       absl::flat_hash_map<std::string, SchedulerParameters> params;
@@ -688,14 +674,6 @@ TEST_P(FrontpanelQosTest,
         absl::StrCat(kSutEgressPortScheduler, "_after_update.json"),
         FormatJsonBestEffort(updated_scheduler_config)));
 
-    // Connect to Ixia and fix global parameters.
-    ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle,
-                         ixia::ConnectToIxia(*testbed));
-    ASSERT_OK_AND_ASSIGN(const std::string kIxiaSrcPortHandle,
-                         ixia::IxiaVport(kIxiaHandle, kIxiaSrcPort, *testbed));
-    ASSERT_OK_AND_ASSIGN(const std::string kIxiaDstPortHandle,
-                         ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
-
     constexpr int64_t kSpeed100g = 100000000000;
     constexpr int64_t kSpeed200g = 200000000000;
 
@@ -724,31 +702,61 @@ TEST_P(FrontpanelQosTest,
         MakeLogPortDebugInfoFunction(*testbed, required_interfaces)))
         << "all required ports must be initialized on the SUT before sending "
            "test packets";
+  }
 
-    std::set<std::string> tested_queues;
+  // Connect to Ixia and fix global parameters.
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaHandle,
+                       ixia::ConnectToIxia(*testbed));
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaSrcPortHandle,
+                       ixia::IxiaVport(kIxiaHandle, kIxiaSrcPort, *testbed));
+  ASSERT_OK_AND_ASSIGN(const std::string kIxiaDstPortHandle,
+                       ixia::IxiaVport(kIxiaHandle, kIxiaDstPort, *testbed));
 
-    // Send traffic twice, once during NSF reboot and once post the reboot
-    // to ensure the forwarding traffic is not disrupted.
-    for (auto test_operation : test_operations) {
-      if (test_operation == TestOperations::NsfRebootAndTrafficTest &&
-          GetParam().ssh_client_for_nsf) {
-        Testbed testbed_variant = std::move(testbed);
-        absl::Cleanup restore_testbed([&] {
-          testbed = std::move(std::get<0>(testbed_variant));
-        });
-        ASSERT_OK(
-            WaitForNsfReboot(testbed_variant, *GetParam().ssh_client_for_nsf));
-        LOG(INFO) << "NSF reboot complete, sending traffic again to ensure "
-                     "the forwarding traffic is not disrupted.";
+  if (GetParam().nsf_reboot) {
+    Testbed testbed_variant = std::move(testbed);
+    absl::Cleanup restore_testbed([&] {
+      testbed = std::move(std::get<0>(testbed_variant));
+    });
+    ASSERT_OK(NsfReboot(testbed_variant));
+    test_operations.push_back(TestOperations::NsfRebootAndTrafficTest);
+  }
+
+  // Send traffic twice, once during NSF reboot and once post the reboot
+  // to ensure the forwarding traffic is not disrupted.
+  for (auto test_operation : test_operations) {
+    if (test_operation == TestOperations::NsfRebootAndTrafficTest &&
+        GetParam().ssh_client_for_nsf) {
+      Testbed testbed_variant = std::move(testbed);
+      absl::Cleanup restore_testbed([&] {
+        testbed = std::move(std::get<0>(testbed_variant));
+      });
+      ASSERT_OK(
+          WaitForNsfReboot(testbed_variant, *GetParam().ssh_client_for_nsf));
+      LOG(INFO) << "NSF reboot complete, sending traffic again to ensure "
+                   "the forwarding traffic is not disrupted.";
+    }
+    for (const DscpsByQueueName kDscpsByQueueName :
+         {kDscpsByUnicastQueueName, kDscpsByMulticastQueueName}) {
+      if (!kDscpsByQueueName.has_value()) {
+        continue;
       }
+      std::set<std::string> tested_queues;
 
-      // Actual testing -- inject test IPv4 and IPv6 packets for each DSCP, and
-      // check the behavior is as eexpted.
+      bool testing_multicast =
+          (kDscpsByQueueName == kDscpsByMulticastQueueName);
+
+      QueueCounters kInitialQueueCounters;
+      // Actual testing -- inject test IPv4 and IPv6 packets for each DSCP,
+      // and check the behavior is as eexpted.
       constexpr int kMaxDscp = 63;
       for (int dscp = 0; dscp <= kMaxDscp; ++dscp) {
         SCOPED_TRACE(absl::StrCat("DSCP = ", dscp));
         for (bool is_ipv4 : {true, false}) {
           SCOPED_TRACE(absl::StrCat("IP version: ", is_ipv4 ? "IPv4" : "IPv6"));
+          SCOPED_TRACE(absl::StrCat("testing_multicast: ", testing_multicast));
+          bool not_after_nsf_reboot =
+              !GetParam().nsf_reboot ||
+              test_operation == TestOperations::NsfRebootAndTrafficTest;
 
           // Figure out which queue we will be targeting and some queue
           // parameters.
@@ -775,10 +783,14 @@ TEST_P(FrontpanelQosTest,
           ASSERT_OK_AND_ASSIGN(
               const int64_t kTargetQueuePir,
               gutil::FindOrStatus(kPirByQueueName, kTargetQueue));
-          ASSERT_OK_AND_ASSIGN(
-              QueueCounters kInitialQueueCounters,
-              GetGnmiQueueCounters(kSutEgressPort, kTargetQueue, *gnmi_stub));
 
+          if (not_after_nsf_reboot) {
+            // Get initial queue counters after NSF Reboot is complete since
+            // gnmi calls cannot be made during NSF reboot.
+            ASSERT_OK_AND_ASSIGN(
+                kInitialQueueCounters,
+                GetGnmiQueueCounters(kSutEgressPort, kTargetQueue, *gnmi_stub));
+          }
           // Configure & start test packet flow.
           const std::string kTrafficName =
               absl::StrCat((is_ipv4 ? "IPv4" : "IPv6"), " traffic for DSCP ",
@@ -854,75 +866,81 @@ TEST_P(FrontpanelQosTest,
                     << " to complete";
           absl::SleepFor(kTrafficDuration);
 
-          // Check observed traffic rate against target queue PIR.
-          ASSERT_OK_AND_ASSIGN(
-              const ixia::TrafficItemStats kIxiaTrafficStats,
-              ixia::GetTrafficItemStats(kIxiaHandle, kTrafficName, *testbed));
-          const int64_t kObservedTrafficRate =
-              ixia::BytesPerSecondReceived(kIxiaTrafficStats);
-          LOG(INFO) << "observed traffic rate (bytes/second): "
-                    << kObservedTrafficRate;
-          const int kAbsoluteError = kObservedTrafficRate - kTargetQueuePir;
-          const double kRelativeErrorPercent =
-              100. * kAbsoluteError / kTargetQueuePir;
-          constexpr double kTolerancePercent = 10;  // +-10% tolerance.
-          if (std::abs(kRelativeErrorPercent) <= kTolerancePercent) {
-            LOG(INFO) << "observed traffic rate matches expected traffic rate "
-                         "(error: "
-                      << kRelativeErrorPercent << "%)";
-          } else {
-            ADD_FAILURE() << "observed traffic rate of " << kObservedTrafficRate
-                          << " bytes/second is not within " << kTolerancePercent
-                          << "% of the PIR of the queue '" << kTargetQueue
-                          << "' targeted by traffic (PIR = " << kTargetQueuePir
-                          << " bytes/second, error = " << kRelativeErrorPercent
-                          << "%)";
-          }
-
-          // Verify that the target egress queue counters incremented.
-          const absl::Time kDeadline = absl::Now() + kMaxQueueCounterUpdateTime;
-          LOG(INFO) << "polling queue counters (this may take up to "
-                    << kMaxQueueCounterUpdateTime << ")";
-          QueueCounters final_counters, delta_counters;
-          do {
+          if (not_after_nsf_reboot) {
+            // Check observed traffic rate against target queue PIR.
             ASSERT_OK_AND_ASSIGN(
-                final_counters,
-                GetGnmiQueueCounters(kSutEgressPort, kTargetQueue, *gnmi_stub));
-            delta_counters = final_counters - kInitialQueueCounters;
-          } while (TotalPacketsForQueue(delta_counters) <
-                       kIxiaTrafficStats.num_tx_frames() &&
-                   absl::Now() < kDeadline);
-          LOG(INFO) << "queue counters incremented by " << delta_counters;
-          LOG(INFO) << "Queue Counters.\nBefore: "
-                    << ToString(kInitialQueueCounters)
-                    << "\nAfter :" << ToString(final_counters);
+                const ixia::TrafficItemStats kIxiaTrafficStats,
+                ixia::GetTrafficItemStats(kIxiaHandle, kTrafficName, *testbed));
+            const int64_t kObservedTrafficRate =
+                ixia::BytesPerSecondReceived(kIxiaTrafficStats);
+            LOG(INFO) << "observed traffic rate (bytes/second): "
+                      << kObservedTrafficRate;
+            const int kAbsoluteError = kObservedTrafficRate - kTargetQueuePir;
+            const double kRelativeErrorPercent =
+                100. * kAbsoluteError / kTargetQueuePir;
+            constexpr double kTolerancePercent = 10;  // +-10% tolerance.
+            if (std::abs(kRelativeErrorPercent) <= kTolerancePercent) {
+              LOG(INFO)
+                  << "observed traffic rate matches expected traffic rate "
+                     "(error: "
+                  << kRelativeErrorPercent << "%)";
+            } else {
+              ADD_FAILURE()
+                  << "observed traffic rate of " << kObservedTrafficRate
+                  << " bytes/second is not within " << kTolerancePercent
+                  << "% of the PIR of the queue '" << kTargetQueue
+                  << "' targeted by traffic (PIR = " << kTargetQueuePir
+                  << " bytes/second, error = " << kRelativeErrorPercent << "%)";
+            }
 
-          SCOPED_TRACE(absl::StrCat("Counters for queue ", kTargetQueue,
-                                    " did not change as expected within ",
-                                    ToString(kMaxQueueCounterUpdateTime),
-                                    " after injecting/receiving back ",
-                                    kIxiaTrafficStats.num_tx_frames(), "/",
-                                    kIxiaTrafficStats.num_rx_frames(),
-                                    " test packets from/at the Ixia.\nBefore: ",
-                                    ToString(kInitialQueueCounters),
-                                    "\nAfter :", ToString(final_counters)));
-          EXPECT_THAT(delta_counters,
-                      ResultOf(TotalPacketsForQueue,
-                               Ge(kIxiaTrafficStats.num_tx_frames())));
-          // Protocol packets such as LLDP/NDv6 can be transmitted via queue
-          // during test. Add some tolerance to account for these packets.
-          constexpr int kMaxToleratedExtraPackets = 5;
-          EXPECT_THAT(delta_counters,
-                      ResultOf(TotalPacketsForQueue,
-                               Le(kIxiaTrafficStats.num_tx_frames() +
-                                  kMaxToleratedExtraPackets)));
-          EXPECT_THAT(delta_counters,
-                      Field(&QueueCounters::num_packets_transmitted,
-                            Ge(kIxiaTrafficStats.num_rx_frames())));
-          EXPECT_THAT(delta_counters,
-                      Field(&QueueCounters::num_packets_transmitted,
-                            Le(kIxiaTrafficStats.num_rx_frames() +
-                               kMaxToleratedExtraPackets)));
+            // Verify that the target egress queue counters incremented.
+            const absl::Time kDeadline =
+                absl::Now() + kMaxQueueCounterUpdateTime;
+            LOG(INFO) << "polling queue counters (this may take up to "
+                      << kMaxQueueCounterUpdateTime << ")";
+            QueueCounters final_counters, delta_counters;
+            do {
+              ASSERT_OK_AND_ASSIGN(
+                  final_counters,
+                  GetGnmiQueueCounters(kSutEgressPort, kTargetQueue,
+                                       *gnmi_stub));
+              delta_counters = final_counters - kInitialQueueCounters;
+            } while (TotalPacketsForQueue(delta_counters) <
+                         kIxiaTrafficStats.num_tx_frames() &&
+                     absl::Now() < kDeadline);
+            LOG(INFO) << "queue counters incremented by " << delta_counters;
+            LOG(INFO) << "Queue Counters.\nBefore: "
+                      << ToString(kInitialQueueCounters)
+                      << "\nAfter :" << ToString(final_counters);
+
+            SCOPED_TRACE(
+                absl::StrCat("Counters for queue ", kTargetQueue,
+                             " did not change as expected within ",
+                             ToString(kMaxQueueCounterUpdateTime),
+                             " after injecting/receiving back ",
+                             kIxiaTrafficStats.num_tx_frames(), "/",
+                             kIxiaTrafficStats.num_rx_frames(),
+                             " test packets from/at the Ixia.\nBefore: ",
+                             ToString(kInitialQueueCounters),
+                             "\nAfter :", ToString(final_counters)));
+            EXPECT_THAT(delta_counters,
+                        ResultOf(TotalPacketsForQueue,
+                                 Ge(kIxiaTrafficStats.num_tx_frames())));
+            // Protocol packets such as LLDP/NDv6 can be transmitted via queue
+            // during test. Add some tolerance to account for these packets.
+            constexpr int kMaxToleratedExtraPackets = 5;
+            EXPECT_THAT(delta_counters,
+                        ResultOf(TotalPacketsForQueue,
+                                 Le(kIxiaTrafficStats.num_tx_frames() +
+                                    kMaxToleratedExtraPackets)));
+            EXPECT_THAT(delta_counters,
+                        Field(&QueueCounters::num_packets_transmitted,
+                              Ge(kIxiaTrafficStats.num_rx_frames())));
+            EXPECT_THAT(delta_counters,
+                        Field(&QueueCounters::num_packets_transmitted,
+                              Le(kIxiaTrafficStats.num_rx_frames() +
+                                 kMaxToleratedExtraPackets)));
+          }
         }
       }
     }
@@ -957,13 +975,14 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
 
+  thinkit::Switch &sut = testbed->Sut();
   // Pick 3 SUT ports connected to the Ixia, 2 for receiving test packets and
   // 1 for forwarding them back. We use the faster links for injecting packets
   // so we can oversubsribe the egress port. We inject the traffic for the
   // round-robin queues via one ingress port, and auxilliary traffic for a
   // strictly-prioritized queue via another ingress port.
   LOG(INFO) << "picking test packet links";
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
   // Get Ixia connected links.
   ASSERT_OK_AND_ASSIGN(IxiaLinks links,
                        GetIxiaLinks(*testbed, *gnmi_stub, GetParam()));
@@ -1190,7 +1209,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
     }
   }
   // Set up auxilliary traffic to strictly prioritized queue.
-  const std::string kAuxilliaryTrafficName = absl::StrFormat(
+  const std::string kAuxiliaryTrafficName = absl::StrFormat(
       "Auxiliary IPv4 packets with DSCP %d targeting strictly prioritized "
       "queue '%s' with PIR = %d bytes/second",
       kStrictlyPrioritizedIpv4Dscp, *strictly_prioritized_queue,
@@ -1198,7 +1217,7 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
   ASSERT_OK_AND_ASSIGN(
       const std::string kAuxilliaryTrafficItem,
       ixia::SetUpTrafficItem(kIxiaAuxiliarySrcPortHandle, kIxiaDstPortHandle,
-                             kAuxilliaryTrafficName, *testbed));
+                             kAuxiliaryTrafficName, *testbed));
   ASSERT_OK(ixia::SetTrafficParameters(
       kAuxilliaryTrafficItem,
       ixia::TrafficParameters{
@@ -1213,85 +1232,69 @@ TEST_P(FrontpanelQosTest, WeightedRoundRobinWeightsAreRespected) {
       *testbed));
   traffic_items.push_back(kAuxilliaryTrafficItem);
 
-  std::vector<TestOperations> test_operations;
-
-  test_operations.push_back(TestOperations::TrafficTest);
-
   if (GetParam().nsf_reboot) {
     Testbed testbed_variant = std::move(testbed);
     absl::Cleanup restore_testbed([&] {
       testbed = std::move(std::get<0>(testbed_variant));
     });
-    ASSERT_OK(NsfReboot(testbed_variant));
-    test_operations.push_back(TestOperations::NsfRebootAndTrafficTest);
+    // Traffic is verified only once after NSF Reboot is complete.
+    ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed_variant,
+                                               *GetParam().ssh_client_for_nsf));
+    // Create a new P4rt session after NSF Reboot
+    ASSERT_OK_AND_ASSIGN(sut_p4rt, pdpi::P4RuntimeSession::Create(sut));
   }
+  // Start traffic.
+  LOG(INFO) << "starting traffic";
+  ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
+  auto stop_traffic = absl::Cleanup(
+      [&] { ASSERT_OK(ixia::StopTraffic(traffic_items, *testbed)); });
+  LOG(INFO) << "traffic started -- sleeping for 3 second";
+  absl::SleepFor(absl::Seconds(3));
+  LOG(INFO) << "clearing table entries to limit buffer drainage after "
+               "traffic is stopped";
 
-  // Send traffic twice, once during NSF reboot and once post the reboot
-  // to ensure the forwarding traffic is not disrupted.
-  for (auto test_operation : test_operations) {
-    if (test_operation == TestOperations::NsfRebootAndTrafficTest &&
-        GetParam().ssh_client_for_nsf) {
-      Testbed testbed_variant = std::move(testbed);
-      absl::Cleanup restore_testbed([&] {
-        testbed = std::move(std::get<0>(testbed_variant));
-      });
-      ASSERT_OK(
-          WaitForNsfReboot(testbed_variant, *GetParam().ssh_client_for_nsf));
-      LOG(INFO) << "NSF reboot complete, sending traffic again to ensure "
-                   "the forwarding traffic is not disrupted.";
-    }
-    // Start traffic.
-    LOG(INFO) << "starting traffic";
-    ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
-    auto stop_traffic = absl::Cleanup(
-        [&] { ASSERT_OK(ixia::StopTraffic(traffic_items, *testbed)); });
-    LOG(INFO) << "traffic started -- sleeping for 3 second";
-    absl::SleepFor(absl::Seconds(3));
-    LOG(INFO) << "clearing table entries to limit buffer drainage after "
-                 "traffic is stopped";
-    ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt.get()));
-    LOG(INFO) << "table entries cleared; stopping traffic";
-    std::move(stop_traffic).Invoke();
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt));
+  LOG(INFO) << "table entries cleared; stopping traffic";
+  std::move(stop_traffic).Invoke();
 
-    // Obtain traffic stats, and ensure traffic got forwarded according to
-    // weights.
-    ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
-                         ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
-    absl::flat_hash_map<std::string, int64_t> num_rx_frames_by_queue;
-    for (auto &[traffic_item_name, stats] :
-         Ordered(kTrafficStats.stats_by_traffic_item())) {
-      if (traffic_item_name == kAuxilliaryTrafficName) continue;
-      ASSERT_OK_AND_ASSIGN(
-          std::string queue,
-          gutil::FindOrStatus(queue_by_traffic_item_name, traffic_item_name));
-      num_rx_frames_by_queue[queue] += stats.num_rx_frames();
-    }
-    int64_t total_num_rx_frames = 0;
-    for (auto &[_, rx] : num_rx_frames_by_queue) total_num_rx_frames += rx;
-    int64_t total_weight = 0;
-    for (auto &[_, weight] : weights_by_queue_name) total_weight += weight;
-    for (auto &[queue, num_rx_frames] : num_rx_frames_by_queue) {
-      ASSERT_OK_AND_ASSIGN(int64_t weight,
-                           gutil::FindOrStatus(weights_by_queue_name, queue));
-      const double kExpectedFraction = 1. * weight / total_weight;
-      const double kActualFraction = 1. * num_rx_frames / total_num_rx_frames;
-      const double kAbsoluteError = kActualFraction - kExpectedFraction;
-      const double kRelativeErrorPercent =
-          100. * kAbsoluteError / kExpectedFraction;
-      const double kAcceptableErrorPercent = 7;
-      LOG(INFO) << "'" << queue << "' transmitted " << (kActualFraction * 100)
-                << "% of forwarded round-robin traffic (expected: "
-                << (kExpectedFraction * 100)
-                << "%, error: " << kRelativeErrorPercent << "%)";
-      EXPECT_LE(std::abs(kRelativeErrorPercent), kAcceptableErrorPercent)
-          << "expected '" << queue << "' to transmit "
-          << (kExpectedFraction * 100)
-          << "% of the forwarded round-robin traffic; instead, it "
-             "transmitted "
-          << (kActualFraction * 100)
-          << "% of the forwarded traffic (error: " << kRelativeErrorPercent
-          << "%)";
-    }
+  // Obtain traffic stats, and ensure traffic got forwarded according to
+  // weights.
+  ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
+                       ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
+  absl::flat_hash_map<std::string, int64_t> num_rx_frames_by_queue;
+  for (auto &[traffic_item_name, stats] :
+       Ordered(kTrafficStats.stats_by_traffic_item())) {
+    if (traffic_item_name == kAuxiliaryTrafficName) continue;
+    ASSERT_OK_AND_ASSIGN(
+        std::string queue,
+        gutil::FindOrStatus(queue_by_traffic_item_name, traffic_item_name));
+    num_rx_frames_by_queue[queue] += stats.num_rx_frames();
+  }
+  int64_t total_num_rx_frames = 0;
+  for (auto &[_, rx] : num_rx_frames_by_queue) total_num_rx_frames += rx;
+  int64_t total_weight = 0;
+  for (auto &[_, weight] : weights_by_queue_name) total_weight += weight;
+  for (auto &[queue, num_rx_frames] : num_rx_frames_by_queue) {
+    ASSERT_OK_AND_ASSIGN(int64_t weight,
+                         gutil::FindOrStatus(weights_by_queue_name, queue));
+    const double kExpectedFraction = 1. * weight / total_weight;
+    const double kActualFraction = 1. * num_rx_frames / total_num_rx_frames;
+    const double kAbsoluteError = kActualFraction - kExpectedFraction;
+    const double kRelativeErrorPercent =
+        100. * kAbsoluteError / kExpectedFraction;
+    const double kAcceptableErrorPercent = 7;
+    LOG(INFO) << "'" << queue << "' transmitted " << (kActualFraction * 100)
+              << "% of forwarded round-robin traffic (expected: "
+              << (kExpectedFraction * 100)
+              << "%, error: " << kRelativeErrorPercent << "%)";
+    EXPECT_LE(std::abs(kRelativeErrorPercent), kAcceptableErrorPercent)
+        << "expected '" << queue << "' to transmit "
+        << (kExpectedFraction * 100)
+        << "% of the forwarded round-robin traffic; instead, it "
+           "transmitted "
+        << (kActualFraction * 100)
+        << "% of the forwarded traffic (error: " << kRelativeErrorPercent
+        << "%)";
   }
   LOG(INFO) << "-- Test done -------------------------------------------------";
 }
@@ -1793,11 +1796,12 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
 
+  thinkit::Switch &sut = testbed->Sut();
   // Set up P4Runtime session.
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
-          testbed->Sut(), /*gnmi_config=*/absl::nullopt, GetParam().p4info));
+          sut, /*gnmi_config=*/absl::nullopt, GetParam().p4info));
 
   // Hook up to GNMI.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
@@ -1845,31 +1849,8 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
   ASSERT_OK_AND_ASSIGN(std::string kSutOutPortId,
                        gutil::FindOrStatus(port_id_by_interface, kSutOutPort));
 
-  // Listen for punted packets from the SUT.
-  EcnTestPacketCounters packet_receive_info;
-
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4info));
-
-  PacketInReceiver sut_packet_receiver(
-      *sut_p4_session, [&](const p4::v1::StreamMessageResponse pi_response) {
-        sai::StreamMessageResponse pd_response;
-        ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
-                                                    &pd_response))
-            << " packet in PI to PD failed: " << pi_response.DebugString();
-        ASSERT_TRUE(pd_response.has_packet())
-            << " received unexpected stream message for packet in: "
-            << pd_response.DebugString();
-        packetlib::Packet packet =
-            packetlib::ParsePacket(pd_response.packet().payload());
-        absl::MutexLock lock(&packet_receive_info.mutex);
-        // Check if the ECN field of IP header is marked for congestion.
-        // Congestion encountered is represented by bits "11" (0x3)
-        if (IsEcnMarked(packet)) {
-          packet_receive_info.num_packets_ecn_marked++;
-        }
-        packet_receive_info.num_packets_punted++;
-      });
 
   // We will perform the following base steps with Ixia:
   // Set up 2 Ixia traffic items.
@@ -1960,6 +1941,40 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
                                                      kTableEntries));
 
   ASSERT_OK(pdpi::InstallPdTableEntries(*sut_p4_session, kTableEntries));
+
+  if (GetParam().nsf_reboot) {
+    Testbed testbed_variant = std::move(testbed);
+    absl::Cleanup restore_testbed([&] {
+      testbed = std::move(std::get<0>(testbed_variant));
+    });
+    // Traffic is verified only once after NSF Reboot is complete.
+    ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(testbed_variant,
+                                               *GetParam().ssh_client_for_nsf));
+    // Create a new P4rt session after NSF Reboot
+    ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
+  }
+
+  // Listen for punted packets from the SUT.
+  EcnTestPacketCounters packet_receive_info;
+  PacketInReceiver sut_packet_receiver(
+      *sut_p4_session, [&](const p4::v1::StreamMessageResponse pi_response) {
+        sai::StreamMessageResponse pd_response;
+        ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
+                                                    &pd_response))
+            << " packet in PI to PD failed: " << pi_response.DebugString();
+        ASSERT_TRUE(pd_response.has_packet())
+            << " received unexpected stream message for packet in: "
+            << pd_response.DebugString();
+        packetlib::Packet packet =
+            packetlib::ParsePacket(pd_response.packet().payload());
+        absl::MutexLock lock(&packet_receive_info.mutex);
+        // Check if the ECN field of IP header is marked for congestion.
+        // Congestion encountered is represented by bits "11" (0x3)
+        if (IsEcnMarked(packet)) {
+          packet_receive_info.num_packets_ecn_marked++;
+        }
+        packet_receive_info.num_packets_punted++;
+      });
 
   // Test ECN marking for IPv4 then IPv6 traffic.
   for (bool is_ipv4 : {false, true}) {
@@ -2053,85 +2068,57 @@ TEST_P(FrontpanelQosTest, TestWredEcnMarking) {
 
         ResetEcnTestPacketCounters(packet_receive_info);
 
-        std::vector<TestOperations> test_operations;
+        ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+          return pins_test::ixia::StartTraffic(ixia_setup_result.traffic_refs,
+                                               ixia_setup_result.topology_ref,
+                                               *testbed);
+        }));
 
-        test_operations.push_back(TestOperations::TrafficTest);
+        // Time period to examine egress packets for ECN marking.
+        constexpr absl::Duration kStatsCollectionTime = absl::Seconds(10);
 
-        if (GetParam().nsf_reboot) {
-          Testbed testbed_variant = std::move(testbed);
-          absl::Cleanup restore_testbed([&] {
-            testbed = std::move(std::get<0>(testbed_variant));
-          });
-          ASSERT_OK(NsfReboot(testbed_variant));
-          test_operations.push_back(TestOperations::NsfRebootAndTrafficTest);
-        }
+        absl::SleepFor(kStatsCollectionTime);
 
-        // Send traffic twice, once during NSF reboot and once post the reboot
-        // to ensure the forwarding traffic is not disrupted.
-        for (auto test_operation : test_operations) {
-          if (test_operation == TestOperations::NsfRebootAndTrafficTest &&
-              GetParam().ssh_client_for_nsf) {
-            Testbed testbed_variant = std::move(testbed);
-            absl::Cleanup restore_testbed([&] {
-              testbed = std::move(std::get<0>(testbed_variant));
-            });
-            ASSERT_OK(WaitForNsfReboot(testbed_variant,
-                                       *GetParam().ssh_client_for_nsf));
-            LOG(INFO) << "NSF reboot complete, sending traffic again to ensure "
-                         "the forwarding traffic is not disrupted.";
+        {
+          // We will be verifying for congestion bit in sampled packets
+          // received at Receiver.
+          absl::MutexLock lock(&packet_receive_info.mutex);
+          LOG(INFO) << "Congestion : " << (is_congestion ? "true" : "false");
+          LOG(INFO) << "IPv4 : " << (is_ipv4 ? "true" : "false");
+          LOG(INFO) << "ECT : " << (is_ect ? "true" : "false");
+          LOG(INFO) << "ECN marked Packets: "
+                    << packet_receive_info.num_packets_ecn_marked;
+
+          if (is_congestion && is_ect) {
+            ASSERT_GT(packet_receive_info.num_packets_ecn_marked, 0);
+            EXPECT_THAT(GetGnmiPortEcnCounter(kSutOutPort, *gnmi_stub),
+                        IsOkAndHolds(Gt(ecn_counter_before_traffic)));
+          } else {
+            // No egress packets must be ECN marked.
+            ASSERT_EQ(packet_receive_info.num_packets_ecn_marked, 0);
           }
-          ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
-            return pins_test::ixia::StartTraffic(ixia_setup_result.traffic_refs,
-                                                 ixia_setup_result.topology_ref,
-                                                 *testbed);
-          }));
-
-          // Time period to examine egress packets for ECN marking.
-          constexpr absl::Duration kStatsCollectionTime = absl::Seconds(10);
-
-          absl::SleepFor(kStatsCollectionTime);
-
-          {
-            // We will be verifying for congestion bit in sampled packets
-            // received at Receiver.
-            absl::MutexLock lock(&packet_receive_info.mutex);
-            LOG(INFO) << "Congestion : " << (is_congestion ? "true" : "false");
-            LOG(INFO) << "IPv4 : " << (is_ipv4 ? "true" : "false");
-            LOG(INFO) << "ECT : " << (is_ect ? "true" : "false");
-            LOG(INFO) << "ECN marked Packets: "
-                      << packet_receive_info.num_packets_ecn_marked;
-
-            if (is_congestion && is_ect) {
-              ASSERT_GT(packet_receive_info.num_packets_ecn_marked, 0);
-              EXPECT_THAT(GetGnmiPortEcnCounter(kSutOutPort, *gnmi_stub),
-                          IsOkAndHolds(Gt(ecn_counter_before_traffic)));
-            } else {
-              // No egress packets must be ECN marked.
-              ASSERT_EQ(packet_receive_info.num_packets_ecn_marked, 0);
-            }
-          }
-          ASSERT_OK(pins_test::ixia::StopTraffic(ixia_setup_result.traffic_refs,
-                                                 *testbed));
-
-          // Wait for a bit to collect queue statistics.
-          constexpr absl::Duration kQueueStatsWaitTime = absl::Seconds(5);
-          absl::SleepFor(kQueueStatsWaitTime);
-
-          // Read counters of the target queue.
-          ASSERT_OK_AND_ASSIGN(
-              const QueueCounters queue_counters_after_test_packet,
-              GetGnmiQueueCounters(/*port=*/kSutOutPort,
-                                   /*queue=*/target_queue, *gnmi_stub));
-
-          // This test expects WRED config to only mark packets and not
-          // drop. Expect no drops in target queue and queue transmit
-          // counter increments.
-          EXPECT_EQ(queue_counters_after_test_packet.num_packets_dropped,
-                    queue_counters_before_test_packet.num_packets_dropped);
-
-          EXPECT_GT(queue_counters_after_test_packet.num_packets_transmitted,
-                    queue_counters_before_test_packet.num_packets_transmitted);
         }
+        ASSERT_OK(pins_test::ixia::StopTraffic(ixia_setup_result.traffic_refs,
+                                               *testbed));
+
+        // Wait for a bit to collect queue statistics.
+        constexpr absl::Duration kQueueStatsWaitTime = absl::Seconds(5);
+        absl::SleepFor(kQueueStatsWaitTime);
+
+        // Read counters of the target queue.
+        ASSERT_OK_AND_ASSIGN(
+            const QueueCounters queue_counters_after_test_packet,
+            GetGnmiQueueCounters(/*port=*/kSutOutPort,
+                                 /*queue=*/target_queue, *gnmi_stub));
+
+        // This test expects WRED config to only mark packets and not
+        // drop. Expect no drops in target queue and queue transmit
+        // counter increments.
+        EXPECT_EQ(queue_counters_after_test_packet.num_packets_dropped,
+                  queue_counters_before_test_packet.num_packets_dropped);
+
+        EXPECT_GT(queue_counters_after_test_packet.num_packets_transmitted,
+                  queue_counters_before_test_packet.num_packets_transmitted);
       }
     }
   }
@@ -2475,76 +2462,55 @@ TEST_P(FrontpanelBufferTest, BufferCarving) {
       }
     }
 
-    std::vector<TestOperations> test_operations;
-
-    test_operations.push_back(TestOperations::TrafficTest);
-
     if (GetParam().default_params.nsf_reboot) {
       Testbed testbed_variant = std::move(testbed);
       absl::Cleanup restore_testbed([&] {
         testbed = std::move(std::get<0>(testbed_variant));
       });
-      ASSERT_OK(NsfReboot(testbed_variant));
-      test_operations.push_back(TestOperations::NsfRebootAndTrafficTest);
+      ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(
+          testbed_variant, *GetParam().default_params.ssh_client_for_nsf));
+    }
+    // Start traffic.
+    LOG(INFO) << "starting traffic";
+    ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
+
+    LOG(INFO) << "traffic started -- sleeping for 5 seconds";
+    absl::SleepFor(absl::Seconds(5));
+
+    // Obtain traffic stats, and ensure traffic got forwarded according to
+    // config.
+    ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
+                         ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
+
+    absl::flat_hash_map<int, int64_t> rx_frames_by_buffer_config;
+    for (auto &[traffic_item_name, stats] :
+         Ordered(kTrafficStats.stats_by_traffic_item())) {
+      ASSERT_OK_AND_ASSIGN(
+          int config, gutil::FindOrStatus(buffer_config_by_traffic_item_name,
+                                          traffic_item_name));
+
+      rx_frames_by_buffer_config[config] += stats.num_rx_frames();
+      LOG(INFO) << "Traffic item : " << traffic_item_name
+                << " Rx packets : " << stats.num_rx_frames();
     }
 
-    // Send traffic twice, once during NSF reboot and once post the reboot
-    // to ensure the forwarding traffic is not disrupted.
-    for (auto test_operation : test_operations) {
-      if (test_operation == TestOperations::NsfRebootAndTrafficTest &&
-          GetParam().default_params.ssh_client_for_nsf) {
-        Testbed testbed_variant = std::move(testbed);
-        absl::Cleanup restore_testbed([&] {
-          testbed = std::move(std::get<0>(testbed_variant));
-        });
-        ASSERT_OK(WaitForNsfReboot(
-            testbed_variant, *GetParam().default_params.ssh_client_for_nsf));
-        LOG(INFO) << "NSF reboot complete, sending traffic again to ensure "
-                     "the forwarding traffic is not disrupted.";
+    int64_t lower_config_num_rx_frames = -1;
+    int lower_config = -1;
+    for (auto &[config, num_rx_frames] : Ordered(rx_frames_by_buffer_config)) {
+      LOG(INFO) << "Config: " << absl::StrFormat("%2d", config)
+                << " Num rx frames: " << num_rx_frames;
+      EXPECT_GT(num_rx_frames, lower_config_num_rx_frames);
+      if (GetParam().config_to_be_tested == kDedicatedBuffer &&
+          lower_config_num_rx_frames != -1) {
+        constexpr float kTolerance = 1.05;
+        int dedicated_buffer_diff = config - lower_config;
+        EXPECT_LE(num_rx_frames * kFrameSizeInBytes,
+                  (lower_config_num_rx_frames * kFrameSizeInBytes +
+                   dedicated_buffer_diff) *
+                      kTolerance);
       }
-      // Start traffic.
-      LOG(INFO) << "starting traffic";
-      ASSERT_OK(ixia::StartTraffic(traffic_items, kIxiaHandle, *testbed));
-
-      LOG(INFO) << "traffic started -- sleeping for 5 seconds";
-      absl::SleepFor(absl::Seconds(5));
-
-      // Obtain traffic stats, and ensure traffic got forwarded according to
-      // config.
-      ASSERT_OK_AND_ASSIGN(const ixia::TrafficStats kTrafficStats,
-                           ixia::GetAllTrafficItemStats(kIxiaHandle, *testbed));
-
-      absl::flat_hash_map<int, int64_t> rx_frames_by_buffer_config;
-      for (auto &[traffic_item_name, stats] :
-           Ordered(kTrafficStats.stats_by_traffic_item())) {
-        ASSERT_OK_AND_ASSIGN(
-            int config, gutil::FindOrStatus(buffer_config_by_traffic_item_name,
-                                            traffic_item_name));
-
-        rx_frames_by_buffer_config[config] += stats.num_rx_frames();
-        LOG(INFO) << "Traffic item : " << traffic_item_name
-                  << " Rx packets : " << stats.num_rx_frames();
-      }
-
-      int64_t lower_config_num_rx_frames = -1;
-      int lower_config = -1;
-      for (auto &[config, num_rx_frames] :
-           Ordered(rx_frames_by_buffer_config)) {
-        LOG(INFO) << "Config: " << absl::StrFormat("%2d", config)
-                  << " Num rx frames: " << num_rx_frames;
-        EXPECT_GT(num_rx_frames, lower_config_num_rx_frames);
-        if (GetParam().config_to_be_tested == kDedicatedBuffer &&
-            lower_config_num_rx_frames != -1) {
-          constexpr float kTolerance = 1.05;
-          int dedicated_buffer_diff = config - lower_config;
-          EXPECT_LE(num_rx_frames * kFrameSizeInBytes,
-                    (lower_config_num_rx_frames * kFrameSizeInBytes +
-                     dedicated_buffer_diff) *
-                        kTolerance);
-        }
-        lower_config = config;
-        lower_config_num_rx_frames = num_rx_frames;
-      }
+      lower_config = config;
+      lower_config_num_rx_frames = num_rx_frames;
     }
   }
   LOG(INFO) << "---------------- Test done ---------------------";
