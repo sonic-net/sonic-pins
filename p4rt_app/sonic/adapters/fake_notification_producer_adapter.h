@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #ifndef PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_FAKE_NOTIFICATION_PRODUCER_ADAPTER_H_
 #define PINS_INFRA_P4RT_APP_SONIC_ADAPTERS_FAKE_NOTIFICATION_PRODUCER_ADAPTER_H_
 

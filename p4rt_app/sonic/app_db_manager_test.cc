@@ -463,14 +463,12 @@ TEST_F(AppDbManagerTest, DeleteNonExistentTableEntryFails) {
   EXPECT_EQ(response.statuses(0).code(), google::rpc::NOT_FOUND);
 }
 
-TEST_F(AppDbManagerTest, ReadAppStateDbP4TableEntryWithoutCounterData) {
+TEST_F(AppDbManagerTest, ReadTableAclEntryWithoutCounterData) {
   const auto app_db_entry = AppDbEntryBuilder{}
-                                .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
+                                .SetTableName("ACL_ACL_INGRESS_TABLE")
                                 .SetPriority(123)
-                                .AddMatchField("router_interface_id", "16")
-                                .SetAction("set_port_and_src_mac")
-                                .AddActionParam("port", "Ethernet28/5")
-                                .AddActionParam("src_mac", "00:02:03:04:05:06");
+                                .AddMatchField("ether_type", "0x0800&0xFFFF")
+                                .SetAction("drop");
 
   EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
       .WillOnce(Return(app_db_entry.GetValueList()));
@@ -487,33 +485,24 @@ TEST_F(AppDbManagerTest, ReadAppStateDbP4TableEntryWithoutCounterData) {
   pdpi::IrTableEntry table_entry = table_entry_status.value();
 
   EXPECT_THAT(table_entry, EqualsProto(R"pb(
-                table_name: "router_interface_table"
+                table_name: "acl_ingress_table"
                 priority: 123
                 matches {
-                  name: "router_interface_id"
-                  exact { str: "16" }
+                  name: "ether_type"
+                  ternary {
+                    value { hex_str: "0x0800" }
+                    mask { hex_str: "0xFFFF" }
+                  }
                 }
-                action {
-                  name: "set_port_and_src_mac"
-                  params {
-                    name: "port"
-                    value { str: "Ethernet28/5" }
-                  }
-                  params {
-                    name: "src_mac"
-                    value { mac: "00:02:03:04:05:06" }
-                  }
-                })pb"));
+                action { name: "drop" })pb"));
 }
 
-TEST_F(AppDbManagerTest, ReadAppStateDbP4TableEntryWithCounterData) {
+TEST_F(AppDbManagerTest, ReadAclTableEntryWithCounterData) {
   const auto app_db_entry = AppDbEntryBuilder{}
-                                .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
+                                .SetTableName("ACL_ACL_INGRESS_TABLE")
                                 .SetPriority(123)
-                                .AddMatchField("router_interface_id", "16")
-                                .SetAction("set_port_and_src_mac")
-                                .AddActionParam("port", "Ethernet28/5")
-                                .AddActionParam("src_mac", "00:02:03:04:05:06");
+                                .AddMatchField("ether_type", "0x0800&0xFFFF")
+                                .SetAction("drop");
 
   EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
       .WillOnce(Return(app_db_entry.GetValueList()));
@@ -536,30 +525,56 @@ TEST_F(AppDbManagerTest, ReadAppStateDbP4TableEntryWithCounterData) {
   pdpi::IrTableEntry table_entry = table_entry_status.value();
 
   EXPECT_THAT(table_entry, EqualsProto(R"pb(
-                table_name: "router_interface_table"
+                table_name: "acl_ingress_table"
                 priority: 123
                 matches {
-                  name: "router_interface_id"
-                  exact { str: "16" }
-                }
-                action {
-                  name: "set_port_and_src_mac"
-                  params {
-                    name: "port"
-                    value { str: "Ethernet28/5" }
-                  }
-                  params {
-                    name: "src_mac"
-                    value { mac: "00:02:03:04:05:06" }
+                  name: "ether_type"
+                  ternary {
+                    value { hex_str: "0x0800" }
+                    mask { hex_str: "0xFFFF" }
                   }
                 }
+                action { name: "drop" }
                 counter_data {
                   byte_count: 1152921504606846975
                   packet_count: 1076078835964837887
                 })pb"));
 }
 
-TEST_F(AppDbManagerTest, ReadAppStateDbP4TableEntryIgnoresInvalidCounterData) {
+TEST_F(AppDbManagerTest, ReadAclTableEntryIgnoresInvalidCounterData) {
+  const auto app_db_entry = AppDbEntryBuilder{}
+                                .SetTableName("ACL_ACL_INGRESS_TABLE")
+                                .SetPriority(123)
+                                .AddMatchField("ether_type", "0x0800&0xFFFF")
+                                .SetAction("drop");
+
+  EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
+      .WillOnce(Return(app_db_entry.GetValueList()));
+
+  EXPECT_CALL(*mock_p4rt_counter_db_, get(app_db_entry.GetKey()))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
+          {"packets", "A"}, {"bytes", "B"}}));
+
+  auto table_entry_status = ReadP4TableEntry(
+      mock_p4rt_table_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+      app_db_entry.GetKey());
+  ASSERT_TRUE(table_entry_status.ok()) << table_entry_status.status();
+  pdpi::IrTableEntry table_entry = table_entry_status.value();
+
+  EXPECT_THAT(table_entry, EqualsProto(R"pb(
+                table_name: "acl_ingress_table"
+                priority: 123
+                matches {
+                  name: "ether_type"
+                  ternary {
+                    value { hex_str: "0x0800" }
+                    mask { hex_str: "0xFFFF" }
+                  }
+                }
+                action { name: "drop" })pb"));
+}
+
+TEST_F(AppDbManagerTest, ReadAclTableEntryIgnoresCountersForFixedTables) {
   const auto app_db_entry = AppDbEntryBuilder{}
                                 .SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
                                 .SetPriority(123)
@@ -570,10 +585,7 @@ TEST_F(AppDbManagerTest, ReadAppStateDbP4TableEntryIgnoresInvalidCounterData) {
 
   EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
       .WillOnce(Return(app_db_entry.GetValueList()));
-
-  EXPECT_CALL(*mock_p4rt_counter_db_, get(app_db_entry.GetKey()))
-      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
-          {"packets", "A"}, {"bytes", "B"}}));
+  EXPECT_CALL(*mock_p4rt_counter_db_, get).Times(0);
 
   auto table_entry_status = ReadP4TableEntry(
       mock_p4rt_table_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock),

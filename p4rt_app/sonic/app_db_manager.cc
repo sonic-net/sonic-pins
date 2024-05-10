@@ -422,10 +422,13 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
                    AppDbKeyAndValuesToIrTableEntry(
                        p4info, key, p4rt_table.app_db->get(key)));
 
-  // CounterDb entries will include the full AppDb entry key.
-  RETURN_IF_ERROR(AppendCounterData(
-      table_entry, p4rt_table.counter_db->get(absl::StrCat(
-                       p4rt_table.app_db->getTablePrefix(), key))));
+  // Counters should only exist for ACL table entries.
+  if (absl::StartsWith(key, table::TypeName(table::Type::kAcl))) {
+    // CounterDb entries will include the full AppDb entry key.
+    RETURN_IF_ERROR(AppendCounterData(
+        table_entry, p4rt_table.counter_db->get(absl::StrCat(
+                         p4rt_table.app_db->getTablePrefix(), key))));
+  }
   return table_entry;
 }
 
