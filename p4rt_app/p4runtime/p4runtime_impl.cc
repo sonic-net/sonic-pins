@@ -1138,7 +1138,6 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       }
     }
   }
-}
   return absl::OkStatus();
 }
 
