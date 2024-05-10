@@ -300,24 +300,25 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
 
     // If the constraints are not met then we should just report an error (i.e.
     // do not try to handle the entry in lower layers).
-    absl::StatusOr<bool> meets_constraint =
-        p4_constraints::EntryMeetsConstraint(update.entity().table_entry(),
-                                             constraint_info);
-    if (!meets_constraint.ok()) {
+    absl::StatusOr<std::string> reason_entry_violates_constraint =
+        p4_constraints::ReasonEntryViolatesConstraint(
+            update.entity().table_entry(), constraint_info);
+    if (!reason_entry_violates_constraint.ok()) {
       // A status failure implies that the TableEntry was not formatted
       // correctly. So we could not check the constraints.
       LOG(WARNING) << "Could not verify P4 constraint: "
                    << update.entity().table_entry().ShortDebugString();
-      *entry_status = GetIrUpdateStatus(meets_constraint.status());
+      *entry_status =
+          GetIrUpdateStatus(reason_entry_violates_constraint.status());
       continue;
     }
-    if (*meets_constraint == false) {
-      // A false result implies the constraints were not met.
+    if (!reason_entry_violates_constraint->empty()) {
+      // A non-empty result implies the constraints were not met.
       LOG(WARNING) << "Entry does not meet P4 constraint: "
+                   << *reason_entry_violates_constraint
                    << update.entity().table_entry().ShortDebugString();
-      *entry_status = GetIrUpdateStatus(
-          gutil::InvalidArgumentErrorBuilder()
-          << "Does not meet constraints required for the table entry.");
+      *entry_status = GetIrUpdateStatus(gutil::InvalidArgumentErrorBuilder()
+                                        << *reason_entry_violates_constraint);
       continue;
     }
 
@@ -1116,27 +1117,27 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       if (status.code() != google::rpc::OK) {
         return gutil::InvalidArgumentErrorBuilder() << status.message();
       }
-  }
-  if (!ext_tables_json.dump().empty()) {
-     // Publish all tables at once and get one success/failure response for them
-    ASSIGN_OR_RETURN(
-          std::string acl_key,
-          sonic::PublishExtTablesDefinitionToAppDb(ext_tables_json, (uint64_t)0,
-                     p4rt_table_),
-          _ << "Could not publish Table Definition Set to APPDB");
+    }
+    if (!ext_tables_json.dump().empty()) {
+       // Publish all tables at once and get one success/failure response for them
+      ASSIGN_OR_RETURN(
+            std::string acl_key,
+            sonic::PublishExtTablesDefinitionToAppDb(ext_tables_json, (uint64_t)0,
+                       p4rt_table_),
+            _ << "Could not publish Table Definition Set to APPDB");
 
-    ASSIGN_OR_RETURN(
-          pdpi::IrUpdateStatus status,
-          sonic::GetAndProcessResponseNotificationWithoutRevertingState(
-               *p4rt_table_.notification_consumer, acl_key));
+      ASSIGN_OR_RETURN(
+            pdpi::IrUpdateStatus status,
+            sonic::GetAndProcessResponseNotificationWithoutRevertingState(
+                 *p4rt_table_.notification_consumer, acl_key));
 
-    // Any issue with the forwarding config should be sent back to the
-    // controller as an INVALID_ARGUMENT.
-    if (status.code() != google::rpc::OK) {
-      return gutil::InvalidArgumentErrorBuilder() << status.message();
+      // Any issue with the forwarding config should be sent back to the
+      // controller as an INVALID_ARGUMENT.
+      if (status.code() != google::rpc::OK) {
+        return gutil::InvalidArgumentErrorBuilder() << status.message();
+      }
     }
   }
-}
   return absl::OkStatus();
 }
 

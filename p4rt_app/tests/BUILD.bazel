@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -327,5 +330,46 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "p4_constraints_test_runner",
+    srcs = ["p4_constraints_test_runner.cc"],
+    linkstatic = True,
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:proto",
+        "//gutil:status",
+        "//gutil:testing",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_request_helpers",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cmd_diff_test(
+    name = "p4_constraints_test",
+    actual_cmd =
+        " | ".join([
+            "$(execpath :p4_constraints_test_runner)",
+            # Strip unnecessary lines for golden testing.
+            "sed '1,/^###/d'",  # Strip everything up to a line beginning with '###'.
+            "sed '/^\\[/d'",  # Strip every line beginning with '['.
+        ]),
+    expected = "golden_outputs/p4_constraints_test.expected",
+    tools = [
+        ":p4_constraints_test_runner",
     ],
 )
