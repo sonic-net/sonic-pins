@@ -26,6 +26,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "artifacts/otg.grpc.pb.h"
@@ -86,7 +87,8 @@ TrafficMetrics GetTrafficMetrics(const otg::FlowMetric& flow_metric,
 
 }  // namespace
 
-absl::Status OtgHelper::StartTraffic(Testbed& testbed) {
+absl::Status OtgHelper::StartTraffic(Testbed& testbed,
+                                     absl::string_view config_label) {
   return std::visit(
       gutil::Overload{
           [this](std::unique_ptr<thinkit::GenericTestbed>& testbed)

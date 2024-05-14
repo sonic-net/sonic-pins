@@ -129,7 +129,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       curr_image_config.image_label, testbed_, *ssh_client_));
 
   LOG(INFO) << "Starting the traffic";
-  RETURN_IF_ERROR(traffic_helper_->StartTraffic(testbed_));
+  RETURN_IF_ERROR(
+      traffic_helper_->StartTraffic(testbed_, curr_image_config.config_label));
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnStartTraffic, component_validators_,
       curr_image_config.image_label, testbed_, *ssh_client_));
