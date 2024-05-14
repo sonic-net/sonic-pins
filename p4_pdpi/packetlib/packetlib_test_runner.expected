@@ -1261,6 +1261,119 @@ headers {
 payload: "test packet #5: ROUTING_PINBALLL3TOGROUP_FLOW: ipv4_table_entry \t { match { vrf_id: \"vrf-210\" ipv4_dst { value: \"185.168.204.0\" prefix_length: 28 } } action { set_wcmp_group_id_and_metadata { wcmp_group_id: \"group-4294934578\" route_metadata: \"0x01\" } } }"
 
 ================================================================================
+Parsing test: SAI P4 BMv2 packet_in header (Valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# SAI P4 BMv2 packet_in header
+        ingress_port: 0b000000001
+        target_egress_port: 0b000000010
+        unused_pad: 0b000000
+        # Ethernet header
+        ethernet_destination: 0x ff ff ff ff ff ff
+        ethernet_source: 0x 00 11 22 33 44 55
+        ether_type: 0x0806
+        # ARP header
+        hardware_type: 0x0001  # Ethernet
+        protocol_type: 0x0800  # IPv4
+        hardware_length: 0x06
+        protocol_length: 0x04
+        operation: 0x0001  # Request
+        sender_hardware_address: 0x 00 11 22 33 44 55
+        sender_protocol_address: 0x 0a 00 00 01
+        target_hardware_address: 0x 00 00 00 00 00 00
+        target_protocol_address: 0x 0a 00 00 02
+        # Payload
+        payload: 0x 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "00:11:22:33:44:55"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "00:11:22:33:44:55"
+    sender_protocol_address: "10.0.0.1"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "10.0.0.2"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+================================================================================
+Parsing test: SAI P4 BMv2 packet_in header unused_pad value is not 0 (Invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# SAI P4 BMv2 packet_in header
+        ingress_port: 0b000000001
+        target_egress_port: 0b000000010
+        unused_pad: 0b000001
+        # Ethernet header
+        ethernet_destination: 0x ff ff ff ff ff ff
+        ethernet_source: 0x 00 11 22 33 44 55
+        ether_type: 0x0806
+        # ARP header
+        hardware_type: 0x0001  # Ethernet
+        protocol_type: 0x0800  # IPv4
+        hardware_length: 0x06
+        protocol_length: 0x04
+        operation: 0x0001  # Request
+        sender_hardware_address: 0x 00 11 22 33 44 55
+        sender_protocol_address: 0x 0a 00 00 01
+        target_hardware_address: 0x 00 00 00 00 00 00
+        target_protocol_address: 0x 0a 00 00 02
+        # Payload
+        payload: 0x 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0x002"
+    unused_pad: "0x01"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "00:11:22:33:44:55"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "00:11:22:33:44:55"
+    sender_protocol_address: "10.0.0.1"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "10.0.0.2"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+reasons_invalid: "in SaiP4BMv2PacketInHeader headers[0]: unused_pad: Must be 0, but was 0x01 instead."
+
+PadPacketToMinimumSize(packet) = false
+UpdateAllComputedFields(packet) = true
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: unused_pad: Must be 0, but was 0x01 instead.
+================================================================================
 Proto packet test: UDP header not preceded by other header
 ================================================================================
 -- INPUT -----------------------------------------------------------------------
@@ -1689,10 +1802,10 @@ payload: "A somewhat longer payload."
 -- OUTPUT ----------------------------------------------------------------------
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in Ipv4Header headers[1]: ihl: missing
-- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
-- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected between 5 and 8 bits
-- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected between 9 and 12 bits
-- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected between 49 and 52 bits
+- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
+- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected 1 hex digits but got 2
+- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected 1 hex digits but got 3
+- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected 4 hex digits but got 13
 - in Ipv4Header headers[1]: ipv4_source: invalid format: Invalid IPv4 address: '0x0a000001'
 - in Ipv4Header headers[1]: ipv4_destination: invalid format: Invalid IPv4 address: '0x14000003'
 - in Ipv4Header headers[1]: total_length: Must be 0x0032, but was 0x0034 instead.
@@ -1730,24 +1843,24 @@ headers {
 payload: "A somewhat longer payload."
 
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
-- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected between 5 and 8 bits
-- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected between 9 and 12 bits
-- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected between 49 and 52 bits
+- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
+- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected 1 hex digits but got 2
+- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected 1 hex digits but got 3
+- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected 4 hex digits but got 13
 - in Ipv4Header headers[1]: ipv4_source: invalid format: Invalid IPv4 address: '0x0a000001'
 - in Ipv4Header headers[1]: ipv4_destination: invalid format: Invalid IPv4 address: '0x14000003'
 - in Ipv4Header headers[1]: total_length: Must be 0x0032, but was 0x0034 instead.
-- in Ipv4Header headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
+- in Ipv4Header headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
 
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
-- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
-- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected between 5 and 8 bits
-- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected between 9 and 12 bits
-- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected between 49 and 52 bits
+- in Ipv4Header headers[1]: dscp: invalid format: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
+- in Ipv4Header headers[1]: ecn: invalid format: illegal conversion from hex string '0x01' to 2 bits; expected 1 hex digits but got 2
+- in Ipv4Header headers[1]: flags: invalid format: illegal conversion from hex string '0x000' to 3 bits; expected 1 hex digits but got 3
+- in Ipv4Header headers[1]: fragment_offset: invalid format: illegal conversion from hex string '0x0000000000000' to 13 bits; expected 4 hex digits but got 13
 - in Ipv4Header headers[1]: ipv4_source: invalid format: Invalid IPv4 address: '0x0a000001'
 - in Ipv4Header headers[1]: ipv4_destination: invalid format: Invalid IPv4 address: '0x14000003'
 - in Ipv4Header headers[1]: total_length: Must be 0x0032, but was 0x0034 instead.
-- in Ipv4Header headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: illegal conversion from hex string '0x011011' to 6 bits; expected between 21 and 24 bits
+- in Ipv4Header headers[1]: checksum: Couldn't compute expected checksum: INVALID_ARGUMENT: illegal conversion from hex string '0x011011' to 6 bits; expected 2 hex digits but got 6
 
 ================================================================================
 Proto packet test: IPv4 with various invalid fields
@@ -1781,7 +1894,7 @@ payload: "Hi"
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in EthernetHeader headers[0]: ethernet_source: missing
 - in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 22
-- in Ipv4Header headers[1]: ihl: invalid format: illegal conversion from hex string '0x6k' to 4 bits; expected between 5 and 8 bits
+- in Ipv4Header headers[1]: ihl: invalid format: illegal conversion from hex string '0x6k' to 4 bits; expected 1 hex digits but got 2
 - in Ipv4Header headers[1]: total_length: missing
 - in Ipv4Header headers[1]: checksum: missing
 - in Ipv4Header headers[1]: ipv4_source: invalid format: Invalid IPv4 address: 'ffff:1::'
@@ -1790,9 +1903,9 @@ ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reas
 PadPacketToMinimumSize(packet) = true
 new payload: "Hi\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
 
-UpdateMissingComputedFields(packet) = INVALID_ARGUMENT: Ipv4Header: failed to compute packet.headers[1].checksum: illegal conversion from hex string '0x6k' to 4 bits; expected between 5 and 8 bits
+UpdateMissingComputedFields(packet) = INVALID_ARGUMENT: Ipv4Header: failed to compute packet.headers[1].checksum: illegal conversion from hex string '0x6k' to 4 bits; expected 1 hex digits but got 2
 
-Serialize(Packet) = INVALID_ARGUMENT: Ipv4Header: failed to compute packet.headers[1].checksum: illegal conversion from hex string '0x6k' to 4 bits; expected between 5 and 8 bits
+Serialize(Packet) = INVALID_ARGUMENT: Ipv4Header: failed to compute packet.headers[1].checksum: illegal conversion from hex string '0x6k' to 4 bits; expected 1 hex digits but got 2
 
 ================================================================================
 Proto packet test: IPv6 without computed fields
@@ -1887,9 +2000,9 @@ payload: "I am the payload"
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in Ipv6Header headers[1]: dscp: invalid format: missing '0x'-prefix in hexadecimal string: '1b'
 - in Ipv6Header headers[1]: ecn: invalid format: missing '0x'-prefix in hexadecimal string: '0b01'
-- in Ipv6Header headers[1]: flow_label: invalid format: illegal conversion from hex string '0x1234' to 20 bits; expected between 13 and 16 bits
-- in Ipv6Header headers[1]: next_header: invalid format: illegal conversion from hex string '0x050' to 8 bits; expected between 9 and 12 bits
-- in Ipv6Header headers[1]: hop_limit: invalid format: illegal conversion from hex string '0x1' to 8 bits; expected between 1 and 4 bits
+- in Ipv6Header headers[1]: flow_label: invalid format: illegal conversion from hex string '0x1234' to 20 bits; expected 5 hex digits but got 4
+- in Ipv6Header headers[1]: next_header: invalid format: illegal conversion from hex string '0x050' to 8 bits; expected 2 hex digits but got 3
+- in Ipv6Header headers[1]: hop_limit: invalid format: illegal conversion from hex string '0x1' to 8 bits; expected 2 hex digits but got 1
 - in Ipv6Header headers[1]: ipv6_source: invalid format: invalid IPv6 address: '20.0.0.3'
 - in Ipv6Header headers[1]: ipv6_destination: invalid format: invalid IPv6 address: ':'
 - in Ipv6Header headers[1]: version: Must be 0x6, but was 0x4 instead.
@@ -1902,9 +2015,9 @@ UpdateMissingComputedFields(packet) = false
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in Ipv6Header headers[1]: dscp: invalid format: missing '0x'-prefix in hexadecimal string: '1b'
 - in Ipv6Header headers[1]: ecn: invalid format: missing '0x'-prefix in hexadecimal string: '0b01'
-- in Ipv6Header headers[1]: flow_label: invalid format: illegal conversion from hex string '0x1234' to 20 bits; expected between 13 and 16 bits
-- in Ipv6Header headers[1]: next_header: invalid format: illegal conversion from hex string '0x050' to 8 bits; expected between 9 and 12 bits
-- in Ipv6Header headers[1]: hop_limit: invalid format: illegal conversion from hex string '0x1' to 8 bits; expected between 1 and 4 bits
+- in Ipv6Header headers[1]: flow_label: invalid format: illegal conversion from hex string '0x1234' to 20 bits; expected 5 hex digits but got 4
+- in Ipv6Header headers[1]: next_header: invalid format: illegal conversion from hex string '0x050' to 8 bits; expected 2 hex digits but got 3
+- in Ipv6Header headers[1]: hop_limit: invalid format: illegal conversion from hex string '0x1' to 8 bits; expected 2 hex digits but got 1
 - in Ipv6Header headers[1]: ipv6_source: invalid format: invalid IPv6 address: '20.0.0.3'
 - in Ipv6Header headers[1]: ipv6_destination: invalid format: invalid IPv6 address: ':'
 - in Ipv6Header headers[1]: version: Must be 0x6, but was 0x4 instead.
@@ -2434,3 +2547,234 @@ payload: "test packet #5: ROUTING_PINBALLL3TOGROUP_FLOW: ipv4_table_entry \t { m
 ValidatePacket(packet) = OK
 
 Serialize(Packet) = OK
+
+================================================================================
+Proto packet test: SAI P4 BMv2 packet_in Header (Valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in EthernetHeader headers[1]: expected at least 46 bytes of Ethernet payload, but got only 28
+- in ArpHeader headers[2]: hardware_type: missing
+- in ArpHeader headers[2]: protocol_type: missing
+- in ArpHeader headers[2]: hardware_length: missing
+- in ArpHeader headers[2]: protocol_length: missing
+
+PadPacketToMinimumSize(packet) = true
+new payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+UpdateMissingComputedFields(packet) = true
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+ValidatePacket(packet) = OK
+
+Serialize(Packet) = OK
+
+================================================================================
+Proto packet test: SAI P4 BMv2 packet_in Header ingress_port number out of range (Invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0xf00"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: ingress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+- in EthernetHeader headers[1]: expected at least 46 bytes of Ethernet payload, but got only 28
+- in ArpHeader headers[2]: hardware_type: missing
+- in ArpHeader headers[2]: protocol_type: missing
+- in ArpHeader headers[2]: hardware_length: missing
+- in ArpHeader headers[2]: protocol_length: missing
+
+PadPacketToMinimumSize(packet) = true
+new payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+UpdateMissingComputedFields(packet) = true
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0xf00"
+    target_egress_port: "0x002"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: ingress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: ingress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+
+================================================================================
+Proto packet test: SAI P4 BMv2 packet_in Header target_egress_port number out of range (Invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0xf00"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: target_egress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+- in EthernetHeader headers[1]: expected at least 46 bytes of Ethernet payload, but got only 28
+- in ArpHeader headers[2]: hardware_type: missing
+- in ArpHeader headers[2]: protocol_type: missing
+- in ArpHeader headers[2]: hardware_length: missing
+- in ArpHeader headers[2]: protocol_length: missing
+
+PadPacketToMinimumSize(packet) = true
+new payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+UpdateMissingComputedFields(packet) = true
+packet =
+headers {
+  sai_p4_bmv2_packet_in_header {
+    ingress_port: "0x001"
+    target_egress_port: "0xf00"
+    unused_pad: "0x00"
+  }
+}
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ff:ff:ff:ff:ff"
+    ethernet_source: "11:22:33:44:55:66"
+    ethertype: "0x0806"
+  }
+}
+headers {
+  arp_header {
+    hardware_type: "0x0001"
+    protocol_type: "0x0800"
+    hardware_length: "0x06"
+    protocol_length: "0x04"
+    operation: "0x0001"
+    sender_hardware_address: "11:22:33:44:55:66"
+    sender_protocol_address: "1.2.3.4"
+    target_hardware_address: "00:00:00:00:00:00"
+    target_protocol_address: "1.2.3.5"
+  }
+}
+payload: "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: target_egress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in SaiP4BMv2PacketInHeader headers[0]: target_egress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
