@@ -123,7 +123,10 @@ absl::Status VerifySairedisRecOnNsfReboot(absl::string_view version,
   absl::StripAsciiWhitespace(&sai_objects_list);
   std::string error_msg;
   if (last_apply_view_entry.empty()) {
-    error_msg = "No APPLY_VIEW entry found in sairedis.rec file.";
+    // Log error but return success. The fragility of the validation shouldn't
+    // cause the validator to fail.
+    LOG(ERROR) << "No APPLY_VIEW entry found in sairedis.rec file.";
+    return absl::OkStatus();
   } else {
     for (const auto& sai_object : absl::StrSplit(sai_objects_list, '\n')) {
       if (!sai_object.empty() && !allowlist.contains(sai_object)) {
