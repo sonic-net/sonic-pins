@@ -17,6 +17,7 @@
 
 #include <string>
 
+#include "absl/time/time.h"
 #include "p4/config/v1/p4info.pb.h"
 
 namespace pins_test {
@@ -28,6 +29,7 @@ struct ImageConfigParams {
   std::string config_label;
   std::string gnmi_config;
   p4::config::v1::P4Info p4_info;
+  absl::Duration max_acceptable_outage;
 };
 
 }  // namespace pins_test
