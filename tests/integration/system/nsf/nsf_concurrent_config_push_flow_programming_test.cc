@@ -26,7 +26,7 @@
 #include "gutil/status_matchers.h"  
 #include "lib/gnmi/gnmi_helper.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/switch.h"
@@ -177,8 +177,7 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // progress to narrow down when the traffic loss occurred (i.e. before
   // reboot, during reboot or after reconciliation).
   LOG(INFO) << "Validating the traffic";
-  ASSERT_OK(
-      traffic_helper_->ValidateTraffic(testbed_, kNsfTrafficLossDuration));
+  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_));
 
   LOG(INFO) << "Clearing the flows";
   ASSERT_OK(flow_programmer_->ClearFlows(testbed_));
