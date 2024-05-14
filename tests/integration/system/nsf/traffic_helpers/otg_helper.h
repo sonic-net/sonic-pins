@@ -16,6 +16,7 @@
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_TRAFFIC_HELPERS_OTG_HELPER_H_
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
@@ -25,7 +26,8 @@ namespace pins_test {
 class OtgHelper : public TrafficHelper {
  public:
   OtgHelper(bool enable_linerate = false) : enable_linerate_(enable_linerate) {}
-  absl::Status StartTraffic(Testbed& testbed) override;
+  absl::Status StartTraffic(Testbed& testbed,
+                            absl::string_view config_label) override;
   absl::Status StopTraffic(Testbed& testbed) override;
   absl::Status ValidateTraffic(Testbed& testbed,
                                absl::Duration max_acceptable_outage) override;
