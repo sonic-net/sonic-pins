@@ -22,7 +22,7 @@
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"  
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "tests/integration/system/nsf/interfaces/test_params.h"
+#include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
 #include "thinkit/switch.h"
@@ -110,8 +110,7 @@ TEST_P(NsfAclFlowCoverageTestFixture, NsfAclFlowCoverageTest) {
   // progress to narrow down when the traffic loss occurred (i.e. before
   // reboot, during reboot or after reconciliation).
   LOG(INFO) << "Validating the traffic";
-  ASSERT_OK(
-      traffic_helper_->ValidateTraffic(testbed_, kNsfTrafficLossDuration));
+  ASSERT_OK(traffic_helper_->ValidateTraffic(testbed_));
 
   // Selectively clear flows (eg. not clearing nexthop entries for host
   // testbeds).

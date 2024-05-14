@@ -71,7 +71,10 @@ cc_library(
 cc_library(
     name = "image_config_params",
     hdrs = ["image_config_params.h"],
-    deps = ["@com_github_p4lang_p4runtime//:p4info_cc_proto"],
+    deps = [
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/time",
+    ],
 )
 
 cc_library(
