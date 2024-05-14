@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
@@ -35,6 +36,7 @@
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
@@ -154,12 +156,23 @@ public:
   const EntryBuilder &LogPdEntries() const;
   EntryBuilder &LogPdEntries();
 
-  absl::StatusOr<std::vector<p4::v1::Entity>>
-  GetDedupedPiEntities(const pdpi::IrP4Info &ir_p4info,
-                       bool allow_unsupported = false) const;
-  absl::StatusOr<pdpi::IrEntities>
-  GetDedupedIrEntities(const pdpi::IrP4Info &ir_p4info,
-                       bool allow_unsupported = false) const;
+  // Deduplicates then installs the entities encoded by the EntryBuilder using
+  // `session`.
+  absl::Status InstallDedupedEntities(pdpi::P4RuntimeSession& session,
+                                      bool allow_unsupported = false) const;
+
+  // Extracts and deduplicates the entities encoded by the EntryBuilder using
+  // `ir_p4info`, then install them using `session`. This is especially useful
+  // for BMv2 where you may *NOT* wish to use the P4Info on the switch for
+  // translation.
+  absl::Status InstallDedupedEntities(const pdpi::IrP4Info& ir_p4info,
+                                      pdpi::P4RuntimeSession& session,
+                                      bool allow_unsupported = false) const;
+
+  absl::StatusOr<std::vector<p4::v1::Entity>> GetDedupedPiEntities(
+      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
+  absl::StatusOr<pdpi::IrEntities> GetDedupedIrEntities(
+      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
 
   // Convenience struct corresponding to the proto
   // `MulticastRouterInterfaceTableEntry`
