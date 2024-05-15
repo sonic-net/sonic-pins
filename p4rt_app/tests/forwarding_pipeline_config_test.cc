@@ -498,6 +498,7 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
       R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
       std::make_pair("replicas", json_array),
+      std::make_pair("controller_metadata", "SomeMetadata"),
   };
   p4rt_service_->GetP4rtAppDbTable().InsertTableEntry(
       "REPLICATION_IP_MULTICAST_TABLE:0x0001", kfv_values);
@@ -529,7 +530,12 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
       ->mutable_multicast_group_entry();
   ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response_pre,
                        p4rt_session_->Read(read_request_pre));
-  EXPECT_EQ(read_response_pre.entities_size(), 1);
+  ASSERT_EQ(read_response_pre.entities_size(), 1);
+  EXPECT_EQ(read_response_pre.entities()[0]
+                .packet_replication_engine_entry()
+                .multicast_group_entry()
+                .metadata(),
+            "SomeMetadata");
 
   p4::v1::ReadRequest read_request_pre_clone;
   read_request_pre_clone.set_device_id(p4rt_session_->DeviceId());

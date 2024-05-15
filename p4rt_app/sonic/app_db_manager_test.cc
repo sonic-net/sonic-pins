@@ -664,6 +664,31 @@ TEST_F(AppDbManagerTest, InsertPacketReplicationEngineEntry) {
                   EqualsProto(entity.packet_replication_engine_entry()))));
 }
 
+TEST_F(AppDbManagerTest, InsertPacketReplicationEngineEntryWithMetadata) {
+  pdpi::IrEntity entity;
+  ASSERT_TRUE(
+      TextFormat::ParseFromString(R"pb(packet_replication_engine_entry {
+                                         multicast_group_entry {
+                                           multicast_group_id: 1
+                                           replicas { port: "1" instance: 0 }
+                                           replicas { port: "2" instance: 0 }
+                                           metadata: "I am metadata"
+                                         }
+                                       })pb",
+                                  &entity));
+  ASSERT_OK_AND_ASSIGN(
+      auto update,
+      CreateAppDbUpdate(p4::v1::Update::INSERT, entity,
+                        sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  pdpi::IrUpdateStatus status;
+  ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                {{update, &status}}));
+  EXPECT_THAT(status, EqualsProto("code: OK"));
+  EXPECT_THAT(GetAllAppDbPacketReplicationTableEntries(mock_p4rt_table_),
+              IsOkAndHolds(ElementsAre(
+                  EqualsProto(entity.packet_replication_engine_entry()))));
+}
+
 TEST_F(AppDbManagerTest, DeletePacketReplicationEngineEntry) {
   pdpi::IrEntity entity;
   ASSERT_TRUE(
