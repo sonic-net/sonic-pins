@@ -99,6 +99,40 @@ TEST_F(PacketReplicationEntryTranslationTest, InsertPacketReplicationEntry) {
               IsOkAndHolds(expected_key_value));
 }
 
+TEST_F(PacketReplicationEntryTranslationTest,
+       InsertPacketReplicationEntryWithMetadata) {
+  pdpi::IrPacketReplicationEngineEntry pre_entry;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(multicast_group_entry {
+             multicast_group_id: 1
+             replicas { port: "Ethernet1/1/1" instance: 1 }
+             replicas { port: "Ethernet3/1/1" instance: 1 }
+             replicas { port: "Ethernet5/1/1" instance: 1 }
+             metadata: "Happy Metadata!"
+           })pb",
+      &pre_entry));
+
+  // Expected RedisDB entry.
+  const std::string json_array =
+      R"j([{"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet3/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet5/1/1"}])j";
+
+  const std::vector<std::pair<std::string, std::string>> kfv_values = {
+      std::make_pair("replicas", json_array),
+      std::make_pair("controller_metadata", "Happy Metadata!")};
+  const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
+  swss::KeyOpFieldsValuesTuple expected_key_value =
+      std::make_tuple(expected_key, "SET", kfv_values);
+
+  ASSERT_THAT(CreateAppDbPacketReplicationTableUpdate(p4::v1::Update::INSERT,
+                                                      pre_entry),
+              IsOkAndHolds(expected_key_value));
+}
+
 TEST_F(PacketReplicationEntryTranslationTest, ModifyPacketReplicationEntry) {
   pdpi::IrPacketReplicationEngineEntry pre_entry;
   ASSERT_TRUE(TextFormat::ParseFromString(
