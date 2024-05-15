@@ -375,6 +375,20 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     const default_action = NoAction();
   }
 
+  // Table with both exact and optional matches.
+  table exact_and_optional_table {
+        key = {
+            meta.ipv4 : exact @id(2) @format(IPV4_ADDRESS) @name("ipv4");
+            meta.ipv6 : exact @id(1) @format(IPV6_ADDRESS) @name("ipv6");
+            meta.str : optional @id(3) @name("str");
+        }
+        actions = {
+          @proto_id(1) do_thing_4;
+          @defaultonly NoAction();
+        }
+        const default_action = NoAction();
+    }
+
   apply {
     id_test_table.apply();
     exact_table.apply();
@@ -393,6 +407,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     unused_table.apply();
     packet_count_and_meter_table.apply();
     byte_count_and_meter_table.apply();
+    exact_and_optional_table.apply();
   }
 }
 

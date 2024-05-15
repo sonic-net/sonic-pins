@@ -159,28 +159,30 @@ message IrPacketIoMetadataDefinition {
 
 // Describes an entire P4 program.
 message IrP4Info {
+  // Top-level package documentation describing the forwarding pipeline config.
+  p4.config.v1.PkgInfo pkg_info = 1;
   // Required. Maps table IDs to tables.
-  map<uint32, IrTableDefinition> tables_by_id = 1;
+  map<uint32, IrTableDefinition> tables_by_id = 2;
   // Required. Maps table names to tables.
-  map<string, IrTableDefinition> tables_by_name = 2;
+  map<string, IrTableDefinition> tables_by_name = 3;
   // Required. Maps action IDs to actions.
-  map<uint32, IrActionDefinition> actions_by_id = 3;
+  map<uint32, IrActionDefinition> actions_by_id = 4;
   // Required. Maps action names to actions.
-  map<string, IrActionDefinition> actions_by_name = 4;
+  map<string, IrActionDefinition> actions_by_name = 5;
   // Required. Maps action profile IDs to action profiles.
-  map<uint32, IrActionProfileDefinition> action_profiles_by_id = 10;
+  map<uint32, IrActionProfileDefinition> action_profiles_by_id = 11;
   // Required. Maps action profile names to action profiles.
-  map<string, IrActionProfileDefinition> action_profiles_by_name = 11;
+  map<string, IrActionProfileDefinition> action_profiles_by_name = 12;
   // Required. Maps packet-in metadata IDs to metadata.
-  map<uint32, IrPacketIoMetadataDefinition> packet_in_metadata_by_id = 5;
+  map<uint32, IrPacketIoMetadataDefinition> packet_in_metadata_by_id = 6;
   // Required. Maps packet-in metadata names to metadata.
-  map<string, IrPacketIoMetadataDefinition> packet_in_metadata_by_name = 6;
+  map<string, IrPacketIoMetadataDefinition> packet_in_metadata_by_name = 7;
   // Required. Maps packet-out metadata IDs to metadata.
-  map<uint32, IrPacketIoMetadataDefinition> packet_out_metadata_by_id = 7;
+  map<uint32, IrPacketIoMetadataDefinition> packet_out_metadata_by_id = 8;
   // Required. Maps packet-out metadata names to metadata.
-  map<string, IrPacketIoMetadataDefinition> packet_out_metadata_by_name = 8;
+  map<string, IrPacketIoMetadataDefinition> packet_out_metadata_by_name = 9;
   // All match field references.
-  repeated IrMatchFieldReference references = 9;
+  repeated IrMatchFieldReference references = 10;
 }
 
 // -- Table entries ------------------------------------------------------------

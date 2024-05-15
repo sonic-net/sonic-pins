@@ -1060,6 +1060,7 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
 
 StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
   IrP4Info info;
+  *info.mutable_pkg_info() = p4_info.pkg_info();
   const P4TypeInfo &type_info = p4_info.type_info();
 
   // Translate all action definitions to IR.

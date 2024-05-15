@@ -217,6 +217,7 @@ cc_library(
         ":ir_cc_proto",
         ":sequencing",
         "//gutil:status",
+        "//gutil:version",
         "//sai_p4/fixed:p4_roles",
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++",

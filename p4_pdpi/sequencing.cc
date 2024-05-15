@@ -307,21 +307,24 @@ absl::StatusOr<std::vector<std::vector<int>>> SequencePiUpdatesInPlace(
 absl::Status SortTableEntries(const IrP4Info& info,
                               std::vector<p4::v1::TableEntry>& entries) {
   std::vector<Update> updates;
+  updates.reserve(entries.size());
   for (const auto& entry : entries) {
     Update update;
     update.set_type(Update::INSERT);
-    *update.mutable_entity()->mutable_table_entry() = entry;
+    *update.mutable_entity()->mutable_table_entry() = std::move(entry);
     updates.push_back(update);
   }
+  ASSIGN_OR_RETURN(std::vector<std::vector<int>> batches,
+                   SequencePiUpdatesInPlace(info, updates));
 
-  ASSIGN_OR_RETURN(std::vector<p4::v1::WriteRequest> requests,
-                   SequencePiUpdatesIntoWriteRequests(info, updates));
   entries.clear();
-  for (const auto& write_request : requests) {
-    for (const auto& update : write_request.updates()) {
-      entries.push_back(update.entity().table_entry());
+  for (const std::vector<int>& batch : batches) {
+    for (int update_index : batch) {
+      entries.push_back(
+          std::move(updates[update_index].entity().table_entry()));
     }
   }
+
   return absl::OkStatus();
 }
 // Uses BuildDependencyGraph to build a dependency graph to help identify
