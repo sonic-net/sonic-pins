@@ -74,7 +74,13 @@ std::vector<swss::FieldValueTuple> CreateFieldValues(
         absl::StrCat("0x", absl::Hex(replica.instance(), absl::kZeroPad4));
     json_array.push_back(json);
   }
-  return {{"replicas", json_array.dump()}};
+
+  if (!entry.multicast_group_entry().metadata().empty()) {
+    return {{"replicas", json_array.dump()},
+            {"controller_metadata", entry.multicast_group_entry().metadata()}};
+  } else {
+    return {{"replicas", json_array.dump()}};
+  }
 }
 
 void ComparePacketReplicationEntities(const pdpi::IrEntity& entity_app_db,
@@ -87,6 +93,12 @@ void ComparePacketReplicationEntities(const pdpi::IrEntity& entity_app_db,
 
   // There's no need to check the multicast group ID, since the caller only
   // attempts to compare entities with equal multicast group IDs.
+
+  if (group_entry_app_db.metadata() != group_entry_cache.metadata()) {
+    failures.push_back(absl::StrCat("Packet replication metadata mismatch '",
+                                    group_entry_app_db.metadata(), "' vs. '",
+                                    group_entry_cache.metadata(), "'"));
+  }
 
   absl::btree_set<std::string> port_instance_app_db;
   for (const auto& replica : group_entry_app_db.replicas()) {
@@ -236,6 +248,8 @@ GetAllAppDbPacketReplicationTableEntries(P4rtTable& p4rt_table) {
           replica->set_port(port_name);
           replica->set_instance(instance);
         }
+      } else if (field == "controller_metadata") {
+        multicast_group_entry->set_metadata(data);
       }
     }
     pre_entries.push_back(pre_entry);
