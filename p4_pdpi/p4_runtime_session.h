@@ -36,6 +36,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "grpcpp/security/credentials.h"
+#include "gutil/version.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
@@ -82,7 +83,7 @@ inline grpc::ChannelArguments GrpcChannelArgumentsForP4rt() {
 // as reverse path signalling.
 // - `GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA` to 0 to allow KeepAlive ping
 // without traffic in the transport,
-// - `GRPC_ARG_KEEPALIVE_TIMEOUT_MS` to 10s,
+// - `GRPC_ARG_KEEPALIVE_TIMEOUT_MS` to 20s,
 // - `GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS` to 1 to allow keepalive on
 // grpc::Channel without ongoing RPCs,
 // - `GRPC_ARG_MAX_METADATA_SIZE` to P4GRPCMaxMetadataSize because P4RT returns
@@ -95,7 +96,7 @@ GrpcChannelArgumentsForP4rtWithAggressiveKeepAlive() {
   // Allows grpc::channel to send keepalive ping without on-going traffic.
   args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
   args.SetInt(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
-  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 4'000 /*4 seconds*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 20'000 /*20 seconds*/);
   args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 1'000 /*1 second*/);
   return args;
 }
@@ -316,12 +317,16 @@ absl::Status ClearTableEntries(
 
 // Installs the given PI (program independent) table entry on the switch.
 absl::Status InstallPiTableEntry(P4RuntimeSession* session,
-                                 const p4::v1::TableEntry& pi_entry);
+                                 p4::v1::TableEntry pi_entry);
 
 // Installs the given PI (program independent) table entries on the switch.
 absl::Status InstallPiTableEntries(
     P4RuntimeSession* session, const IrP4Info& info,
     absl::Span<const p4::v1::TableEntry> pi_entries);
+
+// Installs the given PI (program independent) entity on the switch.
+absl::Status InstallPiEntity(P4RuntimeSession* session,
+                             p4::v1::Entity pi_entity);
 
 // Sends the given PI updates to the switch.
 absl::Status SendPiUpdates(P4RuntimeSession* session,
@@ -347,6 +352,12 @@ GetForwardingPipelineConfig(
     P4RuntimeSession* session,
     p4::v1::GetForwardingPipelineConfigRequest::ResponseType type =
         p4::v1::GetForwardingPipelineConfigRequest::ALL);
+
+// Gets the P4 Info from the device, then parses and returns the `version` field
+// specified in the `PkgInfo` message.
+// Assumes semantic versioning, i.e. that the `version` field is a string of the
+// the form `MAJOR.MINOR.PATCH`.
+absl::StatusOr<gutil::Version> GetPkgInfoVersion(P4RuntimeSession* session);
 
 }  // namespace pdpi
 #endif  // GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_H_
