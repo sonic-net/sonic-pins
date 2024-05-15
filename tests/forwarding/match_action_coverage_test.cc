@@ -373,7 +373,7 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
         // If the field can be a wildcard, install one entry with a wildcard and
         // one without.
         for (bool use_field : {true, false}) {
-          std::optional<absl::string_view> additional_constraint;
+          std::optional<std::string> additional_constraint;
           // Remove conditional if statement.
           if (!pdpi::HasP4RuntimeTranslatedType(field)) {
             ASSIGN_OR_RETURN(additional_constraint,
