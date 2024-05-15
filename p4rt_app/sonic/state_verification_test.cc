@@ -38,6 +38,7 @@ using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Return;
+using ::testing::UnorderedElementsAre;
 
 using ListOfKeys = std::vector<std::string>;
 using ListOfValues = std::vector<std::pair<std::string, std::string>>;
@@ -332,11 +333,107 @@ TEST_F(StateVerificationPacketReplicationTest, VerifyPacketReplicationFails) {
            })pb",
       &ir_entity));
 
-  auto result =
-      VerifyPacketReplicationWithCacheEntities(mock_p4rt_table_, {ir_entity});
-  ASSERT_THAT(result.size(), 1);
-  EXPECT_EQ(result.at(0),
-            "APP DB is missing replica Ethernet1/1/3_1 for group id 1");
+  ASSERT_THAT(
+      VerifyPacketReplicationWithCacheEntities(mock_p4rt_table_, {ir_entity}),
+      UnorderedElementsAre(
+          "APP DB is missing replica Ethernet1/1/3_1 for group id 1"));
+}
+
+TEST_F(StateVerificationPacketReplicationTest,
+       VerifyPacketReplicationFailsWithMetadataMismatch) {
+  const std::string json_array1 =
+      R"j([{"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"}])j";
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
+  const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
+      std::make_pair("replicas", json_array1),
+      std::make_pair("controller_metadata", "Metadata1"),
+  };
+
+  EXPECT_CALL(*mock_p4rt_app_db_, keys)
+      .WillOnce(Return(std::vector<std::string>{app_db_key1}));
+  EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_key1)))
+      .WillOnce(Return(kfv_values1));
+
+  pdpi::IrEntity ir_entity;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(packet_replication_engine_entry {
+             multicast_group_entry {
+               multicast_group_id: 1
+               replicas { port: "Ethernet1/1/1" instance: 1 }
+               metadata: "Metadata2"
+             }
+           })pb",
+      &ir_entity));
+
+  ASSERT_THAT(
+      VerifyPacketReplicationWithCacheEntities(mock_p4rt_table_, {ir_entity}),
+      UnorderedElementsAre(
+          "Packet replication metadata mismatch 'Metadata1' vs. 'Metadata2'"));
+}
+
+TEST_F(StateVerificationPacketReplicationTest,
+       VerifyPacketReplicationFailsWithEmptyMetadataMismatch) {
+  const std::string json_array1 =
+      R"j([{"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"}])j";
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
+  const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
+      std::make_pair("replicas", json_array1),
+  };
+
+  EXPECT_CALL(*mock_p4rt_app_db_, keys)
+      .WillOnce(Return(std::vector<std::string>{app_db_key1}));
+  EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_key1)))
+      .WillOnce(Return(kfv_values1));
+
+  pdpi::IrEntity ir_entity;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(packet_replication_engine_entry {
+             multicast_group_entry {
+               multicast_group_id: 1
+               replicas { port: "Ethernet1/1/1" instance: 1 }
+               metadata: "Metadata2"
+             }
+           })pb",
+      &ir_entity));
+
+  ASSERT_THAT(
+      VerifyPacketReplicationWithCacheEntities(mock_p4rt_table_, {ir_entity}),
+      UnorderedElementsAre(
+          "Packet replication metadata mismatch '' vs. 'Metadata2'"));
+}
+
+TEST_F(StateVerificationPacketReplicationTest,
+       VerifyPacketReplicationFailsWithEmptyCacheMetadataMismatch) {
+  const std::string json_array1 =
+      R"j([{"multicast_replica_instance":"0x0001",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"}])j";
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
+  const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
+      std::make_pair("replicas", json_array1),
+      std::make_pair("controller_metadata", "Metadata1"),
+  };
+
+  EXPECT_CALL(*mock_p4rt_app_db_, keys)
+      .WillOnce(Return(std::vector<std::string>{app_db_key1}));
+  EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_key1)))
+      .WillOnce(Return(kfv_values1));
+
+  pdpi::IrEntity ir_entity;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(packet_replication_engine_entry {
+             multicast_group_entry {
+               multicast_group_id: 1
+               replicas { port: "Ethernet1/1/1" instance: 1 }
+             }
+           })pb",
+      &ir_entity));
+
+  ASSERT_THAT(
+      VerifyPacketReplicationWithCacheEntities(mock_p4rt_table_, {ir_entity}),
+      UnorderedElementsAre(
+          "Packet replication metadata mismatch 'Metadata1' vs. ''"));
 }
 
 }  // namespace
