@@ -183,10 +183,8 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
 
   RETURN_IF_ERROR(ValidatePinsSoftwareComponentsAfterReboot(
-      pins_component_info_before_upgrade_reboot.primary_network_stack,
-      pins_component_info_after_upgrade_reboot.primary_network_stack,
-      pins_component_info_after_upgrade_reboot.secondary_network_stack,
-      image_version));
+      pins_component_info_before_upgrade_reboot,
+      pins_component_info_after_upgrade_reboot, image_version));
 
   RETURN_IF_ERROR(ValidateComponents(
       &ComponentValidator::OnNsfReboot, component_validators_,
