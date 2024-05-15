@@ -163,7 +163,12 @@ absl::StatusOr<bool> IsValidModification(
            << "' to '" << to_stage << "'";
   }
 
-  return !sonic::kfvEq(*from_db_table, to_db_table);
+  bool force_modify = pdpi::GetAnnotationBody("reinstall_during_upgrade",
+                                              to_table.preamble().annotations())
+                          .ok();
+  bool modified = !sonic::kfvEq(*from_db_table, to_db_table);
+
+  return modified || force_modify;
 }
 
 absl::Status CalculateAclDifference(const pdpi::IrP4Info& from,
