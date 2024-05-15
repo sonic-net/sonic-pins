@@ -365,6 +365,8 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
 }  // namespace p4rt_app
 
 int main(int argc, char** argv) {
+  FLAGS_logtostderr = 1;
+  FLAGS_logbuflevel = -1;
   gutil::SyslogSink syslog_sink("p4rt");
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -447,17 +449,17 @@ int main(int argc, char** argv) {
 
   // Create a server to listen on the unix socket port.
   std::thread internal_server_thread;
-  if (!FLAGS_p4rt_unix_socket.empty()) {
+  std::string unix_socket = FLAGS_p4rt_unix_socket;
+  if (!unix_socket.empty()) {
     internal_server_thread = std::thread(
-        [](p4rt_app::P4RuntimeImpl* p4rt_server) {
+        [unix_socket](p4rt_app::P4RuntimeImpl* p4rt_server) {
           ServerBuilder builder;
-          builder.AddListeningPort(
-              absl::StrCat("unix:", FLAGS_p4rt_unix_socket),
-              grpc::InsecureServerCredentials());
+          builder.AddListeningPort(absl::StrCat("unix:", unix_socket),
+                                   grpc::InsecureServerCredentials());
           builder.RegisterService(p4rt_server);
           std::unique_ptr<Server> server(builder.BuildAndStart());
-          LOG(INFO) << "Started unix socket server listening on "
-                    << FLAGS_p4rt_unix_socket << ".";
+          LOG(INFO) << "Started unix socket server listening on " << unix_socket
+                    << ".";
           server->Wait();
         },
         &p4runtime_server);
