@@ -291,6 +291,21 @@ message ByteCountAndMeterTableEntry {
   bytes controller_metadata = 8;
 }
 
+message ExactAndOptionalTableEntry {
+  message Match {
+    string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
+    string ipv4 = 2; // exact match / Format::IPV4
+    Optional str = 3; // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 
 // -- Actions ------------------------------------------------------------------
 
@@ -359,6 +374,7 @@ message TableEntry {
     UnusedTableEntry unused_table_entry = 15;
     PacketCountAndMeterTableEntry packet_count_and_meter_table_entry = 19;
     ByteCountAndMeterTableEntry byte_count_and_meter_table_entry = 23;
+    ExactAndOptionalTableEntry exact_and_optional_table_entry = 12300347;
   }
 }
 

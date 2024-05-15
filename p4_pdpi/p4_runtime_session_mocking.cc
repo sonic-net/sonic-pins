@@ -26,7 +26,7 @@
 #include "absl/types/optional.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/repeated_field.h"
-#include "grpcpp/impl/codegen/call_op_set.h"
+#include "grpcpp/impl/call_op_set.h"
 #include "grpcpp/support/status.h"
 #include "grpcpp/test/mock_stream.h"
 #include "gtest/gtest.h"
