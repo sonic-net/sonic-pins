@@ -33,6 +33,7 @@ struct TestVectorStats {
 
   int num_packets_forwarded = 0;
   int num_packets_punted = 0;
+  int num_deterministic_failures = 0;
 };
 
 TestVectorStats ComputeTestVectorStats(const PacketTestOutcomes &test_outcomes);

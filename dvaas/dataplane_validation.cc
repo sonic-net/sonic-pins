@@ -395,7 +395,7 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                        *sut.p4rt.get(), *control_switch.p4rt.get(),
                        test_vectors, packet_injection_params,
                        packet_statistics_));
-  RETURN_IF_ERROR(dvaas_test_artifact_writer->AppendToTestArtifact(
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
 
   // Validate test runs to create test outcomes.
