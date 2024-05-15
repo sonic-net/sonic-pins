@@ -478,8 +478,10 @@ absl::Status SetMetadataAndSendPiWriteRequest(P4RuntimeSession* session,
 
 absl::Status SetMetadataAndSendPiWriteRequests(
     P4RuntimeSession* session, std::vector<WriteRequest>& write_requests) {
-  for (auto& request : write_requests) {
-    RETURN_IF_ERROR(SetMetadataAndSendPiWriteRequest(session, request));
+  for (int index = 0; index < write_requests.size(); ++index) {
+    RETURN_IF_ERROR(
+        SetMetadataAndSendPiWriteRequest(session, write_requests[index]))
+        << " during request at index #" << index;
   }
   return absl::OkStatus();
 }

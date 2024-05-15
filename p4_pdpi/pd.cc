@@ -162,7 +162,7 @@ absl::StatusOr<bool> HasField(const google::protobuf::Message &parent_message,
                    GetFieldDescriptor(parent_message, fieldname));
   if (field_descriptor == nullptr) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "Field " << fieldname << " missing in "
+           << "Field " << fieldname << " missing in schema for "
            << parent_message.GetTypeName() << ". "
            << kPdProtoAndP4InfoOutOfSync;
   }
@@ -1852,11 +1852,13 @@ static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
     // Skip optional fields that are not present in pd_match. For exact
     // matches, this will automatically assume the default value (i.e. ""),
     // which allows for "" for Format::STRING fields.
-    auto has_field = HasField(pd_match, pd_match_name);
-    if (has_field.ok() && !*has_field &&
+    ASSIGN_OR_RETURN(bool has_field, HasField(pd_match, pd_match_name));
+    if (!has_field &&
         ir_match_info->match_field().match_type() != MatchField::EXACT) {
       continue;
     }
+    // At this point we have established that `pd_match` either uses the field
+    // `pd_match_name` or it is supposed to be an Exact field and is unused.
 
     if (ir_match_info->is_unsupported() && !options.allow_unsupported) {
       invalid_match_reasons.push_back(

@@ -237,6 +237,30 @@ void ExtractWriteRequestsOmitMaximumBatchSizeTest() {
   ASSERT_EQ(result->size(), 1);
 }
 
+void ExtractWriteRequestPreservesFieldsTest() {
+  p4::v1::WriteRequest write_request = WriteRequest();
+  for (int i = 0; i < 11; i++) {
+    write_request.add_updates();
+  }
+  ::p4::v1::Uint128 election_id;
+  election_id.set_high(100);
+  election_id.set_low(10);
+  *write_request.mutable_election_id() = election_id;
+  write_request.set_device_id(123);
+  write_request.set_role("role");
+
+  absl::StatusOr<std::vector<p4::v1::WriteRequest>> result =
+      pdpi::ExtractWriteRequests(std::move(write_request), 2);
+
+  ASSERT_EQ(result->size(), 6);
+  for (int i = 0; i < result->size(); i++) {
+    EXPECT_EQ(result->at(i).election_id().high(), election_id.high());
+    EXPECT_EQ(result->at(i).election_id().low(), election_id.low());
+    EXPECT_EQ(result->at(i).device_id(), 123);
+    EXPECT_EQ(result->at(i).role(), "role");
+  }
+}
+
 void ExtractWriteRequestsTest(int update_size, int max_write_request_size) {
   std::vector<p4::v1::Update> updates;
   updates.reserve(update_size);
@@ -314,6 +338,7 @@ void ExtractWriteRequestsTest(int update_size, int max_write_request_size) {
 void ExtractWriteRequestsTests() {
   ExtractWriteRequestsInvalidInputTest();
   ExtractWriteRequestsOmitMaximumBatchSizeTest();
+  ExtractWriteRequestPreservesFieldsTest();
   ExtractWriteRequestsTest(/*update_size=*/1, /*max_write_request_size=*/0);
   ExtractWriteRequestsTest(/*update_size=*/1, /*max_write_request_size=*/1);
   ExtractWriteRequestsTest(/*update_size=*/1, /*max_write_request_size=*/2);
