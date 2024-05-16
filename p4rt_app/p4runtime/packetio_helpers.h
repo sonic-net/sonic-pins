@@ -25,6 +25,8 @@
 
 namespace p4rt_app {
 
+#define SEND_TO_INGRESS_PORT_NAME "SEND_TO_INGRESS"
+
 // Add the required metadata and return a PacketIn.
 absl::StatusOr<p4::v1::PacketIn> CreatePacketInMessage(
     const std::string& source_port_id, const std::string& target_port_id);
