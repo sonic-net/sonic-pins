@@ -35,6 +35,7 @@
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/flow_programmer.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
+#include "tests/integration/system/nsf/interfaces/scenario.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/interfaces/traffic_helper.h"
 #include "tests/integration/system/nsf/milestone.h"
@@ -274,7 +275,9 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 }
 
 TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
-  GetTestEnvironment(testbed_).SetTestCaseID(GetParam().test_case_id);
+  NsfUpgradeScenario scenario = GetRandomNsfUpgradeScenario();
+  GetTestEnvironment(testbed_).SetTestCaseIDs(
+      GetParam().get_test_case_ids(scenario));
   std::vector<ImageConfigParams> image_config_params =
       GetParam().image_config_params;
   thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
@@ -283,8 +286,6 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   if (image_config_params.empty()) {
     GTEST_SKIP() << "No image config params provided";
   }
-
-  NsfUpgradeScenario scenario = GetRandomNsfUpgradeScenario();
 
   // In case the NSF Upgrade scenario is chosen to be the one where in each
   // iteration we skip pushing the config after NSF Upgrade, we intend to keep
