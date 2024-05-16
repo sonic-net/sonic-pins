@@ -42,6 +42,7 @@
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4rt_app/event_monitoring/app_state_db_port_table_event.h"
+#include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_node_cfg_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/state_event_monitor.h"
@@ -252,19 +253,6 @@ sonic::SwitchTable CreateSwitchTable(swss::DBConnector* app_db,
   };
 }
 
-void WaitForPortInitDone() {
-  // Open a RedisDB connection to the AppDB.
-  swss::DBConnector app_db(APPL_DB, kRedisDbHost, kRedisDbPort, /*timeout=*/0);
-
-  // Wait for the ports to be initialized.
-  while (!app_db.exists("PORT_TABLE:PortInitDone")) {
-    // Prints once every 5 minutes.
-    LOG_EVERY_N(WARNING, 60)
-        << "Waiting for PortInitDone to be set before P4RT App will start.";
-    absl::SleepFor(absl::Seconds(5));
-  }
-}
-
 void LogStatsEveryMinute(absl::Notification* stop,
                          p4rt_app::P4RuntimeImpl* p4runtime) {
   while (!stop->HasBeenNotified()) {
@@ -325,8 +313,8 @@ int main(int argc, char** argv) {
       std::make_unique<p4rt_app::sonic::SystemCallAdapter>(),
       p4rt_app::sonic::PacketIoOptions{});
 
-  // Wait for PortInitDone to be done.
-  p4rt_app::WaitForPortInitDone();
+  // TODO(PINS): Create a netdev translator for P4Runtime's PacketIo handling.
+  //  swss::IntfTranslator netdev_translator(&packetio_config_db);
 
   // Configure the P4RT options.
   p4rt_app::P4RuntimeImplOptions p4rt_options{
@@ -367,11 +355,11 @@ int main(int argc, char** argv) {
   auto app_state_db_event_loop =
       std::thread([&p4runtime_server, &monitor_app_state_db_events]() {
         swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
+        p4rt_app::sonic::StateEventMonitor app_state_db_monitor(app_state_db);
+
         p4rt_app::AppStateDbPortTableEventHandler port_table_handler(
             p4runtime_server);
-
-        p4rt_app::sonic::StateEventMonitor port_state_monitor(app_state_db);
-        auto status = port_state_monitor.RegisterTableHandler(
+        auto status = app_state_db_monitor.RegisterTableHandler(
             "PORT_TABLE", port_table_handler);
         if (!status.ok()) {
           LOG(FATAL)  // Crash OK: only fails on startup.
@@ -379,8 +367,19 @@ int main(int argc, char** argv) {
               << status;
         }
 
+        p4rt_app::AppStateDbSendToIngressPortTableEventHandler
+            send_to_ingress_table_hander(p4runtime_server);
+        status = app_state_db_monitor.RegisterTableHandler(
+            APP_SEND_TO_INGRESS_PORT_TABLE_NAME, send_to_ingress_table_hander);
+        if (!status.ok()) {
+          LOG(FATAL)  // Crash OK: only fails on startup.
+              << "APPL_STATE_DB event monitor could not register '"
+              << APP_SEND_TO_INGRESS_PORT_TABLE_NAME << "': " << status;
+        }
+
         while (monitor_app_state_db_events) {
-          absl::Status status = port_state_monitor.WaitForNextEventAndHandle();
+          absl::Status status =
+              app_state_db_monitor.WaitForNextEventAndHandle();
           if (!status.ok()) {
             LOG(ERROR)
                 << "APPL_STATE_DB event monitor failed waiting for an event: "

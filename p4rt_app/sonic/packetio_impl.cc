@@ -19,10 +19,8 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
@@ -31,20 +29,6 @@
 
 namespace p4rt_app {
 namespace sonic {
-namespace {
-
-// P4RT App only supports PacketIO for SDN controlled ports. In SONiC we expect
-// these port names to be prefixed with Ethernet. For example:
-//   * Ethernet0, Ethernet8
-//   * Ethernet1/1/0, Ethernet2/1/3
-//
-// We also allow submitting directly to the ingress path.
-bool SdnPortName(absl::string_view port_name) {
-  return absl::StartsWith(port_name, "Ethernet") ||
-         port_name == kSubmitToIngress;
-}
-
-}  // namespace
 
 absl::Status PacketIoImpl::SendPacketOut(absl::string_view port_name,
                                          const std::string& packet) {
@@ -61,8 +45,8 @@ absl::Status PacketIoImpl::SendPacketOut(absl::string_view port_name,
 }
 
 absl::Status PacketIoImpl::AddPacketIoPort(absl::string_view port_name) {
-  // Nothing to do if this is not an interesting port or already exists.
-  if (!SdnPortName(port_name) || port_to_socket_.contains(port_name)) {
+  // Nothing to do if this port or already exists.
+  if (port_to_socket_.contains(port_name)) {
     return absl::OkStatus();
   }
   LOG(INFO) << "Adding PacketIO port '" << port_name << "'.";
@@ -95,10 +79,6 @@ absl::Status PacketIoImpl::AddPacketIoPort(absl::string_view port_name) {
 }
 
 absl::Status PacketIoImpl::RemovePacketIoPort(absl::string_view port_name) {
-  // Nothing to do if this is not an interesting port.
-  if (!SdnPortName(port_name)) {
-    return absl::OkStatus();
-  }
   LOG(INFO) << "Removing PacketIO port '" << port_name << "'.";
 
   // Cleanup PacketInSelectable, if in Netdev mode.
@@ -158,10 +138,6 @@ absl::StatusOr<std::thread> PacketIoImpl::StartReceive(
   callback_function_ = std::move(callback_function);
   use_genetlink_ = use_genetlink;
 
-  // Add the SubmitToIngerss port explicitly, if present.
-  if (IsValidSystemPort(*system_call_adapter_, kSubmitToIngress)) {
-    RETURN_IF_ERROR(AddPacketIoPort(kSubmitToIngress));
-  }
   if (use_genetlink_) {
     return packet_metadata::StartReceive(callback_function_);
   } else {
