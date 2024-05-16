@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef GOOGLE_P4RT_APP_UTILS_TABLE_UTILITY_H_
-#define GOOGLE_P4RT_APP_UTILS_TABLE_UTILITY_H_
+#ifndef PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_
+#define PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_
 
 #include <string>
 
@@ -51,4 +51,4 @@ absl::StatusOr<table::Type> GetTableType(
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_UTILS_TABLE_UTILITY_H_
+#endif  // PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_

@@ -78,13 +78,13 @@ void SetNextReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
         auto* reader =
             new grpc::testing::MockClientReader<p4::v1::ReadResponse>();
         InSequence s;
-        for (const auto& entry : read_entries) {
-          EXPECT_CALL(*reader, Read)
-              .WillOnce([=](p4::v1::ReadResponse* response) -> bool {
+        EXPECT_CALL(*reader, Read)
+            .WillOnce([=](p4::v1::ReadResponse* response) -> bool {
+              for (const auto& entry : read_entries) {
                 *response->add_entities()->mutable_table_entry() = entry;
-                return true;
-              });
-        }
+              }
+              return true;
+            });
         EXPECT_CALL(*reader, Read).WillOnce(Return(false));
         EXPECT_CALL(*reader, Finish).WillOnce(Return(grpc::Status::OK));
         return reader;

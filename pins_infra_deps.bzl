@@ -30,10 +30,10 @@ def pins_infra_deps():
     if not native.existing_rule("com_google_absl"):
         http_archive(
             name = "com_google_absl",
-            url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20211102.0.tar.gz",
-            strip_prefix = "abseil-cpp-20211102.0",
-            sha256 = "dcf71b9cba8dc0ca9940c4b316a0c796be8fab42b070bb6b7cab62b48f0e66c4",
-        )
+            url = "https://github.com/abseil/abseil-cpp/archive/20230802.0.tar.gz",
+            strip_prefix = "abseil-cpp-20230802.0",
+            sha256 = "59d2976af9d6ecf001a81a35749a6e551a335b949d34918cfade07737b9d93c5",
+        )   
     if not native.existing_rule("com_google_googletest"):
         http_archive(
             name = "com_google_googletest",
@@ -172,9 +172,8 @@ def pins_infra_deps():
     if not native.existing_rule("sonic_swss_common"):
         http_archive(
             name = "sonic_swss_common",
-            url = "https://github.com/azure/sonic-swss-common/archive/a5db0db46b23c000e0702e8ac247808c7d9ffe24.zip",
-            strip_prefix = "sonic-swss-common-a5db0db46b23c000e0702e8ac247808c7d9ffe24",
-            sha256 = "e1b8a787106b0627905cd07057ba094b4737942bc252287dd4014dd153664632",
+            url = "https://github.com/azure/sonic-swss-common/archive/5d1fe2da5fc4a6b1daebdb5df9b04c05805f8ad7.zip",
+            strip_prefix = "sonic-swss-common-5d1fe2da5fc4a6b1daebdb5df9b04c05805f8ad7",
         )
     if not native.existing_rule("rules_pkg"):
         http_archive(

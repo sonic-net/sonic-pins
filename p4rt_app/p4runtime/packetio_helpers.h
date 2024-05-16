@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_P4RUNTIME_PACKET_IO_HELPERS_H_
-#define GOOGLE_P4RT_APP_P4RUNTIME_PACKET_IO_HELPERS_H_
+#ifndef PINS_P4RT_APP_P4RUNTIME_PACKET_IO_HELPERS_H_
+#define PINS_P4RT_APP_P4RUNTIME_PACKET_IO_HELPERS_H_
 
 #include <string>
 
@@ -24,6 +24,8 @@
 #include "p4rt_app/sonic/packetio_interface.h"
 
 namespace p4rt_app {
+
+#define SEND_TO_INGRESS_PORT_NAME "SEND_TO_INGRESS"
 
 // Add the required metadata and return a PacketIn.
 absl::StatusOr<p4::v1::PacketIn> CreatePacketInMessage(
@@ -39,4 +41,4 @@ absl::Status SendPacketOut(
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_P4RUNTIME_PACKET_IO_HELPERS_H_
+#endif  // PINS_P4RT_APP_P4RUNTIME_PACKET_IO_HELPERS_H_
