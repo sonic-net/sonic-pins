@@ -79,6 +79,11 @@ cc_library(
 )
 
 cc_library(
+    name = "scenario",
+    hdrs = ["scenario.h"],
+)
+
+cc_library(
     name = "test_params",
     testonly = True,
     hdrs = ["test_params.h"],
@@ -86,6 +91,7 @@ cc_library(
         ":component_validator",
         ":flow_programmer",
         ":image_config_params",
+        ":scenario",
         ":testbed",
         ":traffic_helper",
         "//thinkit:ssh_client",
