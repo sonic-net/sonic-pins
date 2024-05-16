@@ -67,10 +67,10 @@ struct P4Specification {
   p4::v1::ForwardingPipelineConfig bmv2_config;
 };
 
-// Stores configurable parameters for `HandleFailure` for packet failure
-// determinism. Attempt at most `num_of_replication_attempts_per_failure`
-// number of reruns for the first `max_failures_to_attempt_to_replicate`
-// failures.
+// Stores configurable parameters for `PostProcessTestVectorFailure` for packet
+// failure determinism. Attempt at most
+// `num_of_replication_attempts_per_failure` number of reruns for the first
+// `max_failures_to_attempt_to_replicate` failures.
 struct FailureEnhancementOptions {
   int num_of_replication_attempts_per_failure = 1000;
   int max_failures_to_attempt_to_replicate = 10;
