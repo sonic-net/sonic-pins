@@ -43,7 +43,7 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-constexpr absl::string_view kSubmitToIngress = SEND_TO_INGRESS;
+constexpr absl::string_view kSubmitToIngress = SEND_TO_INGRESS_PORT_NAME;
 
 MATCHER_P(IfrNameEq, name, "") {
   if (arg != nullptr) {

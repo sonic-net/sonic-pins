@@ -17,7 +17,7 @@ using ::testing::Return;
 // global variables for swss_common macros.
 constexpr char kSetCommand[] = SET_COMMAND;
 constexpr char kDelCommand[] = DEL_COMMAND;
-constexpr char kSendToIngressPort[] = SEND_TO_INGRESS;
+constexpr char kSendToIngressPort[] = SEND_TO_INGRESS_PORT_NAME;
 
 TEST(SendToIngressPortTableEventTest, SetEventCreatesPacketIoPort) {
   MockP4RuntimeImpl mock_p4runtime_impl;

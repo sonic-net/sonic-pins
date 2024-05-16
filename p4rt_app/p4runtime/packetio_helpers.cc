@@ -94,7 +94,7 @@ absl::Status SendPacketOut(
   std::string sonic_port_name;
   if (submit_to_ingress == 1) {
     // Use submit_to_ingress attribute value netdev port.
-    sonic_port_name = SEND_TO_INGRESS;
+    sonic_port_name = SEND_TO_INGRESS_PORT_NAME;
   } else {
     // Use egress_port_id attribute value.
     if (translate_port_ids) {

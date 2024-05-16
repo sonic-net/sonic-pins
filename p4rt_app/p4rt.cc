@@ -314,7 +314,7 @@ int main(int argc, char** argv) {
       p4rt_app::sonic::PacketIoOptions{});
 
   // TODO(PINS): Create a netdev translator for P4Runtime's PacketIo handling.
-  // swss::IntfTranslator netdev_translator(&packetio_config_db);
+  //  swss::IntfTranslator netdev_translator(&packetio_config_db);
 
   // Configure the P4RT options.
   p4rt_app::P4RuntimeImplOptions p4rt_options{

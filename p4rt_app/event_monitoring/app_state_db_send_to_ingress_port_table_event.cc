@@ -35,8 +35,8 @@ AppStateDbSendToIngressPortTableEventHandler::
 absl::Status AppStateDbSendToIngressPortTableEventHandler::HandleEvent(
     const std::string& operation, const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {
-  // P4RT App only supports the SEND_TO_INGRESS name from swss_common.
-  if (!absl::StartsWith(key, SEND_TO_INGRESS)) {
+  // P4RT App only supports the SEND_TO_INGRESS_PORT name from swss_common.
+  if (!absl::StartsWith(key, SEND_TO_INGRESS_PORT_NAME)) {
     return absl::OkStatus();
   }
 
