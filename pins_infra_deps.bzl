@@ -30,10 +30,10 @@ def pins_infra_deps():
     if not native.existing_rule("com_google_absl"):
         http_archive(
             name = "com_google_absl",
-            url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20211102.0.tar.gz",
-            strip_prefix = "abseil-cpp-20211102.0",
-            sha256 = "dcf71b9cba8dc0ca9940c4b316a0c796be8fab42b070bb6b7cab62b48f0e66c4",
-        )
+            url = "https://github.com/abseil/abseil-cpp/archive/20230802.0.tar.gz",
+            strip_prefix = "abseil-cpp-20230802.0",
+            sha256 = "59d2976af9d6ecf001a81a35749a6e551a335b949d34918cfade07737b9d93c5",
+        )   
     if not native.existing_rule("com_google_googletest"):
         http_archive(
             name = "com_google_googletest",
