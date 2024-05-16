@@ -27,6 +27,7 @@
 #include "p4rt_app/sonic/packetio_impl.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "sai_p4/fixed/ids.h"
+#include "swss/schema.h"
 
 namespace p4rt_app {
 
@@ -93,7 +94,7 @@ absl::Status SendPacketOut(
   std::string sonic_port_name;
   if (submit_to_ingress == 1) {
     // Use submit_to_ingress attribute value netdev port.
-    sonic_port_name = std::string(sonic::kSubmitToIngress);
+    sonic_port_name = SEND_TO_INGRESS_PORT_NAME;
   } else {
     // Use egress_port_id attribute value.
     if (translate_port_ids) {
