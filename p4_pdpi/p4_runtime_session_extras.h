@@ -21,8 +21,8 @@
 // convenience, not for performance. They are intended for use in testing &
 // experimentation, not for use in production.
 
-#ifndef GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
-#define GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
+#ifndef PINS_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
+#define PINS_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
 
 #include <vector>
 
@@ -116,4 +116,4 @@ absl::Status InstallPdTableEntry(P4RuntimeSession& p4rt,
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
+#endif  // PINS_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_

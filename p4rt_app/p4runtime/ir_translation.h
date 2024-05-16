@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_
-#define GOOGLE_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_
+#ifndef PINS_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_
+#define PINS_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -57,4 +57,4 @@ void Convert64BitIpv6AclMatchFieldsTo128Bit(pdpi::IrTableEntry& ir_table_entry);
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_
+#endif  // PINS_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_

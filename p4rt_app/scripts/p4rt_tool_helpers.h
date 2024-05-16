@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
-#define GOOGLE_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
+#ifndef PINS_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
+#define PINS_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
 
 #include <memory>
 
@@ -40,4 +40,4 @@ absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> CreateP4rtSession();
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
+#endif  // PINS_P4RT_APP_SCRIPTS_P4RT_TOOL_HELPERS_H_
