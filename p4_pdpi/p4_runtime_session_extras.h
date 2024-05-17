@@ -59,7 +59,7 @@ absl::Status InstallPdTableEntries(P4RuntimeSession& p4rt,
                                    absl::string_view pd_table_entries);
 
 // Like `InstallPdTableEntries`, but for a single entry, which must
-// be a `TableEntries` message with a PD generator-produced .proto definition.
+// be a `TableEntry` message with a PD generator-produced .proto definition.
 absl::Status InstallPdTableEntry(
     P4RuntimeSession& p4rt, const google::protobuf::Message& pd_table_entry);
 
