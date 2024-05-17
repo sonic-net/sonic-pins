@@ -70,5 +70,11 @@ void SystemCallAdapter::freeifaddrs(struct ifaddrs *ifa) const {
   ::freeifaddrs(ifa);
 }
 
+int SystemCallAdapter::getsockopt(int socket, int level, int option_name,
+                                  int *option_value,
+                                  socklen_t *option_len) const {
+  return ::getsockopt(socket, level, option_name, option_value, option_len);
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app
