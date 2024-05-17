@@ -1,7 +1,7 @@
 // Helper functions for working with the SAI PD protobuf representation.
 
-#ifndef GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_PD_UTIL_H_
-#define GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_PD_UTIL_H_
+#ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_PD_UTIL_H_
+#define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_PD_UTIL_H_
 
 #include "absl/types/optional.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -17,4 +17,4 @@ std::string UpdateStatusToString(const sai::UpdateStatus& status);
 
 }  // namespace sai_pd
 
-#endif  // GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_PD_UTIL_H_
+#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_PD_UTIL_H_

@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_SCHEMA_H_
-#define GOOGLE_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_SCHEMA_H_
+#ifndef PINS_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_SCHEMA_H_
+#define PINS_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_SCHEMA_H_
 
 // This file provides utility functions for working with
 // P4InfoVerificationSchema objects.
@@ -39,4 +39,4 @@ absl::Status IsSupportedBySchema(
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_SCHEMA_H_
+#endif  // PINS_P4RT_APP_P4RUNTIME_P4INFO_VERIFICATION_SCHEMA_H_

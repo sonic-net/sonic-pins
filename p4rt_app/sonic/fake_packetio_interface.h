@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
-#define GOOGLE_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
+#ifndef PINS_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
+#define PINS_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
 
 #include <string>
 #include <thread>  //NOLINT
@@ -72,4 +72,4 @@ class FakePacketIoInterface final : public PacketIoInterface {
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_
+#endif  // PINS_P4RT_APP_SONIC_FAKE_PACKETIO_INTERFACE_H_

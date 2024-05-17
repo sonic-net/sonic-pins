@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_GUTIL_TABLE_ENTRY_KEY_H_
-#define GOOGLE_GUTIL_TABLE_ENTRY_KEY_H_
+#ifndef PINS_GUTIL_TABLE_ENTRY_KEY_H_
+#define PINS_GUTIL_TABLE_ENTRY_KEY_H_
 
 #include <algorithm>
 #include <vector>
@@ -60,4 +60,4 @@ H AbslHashValue(H h, const TableEntryKey& key) {
 
 }  // namespace gutil
 
-#endif  // GOOGLE_GUTIL_TABLE_ENTRY_KEY_H_
+#endif  // PINS_GUTIL_TABLE_ENTRY_KEY_H_
