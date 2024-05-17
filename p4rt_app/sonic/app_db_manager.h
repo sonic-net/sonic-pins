@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_SONIC_APP_DB_MANAGER_H_
-#define GOOGLE_P4RT_APP_SONIC_APP_DB_MANAGER_H_
+#ifndef PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_
+#define PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_
 
 #include <memory>
 
@@ -99,4 +99,4 @@ absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_APP_DB_MANAGER_H_
+#endif  // PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_

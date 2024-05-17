@@ -134,6 +134,7 @@ TEST(VisitValuesOfTypeTest, CollectStrings) {
   ASSERT_OK(VisitValuesOfType(info, target_type, entries,
                               /*visitor=*/[&](absl::string_view input) {
                                 string_collection.insert(std::string(input));
+                                return absl::OkStatus();
                               }));
 
   EXPECT_THAT(string_collection,

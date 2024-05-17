@@ -16,8 +16,8 @@
 // as "0xf0a1" to ease working with PD protos.
 // See the documentation of HEX_STRING in ir.proto for details of the encoding.
 
-#ifndef GOOGLE_P4_PDPI_HEX_H_
-#define GOOGLE_P4_PDPI_HEX_H_
+#ifndef PINS_P4_PDPI_HEX_H_
+#define PINS_P4_PDPI_HEX_H_
 
 #include <stddef.h>
 
@@ -156,4 +156,4 @@ absl::StatusOr<std::bitset<num_bits>> HexStringToBitset(
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_HEX_H_
+#endif  // PINS_P4_PDPI_HEX_H_

@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
-#define GOOGLE_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
+#ifndef PINS_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
+#define PINS_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
 
 #include <memory>
 #include <string>
@@ -43,4 +43,4 @@ class PacketIoInterface {
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
+#endif  // PINS_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_

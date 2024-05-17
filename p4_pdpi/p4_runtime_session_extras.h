@@ -21,8 +21,8 @@
 // convenience, not for performance. They are intended for use in testing &
 // experimentation, not for use in production.
 
-#ifndef GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
-#define GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
+#ifndef PINS_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
+#define PINS_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
 
 #include <vector>
 
@@ -80,9 +80,21 @@ absl::Status InstallIrTableEntries(
 absl::Status InstallIrTableEntry(pdpi::P4RuntimeSession& p4rt,
                                  const pdpi::IrTableEntry& ir_table_entry);
 
+// Reads table entries from the switch using `p4rt` and returns them in PI
+// representation in an order determined by gutil::TableEntryKey.
+absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
+    P4RuntimeSession& p4rt);
+
 // Reads table entries from the switch using `p4rt` and returns them in IR
 // representation. Reads the P4Info used in translation from the switch.
 absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntries(
+    P4RuntimeSession& p4rt);
+
+// Reads table entries from the switch using `p4rt` and returns them in IR
+// representation in an order determined by gutil::TableEntryKey on the
+// corresponding PI representation. Reads the P4Info used in translation from
+// the switch.
+absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntriesSorted(
     P4RuntimeSession& p4rt);
 
 // Constructs a write request with metadata from `p4rt` and sends it to the
@@ -116,4 +128,4 @@ absl::Status InstallPdTableEntry(P4RuntimeSession& p4rt,
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_
+#endif  // PINS_P4_PDPI_P4_RUNTIME_SESSION_EXTRAS_H_

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_P4_PDPI_SEQUENCING_H_
-#define GOOGLE_P4_PDPI_SEQUENCING_H_
+#ifndef PINS_P4_PDPI_SEQUENCING_H_
+#define PINS_P4_PDPI_SEQUENCING_H_
 
 #include <functional>
 #include <optional>
@@ -66,4 +66,4 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> GetEntriesUnreachableFromRoots(
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_SEQUENCING_H_
+#endif  // PINS_P4_PDPI_SEQUENCING_H_

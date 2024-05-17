@@ -70,13 +70,14 @@ TEST(StateVerificationTest, MissingEntryInAppDbFails) {
 
   // Read only 1 key from the AppDb and 2 keys from the AppStateDb.
   EXPECT_CALL(mock_app_db, keys).WillOnce(Return(ListOfKeys{"key1"}));
-  EXPECT_CALL(mock_app_state_db, keys)
-      .WillOnce(Return(ListOfKeys{"key0", "key1"}));
-
-  // Because the key1 matches we'll read the full entry from both DBs.
   EXPECT_CALL(mock_app_db, get("key1"))
       .WillOnce(
           Return(ListOfValues{{"field1", "value1"}, {"field0", "value0"}}));
+
+  EXPECT_CALL(mock_app_state_db, keys)
+      .WillOnce(Return(ListOfKeys{"key0", "key1"}));
+  EXPECT_CALL(mock_app_state_db, get("key0"))
+      .WillOnce(Return(ListOfValues{{}}));
   EXPECT_CALL(mock_app_state_db, get("key1"))
       .WillOnce(
           Return(ListOfValues{{"field0", "value0"}, {"field1", "value1"}}));
@@ -90,14 +91,14 @@ TEST(StateVerificationTest, MissingEntryInAppStateDbFails) {
   MockTableAdapter mock_app_state_db;
   MockTableAdapter mock_app_db;
 
-  // Read only 2 key from the AppDb and 1 key from the AppStateDb.
+  // Read 2 key from the AppDb and only 1 key from the AppStateDb.
   EXPECT_CALL(mock_app_db, keys).WillOnce(Return(ListOfKeys{"key0", "key1"}));
-  EXPECT_CALL(mock_app_state_db, keys).WillOnce(Return(ListOfKeys{"key1"}));
-
-  // Because the key1 matches we'll read the full entry from both DBs.
+  EXPECT_CALL(mock_app_db, get("key0")).WillOnce(Return(ListOfValues{{}}));
   EXPECT_CALL(mock_app_db, get("key1"))
       .WillOnce(
           Return(ListOfValues{{"field1", "value1"}, {"field0", "value0"}}));
+
+  EXPECT_CALL(mock_app_state_db, keys).WillOnce(Return(ListOfKeys{"key1"}));
   EXPECT_CALL(mock_app_state_db, get("key1"))
       .WillOnce(
           Return(ListOfValues{{"field0", "value0"}, {"field1", "value1"}}));

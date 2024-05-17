@@ -1,10 +1,11 @@
-#ifndef GOOGLE_P4_PDPI_IR_TOOLS_H_
-#define GOOGLE_P4_PDPI_IR_TOOLS_H_
+#ifndef PINS_P4_PDPI_IR_TOOLS_H_
+#define PINS_P4_PDPI_IR_TOOLS_H_
 
 #include <functional>
 #include <string>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -47,8 +48,8 @@ absl::Status TransformValuesOfType(
 absl::Status VisitValuesOfType(
     const IrP4Info& info, const p4::config::v1::P4NamedType& target_type,
     std::vector<IrTableEntry> entries,
-    const std::function<void(absl::string_view)>& visitor);
+    const absl::AnyInvocable<absl::Status(absl::string_view) const>& visitor);
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_IR_TOOLS_H_
+#endif  // PINS_P4_PDPI_IR_TOOLS_H_
