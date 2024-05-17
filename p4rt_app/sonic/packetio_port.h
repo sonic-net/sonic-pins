@@ -38,10 +38,6 @@ struct PacketIoPortParams {
   std::unique_ptr<PacketInSelectable> packet_in_selectable;
 };
 
-// Checks whether the given port exists in the system or not.
-bool IsValidSystemPort(const SystemCallAdapter& system_call_adapter,
-                       absl::string_view port_name);
-
 // Adds a port to packet I/O by creating the receive & transmit sockets.
 absl::StatusOr<std::unique_ptr<PacketIoPortParams>> AddPacketIoPort(
     const SystemCallAdapter& system_call_adapter, absl::string_view port_name,
