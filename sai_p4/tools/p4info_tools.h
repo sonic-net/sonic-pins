@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_SAI_P4_TOOLS_P4INFO_TOOLS_H_
-#define GOOGLE_SAI_P4_TOOLS_P4INFO_TOOLS_H_
+#ifndef PINS_SAI_P4_TOOLS_P4INFO_TOOLS_H_
+#define PINS_SAI_P4_TOOLS_P4INFO_TOOLS_H_
 
 #include "p4/config/v1/p4info.pb.h"
 
@@ -25,4 +25,4 @@ bool SetSaiHashSeed(p4::config::v1::P4Info& p4info, uint32_t seed);
 
 }  // namespace sai
 
-#endif  // GOOGLE_SAI_P4_TOOLS_P4INFO_TOOLS_H_
+#endif  // PINS_SAI_P4_TOOLS_P4INFO_TOOLS_H_

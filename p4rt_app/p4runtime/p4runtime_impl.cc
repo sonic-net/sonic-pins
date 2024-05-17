@@ -82,7 +82,7 @@ absl::Status SupportedTableEntryRequest(const p4::v1::TableEntry& table_entry) {
 absl::Status AllowRoleAccessToTable(const std::string& role_name,
                                     const std::string& table_name,
                                     const pdpi::IrP4Info& p4_info) {
-  // The defulat role can access any table.
+  // The default role can access any table.
   if (role_name.empty()) return absl::OkStatus();
 
   auto table_def = p4_info.tables_by_name().find(table_name);

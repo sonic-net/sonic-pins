@@ -14,8 +14,8 @@
 
 // Auxilliary functions for mocking P4RuntimeSession behaviors.
 
-#ifndef GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_
-#define GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_
+#ifndef PINS_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_
+#define PINS_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_
 
 #include <vector>
 
@@ -104,4 +104,4 @@ void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_
+#endif  // PINS_P4_PDPI_P4_RUNTIME_SESSION_MOCKING_H_

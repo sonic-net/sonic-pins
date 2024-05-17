@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_P4_PDPI_PD_H_
-#define GOOGLE_P4_PDPI_PD_H_
+#ifndef PINS_P4_PDPI_PD_H_
+#define PINS_P4_PDPI_PD_H_
 
 #include <string>
 #include <vector>
@@ -238,4 +238,4 @@ absl::Status SetEnumField(google::protobuf::Message *message,
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_PD_H_
+#endif  // PINS_P4_PDPI_PD_H_
