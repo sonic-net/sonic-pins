@@ -10,27 +10,6 @@
 #include "p4_pdpi/pd.h"
 
 namespace pdpi {
-namespace {
-
-// Translates `pi_entries` to IrTableEntries by reading the P4Info used in
-// translation from the switch through `p4rt`.
-absl::StatusOr<std::vector<IrTableEntry>> TranslatePiEntriesToIrEntries(
-    P4RuntimeSession& p4rt, absl::Span<const p4::v1::TableEntry> pi_entries) {
-  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   GetForwardingPipelineConfig(&p4rt));
-  ASSIGN_OR_RETURN(IrP4Info ir_info,
-                   CreateIrP4Info(response.config().p4info()));
-
-  std::vector<IrTableEntry> ir_table_entries;
-  for (const auto& entry : pi_entries) {
-    ASSIGN_OR_RETURN(IrTableEntry ir_entry, PiTableEntryToIr(ir_info, entry));
-    ir_table_entries.push_back(ir_entry);
-  }
-
-  return ir_table_entries;
-}
-
-}  // namespace
 
 absl::Status InstallPdTableEntries(
     P4RuntimeSession& p4rt, const google::protobuf::Message& pd_table_entries) {
@@ -58,26 +37,23 @@ absl::Status InstallPdTableEntry(
   return InstallPiTableEntry(&p4rt, pi_entry);
 }
 
-absl::Status InstallIrTableEntries(
-    pdpi::P4RuntimeSession& p4rt,
-    absl::Span<const pdpi::IrTableEntry> ir_table_entries) {
+absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
+                                   const IrTableEntries& ir_table_entries) {
   // Get P4Info from switch.
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
 
   // Convert entries to PI representation.
-  std::vector<p4::v1::TableEntry> pi_entries;
-  for (const pdpi::IrTableEntry& entry : ir_table_entries) {
-    ASSIGN_OR_RETURN(pi_entries.emplace_back(), IrTableEntryToPi(info, entry));
-  }
+  ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> pi_entries,
+                   IrTableEntriesToPi(info, ir_table_entries));
 
   // Install entries.
   return InstallPiTableEntries(&p4rt, info, pi_entries);
 }
 
-absl::Status InstallIrTableEntry(pdpi::P4RuntimeSession& p4rt,
-                                 const pdpi::IrTableEntry& ir_table_entry) {
+absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
+                                 const IrTableEntry& ir_table_entry) {
   // Get P4Info from switch.
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
@@ -105,21 +81,30 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
   return entries;
 }
 
-absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntries(
-    P4RuntimeSession& p4rt) {
+absl::StatusOr<IrTableEntries> ReadIrTableEntries(P4RuntimeSession& p4rt) {
+  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
+                   GetForwardingPipelineConfig(&p4rt));
+  ASSIGN_OR_RETURN(IrP4Info ir_info,
+                   CreateIrP4Info(response.config().p4info()));
+
   ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> entries,
                    ReadPiTableEntries(&p4rt));
-  return TranslatePiEntriesToIrEntries(p4rt, entries);
+  return PiTableEntriesToIr(ir_info, entries);
 }
 
-absl::StatusOr<std::vector<IrTableEntry>> ReadIrTableEntriesSorted(
+absl::StatusOr<IrTableEntries> ReadIrTableEntriesSorted(
     P4RuntimeSession& p4rt) {
+  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
+                   GetForwardingPipelineConfig(&p4rt));
+  ASSIGN_OR_RETURN(IrP4Info ir_info,
+                   CreateIrP4Info(response.config().p4info()));
+
   ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> entries,
                    ReadPiTableEntriesSorted(p4rt));
-  return TranslatePiEntriesToIrEntries(p4rt, entries);
+  return PiTableEntriesToIr(ir_info, entries);
 }
 
-absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
     P4RuntimeSession& p4rt, absl::Span<const p4::v1::Update> updates) {
   p4::v1::WriteRequest request;
   request.set_device_id(p4rt.DeviceId());
@@ -128,11 +113,11 @@ absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
 
   for (const auto& update : updates) *request.add_updates() = update;
 
-  return pdpi::GrpcStatusToIrWriteRpcStatus(
-      p4rt.WriteAndReturnGrpcStatus(request), request.updates_size());
+  return GrpcStatusToIrWriteRpcStatus(p4rt.WriteAndReturnGrpcStatus(request),
+                                      request.updates_size());
 }
 
-absl::StatusOr<pdpi::IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
+absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
     P4RuntimeSession& p4rt,
     const google::protobuf::RepeatedPtrField<p4::v1::Update>& updates) {
   return SendPiUpdatesAndReturnPerUpdateStatus(
