@@ -47,6 +47,9 @@ class SystemCallAdapter {
   virtual int close(int fd) const;
   virtual int getifaddrs(struct ifaddrs **ifap) const;
   virtual void freeifaddrs(struct ifaddrs *ifa) const;
+  // Make option_val int* to support mocking.
+  virtual int getsockopt(int socket, int level, int option_name,
+                         int *option_value, socklen_t *option_len) const;
 };
 
 }  // namespace sonic

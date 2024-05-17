@@ -1,0 +1,27 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+
+package(
+    licenses = ["notice"],
+)
+
+p4_library(
+    name = "single_table_single_entry",
+    src = "p4_programs/single_table_single_entry.p4",
+    p4info_out = "single_table_single_entry.p4info.pb.txt",
+)
+
+p4_library(
+    name = "constraints_equals",
+    src = "p4_programs/constraints_equals.p4",
+    p4info_out = "constraints_equals.p4info.pb.txt",
+)
+
+p4_library(
+    name = "constraints_not_equals",
+    src = "p4_programs/constraints_not_equals.p4",
+    p4info_out = "constraints_not_equals.p4info.pb.txt",
+)
+
