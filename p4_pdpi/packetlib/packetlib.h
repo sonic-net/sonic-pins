@@ -71,6 +71,11 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet);
 // error status is returned otherwise.
 absl::StatusOr<std::string> SerializePacket(Packet packet);
 
+// Like the other `SerializePacket` overload, but takes in the `packet` in text
+// proto format.
+absl::StatusOr<std::string> SerializePacket(
+    absl::string_view packet_text_proto);
+
 // Seralizes a given packet without checking header invariants. All fields must
 // be present and use a valid value (according to ir::Format), but otherwise no
 // requirements are made on the set of headers; they will just be serialized in

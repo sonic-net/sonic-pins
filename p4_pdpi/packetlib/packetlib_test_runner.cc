@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <iostream>
+#include <ostream>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
@@ -53,6 +55,13 @@ const std::string StatusToStableString(const absl::Status& status) {
     absl::StrAppend(&status_message, ": ", status.message());
   }
   return status_message;
+}
+
+// Pretty prints `StatusOr<T>`, assuming a pretty printer for `T` exists.
+template <class T>
+std::ostream& operator<<(std::ostream& os, const absl::StatusOr<T>& statusor) {
+  if (statusor.ok()) return os << *statusor;
+  return os << StatusToStableString(statusor.status());
 }
 
 // Parses packet from bytes, and if it succeeds, re-serializes the parsed packet
@@ -123,9 +132,11 @@ void RunPacketParseTest(
 void RunProtoPacketTest(
     const std::string& name, Packet packet,
     Header::HeaderCase first_header = Header::kEthernetHeader) {
+  const std::string packet_text_proto = PrintTextProto(packet);
+
   std::cout << kBanner << "Proto packet test: " << name << "\n" << kBanner;
   std::cout << kInputHeader << "packet =" << std::endl
-            << PrintTextProto(packet) << std::endl
+            << packet_text_proto << std::endl
             << kOutputHeader;
 
   auto valid = ValidatePacket(packet);
@@ -167,6 +178,14 @@ void RunProtoPacketTest(
   std::cout << std::endl
             << "Serialize(Packet) = " << StatusToStableString(bytes.status())
             << "\n\n";
+  absl::StatusOr<std::string> bytes_from_proto =
+      SerializePacket(packet_text_proto);
+  if (bytes != bytes_from_proto) {
+    std::cout << "BUG: The two overloads of the Serialize function return "
+                 "different results:\n- Serialize(Packet): "
+              << bytes
+              << "\n- Serialize(absl::string_view): " << bytes_from_proto;
+  }
   if (!bytes.ok()) return;
 
   // Test if the packet can be parsed back.
