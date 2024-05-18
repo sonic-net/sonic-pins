@@ -113,17 +113,6 @@ absl::StatusOr<int> CreatePacketIoSocket(
 
 }  // namespace
 
-bool IsValidSystemPort(const SystemCallAdapter &system_call_adapter,
-                       absl::string_view port_name) {
-  struct sockaddr_ll addr;
-  memset(&addr, 0, sizeof(struct sockaddr_ll));
-  addr.sll_family = AF_PACKET;
-  addr.sll_protocol = htons(ETH_P_ALL);
-  addr.sll_ifindex =
-      system_call_adapter.if_nametoindex(std::string(port_name).c_str());
-  return addr.sll_ifindex != 0;
-}
-
 absl::StatusOr<std::unique_ptr<PacketIoPortParams>> AddPacketIoPort(
     const SystemCallAdapter &system_call_adapter, absl::string_view port_name,
     packet_metadata::ReceiveCallbackFunction callback_function) {
@@ -157,6 +146,20 @@ absl::Status SendPacketOut(const SystemCallAdapter &system_call_adapter,
   bool link_up =
       (if_req.ifr_flags & IFF_UP) && (if_req.ifr_flags & IFF_RUNNING);
   RET_CHECK(link_up == true) << "Link not up for interface: " << interface_name;
+
+  // Read and clear any pending error before the write call on the socket.
+  int optval = 0;
+  socklen_t optlen = sizeof(optval);
+  if (system_call_adapter.getsockopt(transmit_socket, SOL_SOCKET, SO_ERROR,
+                                     &optval, &optlen) < 0) {
+    return gutil::InternalErrorBuilder()
+           << "Unable to read socket pending error code for " << interface_name
+           << ", errno " << errno;
+  }
+  if (optval != 0) {
+    LOG(WARNING) << "getsockopt for " << interface_name
+                 << " returned pending errno " << optval;
+  }
 
   do {
     int res = system_call_adapter.write(transmit_socket, ptr, msg_len);
