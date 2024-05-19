@@ -823,6 +823,75 @@ tables {
   const_default_action_id: 21257015
   size: 1024
 }
+tables {
+  preamble {
+    id: 41962453
+    name: "ingress.constrained_table"
+    alias: "constrained_table"
+    annotations: "@entry_restriction(\"\n    // Exact constraint with OR.\n    normal == 5 || normal == 6;\n    // LPM constraint.\n    ipv4::prefix_length != 0;\n    // Ternary constraint with exact set.\n    ipv6 == 0xff;\n    // Ternary constraint with value.\n    mac::mask != 0 -> mac::value == 10;\n    // Implies constraint.\n    val == 1 -> mac::mask != 0;\n    // Metadata constraint.\n    ::priority > 500;\n    // P4runtime translated string constraint without reference.\n    // TODO: This constraint should read\n    // `nonreferring_str != \'\'`, but p4-constraints does not currently\n    // support strings.\n    nonreferring_str != 0;\n    // P4runtime translated string constraint with reference.\n    // TODO: This constraint should read\n    // `referring_str != \'some_str\'` (or equals), but p4-constraints does not\n    // currently support strings. The current constraint is redundant.\n    referring_str::mask != 0 -> referring_str != 0;\n  \")"
+  }
+  match_fields {
+    id: 1
+    name: "val"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 2
+    name: "normal"
+    bitwidth: 10
+    match_type: EXACT
+  }
+  match_fields {
+    id: 3
+    name: "ipv4"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: LPM
+  }
+  match_fields {
+    id: 4
+    name: "ipv6"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 5
+    name: "mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 6
+    name: "referring_str"
+    annotations: "@refers_to(referred_table , id)"
+    match_type: OPTIONAL
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  match_fields {
+    id: 7
+    name: "nonreferring_str"
+    match_type: OPTIONAL
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  action_refs {
+    id: 16777221
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 1024
+}
 actions {
   preamble {
     id: 16777217
@@ -3248,6 +3317,244 @@ tables_by_id {
   }
 }
 tables_by_id {
+  key: 41962453
+  value {
+    preamble {
+      id: 41962453
+      name: "ingress.constrained_table"
+      alias: "constrained_table"
+      annotations: "@entry_restriction(\"\n    // Exact constraint with OR.\n    normal == 5 || normal == 6;\n    // LPM constraint.\n    ipv4::prefix_length != 0;\n    // Ternary constraint with exact set.\n    ipv6 == 0xff;\n    // Ternary constraint with value.\n    mac::mask != 0 -> mac::value == 10;\n    // Implies constraint.\n    val == 1 -> mac::mask != 0;\n    // Metadata constraint.\n    ::priority > 500;\n    // P4runtime translated string constraint without reference.\n    // TODO: This constraint should read\n    // `nonreferring_str != \'\'`, but p4-constraints does not currently\n    // support strings.\n    nonreferring_str != 0;\n    // P4runtime translated string constraint with reference.\n    // TODO: This constraint should read\n    // `referring_str != \'some_str\'` (or equals), but p4-constraints does not\n    // currently support strings. The current constraint is redundant.\n    referring_str::mask != 0 -> referring_str != 0;\n  \")"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "val"
+          bitwidth: 1
+          match_type: OPTIONAL
+        }
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "normal"
+          bitwidth: 10
+          match_type: EXACT
+        }
+      }
+    }
+    match_fields_by_id {
+      key: 3
+      value {
+        match_field {
+          id: 3
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_id {
+      key: 4
+      value {
+        match_field {
+          id: 4
+          name: "ipv6"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 128
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_id {
+      key: 5
+      value {
+        match_field {
+          id: 5
+          name: "mac"
+          annotations: "@format(MAC_ADDRESS)"
+          bitwidth: 48
+          match_type: TERNARY
+        }
+        format: MAC
+      }
+    }
+    match_fields_by_id {
+      key: 6
+      value {
+        match_field {
+          id: 6
+          name: "referring_str"
+          annotations: "@refers_to(referred_table , id)"
+          match_type: OPTIONAL
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+        references {
+          table: "referred_table"
+          match_field: "id"
+        }
+      }
+    }
+    match_fields_by_id {
+      key: 7
+      value {
+        match_field {
+          id: 7
+          name: "nonreferring_str"
+          match_type: OPTIONAL
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "ipv4"
+      value {
+        match_field {
+          id: 3
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv6"
+      value {
+        match_field {
+          id: 4
+          name: "ipv6"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 128
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_name {
+      key: "mac"
+      value {
+        match_field {
+          id: 5
+          name: "mac"
+          annotations: "@format(MAC_ADDRESS)"
+          bitwidth: 48
+          match_type: TERNARY
+        }
+        format: MAC
+      }
+    }
+    match_fields_by_name {
+      key: "nonreferring_str"
+      value {
+        match_field {
+          id: 7
+          name: "nonreferring_str"
+          match_type: OPTIONAL
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "normal"
+      value {
+        match_field {
+          id: 2
+          name: "normal"
+          bitwidth: 10
+          match_type: EXACT
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "referring_str"
+      value {
+        match_field {
+          id: 6
+          name: "referring_str"
+          annotations: "@refers_to(referred_table , id)"
+          match_type: OPTIONAL
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+        references {
+          table: "referred_table"
+          match_field: "id"
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "val"
+      value {
+        match_field {
+          id: 1
+          name: "val"
+          bitwidth: 1
+          match_type: OPTIONAL
+        }
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777221
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777221
+          name: "do_thing_4"
+          alias: "do_thing_4"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    requires_priority: true
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_id {
   key: 45854779
   value {
     preamble {
@@ -3447,6 +3754,244 @@ tables_by_name {
     counter {
       unit: BYTES
     }
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+  }
+}
+tables_by_name {
+  key: "constrained_table"
+  value {
+    preamble {
+      id: 41962453
+      name: "ingress.constrained_table"
+      alias: "constrained_table"
+      annotations: "@entry_restriction(\"\n    // Exact constraint with OR.\n    normal == 5 || normal == 6;\n    // LPM constraint.\n    ipv4::prefix_length != 0;\n    // Ternary constraint with exact set.\n    ipv6 == 0xff;\n    // Ternary constraint with value.\n    mac::mask != 0 -> mac::value == 10;\n    // Implies constraint.\n    val == 1 -> mac::mask != 0;\n    // Metadata constraint.\n    ::priority > 500;\n    // P4runtime translated string constraint without reference.\n    // TODO: This constraint should read\n    // `nonreferring_str != \'\'`, but p4-constraints does not currently\n    // support strings.\n    nonreferring_str != 0;\n    // P4runtime translated string constraint with reference.\n    // TODO: This constraint should read\n    // `referring_str != \'some_str\'` (or equals), but p4-constraints does not\n    // currently support strings. The current constraint is redundant.\n    referring_str::mask != 0 -> referring_str != 0;\n  \")"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "val"
+          bitwidth: 1
+          match_type: OPTIONAL
+        }
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "normal"
+          bitwidth: 10
+          match_type: EXACT
+        }
+      }
+    }
+    match_fields_by_id {
+      key: 3
+      value {
+        match_field {
+          id: 3
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_id {
+      key: 4
+      value {
+        match_field {
+          id: 4
+          name: "ipv6"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 128
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_id {
+      key: 5
+      value {
+        match_field {
+          id: 5
+          name: "mac"
+          annotations: "@format(MAC_ADDRESS)"
+          bitwidth: 48
+          match_type: TERNARY
+        }
+        format: MAC
+      }
+    }
+    match_fields_by_id {
+      key: 6
+      value {
+        match_field {
+          id: 6
+          name: "referring_str"
+          annotations: "@refers_to(referred_table , id)"
+          match_type: OPTIONAL
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+        references {
+          table: "referred_table"
+          match_field: "id"
+        }
+      }
+    }
+    match_fields_by_id {
+      key: 7
+      value {
+        match_field {
+          id: 7
+          name: "nonreferring_str"
+          match_type: OPTIONAL
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "ipv4"
+      value {
+        match_field {
+          id: 3
+          name: "ipv4"
+          annotations: "@format(IPV4_ADDRESS)"
+          bitwidth: 32
+          match_type: LPM
+        }
+        format: IPV4
+      }
+    }
+    match_fields_by_name {
+      key: "ipv6"
+      value {
+        match_field {
+          id: 4
+          name: "ipv6"
+          annotations: "@format(IPV6_ADDRESS)"
+          bitwidth: 128
+          match_type: TERNARY
+        }
+        format: IPV6
+      }
+    }
+    match_fields_by_name {
+      key: "mac"
+      value {
+        match_field {
+          id: 5
+          name: "mac"
+          annotations: "@format(MAC_ADDRESS)"
+          bitwidth: 48
+          match_type: TERNARY
+        }
+        format: MAC
+      }
+    }
+    match_fields_by_name {
+      key: "nonreferring_str"
+      value {
+        match_field {
+          id: 7
+          name: "nonreferring_str"
+          match_type: OPTIONAL
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "normal"
+      value {
+        match_field {
+          id: 2
+          name: "normal"
+          bitwidth: 10
+          match_type: EXACT
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "referring_str"
+      value {
+        match_field {
+          id: 6
+          name: "referring_str"
+          annotations: "@refers_to(referred_table , id)"
+          match_type: OPTIONAL
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+        references {
+          table: "referred_table"
+          match_field: "id"
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "val"
+      value {
+        match_field {
+          id: 1
+          name: "val"
+          bitwidth: 1
+          match_type: OPTIONAL
+        }
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777221
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777221
+          name: "do_thing_4"
+          alias: "do_thing_4"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    requires_priority: true
     const_default_action {
       preamble {
         id: 21257015
