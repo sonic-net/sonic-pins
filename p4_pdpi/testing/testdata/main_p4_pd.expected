@@ -291,6 +291,49 @@ message ByteCountAndMeterTableEntry {
   bytes controller_metadata = 8;
 }
 
+// Table entry restrictions:
+// ## Exact constraint with OR.
+//   normal == 5 || normal == 6;
+// ## LPM constraint.
+//   ipv4::prefix_length != 0;
+// ## Ternary constraint with exact set.
+//   ipv6 == 0xff;
+// ## Ternary constraint with value.
+//   mac::mask != 0 -> mac::value == 10;
+// ## Implies constraint.
+//   val == 1 -> mac::mask != 0;
+// ## Metadata constraint.
+//   ::priority > 500;
+// ## P4runtime translated string constraint without reference.
+// ## TODO: This constraint should read
+// ## `nonreferring_str != ''`, but p4-constraints does not currently
+// ## support strings.
+//   nonreferring_str != 0;
+// ## P4runtime translated string constraint with reference.
+// ## TODO: This constraint should read
+// ## `referring_str != 'some_str'` (or equals), but p4-constraints does not
+// ## currently support strings. The current constraint is redundant.
+//   referring_str::mask != 0 -> referring_str != 0;
+message ConstrainedTableEntry {
+  message Match {
+    Optional val = 1; // optional match / Format::HEX_STRING / 1 bits
+    string normal = 2; // exact match / Format::HEX_STRING / 10 bits
+    Lpm ipv4 = 3; // lpm match / Format::IPV4
+    Ternary ipv6 = 4; // ternary match / Format::IPV6 / 128 bits
+    Ternary mac = 5; // ternary match / Format::MAC
+    // Refers to 'referred_table.id'.
+    Optional referring_str = 6; // optional match / Format::STRING
+    Optional nonreferring_str = 7; // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 message ExactAndOptionalTableEntry {
   message Match {
     string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
@@ -374,6 +417,7 @@ message TableEntry {
     UnusedTableEntry unused_table_entry = 15;
     PacketCountAndMeterTableEntry packet_count_and_meter_table_entry = 19;
     ByteCountAndMeterTableEntry byte_count_and_meter_table_entry = 23;
+    ConstrainedTableEntry constrained_table_entry = 8408021;
     ExactAndOptionalTableEntry exact_and_optional_table_entry = 12300347;
   }
 }

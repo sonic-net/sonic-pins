@@ -14,6 +14,7 @@ struct metadata {
   bit<128> ipv6;
   bit<48> mac;
   string_id_t str;
+  string_id_t str2;
   MeterColor_t color;
 }
 struct headers {
@@ -389,6 +390,49 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         const default_action = NoAction();
     }
 
+  // Table with constraints.
+  @entry_restriction("
+    // Exact constraint with OR.
+    normal == 5 || normal == 6;
+    // LPM constraint.
+    ipv4::prefix_length != 0;
+    // Ternary constraint with exact set.
+    ipv6 == 0xff;
+    // Ternary constraint with value.
+    mac::mask != 0 -> mac::value == 10;
+    // Implies constraint.
+    val == 1 -> mac::mask != 0;
+    // Metadata constraint.
+    ::priority > 500;
+    // P4runtime translated string constraint without reference.
+    // TODO: This constraint should read
+    // `nonreferring_str != ''`, but p4-constraints does not currently
+    // support strings.
+    nonreferring_str != 0;
+    // P4runtime translated string constraint with reference.
+    // TODO: This constraint should read
+    // `referring_str != 'some_str'` (or equals), but p4-constraints does not
+    // currently support strings. The current constraint is redundant.
+    referring_str::mask != 0 -> referring_str != 0;
+  ")
+  table constrained_table {
+        key = {
+            meta.val : optional @id(1) @name("val");
+            meta.normal : exact @id(2) @name("normal");
+            meta.ipv4 : lpm @id(3) @format(IPV4_ADDRESS) @name("ipv4");
+            meta.ipv6 : ternary @id(4) @format(IPV6_ADDRESS) @name("ipv6");
+            meta.mac : ternary @id(5) @format(MAC_ADDRESS) @name("mac");
+            meta.str : optional @id(6) @name("referring_str")
+            @refers_to(referred_table, id);
+            meta.str2 : optional @id(7) @name("nonreferring_str");
+        }
+        actions = {
+          @proto_id(1) do_thing_4;
+          @defaultonly NoAction();
+        }
+        const default_action = NoAction();
+    }
+
   apply {
     id_test_table.apply();
     exact_table.apply();
@@ -408,6 +452,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     packet_count_and_meter_table.apply();
     byte_count_and_meter_table.apply();
     exact_and_optional_table.apply();
+    constrained_table.apply();
   }
 }
 
