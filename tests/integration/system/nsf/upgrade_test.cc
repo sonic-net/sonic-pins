@@ -23,11 +23,11 @@
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -78,6 +78,18 @@ void NsfUpgradeTest::SetUp() {
 }
 void NsfUpgradeTest::TearDown() { TearDownTestbed(testbed_interface_); }
 
+// Used to append multiple errors. It enables the test to return as many errors
+// as possible during the validation instead of returning on first error.
+// TODO: Replace the AppendErrorStatus with StatusBuilder.
+void AppendErrorStatus(absl::Status &ret_status, absl::Status status) {
+  if (status.ok()) {
+    return;
+  }
+  if (ret_status.ok()) {
+    ret_status.Update(status);
+  } else {
+  }
+}
 absl::Status NsfUpgradeTest::PushConfigAndValidate(
     const ImageConfigParams& image_config_param,
     bool enable_interface_validation_during_nsf) {
@@ -103,9 +115,12 @@ absl::Status NsfUpgradeTest::PushConfigAndValidate(
 }
 
 absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
-    NsfUpgradeScenario scenario, ImageConfigParams& curr_image_config,
-    ImageConfigParams& next_image_config,
-    bool enable_interface_validation_during_nsf) {
+    NsfUpgradeScenario scenario, ImageConfigParams &curr_image_config,
+    ImageConfigParams &next_image_config,
+    bool enable_interface_validation_during_nsf, bool &continue_on_failure) {
+  continue_on_failure = false;
+  absl::Status overall_status;
+
   LOG(INFO) << "Initiating NSF Upgrade from: " << curr_image_config.image_label
             << " to: " << next_image_config.image_label;
 
@@ -113,17 +128,35 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   RETURN_IF_ERROR(ValidateTestbedState(
       testbed_, *ssh_client_, &curr_image_config,
       enable_interface_validation_during_nsf, interfaces_to_check));
-  RETURN_IF_ERROR(ValidateComponents(
-      &ComponentValidator::OnInit, component_validators_,
-      curr_image_config.image_label, testbed_, *ssh_client_));
+  absl::Status status =
+      ValidateComponents(&ComponentValidator::OnInit, component_validators_,
+                         curr_image_config.image_label, testbed_, *ssh_client_);
+  if (!status.ok()) {
+    AppendErrorStatus(
+        overall_status,
+        absl::InternalError(absl::StrFormat(
+            "ComponentValidator::OnInit failed: %s", status.message())));
+  }
 
   // P4 snapshot before programming flows and starting the traffic.
   LOG(INFO) << "Capturing P4 snapshot before programming flows and starting "
                "the traffic";
-  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot1, TakeP4FlowSnapshot(testbed_));
-  RETURN_IF_ERROR(
-      SaveP4FlowSnapshot(testbed_, p4flow_snapshot1,
-                         "p4flow_snapshot1_before_programming_flows.txt"));
+
+  ReadResponse p4flow_snapshot1;
+  auto status_or_p4_snapshot1 = TakeP4FlowSnapshot(testbed_);
+  if (!status_or_p4_snapshot1.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "Failed to take P4 snapshot before programming flows "
+                          "and starting traffic")));
+  } else {
+    p4flow_snapshot1 = status_or_p4_snapshot1.value();
+    if (!SaveP4FlowSnapshot(testbed_, p4flow_snapshot1,
+                            "p4flow_snapshot1_before_programming_flows.txt")
+             .ok()) {
+      LOG(ERROR) << "Failed to save P4 snapshot before programming flows";
+    }
+  }
 
   // Program all the flows.
   LOG(INFO) << "Programming flows before starting the traffic";
@@ -133,43 +166,100 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   RETURN_IF_ERROR(ValidateTestbedState(
       testbed_, *ssh_client_, &curr_image_config,
       enable_interface_validation_during_nsf, interfaces_to_check));
-  RETURN_IF_ERROR(ValidateComponents(
+
+  status = ValidateComponents(
       &ComponentValidator::OnFlowProgram, component_validators_,
-      curr_image_config.image_label, testbed_, *ssh_client_));
+      curr_image_config.image_label, testbed_, *ssh_client_);
+  if (!status.ok()) {
+    AppendErrorStatus(overall_status, absl::InternalError(absl::StrFormat(
+                                          "ComponentValidator::OnFlowProgram "
+                                          "failed: %s",
+                                          status.message())));
+  }
 
   LOG(INFO) << "Starting the traffic";
-  RETURN_IF_ERROR(
-      traffic_helper_->StartTraffic(testbed_, curr_image_config.config_label));
-  RETURN_IF_ERROR(ValidateComponents(
+  status =
+      traffic_helper_->StartTraffic(testbed_, curr_image_config.config_label);
+  if (!status.ok()) {
+    AppendErrorStatus(
+        overall_status,
+        absl::InternalError(absl::StrFormat(
+            "StartTraffic failed before Upgrade and NSF reboot %s",
+            status.message())));
+  }
+
+  status = ValidateComponents(
       &ComponentValidator::OnStartTraffic, component_validators_,
-      curr_image_config.image_label, testbed_, *ssh_client_));
+      curr_image_config.image_label, testbed_, *ssh_client_);
+  if (!status.ok()) {
+    AppendErrorStatus(overall_status, absl::InternalError(absl::StrFormat(
+                                          "ComponentValidator::OnStartTraffic "
+                                          "failed: %s",
+                                          status.message())));
+  }
 
   // P4 snapshot before Upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot before Upgrade and NSF reboot";
-  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot2, TakeP4FlowSnapshot(testbed_));
-  RETURN_IF_ERROR(
-      SaveP4FlowSnapshot(testbed_, p4flow_snapshot2,
-                         "p4flow_snapshot2_before_upgrade_and_nsf.txt"));
+
+  ReadResponse p4flow_snapshot2;
+  auto status_or_p4_snapshot2 = TakeP4FlowSnapshot(testbed_);
+  if (!status_or_p4_snapshot2.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "Failed to take P4 snapshot before programming flows "
+                          "and starting traffic")));
+  } else {
+    p4flow_snapshot2 = status_or_p4_snapshot2.value();
+    if (!SaveP4FlowSnapshot(
+             testbed_, p4flow_snapshot2,
+             "p4flow_snapshot2_before_upgrade_and_nsf_reboot.txt")
+             .ok()) {
+      LOG(ERROR) << "Failed to save P4 snapshot before upgrade and NSF reboot";
+    }
+  }
 
   LOG(INFO) << "Starting NSF Upgrade";
 
   ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+
   ASSIGN_OR_RETURN(
       PinsSoftwareComponentInfo pins_component_info_before_upgrade_reboot,
-      GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
+      GetPinsSoftwareComponentInfo(*sut_gnmi_stub),
+      _.LogError() << "Failed to get pins software component info before "
+                      "upgrade and reboot");
+
   // Copy image to the switch for installation.
   ASSIGN_OR_RETURN(
       std::string image_version,
-      ImageCopy(next_image_config.image_label, testbed_, *ssh_client_));
-  RETURN_IF_ERROR(ValidateComponents(
+      ImageCopy(next_image_config.image_label, testbed_, *ssh_client_),
+      _.LogError() << "Copy image to the switch for installation failed");
+
+  status = ValidateComponents(
       &ComponentValidator::OnImageCopy, component_validators_,
-      next_image_config.image_label, testbed_, *ssh_client_));
+      next_image_config.image_label, testbed_, *ssh_client_);
+  if (!status.ok()) {
+    AppendErrorStatus(overall_status, absl::InternalError(absl::StrFormat(
+                                          "ComponentValidator::OnImageCopy "
+                                          "failed: %s",
+                                          status.message())));
+  }
+
   ASSIGN_OR_RETURN(
       PinsSoftwareComponentInfo pins_component_info_after_upgrade_before_reboot,
-      GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
-  RETURN_IF_ERROR(ValidatePinsSoftwareComponentsBeforeReboot(
+      GetPinsSoftwareComponentInfo(*sut_gnmi_stub),
+      _.LogError() << "Failed to get pins software component info after "
+                      "upgrade-before reboot");
+
+  status = ValidatePinsSoftwareComponentsBeforeReboot(
       pins_component_info_after_upgrade_before_reboot,
-      pins_component_info_before_upgrade_reboot, image_version));
+      pins_component_info_before_upgrade_reboot, image_version);
+  if (!status.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "ValidatePinsSoftwareComponentsBeforeReboot() "
+                          "failed: %s",
+                          status.message())));
+  }
 
   // Perform NSF Reboot and validate switch state after reboot is completed.
   // Since the new config is not pushed yet, passing the existing config for
@@ -177,26 +267,59 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   RETURN_IF_ERROR(DoNsfRebootAndWaitForSwitchReady(
       testbed_, *ssh_client_, &curr_image_config,
       enable_interface_validation_during_nsf, interfaces_to_check));
-  ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub());
+  ASSIGN_OR_RETURN(sut_gnmi_stub, sut.CreateGnmiStub(),
+                   _.LogError()
+                       << "Failed to create GNMI stub after NSF reboot");
 
   ASSIGN_OR_RETURN(
       PinsSoftwareComponentInfo pins_component_info_after_upgrade_reboot,
-      GetPinsSoftwareComponentInfo(*sut_gnmi_stub));
+      GetPinsSoftwareComponentInfo(*sut_gnmi_stub),
+      _.LogError() << "Failed to get pins software component info after upgrade"
+                      " and reboot");
 
-  RETURN_IF_ERROR(ValidatePinsSoftwareComponentsAfterReboot(
+  status = ValidatePinsSoftwareComponentsAfterReboot(
       pins_component_info_before_upgrade_reboot,
-      pins_component_info_after_upgrade_reboot, image_version));
+      pins_component_info_after_upgrade_reboot, image_version);
+  if (!status.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "ValidatePinsSoftwareComponentsAfterReboot() "
+                          "failed: %s",
+                          status.message())));
+  }
 
-  RETURN_IF_ERROR(ValidateComponents(
+  LOG(INFO) << "NSF Reboot completed between %s and %s"
+            << curr_image_config.image_label << " and "
+            << next_image_config.image_label;
+
+  status = ValidateComponents(
       &ComponentValidator::OnNsfReboot, component_validators_,
-      next_image_config.image_label, testbed_, *ssh_client_));
+      next_image_config.image_label, testbed_, *ssh_client_);
+  if (!status.ok()) {
+    AppendErrorStatus(
+        overall_status,
+        absl::InternalError(absl::StrFormat(
+            "ComponentValidator::OnNsfReboot failed %s", status.message())));
+  }
 
   // P4 snapshot after upgrade and NSF reboot.
   LOG(INFO) << "Capturing P4 snapshot after Upgrade and NSF reboot";
-  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot3, TakeP4FlowSnapshot(testbed_));
-  RETURN_IF_ERROR(
-      SaveP4FlowSnapshot(testbed_, p4flow_snapshot3,
-                         "p4flow_snapshot3_after_upgrade_and_nsf.txt"));
+
+  ReadResponse p4flow_snapshot3;
+  auto status_or_p4_snapshot3 = TakeP4FlowSnapshot(testbed_);
+  if (!status_or_p4_snapshot3.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "Failed to take P4 snapshot before programming flows "
+                          "and starting traffic")));
+  } else {
+    p4flow_snapshot3 = status_or_p4_snapshot3.value();
+    if (!SaveP4FlowSnapshot(testbed_, p4flow_snapshot3,
+                            "p4flow_snapshot3_after_upgrade_and_nsf_reboot.txt")
+             .ok()) {
+      LOG(ERROR) << "Failed to save P4 snapshot after upgrade and NSF reboot";
+    }
+  }
 
   switch (scenario) {
     case NsfUpgradeScenario::kNoConfigPush:
@@ -207,22 +330,62 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
       break;
     case NsfUpgradeScenario::kOnlyConfigPush:
       LOG(INFO) << "Proceeding with only config push";
-      RETURN_IF_ERROR(PushConfigAndValidate(
-          next_image_config, enable_interface_validation_during_nsf));
+
+      status = PushConfigAndValidate(next_image_config,
+                                     enable_interface_validation_during_nsf);
+      if (!status.ok()) {
+        AppendErrorStatus(
+            overall_status,
+            absl::InternalError(absl::StrFormat(
+                "PushConfigAndValidate failed after NSF reboot %s",
+                status.message())));
+      }
+
       break;
     case NsfUpgradeScenario::kConfigPushAfterAclFlowProgram:
       LOG(INFO) << "Proceeding with config push after ACL flow program";
-      RETURN_IF_ERROR(
-          ProgramAclFlows(GetSut(testbed_), curr_image_config.p4_info));
-      RETURN_IF_ERROR(PushConfigAndValidate(
-          next_image_config, enable_interface_validation_during_nsf));
+
+      status = ProgramAclFlows(GetSut(testbed_), curr_image_config.p4_info);
+      if (!status.ok()) {
+        AppendErrorStatus(overall_status,
+                          absl::InternalError(absl::StrFormat(
+                              "ProgramAclFlows failed after NSF reboot %s",
+                              status.message())));
+      }
+
+      status = PushConfigAndValidate(next_image_config,
+                                     enable_interface_validation_during_nsf);
+      if (!status.ok()) {
+        AppendErrorStatus(overall_status,
+                          absl::InternalError(absl::StrFormat(
+                              "PushConfigAndValidate failed after ACL flow "
+                              "program %s",
+                              status.message())));
+      }
+
       break;
+
     case NsfUpgradeScenario::kConfigPushBeforeAclFlowProgram:
       LOG(INFO) << "Proceeding with config push before ACL flow program";
-      RETURN_IF_ERROR(PushConfigAndValidate(
-          next_image_config, enable_interface_validation_during_nsf));
-      RETURN_IF_ERROR(
-          ProgramAclFlows(GetSut(testbed_), next_image_config.p4_info));
+      status = PushConfigAndValidate(next_image_config,
+                                     enable_interface_validation_during_nsf);
+      if (!status.ok()) {
+        AppendErrorStatus(overall_status,
+                          absl::InternalError(absl::StrFormat(
+                              "PushConfigAndValidate failed before ACL flow "
+                              "program %s",
+                              status.message())));
+      }
+
+      status = ProgramAclFlows(GetSut(testbed_), next_image_config.p4_info);
+      if (!status.ok()) {
+        AppendErrorStatus(overall_status,
+                          absl::InternalError(absl::StrFormat(
+                              "ProgramAclFlows failed before ACL flow "
+                              "program %s",
+                              status.message())));
+      }
+
       break;
     case NsfUpgradeScenario::kNumNsfUpgradeScenarios:
       return absl::InvalidArgumentError("Invalid NSF Upgrade scenario.");
@@ -231,7 +394,12 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
 
   // Stop and validate traffic
   LOG(INFO) << "Stopping the traffic";
-  RETURN_IF_ERROR(traffic_helper_->StopTraffic(testbed_));
+  status = traffic_helper_->StopTraffic(testbed_);
+  if (!status.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "StopTraffic failed %s", status.message())));
+  }
 
   // TODO: For now, we validate traffic only after stopping
   // traffic. Ideally we would want to validate traffic while injection is in
@@ -242,36 +410,97 @@ absl::Status NsfUpgradeTest::NsfUpgradeOrReboot(
   // good-to-have feature and we will update the skeleton to validate traffic
   // while injection is ongoing once this feature is available in DVaaS.
   LOG(INFO) << "Validating the traffic";
-  RETURN_IF_ERROR(traffic_helper_->ValidateTraffic(
-      testbed_, next_image_config.max_acceptable_outage));
-  RETURN_IF_ERROR(ValidateComponents(
+
+  status = traffic_helper_->ValidateTraffic(
+      testbed_, next_image_config.max_acceptable_outage);
+  if (!status.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "ValidateTraffic failed %s", status.message())));
+  }
+
+  status = ValidateComponents(
       &ComponentValidator::OnStopTraffic, component_validators_,
-      next_image_config.image_label, testbed_, *ssh_client_));
+      next_image_config.image_label, testbed_, *ssh_client_);
+  if (!status.ok()) {
+    AppendErrorStatus(
+        overall_status,
+        absl::InternalError(absl::StrFormat(
+            "ComponentValidator::OnStopTraffic failed %s", status.message())));
+  }
 
   // TODO: Look into resetting the testbed state, including the
   // flows on the SUT, in the same state as that before the test.
   LOG(INFO) << "Clearing the flows from SUT";
-  RETURN_IF_ERROR(flow_programmer_->ClearFlows(testbed_));
 
-  RETURN_IF_ERROR(ValidateComponents(
+  status = flow_programmer_->ClearFlows(testbed_);
+  if (!status.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "ClearFlows failed %s", status.message())));
+  }
+
+  status = ValidateComponents(
       &ComponentValidator::OnFlowCleanup, component_validators_,
-      next_image_config.image_label, testbed_, *ssh_client_));
+      next_image_config.image_label, testbed_, *ssh_client_);
+  if (!status.ok()) {
+    AppendErrorStatus(
+        overall_status,
+        absl::InternalError(absl::StrFormat(
+            "ComponentValidator::OnFlowCleanup failed %s", status.message())));
+  }
 
   // P4 snapshot after cleaning up flows.
   LOG(INFO) << "Capturing P4 snapshot after cleaning up flows";
-  ASSIGN_OR_RETURN(ReadResponse p4flow_snapshot4, TakeP4FlowSnapshot(testbed_));
-  RETURN_IF_ERROR(SaveP4FlowSnapshot(
-      testbed_, p4flow_snapshot4, "p4flow_snapshot4_after_clearing_flows.txt"));
 
-  LOG(INFO) << "Comparing P4 snapshots - Before Programming Flows Vs After "
-               "Clearing Flows";
-  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4));
-  LOG(INFO) << "Comparing P4 snapshots - Before Upgrade + NSF Reboot Vs. After "
-               "Upgrade + NSF Reboot";
-  RETURN_IF_ERROR(CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3));
+  ReadResponse p4flow_snapshot4;
+  auto status_or_p4_snapshot4 = TakeP4FlowSnapshot(testbed_);
+  if (!status_or_p4_snapshot4.ok()) {
+    AppendErrorStatus(overall_status,
+                      absl::InternalError(absl::StrFormat(
+                          "Failed to take P4 snapshot before programming flows "
+                          "and starting traffic")));
+  } else {
+    p4flow_snapshot4 = status_or_p4_snapshot4.value();
+    if (!SaveP4FlowSnapshot(testbed_, p4flow_snapshot4,
+                            "p4flow_snapshot4_after_clearing_flows.txt")
+             .ok()) {
+      LOG(ERROR) << "Failed to save P4 snapshot after clearing flows";
+    }
+  }
+
+  if (status_or_p4_snapshot1.ok() && status_or_p4_snapshot4.ok()) {
+    LOG(INFO) << "Comparing P4 snapshots - Before Programming Flows Vs After "
+                 "Clearing Flows";
+    status = CompareP4FlowSnapshots(p4flow_snapshot1, p4flow_snapshot4);
+    if (!status.ok()) {
+      AppendErrorStatus(overall_status, absl::InternalError(absl::StrFormat(
+                                            "CompareP4FlowSnapshots failed %s",
+                                            status.message())));
+    }
+  }
+
+  if (status_or_p4_snapshot2.ok() && status_or_p4_snapshot3.ok()) {
+    LOG(INFO) << "Comparing P4 snapshots - Before Upgrade + NSF Reboot Vs."
+                 "After Upgrade + NSF Reboot";
+    status = CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3);
+    if (!status.ok()) {
+      AppendErrorStatus(overall_status, absl::InternalError(absl::StrFormat(
+                                            "CompareP4FlowSnapshots failed %s",
+                                            status.message())));
+    }
+  }
+
   LOG(INFO) << "NSF Upgrade from: " << curr_image_config.image_label
             << " to: " << next_image_config.image_label << " is complete.";
-  return absl::OkStatus();
+
+  if (!overall_status.ok()) {
+    LOG(ERROR) << "Failures encountered in NSFUpgradeOrReboot: "
+               << overall_status;
+    continue_on_failure = true;
+  }
+
+  return overall_status;
 }
 
 TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
@@ -280,8 +509,6 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
       GetParam().get_test_case_ids(scenario));
   std::vector<ImageConfigParams> image_config_params =
       GetParam().image_config_params;
-  thinkit::TestEnvironment &environment = GetTestEnvironment(testbed_);
-
   // The test needs at least 1 image_config_param to run.
   if (image_config_params.empty()) {
     GTEST_SKIP() << "No image config params provided";
@@ -316,22 +543,30 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   // as the "base" image that will be installed and configured on the
   // SUT before going ahead with NSF Upgrade/Reboot for the following
   // `image_config_params` (if present) in order.
+
   ASSERT_OK(InstallRebootPushConfig(testbed_, *ssh_client_,
                                     image_config_params.front()));
 
+  bool continue_on_failure;
   // N - 1 to N upgrades
   for (auto image_config_param = image_config_params.begin();
        image_config_param + 1 != image_config_params.end();
        ++image_config_param) {
-    ASSERT_OK(NsfUpgradeOrReboot(
+    absl::Status status = (NsfUpgradeOrReboot(
         scenario, *image_config_param, *(image_config_param + 1),
-        GetParam().enable_interface_validation_during_nsf));
+        GetParam().enable_interface_validation_during_nsf,
+        continue_on_failure));
+    if (!status.ok() && !continue_on_failure) {
+      FAIL() << "NsfUpgradeOrReboot failed between"
+             << image_config_param->image_label << "and"
+             << (image_config_param + 1)->image_label << "with" << status;
+    }
   }
 
   // N to N upgrade
   ASSERT_OK(NsfUpgradeOrReboot(
       scenario, image_config_params.back(), image_config_params.back(),
-      GetParam().enable_interface_validation_during_nsf));
+      GetParam().enable_interface_validation_during_nsf, continue_on_failure));
 }
 
 }  // namespace pins_test
