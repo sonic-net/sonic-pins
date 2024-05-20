@@ -58,3 +58,10 @@ p4_library(
     ],
 )
 
+p4_library(
+    name = "sai_main",
+    src = "p4_programs/sai-p4-google/sai_main.p4",
+    p4info_out = "sai_main_info.pb.txt",
+    deps = glob(["p4_programs/sai-p4-google/*"]),
+)
+
