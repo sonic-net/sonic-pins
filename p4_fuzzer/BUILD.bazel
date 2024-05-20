@@ -7,6 +7,11 @@ package(
     licenses = ["notice"],
 )
 
+cc_library(
+    name = "p4_programs/sai-p4-google/ids",
+    hdrs = ["p4_programs/sai-p4-google/ids.h"],
+)
+
 p4_library(
     name = "single_table_single_entry",
     src = "p4_programs/single_table_single_entry.p4",
@@ -23,5 +28,19 @@ p4_library(
     name = "constraints_not_equals",
     src = "p4_programs/constraints_not_equals.p4",
     p4info_out = "constraints_not_equals.p4info.pb.txt",
+)
+
+p4_library(
+    name = "acl_table_test",
+    src = "p4_programs/acl_table_test.p4",
+    p4info_out = "acl_table_test.p4info.pb.txt",
+    deps = [
+        "p4_programs/sai-p4-google/acl_actions.p4",
+        "p4_programs/sai-p4-google/acl_set_vrf.p4",
+        "p4_programs/sai-p4-google/headers.p4",
+        "p4_programs/sai-p4-google/ids.h",
+        "p4_programs/sai-p4-google/metadata.p4",
+        "p4_programs/sai-p4-google/resource_limits.p4",
+    ],
 )
 
