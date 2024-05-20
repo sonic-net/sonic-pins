@@ -14,6 +14,7 @@
 
 #include "lib/ixia_helper.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -274,13 +275,19 @@ absl::StatusOr<std::string> SetUpTrafficItem(
 // "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1"
 absl::StatusOr<std::string> SetUpTrafficItem(
     absl::string_view vref_src, absl::string_view vref_dst,
-    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed) {
+    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed,
+    bool is_raw_pkt) {
   // POST to /traffic/trafficItem with:
   // [{"name":"Unicast Traffic"}]
   constexpr absl::string_view kTrafficPath = "/ixnetwork/traffic/trafficItem";
-  const Json kTrafficJson = Json::array({
-      Json::object({{"name", traffic_name}}),
-  });
+  Json kTrafficJson;
+  if (is_raw_pkt == true) {
+    kTrafficJson = Json::array(
+        {Json::object({{"name", traffic_name}, {"trafficType", "raw"}})});
+  } else {
+    kTrafficJson = Json::array({Json::object({{"name", traffic_name}})});
+  }
+
   LOG(INFO) << "path " << kTrafficPath;
   LOG(INFO) << "json " << kTrafficJson;
   ASSIGN_OR_RETURN(
@@ -1036,6 +1043,101 @@ absl::Status AppendUdp(absl::string_view tref,
   return ixia::WaitForComplete(append_response, generic_testbed);
 }
 
+absl::Status AppendPfc(absl::string_view tref,
+                       thinkit::GenericTestbed &generic_testbed) {
+  // GET to /ixnetwork/traffic/protocolTemplate to find the correct protocol
+  // template to use.
+  constexpr absl::string_view kProtoPath =
+      "/ixnetwork/traffic/protocolTemplate?stackTypeId=pfcPause";
+  ASSIGN_OR_RETURN(thinkit::HttpResponse proto_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kGet, kProtoPath, ""));
+  LOG(INFO) << "Returns " << proto_response.response_code;
+  if (proto_response.response_code != 200)
+    return absl::InternalError(absl::StrFormat("unexpected response: %u",
+                                               proto_response.response_code));
+  LOG(INFO) << "response: " << proto_response.response;
+  std::size_t ixname =
+      proto_response.response.find("\"displayName\":\"PFC PAUSE (802.1Qbb)\"");
+  if (ixname == std::string::npos)
+    return absl::InternalError("no PFC template");
+  std::size_t ixhref = proto_response.response.find("\"href\":", ixname);
+  if (ixhref == std::string::npos)
+    return absl::InternalError("no PFC template");
+  std::size_t ixqt = proto_response.response.find('"', ixhref + 8);
+  if (ixqt == std::string::npos) return absl::InternalError("no PFC template");
+  std::string tcpref =
+      proto_response.response.substr(ixhref + 8, ixqt - ixhref - 8);
+  std::size_t ixfield = tcpref.find("/field");
+  if (ixfield != std::string::npos) {
+    tcpref = tcpref.substr(0, ixfield);
+  }
+
+  // POST to
+  // /ixnetwork/traffic/trafficItem/configElement/stack/operations/appendprotocol
+  // {"arg1":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/configElement/1/stack/<stack>","arg2":"/api/v1/sessions/1/ixnetwork/traffic/protocolTemplate/<template>"}
+  constexpr absl::string_view kAppendPath =
+      "/ixnetwork/traffic/trafficItem/configElement/stack/operations/"
+      "appendprotocol";
+
+  std::string append_json =
+      absl::StrCat("{\"arg1\":\"", tref, "/configElement/1/stack/1",
+                   "\",\"arg2\":\"", tcpref, "\"}");
+  LOG(INFO) << "json " << append_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPost, kAppendPath, append_json));
+  LOG(INFO) << "Received code: " << append_response.response_code;
+  LOG(INFO) << "Received response: "
+            << FormatJsonBestEffort(append_response.response);
+  return ixia::WaitForComplete(append_response, generic_testbed);
+}
+
+absl::Status SetPfcPriorityEnableVector(
+    absl::string_view tref, uint8_t priority_enable_vector,
+    thinkit::GenericTestbed &generic_testbed) {
+  // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/stack/1/field/5
+  // with {"singleValue":"1"} to set the priroity enable vector.
+  std::string path = absl::StrCat(tref, "/configElement/1/stack/2/field/5");
+  std::string json =
+      absl::StrCat("{\"singleValue\":\"", priority_enable_vector, "\"}");
+  LOG(INFO) << "path " << path;
+  LOG(INFO) << "json " << json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse sip_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, path, json));
+  LOG(INFO) << "Returns " << sip_response.response_code;
+  if (sip_response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", sip_response.response_code));
+  return absl::OkStatus();
+}
+
+absl::Status SetPfcQueuePauseQuanta(
+    absl::string_view tref, const std::array<uint16_t, 8> queue_pause_quanta,
+    thinkit::GenericTestbed &generic_testbed) {
+  // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/stack/1/field/6+i
+  // with {"singleValue":"ffff"} to set the pause quanta for queue i.
+  for (int i = 0; i < 8; ++i) {
+    if (queue_pause_quanta[i] == 0) continue;
+    std::string path =
+        absl::StrCat(tref, "/configElement/1/stack/2/field/", 6 + i);
+    std::string json =
+        absl::StrCat("{\"singleValue\":\"",
+                     absl::StrFormat("%X", queue_pause_quanta[i]), "\"}");
+    LOG(INFO) << "path " << path;
+    LOG(INFO) << "json " << json;
+    ASSIGN_OR_RETURN(thinkit::HttpResponse sip_response,
+                     generic_testbed.SendRestRequestToIxia(
+                         thinkit::RequestType::kPatch, path, json));
+    LOG(INFO) << "Returns " << sip_response.response_code;
+    if (sip_response.response_code != 200)
+      return absl::InternalError(absl::StrFormat("unexpected response: %u",
+                                                 sip_response.response_code));
+  }
+  return absl::OkStatus();
+}
+
 absl::Status AppendProtocolAtStack(absl::string_view tref,
                                    absl::string_view protocol,
                                    absl::string_view stack,
@@ -1300,6 +1402,18 @@ absl::Status SetIpTrafficParameters(absl::string_view tref,
   return absl::OkStatus();
 }
 
+absl::Status SetPfcTrafficParameters(absl::string_view tref,
+                                     const PfcTrafficParameters &params,
+                                     thinkit::GenericTestbed &testbed) {
+  RETURN_IF_ERROR(AppendPfc(tref, testbed));
+  RETURN_IF_ERROR(
+      SetPfcPriorityEnableVector(tref, params.priority_enable_vector, testbed));
+  RETURN_IF_ERROR(
+      SetPfcQueuePauseQuanta(tref, params.pause_quanta_per_queue, testbed));
+
+  return absl::OkStatus();
+}
+
 absl::Status SetTrafficParameters(absl::string_view tref,
                                   const TrafficParameters &params,
                                   thinkit::GenericTestbed &testbed) {
@@ -1328,6 +1442,10 @@ absl::Status SetTrafficParameters(absl::string_view tref,
           return SetIpTrafficParameters(tref, ip_params, testbed);
         },
         *params.ip_parameters));
+  }
+  if (params.pfc_parameters.has_value()) {
+    RETURN_IF_ERROR(
+        SetPfcTrafficParameters(tref, *params.pfc_parameters, testbed));
   }
 
   return absl::OkStatus();
