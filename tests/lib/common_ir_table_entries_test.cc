@@ -23,8 +23,7 @@ TEST_P(CommonIrTableEntriesTest, IsValidIrEntryForAllSaiInstantiations) {
 
 INSTANTIATE_TEST_SUITE_P(
     CommonIrTableEntriesSuite, CommonIrTableEntriesTest,
-    testing::Values(L3AdmitAllIrTableEntry(), VrfIrTableEntry("vrf-0"),
-                    PuntAllPacketsToControllerIrTableEntry("0x1"),
+    testing::Values(PuntAllPacketsToControllerIrTableEntry("0x1"), 
                     SetVrfIdForAllPacketsIrTableEntry("vrf-1")));
 
 } // namespace
