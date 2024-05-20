@@ -15,6 +15,7 @@
 #ifndef PINS_THINKIT_IXIA_INTERFACE_H_
 #define PINS_THINKIT_IXIA_INTERFACE_H_
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -114,13 +115,13 @@ IxiaSession(absl::string_view vref, thinkit::GenericTestbed &generic_testbed);
 // "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1", which we'll refer
 // to as a tref is this namespace. Takes in the vref returned by Ixia ports
 // as parameters.
-absl::StatusOr<std::string>
-SetUpTrafficItem(absl::string_view vref_src, absl::string_view vref_dst,
-                 thinkit::GenericTestbed &generic_testbed);
-absl::StatusOr<std::string>
-SetUpTrafficItem(absl::string_view vref_src, absl::string_view vref_dst,
-                 absl::string_view traffic_name,
-                 thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string> SetUpTrafficItem(
+    absl::string_view vref_src, absl::string_view vref_dst,
+    thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string> SetUpTrafficItem(
+    absl::string_view vref_src, absl::string_view vref_dst,
+    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed,
+    bool is_raw_pkt = false);
 
 // Deletes traffic item. Takes in the tref returned by IxiaSession.
 // Deleting a traffic item manually is not strictly required, but is useful
@@ -246,6 +247,8 @@ absl::Status AppendProtocolAtStack(absl::string_view tref,
                                    absl::string_view stack,
                                    thinkit::GenericTestbed &generic_testbed);
 
+absl::Status AppendPfc(absl::string_view tref, absl::string_view stack,
+                       thinkit::GenericTestbed &generic_testbed);
 // -- High-level API for setting traffic item parameters -----------------------
 
 // The priority fields of an IP packet. Aka "type of service" for IPv4 and
@@ -267,6 +270,11 @@ struct Ipv6TrafficParameters {
   netaddr::Ipv6Address dst_ipv6 =
       netaddr::Ipv6Address(0x2000, 0, 0, 0, 0, 0, 0, 2); // 2000::2;
   std::optional<IpPriority> priority;
+};
+
+struct PfcTrafficParameters {
+  uint8_t priority_enable_vector = 0;
+  std::array<uint16_t, 8> pause_quanta_per_queue = {0, 0, 0, 0, 0, 0, 0, 0};
 };
 
 // The number of frames to send per second.
@@ -297,6 +305,7 @@ struct TrafficParameters {
   // header will be sent.
   std::optional<std::variant<Ipv4TrafficParameters, Ipv6TrafficParameters>>
       ip_parameters;
+  std::optional<PfcTrafficParameters> pfc_parameters;
 };
 
 // Sets any given parameters for the given traffic item.
@@ -304,6 +313,16 @@ struct TrafficParameters {
 absl::Status SetTrafficParameters(absl::string_view tref,
                                   const TrafficParameters &params,
                                   thinkit::GenericTestbed &testbed);
+
+// Sets the priority enable vector field in the PFC header.
+absl::Status SetPfcPriorityEnableVector(
+    absl::string_view tref, uint8_t priority_enable_vector,
+    thinkit::GenericTestbed &generic_testbed);
+
+// Sets the pause quanta values for queues in the PFC header.
+absl::Status SetPfcQueuePauseQuanta(
+    absl::string_view tref, const std::array<uint16_t, 8> queue_pause_quanta,
+    thinkit::GenericTestbed &generic_testbed);
 
 // -- Statistics ---------------------------------------------------------------
 
