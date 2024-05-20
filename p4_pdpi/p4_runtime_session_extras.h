@@ -36,6 +36,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.pb.h"
 
 namespace pdpi {
 
@@ -79,6 +80,15 @@ absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
 // Like `InstallIrTableEntries`, but for a single entry.
 absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
                                  const IrTableEntry& ir_table_entry);
+
+// Installs the given `entities` via the given `P4RuntimeSession`.
+absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
+                               const PiEntities& entities);
+
+// Like the `InstallPiEntities` above, but takes in the `PiEntities` message in
+// text format.
+absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
+                               absl::string_view entities);
 
 // Reads table entries from the switch using `p4rt` and returns them in PI
 // representation in an order determined by gutil::TableEntryKey.
