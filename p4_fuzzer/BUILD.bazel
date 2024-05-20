@@ -7,6 +7,20 @@ package(
     licenses = ["notice"],
 )
 
+proto_library(
+    name = "fuzzer_proto",
+    srcs = ["fuzzer.proto"],
+    deps = [
+        "//p4_pdpi:ir_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "fuzzer_cc_proto",
+    deps = [":fuzzer_proto"],
+)
+
 cc_library(
     name = "p4_programs/sai-p4-google/ids",
     hdrs = ["p4_programs/sai-p4-google/ids.h"],
