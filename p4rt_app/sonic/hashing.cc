@@ -17,6 +17,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
@@ -26,18 +27,23 @@
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
-#include "swss/json.hpp"
+//#include "swss/json.hpp"
+#include <nlohmann/json.hpp>
 #include "swss/rediscommand.h"
 
 namespace p4rt_app {
 namespace sonic {
 namespace {
 
-// Hashing configurations will be marked with a 'sai_hash_algorithm' annotation.
+// Hashing configurations will be marked at least one hash config annotation.
+// All hash config annotations have the form of: sai_hash_*
+//   Examples: sai_hash_algorithm, sai_hash_offset, sai_hash_seed
 bool ActionHasHashingConfig(const pdpi::IrActionDefinition& action_def) {
-  return pdpi::GetAllAnnotationsAsArgList("sai_hash_algorithm",
-                                          action_def.preamble().annotations())
-      .ok();
+  for (const auto& annotation :
+       pdpi::GetAllAnnotations(action_def.preamble().annotations())) {
+    if (absl::StartsWith(annotation.label, "sai_hash_")) return true;
+  }
+  return false;
 }
 
 // Hashing configurations can apply to multiple parts of the dataplane, and
@@ -216,10 +222,6 @@ absl::StatusOr<std::vector<EcmpHashEntry>> GenerateAppDbHashFieldEntries(
                             {{"hash_field_list", (*json).dump()}})}));
     }
   }
-  if (hash_entries.empty()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Missing hash field entries in P4Info file.";
-  }
   return hash_entries;
 }
 
@@ -237,12 +239,6 @@ GenerateAppDbHashValueEntries(const pdpi::IrP4Info& ir_p4info) {
     // matches expectations.
     ASSIGN_OR_RETURN(HashConfigType hash_type, GetHashConfigType(action_name));
 
-    // Expect to get all hashing value related annotations like algorithm,
-    // offset, seed etc.
-    bool has_algorithm = false;
-    bool has_offset = false;
-    bool has_seed = false;
-
     for (const auto& annotation :
          pdpi::GetAllAnnotations(action_def.preamble().annotations())) {
       swss::FieldValueTuple fv;
@@ -250,17 +246,16 @@ GenerateAppDbHashValueEntries(const pdpi::IrP4Info& ir_p4info) {
         ASSIGN_OR_RETURN(fv, GetHashAlgorithm(hash_type, annotation.body),
                          _.SetAppend()
                              << " Found in action '" << action_name << "'.");
-        has_algorithm = true;
       } else if (annotation.label == "sai_hash_seed") {
         fv = GetHashSeed(hash_type, annotation.body);
-        has_seed = true;
       } else if (annotation.label == "sai_hash_offset") {
         fv = GetHashOffset(hash_type, annotation.body);
-        has_offset = true;
-      } else {
+      } else if (absl::StartsWith(annotation.label, "sai_hash_")) {
         return gutil::InvalidArgumentErrorBuilder()
-               << "Unexpected hash configuration '" << annotation.label
-               << "' in action '" << action_name << "'.";
+               << "Invalid sai_hash_* annotation: " << annotation.label << "("
+               << annotation.body << ")";
+      } else {
+        continue;
       }
       // Do not allow duplicate configurations.
       auto [_, success] = hash_values_set.insert(fv.first);
@@ -271,29 +266,19 @@ GenerateAppDbHashValueEntries(const pdpi::IrP4Info& ir_p4info) {
       }
       hash_value_entries.push_back(fv);
     }
-
-    std::vector<std::string> missing;
-    if (!has_algorithm) missing.push_back("algorithm");
-    if (!has_offset) missing.push_back("offset");
-    if (!has_seed) missing.push_back("seed");
-    if (!missing.empty()) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Hash configuration for '" << action_name
-             << "' is missing: " << absl::StrJoin(missing, ", ");
-    }
-  }
-  if (hash_value_entries.empty()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Could not find action with hashing algorithm in the P4Info.";
   }
   return hash_value_entries;
 }
 
 absl::StatusOr<std::vector<std::string>> ProgramHashFieldTable(
     HashTable& hash_table, const pdpi::IrP4Info& ir_p4info) {
-  // Get the key, value pairs of Hash field APP_DB entries.
+  // Get the [key, value] pairs of Hash field APP_DB entries.
   ASSIGN_OR_RETURN(const auto entries,
                    GenerateAppDbHashFieldEntries(ir_p4info));
+
+  if (entries.empty()) return std::vector<std::string>();
+  LOG(INFO) << "Applying hash fields: \n  "
+            << absl::StrJoin(entries, "\n  ", EcmpHashEntry::AbslFormatter);
 
   // Write to APP_DB.
   pdpi::IrWriteResponse update_status;
@@ -303,7 +288,7 @@ absl::StatusOr<std::vector<std::string>> ProgramHashFieldTable(
     status_by_key[entry.hash_key] = update_status.add_statuses();
   }
 
-  // Wait for the OrchAgent's repsonse.
+  // Wait for the OrchAgent's response.
   pdpi::IrWriteResponse ir_write_response;
   RETURN_IF_ERROR(GetAndProcessResponseNotification(
       *hash_table.notification_consumer, *hash_table.app_db,
@@ -353,6 +338,12 @@ absl::Status ProgramSwitchTable(SwitchTable& switch_table,
              << "Invalid hash field key: " << hash_field_key;
     }
   }
+
+  if (switch_table_attrs.empty()) return absl::OkStatus();
+
+  LOG(INFO) << "Applying hash config: \n  "
+            << absl::StrJoin(switch_table_attrs, "\n  ",
+                             absl::PairFormatter(": "));
 
   // Write to switch table and process response.
   switch_table.producer_state->set(kSwitchTableEntryKey, switch_table_attrs);

@@ -66,9 +66,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_google_glog"):
         http_archive(
             name = "com_github_google_glog",
-            url = "https://github.com/google/glog/archive/v0.4.0.tar.gz",
-            strip_prefix = "glog-0.4.0",
-            sha256 = "f28359aeba12f30d73d9e4711ef356dc842886968112162bc73002645139c39c",
+            url = "https://github.com/google/glog/archive/v0.6.0.tar.gz",
+            strip_prefix = "glog-0.6.0",
+            sha256 = "8a83bf982f37bb70825df71a9709fa90ea9f4447fb3c099e1d720a439d88bad6",
         )
 
     # Needed to make glog happy.
