@@ -428,6 +428,10 @@ INSTANTIATE_TEST_SUITE_P(
             .swss_error = "SWSS_RC_UNIMPLEMENTED",
             .p4rt_error = google::rpc::Code::UNIMPLEMENTED,
         },
+        {
+            .swss_error = "SWSS_RC_NOT_EXECUTED",
+            .p4rt_error = google::rpc::Code::ABORTED,
+        },
     }),
     [](const testing::TestParamInfo<ResponseHandlerErrorCodeTest::ParamType>&
            info) { return info.param.swss_error; });

@@ -65,6 +65,8 @@ google::rpc::Code SwssToP4RTErrorCode(const std::string& status_str) {
       return google::rpc::Code::INTERNAL;
     case swss::StatusCode::SWSS_RC_UNAVAIL:
       return google::rpc::Code::UNAVAILABLE;
+    case swss::StatusCode::SWSS_RC_NOT_EXECUTED:
+      return google::rpc::Code::ABORTED;
     default:
       return google::rpc::Code::UNKNOWN;
   }
