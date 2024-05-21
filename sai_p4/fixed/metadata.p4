@@ -129,6 +129,7 @@ header packet_out_header_t {
 
 // -- Per Packet State ---------------------------------------------------------
 
+// LINT.IfChange
 struct headers_t {
 // TODO: Clean up once we have better solution to handle packet-in
 // across platforms.
@@ -169,6 +170,10 @@ struct headers_t {
   udp_t udp;
   arp_t arp;
 }
+// Headers are only useful if they are parsed and deparsed, therefore we add a
+// lint check ensuring that the parser and deparser are changed whenever the
+// header set is.
+// LINT.ThenChange(parser.p4:deparser, parser.p4:parser)
 
 // Header fields rewritten by the ingress pipeline. Rewrites are computed and
 // stored in this struct, but actual rewriting is dealyed until the egress

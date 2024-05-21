@@ -42,6 +42,7 @@
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/translation_options.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
@@ -84,7 +85,10 @@ absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
   ASSIGN_OR_RETURN(
       pdpi::IrEntities ir_entities,
       pdpi::PdTableEntriesToIrEntities(
-          ir_p4info, entries_,
+          // We always use the static P4Info when translating from PD to protect
+          // against a mismatch between the PD proto and the argument
+          // `ir_p4info`.
+          sai::GetUnionedIrP4Info(), entries_,
           pdpi::TranslationOptions{.allow_unsupported = allow_unsupported}));
   gutil::InefficientProtoSortAndDedup(*ir_entities.mutable_entities());
   return ir_entities;
@@ -536,21 +540,17 @@ EntryBuilder& EntryBuilder::AddIpv6TunnelTerminationEntry(
   sai::TableEntry pd_entry;
   sai::Ipv6TunnelTerminationTableEntry& tunnel_entry =
       *pd_entry.mutable_ipv6_tunnel_termination_table_entry();
-  if (params.dst_ipv6_value.has_value()) {
+  if (params.dst_ipv6.has_value()) {
     tunnel_entry.mutable_match()->mutable_dst_ipv6()->set_value(
-        params.dst_ipv6_value->ToString());
-  }
-  if (params.dst_ipv6_mask.has_value()) {
+        params.dst_ipv6->value.ToString());
     tunnel_entry.mutable_match()->mutable_dst_ipv6()->set_mask(
-        params.dst_ipv6_mask->ToString());
+        params.dst_ipv6->mask.ToString());
   }
-  if (params.src_ipv6_value.has_value()) {
+  if (params.src_ipv6.has_value()) {
     tunnel_entry.mutable_match()->mutable_src_ipv6()->set_value(
-        params.src_ipv6_value->ToString());
-  }
-  if (params.src_ipv6_mask.has_value()) {
+        params.src_ipv6->value.ToString());
     tunnel_entry.mutable_match()->mutable_src_ipv6()->set_mask(
-        params.src_ipv6_mask->ToString());
+        params.src_ipv6->mask.ToString());
   }
   tunnel_entry.mutable_action()->mutable_tunnel_decap();
   tunnel_entry.set_priority(1);
