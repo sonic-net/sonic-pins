@@ -137,6 +137,10 @@ struct MirrorAndRedirectMatchFields {
   std::optional<absl::string_view> in_port;
   std::optional<bool> ipmc_table_hit;
   std::optional<int> vlan_id;
+  std::optional<bool> is_ipv4;
+  std::optional<sai::P4RuntimeTernary<netaddr::Ipv4Address>> dst_ip;
+  std::optional<bool> is_ipv6;
+  std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
 };
 
 // Provides methods to conveniently build a set of SAI-P4 table entries for
