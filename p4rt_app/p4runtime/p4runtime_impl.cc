@@ -295,25 +295,48 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
   // per the spec, the control plane is not required to send the full entry.
   bool only_translate_the_key = pi_update.type() == p4::v1::Update::DELETE;
 
-  ASSIGN_OR_RETURN(
-      pdpi::IrTableEntry ir_table_entry,
-      TranslatePiTableEntryForOrchAgent(
-          pi_update.entity().table_entry(), p4_info, translate_port_ids,
-          port_translation_map, only_translate_the_key));
+  // Translating between PI and IR, and vice versa, is non-negligable. To save
+  // redundant work by doing both translations here. The IR to PI translation
+  // will normalize the PI value which we can then use for the table entry
+  // cache. Note that the table entry cache isn't updated until we know that the
+  // hardware has successfully programmed the entry. We do the PI to IR
+  // translation here so we can efficently handle the cache.
+  auto ir_table_entry = pdpi::PiTableEntryToIr(
+      p4_info, pi_update.entity().table_entry(), only_translate_the_key);
+  if (!ir_table_entry.ok()) {
+    LOG(ERROR) << "PDPI could not translate a PI table entry to IR: "
+               << pi_update.entity().table_entry().ShortDebugString();
+    return gutil::StatusBuilder(ir_table_entry.status().code())
+           << "[P4RT/PDPI] " << ir_table_entry.status().message();
+  }
+  auto normalized_pi_entry =
+      pdpi::IrTableEntryToPi(p4_info, *ir_table_entry, only_translate_the_key);
+  if (!ir_table_entry.ok()) {
+    LOG(ERROR) << "PDPI could not translate an IR table entry to PI: "
+               << ir_table_entry->ShortDebugString();
+    return gutil::StatusBuilder(normalized_pi_entry.status().code())
+           << "[P4RT/PDPI] " << normalized_pi_entry.status().message();
+  }
+
+  // Apply any custom translation that are needed on the switch side to account
+  // for gNMI configs (e.g. port ID translation).
+  RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
+      *ir_table_entry, p4_info, translate_port_ids, port_translation_map));
 
   // Verify the table entry can be written to the table.
   absl::Status role_has_access =
-      AllowRoleAccessToTable(role_name, ir_table_entry.table_name(), p4_info);
+      AllowRoleAccessToTable(role_name, ir_table_entry->table_name(), p4_info);
   if (!role_has_access.ok()) {
     LOG(WARNING) << role_has_access
-                 << " IR Table Entry: " << ir_table_entry.ShortDebugString();
+                 << " IR Table Entry: " << ir_table_entry->ShortDebugString();
     return role_has_access;
   }
 
   return sonic::AppDbEntry{
-      .entry = ir_table_entry,
+      .entry = *ir_table_entry,
       .update_type = pi_update.type(),
-      .appdb_table = GetAppDbTableType(ir_table_entry),
+      .pi_table_entry = *normalized_pi_entry,
+      .appdb_table = GetAppDbTableType(*ir_table_entry),
   };
 }
 
@@ -336,7 +359,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
           GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
       continue;
     }
-    
+
     // If we cannot translate it then we should just report an error (i.e. do
     // not try to handle it in lower layers).
     auto app_db_entry = PiUpdateToAppDbEntry(
@@ -356,39 +379,19 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
 
 absl::Status CacheWriteResults(
     absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
-    const pdpi::IrP4Info& ir_p4finfo, const p4::v1::WriteRequest& request,
+    const sonic::AppDbUpdates& app_db_updates,
     const pdpi::IrWriteResponse& results) {
-  if (request.updates_size() != results.statuses_size()) {
-    return gutil::InternalErrorBuilder()
-           << "The number of requests (" << request.updates_size()
-           << ") does not match the number of status results ("
-           << results.statuses_size() << ").";
-  }
-
-  // We only update the cache if the request passes. If it fails then the state
-  // should have been restored by the lower layers, or gone critical (i.e. the
-  // cache state doesn't really matter anymore).
-  for (int i = 0; i < request.updates_size(); ++i) {
-    if (results.statuses(i).code() != google::rpc::Code::OK) {
+  for (const sonic::AppDbEntry& app_db_entry : app_db_updates.entries) {
+    if (results.statuses(app_db_entry.rpc_index).code() !=
+        google::rpc::Code::OK) {
       continue;
     }
 
-    const auto& update = request.updates(i);
-
-    // Get the canonical form of the key by converting it to an IR and back.
-    ASSIGN_OR_RETURN(
-        auto ir_table_entry,
-        pdpi::PiTableEntryToIr(ir_p4finfo, update.entity().table_entry(),
-                               /*key_only=*/true));
-    ASSIGN_OR_RETURN(
-        auto pi_table_entry,
-        pdpi::IrTableEntryToPi(ir_p4finfo, ir_table_entry, /*key_only=*/true));
-    gutil::TableEntryKey key(pi_table_entry);
-
-    switch (update.type()) {
+    gutil::TableEntryKey key(app_db_entry.pi_table_entry);
+    switch (app_db_entry.update_type) {
       case p4::v1::Update::INSERT:
       case p4::v1::Update::MODIFY:
-        cache[key] = update.entity().table_entry();
+        cache[key] = app_db_entry.pi_table_entry;
         break;
       case p4::v1::Update::DELETE:
         cache.erase(key);
@@ -396,10 +399,9 @@ absl::Status CacheWriteResults(
       default:
         return gutil::InternalErrorBuilder()
                << "Invalid Update Type: "
-               << p4::v1::Update::Type_Name(update.type());
+               << p4::v1::Update::Type_Name(app_db_entry.update_type);
     }
   }
-
   return absl::OkStatus();
 }
 
@@ -477,8 +479,8 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
       return EnterCriticalState(grpc_status.status().ToString());
     }
 
-    absl::Status cache_status = CacheWriteResults(
-        table_entry_cache_, *ir_p4info_, *request, *rpc_response);
+    absl::Status cache_status =
+        CacheWriteResults(table_entry_cache_, app_db_updates, *rpc_response);
     if (!cache_status.ok()) {
       LOG(ERROR) << "Could not caching write results: " << cache_status;
       return EnterCriticalState(cache_status.ToString());

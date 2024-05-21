@@ -487,12 +487,12 @@ int main(int argc, char** argv) {
   // connection might not be able to connect to P4RT with the same election id.
   builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIME_MS, 1000);
 
-  // Keepalive should fail relatively fast to let P4RT find out disconnect
-  // quickly and yield primaryship to allow other controller to connect as
-  // primary.
-  // This value was increased from 4s to 7s to allow TCP retransmit to kick in
-  // for occasional keepalive ping failures.
-  builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 7000);
+  // Keepalive pings' timeout.
+  // Despite the switch wanting to discover disconnects as soon as possible the
+  // keepalive timeout can not be too fast. Else there won't be enough time for
+  // the switch's teaming driver to failover. We settle with 20s since this is
+  // the timeout value a P4 client would usually have.
+  builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 20'000);
 
   // Sends KA pings even when existing streaming RPC is not active.
   builder.AddChannelArgument(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
