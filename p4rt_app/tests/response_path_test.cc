@@ -920,6 +920,79 @@ TEST_F(ResponsePathTest, WriteRequestsStatisticsHandleBatchRequests) {
                         /*max_write_time=*/Not(absl::ZeroDuration()), _, _));
 }
 
+TEST_F(ResponsePathTest, WriteRequestsStatisticsDoNotIncludeInvalidPiEntries) {
+  // We start with 3 valud IPv6 table entries because the PD to PI libraries
+  // will reject invalid requests.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c115::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c116::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Manually modify the 2nd request so that it uses a ternary field. Because
+  // VRF uses an exact match and IPv6 DST uses a LPM we know the ternary field
+  // will be invalid.
+  *write_request.mutable_updates(1)
+       ->mutable_entity()
+       ->mutable_table_entry()
+       ->mutable_match(0)
+       ->mutable_ternary()
+       ->mutable_value() = "bad value.";
+
+  // Because of the invalid input we expect the 2nd request to be invalid and
+  // the 3rd request to get aborted.
+  ASSERT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                     write_request),
+              StatusIs(absl::StatusCode::kUnknown));
+
+  // Only the 1st request makes it through the translation step so we should
+  // only see 1 write request total.
+  ASSERT_OK_AND_ASSIGN(
+      FlowProgrammingStatistics flow_stats,
+      p4rt_service_.GetP4rtServer().GetFlowProgrammingStatistics());
+  EXPECT_THAT(flow_stats,
+              FieldsAre(/*write_batches=*/1, /*write_requests=*/1,
+                        /*write_time=*/Not(absl::ZeroDuration()),
+                        /*max_write_time=*/Not(absl::ZeroDuration()), _, _));
+}
+
 TEST_F(ResponsePathTest, ReadCacheUsesCanonicalFormToStoreTableEntries) {
   // The insert and modify requests will have the same logical IPv6 LPM value,
   // but the modify removes the preceeding zero bits to make the requests

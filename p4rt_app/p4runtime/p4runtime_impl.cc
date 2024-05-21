@@ -263,26 +263,58 @@ bool P4InfoEquals(const p4::config::v1::P4Info& left,
   return differencer.Compare(left, right);
 }
 
-absl::StatusOr<pdpi::IrTableEntry> DoPiTableEntryToIr(
-    const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& p4_info,
-    const std::string& role_name, bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    bool translate_key_only) {
-  ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,
-                   TranslatePiTableEntryForOrchAgent(
-                       pi_table_entry, p4_info, translate_port_ids,
-                       port_translation_map, translate_key_only));
-
-  // Verify the table entry can be written to the table.
-  absl::Status role_access =
-      AllowRoleAccessToTable(role_name, ir_table_entry.table_name(), p4_info);
-  if (!role_access.ok()) {
-    LOG(WARNING) << role_access
-                 << " IR Table Entry: " << ir_table_entry.ShortDebugString();
-    return role_access;
+absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
+    const pdpi::IrP4Info& p4_info, const p4::v1::Update& pi_update,
+    const std::string& role_name,
+    const p4_constraints::ConstraintInfo& constraint_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map) {
+  // If the constraints are not met then we should just report an error (i.e. do
+  // not try to handle the entry in lower layers).
+  absl::StatusOr<std::string> reason_entry_violates_constraint =
+      p4_constraints::ReasonEntryViolatesConstraint(
+          pi_update.entity().table_entry(), constraint_info);
+  if (!reason_entry_violates_constraint.ok()) {
+    // A status failure implies that the TableEntry was not formatted correctly.
+    // So we could not check the constraints.
+    LOG(WARNING) << "Could not verify P4 constraint: "
+                 << pi_update.entity().table_entry().ShortDebugString();
+    return reason_entry_violates_constraint.status();
+  }
+  if (!reason_entry_violates_constraint->empty()) {
+    // A non-empty result implies the constraints were not met.
+    LOG(WARNING) << "Entry does not meet P4 constraint: "
+                 << *reason_entry_violates_constraint
+                 << pi_update.entity().table_entry().ShortDebugString();
+    return gutil::InvalidArgumentErrorBuilder()
+           << *reason_entry_violates_constraint;
   }
 
-  return ir_table_entry;
+  // When deleting we only consider the key. Actions do matter so we don't waste
+  // time trying to translate that part even if the controller sent it. Also,
+  // per the spec, the control plane is not required to send the full entry.
+  bool only_translate_the_key = pi_update.type() == p4::v1::Update::DELETE;
+
+  ASSIGN_OR_RETURN(
+      pdpi::IrTableEntry ir_table_entry,
+      TranslatePiTableEntryForOrchAgent(
+          pi_update.entity().table_entry(), p4_info, translate_port_ids,
+          port_translation_map, only_translate_the_key));
+
+  // Verify the table entry can be written to the table.
+  absl::Status role_has_access =
+      AllowRoleAccessToTable(role_name, ir_table_entry.table_name(), p4_info);
+  if (!role_has_access.ok()) {
+    LOG(WARNING) << role_has_access
+                 << " IR Table Entry: " << ir_table_entry.ShortDebugString();
+    return role_has_access;
+  }
+
+  return sonic::AppDbEntry{
+      .entry = ir_table_entry,
+      .update_type = pi_update.type(),
+      .appdb_table = GetAppDbTableType(ir_table_entry),
+  };
 }
 
 sonic::AppDbUpdates PiTableEntryUpdatesToIr(
@@ -293,7 +325,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     pdpi::IrWriteResponse* response) {
   bool fail_on_first_error = false;
   sonic::AppDbUpdates ir_updates;
-  for (const auto& update : request.updates()) {
+  for (const p4::v1::Update& pi_update : request.updates()) {
     // An RPC response should be created for every updater.
     auto entry_status = response->add_statuses();
 
@@ -304,58 +336,20 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
           GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
       continue;
     }
-
-    ++ir_updates.total_rpc_updates;
-
-    // If the constraints are not met then we should just report an error (i.e.
-    // do not try to handle the entry in lower layers).
-    absl::StatusOr<std::string> reason_entry_violates_constraint =
-        p4_constraints::ReasonEntryViolatesConstraint(
-            update.entity().table_entry(), constraint_info);
-    if (!reason_entry_violates_constraint.ok()) {
-      // A status failure implies that the TableEntry was not formatted
-      // correctly. So we could not check the constraints.
-      LOG(WARNING) << "Could not verify P4 constraint: "
-                   << update.entity().table_entry().ShortDebugString();
-      *entry_status =
-          GetIrUpdateStatus(reason_entry_violates_constraint.status());
-      fail_on_first_error = true;
-      continue;
-    }
-    if (!reason_entry_violates_constraint->empty()) {
-      // A non-empty result implies the constraints were not met.
-      LOG(WARNING) << "Entry does not meet P4 constraint: "
-                   << *reason_entry_violates_constraint
-                   << update.entity().table_entry().ShortDebugString();
-      *entry_status = GetIrUpdateStatus(gutil::InvalidArgumentErrorBuilder()
-                                        << *reason_entry_violates_constraint);
-      fail_on_first_error = true;
-      continue;
-    }
-
+    
     // If we cannot translate it then we should just report an error (i.e. do
-    // not try to handle it in lower layers). When doing a DELETE, translate
-    // only the key part of the table entry because, from the specs, the control
-    // plane is not required to send the full entry.
-    auto ir_table_entry = DoPiTableEntryToIr(
-        update.entity().table_entry(), p4_info, request.role(),
-        translate_port_ids, port_translation_map,
-        update.type() == p4::v1::Update::DELETE);
-    *entry_status = GetIrUpdateStatus(ir_table_entry.status());
-    if (!ir_table_entry.ok()) {
-      LOG(WARNING) << "Failed to translate table entry. Entry: "
-                   << update.entity().table_entry().ShortDebugString();
+    // not try to handle it in lower layers).
+    auto app_db_entry = PiUpdateToAppDbEntry(
+        p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
+        port_translation_map);
+    if (!app_db_entry.ok()) {
       fail_on_first_error = true;
-      continue;
+    } else {
+      app_db_entry->rpc_index = response->statuses_size() - 1;
+      ir_updates.entries.push_back(*app_db_entry);
+      ++ir_updates.total_rpc_updates;
     }
-
-    int rpc_index = response->statuses_size() - 1;
-    ir_updates.entries.push_back(sonic::AppDbEntry{
-        .rpc_index = rpc_index,
-        .entry = *ir_table_entry,
-        .update_type = update.type(),
-        .appdb_table = GetAppDbTableType(*ir_table_entry),
-    });
+    *entry_status = GetIrUpdateStatus(app_db_entry.status());
   }
   return ir_updates;
 }
