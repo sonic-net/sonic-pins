@@ -514,6 +514,36 @@ TEST(EntryBuilder, AddIngressAclEntryRedirectingToNexthopAddsEntry) {
       )pb"))));
 }
 
+TEST(EntryBuilder,
+     AddIngressAclEntryRedirectingToNexthopWithMatchFieldOptionsAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  MirrorAndRedirectMatchFields match_fields = {
+      .is_ipv4 = true,
+      .dst_ip =
+          sai::P4RuntimeTernary<netaddr::Ipv4Address>{
+              .value = netaddr::Ipv4Address(0x10, 0, 0, 0x1),
+              .mask = netaddr::Ipv4Address(0xff, 0xff, 0xff, 0xff),
+          },
+      .is_ipv6 = true,
+      .dst_ipv6 =
+          sai::P4RuntimeTernary<netaddr::Ipv6Address>{
+              .value = netaddr::Ipv6Address(0x10, 0, 0, 0, 0, 0, 0, 0x1),
+              .mask = netaddr::Ipv6Address(0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                           0xff, 0xff),
+          },
+  };
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIngressAclEntryRedirectingToNexthop("nexthop", match_fields)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
+      )pb"))));
+}
+
 TEST(EntryBuilder, AddIngressAclEntryRedirectingToMulticastGroupAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
   ASSERT_OK_AND_ASSIGN(
