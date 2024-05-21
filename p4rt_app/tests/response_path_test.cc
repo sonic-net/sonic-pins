@@ -788,5 +788,83 @@ TEST_F(ResponsePathTest, WriteRequestsStatisticsHandleBatchRequests) {
                         /*max_write_time=*/Not(absl::ZeroDuration()), _, _));
 }
 
+TEST_F(ResponsePathTest, ReadCacheUsesCanonicalFormToStoreTableEntries) {
+  // The insert and modify requests will have the same logical IPv6 LPM value,
+  // but the modify removes the preceeding zero bits to make the requests
+  // syntactically different.
+  p4::v1::WriteRequest insert_request;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(updates {
+             type: INSERT
+             entity {
+               table_entry {
+                 table_id: 33554501
+                 match {
+                   field_id: 1
+                   exact { value: "80" }
+                 }
+                 match {
+                   field_id: 2
+                   lpm {
+                     value: "\000\000\000\000\000\000\024\000\000\000\000\000\000\000\000"
+                     prefix_len: 64
+                   }
+                 }
+                 action {
+                   action {
+                     action_id: 16777221
+                     params { param_id: 1 value: "20" }
+                   }
+                 }
+               }
+             }
+           })pb",
+      &insert_request));
+
+  p4::v1::WriteRequest modify_request;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(updates {
+             type: MODIFY
+             entity {
+               table_entry {
+                 table_id: 33554501
+                 match {
+                   field_id: 1
+                   exact { value: "80" }
+                 }
+                 match {
+                   field_id: 2
+                   lpm {
+                     value: "\024\000\000\000\000\000\000\000\000"
+                     prefix_len: 64
+                   }
+                 }
+                 action {
+                   action {
+                     action_id: 16777221
+                     params { param_id: 1 value: "20" }
+                   }
+                 }
+               }
+             }
+           })pb",
+      &modify_request));
+
+  p4::v1::ReadRequest read_request;
+  read_request.add_entities()->mutable_table_entry();
+
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   insert_request));
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   modify_request));
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::ReadResponse read_response,
+      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+
+  // Because we only inserted and modified one entry we should only read back
+  // that entry.
+  EXPECT_EQ(read_response.entities_size(), 1);
+}
+
 }  // namespace
 }  // namespace p4rt_app
