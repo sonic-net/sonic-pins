@@ -10,6 +10,7 @@ enum MeterColor_t { GREEN, YELLOW, RED };
 struct metadata {
   bit<1> val;
   bit<10> normal;
+  bit<10> field10bit;
   bit<32> ipv4;
   bit<128> ipv6;
   bit<48> mac;
@@ -397,7 +398,9 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     // LPM constraint.
     ipv4::prefix_length != 0;
     // Ternary constraint with exact set.
-    ipv6 == 0xff;
+    field10bit == 0xff;
+    // Large integer (most significant bit position > 64).
+    ipv6 == 0xffffffffffffffffffffffff;
     // Ternary constraint with value.
     mac::mask != 0 -> mac::value == 10;
     // Implies constraint.
@@ -419,6 +422,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         key = {
             meta.val : optional @id(1) @name("val");
             meta.normal : exact @id(2) @name("normal");
+            meta.field10bit : ternary @id(8) @name("field10bit");
             meta.ipv4 : lpm @id(3) @format(IPV4_ADDRESS) @name("ipv4");
             meta.ipv6 : ternary @id(4) @format(IPV6_ADDRESS) @name("ipv6");
             meta.mac : ternary @id(5) @format(MAC_ADDRESS) @name("mac");
