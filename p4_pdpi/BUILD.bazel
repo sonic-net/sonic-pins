@@ -199,6 +199,17 @@ proto_library(
     ],
 )
 
+proto_library(
+    name = "p4_runtime_session_extras_proto",
+    srcs = ["p4_runtime_session_extras.proto"],
+    deps = ["@com_github_p4lang_p4runtime//:p4runtime_proto"],
+)
+
+cc_proto_library(
+    name = "p4_runtime_session_extras_cc_proto",
+    deps = [":p4_runtime_session_extras_proto"],
+)
+
 cc_proto_library(
     name = "ir_cc_proto",
     deps = [":ir_proto"],
@@ -301,6 +312,7 @@ cc_library(
         ":ir",
         ":ir_cc_proto",
         ":p4_runtime_session",
+        ":p4_runtime_session_extras_cc_proto",
         ":pd",
         "//gutil:proto",
         "//gutil:table_entry_key",
