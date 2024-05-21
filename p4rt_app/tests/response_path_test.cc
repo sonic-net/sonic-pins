@@ -635,11 +635,143 @@ TEST_F(ResponsePathTest, RequestWithDuplicateKeysFails) {
 
   // We expect the invalid argument error to be propagated all the way back to
   // the gRPC response.
+  // With the fail on first error behavior, P4RT App will detect the duplicate
+  // in the first entry and mark that as the INVALID_ARGUMENT error but the
+  // subsequent one is marked as ABORTED (not attempted).
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: INVALID_ARGUMENT:"),
-                     HasSubstr("#2: INVALID_ARGUMENT:"))));
+                     HasSubstr("#2: ABORTED:"))));
+}
+
+TEST_F(ResponsePathTest, FailsOnFirstErrorInP4RT) {
+  // Any P4RT error in write request translation should fail on first error,
+  // with the first error having the actual failed code and the subsequent ones
+  // with ABORTED and the error string as not attempted. Force a P4 contraint
+  // violation in the PiToIr translation in the second request.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-1"
+                    ipv6_dst { value: "2002:a17:506:c111::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vrf_table_entry {
+                  match { vrf_id: "" }
+                  action { no_action {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-3"
+                    ipv6_dst { value: "2002:a17:506:c113::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(
+          absl::StatusCode::kUnknown,
+          AllOf(HasSubstr("#1: OK"),
+                HasSubstr("#2: INVALID_ARGUMENT: All entries must satisfy"),
+                HasSubstr("#3: ABORTED: Not attempted"))));
+}
+
+TEST_F(ResponsePathTest, FailOnFirstErrorFromAppdbResponses) {
+  // If write requests are written to APP_DB successfully, App db responses
+  // should reflect fail on first error.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-1"
+                    ipv6_dst { value: "2002:a17:506:c111::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-2"
+                    ipv6_dst { value: "2002:a17:506:c112::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-3"
+                    ipv6_dst { value: "2002:a17:506:c113::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Fake valid error (INVALID_ARG) for second and NOT_EXECUTED for subsequent
+  // ones.
+  auto failed_ipv6_entry2 =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_IPV6_TABLE")
+          .AddMatchField("ipv6_dst", "2002:a17:506:c112::/64")
+          .AddMatchField("vrf_id", "vrf-2");
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      failed_ipv6_entry2.GetKey(), "SWSS_RC_INVALID_PARAM", "error with vrf-2");
+
+  auto failed_ipv6_entry3 =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_IPV6_TABLE")
+          .AddMatchField("ipv6_dst", "2002:a17:506:c113::/64")
+          .AddMatchField("vrf_id", "vrf-3");
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      failed_ipv6_entry3.GetKey(), "SWSS_RC_NOT_EXECUTED",
+      "SWSS_RC_NOT_EXECUTED");
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: OK"),
+                     HasSubstr("#2: INVALID_ARGUMENT: error with vrf-2"),
+                     HasSubstr("#3: ABORTED: SWSS_RC_NOT_EXECUTED"))));
 }
 
 TEST_F(ResponsePathTest, ReadingIgnoresRedisDbValues) {
