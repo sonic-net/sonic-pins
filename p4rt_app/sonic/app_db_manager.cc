@@ -471,8 +471,16 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
 
   std::vector<swss::KeyOpFieldsValuesTuple> kfv_updates;
   absl::btree_map<std::string, pdpi::IrUpdateStatus*> app_db_status;
+  bool fail_on_first_error = false;
 
   for (const auto& entry : updates.entries) {
+    // Mark rest of the entries as not attempted after the first error.
+    if (fail_on_first_error) {
+      *response->mutable_statuses(entry.rpc_index) =
+          GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+      continue;
+    }
+
     if (entry.appdb_table == AppDbTableType::UNKNOWN) {
       // If we cannot determine the table type then something went wrong with
       // the IR translation, and we should not continue with this request.
@@ -511,6 +519,7 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
       LOG(WARNING) << "Could not update in AppDb: " << key.status();
       *response->mutable_statuses(entry.rpc_index) =
           GetIrUpdateStatus(key.status());
+      fail_on_first_error = true;
       continue;
     }
 
