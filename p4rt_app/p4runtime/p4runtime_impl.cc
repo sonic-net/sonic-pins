@@ -18,6 +18,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cstring>
+#include <string>
 
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
@@ -106,8 +108,18 @@ absl::Status AllowRoleAccessToTable(const std::string& role_name,
 sonic::AppDbTableType GetAppDbTableType(
     const pdpi::IrTableEntry& ir_table_entry) {
 
+    std::string vrf_tb("vrf_table");
+    std::string tb_name;
   // By default we assume and AppDb P4RT entry.
-  return sonic::AppDbTableType::P4RT;
+  tb_name = ir_table_entry.table_name();
+  if((tb_name.compare(vrf_tb)) == 0)
+  {
+  	return sonic::AppDbTableType::VRF_TABLE;
+  }
+  else
+  {
+  	return sonic::AppDbTableType::P4RT;
+  }
 }
 
 absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
