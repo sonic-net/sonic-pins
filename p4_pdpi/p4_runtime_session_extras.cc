@@ -1,6 +1,8 @@
 #include "p4_pdpi/p4_runtime_session_extras.h"
 
 #include "absl/algorithm/container.h"
+#include "absl/status/status.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -65,6 +67,21 @@ absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
 
   // Install entry.
   return InstallPiTableEntry(&p4rt, pi_entry);
+}
+
+absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
+                               const PiEntities& entities) {
+  for (const p4::v1::Entity& entity : entities.entities()) {
+    RETURN_IF_ERROR(InstallPiEntity(&p4rt, entity));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
+                               absl::string_view entities) {
+  ASSIGN_OR_RETURN(auto parsed_entities,
+                   gutil::ParseTextProto<PiEntities>(entities));
+  return InstallPiEntities(p4rt, parsed_entities);
 }
 
 absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(

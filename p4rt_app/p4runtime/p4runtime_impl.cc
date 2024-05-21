@@ -292,10 +292,20 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     pdpi::IrWriteResponse* response) {
+  bool fail_on_first_error = false;
   sonic::AppDbUpdates ir_updates;
   for (const auto& update : request.updates()) {
     // An RPC response should be created for every updater.
     auto entry_status = response->add_statuses();
+
+    // Just update the statuses as not attempted if any entry in the batch
+    // failed earlier.
+    if (fail_on_first_error) {
+      *entry_status =
+          GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+      continue;
+    }
+
     ++ir_updates.total_rpc_updates;
 
     // If the constraints are not met then we should just report an error (i.e.
@@ -310,6 +320,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
                    << update.entity().table_entry().ShortDebugString();
       *entry_status =
           GetIrUpdateStatus(reason_entry_violates_constraint.status());
+      fail_on_first_error = true;
       continue;
     }
     if (!reason_entry_violates_constraint->empty()) {
@@ -319,6 +330,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
                    << update.entity().table_entry().ShortDebugString();
       *entry_status = GetIrUpdateStatus(gutil::InvalidArgumentErrorBuilder()
                                         << *reason_entry_violates_constraint);
+      fail_on_first_error = true;
       continue;
     }
 
@@ -334,6 +346,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     if (!ir_table_entry.ok()) {
       LOG(WARNING) << "Failed to translate table entry. Entry: "
                    << update.entity().table_entry().ShortDebugString();
+      fail_on_first_error = true;
       continue;
     }
 
@@ -350,7 +363,8 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
 
 absl::Status CacheWriteResults(
     absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
-    const p4::v1::WriteRequest& request, const pdpi::IrWriteResponse& results) {
+    const pdpi::IrP4Info& ir_p4finfo, const p4::v1::WriteRequest& request,
+    const pdpi::IrWriteResponse& results) {
   if (request.updates_size() != results.statuses_size()) {
     return gutil::InternalErrorBuilder()
            << "The number of requests (" << request.updates_size()
@@ -367,7 +381,17 @@ absl::Status CacheWriteResults(
     }
 
     const auto& update = request.updates(i);
-    gutil::TableEntryKey key(update.entity().table_entry());
+
+    // Get the canonical form of the key by converting it to an IR and back.
+    ASSIGN_OR_RETURN(
+        auto ir_table_entry,
+        pdpi::PiTableEntryToIr(ir_p4finfo, update.entity().table_entry(),
+                               /*key_only=*/true));
+    ASSIGN_OR_RETURN(
+        auto pi_table_entry,
+        pdpi::IrTableEntryToPi(ir_p4finfo, ir_table_entry, /*key_only=*/true));
+    gutil::TableEntryKey key(pi_table_entry);
+
     switch (update.type()) {
       case p4::v1::Update::INSERT:
       case p4::v1::Update::MODIFY:
@@ -460,8 +484,8 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
       return EnterCriticalState(grpc_status.status().ToString());
     }
 
-    absl::Status cache_status =
-        CacheWriteResults(table_entry_cache_, *request, *rpc_response);
+    absl::Status cache_status = CacheWriteResults(
+        table_entry_cache_, *ir_p4info_, *request, *rpc_response);
     if (!cache_status.ok()) {
       LOG(ERROR) << "Could not caching write results: " << cache_status;
       return EnterCriticalState(cache_status.ToString());
