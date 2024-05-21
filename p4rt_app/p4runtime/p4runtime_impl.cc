@@ -336,7 +336,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
           GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
       continue;
     }
-
+    
     // If we cannot translate it then we should just report an error (i.e. do
     // not try to handle it in lower layers).
     auto app_db_entry = PiUpdateToAppDbEntry(
