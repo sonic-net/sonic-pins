@@ -334,17 +334,12 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
   swss::DBConnector config_db("CONFIG_DB", /*timeout=*/0);
   p4rt_app::sonic::StateEventMonitor config_db_monitor(config_db);
 
-  swss::DBConnector app_db("APPL_DB", /*timeout=*/0);
-  swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
-  p4rt_app::sonic::PortTable port_table =
-      p4rt_app::CreatePortTable(&app_db, &app_state_db);
-
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbNodeCfgTableEventHandler>(
       config_db_monitor, "NODE_CFG", p4runtime_server);
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
-      config_db_monitor, "PORT", p4runtime_server, &port_table);
+      config_db_monitor, "PORT", p4runtime_server);
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
-      config_db_monitor, "PORTCHANNEL", p4runtime_server, &port_table);
+      config_db_monitor, "PORTCHANNEL", p4runtime_server);
 
   while (*monitor_config_db_events) {
     absl::Status status = config_db_monitor.WaitForNextEventAndHandle();
@@ -391,6 +386,8 @@ int main(int argc, char** argv) {
       p4rt_app::CreateHashTable(&app_db, &app_state_db);
   p4rt_app::sonic::SwitchTable switch_table =
       p4rt_app::CreateSwitchTable(&app_db, &app_state_db);
+  p4rt_app::sonic::PortTable port_table =
+      p4rt_app::CreatePortTable(&app_db, &app_state_db);
 
   // Create PacketIoImpl for Packet I/O.
   auto packetio_impl = std::make_unique<p4rt_app::sonic::PacketIoImpl>(
@@ -414,7 +411,7 @@ int main(int argc, char** argv) {
   // Create the P4RT server.
   p4rt_app::P4RuntimeImpl p4runtime_server(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
-      std::move(switch_table), std::move(packetio_impl),
+      std::move(switch_table), std::move(port_table), std::move(packetio_impl),
       //TODO(PINS): To add component_state_singleton, system_state_singleton, netdev_translator
       //component_state_singleton, system_state_singleton, netdev_translator,
       p4rt_options);
