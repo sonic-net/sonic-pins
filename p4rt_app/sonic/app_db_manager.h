@@ -24,6 +24,7 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/json.h"
@@ -47,6 +48,7 @@ struct AppDbEntry {
   int rpc_index;
   pdpi::IrTableEntry entry;
   p4::v1::Update::Type update_type;
+  p4::v1::TableEntry pi_table_entry;
   AppDbTableType appdb_table = AppDbTableType::UNKNOWN;
 };
 
