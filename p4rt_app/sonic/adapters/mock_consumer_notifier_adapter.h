@@ -26,7 +26,7 @@
 namespace p4rt_app {
 namespace sonic {
 
-class MockConsumerNotifierAdapter final : public ConsumerNotifierAdapter {
+class MockConsumerNotifierAdapter : public ConsumerNotifierAdapter {
  public:
   MOCK_METHOD(bool, WaitForNotificationAndPop,
               (std::string & op, std::string &data,
