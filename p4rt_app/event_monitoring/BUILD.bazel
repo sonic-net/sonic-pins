@@ -106,6 +106,24 @@ cc_library(
 )
 
 cc_library(
+    name = "debug_data_dump_events",
+    srcs = ["debug_data_dump_events.cc"],
+    hdrs = ["debug_data_dump_events.h"],
+    deps = [
+        "//gutil:status",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/sonic/adapters:consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:notification_producer_adapter",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_library(
     name = "config_db_node_cfg_table_event",
     srcs = ["config_db_node_cfg_table_event.cc"],
     hdrs = ["config_db_node_cfg_table_event.h"],
@@ -170,6 +188,22 @@ cc_test(
         "//p4rt_app/p4runtime:mock_p4runtime_impl",
         "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "debug_data_dump_events_test",
+    srcs = ["debug_data_dump_events_test.cc"],
+    deps = [
+        ":debug_data_dump_events",
+        "//gutil:status_matchers",
+        "//p4rt_app/p4runtime:mock_p4runtime_impl",
+        "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:mock_notification_producer_adapter",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/synchronization",
         "@com_google_googletest//:gtest_main",

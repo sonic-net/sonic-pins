@@ -14,10 +14,14 @@
 #include "p4rt_app/sonic/adapters/notification_producer_adapter.h"
 
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "swss/dbconnector.h"
 #include "swss/notificationproducer.h"
 #include "swss/json.h" 
+#include "swss/rediscommand.h"
+#include "swss/table.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -41,6 +45,11 @@ void NotificationProducerAdapter::send(
      notification_producer_->send("", "", new_values);
 }
 
+void NotificationProducerAdapter::send_with_op_key(
+    const std::string& op, const std::string& key,
+    std::vector<swss::FieldValueTuple>& fv) {
+  notification_producer_->send(op, key, fv);
+}
 
 }  // namespace sonic
 }  // namespace p4rt_app

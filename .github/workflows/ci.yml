@@ -43,6 +43,13 @@ jobs:
     # Unauthenticated reads are allowed for PRs from forks
     - name: Build and Test
       run: |
+	grep -r 'butter\|financial\|exchange\|stock\|market\|trading\|GCPTP\|CME\|bubble\|coarse-grained equalization\|CGE\|coarse' *
+	if [ $? -eq 0 ]
+	then
+		echo "Keyword check Failed. Pl. check and fix it"
+	else
+		echo "Keyword check Passed."
+	fi
         mkdir -p /tmp/repo-cache
         BAZEL_OPTS="--repository_cache=/tmp/repo-cache"
         [ ! -z "$BAZEL_CACHE_USER" ] && [ ! -z "$BAZEL_CACHE_PWD" ] && \
