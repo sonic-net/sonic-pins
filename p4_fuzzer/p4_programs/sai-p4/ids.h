@@ -1,4 +1,3 @@
-// Rename this for the open source version.
 #ifndef P4_SAI_IDS_H_
 #define P4_SAI_IDS_H_
 

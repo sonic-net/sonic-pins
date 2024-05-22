@@ -8,8 +8,8 @@ package(
 )
 
 cc_library(
-    name = "p4_programs/sai-p4-google/ids",
-    hdrs = ["p4_programs/sai-p4-google/ids.h"],
+    name = "p4_programs/sai-p4/ids",
+    hdrs = ["p4_programs/sai-p4/ids.h"],
 )
 
 p4_library(
@@ -35,12 +35,12 @@ p4_library(
     src = "p4_programs/acl_table_test.p4",
     p4info_out = "acl_table_test.p4info.pb.txt",
     deps = [
-        "p4_programs/sai-p4-google/acl_actions.p4",
-        "p4_programs/sai-p4-google/acl_set_vrf.p4",
-        "p4_programs/sai-p4-google/headers.p4",
-        "p4_programs/sai-p4-google/ids.h",
-        "p4_programs/sai-p4-google/metadata.p4",
-        "p4_programs/sai-p4-google/resource_limits.p4",
+        "p4_programs/sai-p4/acl_actions.p4",
+        "p4_programs/sai-p4/acl_set_vrf.p4",
+        "p4_programs/sai-p4/headers.p4",
+        "p4_programs/sai-p4/ids.h",
+        "p4_programs/sai-p4/metadata.p4",
+        "p4_programs/sai-p4/resource_limits.p4",
     ],
 )
 

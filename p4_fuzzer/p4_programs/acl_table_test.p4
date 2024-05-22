@@ -1,7 +1,7 @@
 /* -*- P4_16 -*- */
 #include <core.p4>
 #include <v1model.p4>
-#include "sai-p4-google/acl_set_vrf.p4"
+#include "sai-p4/acl_set_vrf.p4"
 
 // -- Headers.
 header hdr_fuzz_t {
