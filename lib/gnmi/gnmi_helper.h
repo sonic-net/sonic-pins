@@ -149,6 +149,43 @@ struct Counters {
   uint64_t timestamp_ns = 0;
 };
 
+struct BlackholeSwitchCounters {
+  uint64_t in_discard_events = 0;
+  uint64_t out_discard_events = 0;
+  uint64_t in_error_events = 0;
+  uint64_t lpm_miss_events = 0;
+  uint64_t fec_not_correctable_events = 0;
+  uint64_t memory_error_events = 0;
+  uint64_t blackhole_events = 0;
+
+  BlackholeSwitchCounters operator-(
+      const BlackholeSwitchCounters& other) const {
+    return BlackholeSwitchCounters{
+        in_discard_events - other.in_discard_events,
+        out_discard_events - other.out_discard_events,
+        in_error_events - other.in_error_events,
+        lpm_miss_events - other.lpm_miss_events,
+        fec_not_correctable_events - other.fec_not_correctable_events,
+        memory_error_events - other.memory_error_events,
+        blackhole_events - other.blackhole_events};
+  }
+};
+
+struct BlackholePortCounters {
+  uint64_t in_discard_events = 0;
+  uint64_t out_discard_events = 0;
+  uint64_t in_error_events = 0;
+  uint64_t fec_not_correctable_events = 0;
+
+  BlackholePortCounters operator-(const BlackholePortCounters& other) const {
+    return BlackholePortCounters{
+        in_discard_events - other.in_discard_events,
+        out_discard_events - other.out_discard_events,
+        in_error_events - other.in_error_events,
+        fec_not_correctable_events - other.fec_not_correctable_events};
+  }
+};
+
 // HST counters exposed by gNMI.
 struct HstCounters {
   std::vector<float> abwc_digests;
@@ -582,6 +619,14 @@ absl::StatusOr<std::string> GetPortPfcRxEnable(
 // Gets counters for all interfaces.
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Gets blackhole counters for an interface.
+absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Gets blackhole counters for the switch.
+absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
+    gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Removes specified characters from Json object string.
 void StripSymbolFromString(std::string &str, char symbol);
