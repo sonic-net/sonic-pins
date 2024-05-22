@@ -3347,6 +3347,171 @@ TEST(GetAllInterfaceCounters, FailedWithMissingFieldAndReportsInterface) {
                 HasSubstr("pins-interfaces:in-buffer-discards not found in"))));
 }
 
+TEST(GetBlackholePortCounters, Success) {
+  static constexpr absl::string_view kCountersJson = R"json(
+{
+  "google-pins-interfaces:blackhole": {
+    "fec-not-correctable-events": "1",
+    "in-discard-events": "2",
+    "in-error-events": "3",
+    "out-discard-events": "4"
+  }
+})json";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_,
+                  EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                      R"pb(prefix { origin: "openconfig" }
+                           path {
+                             elem { name: "interfaces" }
+                             elem {
+                               name: "interface"
+                               key { key: "name" value: "Ethernet1/4/1" }
+                             }
+                             elem { name: "state" }
+                             elem { name: "google-pins-interfaces:blackhole" }
+                           }
+                           type: STATE)pb")),
+                  _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          /*oc_path=*/"google-pins-interfaces:blackhole",
+                          /*gnmi_config=*/kCountersJson)),
+                      Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(BlackholePortCounters counters,
+                       GetBlackholePortCounters("Ethernet1/4/1", stub));
+  EXPECT_EQ(counters.fec_not_correctable_events, 1);
+  EXPECT_EQ(counters.in_discard_events, 2);
+  EXPECT_EQ(counters.in_error_events, 3);
+  EXPECT_EQ(counters.out_discard_events, 4);
+}
+
+TEST(GetBlackholePortCounters, FailWithMissingField) {
+  static constexpr absl::string_view kCountersJson = R"json(
+{
+  "google-pins-interfaces:blackhole": {
+    "fec-not-correctable-events": "1",
+    "in-discard-events": "2",
+    "in-error-events": "3"
+  }
+})json";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_,
+                  EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                      R"pb(prefix { origin: "openconfig" }
+                           path {
+                             elem { name: "interfaces" }
+                             elem {
+                               name: "interface"
+                               key { key: "name" value: "Ethernet1/4/1" }
+                             }
+                             elem { name: "state" }
+                             elem { name: "google-pins-interfaces:blackhole" }
+                           }
+                           type: STATE)pb")),
+                  _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          /*oc_path=*/"google-pins-interfaces:blackhole",
+                          /*gnmi_config=*/kCountersJson)),
+                      Return(grpc::Status::OK)));
+  EXPECT_THAT(GetBlackholePortCounters("Ethernet1/4/1", stub),
+              StatusIs(absl::StatusCode::kNotFound,
+                       HasSubstr("out-discard-events not found in")));
+}
+
+TEST(GetBlackholeSwitchCounters, Success) {
+  static constexpr absl::string_view kCountersJson = R"json(
+{
+  "openconfig-platform:state": {
+    "google-pins-platform:blackhole": {
+      "blackhole-events": "1",
+      "fec-not-correctable-events": "2",
+      "in-discard-events": "3",
+      "in-error-events": "4",
+      "lpm-miss-events": "5",
+      "memory-error-events": "6",
+      "out-discard-events": "7"
+    },
+    "google-pins-platform:congestion": {
+      "congestion-events": "0"
+    },
+    "openconfig-p4rt:node-id": "2795043031"
+  }
+})json";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_,
+                  EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                      R"pb(prefix { origin: "openconfig" }
+                           path {
+                             elem { name: "components" }
+                             elem {
+                               name: "component"
+                               key { key: "name" value: "integrated_circuit0" }
+                             }
+                             elem { name: "integrated-circuit" }
+                             elem { name: "state" }
+                           }
+                           type: STATE)pb")),
+                  _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          /*oc_path=*/"openconfig-platform:state",
+                          /*gnmi_config=*/kCountersJson)),
+                      Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(BlackholeSwitchCounters counters,
+                       GetBlackholeSwitchCounters(stub));
+  EXPECT_EQ(counters.blackhole_events, 1);
+  EXPECT_EQ(counters.fec_not_correctable_events, 2);
+  EXPECT_EQ(counters.in_discard_events, 3);
+  EXPECT_EQ(counters.in_error_events, 4);
+  EXPECT_EQ(counters.lpm_miss_events, 5);
+  EXPECT_EQ(counters.memory_error_events, 6);
+  EXPECT_EQ(counters.out_discard_events, 7);
+}
+
+TEST(GetBlackholeSwitchCounters, FailWithMissingField) {
+  static constexpr absl::string_view kCountersJson = R"json(
+{
+  "openconfig-platform:state": {
+    "google-pins-platform:blackhole": {
+      "blackhole-events": "1",
+      "fec-not-correctable-events": "2",
+      "in-discard-events": "3",
+      "in-error-events": "4",
+      "lpm-miss-events": "5",
+      "memory-error-events": "6"
+    },
+    "google-pins-platform:congestion": {
+      "congestion-events": "0"
+    },
+    "openconfig-p4rt:node-id": "2795043031"
+  }
+})json";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_,
+                  EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                      R"pb(prefix { origin: "openconfig" }
+                           path {
+                             elem { name: "components" }
+                             elem {
+                               name: "component"
+                               key { key: "name" value: "integrated_circuit0" }
+                             }
+                             elem { name: "integrated-circuit" }
+                             elem { name: "state" }
+                           }
+                           type: STATE)pb")),
+                  _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          /*oc_path=*/"openconfig-platform:state",
+                          /*gnmi_config=*/kCountersJson)),
+                      Return(grpc::Status::OK)));
+  EXPECT_THAT(GetBlackholeSwitchCounters(stub),
+              StatusIs(absl::StatusCode::kNotFound,
+                       HasSubstr("out-discard-events not found in")));
+}
+
 TEST(GetGnmiStateLeafValue, ReturnsStateValue) {
   gnmi::MockgNMIStub stub;
   gnmi::GetResponse response;

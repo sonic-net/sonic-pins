@@ -418,6 +418,65 @@ absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
   return counters;
 }
 
+constexpr absl::string_view kBlackholeSwitchCountersParseKey =
+    "google-pins-platform:blackhole";
+
+absl::StatusOr<BlackholeSwitchCounters> ParseBlackholeSwitchCounters(
+    const json& switch_state_json) {
+  BlackholeSwitchCounters counters;
+
+  ASSIGN_OR_RETURN(
+      counters.in_discard_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "in-discard-events"}));
+  ASSIGN_OR_RETURN(
+      counters.out_discard_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "out-discard-events"}));
+  ASSIGN_OR_RETURN(
+      counters.in_error_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "in-error-events"}));
+  ASSIGN_OR_RETURN(
+      counters.lpm_miss_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "lpm-miss-events"}));
+  ASSIGN_OR_RETURN(
+      counters.fec_not_correctable_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "fec-not-correctable-events"}));
+  ASSIGN_OR_RETURN(
+      counters.memory_error_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "memory-error-events"}));
+  ASSIGN_OR_RETURN(
+      counters.blackhole_events,
+      ParseJsonValueAsUint(switch_state_json, {kBlackholeSwitchCountersParseKey,
+                                               "blackhole-events"}));
+
+  return counters;
+}
+
+absl::StatusOr<BlackholePortCounters> ParseBlackholePortCounters(
+    const json& port_counters_json) {
+  BlackholePortCounters counters;
+
+  ASSIGN_OR_RETURN(
+      counters.in_discard_events,
+      ParseJsonValueAsUint(port_counters_json, {"in-discard-events"}));
+  ASSIGN_OR_RETURN(
+      counters.out_discard_events,
+      ParseJsonValueAsUint(port_counters_json, {"out-discard-events"}));
+  ASSIGN_OR_RETURN(
+      counters.in_error_events,
+      ParseJsonValueAsUint(port_counters_json, {"in-error-events"}));
+  ASSIGN_OR_RETURN(
+      counters.fec_not_correctable_events,
+      ParseJsonValueAsUint(port_counters_json, {"fec-not-correctable-events"}));
+
+  return counters;
+}
+
 // Parses `val` into a JSON value, extracting `match_tag` if non-empty.
 absl::StatusOr<nlohmann::json> ParseJsonResponseAsJson(
     absl::string_view val, absl::string_view match_tag) {
@@ -2066,6 +2125,39 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
     port_counters.timestamp_ns = timestamp;
   }
   return counters;
+}
+
+absl::StatusOr<BlackholePortCounters> GetBlackholePortCounters(
+    absl::string_view interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
+  const std::string ops_state_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/state/google-pins-interfaces:blackhole");
+  const std::string ops_parse_str = "google-pins-interfaces:blackhole";
+  ASSIGN_OR_RETURN(
+      std::string port_counters_info,
+      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, ops_parse_str));
+
+  ASSIGN_OR_RETURN(json port_counters_json,
+                   json_yang::ParseJson(port_counters_info));
+  ASSIGN_OR_RETURN(BlackholePortCounters port_counters,
+                   ParseBlackholePortCounters(port_counters_json));
+  return port_counters;
+}
+
+absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  const std::string ops_state_path =
+      "components/component[name=integrated_circuit0]/integrated-circuit/state";
+  const std::string ops_parse_str = "openconfig-platform:state";
+  ASSIGN_OR_RETURN(
+      std::string switch_state_info,
+      GetGnmiStatePathInfo(&gnmi_stub, ops_state_path, ops_parse_str));
+
+  ASSIGN_OR_RETURN(json switch_state_json,
+                   json_yang::ParseJson(switch_state_info));
+  ASSIGN_OR_RETURN(BlackholeSwitchCounters switch_counters,
+                   ParseBlackholeSwitchCounters(switch_state_json));
+  return switch_counters;
 }
 
 absl::StatusOr<std::string> ParseJsonValue(absl::string_view json) {
