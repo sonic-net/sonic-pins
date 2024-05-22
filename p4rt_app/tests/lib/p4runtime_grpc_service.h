@@ -20,6 +20,7 @@
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
+//TODO(PINS):
 // #include "swss/fakes/fake_component_state_helper.h"
 // #include "swss/fakes/fake_system_state_helper.h"
 
@@ -46,6 +47,7 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable& GetVrfAppStateDbTable();
   sonic::FakeSonicDbTable& GetHashAppStateDbTable();
   sonic::FakeSonicDbTable& GetSwitchAppStateDbTable();
+  sonic::FakeSonicDbTable& GetPortAppStateDbTable();
 
   // Accessors for CounterDb tables.
   sonic::FakeSonicDbTable& GetP4rtCountersDbTable();
@@ -69,6 +71,7 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable fake_vrf_state_table_;
   sonic::FakeSonicDbTable fake_hash_state_table_;
   sonic::FakeSonicDbTable fake_switch_state_table_;
+  sonic::FakeSonicDbTable fake_port_state_table_;
 
   // Faked AppDb tables.
   sonic::FakeSonicDbTable fake_p4rt_table_;
@@ -82,6 +85,14 @@ class P4RuntimeGrpcService {
 
   // Faked PacketIO interface.
   sonic::FakePacketIoInterface* fake_packetio_interface_;  // No ownership.
+
+// TODO(PINS):
+// Faked state state managment.
+// swss::FakeComponentStateHelper fake_component_state_helper_;
+// swss::FakeSystemStateHelper fake_system_state_helper_;
+
+// Faked netdev port translation.
+// sonic::FakeIntfTranslator fake_netdev_translator_{/*enabled=*/true};
 
   // gRPC server faking the P4RT App for testing.
   std::unique_ptr<grpc::Server> server_;
