@@ -58,13 +58,14 @@ absl::Status TranslateAction(const TranslateTableEntryOptions& options,
                              const pdpi::IrTableDefinition& table_def,
                              pdpi::IrActionInvocation& action) {
   // Find the action definition from the ir table definition.
-  absl::optional<pdpi::IrActionDefinition> action_def;
+  const pdpi::IrActionDefinition* action_def = nullptr;
   for (const auto& entry_action : table_def.entry_actions()) {
     if (entry_action.action().preamble().alias() == action.name()) {
-      action_def = entry_action.action();
+      action_def = &entry_action.action();
+      break;
     }
   }
-  if (!action_def.has_value()) {
+  if (action_def == nullptr) {
     return gutil::InternalErrorBuilder()
            << "Could not find action definition for " << action.name() << ".";
   }
