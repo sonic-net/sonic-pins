@@ -9,20 +9,19 @@ SequenceTest: Empty input
 <empty>
 
 =========================================================================
-SequenceTest: Insert(a) -> Insert(a)
+SequenceTest: INSERT EntryWithOneKey{key-a} -> INSERT EntryThatRefersTo{key-a}
 =========================================================================
 
 --- PD updates (input):
 type: INSERT
 table_entry {
-  referring_table_entry {
+  referring_by_action_table_entry {
     match {
       val: "0x001"
     }
     action {
-      referring_action {
+      referring_to_one_match_field_action {
         referring_id_1: "key-a"
-        referring_id_2: "non-existent"
       }
     }
   }
@@ -30,7 +29,7 @@ table_entry {
 
 type: INSERT
 table_entry {
-  referred_table_entry {
+  one_match_field_table_entry {
     match {
       id: "key-a"
     }
@@ -46,7 +45,7 @@ WriteRequest #0
 updates {
   type: INSERT
   table_entry {
-    referred_table_entry {
+    one_match_field_table_entry {
       match {
         id: "key-a"
       }
@@ -62,14 +61,13 @@ WriteRequest #1
 updates {
   type: INSERT
   table_entry {
-    referring_table_entry {
+    referring_by_action_table_entry {
       match {
         val: "0x001"
       }
       action {
-        referring_action {
+        referring_to_one_match_field_action {
           referring_id_1: "key-a"
-          referring_id_2: "non-existent"
         }
       }
     }
@@ -77,96 +75,13 @@ updates {
 }
 
 =========================================================================
-SequenceTest: Delete(a) -> Delete(a)
+SequenceTest: DELETE EntryThatRefersTo{key-a} -> DELETE EntryWithOneKey{key-a}
 =========================================================================
 
 --- PD updates (input):
 type: DELETE
 table_entry {
-  referring_table_entry {
-    match {
-      val: "0x001"
-    }
-    action {
-      referring_action {
-        referring_id_1: "key-a"
-        referring_id_2: "non-existent"
-      }
-    }
-  }
-}
-
-type: DELETE
-table_entry {
-  referred_table_entry {
-    match {
-      id: "key-a"
-    }
-    action {
-      do_thing_4 {
-      }
-    }
-  }
-}
-
---- Write requests (output):
-WriteRequest #0
-updates {
-  type: DELETE
-  table_entry {
-    referring_table_entry {
-      match {
-        val: "0x001"
-      }
-      action {
-        referring_action {
-          referring_id_1: "key-a"
-          referring_id_2: "non-existent"
-        }
-      }
-    }
-  }
-}
-
-WriteRequest #1
-updates {
-  type: DELETE
-  table_entry {
-    referred_table_entry {
-      match {
-        id: "key-a"
-      }
-      action {
-        do_thing_4 {
-        }
-      }
-    }
-  }
-}
-
-=========================================================================
-SequenceTest: Test case with 1 entry in the first batch and multiple ones in the second batch. Used to verify the API is stable.
-=========================================================================
-
---- PD updates (input):
-type: DELETE
-table_entry {
-  referring_table_entry {
-    match {
-      val: "0x001"
-    }
-    action {
-      referring_action {
-        referring_id_1: "key-a"
-        referring_id_2: "key-b"
-      }
-    }
-  }
-}
-
-type: DELETE
-table_entry {
-  referred_table_entry {
+  one_match_field_table_entry {
     match {
       id: "key-a"
     }
@@ -179,12 +94,13 @@ table_entry {
 
 type: DELETE
 table_entry {
-  referred_table_entry {
+  referring_by_action_table_entry {
     match {
-      id: "key-b"
+      val: "0x001"
     }
     action {
-      do_thing_4 {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-a"
       }
     }
   }
@@ -195,14 +111,13 @@ WriteRequest #0
 updates {
   type: DELETE
   table_entry {
-    referring_table_entry {
+    referring_by_action_table_entry {
       match {
         val: "0x001"
       }
       action {
-        referring_action {
+        referring_to_one_match_field_action {
           referring_id_1: "key-a"
-          referring_id_2: "key-b"
         }
       }
     }
@@ -213,7 +128,7 @@ WriteRequest #1
 updates {
   type: DELETE
   table_entry {
-    referred_table_entry {
+    one_match_field_table_entry {
       match {
         id: "key-a"
       }
@@ -224,36 +139,22 @@ updates {
     }
   }
 }
-updates {
-  type: DELETE
-  table_entry {
-    referred_table_entry {
-      match {
-        id: "key-b"
-      }
-      action {
-        do_thing_4 {
-        }
-      }
-    }
-  }
-}
 
 =========================================================================
-SequenceTest: Insert(a), Insert(not-a)
+SequenceTest: INSERT EntryWithTwoKeys{key-a, 0x002} -> INSERT EntryThatRefersTo{key-a, 0x002}
 =========================================================================
 
 --- PD updates (input):
 type: INSERT
 table_entry {
-  referring_table_entry {
+  referring_by_action_table_entry {
     match {
       val: "0x001"
     }
     action {
-      referring_action {
+      referring_to_two_match_fields_action {
         referring_id_1: "key-a"
-        referring_id_2: "non-existent"
+        referring_id_2: "0x002"
       }
     }
   }
@@ -261,9 +162,10 @@ table_entry {
 
 type: INSERT
 table_entry {
-  referred_table_entry {
+  two_match_fields_table_entry {
     match {
-      id: "not-key-a"
+      id_1: "key-a"
+      id_2: "0x002"
     }
     action {
       do_thing_4 {
@@ -277,25 +179,98 @@ WriteRequest #0
 updates {
   type: INSERT
   table_entry {
-    referring_table_entry {
+    two_match_fields_table_entry {
       match {
-        val: "0x001"
+        id_1: "key-a"
+        id_2: "0x002"
       }
       action {
-        referring_action {
-          referring_id_1: "key-a"
-          referring_id_2: "non-existent"
+        do_thing_4 {
         }
       }
     }
   }
 }
+
+WriteRequest #1
 updates {
   type: INSERT
   table_entry {
-    referred_table_entry {
+    referring_by_action_table_entry {
       match {
-        id: "not-key-a"
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: DELETE EntryThatRefersTo{key-a, 0x002} -> DELETE EntryWithTwoKeys{key-a, 0x002}
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x002"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x002"
       }
       action {
         do_thing_4 {
@@ -306,20 +281,20 @@ updates {
 }
 
 =========================================================================
-SequenceTest: Insert(a) -> Insert(a), Insert(different table)
+SequenceTest: INSERT EntryThatRefersTo{key-a, 0x002}, INSERT EntryWithTwoKeys{key-c, 0x004}
 =========================================================================
 
 --- PD updates (input):
 type: INSERT
 table_entry {
-  referring_table_entry {
+  referring_by_action_table_entry {
     match {
       val: "0x001"
     }
     action {
-      referring_action {
+      referring_to_two_match_fields_action {
         referring_id_1: "key-a"
-        referring_id_2: "non-existent"
+        referring_id_2: "0x002"
       }
     }
   }
@@ -327,7 +302,476 @@ table_entry {
 
 type: INSERT
 table_entry {
-  referred_table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-c"
+      id_2: "0x004"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-c"
+        id_2: "0x004"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: DELETE EntryThatRefersTo{key-a, 0x002}, DELETE EntryWithTwoKeys{key-c, 0x004}
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-c"
+      id_2: "0x004"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-c"
+        id_2: "0x004"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: [INCORRECT due to false dependency] INSERT EntryThatRefersTo{key-a, 0x002}, INSERT EntryWithTwoKeys{key-a, 0x004} should be in a single batch and no change in orders
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x004"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x004"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: [INCORRECT due to false dependency] DELETE EntryWithTwoKeys{key-a, 0x004}, DELETE EntryThatRefersTo{key-a, 0x002} should be in a single batch no change in orders
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x004"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x004"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: [INCORRECT due to false dependency] INSERT Entries that don't refer to each other should be in one batch and maintain the original orders.
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x003"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-c"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x003"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-c"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: INSERT
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: [INCORRECT due to false dependency] DELETE Entries that don't refer to each other should be in one batch and maintain the original orders.
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_two_match_fields_action {
+        referring_id_1: "key-a"
+        referring_id_2: "0x002"
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x003"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-c"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_action_table_entry {
+      match {
+        val: "0x001"
+      }
+      action {
+        referring_to_two_match_fields_action {
+          referring_id_1: "key-a"
+          referring_id_2: "0x002"
+        }
+      }
+    }
+  }
+}
+updates {
+  type: DELETE
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-c"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x003"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: INSERT EntryWithOneKey{key-a} ->INSERT EntryThatRefersTo{key-a} , another entry
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_action_table_entry {
+    match {
+      val: "0x001"
+    }
+    action {
+      referring_to_one_match_field_action {
+        referring_id_1: "key-a"
+      }
+    }
+  }
+}
+
+type: INSERT
+table_entry {
+  one_match_field_table_entry {
     match {
       id: "key-a"
     }
@@ -359,7 +803,7 @@ WriteRequest #0
 updates {
   type: INSERT
   table_entry {
-    referred_table_entry {
+    one_match_field_table_entry {
       match {
         id: "key-a"
       }
@@ -392,14 +836,13 @@ WriteRequest #1
 updates {
   type: INSERT
   table_entry {
-    referring_table_entry {
+    referring_by_action_table_entry {
       match {
         val: "0x001"
       }
       action {
-        referring_action {
+        referring_to_one_match_field_action {
           referring_id_1: "key-a"
-          referring_id_2: "non-existent"
         }
       }
     }
@@ -407,20 +850,19 @@ updates {
 }
 
 =========================================================================
-SequenceTest: Insert(a) -> Insert(a), Insert(b) -> Insert(b)
+SequenceTest: INSERT EntryWithOneKey{key-a} -> INSERTEntryThatRefersTo{key-a} ,INSERT EntryWithOneKey{key-b} -> INSERTEntryThatRefersTo{key-b}
 =========================================================================
 
 --- PD updates (input):
 type: INSERT
 table_entry {
-  referring_table_entry {
+  referring_by_action_table_entry {
     match {
       val: "0x001"
     }
     action {
-      referring_action {
+      referring_to_one_match_field_action {
         referring_id_1: "key-a"
-        referring_id_2: "non-existent"
       }
     }
   }
@@ -428,7 +870,7 @@ table_entry {
 
 type: INSERT
 table_entry {
-  referred_table_entry {
+  one_match_field_table_entry {
     match {
       id: "key-a"
     }
@@ -441,14 +883,13 @@ table_entry {
 
 type: INSERT
 table_entry {
-  referring_table_entry {
+  referring_by_action_table_entry {
     match {
       val: "0x002"
     }
     action {
-      referring_action {
+      referring_to_one_match_field_action {
         referring_id_1: "key-b"
-        referring_id_2: "non-existent"
       }
     }
   }
@@ -456,7 +897,7 @@ table_entry {
 
 type: INSERT
 table_entry {
-  referred_table_entry {
+  one_match_field_table_entry {
     match {
       id: "key-b"
     }
@@ -472,7 +913,7 @@ WriteRequest #0
 updates {
   type: INSERT
   table_entry {
-    referred_table_entry {
+    one_match_field_table_entry {
       match {
         id: "key-a"
       }
@@ -486,7 +927,7 @@ updates {
 updates {
   type: INSERT
   table_entry {
-    referred_table_entry {
+    one_match_field_table_entry {
       match {
         id: "key-b"
       }
@@ -502,14 +943,13 @@ WriteRequest #1
 updates {
   type: INSERT
   table_entry {
-    referring_table_entry {
+    referring_by_action_table_entry {
       match {
         val: "0x001"
       }
       action {
-        referring_action {
+        referring_to_one_match_field_action {
           referring_id_1: "key-a"
-          referring_id_2: "non-existent"
         }
       }
     }
@@ -518,14 +958,13 @@ updates {
 updates {
   type: INSERT
   table_entry {
-    referring_table_entry {
+    referring_by_action_table_entry {
       match {
         val: "0x002"
       }
       action {
-        referring_action {
+        referring_to_one_match_field_action {
           referring_id_1: "key-b"
-          referring_id_2: "non-existent"
         }
       }
     }
@@ -533,20 +972,19 @@ updates {
 }
 
 =========================================================================
-SequenceTest: Insert(a) -> Insert(a), Insert(a) -> Insert(a) (i.e., two inserts pointing to the same insert)
+SequenceTest: INSERT EntryThatRefersTo{key-a}<- INSERT EntryWithOneKey{key-a} -> INSERT EntryThatRefersTo{key-a}. Two INSERT refers to the same referred entry.
 =========================================================================
 
 --- PD updates (input):
 type: INSERT
 table_entry {
-  referring_table_entry {
+  referring_by_action_table_entry {
     match {
       val: "0x001"
     }
     action {
-      referring_action {
+      referring_to_one_match_field_action {
         referring_id_1: "key-a"
-        referring_id_2: "non-existent"
       }
     }
   }
@@ -554,7 +992,7 @@ table_entry {
 
 type: INSERT
 table_entry {
-  referred_table_entry {
+  one_match_field_table_entry {
     match {
       id: "key-a"
     }
@@ -567,14 +1005,13 @@ table_entry {
 
 type: INSERT
 table_entry {
-  referring_table_entry {
+  referring_by_action_table_entry {
     match {
       val: "0x002"
     }
     action {
-      referring_action {
+      referring_to_one_match_field_action {
         referring_id_1: "key-a"
-        referring_id_2: "non-existent"
       }
     }
   }
@@ -585,7 +1022,7 @@ WriteRequest #0
 updates {
   type: INSERT
   table_entry {
-    referred_table_entry {
+    one_match_field_table_entry {
       match {
         id: "key-a"
       }
@@ -601,14 +1038,13 @@ WriteRequest #1
 updates {
   type: INSERT
   table_entry {
-    referring_table_entry {
+    referring_by_action_table_entry {
       match {
         val: "0x001"
       }
       action {
-        referring_action {
+        referring_to_one_match_field_action {
           referring_id_1: "key-a"
-          referring_id_2: "non-existent"
         }
       }
     }
@@ -617,14 +1053,13 @@ updates {
 updates {
   type: INSERT
   table_entry {
-    referring_table_entry {
+    referring_by_action_table_entry {
       match {
         val: "0x002"
       }
       action {
-        referring_action {
+        referring_to_one_match_field_action {
           referring_id_1: "key-a"
-          referring_id_2: "non-existent"
         }
       }
     }
@@ -632,26 +1067,27 @@ updates {
 }
 
 =========================================================================
-SequenceTest: A referring to B using a match field
+SequenceTest: referring via one match field for INSERT
 =========================================================================
 
 --- PD updates (input):
 type: INSERT
 table_entry {
-  referring2_table_entry {
+  referring_by_match_field_table_entry {
     match {
-      referring_id: "key-a"
+      referring_id_1: "key-a"
     }
     action {
       do_thing_4 {
       }
     }
+    priority: 32
   }
 }
 
 type: INSERT
 table_entry {
-  referred_table_entry {
+  one_match_field_table_entry {
     match {
       id: "key-a"
     }
@@ -667,9 +1103,78 @@ WriteRequest #0
 updates {
   type: INSERT
   table_entry {
-    referred_table_entry {
+    referring_by_match_field_table_entry {
+      match {
+        referring_id_1: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+      priority: 32
+    }
+  }
+}
+updates {
+  type: INSERT
+  table_entry {
+    one_match_field_table_entry {
       match {
         id: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: referring via two match fields for INSERT
+=========================================================================
+
+--- PD updates (input):
+type: INSERT
+table_entry {
+  referring_by_match_field_table_entry {
+    match {
+      referring_id_1: "key-a"
+      referring_id_2 {
+        value: "0x001"
+      }
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+    priority: 32
+  }
+}
+
+type: INSERT
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x001"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: INSERT
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x001"
       }
       action {
         do_thing_4 {
@@ -683,9 +1188,62 @@ WriteRequest #1
 updates {
   type: INSERT
   table_entry {
-    referring2_table_entry {
+    referring_by_match_field_table_entry {
       match {
-        referring_id: "key-a"
+        referring_id_1: "key-a"
+        referring_id_2 {
+          value: "0x001"
+        }
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+      priority: 32
+    }
+  }
+}
+
+=========================================================================
+SequenceTest: referring via one match field for DELETE
+=========================================================================
+
+--- PD updates (input):
+type: DELETE
+table_entry {
+  one_match_field_table_entry {
+    match {
+      id: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+  }
+}
+
+type: DELETE
+table_entry {
+  referring_by_match_field_table_entry {
+    match {
+      referring_id_1: "key-a"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+    priority: 32
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    one_match_field_table_entry {
+      match {
+        id: "key-a"
       }
       action {
         do_thing_4 {
@@ -694,103 +1252,92 @@ updates {
     }
   }
 }
-
-=========================================================================
-SortTest: A referring to B
-=========================================================================
-
---- PD entries (input):
-referring_table_entry {
-  match {
-    val: "0x001"
-  }
-  action {
-    referring_action {
-      referring_id_1: "key-a"
-      referring_id_2: "non-existent"
-    }
-  }
-}
-
-referred_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-}
-
---- Sorted entries (output):
-referred_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-}
-
-referring_table_entry {
-  match {
-    val: "0x001"
-  }
-  action {
-    referring_action {
-      referring_id_1: "key-a"
-      referring_id_2: "non-existent"
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_match_field_table_entry {
+      match {
+        referring_id_1: "key-a"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+      priority: 32
     }
   }
 }
 
 =========================================================================
-SortTest: A referring to B twice
+SequenceTest: referring via two match fields for DELETE
 =========================================================================
 
---- PD entries (input):
-referring_table_entry {
-  match {
-    val: "0x001"
+--- PD updates (input):
+type: DELETE
+table_entry {
+  two_match_fields_table_entry {
+    match {
+      id_1: "key-a"
+      id_2: "0x001"
+    }
+    action {
+      do_thing_4 {
+      }
+    }
   }
-  action {
-    referring_action {
+}
+
+type: DELETE
+table_entry {
+  referring_by_match_field_table_entry {
+    match {
       referring_id_1: "key-a"
-      referring_id_2: "key-a"
+      referring_id_2 {
+        value: "0x001"
+      }
+    }
+    action {
+      do_thing_4 {
+      }
+    }
+    priority: 32
+  }
+}
+
+--- Write requests (output):
+WriteRequest #0
+updates {
+  type: DELETE
+  table_entry {
+    referring_by_match_field_table_entry {
+      match {
+        referring_id_1: "key-a"
+        referring_id_2 {
+          value: "0x001"
+        }
+      }
+      action {
+        do_thing_4 {
+        }
+      }
+      priority: 32
     }
   }
 }
 
-referred_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-}
-
---- Sorted entries (output):
-referred_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-}
-
-referring_table_entry {
-  match {
-    val: "0x001"
-  }
-  action {
-    referring_action {
-      referring_id_1: "key-a"
-      referring_id_2: "key-a"
+WriteRequest #1
+updates {
+  type: DELETE
+  table_entry {
+    two_match_fields_table_entry {
+      match {
+        id_1: "key-a"
+        id_2: "0x001"
+      }
+      action {
+        do_thing_4 {
+        }
+      }
     }
   }
 }
@@ -810,27 +1357,27 @@ GetEntriesUnreachableFromRootsTest: All root entries means no garbage.
 =========================================================================
 
 --- PD entries (input):
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-a"
-      referring_id_2: "key-a"
+      referring_id_2: "0x003"
     }
   }
   controller_metadata: "Root"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x002"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-a"
-      referring_id_2: "key-b"
+      referring_id_2: "0x002"
     }
   }
   controller_metadata: "Root"
@@ -844,65 +1391,21 @@ GetEntriesUnreachableFromRootsTest: Root referring to the only entry generates n
 =========================================================================
 
 --- PD entries (input):
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_one_match_field_action {
       referring_id_1: "key-a"
-      referring_id_2: "key-a"
     }
   }
   controller_metadata: "Root"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-  controller_metadata: "Dependency"
-}
-
---- Unreachable entries from roots (output):
-<empty>
-
-=========================================================================
-GetEntriesUnreachableFromRootsTest: Root referring to all dependencies generates no garbage.
-=========================================================================
-
---- PD entries (input):
-referring_table_entry {
-  match {
-    val: "0x001"
-  }
-  action {
-    referring_action {
-      referring_id_1: "key-a"
-      referring_id_2: "key-b"
-    }
-  }
-  controller_metadata: "Root"
-}
-
-referred_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-  controller_metadata: "Dependency"
-}
-
-referred_table_entry {
-  match {
-    id: "key-b"
   }
   action {
     do_thing_4 {
@@ -919,20 +1422,19 @@ GetEntriesUnreachableFromRootsTest: Garbage is unreachable.
 =========================================================================
 
 --- PD entries (input):
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_one_match_field_action {
       referring_id_1: "key-a"
-      referring_id_2: "key-b"
     }
   }
   controller_metadata: "Root"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-a"
   }
@@ -943,7 +1445,7 @@ referred_table_entry {
   controller_metadata: "Dependency"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-c"
   }
@@ -955,7 +1457,7 @@ referred_table_entry {
 }
 
 --- Unreachable entries from roots (output):
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-c"
   }
@@ -971,20 +1473,19 @@ GetEntriesUnreachableFromRootsTest: Root referring to dependency and a standalon
 =========================================================================
 
 --- PD entries (input):
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_one_match_field_action {
       referring_id_1: "key-a"
-      referring_id_2: "key-b"
     }
   }
   controller_metadata: "Root"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-a"
   }
@@ -995,14 +1496,14 @@ referred_table_entry {
   controller_metadata: "Dependency"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "non-exist"
-      referring_id_2: "non-exist"
+      referring_id_2: "0x000"
     }
   }
   controller_metadata: "Root"
@@ -1016,7 +1517,7 @@ GetEntriesUnreachableFromRootsTest: All entries are garbage.
 =========================================================================
 
 --- PD entries (input):
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-a"
   }
@@ -1027,7 +1528,7 @@ referred_table_entry {
   controller_metadata: "Garbage"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-c"
   }
@@ -1039,7 +1540,7 @@ referred_table_entry {
 }
 
 --- Unreachable entries from roots (output):
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-a"
   }
@@ -1050,7 +1551,7 @@ referred_table_entry {
   controller_metadata: "Garbage"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-c"
   }
@@ -1066,35 +1567,36 @@ GetEntriesUnreachableFromRootsTest: Two roots referring to one dependency genera
 =========================================================================
 
 --- PD entries (input):
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-a"
-      referring_id_2: "key-a"
+      referring_id_2: "0x002"
     }
   }
   controller_metadata: "Root"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x002"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-a"
-      referring_id_2: "key-a"
+      referring_id_2: "0x002"
     }
   }
   controller_metadata: "Root"
 }
 
-referred_table_entry {
+two_match_fields_table_entry {
   match {
-    id: "key-a"
+    id_1: "key-a"
+    id_2: "0x002"
   }
   action {
     do_thing_4 {
@@ -1111,9 +1613,9 @@ GetEntriesUnreachableFromRootsTest: Children and grand children of the root are 
 =========================================================================
 
 --- PD entries (input):
-referring_to_referring2_table_entry {
+referring_to_referring_by_match_field_table_entry {
   match {
-    referring2_table_id: "key-a"
+    referring_to_referring_id_1: "key-a"
   }
   action {
     do_thing_4 {
@@ -1122,18 +1624,19 @@ referring_to_referring2_table_entry {
   controller_metadata: "Root"
 }
 
-referring2_table_entry {
+referring_by_match_field_table_entry {
   match {
-    referring_id: "key-a"
+    referring_id_1: "key-a"
   }
   action {
     do_thing_4 {
     }
   }
+  priority: 32
   controller_metadata: "Child dependency"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-a"
   }
@@ -1145,57 +1648,64 @@ referred_table_entry {
 }
 
 --- Unreachable entries from roots (output):
-<empty>
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grand child Dependency"
+}
 
 =========================================================================
 GetEntriesUnreachableFromRootsTest: NonRoot referring to other NonRoot is garbage.
 =========================================================================
 
 --- PD entries (input):
-referred_table_entry {
+referring_by_match_field_table_entry {
   match {
-    id: "key-a"
+    referring_id_1: "key-a"
   }
   action {
     do_thing_4 {
     }
   }
+  priority: 32
   controller_metadata: "NonRoot garbage"
 }
 
-referring_table_entry {
+one_match_field_table_entry {
   match {
-    val: "0x001"
+    id: "key-a"
   }
   action {
-    referring_action {
-      referring_id_1: "key-a"
-      referring_id_2: "non-existent"
+    do_thing_4 {
     }
   }
   controller_metadata: "NonRoot garbage"
 }
 
 --- Unreachable entries from roots (output):
-referred_table_entry {
+referring_by_match_field_table_entry {
   match {
-    id: "key-a"
+    referring_id_1: "key-a"
   }
   action {
     do_thing_4 {
     }
   }
+  priority: 32
   controller_metadata: "NonRoot garbage"
 }
 
-referring_table_entry {
+one_match_field_table_entry {
   match {
-    val: "0x001"
+    id: "key-a"
   }
   action {
-    referring_action {
-      referring_id_1: "key-a"
-      referring_id_2: "non-existent"
+    do_thing_4 {
     }
   }
   controller_metadata: "NonRoot garbage"
@@ -1206,9 +1716,9 @@ GetEntriesUnreachableFromRootsTest: NonRoot referring to other dependency is gar
 =========================================================================
 
 --- PD entries (input):
-referring_to_referring2_table_entry {
+referring_to_referring_by_match_field_table_entry {
   match {
-    referring2_table_id: "key-a"
+    referring_to_referring_id_1: "key-a"
   }
   action {
     do_thing_4 {
@@ -1217,18 +1727,19 @@ referring_to_referring2_table_entry {
   controller_metadata: "Root"
 }
 
-referring2_table_entry {
+referring_by_match_field_table_entry {
   match {
-    referring_id: "key-a"
+    referring_id_1: "key-a"
   }
   action {
     do_thing_4 {
     }
   }
+  priority: 32
   controller_metadata: "Child dependency"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-a"
   }
@@ -1239,28 +1750,37 @@ referred_table_entry {
   controller_metadata: "Grand child Dependency"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_one_match_field_action {
       referring_id_1: "key-a"
-      referring_id_2: "non-existent"
     }
   }
   controller_metadata: "NonRoot garbage"
 }
 
 --- Unreachable entries from roots (output):
-referring_table_entry {
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grand child Dependency"
+}
+
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_one_match_field_action {
       referring_id_1: "key-a"
-      referring_id_2: "non-existent"
     }
   }
   controller_metadata: "NonRoot garbage"
@@ -1271,9 +1791,9 @@ GetEntriesUnreachableFromRootsTest: Conglomeration test.
 =========================================================================
 
 --- PD entries (input):
-referring_to_referring2_table_entry {
+referring_to_referring_by_match_field_table_entry {
   match {
-    referring2_table_id: "key-a"
+    referring_to_referring_id_1: "key-a"
   }
   action {
     do_thing_4 {
@@ -1282,18 +1802,19 @@ referring_to_referring2_table_entry {
   controller_metadata: "Root"
 }
 
-referring2_table_entry {
+referring_by_match_field_table_entry {
   match {
-    referring_id: "key-a"
+    referring_id_1: "key-a"
   }
   action {
     do_thing_4 {
     }
   }
+  priority: 32
   controller_metadata: "Child dependency"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-a"
   }
@@ -1304,20 +1825,20 @@ referred_table_entry {
   controller_metadata: "Grand child Dependency"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-a"
-      referring_id_2: "non-existent"
+      referring_id_2: "0x000"
     }
   }
   controller_metadata: "NonRoot garbage"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-b"
   }
@@ -1328,33 +1849,33 @@ referred_table_entry {
   controller_metadata: "NonRoot garbage"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-b"
-      referring_id_2: "non-existent"
+      referring_id_2: "0x000"
     }
   }
   controller_metadata: "NonRoot garbage"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-c"
-      referring_id_2: "non-exist"
+      referring_id_2: "0x000"
     }
   }
   controller_metadata: "Root"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-c"
   }
@@ -1365,34 +1886,45 @@ referred_table_entry {
   controller_metadata: "Dependency"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "non-exist"
-      referring_id_2: "non-exist"
+      referring_id_2: "0x000"
     }
   }
   controller_metadata: "Root"
 }
 
 --- Unreachable entries from roots (output):
-referring_table_entry {
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Grand child Dependency"
+}
+
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-a"
-      referring_id_2: "non-existent"
+      referring_id_2: "0x000"
     }
   }
   controller_metadata: "NonRoot garbage"
 }
 
-referred_table_entry {
+one_match_field_table_entry {
   match {
     id: "key-b"
   }
@@ -1403,15 +1935,26 @@ referred_table_entry {
   controller_metadata: "NonRoot garbage"
 }
 
-referring_table_entry {
+referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-b"
-      referring_id_2: "non-existent"
+      referring_id_2: "0x000"
     }
   }
   controller_metadata: "NonRoot garbage"
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-c"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Dependency"
 }
