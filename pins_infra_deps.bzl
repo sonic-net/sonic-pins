@@ -66,9 +66,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_google_glog"):
         http_archive(
             name = "com_github_google_glog",
-            url = "https://github.com/google/glog/archive/v0.4.0.tar.gz",
-            strip_prefix = "glog-0.4.0",
-            sha256 = "f28359aeba12f30d73d9e4711ef356dc842886968112162bc73002645139c39c",
+            url = "https://github.com/google/glog/archive/v0.6.0.tar.gz",
+            strip_prefix = "glog-0.6.0",
+            sha256 = "8a83bf982f37bb70825df71a9709fa90ea9f4447fb3c099e1d720a439d88bad6",
         )
 
     # Needed to make glog happy.
@@ -172,8 +172,8 @@ def pins_infra_deps():
     if not native.existing_rule("sonic_swss_common"):
         http_archive(
             name = "sonic_swss_common",
-            url = "https://github.com/azure/sonic-swss-common/archive/5d1fe2da5fc4a6b1daebdb5df9b04c05805f8ad7.zip",
-            strip_prefix = "sonic-swss-common-5d1fe2da5fc4a6b1daebdb5df9b04c05805f8ad7",
+            url = "https://github.com/azure/sonic-swss-common/archive/e7917acd2d4a9c0121802437e3c899bd513ac888.zip",
+            strip_prefix = "sonic-swss-common-e7917acd2d4a9c0121802437e3c899bd513ac888",
         )
     if not native.existing_rule("rules_pkg"):
         http_archive(

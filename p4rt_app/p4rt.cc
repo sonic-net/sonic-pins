@@ -45,6 +45,7 @@
 #include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_node_cfg_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_port_table_event.h"
+#include "p4rt_app/event_monitoring/debug_data_dump_events.h"
 #include "p4rt_app/event_monitoring/state_event_monitor.h"
 #include "p4rt_app/event_monitoring/state_verification_events.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
@@ -450,6 +451,15 @@ int main(int argc, char** argv) {
       state_verification_table_adapter);
   state_verification_event_monitor.Start();
 
+  // Start listening for debug data dump events.
+  p4rt_app::sonic::ConsumerNotifierAdapter debug_data_dump_notifier(
+      "DEBUG_DATA_REQ_CHANNEL", &app_db);
+  p4rt_app::sonic::NotificationProducerAdapter debug_data_dump_responder(
+      &app_db, "DEBUG_DATA_RESP_CHANNEL");
+  p4rt_app::DebugDataDumpEventHandler debug_data_dump_event_monitor(
+      p4runtime_server, debug_data_dump_notifier, debug_data_dump_responder);
+  debug_data_dump_event_monitor.Start();
+
   // Report performance statistics every minute.
   absl::Notification stop_stats_logging;
   std::thread stats_logging_loop(p4rt_app::LogStatsEveryMinute,
@@ -478,6 +488,24 @@ int main(int argc, char** argv) {
   }
 
   builder.RegisterService(&p4runtime_server);
+
+  // Disable max ping strikes behavior to allow more frequent KA.
+  builder.AddChannelArgument(GRPC_ARG_HTTP2_MAX_PING_STRIKES, 0);
+
+  // Sends KeepAlive pings to client to ensure P4RT can promptly discover
+  // disconnects and vacate the role of primary controller. Else, backup
+  // connection might not be able to connect to P4RT with the same election id.
+  builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIME_MS, 1000);
+
+  // Keepalive pings' timeout.
+  // Despite the switch wanting to discover disconnects as soon as possible the
+  // keepalive timeout can not be too fast. Else there won't be enough time for
+  // the switch's teaming driver to failover. We settle with 20s since this is
+  // the timeout value a P4 client would usually have.
+  builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 20'000);
+
+  // Sends KA pings even when existing streaming RPC is not active.
+  builder.AddChannelArgument(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
 
   std::unique_ptr<Server> server(builder.BuildAndStart());
   LOG(INFO) << "Server listening on " << server_addr << ".";

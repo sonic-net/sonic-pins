@@ -635,11 +635,143 @@ TEST_F(ResponsePathTest, RequestWithDuplicateKeysFails) {
 
   // We expect the invalid argument error to be propagated all the way back to
   // the gRPC response.
+  // With the fail on first error behavior, P4RT App will detect the duplicate
+  // in the first entry and mark that as the INVALID_ARGUMENT error but the
+  // subsequent one is marked as ABORTED (not attempted).
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
       StatusIs(absl::StatusCode::kUnknown,
                AllOf(HasSubstr("#1: INVALID_ARGUMENT:"),
-                     HasSubstr("#2: INVALID_ARGUMENT:"))));
+                     HasSubstr("#2: ABORTED:"))));
+}
+
+TEST_F(ResponsePathTest, FailsOnFirstErrorInP4RT) {
+  // Any P4RT error in write request translation should fail on first error,
+  // with the first error having the actual failed code and the subsequent ones
+  // with ABORTED and the error string as not attempted. Force a P4 contraint
+  // violation in the PiToIr translation in the second request.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-1"
+                    ipv6_dst { value: "2002:a17:506:c111::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vrf_table_entry {
+                  match { vrf_id: "" }
+                  action { no_action {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-3"
+                    ipv6_dst { value: "2002:a17:506:c113::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(
+          absl::StatusCode::kUnknown,
+          AllOf(HasSubstr("#1: OK"),
+                HasSubstr("#2: INVALID_ARGUMENT: All entries must satisfy"),
+                HasSubstr("#3: ABORTED: Not attempted"))));
+}
+
+TEST_F(ResponsePathTest, FailOnFirstErrorFromAppdbResponses) {
+  // If write requests are written to APP_DB successfully, App db responses
+  // should reflect fail on first error.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-1"
+                    ipv6_dst { value: "2002:a17:506:c111::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-2"
+                    ipv6_dst { value: "2002:a17:506:c112::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-3"
+                    ipv6_dst { value: "2002:a17:506:c113::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Fake valid error (INVALID_ARG) for second and NOT_EXECUTED for subsequent
+  // ones.
+  auto failed_ipv6_entry2 =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_IPV6_TABLE")
+          .AddMatchField("ipv6_dst", "2002:a17:506:c112::/64")
+          .AddMatchField("vrf_id", "vrf-2");
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      failed_ipv6_entry2.GetKey(), "SWSS_RC_INVALID_PARAM", "error with vrf-2");
+
+  auto failed_ipv6_entry3 =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_IPV6_TABLE")
+          .AddMatchField("ipv6_dst", "2002:a17:506:c113::/64")
+          .AddMatchField("vrf_id", "vrf-3");
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      failed_ipv6_entry3.GetKey(), "SWSS_RC_NOT_EXECUTED",
+      "SWSS_RC_NOT_EXECUTED");
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: OK"),
+                     HasSubstr("#2: INVALID_ARGUMENT: error with vrf-2"),
+                     HasSubstr("#3: ABORTED: SWSS_RC_NOT_EXECUTED"))));
 }
 
 TEST_F(ResponsePathTest, ReadingIgnoresRedisDbValues) {
@@ -786,6 +918,157 @@ TEST_F(ResponsePathTest, WriteRequestsStatisticsHandleBatchRequests) {
               FieldsAre(/*write_batches=*/1, /*write_requests=*/2,
                         /*write_time=*/Not(absl::ZeroDuration()),
                         /*max_write_time=*/Not(absl::ZeroDuration()), _, _));
+}
+
+TEST_F(ResponsePathTest, WriteRequestsStatisticsDoNotIncludeInvalidPiEntries) {
+  // We start with 3 valud IPv6 table entries because the PD to PI libraries
+  // will reject invalid requests.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c115::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c116::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Manually modify the 2nd request so that it uses a ternary field. Because
+  // VRF uses an exact match and IPv6 DST uses a LPM we know the ternary field
+  // will be invalid.
+  *write_request.mutable_updates(1)
+       ->mutable_entity()
+       ->mutable_table_entry()
+       ->mutable_match(0)
+       ->mutable_ternary()
+       ->mutable_value() = "bad value.";
+
+  // Because of the invalid input we expect the 2nd request to be invalid and
+  // the 3rd request to get aborted.
+  ASSERT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                     write_request),
+              StatusIs(absl::StatusCode::kUnknown));
+
+  // Only the 1st request makes it through the translation step so we should
+  // only see 1 write request total.
+  ASSERT_OK_AND_ASSIGN(
+      FlowProgrammingStatistics flow_stats,
+      p4rt_service_.GetP4rtServer().GetFlowProgrammingStatistics());
+  EXPECT_THAT(flow_stats,
+              FieldsAre(/*write_batches=*/1, /*write_requests=*/1,
+                        /*write_time=*/Not(absl::ZeroDuration()),
+                        /*max_write_time=*/Not(absl::ZeroDuration()), _, _));
+}
+
+TEST_F(ResponsePathTest, ReadCacheUsesCanonicalFormToStoreTableEntries) {
+  // The insert and modify requests will have the same logical IPv6 LPM value,
+  // but the modify removes the preceeding zero bits to make the requests
+  // syntactically different.
+  p4::v1::WriteRequest insert_request;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(updates {
+             type: INSERT
+             entity {
+               table_entry {
+                 table_id: 33554501
+                 match {
+                   field_id: 1
+                   exact { value: "80" }
+                 }
+                 match {
+                   field_id: 2
+                   lpm {
+                     value: "\000\000\000\000\000\000\024\000\000\000\000\000\000\000\000"
+                     prefix_len: 64
+                   }
+                 }
+                 action {
+                   action {
+                     action_id: 16777221
+                     params { param_id: 1 value: "20" }
+                   }
+                 }
+               }
+             }
+           })pb",
+      &insert_request));
+
+  p4::v1::WriteRequest modify_request;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(updates {
+             type: MODIFY
+             entity {
+               table_entry {
+                 table_id: 33554501
+                 match {
+                   field_id: 1
+                   exact { value: "80" }
+                 }
+                 match {
+                   field_id: 2
+                   lpm {
+                     value: "\024\000\000\000\000\000\000\000\000"
+                     prefix_len: 64
+                   }
+                 }
+                 action {
+                   action {
+                     action_id: 16777221
+                     params { param_id: 1 value: "20" }
+                   }
+                 }
+               }
+             }
+           })pb",
+      &modify_request));
+
+  p4::v1::ReadRequest read_request;
+  read_request.add_entities()->mutable_table_entry();
+
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   insert_request));
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   modify_request));
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::ReadResponse read_response,
+      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+
+  // Because we only inserted and modified one entry we should only read back
+  // that entry.
+  EXPECT_EQ(read_response.entities_size(), 1);
 }
 
 }  // namespace
