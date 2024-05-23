@@ -19,20 +19,23 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
+#include <thread>  // NOLINT
 
+#include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "boost/bimap.hpp"
-#include "grpcpp/grpcpp.h"
+#include "glog/logging.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
+#include "grpcpp/support/sync_stream.h"
 #include "gutil/table_entry_key.h"
-#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
@@ -193,6 +196,9 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   absl::StatusOr<FlowProgrammingStatistics> GetFlowProgrammingStatistics()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  sonic::PacketIoCounters GetPacketIoCounters()
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
  protected:
   // Simple constructor that should only be used for testing purposes.
   P4RuntimeImpl(bool translate_port_ids)
@@ -343,6 +349,9 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   EventDataTracker<absl::Duration> read_execution_time_
       ABSL_GUARDED_BY(server_state_lock_){
           EventDataTracker<absl::Duration>(absl::ZeroDuration())};
+
+  // PacketIO debug counters.
+  sonic::PacketIoCounters packetio_counters_;
 };
 
 }  // namespace p4rt_app

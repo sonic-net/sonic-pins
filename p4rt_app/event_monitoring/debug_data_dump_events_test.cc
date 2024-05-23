@@ -19,9 +19,11 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/synchronization/notification.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/io.h"
 #include "gutil/status_matchers.h"
 #include "p4rt_app/p4runtime/mock_p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
@@ -102,7 +104,9 @@ TEST_F(DebugDataDumpEventHandlerTest, DumpDebugDataFails) {
   EXPECT_CALL(mock_notification_producer_, send_with_op_key("p4rt", "path", fv))
       .Times(1);
 
-  EXPECT_OK(debug_data_dump_.WaitForEventAndDumpDebugData());
+  EXPECT_THAT(debug_data_dump_.WaitForEventAndDumpDebugData(),
+              StatusIs(absl::StatusCode::kUnknown,
+                       HasSubstr("Dump debug data fails.")));
 }
 
 TEST_F(DebugDataDumpEventHandlerTest,

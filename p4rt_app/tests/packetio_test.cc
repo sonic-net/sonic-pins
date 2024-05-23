@@ -11,9 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <cstdint>
 #include <memory>
 #include <string>
-#include <thread>  //NOLINT
 #include <utility>
 #include <vector>
 
@@ -25,7 +25,6 @@
 #include "absl/synchronization/notification.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "grpcpp/client_context.h"
 #include "grpcpp/create_channel.h"
@@ -33,7 +32,6 @@
 #include "grpcpp/support/status.h"
 #include "grpcpp/support/sync_stream.h"
 #include "gtest/gtest.h"
-#include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -45,6 +43,7 @@
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
+#include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -152,9 +151,9 @@ TEST_F(FakePacketIoTest, VerifyPacketIn) {
 
   // Push the expected PacketIn.
   EXPECT_OK(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
-      "Ethernet1/1/0", "Ethernet1/1/0", "test packet1"));
+      "Ethernet1/1/0", "Ethernet1/1/1", "test packet1"));
   EXPECT_OK(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
-      "Ethernet1/1/1", "Ethernet1/1/1", "test packet2"));
+      "Ethernet1/1/1", "Ethernet1/1/0", "test packet2"));
 
   // Wait for a max timeout, close the session and verify responses.
   got_responses.WaitForNotificationWithTimeout(absl::Seconds(10));
@@ -164,16 +163,21 @@ TEST_F(FakePacketIoTest, VerifyPacketIn) {
                                      packet {
                                        payload: "test packet1"
                                        metadata { metadata_id: 1 value: "0" }
-                                       metadata { metadata_id: 2 value: "0" }
+                                       metadata { metadata_id: 2 value: "1" }
                                      }
                                    )pb"),
                                    EqualsProto(R"pb(
                                      packet {
                                        payload: "test packet2"
                                        metadata { metadata_id: 1 value: "1" }
-                                       metadata { metadata_id: 2 value: "1" }
+                                       metadata { metadata_id: 2 value: "0" }
                                      }
                                    )pb")));
+  
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 2);
+  EXPECT_EQ(counters.packet_in_errors, 0);
 }
 
 TEST_F(FakePacketIoTest, VerifyPacketInFailAfterPortRemove) {
@@ -188,6 +192,11 @@ TEST_F(FakePacketIoTest, VerifyPacketInFailAfterPortRemove) {
   EXPECT_THAT(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
                   "Ethernet1/1/0", "Ethernet1/1/0", "test packet1"),
               StatusIs(absl::StatusCode::kInvalidArgument));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 0);
+  EXPECT_EQ(counters.packet_in_errors, 1);
 }
 
 TEST_F(FakePacketIoTest, PacketInFailsWithoutPortTranslation) {
@@ -201,6 +210,11 @@ TEST_F(FakePacketIoTest, PacketInFailsWithoutPortTranslation) {
   EXPECT_THAT(p4rt_service_.GetFakePacketIoInterface().PushPacketIn(
                   "Ethernet1/1/0", "Ethernet1/1/0", "test packet1"),
               StatusIs(absl::StatusCode::kInvalidArgument));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 0);
+  EXPECT_EQ(counters.packet_in_errors, 1);
 }
 
 TEST_F(FakePacketIoTest, PacketOutFailsWithoutPortTranslation) {
@@ -221,6 +235,11 @@ TEST_F(FakePacketIoTest, PacketOutFailsWithoutPortTranslation) {
   ASSERT_TRUE(actual_responses[0].has_error());
   ASSERT_EQ(actual_responses[0].error().canonical_code(),
             grpc::StatusCode::FAILED_PRECONDITION);
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_out_sent, 0);
+  EXPECT_EQ(counters.packet_out_errors, 1);
 }
 
 TEST_F(FakePacketIoTest, PacketOutFailBeforeP4InfoPush) {
@@ -241,6 +260,11 @@ TEST_F(FakePacketIoTest, PacketOutFailBeforeP4InfoPush) {
   ASSERT_TRUE(actual_responses[0].has_error());
   ASSERT_EQ(actual_responses[0].error().canonical_code(),
             grpc::StatusCode::FAILED_PRECONDITION);
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_out_sent, 0);
+  EXPECT_EQ(counters.packet_out_errors, 1);
 }
 
 TEST_F(FakePacketIoTest, PacketOutFailAfterPortRemoval) {
@@ -270,6 +294,11 @@ TEST_F(FakePacketIoTest, PacketOutFailAfterPortRemoval) {
   ASSERT_TRUE(actual_responses[0].has_error());
   ASSERT_EQ(actual_responses[0].error().canonical_code(),
             grpc::StatusCode::INVALID_ARGUMENT);
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_out_sent, 0);
+  EXPECT_EQ(counters.packet_out_errors, 1);
 }
 
 TEST_F(FakePacketIoTest, PacketOutFailForSecondary) {
@@ -304,6 +333,11 @@ TEST_F(FakePacketIoTest, PacketOutFailForSecondary) {
   ASSERT_TRUE(response.has_error());
   ASSERT_THAT(response.error().canonical_code(),
               Eq(grpc::StatusCode::PERMISSION_DENIED));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_out_sent, 0);
+  EXPECT_EQ(counters.packet_out_errors, 1);
 }
 
 TEST_F(FakePacketIoTest, VerifyPacketOut) {
@@ -333,6 +367,11 @@ TEST_F(FakePacketIoTest, VerifyPacketOut) {
   ASSERT_OK(packets_or);
   EXPECT_EQ(*packets_or,
             std::vector<std::string>({"test packet1", "test packet2"}));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_out_sent, 2);
+  EXPECT_EQ(counters.packet_out_errors, 0);
 }
 
 TEST_F(FakePacketIoTest, VerifyPacketInWithPortNames) {
@@ -363,6 +402,11 @@ TEST_F(FakePacketIoTest, VerifyPacketInWithPortNames) {
                   metadata { metadata_id: 2 value: "0" }
                 }
               )pb")));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 1);
+  EXPECT_EQ(counters.packet_in_errors, 0);
 }
 
 TEST_F(FakePacketIoTest, PacketInMessageFailsWhenNoPrimaryExists) {
@@ -375,6 +419,11 @@ TEST_F(FakePacketIoTest, PacketInMessageFailsWhenNoPrimaryExists) {
                   "Ethernet1/1/0", "Ethernet1/1/0", "test packet1"),
               StatusIs(absl::StatusCode::kFailedPrecondition,
                        HasSubstr("No active role has a primary connection")));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 0);
+  EXPECT_EQ(counters.packet_in_errors, 1);
 }
 
 TEST_F(FakePacketIoTest, PacketInCanBeSentToMultiplePrimaries) {
@@ -441,6 +490,11 @@ TEST_F(FakePacketIoTest, PacketInCanBeSentToMultiplePrimaries) {
                   metadata { metadata_id: 2 value: "0" }
                 }
               )pb")));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 1);
+  EXPECT_EQ(counters.packet_in_errors, 0);
 }
 
 TEST_F(FakePacketIoTest, PacketInMessageFailsWhenPrimaryHasNonAuthorizeRole) {
@@ -461,6 +515,11 @@ TEST_F(FakePacketIoTest, PacketInMessageFailsWhenPrimaryHasNonAuthorizeRole) {
                   "Ethernet1/1/0", "Ethernet1/1/0", "test packet1"),
               StatusIs(absl::StatusCode::kFailedPrecondition,
                        HasSubstr("No active role has a primary connection")));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service_.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 0);
+  EXPECT_EQ(counters.packet_in_errors, 1);
 }
 
 TEST(PacketIoTest, PacketInMessageFailsWhenNoPrimaryIsEstablished) {
@@ -476,6 +535,11 @@ TEST(PacketIoTest, PacketInMessageFailsWhenNoPrimaryIsEstablished) {
                   "Ethernet1/1/0", "Ethernet1/1/0", "test packet1"),
               StatusIs(absl::StatusCode::kFailedPrecondition,
                        HasSubstr("No active role has a primary connection")));
+
+  sonic::PacketIoCounters counters =
+      p4rt_service.GetP4rtServer().GetPacketIoCounters();
+  EXPECT_EQ(counters.packet_in_received, 0);
+  EXPECT_EQ(counters.packet_in_errors, 1);
 }
 
 }  // namespace
