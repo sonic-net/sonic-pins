@@ -47,7 +47,8 @@ void SequenceTest(const pdpi::IrP4Info& info, const std::string& test_name,
     pd_updates.push_back(pd_update);
     const auto pi_update_or_status = pdpi::PdUpdateToPi(info, pd_update);
     if (!pi_update_or_status.status().ok()) {
-      std::cerr << "Unable to convert Update from PD to PI." << std::endl;
+      std::cerr << "Unable to convert Update from PD to PI."
+                << pi_update_or_status.status() << std::endl;
       return;
     }
     const auto& pi_update = pi_update_or_status.value();
@@ -83,7 +84,8 @@ void SequenceTest(const pdpi::IrP4Info& info, const std::string& test_name,
     const auto& status =
         pdpi::PiWriteRequestToPd(info, pi_write_request, &pd_write_request);
     if (!status.ok()) {
-      std::cerr << "Unable to convert WriteRequest from PI to PD." << std::endl;
+      std::cerr << "Unable to convert WriteRequest from PI to PD." << status
+                << std::endl;
       return;
     }
     std::cout << "WriteRequest #" << i << std::endl;
@@ -104,7 +106,8 @@ void SortTest(const pdpi::IrP4Info& info, const std::string& test_name,
     pd_entries.push_back(pd_entry);
     const auto pi_entry_or_status = pdpi::PdTableEntryToPi(info, pd_entry);
     if (!pi_entry_or_status.status().ok()) {
-      std::cerr << "Unable to convert TableEntry from PD to PI." << std::endl;
+      std::cerr << "Unable to convert TableEntry from PD to PI."
+                << pi_entry_or_status.status() << std::endl;
       return;
     }
     const auto& pi_entry = pi_entry_or_status.value();
@@ -133,8 +136,10 @@ void SortTest(const pdpi::IrP4Info& info, const std::string& test_name,
   if (pi_entries.empty()) std::cout << "<empty>" << std::endl << std::endl;
   for (const auto& entry : pi_entries) {
     pdpi::TableEntry pd_entry;
-    if (!pdpi::PiTableEntryToPd(info, entry, &pd_entry).ok()) {
-      std::cerr << "Unable to convert TableEntry from PI to PD." << std::endl;
+    if (absl::Status status = pdpi::PiTableEntryToPd(info, entry, &pd_entry);
+        !status.ok()) {
+      std::cerr << "Unable to convert TableEntry from PI to PD." << status
+                << std::endl;
       return;
     }
     std::cout << PrintTextProto(pd_entry) << std::endl;
@@ -153,7 +158,8 @@ void GetEntriesUnreachableFromRootsTest(
     pd_entries.push_back(pd_entry);
     const auto pi_entry_or_status = pdpi::PdTableEntryToPi(info, pd_entry);
     if (!pi_entry_or_status.status().ok()) {
-      std::cerr << "Unable to convert TableEntry from PD to PI." << std::endl;
+      std::cerr << "Unable to convert TableEntry from PD to PI."
+                << pi_entry_or_status.status() << std::endl;
       return;
     }
     const auto& pi_entry = pi_entry_or_status.value();
@@ -194,8 +200,10 @@ void GetEntriesUnreachableFromRootsTest(
   // Output results.
   for (const auto& entry : *unreachable_entries) {
     pdpi::TableEntry pd_entry;
-    if (!pdpi::PiTableEntryToPd(info, entry, &pd_entry).ok()) {
-      std::cerr << "Unable to convert TableEntry from PI to PD." << std::endl;
+    if (absl::Status status = pdpi::PiTableEntryToPd(info, entry, &pd_entry);
+        !status.ok()) {
+      std::cerr << "Unable to convert TableEntry from PI to PD." << status
+                << std::endl;
       return;
     }
     std::cout << PrintTextProto(pd_entry) << std::endl;
@@ -217,324 +225,615 @@ int main(int argc, char** argv) {
   const auto& info = status_or_info.value();
 
   SequenceTest(info, "Empty input", {});
-  SequenceTest(info, "Insert(a) -> Insert(a)",
-               {R"pb(
-                  type: INSERT
-                  table_entry {
-                    referring_table_entry {
-                      match { val: "0x001" }
-                      action {
-                        referring_action {
-                          referring_id_1: "key-a",
-                          referring_id_2: "non-existent"
-                        }
-                      }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: INSERT
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "key-a" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb"});
-  SequenceTest(info, "Delete(a) -> Delete(a)",
-               {R"pb(
-                  type: DELETE
-                  table_entry {
-                    referring_table_entry {
-                      match { val: "0x001" }
-                      action {
-                        referring_action {
-                          referring_id_1: "key-a",
-                          referring_id_2: "non-existent"
-                        }
-                      }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: DELETE
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "key-a" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb"});
+
+  // Test entries that have reference relationships are properly sequenced.
+  // A note on notation: A -> B means B is dependent on A and A needs to be
+  // sequenced ahead of B. The arrow shows the order entries need to be
+  // sequenced.
   SequenceTest(info,
-               "Test case with 1 entry in the first batch and multiple ones in "
-               "the second batch. Used to verify the API is stable.",
-               {R"pb(
-                  type: DELETE
-                  table_entry {
-                    referring_table_entry {
-                      match { val: "0x001" }
-                      action {
-                        referring_action {
-                          referring_id_1: "key-a"
-                          referring_id_2: "key-b"
-                        }
-                      }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: DELETE
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "key-a" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: DELETE
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "key-b" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb"});
-  SequenceTest(info, "Insert(a), Insert(not-a)",
-               {R"pb(
-                  type: INSERT
-                  table_entry {
-                    referring_table_entry {
-                      match { val: "0x001" }
-                      action {
-                        referring_action {
-                          referring_id_1: "key-a",
-                          referring_id_2: "non-existent"
-                        }
-                      }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: INSERT
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "not-key-a" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb"});
+               "INSERT EntryWithOneKey{key-a} -> "
+               "INSERT EntryThatRefersTo{key-a}",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_one_match_field_action {
+                             referring_id_1: "key-a",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       one_match_field_table_entry {
+                         match { id: "key-a" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
   SequenceTest(
-      info, "Insert(a) -> Insert(a), Insert(different table)",
-      {R"pb(
-         type: INSERT
-         table_entry {
-           referring_table_entry {
-             match { val: "0x001" }
-             action {
-               referring_action {
-                 referring_id_1: "key-a",
-                 referring_id_2: "non-existent"
-               }
-             }
-           }
-         }
-       )pb",
-       R"pb(
-         type: INSERT
-         table_entry {
-           referred_table_entry {
-             match { id: "key-a" }
-             action { do_thing_4 {} }
-           }
-         }
-       )pb",
-       R"pb(
-         type: INSERT
-         table_entry {
-           lpm2_table_entry {
-             match { ipv6 { value: "ffff::abcd:0:0" prefix_length: 96 } }
-             action { NoAction {} }
-           }
-         }
-       )pb"});
-  SequenceTest(info, "Insert(a) -> Insert(a), Insert(b) -> Insert(b)",
-               {R"pb(
-                  type: INSERT
-                  table_entry {
-                    referring_table_entry {
-                      match { val: "0x001" }
-                      action {
-                        referring_action {
-                          referring_id_1: "key-a",
-                          referring_id_2: "non-existent"
-                        }
-                      }
-                    }
+      info, "DELETE EntryThatRefersTo{key-a} -> DELETE EntryWithOneKey{key-a}",
+      {
+          R"pb(
+            type: DELETE
+            table_entry {
+              one_match_field_table_entry {
+                match { id: "key-a" }
+                action { do_thing_4 {} }
+              }
+            }
+          )pb",
+          R"pb(
+            type: DELETE
+            table_entry {
+              referring_by_action_table_entry {
+                match { val: "0x001" }
+                action {
+                  referring_to_one_match_field_action {
+                    referring_id_1: "key-a",
                   }
-                )pb",
-                R"pb(
-                  type: INSERT
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "key-a" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: INSERT
-                  table_entry {
-                    referring_table_entry {
-                      match { val: "0x002" }
-                      action {
-                        referring_action {
-                          referring_id_1: "key-b",
-                          referring_id_2: "non-existent"
-                        }
-                      }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: INSERT
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "key-b" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb"});
+                }
+              }
+            }
+          )pb",
+      });
+
+  // TODO re-enable after adding double dependencies.
+  // SequenceTest(
+  //  info,
+  //  "INSERT EntryWithOneKey{key-a} -> INSERT EntryThatRefersTo{key-a, 0x002}",
+  //     {R"pb(
+  //        type: INSERT
+  //        table_entry {
+  //          referring_by_action_table_entry {
+  //            match { val: "0x001" }
+  //            action {
+  //              referring_to_two_match_fields_action {
+  //                referring_id_1: "key-a",
+  //                referring_id_2: "0x002",
+  //              }
+  //            }
+  //          }
+  //        }
+  //      )pb",
+  //      R"pb(
+  //        type: INSERT
+  //        table_entry {
+  //          one_match_field_table_entry {
+  //            match { id: "key-a" }
+  //            action { do_thing_4 {} }
+  //          }
+  //        }
+  //      )pb"});
   SequenceTest(info,
-               "Insert(a) -> Insert(a), Insert(a) -> Insert(a) (i.e., two "
-               "inserts pointing to the same insert)",
-               {R"pb(
-                  type: INSERT
-                  table_entry {
-                    referring_table_entry {
-                      match { val: "0x001" }
-                      action {
-                        referring_action {
-                          referring_id_1: "key-a",
-                          referring_id_2: "non-existent"
-                        }
-                      }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: INSERT
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "key-a" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: INSERT
-                  table_entry {
-                    referring_table_entry {
-                      match { val: "0x002" }
-                      action {
-                        referring_action {
-                          referring_id_1: "key-a",
-                          referring_id_2: "non-existent"
-                        }
-                      }
-                    }
-                  }
-                )pb"});
+               "INSERT EntryWithTwoKeys{key-a, 0x002} -> INSERT "
+               "EntryThatRefersTo{key-a, 0x002}",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_two_match_fields_action {
+                             referring_id_1: "key-a",
+                             referring_id_2: "0x002",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-a", id_2: "0x002" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
+  SequenceTest(info,
+               "DELETE EntryThatRefersTo{key-a, 0x002} -> DELETE "
+               "EntryWithTwoKeys{key-a, 0x002}",
+               {
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-a", id_2: "0x002" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_two_match_fields_action {
+                             referring_id_1: "key-a",
+                             referring_id_2: "0x002",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+               });
 
-  SequenceTest(info, "A referring to B using a match field",
-               {R"pb(
-                  type: INSERT
-                  table_entry {
-                    referring2_table_entry {
-                      match { referring_id: "key-a" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb",
-                R"pb(
-                  type: INSERT
-                  table_entry {
-                    referred_table_entry {
-                      match { id: "key-a" }
-                      action { do_thing_4 {} }
-                    }
-                  }
-                )pb"});
+  // Sequence tests to test entries that do not refer to another entry by
+  // any of its match field will not be sequenced.
+  SequenceTest(info,
+               "INSERT EntryThatRefersTo{key-a, 0x002}, INSERT "
+               "EntryWithTwoKeys{key-c, 0x004}",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_two_match_fields_action {
+                             referring_id_1: "key-a",
+                             referring_id_2: "0x002",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-c", id_2: "0x004" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
 
-  SortTest(info, "A referring to B",
-           {R"pb(
-              referring_table_entry {
+  SequenceTest(info,
+               "DELETE EntryThatRefersTo{key-a, 0x002}, DELETE "
+               "EntryWithTwoKeys{key-c, 0x004}",
+               {
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_two_match_fields_action {
+                             referring_id_1: "key-a",
+                             referring_id_2: "0x002",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-c", id_2: "0x004" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
+
+  // Sequence tests to test entries that partially refer to another entry
+  // will not be sequenced.
+  SequenceTest(info,
+               "[INCORRECT due to false dependency] INSERT "
+               "EntryThatRefersTo{key-a, 0x002}, INSERT "
+               "EntryWithTwoKeys{key-a, 0x004} should be in a single batch and "
+               "no change in orders",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_two_match_fields_action {
+                             referring_id_1: "key-a",
+                             referring_id_2: "0x002",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-a", id_2: "0x004" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
+
+  SequenceTest(info,
+               "[INCORRECT due to false dependency] DELETE "
+               "EntryWithTwoKeys{key-a, 0x004}, DELETE "
+               "EntryThatRefersTo{key-a, 0x002} should be in a single batch no "
+               "change in orders",
+               {
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-a", id_2: "0x004" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_two_match_fields_action {
+                             referring_id_1: "key-a",
+                             referring_id_2: "0x002",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+               });
+
+  // test orders are stable among entries that don't have reference
+  // relationships.
+  SequenceTest(info,
+               "[INCORRECT due to false dependency] INSERT Entries that don't "
+               "refer to each other should be in one batch and maintain the "
+               "original orders.",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_two_match_fields_action {
+                             referring_id_1: "key-a"
+                             referring_id_2: "0x002"
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-a", id_2: "0x003" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       one_match_field_table_entry {
+                         match { id: "key-c" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
+  SequenceTest(info,
+               "[INCORRECT due to false dependency] DELETE Entries that don't "
+               "refer to each other should be in one batch and maintain the "
+               "original orders.",
+               {
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_two_match_fields_action {
+                             referring_id_1: "key-a"
+                             referring_id_2: "0x002"
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-a", id_2: "0x003" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       one_match_field_table_entry {
+                         match { id: "key-c" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
+
+  // Tests a mix of referred and referring entries and other entries.
+  SequenceTest(
+      info,
+      "INSERT EntryWithOneKey{key-a} ->"
+      "INSERT EntryThatRefersTo{key-a} , another entry",
+      {
+          R"pb(
+            type: INSERT
+            table_entry {
+              referring_by_action_table_entry {
                 match { val: "0x001" }
                 action {
-                  referring_action {
+                  referring_to_one_match_field_action {
                     referring_id_1: "key-a",
-                    referring_id_2: "non-existent"
                   }
                 }
               }
-            )pb",
-            R"pb(
-              referred_table_entry {
+            }
+          )pb",
+          R"pb(
+            type: INSERT
+            table_entry {
+              one_match_field_table_entry {
                 match { id: "key-a" }
                 action { do_thing_4 {} }
               }
-            )pb"});
+            }
+          )pb",
+          R"pb(
+            type: INSERT
+            table_entry {
+              lpm2_table_entry {
+                match { ipv6 { value: "ffff::abcd:0:0" prefix_length: 96 } }
+                action { NoAction {} }
+              }
+            }
+          )pb",
+      });
+  SequenceTest(info,
+               "INSERT EntryWithOneKey{key-a} -> INSERT"
+               "EntryThatRefersTo{key-a} ,"
+               "INSERT EntryWithOneKey{key-b} -> INSERT"
+               "EntryThatRefersTo{key-b}",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_one_match_field_action {
+                             referring_id_1: "key-a",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       one_match_field_table_entry {
+                         match { id: "key-a" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x002" }
+                         action {
+                           referring_to_one_match_field_action {
+                             referring_id_1: "key-b",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       one_match_field_table_entry {
+                         match { id: "key-b" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
 
-  SortTest(info, "A referring to B twice",
-           {R"pb(
-              referring_table_entry {
-                match { val: "0x001" }
-                action {
-                  referring_action {
-                    referring_id_1: "key-a",
-                    referring_id_2: "key-a"
-                  }
-                }
-              }
-            )pb",
-            R"pb(
-              referred_table_entry {
-                match { id: "key-a" }
-                action { do_thing_4 {} }
-              }
-            )pb"});
+  SequenceTest(info,
+               "INSERT EntryThatRefersTo{key-a}"
+               "<- INSERT EntryWithOneKey{key-a} -> "
+               "INSERT EntryThatRefersTo{key-a}. Two INSERT "
+               "refers to the same referred entry.",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x001" }
+                         action {
+                           referring_to_one_match_field_action {
+                             referring_id_1: "key-a",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       one_match_field_table_entry {
+                         match { id: "key-a" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_action_table_entry {
+                         match { val: "0x002" }
+                         action {
+                           referring_to_one_match_field_action {
+                             referring_id_1: "key-a",
+                           }
+                         }
+                       }
+                     }
+                   )pb",
+               });
+
+  SequenceTest(info, "referring via one match field for INSERT",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_match_field_table_entry {
+                         match { referring_id_1: "key-a" }
+                         action { do_thing_4 {} }
+                         priority: 32
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       one_match_field_table_entry {
+                         match { id: "key-a" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
+
+  SequenceTest(info, "referring via two match fields for INSERT",
+               {
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       referring_by_match_field_table_entry {
+                         match {
+                           referring_id_1: "key-a"
+                           referring_id_2 { value: "0x001" }
+                         }
+                         action { do_thing_4 {} }
+                         priority: 32
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: INSERT
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-a", id_2: "0x001" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+               });
+
+  SequenceTest(info, "referring via one match field for DELETE",
+               {
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       one_match_field_table_entry {
+                         match { id: "key-a" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       referring_by_match_field_table_entry {
+                         match { referring_id_1: "key-a" }
+                         action { do_thing_4 {} }
+                         priority: 32
+                       }
+                     }
+                   )pb",
+               });
+
+  SequenceTest(info, "referring via two match fields for DELETE",
+               {
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       two_match_fields_table_entry {
+                         match { id_1: "key-a", id_2: "0x001" }
+                         action { do_thing_4 {} }
+                       }
+                     }
+                   )pb",
+                   R"pb(
+                     type: DELETE
+                     table_entry {
+                       referring_by_match_field_table_entry {
+                         match {
+                           referring_id_1: "key-a",
+                           referring_id_2 { value: "0x001" }
+                         }
+                         action { do_thing_4 {} }
+                         priority: 32
+                       }
+                     }
+                   )pb",
+               });
 
   GetEntriesUnreachableFromRootsTest(info, "Empty input generates no garbage.",
                                      {});
 
   // Root  Root
-  GetEntriesUnreachableFromRootsTest(info, "All root entries means no garbage.",
-                                     {
-                                         R"pb(
-                                           referring_table_entry {
-                                             match { val: "0x001" }
-                                             action {
-                                               referring_action {
-                                                 referring_id_1: "key-a",
-                                                 referring_id_2: "key-a"
-                                               }
-                                             }
-                                             controller_metadata: "Root"
-                                           }
-                                         )pb",
-                                         R"pb(
-                                           referring_table_entry {
-                                             match { val: "0x002" }
-                                             action {
-                                               referring_action {
-                                                 referring_id_1: "key-a",
-                                                 referring_id_2: "key-b"
-                                               }
-                                             }
-                                             controller_metadata: "Root"
-                                           }
-                                         )pb",
-                                     });
+  GetEntriesUnreachableFromRootsTest(
+      info, "All root entries means no garbage.",
+      {
+          R"pb(
+            referring_by_action_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_to_two_match_fields_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "0x003"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            referring_by_action_table_entry {
+              match { val: "0x002" }
+              action {
+                referring_to_two_match_fields_action {
+                  referring_id_1: "key-a",
+                  referring_id_2: "0x002"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+      });
 
   // Root
   //   |
@@ -543,19 +842,18 @@ int main(int argc, char** argv) {
       info, "Root referring to the only entry generates no garbage.",
       {
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_action {
+                referring_to_one_match_field_action {
                   referring_id_1: "key-a",
-                  referring_id_2: "key-a"
                 }
               }
               controller_metadata: "Root"
             }
           )pb",
           R"pb(
-            referred_table_entry {
+            one_match_field_table_entry {
               match { id: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Dependency"
@@ -566,120 +864,117 @@ int main(int argc, char** argv) {
   //    Root
   //   |           \
   // Dependency   Dependency
+  // TODO re-enable after adding double dependencies.
+  // GetEntriesUnreachableFromRootsTest(
+  //     info, "Root referring to all dependencies generates no garbage.",
+  //     {
+  //         R"pb(
+  //           referring_by_action_table_entry {
+  //             match { val: "0x001" }
+  //             action {
+  //               referring_to_two_match_fields_action {
+  //                 referring_id_1: "key-a",
+  //                 referring_id_2: "0x002"
+  //               }
+  //             }
+  //             controller_metadata: "Root"
+  //           }
+  //         )pb",
+  //         R"pb(
+  //           one_match_field_table_entry {
+  //             match { id: "key-a" }
+  //             action { do_thing_4 {} }
+  //             controller_metadata: "Dependency"
+  //           }
+  //         )pb",
+  //         R"pb(
+  //           two_match_fields_table_entry {
+  //             match { id_1: "key-a", id_2: "0x002" }
+  //             action { do_thing_4 {} }
+  //             controller_metadata: "Dependency"
+  //           }
+  //         )pb",
+  //     });
+
+  // Root
+  //   |
+  // Dependency   Garbage
   GetEntriesUnreachableFromRootsTest(
-      info, "Root referring to all dependencies generates no garbage.",
+      info, "Garbage is unreachable.",
       {
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_action {
-                  referring_id_1: "key-a",
-                  referring_id_2: "key-b"
-                }
+                referring_to_one_match_field_action { referring_id_1: "key-a" }
               }
               controller_metadata: "Root"
             }
           )pb",
           R"pb(
-            referred_table_entry {
+            one_match_field_table_entry {
               match { id: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Dependency"
             }
           )pb",
           R"pb(
-            referred_table_entry {
-              match { id: "key-b" }
+            one_match_field_table_entry {
+              match { id: "key-c" }
+              action { do_thing_4 {} }
+              controller_metadata: "Garbage"
+            }
+          )pb",
+      });
+  // Root
+  //   |
+  // Dependency   Root
+  GetEntriesUnreachableFromRootsTest(
+      info,
+      "Root referring to dependency and a "
+      "standalone Root generates no garbage.",
+      {
+          R"pb(
+            referring_by_action_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_to_one_match_field_action { referring_id_1: "key-a" }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
+          R"pb(
+            one_match_field_table_entry {
+              match { id: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Dependency"
             }
           )pb",
+          R"pb(
+            referring_by_action_table_entry {
+              match { val: "0x001" }
+              action {
+                referring_to_two_match_fields_action {
+                  referring_id_1: "non-exist",
+                  referring_id_2: "0x000"
+                }
+              }
+              controller_metadata: "Root"
+            }
+          )pb",
       });
-
-  // Root
-  //   |
-  // Dependency   Garbage
-  GetEntriesUnreachableFromRootsTest(info, "Garbage is unreachable.",
-                                     {
-                                         R"pb(
-                                           referring_table_entry {
-                                             match { val: "0x001" }
-                                             action {
-                                               referring_action {
-                                                 referring_id_1: "key-a",
-                                                 referring_id_2: "key-b"
-                                               }
-                                             }
-                                             controller_metadata: "Root"
-                                           }
-                                         )pb",
-                                         R"pb(
-                                           referred_table_entry {
-                                             match { id: "key-a" }
-                                             action { do_thing_4 {} }
-                                             controller_metadata: "Dependency"
-                                           }
-                                         )pb",
-                                         R"pb(
-                                           referred_table_entry {
-                                             match { id: "key-c" }
-                                             action { do_thing_4 {} }
-                                             controller_metadata: "Garbage"
-                                           }
-                                         )pb",
-                                     });
-  // Root
-  //   |
-  // Dependency   Root
-  GetEntriesUnreachableFromRootsTest(info,
-                                     "Root referring to dependency and a "
-                                     "standalone Root generates no garbage.",
-                                     {
-                                         R"pb(
-                                           referring_table_entry {
-                                             match { val: "0x001" }
-                                             action {
-                                               referring_action {
-                                                 referring_id_1: "key-a",
-                                                 referring_id_2: "key-b"
-                                               }
-                                             }
-                                             controller_metadata: "Root"
-                                           }
-                                         )pb",
-                                         R"pb(
-                                           referred_table_entry {
-                                             match { id: "key-a" }
-                                             action { do_thing_4 {} }
-                                             controller_metadata: "Dependency"
-                                           }
-                                         )pb",
-                                         R"pb(
-                                           referring_table_entry {
-                                             match { val: "0x001" }
-                                             action {
-                                               referring_action {
-                                                 referring_id_1: "non-exist",
-                                                 referring_id_2: "non-exist"
-                                               }
-                                             }
-                                             controller_metadata: "Root"
-                                           }
-                                         )pb",
-                                     });
   // Garbage   Garbage
   GetEntriesUnreachableFromRootsTest(info, "All entries are garbage.",
                                      {
                                          R"pb(
-                                           referred_table_entry {
+                                           one_match_field_table_entry {
                                              match { id: "key-a" }
                                              action { do_thing_4 {} }
                                              controller_metadata: "Garbage"
                                            }
                                          )pb",
                                          R"pb(
-                                           referred_table_entry {
+                                           one_match_field_table_entry {
                                              match { id: "key-c" }
                                              action { do_thing_4 {} }
                                              controller_metadata: "Garbage"
@@ -694,32 +989,32 @@ int main(int argc, char** argv) {
       info, "Two roots referring to one dependency generates no garbage.",
       {
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_action {
+                referring_to_two_match_fields_action {
                   referring_id_1: "key-a",
-                  referring_id_2: "key-a"
+                  referring_id_2: "0x002"
                 }
               }
               controller_metadata: "Root"
             }
           )pb",
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x002" }
               action {
-                referring_action {
+                referring_to_two_match_fields_action {
                   referring_id_1: "key-a",
-                  referring_id_2: "key-a"
+                  referring_id_2: "0x002"
                 }
               }
               controller_metadata: "Root"
             }
           )pb",
           R"pb(
-            referred_table_entry {
-              match { id: "key-a" }
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x002" }
               action { do_thing_4 {} }
               controller_metadata: "Dependency"
             }
@@ -735,20 +1030,21 @@ int main(int argc, char** argv) {
       info, "Children and grand children of the root are not garbage.",
       {
           R"pb(
-            referring_to_referring2_table_entry {
-              match { referring2_table_id: "key-a" }
+            referring_to_referring_by_match_field_table_entry {
+              match { referring_to_referring_id_1: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Root"
             }
           )pb",
           R"pb(
-            referring2_table_entry {
-              match { referring_id: "key-a" }
+            referring_by_match_field_table_entry {
+              match { referring_id_1: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Child dependency"
+              priority: 32
             })pb",
           R"pb(
-            referred_table_entry {
+            one_match_field_table_entry {
               match { id: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Grand child Dependency"
@@ -762,21 +1058,17 @@ int main(int argc, char** argv) {
       info, "NonRoot referring to other NonRoot is garbage.",
       {
           R"pb(
-            referred_table_entry {
-              match { id: "key-a" }
+            referring_by_match_field_table_entry {
+              match { referring_id_1: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "NonRoot garbage"
+              priority: 32
             }
           )pb",
           R"pb(
-            referring_table_entry {
-              match { val: "0x001" }
-              action {
-                referring_action {
-                  referring_id_1: "key-a"
-                  referring_id_2: "non-existent"
-                }
-              }
+            one_match_field_table_entry {
+              match { id: "key-a" }
+              action { do_thing_4 {} }
               controller_metadata: "NonRoot garbage"
             }
           )pb",
@@ -793,33 +1085,31 @@ int main(int argc, char** argv) {
       "dependencies that are referred by a root won't be removed.",
       {
           R"pb(
-            referring_to_referring2_table_entry {
-              match { referring2_table_id: "key-a" }
+            referring_to_referring_by_match_field_table_entry {
+              match { referring_to_referring_id_1: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Root"
             }
           )pb",
           R"pb(
-            referring2_table_entry {
-              match { referring_id: "key-a" }
+            referring_by_match_field_table_entry {
+              match { referring_id_1: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Child dependency"
+              priority: 32
             })pb",
           R"pb(
-            referred_table_entry {
+            one_match_field_table_entry {
               match { id: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Grand child Dependency"
             }
           )pb",
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_action {
-                  referring_id_1: "key-a"
-                  referring_id_2: "non-existent"
-                }
+                referring_to_one_match_field_action { referring_id_1: "key-a" }
               }
               controller_metadata: "NonRoot garbage"
             }
@@ -836,82 +1126,83 @@ int main(int argc, char** argv) {
       info, "Conglomeration test.",
       {
           R"pb(
-            referring_to_referring2_table_entry {
-              match { referring2_table_id: "key-a" }
+            referring_to_referring_by_match_field_table_entry {
+              match { referring_to_referring_id_1: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Root"
             }
           )pb",
           R"pb(
-            referring2_table_entry {
-              match { referring_id: "key-a" }
+            referring_by_match_field_table_entry {
+              match { referring_id_1: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Child dependency"
+              priority: 32
             })pb",
           R"pb(
-            referred_table_entry {
+            one_match_field_table_entry {
               match { id: "key-a" }
               action { do_thing_4 {} }
               controller_metadata: "Grand child Dependency"
             }
           )pb",
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_action {
+                referring_to_two_match_fields_action {
                   referring_id_1: "key-a"
-                  referring_id_2: "non-existent"
+                  referring_id_2: "0x000"
                 }
               }
               controller_metadata: "NonRoot garbage"
             }
           )pb",
           R"pb(
-            referred_table_entry {
+            one_match_field_table_entry {
               match { id: "key-b" }
               action { do_thing_4 {} }
               controller_metadata: "NonRoot garbage"
             }
           )pb",
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_action {
+                referring_to_two_match_fields_action {
                   referring_id_1: "key-b"
-                  referring_id_2: "non-existent"
+                  referring_id_2: "0x000"
                 }
               }
               controller_metadata: "NonRoot garbage"
             }
           )pb",
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_action {
+                referring_to_two_match_fields_action {
                   referring_id_1: "key-c",
-                  referring_id_2: "non-exist"
+                  referring_id_2: "0x000"
                 }
               }
               controller_metadata: "Root"
             }
           )pb",
           R"pb(
-            referred_table_entry {
+            one_match_field_table_entry {
               match { id: "key-c" }
               action { do_thing_4 {} }
               controller_metadata: "Dependency"
             }
           )pb",
           R"pb(
-            referring_table_entry {
+            referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_action {
+                referring_to_two_match_fields_action {
                   referring_id_1: "non-exist",
-                  referring_id_2: "non-exist"
+                  referring_id_2: "0x000"
                 }
               }
               controller_metadata: "Root"
