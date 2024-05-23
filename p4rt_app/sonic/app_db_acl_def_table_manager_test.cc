@@ -1012,16 +1012,18 @@ TEST(InsertAclTableDefinition, IgnoresNoActionConstDefaultAction) {
   P4rtTable fake_expected_db = MakeP4rtTable(fake_expected_appdb_table);
   EXPECT_OK(VerifyAclTableDefinition(control_table));
   EXPECT_OK(InsertAclTableDefinition(fake_expected_db, control_table));
-  ASSERT_OK_AND_ASSIGN(auto expected_values, fake_expected_table.ReadTableEntry(
-                                                 "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
+  ASSERT_OK_AND_ASSIGN(auto expected_values,
+                       fake_expected_table.ReadTableEntry(
+                           "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
 
   FakeSonicDbTable fake_table;
   FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
   P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
   EXPECT_OK(VerifyAclTableDefinition(table));
   EXPECT_OK(InsertAclTableDefinition(fake_db, table));
-  ASSERT_OK_AND_ASSIGN(auto actual_values,
-                       fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
+  ASSERT_OK_AND_ASSIGN(
+      auto actual_values,
+      fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
 
   EXPECT_THAT(actual_values, UnorderedElementsAreArray(expected_values));
 }
@@ -1059,16 +1061,18 @@ TEST(InsertAclTableDefinition, SkipsDefaultOnlyActions) {
   P4rtTable fake_expected_db = MakeP4rtTable(fake_expected_appdb_table);
   EXPECT_OK(VerifyAclTableDefinition(control_table));
   EXPECT_OK(InsertAclTableDefinition(fake_expected_db, control_table));
-  ASSERT_OK_AND_ASSIGN(auto expected_values, fake_expected_table.ReadTableEntry(
-                                                 "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
+  ASSERT_OK_AND_ASSIGN(auto expected_values,
+                       fake_expected_table.ReadTableEntry(
+                           "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
 
   FakeSonicDbTable fake_table;
   FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
   P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
   EXPECT_OK(VerifyAclTableDefinition(table));
   EXPECT_OK(InsertAclTableDefinition(fake_db, table));
-  ASSERT_OK_AND_ASSIGN(auto actual_values,
-                       fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
+  ASSERT_OK_AND_ASSIGN(
+      auto actual_values,
+      fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
 
   EXPECT_THAT(actual_values, UnorderedElementsAreArray(expected_values));
 }
@@ -1503,12 +1507,12 @@ TEST(AppDbAclTableManagerTest, Insert_ConsistentActionOrder) {
   EXPECT_OK(VerifyAclTableDefinition(decremental_table()));
   EXPECT_OK(InsertAclTableDefinition(decremental_db, decremental_table()));
 
-  ASSERT_OK_AND_ASSIGN(
-      auto incremental_result,
-      incremental_db_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
-  ASSERT_OK_AND_ASSIGN(
-      auto decremental_result,
-      decremental_db_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
+  ASSERT_OK_AND_ASSIGN(auto incremental_result,
+                       incremental_db_table.ReadTableEntry(
+                           "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
+  ASSERT_OK_AND_ASSIGN(auto decremental_result,
+                       decremental_db_table.ReadTableEntry(
+                           "ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"));
   EXPECT_THAT(decremental_result,
               UnorderedElementsAreArray(incremental_result));
 }
@@ -1520,7 +1524,8 @@ TEST(AppDbAclTableManagerTest, Remove) {
   FakeSonicDbTable fake_table;
   FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
   P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
-  fake_table.InsertTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE", {{"a", "a"}});
+  fake_table.InsertTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE",
+                              {{"a", "a"}});
   ASSERT_OK(RemoveAclTableDefinition(fake_db, table));
   EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               StatusIs(absl::StatusCode::kNotFound));

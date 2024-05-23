@@ -15,12 +15,13 @@
 
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <vector>
 #include <cstring>
 #include <string>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -35,6 +36,7 @@
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/impl/codegen/status.h"
+#include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -276,26 +278,81 @@ bool P4InfoEquals(const p4::config::v1::P4Info& left,
   return differencer.Compare(left, right);
 }
 
-absl::StatusOr<pdpi::IrTableEntry> DoPiTableEntryToIr(
-    const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& p4_info,
-    const std::string& role_name, bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    bool translate_key_only) {
-  ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,
-                   TranslatePiTableEntryForOrchAgent(
-                       pi_table_entry, p4_info, translate_port_ids,
-                       port_translation_map, translate_key_only));
-
-  // Verify the table entry can be written to the table.
-  absl::Status role_access =
-      AllowRoleAccessToTable(role_name, ir_table_entry.table_name(), p4_info);
-  if (!role_access.ok()) {
-    LOG(WARNING) << role_access
-                 << " IR Table Entry: " << ir_table_entry.ShortDebugString();
-    return role_access;
+absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
+    const pdpi::IrP4Info& p4_info, const p4::v1::Update& pi_update,
+    const std::string& role_name,
+    const p4_constraints::ConstraintInfo& constraint_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map) {
+  // If the constraints are not met then we should just report an error (i.e. do
+  // not try to handle the entry in lower layers).
+  absl::StatusOr<std::string> reason_entry_violates_constraint =
+      p4_constraints::ReasonEntryViolatesConstraint(
+          pi_update.entity().table_entry(), constraint_info);
+  if (!reason_entry_violates_constraint.ok()) {
+    // A status failure implies that the TableEntry was not formatted correctly.
+    // So we could not check the constraints.
+    LOG(WARNING) << "Could not verify P4 constraint: "
+                 << pi_update.entity().table_entry().ShortDebugString();
+    return reason_entry_violates_constraint.status();
+  }
+  if (!reason_entry_violates_constraint->empty()) {
+    // A non-empty result implies the constraints were not met.
+    LOG(WARNING) << "Entry does not meet P4 constraint: "
+                 << *reason_entry_violates_constraint
+                 << pi_update.entity().table_entry().ShortDebugString();
+    return gutil::InvalidArgumentErrorBuilder()
+           << *reason_entry_violates_constraint;
   }
 
-  return ir_table_entry;
+  // When deleting we only consider the key. Actions do matter so we don't waste
+  // time trying to translate that part even if the controller sent it. Also,
+  // per the spec, the control plane is not required to send the full entry.
+  bool only_translate_the_key = pi_update.type() == p4::v1::Update::DELETE;
+
+  // Translating between PI and IR, and vice versa, is non-negligable. To save
+  // redundant work by doing both translations here. The IR to PI translation
+  // will normalize the PI value which we can then use for the table entry
+  // cache. Note that the table entry cache isn't updated until we know that the
+  // hardware has successfully programmed the entry. We do the PI to IR
+  // translation here so we can efficently handle the cache.
+  auto ir_table_entry = pdpi::PiTableEntryToIr(
+      p4_info, pi_update.entity().table_entry(), only_translate_the_key);
+  if (!ir_table_entry.ok()) {
+    LOG(ERROR) << "PDPI could not translate a PI table entry to IR: "
+               << pi_update.entity().table_entry().ShortDebugString();
+    return gutil::StatusBuilder(ir_table_entry.status().code())
+           << "[P4RT/PDPI] " << ir_table_entry.status().message();
+  }
+  auto normalized_pi_entry =
+      pdpi::IrTableEntryToPi(p4_info, *ir_table_entry, only_translate_the_key);
+  if (!ir_table_entry.ok()) {
+    LOG(ERROR) << "PDPI could not translate an IR table entry to PI: "
+               << ir_table_entry->ShortDebugString();
+    return gutil::StatusBuilder(normalized_pi_entry.status().code())
+           << "[P4RT/PDPI] " << normalized_pi_entry.status().message();
+  }
+
+  // Apply any custom translation that are needed on the switch side to account
+  // for gNMI configs (e.g. port ID translation).
+  RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
+      *ir_table_entry, p4_info, translate_port_ids, port_translation_map));
+
+  // Verify the table entry can be written to the table.
+  absl::Status role_has_access =
+      AllowRoleAccessToTable(role_name, ir_table_entry->table_name(), p4_info);
+  if (!role_has_access.ok()) {
+    LOG(WARNING) << role_has_access
+                 << " IR Table Entry: " << ir_table_entry->ShortDebugString();
+    return role_has_access;
+  }
+
+  return sonic::AppDbEntry{
+      .entry = *ir_table_entry,
+      .update_type = pi_update.type(),
+      .pi_table_entry = *normalized_pi_entry,
+      .appdb_table = GetAppDbTableType(*ir_table_entry),
+  };
 }
 
 sonic::AppDbUpdates PiTableEntryUpdatesToIr(
@@ -306,7 +363,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     pdpi::IrWriteResponse* response) {
   bool fail_on_first_error = false;
   sonic::AppDbUpdates ir_updates;
-  for (const auto& update : request.updates()) {
+  for (const p4::v1::Update& pi_update : request.updates()) {
     // An RPC response should be created for every updater.
     auto entry_status = response->add_statuses();
 
@@ -318,96 +375,38 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
       continue;
     }
 
-    ++ir_updates.total_rpc_updates;
-
-    // If the constraints are not met then we should just report an error (i.e.
-    // do not try to handle the entry in lower layers).
-    absl::StatusOr<std::string> reason_entry_violates_constraint =
-        p4_constraints::ReasonEntryViolatesConstraint(
-            update.entity().table_entry(), constraint_info);
-    if (!reason_entry_violates_constraint.ok()) {
-      // A status failure implies that the TableEntry was not formatted
-      // correctly. So we could not check the constraints.
-      LOG(WARNING) << "Could not verify P4 constraint: "
-                   << update.entity().table_entry().ShortDebugString();
-      *entry_status =
-          GetIrUpdateStatus(reason_entry_violates_constraint.status());
-      fail_on_first_error = true;
-      continue;
-    }
-    if (!reason_entry_violates_constraint->empty()) {
-      // A non-empty result implies the constraints were not met.
-      LOG(WARNING) << "Entry does not meet P4 constraint: "
-                   << *reason_entry_violates_constraint
-                   << update.entity().table_entry().ShortDebugString();
-      *entry_status = GetIrUpdateStatus(gutil::InvalidArgumentErrorBuilder()
-                                        << *reason_entry_violates_constraint);
-      fail_on_first_error = true;
-      continue;
-    }
-
     // If we cannot translate it then we should just report an error (i.e. do
-    // not try to handle it in lower layers). When doing a DELETE, translate
-    // only the key part of the table entry because, from the specs, the control
-    // plane is not required to send the full entry.
-    auto ir_table_entry = DoPiTableEntryToIr(
-        update.entity().table_entry(), p4_info, request.role(),
-        translate_port_ids, port_translation_map,
-        update.type() == p4::v1::Update::DELETE);
-    *entry_status = GetIrUpdateStatus(ir_table_entry.status());
-    if (!ir_table_entry.ok()) {
-      LOG(WARNING) << "Failed to translate table entry. Entry: "
-                   << update.entity().table_entry().ShortDebugString();
+    // not try to handle it in lower layers).
+    auto app_db_entry = PiUpdateToAppDbEntry(
+        p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
+        port_translation_map);
+    if (!app_db_entry.ok()) {
       fail_on_first_error = true;
-      continue;
+    } else {
+      app_db_entry->rpc_index = response->statuses_size() - 1;
+      ir_updates.entries.push_back(*app_db_entry);
+      ++ir_updates.total_rpc_updates;
     }
-
-    int rpc_index = response->statuses_size() - 1;
-    ir_updates.entries.push_back(sonic::AppDbEntry{
-        .rpc_index = rpc_index,
-        .entry = *ir_table_entry,
-        .update_type = update.type(),
-        .appdb_table = GetAppDbTableType(*ir_table_entry),
-    });
+    *entry_status = GetIrUpdateStatus(app_db_entry.status());
   }
   return ir_updates;
 }
 
 absl::Status CacheWriteResults(
     absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
-    const pdpi::IrP4Info& ir_p4finfo, const p4::v1::WriteRequest& request,
+    const sonic::AppDbUpdates& app_db_updates,
     const pdpi::IrWriteResponse& results) {
-  if (request.updates_size() != results.statuses_size()) {
-    return gutil::InternalErrorBuilder()
-           << "The number of requests (" << request.updates_size()
-           << ") does not match the number of status results ("
-           << results.statuses_size() << ").";
-  }
-
-  // We only update the cache if the request passes. If it fails then the state
-  // should have been restored by the lower layers, or gone critical (i.e. the
-  // cache state doesn't really matter anymore).
-  for (int i = 0; i < request.updates_size(); ++i) {
-    if (results.statuses(i).code() != google::rpc::Code::OK) {
+  for (const sonic::AppDbEntry& app_db_entry : app_db_updates.entries) {
+    if (results.statuses(app_db_entry.rpc_index).code() !=
+        google::rpc::Code::OK) {
       continue;
     }
 
-    const auto& update = request.updates(i);
-
-    // Get the canonical form of the key by converting it to an IR and back.
-    ASSIGN_OR_RETURN(
-        auto ir_table_entry,
-        pdpi::PiTableEntryToIr(ir_p4finfo, update.entity().table_entry(),
-                               /*key_only=*/true));
-    ASSIGN_OR_RETURN(
-        auto pi_table_entry,
-        pdpi::IrTableEntryToPi(ir_p4finfo, ir_table_entry, /*key_only=*/true));
-    gutil::TableEntryKey key(pi_table_entry);
-
-    switch (update.type()) {
+    gutil::TableEntryKey key(app_db_entry.pi_table_entry);
+    switch (app_db_entry.update_type) {
       case p4::v1::Update::INSERT:
       case p4::v1::Update::MODIFY:
-        cache[key] = update.entity().table_entry();
+        cache[key] = app_db_entry.pi_table_entry;
         break;
       case p4::v1::Update::DELETE:
         cache.erase(key);
@@ -415,10 +414,9 @@ absl::Status CacheWriteResults(
       default:
         return gutil::InternalErrorBuilder()
                << "Invalid Update Type: "
-               << p4::v1::Update::Type_Name(update.type());
+               << p4::v1::Update::Type_Name(app_db_entry.update_type);
     }
   }
-
   return absl::OkStatus();
 }
 
@@ -496,8 +494,8 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
       return EnterCriticalState(grpc_status.status().ToString());
     }
 
-    absl::Status cache_status = CacheWriteResults(
-        table_entry_cache_, *ir_p4info_, *request, *rpc_response);
+    absl::Status cache_status =
+        CacheWriteResults(table_entry_cache_, app_db_updates, *rpc_response);
     if (!cache_status.ok()) {
       LOG(ERROR) << "Could not caching write results: " << cache_status;
       return EnterCriticalState(cache_status.ToString());
@@ -510,14 +508,19 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 
     // Log a warning for any batch requests that are taking "too long" so we can
     // have an accurate time of when it happened.
-    if (write_execution_time > absl::Milliseconds(100)) {
+    if (write_execution_time > absl::Milliseconds(500)) {
       LOG(WARNING) << absl::StreamFormat(
-          "Batch request (%d entries) took >100ms: %lldms",
+          "Batch request (%d entries) took >500ms: %lldms ",
           app_db_updates.total_rpc_updates,
           absl::ToInt64Milliseconds(write_execution_time));
-      for (const auto& entry : app_db_updates.entries) {
-        LOG(WARNING) << "entry " << entry.rpc_index << ": "
-                     << entry.entry.ShortDebugString();
+      LOG_IF(WARNING, !app_db_updates.entries.empty())
+          << "First entry: "
+          << app_db_updates.entries[0].entry.ShortDebugString();
+      if (VLOG_IS_ON(1)) {
+        for (const auto& entry : app_db_updates.entries) {
+          LOG(WARNING) << "entry " << entry.rpc_index << ": "
+                       << entry.entry.ShortDebugString();
+        }
       }
     }
 
@@ -901,6 +904,12 @@ absl::Status P4RuntimeImpl::RemovePortTranslation(
   return absl::OkStatus();
 }
 
+absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
+                                          const std::string& log_level) {
+  return absl::OkStatus();
+}
+
+//absl::Status P4RuntimeImpl::VerifyState(bool update_component_state) {
 absl::Status P4RuntimeImpl::VerifyState() {
   absl::MutexLock l(&server_state_lock_);
 

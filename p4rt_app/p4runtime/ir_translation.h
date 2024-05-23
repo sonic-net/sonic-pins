@@ -55,6 +55,21 @@ void TranslateIrP4InfoForOrchAgent(pdpi::IrP4Info& p4_info);
 // If the IPv6 address is larger than 64 bits, does nothing.
 void Convert64BitIpv6AclMatchFieldsTo128Bit(pdpi::IrTableEntry& ir_table_entry);
 
+// Translates a PI table entry from the controller into an IR format with fields
+// values consumable by the OA.
+absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
+    const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    bool translate_key_only);
+
+// Updates a IR table entry from the controller to an IR format with fields
+// values consumable by the OA.
+absl::Status UpdateIrTableEntryForOrchAgent(
+    pdpi::IrTableEntry& ir_table_entry, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map);
+
 }  // namespace p4rt_app
 
 #endif  // PINS_P4RT_APP_P4RUNTIME_IR_TRANSLATION_H_

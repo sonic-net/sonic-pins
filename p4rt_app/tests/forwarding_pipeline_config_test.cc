@@ -507,8 +507,8 @@ TEST_F(ForwardingPipelineConfigTest,
   // Generate error from the OrchAgent layer when programming the PRE_INGRESS
   // ACL table.
   p4rt_service_->GetP4rtAppDbTable().SetResponseForKey(
-      "DEFINITION:ACL_ACL_PRE_INGRESS_TABLE", "SWSS_RC_INVALID_PARAM",
-      "my error message");
+      "ACL_TABLE_DEFINITION_TABLE:ACL_ACL_PRE_INGRESS_TABLE",
+      "SWSS_RC_INVALID_PARAM", "my error message");
   ASSERT_THAT(pdpi::SetMetadataAndSetForwardingPipelineConfig(
                   p4rt_session_.get(),
                   SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,

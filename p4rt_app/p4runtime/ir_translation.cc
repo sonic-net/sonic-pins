@@ -58,13 +58,14 @@ absl::Status TranslateAction(const TranslateTableEntryOptions& options,
                              const pdpi::IrTableDefinition& table_def,
                              pdpi::IrActionInvocation& action) {
   // Find the action definition from the ir table definition.
-  absl::optional<pdpi::IrActionDefinition> action_def;
+  const pdpi::IrActionDefinition* action_def = nullptr;
   for (const auto& entry_action : table_def.entry_actions()) {
     if (entry_action.action().preamble().alias() == action.name()) {
-      action_def = entry_action.action();
+      action_def = &entry_action.action();
+      break;
     }
   }
-  if (!action_def.has_value()) {
+  if (action_def == nullptr) {
     return gutil::InternalErrorBuilder()
            << "Could not find action definition for " << action.name() << ".";
   }
@@ -287,6 +288,43 @@ void Convert64BitIpv6AclMatchFieldsTo128Bit(
           (*mask_address << 64).ToString());
     }
   }
+}
+
+absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
+    const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    bool translate_key_only) {
+  auto ir_table_entry =
+      pdpi::PiTableEntryToIr(ir_p4_info, pi_table_entry, translate_key_only);
+  if (!ir_table_entry.ok()) {
+    LOG(ERROR) << "PDPI could not translate PI table entry to IR: "
+               << pi_table_entry.ShortDebugString();
+    return gutil::StatusBuilder(ir_table_entry.status().code())
+           << "[P4RT/PDPI] " << ir_table_entry.status().message();
+  }
+
+  RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
+      *ir_table_entry, ir_p4_info, translate_port_ids, port_translation_map));
+  return *ir_table_entry;
+}
+
+absl::Status UpdateIrTableEntryForOrchAgent(
+    pdpi::IrTableEntry& ir_table_entry, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map) {
+  // TODO: Remove this when P4Info uses 64-bit IPv6 ACL matchess.
+  // We don't allow overwriting of the p4info, so static is ok here.
+  Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
+
+  RETURN_IF_ERROR(TranslateTableEntry(
+      TranslateTableEntryOptions{
+          .direction = TranslationDirection::kForOrchAgent,
+          .ir_p4_info = ir_p4_info,
+          .translate_port_ids = translate_port_ids,
+          .port_map = port_translation_map},
+      ir_table_entry));
+  return absl::OkStatus();
 }
 
 }  // namespace p4rt_app
