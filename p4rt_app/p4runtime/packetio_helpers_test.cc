@@ -291,8 +291,7 @@ TEST_F(PacketIoHelpersTest, SendPacketOutPortZero) {
 TEST_F(PacketIoHelpersTest, AddPacketInMetadataOk) {
   std::string ingress_port = "1";
   std::string target_port = "1";
-  ASSERT_OK_AND_ASSIGN(auto actual_packet,
-                       CreatePacketInMessage(ingress_port, target_port));
+  auto actual_packet = CreatePacketInMessage(ingress_port, target_port);
   p4::v1::PacketIn expected_packet;
   SetupPacketInMetadata(ingress_port, target_port, expected_packet);
   EXPECT_THAT(actual_packet, EqualsProto(expected_packet));
