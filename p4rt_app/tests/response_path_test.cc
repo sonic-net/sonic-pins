@@ -645,7 +645,124 @@ TEST_F(ResponsePathTest, RequestWithDuplicateKeysFails) {
                      HasSubstr("#2: ABORTED:"))));
 }
 
-TEST_F(ResponsePathTest, FailsOnFirstErrorInP4RT) {
+TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorDoesNotAffectVrfTable) {
+  // VRF table entries are written into the VRF_TABLE, while IPv6 table entries
+  // are written into the P4RT table. P4RT App will process all entries for each
+  // table together (i.e. entry 1 & 3 will go to the OrchAgent one after the
+  // other without entry 2 inbetween).
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                vrf_table_entry {
+                  match { vrf_id: "vrf-1" }
+                  action { no_action {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-2"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vrf_table_entry {
+                  match { vrf_id: "vrf-3" }
+                  action { no_action {} }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Fake valid error (INVALID_ARG) for the middle entry.
+  auto failed_ipv6_entry =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_IPV6_TABLE")
+          .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
+          .AddMatchField("vrf_id", "vrf-2");
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      failed_ipv6_entry.GetKey(), "SWSS_RC_INVALID_PARAM", "error with vrf-2");
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: OK"),
+                     HasSubstr("#2: INVALID_ARGUMENT: error with vrf-2"),
+                     HasSubstr("#3: OK"))));
+}
+
+TEST_F(ResponsePathTest, FailOnFirstErrorInVrfTable) {
+  // VRF entry failure will cause the subsequent entries not to be updated
+  // to App Db and hence the status returned as ABORTED for those entries.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                vrf_table_entry {
+                  match { vrf_id: "vrf-1" }
+                  action { no_action {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-2"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vrf_table_entry {
+                  match { vrf_id: "vrf-3" }
+                  action { no_action {} }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  auto failed_vrf_entry =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_VRF_TABLE")
+          .AddMatchField("vrf_id", "vrf-1");
+
+  p4rt_service_.GetVrfAppDbTable().SetResponseForKey(
+      "vrf-1", "SWSS_RC_INVALID_PARAM", "error with vrf-1");
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: INVALID_ARGUMENT: error with vrf-1"),
+                     HasSubstr("#2: ABORTED: Not attempted"),
+                     HasSubstr("#3: ABORTED: Not attempted"))));
+}
+
+TEST_F(ResponsePathTest, FailsOnFirstErrorInP4rtTable) {
   // Any P4RT error in write request translation should fail on first error,
   // with the first error having the actual failed code and the subsequent ones
   // with ABORTED and the error string as not attempted. Force a P4 contraint
