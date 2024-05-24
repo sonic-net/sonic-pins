@@ -13,7 +13,13 @@
 // limitations under the License.
 #include <algorithm>
 #include <cstdint>
+#include <fstream>
+#include <iostream>
 #include <memory>
+#include <random>
+#include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/numeric/int128.h"
@@ -30,8 +36,9 @@
 #include "grpcpp/client_context.h"
 #include "grpcpp/grpcpp.h"
 #include "gtest/gtest.h"
-#include "gutil/io.h"
 #include "gutil/proto.h"
+#include "gutil/collections.h"
+#include "gutil/io.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
@@ -50,6 +57,17 @@
 //       <IP_address>:9559.
 DEFINE_string(server_address, "unix:/sock/p4rt.sock",
               "The address of the server to connect to");
+
+DEFINE_bool(insecure, true, "Use insecure connection");
+DEFINE_string(ca_cert, "/keys/ca_cert.lnk",
+              "CA bundle file. Used when insecure is false");
+DEFINE_string(cert, "/keys/gpins_test_user.cert",
+              "Cert file. Used when insecure is false");
+DEFINE_string(key, "/keys/gpins_test_user.key",
+              "Key file. Used when insecure is false");
+DEFINE_string(host_name, "",
+              "Host name of the switch for validating the switch cert. Used "
+              "when insecure is false");
 
 // P4RT connections require a device and election ID to program flows. By
 // default we use a time based election ID, and it shouldn't need to be set
@@ -178,6 +196,14 @@ static constexpr absl::string_view ip4table_entry = R"pb(
   }
 )pb";
 
+std::string ReadFileOrEmpty(const std::string& path) {
+  auto file = gutil::ReadFile(path);
+  if (file.ok()) {
+    return *file;
+  }
+  return "";
+}
+
 absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> OpenP4RuntimeSession() {
   std::string server_address = FLAGS_server_address;
   uint64_t device_id = FLAGS_p4rt_device_id;
@@ -186,8 +212,19 @@ absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> OpenP4RuntimeSession() {
                                  : FLAGS_election_id;
 
   LOG(INFO) << "Opening P4RT connection to: " << server_address;
-  std::unique_ptr<p4::v1::P4Runtime::Stub> stub = pdpi::CreateP4RuntimeStub(
-      FLAGS_server_address, grpc::InsecureChannelCredentials());
+  std::unique_ptr<p4::v1::P4Runtime::Stub> stub;
+  if (FLAGS_insecure) {
+    stub = pdpi::CreateP4RuntimeStub(FLAGS_server_address,
+                                     grpc::InsecureChannelCredentials());
+  } else {
+    grpc::SslCredentialsOptions sslOpts;
+    sslOpts.pem_root_certs = ReadFileOrEmpty(FLAGS_ca_cert);
+    sslOpts.pem_private_key = ReadFileOrEmpty(FLAGS_key);
+    sslOpts.pem_cert_chain = ReadFileOrEmpty(FLAGS_cert);
+    stub = pdpi::CreateP4RuntimeStub(
+        FLAGS_server_address, grpc::SslCredentials(sslOpts), FLAGS_host_name);
+  }
+
   return pdpi::P4RuntimeSession::Create(
       std::move(stub), device_id,
       pdpi::P4RuntimeSessionOptionalArgs{

@@ -29,6 +29,7 @@
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -287,9 +288,11 @@ class P4RuntimeSession {
 };
 
 // Create P4Runtime stub.
+// Set the host_name for secure connection that needs to verify the switch.
 std::unique_ptr<p4::v1::P4Runtime::Stub> CreateP4RuntimeStub(
     const std::string& address,
-    const std::shared_ptr<grpc::ChannelCredentials>& credentials);
+    const std::shared_ptr<grpc::ChannelCredentials>& credentials,
+    const std::string& host_name = "");
 
 // -- Helper functions mainly used with `P4RuntimeSession` ---------------------
 
