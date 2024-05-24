@@ -138,23 +138,6 @@ std::string ArbitraryToCanonicalByteString(std::string bytes) {
   return bytes;
 }
 
-int GetBitwidthOfByteString(const std::string &input_string) {
-  if (input_string.empty()) return 0;
-
-  // Use str.length() - 1. MSB will need to be handled separately since it
-  // can have leading zeros which should not be counted.
-  int length_in_bits = (input_string.length() - 1) * kNumBitsInByte;
-
-  uint8_t msb;
-  memcpy(&msb, &input_string[0], 1);
-  while (msb != 0) {
-    ++length_in_bits;
-    msb >>= 1;
-  }
-
-  return length_in_bits;
-}
-
 absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
                                  const int bitwidth, bool is_sdn_string) {
   Format format = Format::HEX_STRING;
