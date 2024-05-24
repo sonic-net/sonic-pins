@@ -37,7 +37,6 @@
 #include "grpcpp/security/tls_credentials_options.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
-#include "grpcpp/support/channel_arguments.h"
 #include "gutil/status.h"
 #include "p4rt_app/event_monitoring/app_state_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
@@ -102,11 +101,6 @@ DEFINE_string(save_forwarding_config_file,
               "/etc/sonic/p4rt_forwarding_config.pb.txt",
               "Saves the forwarding pipeline config to a file so it can be "
               "reloaded after reboot.");
-
-// We expect to run in the SONiC enviornment so the RedisDb connections are
-// fixed, and connot be set by a flag.
-constexpr char kRedisDbHost[] = "localhost";
-constexpr int kRedisDbPort = 6379;
 
 absl::StatusOr<std::shared_ptr<ServerCredentials>> BuildServerCredentials() {
   constexpr int kCertRefreshIntervalSec = 5;
@@ -374,11 +368,9 @@ int main(int argc, char** argv) {
 */
 
   // Open a database connection into the SONiC AppDb.
-  swss::DBConnector app_db(APPL_DB, kRedisDbHost, kRedisDbPort, /*timeout=*/0);
-  swss::DBConnector app_state_db(APPL_STATE_DB, kRedisDbHost, kRedisDbPort,
-                                 /*timeout=*/0);
-  swss::DBConnector counters_db(COUNTERS_DB, kRedisDbHost, kRedisDbPort,
-                                /*timeout=*/0);
+  swss::DBConnector app_db("APPL_DB", /*timeout=*/0);
+  swss::DBConnector app_state_db("APPL_STATE_DB", /*timeout=*/0);
+  swss::DBConnector counters_db("COUNTERS_DB", /*timeout=*/0);
 
   // Create interfaces to interact with the P4RT_TABLE entries.
   p4rt_app::sonic::P4rtTable p4rt_table =
@@ -448,8 +440,7 @@ int main(int argc, char** argv) {
                        &monitor_config_db_events));
 
   // Start listening for state verification events, and update StateDb for P4RT.
-  swss::DBConnector state_verification_db(STATE_DB, kRedisDbHost, kRedisDbPort,
-                                          /*timeout=*/0);
+  swss::DBConnector state_verification_db("STATE_DB", /*timeout=*/0);
   p4rt_app::sonic::TableAdapter state_verification_table_adapter(
       &state_verification_db, "VERIFY_STATE_RESP_TABLE");
   p4rt_app::sonic::ConsumerNotifierAdapter state_verification_notifier(
