@@ -24,6 +24,7 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -49,6 +50,7 @@ struct AppDbEntry {
   pdpi::IrTableEntry entry;
   p4::v1::Update::Type update_type;
   p4::v1::TableEntry pi_table_entry;
+  gutil::TableEntryKey table_entry_key;
   AppDbTableType appdb_table = AppDbTableType::UNKNOWN;
 };
 
@@ -95,6 +97,10 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
 absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
                                             P4rtTable& p4rt_table,
                                             const pdpi::IrP4Info& p4info);
+
+// Returns the expected P4RT_TABLE key for a given IRTableEntry.
+   absl::StatusOr<std::string> GetRedisP4rtTableKey(
+   const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info);
 
 }  // namespace sonic
 }  // namespace p4rt_app

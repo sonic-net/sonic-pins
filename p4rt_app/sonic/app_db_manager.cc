@@ -46,69 +46,17 @@ namespace p4rt_app {
 namespace sonic {
 namespace {
 
-absl::StatusOr<std::string> GetP4rtTableKey(const pdpi::IrTableEntry& entry,
-                                            const pdpi::IrP4Info& p4_info) {
-  // Determine the table type.
-  const pdpi::IrTableDefinition* ir_table_def =
-      gutil::FindOrNull(p4_info.tables_by_name(), entry.table_name());
-  if (ir_table_def == nullptr) {
-    return gutil::InternalErrorBuilder()
-           << "Table name '" << entry.table_name() << "' does not exist";
-  }
-  ASSIGN_OR_RETURN(auto table_type, GetTableType(*ir_table_def));
-
-  // Determine the AppDb match key.
-  ASSIGN_OR_RETURN(const std::string json_key, IrTableEntryToAppDbKey(entry));
-
-  // The final AppDb Key format is: <table_type>_<table_name>:<json_key>
-  return absl::StrCat(
-      absl::AsciiStrToUpper(absl::Substitute(
-          "$0_$1:", table::TypeName(table_type), entry.table_name())),
-      json_key);
-}
-
-absl::flat_hash_set<std::string> FindDuplicateKeys(
-    const AppDbUpdates& updates, const pdpi::IrP4Info& p4_info) {
-  absl::flat_hash_set<std::string> duplicates;
-  absl::flat_hash_set<std::string> keys;
-
-  for (const auto& entry : updates.entries) {
-    auto key = GetP4rtTableKey(entry.entry, p4_info);
-    if (key.ok()) {
-      if (keys.count(*key) > 0) duplicates.insert(*key);
-      keys.insert(*key);
-    }
-  }
-
-  return duplicates;
-}
-
 // Translates the IR entry into a format understood by the OA layer. Also
 // verifies that the entry can be deleted (i.e. alreay exist). On success the
 // P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForDelete(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
     const pdpi::IrP4Info& p4_info,
-    const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_deletes) {
   VLOG(2) << "Delete PDPI IR entry: " << entry.ShortDebugString();
-
-  ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
-
-  // Verify key has not been duplicated in this batch request.
-  if (duplicate_keys.count(key) > 0) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "[P4RT App] Found duplicated key in the same batch request.";
-  }
-
-  // Check that key exists in the table.
-  if (!p4rt_table.app_db->exists(key)) {
-    LOG(WARNING) << "Could not delete missing entry: " << key;
-    return gutil::NotFoundErrorBuilder()
-           << "[P4RT App] Table entry with the given key does not exist in '"
-           << entry.table_name() << "'.";
-  }
-
+  
+  ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
+  
   // Get table entry from the AppDB (before delete) instead of the one from the
   // request.
   ASSIGN_OR_RETURN(auto ir_table_entry,
@@ -129,26 +77,11 @@ absl::StatusOr<std::string> CreateEntryForDelete(
 absl::StatusOr<std::string> CreateEntryForInsert(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
     const pdpi::IrP4Info& p4_info,
-    const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts) {
   VLOG(2) << "Insert PDPI IR entry: " << entry.ShortDebugString();
 
-  ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
-
-  // Verify key has not been duplicated in this batch request.
-  if (duplicate_keys.count(key) > 0) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "[P4RT App] Found duplicated key in the same batch request.";
-  }
-
-  // Check that key does not already exist in the table.
-  if (p4rt_table.app_db->exists(key)) {
-    LOG(WARNING) << "Could not insert duplicate entry: " << key;
-    return gutil::AlreadyExistsErrorBuilder()
-           << "[P4RT App] Table entry with the given key already exist in '"
-           << entry.table_name() << "'.";
-  }
-
+  ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
+  
   VLOG(1) << "Insert AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
@@ -165,26 +98,11 @@ absl::StatusOr<std::string> CreateEntryForInsert(
 absl::StatusOr<std::string> CreateEntryForModify(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
     const pdpi::IrP4Info& p4_info,
-    const absl::flat_hash_set<std::string>& duplicate_keys,
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies) {
   VLOG(2) << "Modify PDPI IR entry: " << entry.ShortDebugString();
-
-  ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(entry, p4_info));
-
-  // Verify key has not been duplicated in this batch request.
-  if (duplicate_keys.count(key) > 0) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "[P4RT App] Found duplicated key in the same batch request.";
-  }
-
-  // Check that key already exist in the table.
-  if (!p4rt_table.app_db->exists(key)) {
-    LOG(WARNING) << "Could not modify missing entry: " << key;
-    return gutil::NotFoundErrorBuilder()
-           << "[P4RT App] Table entry with the given key does not exist in '"
-           << entry.table_name() << "'.";
-  }
-
+  
+  ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
+  
   VLOG(1) << "Modify AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
@@ -414,6 +332,27 @@ absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
 
 }
 
+absl::StatusOr<std::string> GetRedisP4rtTableKey(
+    const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info) {
+  // Determine the table type.
+  const pdpi::IrTableDefinition* ir_table_def =
+      gutil::FindOrNull(p4_info.tables_by_name(), entry.table_name());
+  if (ir_table_def == nullptr) {
+    return gutil::InternalErrorBuilder()
+           << "Table name '" << entry.table_name() << "' does not exist";
+  }
+  ASSIGN_OR_RETURN(auto table_type, GetTableType(*ir_table_def));
+
+  // Determine the AppDb match key.
+  ASSIGN_OR_RETURN(const std::string json_key, IrTableEntryToAppDbKey(entry));
+
+  // The final AppDb Key format is: <table_type>_<table_name>:<json_key>
+  return absl::StrCat(
+      absl::AsciiStrToUpper(absl::Substitute(
+          "$0_$1:", table::TypeName(table_type), entry.table_name())),
+      json_key);
+}
+
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key) {
@@ -435,7 +374,7 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
 absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
                                             P4rtTable& p4rt_table,
                                             const pdpi::IrP4Info& p4info) {
-  ASSIGN_OR_RETURN(std::string key, GetP4rtTableKey(ir_table_entry, p4info));
+  ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(ir_table_entry, p4info));
   return AppendCounterData(ir_table_entry,
                            p4rt_table.counter_db->get(absl::StrCat(
                                p4rt_table.app_db->getTablePrefix(), key)));
@@ -464,15 +403,9 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
                          const AppDbUpdates& updates,
                          const pdpi::IrP4Info& p4_info,
                          pdpi::IrWriteResponse* response) {
-  // We keep a temporary cache of any keys that are duplicated in the batch
-  // request so the flow can be rejected.
-  absl::flat_hash_set<std::string> duplicate_keys =
-      FindDuplicateKeys(updates, p4_info);
-
   std::vector<swss::KeyOpFieldsValuesTuple> kfv_updates;
   absl::btree_map<std::string, pdpi::IrUpdateStatus*> app_db_status;
   bool fail_on_first_error = false;
-
   for (const auto& entry : updates.entries) {
     // Mark rest of the entries as not attempted after the first error.
     if (fail_on_first_error) {
@@ -499,16 +432,16 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
     absl::StatusOr<std::string> key;
     switch (entry.update_type) {
       case p4::v1::Update::INSERT:
-        key = CreateEntryForInsert(p4rt_table, entry.entry, p4_info,
-                                   duplicate_keys, kfv_updates);
+        key =
+            CreateEntryForInsert(p4rt_table, entry.entry, p4_info, kfv_updates);
         break;
       case p4::v1::Update::MODIFY:
-        key = CreateEntryForModify(p4rt_table, entry.entry, p4_info,
-                                   duplicate_keys, kfv_updates);
+        key =
+            CreateEntryForModify(p4rt_table, entry.entry, p4_info, kfv_updates);
         break;
       case p4::v1::Update::DELETE:
-        key = CreateEntryForDelete(p4rt_table, entry.entry, p4_info,
-                                   duplicate_keys, kfv_updates);
+        key =
+            CreateEntryForDelete(p4rt_table, entry.entry, p4_info, kfv_updates);
         break;
       default:
         key = gutil::InvalidArgumentErrorBuilder()
