@@ -28,7 +28,8 @@ namespace p4rt_app {
 class AppStateDbSendToIngressPortTableEventHandler
     : public sonic::StateEventHandler {
  public:
-  AppStateDbSendToIngressPortTableEventHandler(P4RuntimeImpl& p4runtime);
+  AppStateDbSendToIngressPortTableEventHandler(P4RuntimeImpl* p4runtime)
+      : p4runtime_(*p4runtime) {}
 
   absl::Status HandleEvent(
       const std::string& operation, const std::string& key,
