@@ -1031,6 +1031,19 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         priority: 32
                       )pb"));
 
+  RunIrTableEntryTest(info, "Invalid match field format",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "ternary_table"
+                        matches {
+                          name: "ipv6"
+                          ternary {
+                            value { ipv4: "127.0.0.0" }
+                            mask { ipv4: "127.0.0.0" }
+                          }
+                        }
+                        priority: 32
+                      )pb"));
+
   RunIrTableEntryTest(info, "missing action",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
                         table_name: "id_test_table"
@@ -1112,6 +1125,30 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           params {
                             name: "arg2"
                             value { hex_str: "0x01234568" }
+                          }
+                        }
+                      )pb"));
+
+  RunIrTableEntryTest(info, "bad action param format",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "id_test_table"
+                        matches {
+                          name: "ipv6"
+                          exact { ipv6: "::ff22" }
+                        }
+                        matches {
+                          name: "ipv4"
+                          exact { ipv4: "10.24.32.52" }
+                        }
+                        action {
+                          name: "do_thing_1"
+                          params {
+                            name: "arg1"
+                            value { ipv6: "ffff::" }
+                          }
+                          params {
+                            name: "arg2"
+                            value { str: "0x01234567" }
                           }
                         }
                       )pb"));

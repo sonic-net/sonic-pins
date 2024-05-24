@@ -23,4 +23,18 @@ std::string ByteStringToP4runtimeByteString(std::string bytes) {
   return bytes;
 }
 
+int GetBitwidthOfByteString(absl::string_view byte_string) {
+  for (int i = 0; i < byte_string.size(); ++i) {
+    unsigned char c = static_cast<unsigned char>(byte_string[i]);
+    if (c == 0) continue;
+    int significant_bits = 0;
+    do {
+      significant_bits += 1;
+      c >>= 1;
+    } while (c != 0);
+    return significant_bits + 8 * (byte_string.size() - i - 1);
+  }
+  return byte_string.empty() ? 0 : 1;
+}
+
 }  // namespace pdpi

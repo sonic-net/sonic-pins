@@ -1461,6 +1461,30 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
+Invalid match field format
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "ipv6"
+  ternary {
+    value {
+      ipv4: "127.0.0.0"
+    }
+    mask {
+      ipv4: "127.0.0.0"
+    }
+  }
+}
+priority: 32
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
+  - Match field 'ipv6' is invalid: Expected format 'IPV6', but got 'IPV4' instead.
+  - Action is required.
+
+=========================================================================
 missing action
 =========================================================================
 
@@ -1601,6 +1625,46 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
   - Action 'do_thing_1' is invalid for the following reasons:
     - Duplicate parameter field found with name 'arg2'.
     - Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
+
+=========================================================================
+bad action param format
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg1"
+    value {
+      ipv6: "ffff::"
+    }
+  }
+  params {
+    name: "arg2"
+    value {
+      str: "0x01234567"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Param 'arg1': Expected format 'HEX_STRING', but got 'IPV6' instead.
+    - Param 'arg2': Expected format 'HEX_STRING', but got 'STR' instead.
 
 =========================================================================
 invalid action param name
