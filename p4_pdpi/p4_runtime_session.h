@@ -22,14 +22,14 @@
 #include <queue>
 #include <string>
 #include <thread>  // NOLINT: third_party code.
-#include <utility>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
-#include "absl/memory/memory.h"
+#include "absl/functional/any_invocable.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -181,17 +181,58 @@ class P4RuntimeSession {
   p4::v1::Uint128 ElectionId() const { return election_id_; }
   // Returns the role of this session.
   std::string Role() const { return role_; }
+
   // Thread-safe wrapper around the stream channel's `Read` method.
-  // It blocks until the stream message queue is non-empty, the
-  // stream channel is closed, or (if specified) the `timeout` is expired .
+  //
+  // StreamChannelRead is a blocking call that only returns if a message is
+  // received or the stream is closed (i.e. Finish is called). Using this API
+  // can complicate testing logic. Consider using GetNextStreamMessage() or
+  // GetAllStreamMessagesFor() before deciding to use this API.
+  ABSL_DEPRECATED(
+      "Prefer to use GetNextStreamMessage() or GetAllStreamMessagesFor()")
   ABSL_MUST_USE_RESULT bool StreamChannelRead(
-      p4::v1::StreamMessageResponse& response,
-      std::optional<absl::Duration> timeout = std::nullopt)
+      p4::v1::StreamMessageResponse& response)
       ABSL_LOCKS_EXCLUDED(stream_read_lock_);
   // Thread-safe wrapper around the stream channel's `Write` method.
   ABSL_MUST_USE_RESULT bool StreamChannelWrite(
       const p4::v1::StreamMessageRequest& request)
       ABSL_LOCKS_EXCLUDED(stream_write_lock_);
+
+  // Thread-safe call that waits for the switch to respond with a stream message
+  // (i.e. PacketIn) and then applies the `callback` function to it. Once this
+  // function has handled `expected_messages` messages successfully it will
+  // return OK. If not enough response are seen, or successfully handled, before
+  // the `timeout` then this function will terminate with a DEADLINE_EXCEEDED
+  // error.
+  //
+  // The callback should return:
+  //   true   : if it wants the packet to be counted as handled.
+  //   false  : if it wants the packet to be ignored.
+  //   Status : if it wants to stop processing more packets.
+  ABSL_MUST_USE_RESULT
+  absl::Status HandleNextNStreamMessages(
+      absl::AnyInvocable<
+          absl::StatusOr<bool>(const p4::v1::StreamMessageResponse& message)>
+          callback,
+      int expected_messages, absl::Duration timeout)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
+
+  // Thread-safe call that waits for the next stream message response from the
+  // switch (i.e. PacketIn). If no response is seen before the timeout then it
+  // will terminate with a DEADLINE_EXCEEDED error.
+  ABSL_MUST_USE_RESULT absl::StatusOr<p4::v1::StreamMessageResponse>
+  GetNextStreamMessage(absl::Duration timeout)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
+
+  // Thread-safe call that will collect all stream message responses from the
+  // switch (i.e PacketIn) over a given duration. If no responses are seen the
+  // call will still return successfully, but the vector will be empty. If the
+  // P4Runtime connection goes down while waiting for responses an UNAVAILABLE
+  // error will be returned.
+  ABSL_MUST_USE_RESULT
+  absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+  GetAllStreamMessagesFor(absl::Duration duration)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
 
   // Closes the RPC connection by telling the server it is done writing, then
   // reads and logs any outstanding messages from the server. Once the server
@@ -266,9 +307,11 @@ class P4RuntimeSession {
 };
 
 // Create P4Runtime stub.
+// Set the host_name for secure connection that needs to verify the switch.
 std::unique_ptr<p4::v1::P4Runtime::Stub> CreateP4RuntimeStub(
     const std::string& address,
-    const std::shared_ptr<grpc::ChannelCredentials>& credentials);
+    const std::shared_ptr<grpc::ChannelCredentials>& credentials,
+    const std::string& host_name = "");
 
 // -- Helper functions mainly used with `P4RuntimeSession` ---------------------
 
@@ -309,11 +352,8 @@ absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
 // Checks that there are no table entries.
 absl::Status CheckNoTableEntries(P4RuntimeSession* session);
 
-// Clears the table entries. Optionally, `max_batch_size` can be used to limit
-// the number of updates in a single write request.
-absl::Status ClearTableEntries(
-    P4RuntimeSession* session,
-    std::optional<int> max_batch_size = std::nullopt);
+// Clears the table entries.
+absl::Status ClearTableEntries(P4RuntimeSession* session);
 
 // Installs the given PI (program independent) table entry on the switch.
 absl::Status InstallPiTableEntry(P4RuntimeSession* session,

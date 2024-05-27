@@ -48,7 +48,7 @@ static const char kSwssInternal[] = "SWSS_RC_INTERNAL";
 
 std::vector<swss::FieldValueTuple> GetSwssOkResponse() {
   return std::vector<swss::FieldValueTuple>(
-      {swss::FieldValueTuple("err_str", "Ok")});
+      {swss::FieldValueTuple("err_str", "")});
 }
 
 std::vector<swss::FieldValueTuple> GetSwssError(const std::string& message) {
@@ -427,6 +427,10 @@ INSTANTIATE_TEST_SUITE_P(
         {
             .swss_error = "SWSS_RC_UNIMPLEMENTED",
             .p4rt_error = google::rpc::Code::UNIMPLEMENTED,
+        },
+        {
+            .swss_error = "SWSS_RC_NOT_EXECUTED",
+            .p4rt_error = google::rpc::Code::ABORTED,
         },
     }),
     [](const testing::TestParamInfo<ResponseHandlerErrorCodeTest::ParamType>&

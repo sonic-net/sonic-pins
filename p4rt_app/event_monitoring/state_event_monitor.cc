@@ -21,7 +21,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "swss/rediscommand.h"
@@ -64,13 +63,13 @@ StateEventMonitor::StateEventMonitor(swss::DBConnector& db) : redis_db_(db) {
 }
 
 absl::Status StateEventMonitor::RegisterTableHandler(
-    const std::string& table_name, StateEventHandler& handler) {
+    absl::string_view table_name, std::unique_ptr<StateEventHandler> handler) {
   auto [iter, success] = monitored_tables_by_name_.emplace(
       table_name,
       TableHandler{
           .subscriber_table = std::make_unique<swss::SubscriberStateTable>(
-              &redis_db_, table_name),
-          .event_handler = handler,
+              &redis_db_, std::string(table_name)),
+          .event_handler = std::move(handler),
       });
 
   if (!success) {
@@ -98,7 +97,7 @@ absl::Status StateEventMonitor::WaitForNextEventAndHandle() {
     std::deque<swss::KeyOpFieldsValuesTuple> events;
     handler.subscriber_table->pops(events);
     for (const auto& event : events) {
-      absl::Status status = handler.event_handler.HandleEvent(
+      absl::Status status = handler.event_handler->HandleEvent(
           kfvOp(event), kfvKey(event), kfvFieldsValues(event));
       if (!status.ok()) {
         LOG(ERROR) << "Could not handle " << table_name << " change in "

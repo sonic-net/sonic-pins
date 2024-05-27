@@ -15,23 +15,24 @@
 #include "p4_pdpi/p4_runtime_session.h"
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
 
+#include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
 #include "google/protobuf/descriptor.h"
-#include "google/protobuf/repeated_field.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "grpcpp/channel.h"
 #include "grpcpp/create_channel.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
@@ -48,19 +49,22 @@ using ::p4::v1::P4Runtime;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
 using ::p4::v1::SetForwardingPipelineConfigRequest;
-using ::p4::v1::SetForwardingPipelineConfigResponse;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::p4::v1::Update_Type;
 using ::p4::v1::WriteRequest;
-using ::p4::v1::WriteResponse;
 
 // Create P4Runtime Stub.
 std::unique_ptr<P4Runtime::Stub> CreateP4RuntimeStub(
     const std::string& address,
-    const std::shared_ptr<grpc::ChannelCredentials>& credentials) {
-  return P4Runtime::NewStub(grpc::CreateCustomChannel(
-      address, credentials, GrpcChannelArgumentsForP4rt()));
+    const std::shared_ptr<grpc::ChannelCredentials>& credentials,
+    const std::string& host_name) {
+  auto args = GrpcChannelArgumentsForP4rt();
+  if (!host_name.empty()) {
+    args.SetString(GRPC_SSL_TARGET_NAME_OVERRIDE_ARG, host_name);
+  }
+  return P4Runtime::NewStub(
+      grpc::CreateCustomChannel(address, credentials, args));
 }
 
 // Creates a session with the switch, which lasts until the session object is
@@ -218,17 +222,12 @@ P4RuntimeSession::GetForwardingPipelineConfig(
 }
 
 bool P4RuntimeSession::StreamChannelRead(
-    p4::v1::StreamMessageResponse& response,
-    std::optional<absl::Duration> timeout) {
+    p4::v1::StreamMessageResponse& response) {
   absl::MutexLock lock(&stream_read_lock_);
   auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
     return !stream_messages_.empty() || !is_stream_up_;
   };
-  if (timeout.has_value()) {
-    stream_read_lock_.AwaitWithTimeout(absl::Condition(&cond), *timeout);
-  } else {
-    stream_read_lock_.Await(absl::Condition(&cond));
-  }
+  stream_read_lock_.Await(absl::Condition(&cond));
 
   if (!stream_messages_.empty()) {
     response = stream_messages_.front();
@@ -247,6 +246,72 @@ bool P4RuntimeSession::StreamChannelWrite(
     return false;
   }
   return stream_channel_->Write(request);
+}
+
+absl::Status P4RuntimeSession::HandleNextNStreamMessages(
+    absl::AnyInvocable<
+        absl::StatusOr<bool>(const p4::v1::StreamMessageResponse& message)>
+        callback,
+    int expected_messages, absl::Duration timeout) {
+  absl::MutexLock mu(&stream_read_lock_);
+  int seen_messages = 0;
+  int handled_messages = 0;
+  absl::Time deadline = absl::Now() + timeout;
+
+  auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
+    return !stream_messages_.empty();
+  };
+  while (
+      stream_read_lock_.AwaitWithDeadline(absl::Condition(&cond), deadline)) {
+    ASSIGN_OR_RETURN(bool success, callback(stream_messages_.front()));
+    if (success) {
+      ++handled_messages;
+    }
+    ++seen_messages;
+    stream_messages_.pop();
+    if (handled_messages == expected_messages) {
+      return absl::OkStatus();
+    }
+  }
+  if (!is_stream_up_) {
+    return absl::UnavailableError(
+        "The P4RT stream has gone down unexpectedly.");
+  }
+  return absl::DeadlineExceededError(
+      absl::StrFormat("Expected to handle %d messages, but only handled %d of "
+                      "the %d seen in %s.",
+                      expected_messages, handled_messages, seen_messages,
+                      absl::FormatDuration(timeout)));
+}
+
+absl::StatusOr<p4::v1::StreamMessageResponse>
+P4RuntimeSession::GetNextStreamMessage(absl::Duration timeout) {
+  p4::v1::StreamMessageResponse result;
+  RETURN_IF_ERROR(HandleNextNStreamMessages(
+      [&result](const p4::v1::StreamMessageResponse& message) {
+        result = message;
+        return true;
+      },
+      /*expected_messages=*/1, timeout));
+  return result;
+}
+
+absl::StatusOr<std::vector<p4::v1::StreamMessageResponse>>
+P4RuntimeSession::GetAllStreamMessagesFor(absl::Duration duration) {
+  absl::SleepFor(duration);
+  absl::MutexLock mu(&stream_read_lock_);
+
+  if (!is_stream_up_) {
+    return absl::UnavailableError(
+        "The P4RT stream has gone down unexpectedly.");
+  }
+
+  std::vector<p4::v1::StreamMessageResponse> messages;
+  while (!stream_messages_.empty()) {
+    messages.push_back(stream_messages_.front());
+    stream_messages_.pop();
+  }
+  return messages;
 }
 
 absl::Status P4RuntimeSession::Finish() {
@@ -429,8 +494,7 @@ absl::Status CheckNoTableEntries(P4RuntimeSession* session) {
   return absl::OkStatus();
 }
 
-absl::Status ClearTableEntries(P4RuntimeSession* session,
-                               std::optional<int> max_batch_size) {
+absl::Status ClearTableEntries(P4RuntimeSession* session) {
   // Get P4Info from Switch. It is needed to sequence the delete requests.
   ASSIGN_OR_RETURN(
       p4::v1::GetForwardingPipelineConfigResponse response,
@@ -454,8 +518,7 @@ absl::Status ClearTableEntries(P4RuntimeSession* session,
   std::vector<Update> pi_updates =
       CreatePiUpdates(table_entries, Update::DELETE);
   ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_clear_requests,
-                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates,
-                                                            max_batch_size));
+                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
   RETURN_IF_ERROR(
       SetMetadataAndSendPiWriteRequests(session, sequenced_clear_requests));
 

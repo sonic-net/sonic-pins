@@ -60,6 +60,11 @@ std::string BitsetToP4RuntimeByteString(std::bitset<num_bits> bits);
 // Converts byte string to P4Runtime byte string.
 std::string ByteStringToP4runtimeByteString(std::string bytes);
 
+// Returns the number of binary digits required to represent the unsigned
+// integer encoded by the given binary string (most significant bit first).
+// https://en.wikipedia.org/wiki/Bit-length
+int GetBitwidthOfByteString(absl::string_view byte_string);
+
 // == END OF PUBLIC INTERFACE ==================================================
 
 namespace internal {

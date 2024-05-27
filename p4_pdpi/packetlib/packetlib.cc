@@ -28,6 +28,7 @@
 #include "absl/types/span.h"
 #include "glog/logging.h"
 #include "gutil/overload.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
@@ -1598,6 +1599,13 @@ absl::StatusOr<std::string> SerializePacket(Packet packet) {
   RETURN_IF_ERROR(UpdateMissingComputedFields(packet).status());
   RETURN_IF_ERROR(ValidatePacket(packet));
   return RawSerializePacket(packet);
+}
+
+absl::StatusOr<std::string> SerializePacket(
+    absl::string_view packet_text_proto) {
+  ASSIGN_OR_RETURN(Packet packet,
+                   gutil::ParseTextProto<Packet>(packet_text_proto));
+  return SerializePacket(std::move(packet));
 }
 
 // ---- Computed field logic ---------------------------------------------------

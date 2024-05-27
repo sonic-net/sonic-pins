@@ -24,8 +24,7 @@
 namespace p4rt_app {
 namespace sonic {
 
-class MockNotificationProducerAdapter final
-    : public NotificationProducerAdapter {
+class MockNotificationProducerAdapter : public NotificationProducerAdapter {
  public:
     MOCK_METHOD(void, send,
               (const std::vector<swss::KeyOpFieldsValuesTuple>& values),

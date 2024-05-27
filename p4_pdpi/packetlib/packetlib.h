@@ -67,9 +67,14 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet);
 // Seralizes a given packet. The packet may miss computed fields, which will be
 // filled in automatically when missing (but not changed if they are present).
 // Serialization succeeds iff `ValidatePacket(packet).ok()` after calling
-// `PadPacketToMinimumSize(packet); UpdateMisssingComputedFields(packet)`. An
+// `PadPacketToMinimumSize(packet); UpdateMissingComputedFields(packet)`. An
 // error status is returned otherwise.
 absl::StatusOr<std::string> SerializePacket(Packet packet);
+
+// Like the other `SerializePacket` overload, but takes in the `packet` in text
+// proto format.
+absl::StatusOr<std::string> SerializePacket(
+    absl::string_view packet_text_proto);
 
 // Seralizes a given packet without checking header invariants. All fields must
 // be present and use a valid value (according to ir::Format), but otherwise no
