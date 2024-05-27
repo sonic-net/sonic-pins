@@ -70,7 +70,6 @@ cc_library(
         ":bit_string",
         ":hex_string",
         "//gutil:status",
-        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
