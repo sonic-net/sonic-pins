@@ -26,7 +26,7 @@
 
 namespace p4rt_app {
 
-absl::Status ConfigDbPortTableEventHandler::HandleEvent(
+  absl::Status ConfigDbPortTableEventHandler::HandleEvent(
     const std::string& operation, const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {
   // P4RT can ignore managment ports, and only focus on front-panel port that
