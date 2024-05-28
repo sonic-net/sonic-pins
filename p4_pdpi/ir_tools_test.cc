@@ -39,7 +39,7 @@ TEST(TransformValuesOfTypeTest, RewriteMatchString) {
   ASSERT_OK_AND_ASSIGN(
       IrTableEntry original_entry,
       PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referred_table_entry {
+                         one_match_field_table_entry {
                            match { id: "string" }
                            action { do_thing_4 {} }
                          }
@@ -48,7 +48,7 @@ TEST(TransformValuesOfTypeTest, RewriteMatchString) {
   ASSERT_OK_AND_ASSIGN(
       IrTableEntry goal_entry,
       PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referred_table_entry {
+                         one_match_field_table_entry {
                            match { id: "another_string" }
                            action { do_thing_4 {} }
                          }
@@ -69,12 +69,12 @@ TEST(TransformValuesOfTypeTest, RewriteActionStrings) {
   ASSERT_OK_AND_ASSIGN(
       IrTableEntry original_entry,
       PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referring_table_entry {
+                         referring_by_action_table_entry {
                            match { val: "0x001" }
                            action {
-                             referring_action {
+                             referring_to_two_match_fields_action {
                                referring_id_1: "string1",
-                               referring_id_2: "string2",
+                               referring_id_2: "0x004",
                              }
                            }
                          }
@@ -83,12 +83,12 @@ TEST(TransformValuesOfTypeTest, RewriteActionStrings) {
   ASSERT_OK_AND_ASSIGN(
       IrTableEntry goal_entry,
       PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referring_table_entry {
+                         referring_by_action_table_entry {
                            match { val: "0x001" }
                            action {
-                             referring_action {
+                             referring_to_two_match_fields_action {
                                referring_id_1: "another_string1",
-                               referring_id_2: "another_string2",
+                               referring_id_2: "0x004",
                              }
                            }
                          }
@@ -109,7 +109,7 @@ TEST(VisitValuesOfTypeTest, CollectStrings) {
   ASSERT_OK_AND_ASSIGN(
       IrTableEntry entry1,
       PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referred_table_entry {
+                         one_match_field_table_entry {
                            match { id: "string1" }
                            action { do_thing_4 {} }
                          }
@@ -117,12 +117,12 @@ TEST(VisitValuesOfTypeTest, CollectStrings) {
   ASSERT_OK_AND_ASSIGN(
       IrTableEntry entry2,
       PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referring_table_entry {
+                         referring_by_action_table_entry {
                            match { val: "0x001" }
                            action {
-                             referring_action {
+                             referring_to_two_match_fields_action {
                                referring_id_1: "string2",
-                               referring_id_2: "string3",
+                               referring_id_2: "0x003",
                              }
                            }
                          }
@@ -137,8 +137,10 @@ TEST(VisitValuesOfTypeTest, CollectStrings) {
                                 return absl::OkStatus();
                               }));
 
-  EXPECT_THAT(string_collection,
-              UnorderedElementsAreArray({"string1", "string2", "string3"}));
+  EXPECT_THAT(string_collection, UnorderedElementsAreArray({
+                                     "string1",
+                                     "string2",
+                                 }));
 }
 
 }  // namespace
