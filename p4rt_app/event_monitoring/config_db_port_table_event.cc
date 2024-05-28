@@ -24,8 +24,6 @@
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "swss/schema.h"
 
-namespace p4rt_app {
-
 absl::Status ConfigDbPortTableEventHandler::HandleEvent(
     const std::string& operation, const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {

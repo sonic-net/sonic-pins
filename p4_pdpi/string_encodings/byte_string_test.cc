@@ -14,10 +14,16 @@
 #include "p4_pdpi/string_encodings/byte_string.h"
 
 #include <bitset>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/strings/escaping.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
@@ -112,6 +118,32 @@ TEST(ByteStringTest, ByteStringToBitsetCorrect) {
 TEST(ByteStringTest, BitsetToPaddedByteString_Regression_2020_12_02) {
   const auto bitset = ~std::bitset<128>();
   BitsetToPaddedByteString(bitset);  // No crash.
+}
+
+TEST(GetBitwidthOfByteString, EmptyStringHasWidthZero) {
+  EXPECT_EQ(GetBitwidthOfByteString(""), 0);
+}
+
+TEST(GetBitwidthOfByteString, AllSingleByteStringsHaveExpectedBitwidth) {
+  for (int i = 0; i < 255; ++i) {
+    std::string bytes = "0";
+    std::memcpy(bytes.data(), &i, 1);
+    EXPECT_EQ(GetBitwidthOfByteString(bytes),
+              i == 0 ? 1 : std::floor(1 + std::log2(i)))
+        << "for bytes == int " << i;
+  }
+}
+
+TEST(GetBitwidthOfByteString, TrailingPaddingIncreasesBitwdith) {
+  EXPECT_EQ(GetBitwidthOfByteString(SafeString({'\x01'})), 1);
+  EXPECT_EQ(GetBitwidthOfByteString(SafeString({'\x01', '\x00'})), 9);
+  EXPECT_EQ(GetBitwidthOfByteString(SafeString({'\x01', '\x00', '\x00'})), 17);
+}
+
+TEST(GetBitwidthOfByteString, LeadingPaddingDoesNotAffectBitwidth) {
+  EXPECT_EQ(GetBitwidthOfByteString(SafeString({'\x01'})), 1);
+  EXPECT_EQ(GetBitwidthOfByteString(SafeString({'\x00', '\x01'})), 1);
+  EXPECT_EQ(GetBitwidthOfByteString(SafeString({'\x00', '\x00', '\x01'})), 1);
 }
 
 }  // namespace

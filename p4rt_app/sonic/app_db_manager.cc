@@ -26,6 +26,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "glog/logging.h"
+#include "google/rpc/code.pb.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -425,6 +426,9 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
       RETURN_IF_ERROR(UpdateAppDbVrfTable(vrf_table, entry.update_type,
                                           entry.rpc_index, entry.entry,
                                           *response));
+      if (response->statuses(entry.rpc_index).code() != google::rpc::Code::OK) {
+        fail_on_first_error = true;
+      } 
       continue;
     }
 
