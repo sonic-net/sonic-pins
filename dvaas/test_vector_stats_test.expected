@@ -15,4 +15,3 @@ All of 2 test vectors attempted had deterministically reproducible failures
 4 test vectors forwarded, producing 6 forwarded output packets
 3 test vectors punted, producing 3 punted output packets
 1 test vectors produced no output packets
-1 of 3 test vectors with failures were deterministically reproducible
