@@ -22,7 +22,6 @@
 #include "absl/status/status.h"
 #include "p4rt_app/event_monitoring/state_event_monitor.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
-#include "p4rt_app/sonic/redis_connections.h"
 
 namespace p4rt_app {
 
@@ -33,20 +32,14 @@ class ConfigDbPortTableEventHandler : public sonic::StateEventHandler {
  public:
   // p4runtime must be a non-null pointer to a P4RuntimeImpl object that is
   // valid as long as this event handler.
-  explicit ConfigDbPortTableEventHandler(P4RuntimeImpl* p4runtime,
-                                         p4rt_app::sonic::PortTable* port_table)
-      : p4runtime_(*p4runtime), port_table_(port_table) {}
-
+  explicit ConfigDbPortTableEventHandler(P4RuntimeImpl* p4runtime)
+      : p4runtime_(*p4runtime) {}
   absl::Status HandleEvent(
       const std::string& operation, const std::string& key,
       const std::vector<std::pair<std::string, std::string>>& values) override;
 
  private:
   P4RuntimeImpl& p4runtime_;
-
-  // The redis AppDB and AppStateDB should be in-sync (i.e. what we write to one
-  // we write to the other), and reflect the state of the P4Runtime service.
-  p4rt_app::sonic::PortTable* port_table_;
 };
 
 }  // namespace p4rt_app

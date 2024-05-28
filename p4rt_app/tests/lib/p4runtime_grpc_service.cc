@@ -33,6 +33,7 @@
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
+//TODO(PINS):
 // #include "swss/fakes/fake_component_state_helper.h"
 // #include "swss/fakes/fake_system_state_helper.h"
 
@@ -43,10 +44,12 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
     : fake_vrf_state_table_("AppStateDb:VRF_TABLE"),
       fake_hash_state_table_("AppStateDb:HASH_TABLE"),
       fake_switch_state_table_("AppStateDb:SWITCH_TABLE"),
+      fake_port_state_table_("AppStateDb:PORT_TABLE"),
       fake_p4rt_table_("AppDb:P4RT_TABLE"),
       fake_vrf_table_("AppDb:VRF_TABLE", &fake_vrf_state_table_),
       fake_hash_table_("AppDb:HASH_TABLE", &fake_hash_state_table_),
-      fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_) {
+      fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_),
+      fake_port_table_("AppDb:PORT_TABLE", &fake_port_state_table_) {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
   const std::string kP4rtTableName = "P4RT_TABLE";
   const std::string kPortTableName = "PORT_TABLE";
@@ -112,15 +115,32 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
           &fake_switch_state_table_, kSwitchTableName),
   };
 
+  // Create interfaces to access SWITCH_TABLE entries.
+  sonic::PortTable port_table{
+      .app_db = absl::make_unique<sonic::FakeTableAdapter>(&fake_port_table_,
+                                                           kPortTableName),
+      .app_state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_port_state_table_, kPortTableName),
+  };
+
   // Create FakePacketIoInterface and save the pointer.
   auto fake_packetio_interface =
       absl::make_unique<sonic::FakePacketIoInterface>();
   fake_packetio_interface_ = fake_packetio_interface.get();
 
+// TODO(PINS):
+  // Add the P4RT component helper into the system state helper so they can
+  // interact around critical state handling.
+//  fake_system_state_helper_.AddComponent(/*name=*/"p4rt-con",
+//                                       fake_component_state_helper_);
+
   // Create the P4RT server.
   p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
-      std::move(switch_table), std::move(fake_packetio_interface),
+      std::move(switch_table), std::move(port_table),
+      std::move(fake_packetio_interface),
+     // TODO(PINS):
+     // fake_component_state_helper_, fake_system_state_helper_, fake_netdev_translator_, 
       options);
 
   // Component tests will use an insecure connection for the service.
@@ -181,6 +201,9 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetSwitchAppStateDbTable() {
   return fake_switch_state_table_;
 }
 
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppStateDbTable() {
+  return fake_port_state_table_;
+}
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtCountersDbTable() {
   return fake_p4rt_counters_table_;
 }
@@ -192,6 +215,16 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtStateDbTable() {
 sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
   return *fake_packetio_interface_;
 }
+
+/*TODO(PINS):
+swss::FakeSystemStateHelper& P4RuntimeGrpcService::GetSystemStateHelper() {
+  return fake_system_state_helper_;
+}
+
+swss::FakeComponentStateHelper&
+P4RuntimeGrpcService::GetComponentStateHelper() {
+  return fake_component_state_helper_;
+} */
 
 P4RuntimeImpl& P4RuntimeGrpcService::GetP4rtServer() {
   return *p4runtime_server_;

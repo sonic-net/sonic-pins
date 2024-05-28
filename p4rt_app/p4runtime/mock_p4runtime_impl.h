@@ -22,7 +22,7 @@
 
 namespace p4rt_app {
 
-class MockP4RuntimeImpl final : public P4RuntimeImpl {
+class MockP4RuntimeImpl : public P4RuntimeImpl {
  public:
   MockP4RuntimeImpl()
       : P4RuntimeImpl(/*translate_port_ids=*/false) {}
