@@ -49,6 +49,8 @@ class NsfUpgradeTest : public testing::TestWithParam<NsfTestParams> {
   // Note: In case the flow programmer returns a gNMI config, then that will
   // override the `next_image_config.gnmi_config` and will used for subsequent
   // validations.
+  // A boolean `continue_on_failure` is passed as reference to continue even in
+  // case of failures during upgrade.
   absl::Status NsfUpgradeOrReboot(NsfUpgradeScenario scenario,
                                   ImageConfigParams &curr_image_config,
                                   ImageConfigParams &next_image_config,
