@@ -41,6 +41,9 @@ cc_library(
     testonly = True,
     hdrs = ["proto_matchers.h"],
     deps = [
+        ":proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
         "@com_google_protobuf//:protobuf",
     ],
@@ -51,8 +54,10 @@ cc_test(
     srcs = ["proto_matchers_test.cc"],
     deps = [
         ":proto_matchers",
-        "//p4_pdpi:ir",
+        ":proto_test_cc_proto",
+        ":testing",
         "//p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -86,15 +91,23 @@ cc_test(
 cc_library(
     name = "testing",
     testonly = True,
-    hdrs = [
-        "testing.h",
-    ],
+    srcs = ["testing.cc"],
+    hdrs = ["testing.h"],
     deps = [
         ":proto",
         ":status",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "testing_test",
+    srcs = ["testing_test.cc"],
+    deps = [
+        ":testing",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -124,6 +137,7 @@ cc_library(
         "proto.h",
     ],
     deps = [
+        ":proto_string_error_collector",
         ":status",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -239,3 +253,22 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "version_test",
+    srcs = ["version_test.cc"],
+    deps = [
+        ":status_matchers",
+        ":version",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "proto_string_error_collector",
+    hdrs = ["proto_string_error_collector.h"],
+    deps = [
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
+)

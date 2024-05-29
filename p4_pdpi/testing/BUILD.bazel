@@ -181,6 +181,31 @@ cmd_diff_test(
     ],
 )
 
+cc_test(
+    name = "sequencing_util_test_runner",
+    srcs = ["sequencing_util_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        ":test_p4info_cc",
+        "//gutil:proto",
+        "//gutil:testing",
+        "//p4_pdpi:pd",
+        "//p4_pdpi:sequencing_util",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "sequencing_util_test",
+    actual_cmd = "$(execpath :sequencing_util_test_runner) ",
+    expected = "//p4_pdpi/testing/testdata:sequencing_util.expected",
+    tools = [":sequencing_util_test_runner"],
+)
+
 # go/golden-test-with-coverage
 cc_test(
     name = "info_test_runner",
