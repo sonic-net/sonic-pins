@@ -15,6 +15,8 @@
 #define PINS_GUTIL_TABLE_ENTRY_KEY_H_
 
 #include <algorithm>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/hash/hash.h"
@@ -32,6 +34,9 @@ class TableEntryKey {
   bool operator==(const TableEntryKey& other) const;
 
   bool operator<(const TableEntryKey& other) const;
+
+  // Returns vector of non-key field paths in PI TableEntry proto.
+  static std::vector<std::string_view> NonKeyFieldPaths();
 
  private:
   uint32_t table_id_;

@@ -44,6 +44,13 @@ T ParseProtoFileOrDie(absl::string_view proto_file) {
   return message;
 }
 
+// Takes a snake_case string and returns a CamelCase string. If `lower_first` is
+// set, the first character will be lowercase (if a letter) and otherwise it
+// will be uppercase.
+// Used to e.g. convert snake case strings to GTEST compatible test names.
+std::string SnakeCaseToCamelCase(absl::string_view input,
+                                 bool lower_first = false);
+
 }  // namespace gutil
 
 #endif  // GUTIL_TESTING_H

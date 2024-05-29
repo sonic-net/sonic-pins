@@ -1374,6 +1374,314 @@ UpdateAllComputedFields(packet) = true
 ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in SaiP4BMv2PacketInHeader headers[0]: unused_pad: Must be 0, but was 0x01 instead.
 ================================================================================
+Parsing test: IPv6-in-IPv6 packet (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ether_type: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0043
+                       next_header: 0x29  # IPv6
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x001b
+                       next_header: 0xfd  # Experimental
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # Payload.
+                       payload: "IPv6-in-IPv6 packet payload"
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0043"
+    next_header: "0x29"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x001b"
+    next_header: "0xfd"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+payload: "IPv6-in-IPv6 packet payload"
+
+================================================================================
+Parsing test: IPv4-in-IPv6 packet (valid except for computed fields)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ether_type: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0000
+                       next_header: 0x04  # IPv4
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # IPv4 header.
+                       version: 0x4
+                       ihl: 0x5
+                       dscp: 0b011011
+                       ecn: 0b01
+                       total_length: 0x0000
+                       identification: 0x0000
+                       flags: 0b000
+                       fragment_offset: 0b0000000000000
+                       ttl: 0x10
+                       protocol: 0xfd  # Experimental
+                       checksum: 0x0000
+                       ipv4_source: 0xc0a8001f       # 192.168.0.31
+                       ipv4_destination: 0xc0a8001e  # 192.168.0.30
+                       # Payload.
+                       payload: "IPv4-in-IPv6 packet payload"
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0000"
+    next_header: "0x04"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+headers {
+  ipv4_header {
+    version: "0x4"
+    ihl: "0x5"
+    dscp: "0x1b"
+    ecn: "0x1"
+    total_length: "0x0000"
+    identification: "0x0000"
+    flags: "0x0"
+    fragment_offset: "0x0000"
+    ttl: "0x10"
+    protocol: "0xfd"
+    checksum: "0x0000"
+    ipv4_source: "192.168.0.31"
+    ipv4_destination: "192.168.0.30"
+  }
+}
+payload: "IPv4-in-IPv6 packet payload"
+reasons_invalid: "in Ipv6Header headers[1]: payload_length: Must be 0x002f, but was 0x0000 instead."
+reasons_invalid: "in Ipv4Header headers[2]: total_length: Must be 0x002f, but was 0x0000 instead."
+reasons_invalid: "in Ipv4Header headers[2]: checksum: Must be 0x2807, but was 0x0000 instead."
+
+PadPacketToMinimumSize(packet) = false
+UpdateAllComputedFields(packet) = true
+ValidatePacket(packet) = OK
+================================================================================
+Parsing test: IPv6-in-IPv4 packet (valid except for computed fields)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ether_type: 0x0800
+                       # IPv4 header.
+                       version: 0x4
+                       ihl: 0x5
+                       dscp: 0b011011
+                       ecn: 0b01
+                       total_length: 0x0000
+                       identification: 0x0000
+                       flags: 0b000
+                       fragment_offset: 0b0000000000000
+                       ttl: 0x10
+                       protocol: 0x29  # IPv6
+                       checksum: 0x0000
+                       ipv4_source: 0xc0a8001f       # 192.168.0.31
+                       ipv4_destination: 0xc0a8001e  # 192.168.0.30
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0000
+                       next_header: 0xfd  # Experimental
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # Payload.
+                       payload: "IPv6-in-IPv4 packet payload"
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x0800"
+  }
+}
+headers {
+  ipv4_header {
+    version: "0x4"
+    ihl: "0x5"
+    dscp: "0x1b"
+    ecn: "0x1"
+    total_length: "0x0000"
+    identification: "0x0000"
+    flags: "0x0"
+    fragment_offset: "0x0000"
+    ttl: "0x10"
+    protocol: "0x29"
+    checksum: "0x0000"
+    ipv4_source: "192.168.0.31"
+    ipv4_destination: "192.168.0.30"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0000"
+    next_header: "0xfd"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+payload: "IPv6-in-IPv4 packet payload"
+reasons_invalid: "in Ipv4Header headers[1]: total_length: Must be 0x0057, but was 0x0000 instead."
+reasons_invalid: "in Ipv4Header headers[1]: checksum: Must be 0x28db, but was 0x0000 instead."
+reasons_invalid: "in Ipv6Header headers[2]: payload_length: Must be 0x001b, but was 0x0000 instead."
+
+PadPacketToMinimumSize(packet) = false
+UpdateAllComputedFields(packet) = true
+ValidatePacket(packet) = OK
+================================================================================
+Parsing test: IPv4-in-IPv4 packet (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ether_type: 0x0800
+                       # IPv4 header.
+                       version: 0x4
+                       ihl: 0x5
+                       dscp: 0b011011
+                       ecn: 0b01
+                       total_length: 0x0043
+                       identification: 0x2900
+                       flags: 0b000
+                       fragment_offset: 0b0000000000000
+                       ttl: 0x10
+                       protocol: 0x04  # IPv4
+                       checksum: 0xffbc
+                       ipv4_source: 0xc0a8001f       # 192.168.0.31
+                       ipv4_destination: 0xc0a8001e  # 192.168.0.30
+                       # IPv4 header.
+                       version: 0x4
+                       ihl: 0x5
+                       dscp: 0b011011
+                       ecn: 0b01
+                       total_length: 0x002f
+                       identification: 0x0000
+                       flags: 0b000
+                       fragment_offset: 0b0000000000000
+                       ttl: 0x10
+                       protocol: 0xfd  # Experimental
+                       checksum: 0x27d8
+                       ipv4_source: 0xc0a8001f       # 192.168.0.31
+                       ipv4_destination: 0xc0a8001e  # 192.168.0.30
+                       # Payload.
+                       payload: "IPv4-in-IPv4 packet payload"
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x0800"
+  }
+}
+headers {
+  ipv4_header {
+    version: "0x4"
+    ihl: "0x5"
+    dscp: "0x1b"
+    ecn: "0x1"
+    total_length: "0x0043"
+    identification: "0x2900"
+    flags: "0x0"
+    fragment_offset: "0x0000"
+    ttl: "0x10"
+    protocol: "0x04"
+    checksum: "0xffbc"
+    ipv4_source: "192.168.0.31"
+    ipv4_destination: "192.168.0.30"
+  }
+}
+headers {
+  ipv4_header {
+    version: "0x4"
+    ihl: "0x5"
+    dscp: "0x1b"
+    ecn: "0x1"
+    total_length: "0x002f"
+    identification: "0x0000"
+    flags: "0x0"
+    fragment_offset: "0x0000"
+    ttl: "0x10"
+    protocol: "0xfd"
+    checksum: "0x27d8"
+    ipv4_source: "192.168.0.31"
+    ipv4_destination: "192.168.0.30"
+  }
+}
+payload: "IPv4-in-IPv4 packet payload"
+
+================================================================================
 Proto packet test: UDP header not preceded by other header
 ================================================================================
 -- INPUT -----------------------------------------------------------------------

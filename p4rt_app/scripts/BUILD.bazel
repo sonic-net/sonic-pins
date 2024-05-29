@@ -36,8 +36,9 @@ cc_binary(
     testonly = True,
     srcs = ["p4rt_route_measurement_test.cc"],
     deps = [
-        "//gutil:io",
         "//gutil:proto",
+        "//gutil:collections",
+        "//gutil:io",
         "//gutil:status",
         "//gutil:status_matchers",
         "//p4_pdpi:ir",
