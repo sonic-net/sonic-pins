@@ -22,46 +22,11 @@
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
-#include "p4rt_app/sonic/adapters/table_adapter.h"
-#include "p4rt_app/sonic/redis_connections.h"
 #include "swss/schema.h"
 
 namespace p4rt_app {
-namespace {
 
-const char kPortIdField[] = "id";
-
-absl::Status RemovePortIdFromP4rtAndRedis(P4RuntimeImpl& p4runtime,
-                                          sonic::PortTable& port_table,
-                                          const std::string& port_name) {
-  RETURN_IF_ERROR(p4runtime.RemovePortTranslation(port_name));
-  port_table.app_db->del(port_name);
-  port_table.app_state_db->del(port_name);
-  return absl::OkStatus();
-}
-
-absl::Status InsertPortIdFromP4rtAndRedis(P4RuntimeImpl& p4runtime,
-                                          sonic::PortTable& port_table,
-                                          const std::string& port_name,
-                                          const std::string& port_id) {
-  // Port ID 0 is reserved for ports that are modeled, but should not be used by
-  // P4RT. If we see ID = 0 we should still update redis so gNMI can converge.
-  if (port_id == "0") {
-    // Handle the edge case where an existing port has an ID, but then gets
-    // updated to be 0.
-    RETURN_IF_ERROR(
-        RemovePortIdFromP4rtAndRedis(p4runtime, port_table, port_name));
-  } else {
-    RETURN_IF_ERROR(p4runtime.AddPortTranslation(port_name, port_id));
-  }
-  port_table.app_db->set(port_name, {{kPortIdField, port_id}});
-  port_table.app_state_db->set(port_name, {{kPortIdField, port_id}});
-  return absl::OkStatus();
-}
-
-}  // namespace
-
-absl::Status ConfigDbPortTableEventHandler::HandleEvent(
+  absl::Status ConfigDbPortTableEventHandler::HandleEvent(
     const std::string& operation, const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {
   // P4RT can ignore managment ports, and only focus on front-panel port that
@@ -73,21 +38,20 @@ absl::Status ConfigDbPortTableEventHandler::HandleEvent(
 
   std::string port_id;
   for (const auto& [field, value] : values) {
-    if (field == kPortIdField) {
+    if (field == "id") {
       port_id = value;
+      break;
     }
   }
 
   if (port_id.empty()) {
-    LOG(WARNING) << "Port '" << key << "' does not have an ID field.";
-    RETURN_IF_ERROR(
-        RemovePortIdFromP4rtAndRedis(p4runtime_, *port_table_, key));
+    LOG(WARNING) << "Port '" << key
+                 << "' does not have an ID field. Removing translation.";
+    RETURN_IF_ERROR(p4runtime_.RemovePortTranslation(key));
   } else if (operation == DEL_COMMAND) {
-    RETURN_IF_ERROR(
-        RemovePortIdFromP4rtAndRedis(p4runtime_, *port_table_, key));
+    RETURN_IF_ERROR(p4runtime_.RemovePortTranslation(key));
   } else if (operation == SET_COMMAND) {
-    RETURN_IF_ERROR(
-        InsertPortIdFromP4rtAndRedis(p4runtime_, *port_table_, key, port_id));
+    RETURN_IF_ERROR(p4runtime_.AddPortTranslation(key, port_id));
   } else {
     return gutil::InvalidArgumentErrorBuilder()
            << "unexpected event: " << operation << " on " << key;
