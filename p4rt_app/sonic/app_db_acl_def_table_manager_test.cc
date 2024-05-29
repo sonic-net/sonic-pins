@@ -50,7 +50,9 @@ P4rtTable MakeP4rtTable(FakeSonicDbTable& fake_app_db_table) {
 TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
   pdpi::IrTableDefinition table =
       IrTableDefinitionBuilder()
-          .preamble(R"pb(alias: "Table" annotations: "@sai_acl(INGRESS)")pb")
+          .preamble(R"pb(alias: "Table"
+                         annotations: "@sai_acl(INGRESS)"
+                         annotations: "@sai_acl_priority(5)")pb")
           .match_field(
               R"pb(id: 123
                    name: "mac_address"
@@ -167,7 +169,9 @@ TEST(InsertAclTableDefinition, InsertsAclTableDefinition) {
                                                        .dump()},
       {"size", "512"},
       {"meter/unit", "BYTES"},
-      {"counter/unit", "BOTH"}};
+      {"counter/unit", "BOTH"},
+      {"priority", "5"},
+  };
   EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(UnorderedElementsAreArray(expected_values)));
 }
@@ -305,6 +309,80 @@ TEST(InsertAclTableDefinition, InsertsCompositeUdfMatchField) {
       {"size", "512"}};
   EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
               IsOkAndHolds(UnorderedElementsAreArray(expected_values)));
+}
+
+TEST(InsertAclTableDefinition, OmitsPriorityIfNoPriorityAnnotation) {
+  pdpi::IrTableDefinition table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(alias: "Table" annotations: "@sai_acl(EGRESS)")pb")
+          .match_field(
+              R"pb(id: 123
+                   name: "match"
+                   annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)")pb",
+              pdpi::STRING)
+          .entry_action(IrActionDefinitionBuilder().preamble(
+              R"pb(alias: "action"
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))();
+
+  FakeSonicDbTable fake_table;
+  FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
+  P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
+  ASSERT_OK(VerifyAclTableDefinition(table));
+  ASSERT_OK(InsertAclTableDefinition(fake_db, table));
+  EXPECT_THAT(fake_table.ReadTableEntry("ACL_TABLE_DEFINITION_TABLE:ACL_TABLE"),
+              IsOkAndHolds(Not(Contains(Key("priority")))));
+}
+
+TEST(InsertAclTableDefinition, FailsWithEmptyPriorityAnnotationBody) {
+  pdpi::IrTableDefinition table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(alias: "Table"
+                         annotations: "@sai_acl(EGRESS)"
+                         annotations: "@sai_acl_priority()")pb")
+          .match_field(
+              R"pb(id: 123
+                   name: "match"
+                   annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)")pb",
+              pdpi::STRING)
+          .entry_action(IrActionDefinitionBuilder().preamble(
+              R"pb(alias: "action"
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))();
+
+  FakeSonicDbTable fake_table;
+  FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
+  P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
+  EXPECT_THAT(
+      VerifyAclTableDefinition(table),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("priority")));
+  EXPECT_THAT(
+      InsertAclTableDefinition(fake_db, table),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("priority")));
+}
+
+TEST(InsertAclTableDefinition, FailsWithNonIntegerPriority) {
+  pdpi::IrTableDefinition table =
+      IrTableDefinitionBuilder()
+          .preamble(R"pb(alias: "Table"
+                         annotations: "@sai_acl(EGRESS)"
+                         annotations: "@sai_acl_priority(1.2)")pb")
+          .match_field(
+              R"pb(id: 123
+                   name: "match"
+                   annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)")pb",
+              pdpi::STRING)
+          .entry_action(IrActionDefinitionBuilder().preamble(
+              R"pb(alias: "action"
+                   annotations: "@sai_action(SAI_PACKET_ACTION_DROP)")pb"))();
+
+  FakeSonicDbTable fake_table;
+  FakeSonicDbTable fake_appdb_table("AppDb", &fake_table);
+  P4rtTable fake_db = MakeP4rtTable(fake_appdb_table);
+  EXPECT_THAT(
+      VerifyAclTableDefinition(table),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("priority")));
+  EXPECT_THAT(
+      InsertAclTableDefinition(fake_db, table),
+      StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("priority")));
 }
 
 // Simple table builder for meter/counter testing.
