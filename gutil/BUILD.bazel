@@ -239,3 +239,13 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "version_test",
+    srcs = ["version_test.cc"],
+    deps = [
+        ":status_matchers",
+        ":version",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
