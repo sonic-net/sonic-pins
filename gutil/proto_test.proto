@@ -11,3 +11,12 @@ message AnotherTestMessage {
   int32 int_field = 1;
   string string_field = 2;
 }
+
+message TestMessageWithOneof {
+  oneof foo {
+    string string_foo = 1;
+    int32 int_foo = 2;
+    bool bool_foo = 3;
+    bytes bytes_foo = 4;
+  }
+}
