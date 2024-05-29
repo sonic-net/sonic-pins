@@ -40,7 +40,6 @@ TEST(PortTableIdEventTest, AcceptEthernetPortIds) {
   EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("Ethernet1/1/1", "1"))
       .WillOnce(Return(absl::OkStatus()));
   ConfigDbPortTableEventHandler event_handler(&mock_p4runtime_impl);
-
   EXPECT_OK(
       event_handler.HandleEvent(kSetCommand, "Ethernet1/1/1", {{"id", "1"}}));
 }

@@ -19,9 +19,16 @@ package(
 
 cc_library(
     name = "sequencing_util",
+    srcs = ["sequencing_util.cc"],
     hdrs = ["sequencing_util.h"],
     deps = [
+        ":ir_cc_proto",
+        "//gutil:collections",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
     ],

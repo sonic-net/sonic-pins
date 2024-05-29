@@ -498,7 +498,7 @@ P4RuntimeImpl::P4RuntimeImpl(
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
-//TODO(PINS):
+//TODO(PINS): To add component_state, system_state and netdev_translator.
 /*  swss::ComponentStateHelperInterface& component_state,
     swss::SystemStateHelperInterface& system_state,
     swss::IntfTranslator& netdev_translator,*/
@@ -511,7 +511,7 @@ P4RuntimeImpl::P4RuntimeImpl(
       host_stats_table_(std::move(host_stats_table)),
       forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
-//TODO(PINS):
+//TODO(PINS): To add component_state, system_state and netdev_translator.
 /*      component_state_(component_state),
       system_state_(system_state),
       netdev_translator_(netdev_translator), */

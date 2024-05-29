@@ -16,6 +16,8 @@
 #include <cstddef>
 #include <ostream>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -26,6 +28,7 @@
 #include "absl/strings/strip.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
+#include "absl/types/variant.h"
 #include "glog/logging.h"
 #include "gutil/overload.h"
 #include "gutil/proto.h"
@@ -93,11 +96,13 @@ absl::StatusOr<NextHeader> GetNextHeader(
   return Header::kEthernetHeader;
 }
 absl::StatusOr<NextHeader> GetNextHeader(const Ipv4Header& header) {
+  if (header.protocol() == "0x04") return Header::kIpv4Header;
   if (header.protocol() == "0x06") return Header::kTcpHeader;
   if (header.protocol() == "0x11") return Header::kUdpHeader;
   if (header.protocol() == "0x01") return Header::kIcmpHeader;
+  if (header.protocol() == "0x29") return Header::kIpv6Header;
   if (header.protocol() == "0x2f") return Header::kGreHeader;
-  // The following IP protcol numbers are "reserved for experimentation",
+  // The following IP protocol numbers are "reserved for experimentation",
   // meaning the bits after the L3 header are arbitrary.
   if (header.protocol() == "0xfd") return Header::HEADER_NOT_SET;
   if (header.protocol() == "0xfe") return Header::HEADER_NOT_SET;
@@ -106,11 +111,13 @@ absl::StatusOr<NextHeader> GetNextHeader(const Ipv4Header& header) {
                                 header.protocol())};
 }
 absl::StatusOr<NextHeader> GetNextHeader(const Ipv6Header& header) {
+  if (header.next_header() == "0x04") return Header::kIpv4Header;
   if (header.next_header() == "0x06") return Header::kTcpHeader;
   if (header.next_header() == "0x11") return Header::kUdpHeader;
   if (header.next_header() == "0x3a") return Header::kIcmpHeader;
+  if (header.next_header() == "0x29") return Header::kIpv6Header;
   if (header.next_header() == "0x2f") return Header::kGreHeader;
-  // The following IP protcol numbers are "reserved for experimentation",
+  // The following IP protocol numbers are "reserved for experimentation",
   // meaning the bits after the L3 header are arbitrary.
   if (header.next_header() == "0xfd") return Header::HEADER_NOT_SET;
   if (header.next_header() == "0xfe") return Header::HEADER_NOT_SET;
@@ -525,19 +532,19 @@ Packet ParsePacket(absl::string_view input, Header::HeaderCase first_header) {
       packet.add_reasons_invalid(std::string(header.status().message()));
       break;
     }
-    *packet.add_headers() = *header;
-    if (absl::StatusOr<NextHeader> next = GetNextHeader(*header); next.ok()) {
-      absl::visit(gutil::Overload{
-                      [&](Header::HeaderCase next) { next_header = next; },
-                      [&](UnsupportedNextHeader unsupported) {
-                        next_header = Header::HEADER_NOT_SET;
-                        packet.set_reason_not_fully_parsed(unsupported.reason);
-                      }},
-                  *next);
-    } else {
+    absl::StatusOr<NextHeader> next = GetNextHeader(*header);
+    if (!next.ok()) {
       LOG(DFATAL) << "SHOULD NEVER HAPPEN: " << next.status();
-      next_header = Header::HEADER_NOT_SET;
+      break;
     }
+    *packet.add_headers() = std::move(*header);
+    absl::visit(gutil::Overload{
+                    [&](Header::HeaderCase next) { next_header = next; },
+                    [&](UnsupportedNextHeader unsupported) {
+                      next_header = Header::HEADER_NOT_SET;
+                      packet.set_reason_not_fully_parsed(unsupported.reason);
+                    }},
+                *next);
   }
 
   // Set payload.
@@ -1598,7 +1605,7 @@ absl::StatusOr<std::string> SerializePacket(Packet packet) {
   RETURN_IF_ERROR(PadPacketToMinimumSize(packet).status());
   RETURN_IF_ERROR(UpdateMissingComputedFields(packet).status());
   RETURN_IF_ERROR(ValidatePacket(packet));
-  return RawSerializePacket(packet);
+  return RawSerializePacket(std::move(packet));
 }
 
 absl::StatusOr<std::string> SerializePacket(

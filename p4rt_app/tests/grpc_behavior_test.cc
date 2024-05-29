@@ -64,7 +64,7 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
       std::move(dummy_hash_table), std::move(dummy_switch_table),
       std::move(dummy_port_table), std::move(dummy_host_stats_table),
       std::move(packet_io),
-      //TODO(PINS):
+      //TODO(PINS): To add component_state, system_state and netdev_translator.
       //component_state_helper, system_state_helper, netdev_translator,
       P4RuntimeImplOptions{});
 }
