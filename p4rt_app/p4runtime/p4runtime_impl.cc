@@ -58,6 +58,9 @@
 #include "p4rt_app/sonic/state_verification.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
+//TODO(PINS):
+/*#include "swss/component_state_helper_interface.h"
+#include "swss/intf_translator.h"*/
 #include "swss/json.h"
 #include <nlohmann/json.hpp>
 
@@ -425,14 +428,24 @@ absl::Status CacheWriteResults(
 P4RuntimeImpl::P4RuntimeImpl(
     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
+    sonic::PortTable port_table,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
+//TODO(PINS):
+/*  swss::ComponentStateHelperInterface& component_state,
+    swss::SystemStateHelperInterface& system_state,
+    swss::IntfTranslator& netdev_translator,*/
     const P4RuntimeImplOptions& p4rt_options)
     : p4rt_table_(std::move(p4rt_table)),
       vrf_table_(std::move(vrf_table)),
       hash_table_(std::move(hash_table)),
       switch_table_(std::move(switch_table)),
+      port_table_(std::move(port_table)),
       forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
+//TODO(PINS):
+/*      component_state_(component_state),
+      system_state_(system_state),
+      netdev_translator_(netdev_translator), */
       translate_port_ids_(p4rt_options.translate_port_ids) {
   absl::optional<std::string> init_failure;
 
@@ -852,35 +865,66 @@ absl::Status P4RuntimeImpl::RemovePacketIoPort(const std::string& port_name) {
   return packetio_impl_->RemovePacketIoPort(port_name);
 }
 
+// Responds with one of the following actions to port translation:
+// * Add the new port translation for unknown name & ID
+// * Update an existing {name, id} translation to the new ID
+// * No-Op if the {name, id} pairing already exists
+// * Reject if the ID is already in-use or if any input is empty ("").
+//
+// Consider existing port mappings: {"A", "1"}, {"B", "2"}
+// The result map is:
+// Port | <-----  Port ID  ------> |
+// Name |   "1"  |   "2"  |   "3"  |
+// =====|========|========|========|
+//  "A" | No-Op  | Reject | Update |
+// -----|--------|--------|--------|
+//  "B" | Reject | No-Op  | Update |
+// -----|--------|--------|--------|
+//  "C" | Reject | Reject |  Add   |
 absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
                                                const std::string& port_id) {
   absl::MutexLock l(&server_state_lock_);
 
   // Do not allow empty strings.
   if (port_name.empty()) {
-    return absl::InvalidArgumentError(
-        "Cannot add port translation without the port name.");
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Cannot add port translation {'" << port_name << "', '" << port_id
+           << "'} without a port name.";
   } else if (port_id.empty()) {
-    return absl::InvalidArgumentError(
-        "Cannot add port translation without the port ID.");
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Cannot add port translation {'" << port_name << "', '" << port_id
+           << "'} without a port ID.";
   }
 
-  // If the Port Name/ID pair already exists then the operation is a no-op.
-  if (const auto iter = port_translation_map_.left.find(port_name);
-      iter != port_translation_map_.left.end() && iter->second == port_id) {
+  // TODO: Remove DB writes when sFlow listens to another table.
+  // If the Port Name/ID pair already exists then update AppDB and AppStateDB to
+  // ensure sFlow gets an update.
+  const auto name_iter = port_translation_map_.left.find(port_name);
+  if (name_iter != port_translation_map_.left.end() &&
+      name_iter->second == port_id) {
+    port_table_.app_db->set(port_name, {{"id", port_id}});
+    port_table_.app_state_db->set(port_name, {{"id", port_id}});
     return absl::OkStatus();
   }
 
-  // However, we do not accept reuse of existing values.
-  if (const auto& [_, success] =
-          port_translation_map_.insert({port_name, port_id});
-      !success) {
+  // If the ID exists (but isn't paired to the name), reject.
+  if (const auto id_iter = port_translation_map_.right.find(port_id);
+      id_iter != port_translation_map_.right.end()) {
     return gutil::AlreadyExistsErrorBuilder()
-           << "Could not add port '" << port_name << "' with ID '" << port_id
-           << "' because an entry already exists.";
+           << "Cannot add port translation {'" << port_name << "', '" << port_id
+           << "'}. Port ID is already in use for translation {'"
+           << id_iter->second << "', '" << port_id << "'}.";
   }
-  LOG(INFO) << "Adding translation for '" << port_name << "' with ID '"
-            << port_id << "'.";
+
+  // Insert or update the port mapping.
+  LOG(INFO) << "Adding translation for {'" << port_name << "', '" << port_id
+            << "'}.";
+  if (name_iter != port_translation_map_.left.end()) {
+    port_translation_map_.left.erase(name_iter);
+  }
+  port_translation_map_.insert({port_name, port_id});
+  port_table_.app_db->set(port_name, {{"id", port_id}});
+  port_table_.app_state_db->set(port_name, {{"id", port_id}});
   return absl::OkStatus();
 }
 
@@ -896,11 +940,13 @@ absl::Status P4RuntimeImpl::RemovePortTranslation(
 
   if (auto port = port_translation_map_.left.find(port_name);
       port != port_translation_map_.left.end()) {
-    LOG(INFO) << "Removing translation for '" << port->first << "' with ID '"
-              << port->second << "'.";
+    LOG(INFO) << "Removing translation for {'" << port->first << "', '"
+              << port->second << "'}.";
     port_translation_map_.left.erase(port);
   }
 
+  port_table_.app_db->del(port_name);
+  port_table_.app_state_db->del(port_name);
   return absl::OkStatus();
 }
 

@@ -1,4 +1,4 @@
-/* Copyright 2018 The TensorFlow Authors. All Rights Reserved.
+/* Copyright 2024 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef PINS_INFRA_PROTO_STRING_ERROR_COLLECTOR_H_
-#define PINS_INFRA_PROTO_STRING_ERROR_COLLECTOR_H_
+#ifndef PINS_PROTO_STRING_ERROR_COLLECTOR_H_
+#define PINS_PROTO_STRING_ERROR_COLLECTOR_H_
 
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -51,4 +51,4 @@ class StringErrorCollector : public google::protobuf::io::ErrorCollector {
 
 }  // namespace gutil
 
-#endif  // PINS_INFRA_PROTO_STRING_ERROR_COLLECTOR_H_
+#endif  // PINS_PROTO_STRING_ERROR_COLLECTOR_H_

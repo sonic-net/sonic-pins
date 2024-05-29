@@ -37,6 +37,8 @@ class P4RuntimeComponentTestFixture : public testing::Test {
  protected:
   P4RuntimeComponentTestFixture(sai::Instantiation sai_instantiation);
   P4RuntimeComponentTestFixture(p4::config::v1::P4Info p4info);
+  P4RuntimeComponentTestFixture(sai::Instantiation sai_instantiation,
+                                const P4RuntimeImplOptions& options);
   void SetUp() override;
 
   // Component test configurations that should never change for the lifetime of
@@ -46,8 +48,7 @@ class P4RuntimeComponentTestFixture : public testing::Test {
   const pdpi::IrP4Info ir_p4_info_;
 
   // Bring up a fake P4Runtime gRPC server to run tests against.
-  P4RuntimeGrpcService p4rt_service_ =
-      P4RuntimeGrpcService(P4RuntimeImplOptions{});
+  P4RuntimeGrpcService p4rt_service_;
 
   // The P4RT gRPC client session tests will use to connect to the fake
   // P4Runtime server.
