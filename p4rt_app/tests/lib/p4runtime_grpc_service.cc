@@ -33,7 +33,7 @@
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
-//TODO(PINS):
+//TODO(PINS): Add Component/System Translator
 // #include "swss/fakes/fake_component_state_helper.h"
 // #include "swss/fakes/fake_system_state_helper.h"
 
@@ -135,18 +135,17 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       absl::make_unique<sonic::FakePacketIoInterface>();
   fake_packetio_interface_ = fake_packetio_interface.get();
 
-// TODO(PINS):
-  // Add the P4RT component helper into the system state helper so they can
+  //TODO(PINS): Add the P4RT component helper into the system state helper so they can
   // interact around critical state handling.
-//  fake_system_state_helper_.AddComponent(/*name=*/"p4rt-con",
-//                                       fake_component_state_helper_);
+  // fake_system_state_helper_.AddComponent(/*name=*/"p4rt-con",
+  //                                     fake_component_state_helper_);
 
   // Create the P4RT server.
   p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
       std::move(host_stats_table), std::move(fake_packetio_interface),
-     // TODO(PINS):
+     // TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
      // fake_component_state_helper_, fake_system_state_helper_, fake_netdev_translator_, 
       options);
 
@@ -228,7 +227,7 @@ sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
   return *fake_packetio_interface_;
 }
 
-/*TODO(PINS):
+/*TODO(PINS): To add fake_system_state_helper and fake_component_state_helper.
 swss::FakeSystemStateHelper& P4RuntimeGrpcService::GetSystemStateHelper() {
   return fake_system_state_helper_;
 }

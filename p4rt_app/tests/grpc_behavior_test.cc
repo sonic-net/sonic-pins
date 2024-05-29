@@ -51,7 +51,7 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
   // Dummy PacketIO.
   auto packet_io = std::make_unique<sonic::FakePacketIoInterface>();
 
-//TODO(PINS):
+//TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
   // Dummy state managment.
   // swss::FakeComponentStateHelper component_state_helper;
   // swss::FakeSystemStateHelper system_state_helper;
@@ -64,7 +64,7 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
       std::move(dummy_hash_table), std::move(dummy_switch_table),
       std::move(dummy_port_table), std::move(dummy_host_stats_table),
       std::move(packet_io),
-      //TODO(PINS):
+      //TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
       //component_state_helper, system_state_helper, netdev_translator,
       P4RuntimeImplOptions{});
 }

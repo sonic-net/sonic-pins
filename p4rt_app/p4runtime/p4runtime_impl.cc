@@ -438,7 +438,7 @@ P4RuntimeImpl::P4RuntimeImpl(
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
-//TODO(PINS):
+//TODO(PINS): To add component_state, system_state and interface translator
 /*  swss::ComponentStateHelperInterface& component_state,
     swss::SystemStateHelperInterface& system_state,
     swss::IntfTranslator& netdev_translator,*/
@@ -936,7 +936,6 @@ absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
            << "'}. Port ID is already in use for translation {'"
            << id_iter->second << "', '" << port_id << "'}.";
   }
-
   // Insert or update the port mapping.
   LOG(INFO) << "Adding translation for {'" << port_name << "', '" << port_id
             << "'}.";

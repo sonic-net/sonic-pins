@@ -569,7 +569,6 @@ void RunPacketParseTests() {
     payload: 0x 15 16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27 28 29
     payload: 0x 2a 2b 2c 2d 2e 2f 30 31 32 33
   )pb");
-
   RunPacketParseTest("VLAN Packet with ARP (Valid)", R"pb(
     # Taken from
     # www.cloudshark.org/captures/e7f1b8c0b434
@@ -596,9 +595,6 @@ void RunPacketParseTests() {
     # Payload
     payload: 0x 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   )pb");
-}
-
-void RunAdditionalPacketParseTests() {
   RunPacketParseTest("Packet too short to parse a GRE header (Invalid)", R"pb(
     # Ethernet header
     ethernet_destination: 0x c2 01 51 fa 00 00
@@ -815,7 +811,139 @@ void RunAdditionalPacketParseTests() {
         payload: 0x 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
       )pb",
       /*first_header=*/Header::kSaiP4Bmv2PacketInHeader);
-}
+  RunPacketParseTest("IPv6-in-IPv6 packet (valid)",
+                     R"pb(
+                       # Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ether_type: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0043
+                       next_header: 0x29  # IPv6
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x001b
+                       next_header: 0xfd  # Experimental
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # Payload.
+                       payload: "IPv6-in-IPv6 packet payload"
+                     )pb");
+  RunPacketParseTest("IPv4-in-IPv6 packet (valid except for computed fields)",
+                     R"pb(
+                       # Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ether_type: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0000
+                       next_header: 0x04  # IPv4
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # IPv4 header.
+                       version: 0x4
+                       ihl: 0x5
+                       dscp: 0b011011
+                       ecn: 0b01
+                       total_length: 0x0000
+                       identification: 0x0000
+                       flags: 0b000
+                       fragment_offset: 0b0000000000000
+                       ttl: 0x10
+                       protocol: 0xfd  # Experimental
+                       checksum: 0x0000
+                       ipv4_source: 0xc0a8001f       # 192.168.0.31
+                       ipv4_destination: 0xc0a8001e  # 192.168.0.30
+                       # Payload.
+                       payload: "IPv4-in-IPv6 packet payload"
+                     )pb");
+  RunPacketParseTest("IPv6-in-IPv4 packet (valid except for computed fields)",
+                     R"pb(
+                       # Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ether_type: 0x0800
+                       # IPv4 header.
+                       version: 0x4
+                       ihl: 0x5
+                       dscp: 0b011011
+                       ecn: 0b01
+                       total_length: 0x0000
+                       identification: 0x0000
+                       flags: 0b000
+                       fragment_offset: 0b0000000000000
+                       ttl: 0x10
+                       protocol: 0x29  # IPv6
+                       checksum: 0x0000
+                       ipv4_source: 0xc0a8001f       # 192.168.0.31
+                       ipv4_destination: 0xc0a8001e  # 192.168.0.30
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0000
+                       next_header: 0xfd  # Experimental
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # Payload.
+                       payload: "IPv6-in-IPv4 packet payload"
+                     )pb");
+  RunPacketParseTest("IPv4-in-IPv4 packet (valid)",
+                     R"pb(
+                       # Ethernet header.
+                       ethernet_destination: 0xffeeddccbbaa
+                       ethernet_source: 0x554433221100
+                       ether_type: 0x0800
+                       # IPv4 header.
+                       version: 0x4
+                       ihl: 0x5
+                       dscp: 0b011011
+                       ecn: 0b01
+                       total_length: 0x0043
+                       identification: 0x2900
+                       flags: 0b000
+                       fragment_offset: 0b0000000000000
+                       ttl: 0x10
+                       protocol: 0x04  # IPv4
+                       checksum: 0xffbc
+                       ipv4_source: 0xc0a8001f       # 192.168.0.31
+                       ipv4_destination: 0xc0a8001e  # 192.168.0.30
+                       # IPv4 header.
+                       version: 0x4
+                       ihl: 0x5
+                       dscp: 0b011011
+                       ecn: 0b01
+                       total_length: 0x002f
+                       identification: 0x0000
+                       flags: 0b000
+                       fragment_offset: 0b0000000000000
+                       ttl: 0x10
+                       protocol: 0xfd  # Experimental
+                       checksum: 0x27d8
+                       ipv4_source: 0xc0a8001f       # 192.168.0.31
+                       ipv4_destination: 0xc0a8001e  # 192.168.0.30
+                       # Payload.
+                       payload: "IPv4-in-IPv4 packet payload"
+                     )pb");
+}  // NOLINT(readability/fn_size)
 
 void RunProtoPacketTests() {
   RunProtoPacketTest("UDP header not preceded by other header",
@@ -1276,12 +1404,8 @@ void RunProtoPacketTests() {
                              }
                            }
                          )pb"));
-
   RunProtoPacketTest("Uninitialized (empty packet) - should be invalid",
                      gutil::ParseProtoOrDie<Packet>(R"pb()pb"));
-}
-
-void RunAdditionalProtoPacketTests() {
   RunProtoPacketTest(
       "GRE Ipv4 Encapsulated with Ipv6 Header (Valid)",
       gutil::ParseProtoOrDie<Packet>(R"pb(
@@ -1427,19 +1551,11 @@ void RunAdditionalProtoPacketTests() {
             }
           )pb"),
       /*first_header=*/Header::kSaiP4Bmv2PacketInHeader);
-}
+}  // NOLINT(readability/fn_size)
 
 void main() {
   RunPacketParseTests();
-  // If there are too many lines (error triggered by exceeding 500 lines) in a
-  // function, presubmit will fail. So split packet parse tests into two
-  // functions.
-  RunAdditionalPacketParseTests();
   RunProtoPacketTests();
-  // If there are too many lines (error triggered by exceeding 500 lines) in a
-  // function, presubmit will fail. So split proto packets tests into two
-  // functions.
-  RunAdditionalProtoPacketTests();
 }
 
 }  // namespace packetlib
