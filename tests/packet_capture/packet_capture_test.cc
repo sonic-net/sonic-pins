@@ -87,7 +87,7 @@ ConstructEntriesToMirrorTrafficWithVlanTag(
 
 TEST_P(PacketCaptureTestWithoutIxia, PsampEncapsulatedMirroringTest) {
   LOG(INFO) << "-- START OF TEST ---------------------------------------------";
-  Testbed().Environment().SetTestCaseID("TBD");
+  Testbed().Environment().SetTestCaseID("d8d0179e-f177-47dc-a142-862d0f0f6149");
 
   // Setup: the testbed consists of a SUT connected to a control device
   // that allows us to send and receive packets to/from the SUT.
