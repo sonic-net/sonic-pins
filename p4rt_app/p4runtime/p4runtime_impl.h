@@ -41,6 +41,7 @@
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/event_data_tracker.h"
+//TODO(PINS):
 //#include "swss/component_state_helper_interface.h"
 //#include "swss/intf_translator.h"
 
@@ -84,7 +85,12 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
  public:
   P4RuntimeImpl(sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
                 sonic::HashTable hash_table, sonic::SwitchTable switch_table,
+                sonic::PortTable port_table,
                 std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
+//TODO(PINS):
+/*              swss::ComponentStateHelperInterface& component_state,
+                swss::SystemStateHelperInterface& system_state,
+                swss::IntfTranslator& netdev_translator, */
                 const P4RuntimeImplOptions& p4rt_options);
   ~P4RuntimeImpl() override = default;
 
@@ -134,13 +140,30 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   virtual absl::Status RemovePacketIoPort(const std::string& port_name)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Add or remove a port name/ID translation. Duplicate name or ID values are
-  // not allowed, and will be rejected. Order matters, so if a consumer needs to
-  // swap ID values they should first remove the existing IDs then reinsert the
-  // new values.
+  // Responds with one of the following actions to port translation:
+  // * Add the new port translation for unknown name & ID
+  // * Update an existing {name, id} translation to the new ID
+  // * No-Op if the {name, id} pairing already exists
+  // * Reject if the ID is already in-use or if any input is empty ("").
+  //
+  // Consider existing port mappings: {"A", "1"}, {"B", "2"}
+  // The result map is:
+  // Port | <-----  Port ID  ------> |
+  // Name |   "1"  |   "2"  |   "3"  |
+  // =====|========|========|========|
+  //  "A" | No-Op  | Reject | Update |
+  // -----|--------|--------|--------|
+  //  "B" | Reject | No-Op  | Update |
+  // -----|--------|--------|--------|
+  //  "C" | Reject | Reject |  Add   |
+  // -----|--------|--------|--------|
   virtual absl::Status AddPortTranslation(const std::string& port_name,
                                           const std::string& port_id)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  // Removes a port translation. Returns an error for an empty port name.
+  // Triggers AppDb and AppStateDb updates even if the port translation does not
+  // currently exist.
   virtual absl::Status RemovePortTranslation(const std::string& port_name)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
@@ -153,6 +176,15 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   // NOTE: We do not verify ownership of table entries today. Therefore, shared
   // tables (e.g. VRF_TABLE) could cause false positives.
   virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  // Dump various debug data for the P4RT App, including:
+  // * PacketIO counters.
+  //
+  // TODO: Dump other artifacts(e.g. P4Info, internal cache and
+  // mappings etc.)
+  virtual absl::Status DumpDebugData(const std::string& path,
+                                     const std::string& log_level)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Returns performance statistics relating to the P4Runtime flow programming
   // API. Data will be reset to zero on reading(i.e. results are not
@@ -240,6 +272,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   sonic::VrfTable vrf_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::HashTable hash_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
 
   // P4RT can accept multiple connections to a single switch for redundancy.
   // When there is >1 connection the switch chooses a primary which is used for

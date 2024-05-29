@@ -83,10 +83,18 @@ absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
 absl::StatusOr<IrValue> FormattedStringToIrValue(const std::string &value,
                                                  Format format);
 
-// Returns a std::string based on an IrValue value and a format. The value is
-// expected to already be formatted correctly, and is just returned as is.
-absl::StatusOr<std::string> IrValueToFormattedString(const IrValue &value,
-                                                     Format format);
+// Returns the string contents of an IrValue for the populated format (or "" if
+// there is no data).
+std::string IrValueString(const IrValue &value);
+
+// Return a short-form representation of an IrTableEntry.
+// This is useful for creating a unique, short description of the table entry
+// and its actions. It is easier to read and shorter than a generic protobuf
+// representation which will include repreated references to message and leaf
+// names.
+//
+// Does not include metadata, meter, and counters.
+std::string ShortDescription(const IrTableEntry &entry);
 
 // Returns a string of length ceil(expected_bitwidth/8).
 absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
@@ -103,10 +111,6 @@ absl::StatusOr<uint64_t> ArbitraryByteStringToUint(const std::string &bytes,
 // Convert the given uint to byte string.
 absl::StatusOr<std::string> UintToNormalizedByteString(uint64_t value,
                                                        int bitwidth);
-
-// Returns the number of bits used by the PI byte string interpreted as an
-// unsigned integer.
-int GetBitwidthOfByteString(const std::string &input_string);
 
 // Returns if a (normalized) byte string is all zeros.
 bool IsAllZeros(const std::string &s);

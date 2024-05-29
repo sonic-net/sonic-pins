@@ -31,9 +31,11 @@ namespace pdpi {
 //   version: 0x4
 //   ihl: 0x5
 //   dhcp: 0b011011)PB"
+//   # Payload
+//   payload: "This is an ASCII string."
 //
 // Supports comments (using #), annotations of what a group of bits represents
-// (string before the colon), hex strings, base-2 strings.
+// (string before the colon), hex strings, base-2 strings, and ASCII strings.
 absl::StatusOr<std::string> ReadableByteStringToByteString(
     absl::string_view readable_byte_string);
 

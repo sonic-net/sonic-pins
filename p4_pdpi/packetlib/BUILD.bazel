@@ -46,6 +46,17 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@com_google_absl//absl/types:variant",
+    ],
+)
+
+cc_library(
+    name = "packetlib_matchers",
+    testonly = True,
+    hdrs = ["packetlib_matchers.h"],
+    deps = [
+        ":packetlib_cc_proto",
+        "//gutil:proto_matchers",
     ],
 )
 
@@ -97,6 +108,18 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "packetlib_matchers_test",
+    srcs = ["packetlib_matchers_test.cc"],
+    deps = [
+        ":packetlib_cc_proto",
+        ":packetlib_matchers",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
     ],
 )

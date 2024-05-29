@@ -34,12 +34,19 @@ namespace pdpi {
 
 // Returns a list of write requests, such that updates are sequenced correctly
 // when the write requests are sent in order. Order within a write request is
-// stable, i.e. the same as in the input. Optionally, `max_batch_size` can be
-// used to limit the number of updates in a single write request.
+// stable, i.e. the same as in the input.
+//
+// Optionally, `max_batch_size` can be used to limit the number of updates in a
+// single write request. Sending too many updates in a single write request will
+// return a RESOURCE EXHAUSTED error due to the amount of metadata in the
+// response. The P4 Runtime specification states that a good rule of thumb for
+// the size of request is "8192 + MAX_UPDATES_PER_WRITE * 100 bytes of
+// metadata". P4RuntimeSession uses a 1MB limit and 5000 updates falls safely
+// within those limits and is simultaneously more than we ever tend to send.
 absl::StatusOr<std::vector<p4::v1::WriteRequest>>
-SequencePiUpdatesIntoWriteRequests(
-    const IrP4Info& info, absl::Span<const p4::v1::Update> updates,
-    std::optional<int> max_batch_size = std::nullopt);
+SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
+                                   absl::Span<const p4::v1::Update> updates,
+                                   std::optional<int> max_batch_size = 5000);
 
 // Returns a vector of batches, where each batch is given by a vector of indices
 // into the input vector, such that updates are sequenced correctly when sent

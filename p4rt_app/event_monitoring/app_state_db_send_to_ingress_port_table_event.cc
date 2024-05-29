@@ -26,12 +26,6 @@
 
 namespace p4rt_app {
 
-AppStateDbSendToIngressPortTableEventHandler::
-    AppStateDbSendToIngressPortTableEventHandler(P4RuntimeImpl& p4runtime)
-    : p4runtime_(p4runtime) {
-  // Do nothing.
-}
-
 absl::Status AppStateDbSendToIngressPortTableEventHandler::HandleEvent(
     const std::string& operation, const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {

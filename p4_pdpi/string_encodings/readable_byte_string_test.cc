@@ -49,6 +49,11 @@ TEST(ReadableByteStringTest, Positive) {
                 another_binary_field: 0b00
               )"),
               IsOkAndHolds("\x04"));
+
+  EXPECT_THAT(ReadableByteStringToByteString(R"(
+                ASCII string: "a beautiful string"  # Comment  
+              )"),
+              IsOkAndHolds("a beautiful string"));
 }
 
 TEST(ReadableByteStringTest, OnlyFullBytes) {

@@ -4,12 +4,15 @@
 @p4runtime_translation("", string)
 type bit<12> string_id_t;
 
+// HEX_STRING
+type bit<10> normal_id_t;
+
 enum MeterColor_t { GREEN, YELLOW, RED };
 
 // Note: no format annotations, since these don't affect anything
 struct metadata {
   bit<1> val;
-  bit<10> normal;
+  normal_id_t normal;
   bit<10> field10bit;
   bit<32> ipv4;
   bit<128> ipv6;
@@ -234,9 +237,20 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
       const default_action = NoAction();
   }
 
-  // Table that refers to another table
-  @id(10)
-  table referred_table {
+
+  table two_match_fields_table {
+      key = {
+          meta.str : exact @id(1) @name("id_1");
+          meta.normal : exact @id(2) @name("id_2");
+      }
+      actions = {
+        @proto_id(1) do_thing_4;
+        @defaultonly NoAction();
+      }
+      const default_action = NoAction();
+  }
+
+  table one_match_field_table {
       key = {
           meta.str : exact @id(1) @name("id");
       }
@@ -246,29 +260,40 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
       }
       const default_action = NoAction();
   }
-  // Generic action
-  @id(6)
-  action referring_action(@id(1) @refers_to(referred_table, id)
+
+  // Action that refers to both fields of two_match_fields_table.
+  // TODO Add double reference.
+  action referring_to_two_match_fields_action(@id(1)
+  @refers_to(two_match_fields_table, id_1)
                          string_id_t referring_id_1,
-                         @id(2) @refers_to(referred_table, id)
-                         string_id_t referring_id_2) {}
-  @id(11)
-  table referring_table {
+                         @id(2) @refers_to(two_match_fields_table, id_2)
+                          normal_id_t referring_id_2) {}
+
+  action referring_to_one_match_field_action(@id(1)
+  @refers_to(one_match_field_table, id)
+  @refers_to(two_match_fields_table, id_1)
+                         string_id_t referring_id_1) {}
+  // A table whose entries refer to other table entries via action.
+  table referring_by_action_table {
       key = {
           meta.normal : exact @id(1) @name("val");
       }
       actions = {
-        @proto_id(1) referring_action;
+        @proto_id(1) referring_to_two_match_fields_action;
+        @proto_id(2) referring_to_one_match_field_action;
         @defaultonly NoAction();
       }
       const default_action = NoAction();
   }
 
-  @id(12)
-  table referring2_table {
+  // A table whose entries refer to other table entries via their own
+  // match fields.
+  table referring_by_match_field_table {
       key = {
-          meta.str : exact @id(1) @name("referring_id")
-          @refers_to(referred_table, id);
+          meta.str : exact @id(1) @name("referring_id_1")
+          @refers_to(two_match_fields_table, id_1);
+          meta.normal : optional @id(2) @name("referring_id_2")
+          @refers_to(two_match_fields_table, id_2);
       }
       actions = {
         @proto_id(1) do_thing_4;
@@ -288,12 +313,11 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     }
   }
 
-  // Table that refers to referring2_table.
-  @id(14)
-  table referring_to_referring2_table {
+  // Table that refers to referring_by_match_field_table.
+  table referring_to_referring_by_match_field_table {
       key = {
-          meta.str : exact @id(1) @name("referring2_table_id")
-          @refers_to(referring2_table, referring_id);
+          meta.str : exact @id(1) @name("referring_to_referring_id_1")
+          @refers_to(referring_by_match_field_table, referring_id_1);
       }
       actions = {
         @proto_id(1) do_thing_4;
@@ -427,7 +451,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
             meta.ipv6 : ternary @id(4) @format(IPV6_ADDRESS) @name("ipv6");
             meta.mac : ternary @id(5) @format(MAC_ADDRESS) @name("mac");
             meta.str : optional @id(6) @name("referring_str")
-            @refers_to(referred_table, id);
+            @refers_to(one_match_field_table, id);
             meta.str2 : optional @id(7) @name("nonreferring_str");
         }
         actions = {
@@ -447,11 +471,12 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     count_and_meter_table.apply();
     wcmp2_table.apply();
     optional_table.apply();
-    referred_table.apply();
-    referring_table.apply();
-    referring2_table.apply();
+    two_match_fields_table.apply();
+    one_match_field_table.apply();
+    referring_by_action_table.apply();
+    referring_by_match_field_table.apply();
     no_action_table.apply();
-    referring_to_referring2_table.apply();
+    referring_to_referring_by_match_field_table.apply();
     unused_table.apply();
     packet_count_and_meter_table.apply();
     byte_count_and_meter_table.apply();

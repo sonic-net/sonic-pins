@@ -22,7 +22,7 @@
 
 namespace p4rt_app {
 
-class MockP4RuntimeImpl final : public P4RuntimeImpl {
+class MockP4RuntimeImpl : public P4RuntimeImpl {
  public:
   MockP4RuntimeImpl()
       : P4RuntimeImpl(/*translate_port_ids=*/false) {}
@@ -66,7 +66,21 @@ class MockP4RuntimeImpl final : public P4RuntimeImpl {
   MOCK_METHOD(absl::Status, RemovePortTranslation,
               (const std::string& port_name), (override));
 
+/* TODO
+  MOCK_METHOD(absl::Status, VerifyState, (bool update_component_state),
+              (override)); */
   MOCK_METHOD(absl::Status, VerifyState, (), (override));
+
+  MOCK_METHOD(absl::Status, DumpDebugData,
+              (const std::string& path, const std::string& log_level),
+              (override));
+
+/* TODO
+ private:
+  swss::MockComponentStateHelper mock_component_state_helper_;
+  swss::MockSystemStateHelper mock_system_state_helper_; */
+//  sonic::FakeIntfTranslator fake_intf_translator_{/*enabled=*/true}; 
+
 };
 
 }  // namespace p4rt_app

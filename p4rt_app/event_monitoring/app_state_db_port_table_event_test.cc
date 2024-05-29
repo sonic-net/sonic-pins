@@ -35,7 +35,7 @@ constexpr char kDelCommand[] = "DEL";
 
 TEST(PortTableEventTest, SetEventCreatesPacketIoPort) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  AppStateDbPortTableEventHandler port_change_events(mock_p4runtime_impl);
+  AppStateDbPortTableEventHandler port_change_events(&mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, AddPacketIoPort("Ethernet0"))
       .WillOnce(Return(absl::OkStatus()));
@@ -50,7 +50,7 @@ TEST(PortTableEventTest, SetEventCreatesPacketIoPort) {
 
 TEST(PortTableEventTest, DeleteEventRemovesPacketIoPort) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  AppStateDbPortTableEventHandler port_change_events(mock_p4runtime_impl);
+  AppStateDbPortTableEventHandler port_change_events(&mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, RemovePacketIoPort("Ethernet1/1/1"))
       .WillOnce(Return(absl::OkStatus()));
@@ -65,7 +65,7 @@ TEST(PortTableEventTest, DeleteEventRemovesPacketIoPort) {
 
 TEST(PortTableEventTest, NonEthernetPortEventIsANoop) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  AppStateDbPortTableEventHandler port_change_events(mock_p4runtime_impl);
+  AppStateDbPortTableEventHandler port_change_events(&mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation).Times(0);
   EXPECT_CALL(mock_p4runtime_impl, RemovePortTranslation).Times(0);
@@ -76,7 +76,7 @@ TEST(PortTableEventTest, NonEthernetPortEventIsANoop) {
 
 TEST(PortTableEventTest, UnknownPortEventFails) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  AppStateDbPortTableEventHandler port_change_events(mock_p4runtime_impl);
+  AppStateDbPortTableEventHandler port_change_events(&mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation).Times(0);
   EXPECT_CALL(mock_p4runtime_impl, RemovePortTranslation).Times(0);
@@ -88,7 +88,7 @@ TEST(PortTableEventTest, UnknownPortEventFails) {
 
 TEST(PortTableEventTest, P4RuntimeAddPacketIoFails) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  AppStateDbPortTableEventHandler port_change_events(mock_p4runtime_impl);
+  AppStateDbPortTableEventHandler port_change_events(&mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, AddPacketIoPort)
       .WillOnce(Return(absl::InvalidArgumentError("something was bad")));
@@ -101,7 +101,7 @@ TEST(PortTableEventTest, P4RuntimeAddPacketIoFails) {
 
 TEST(PortTableEventTest, P4RuntimeRemovePacketIoFails) {
   MockP4RuntimeImpl mock_p4runtime_impl;
-  AppStateDbPortTableEventHandler port_change_events(mock_p4runtime_impl);
+  AppStateDbPortTableEventHandler port_change_events(&mock_p4runtime_impl);
 
   EXPECT_CALL(mock_p4runtime_impl, RemovePacketIoPort)
       .WillOnce(Return(absl::InvalidArgumentError("something was bad")));
