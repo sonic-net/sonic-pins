@@ -66,5 +66,10 @@ TEST(ComparisonTest, OrderingIsLexicographic) {
   EXPECT_GT((Version{10, 0, 0}), (Version{2, 0, 0}));
 }
 
+// TODO: Remove this test once all P4Infos have versions.
+TEST(ParseVersionTest, EmptyStringForBackwardsCompatibility) {
+  EXPECT_THAT(ParseVersion(""), IsOkAndHolds(Eq(Version{0, 0, 0})));
+}
+
 }  // namespace
 }  // namespace gutil
