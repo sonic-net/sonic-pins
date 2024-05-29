@@ -272,3 +272,4 @@ cc_library(
         "@com_google_protobuf//:protobuf",
     ],
 )
+
