@@ -66,7 +66,7 @@
 #include "p4rt_app/sonic/state_verification.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
-//TODO(PINS):
+//TODO(PINS): Add Component/Interface Translator
 /*#include "swss/component_state_helper_interface.h"
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"

@@ -91,8 +91,8 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
                 sonic::PortTable port_table,
                 sonic::HostStatsTable host_stats_table,
                 std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
-//TODO(PINS): To add component_state, system_state and netdev_translator.
-/*              swss::ComponentStateHelperInterface& component_state,
+                //TODO(PINS): To add component_state, system_state and netdev_translator.
+                /* swss::ComponentStateHelperInterface& component_state,
                 swss::SystemStateHelperInterface& system_state,
                 swss::IntfTranslator& netdev_translator, */
                 const P4RuntimeImplOptions& p4rt_options);

@@ -145,7 +145,7 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
       std::move(host_stats_table), std::move(fake_packetio_interface),
-     // TODO(PINS): To add fake component state, system state & netdev translator
+     // TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
      // fake_component_state_helper_, fake_system_state_helper_, fake_netdev_translator_, 
       options);
 
@@ -227,7 +227,7 @@ sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
   return *fake_packetio_interface_;
 }
 
-/*TODO(PINS): To add Component/System state Translator 
+/*TODO(PINS): Add Component/System State Translator
 swss::FakeSystemStateHelper& P4RuntimeGrpcService::GetSystemStateHelper() {
   return fake_system_state_helper_;
 }

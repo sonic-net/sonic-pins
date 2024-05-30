@@ -1,0 +1,122 @@
+syntax = "proto3";
+
+package p4_fuzzer;
+
+import "p4/v1/p4runtime.proto";
+import "p4_pdpi/ir.proto";
+
+// The types of mutations p4-fuzzer can perform on a given table entry.
+enum Mutation {
+  // Change a valid table identifier in a table entry to one that does
+  // not exist in the P4Info file associated with the P4 program.
+  INVALID_TABLE_ID = 0;
+
+  // Works the same way as INVALID_TABLE_ID but acts on action
+  // identifiers.
+  INVALID_ACTION_ID = 1;
+
+  // Works the same way as INVALID_TABLE_ID but acts on match field
+  // identifiers.
+  INVALID_MATCH_FIELD_ID = 2;
+
+  // Removes a mandatory match field from a table entry.
+  MISSING_MANDATORY_MATCH_FIELD = 3;
+
+  // Duplicates a match field in a table entry.
+  DUPLICATE_MATCH_FIELD = 4;
+
+  // Picks table entry fields and changes their value to randomly generated ones
+  // of the same type.
+  INVALID_GENERIC = 5;
+
+  // Changes a table entry with an ActionProfileActionSet (intended for tables
+  // that implement one-shot action selector programming) to a table that
+  // expects a single action and vice versa.
+  INVALID_TABLE_IMPLEMENTATION = 6;
+
+  // Picks an action_profile_action and sets its weight to zero.
+  INVALID_ACTION_SELECTOR_WEIGHT = 7;
+
+  // Attempts to insert a table entry that is a duplicate of an already inserted
+  // table entry.
+  DUPLICATE_INSERT = 8;
+
+  // Attempts to delete a table entry that does not exist in the switch.
+  NONEXISTING_DELETE = 9;
+}
+
+// Human readable version of a (fuzzed) table entry. Contains the original
+// P4Runtime table entry (pi) and either a more readable program
+// dependent version of the table entry translated using p4-pdpi or an error
+// message if translation was attempted and failed.
+message AnnotatedTableEntry {
+  // The P4 runtime spec table entry (program independent representation).
+  p4.v1.TableEntry pi = 1;
+
+  oneof pd {
+    // An error message in case a conversion from the program independent
+    // version of the table entry (pi) to the program dependent version (ir)
+    // failed.
+    string error = 2;
+
+    // The PDPI program dependent representation of a table entry.
+    pdpi.IrTableEntry ir = 3;
+  }
+
+  repeated Mutation mutations = 4;
+}
+
+// Like AnnotatedTableEntry, but for updates instead.
+message AnnotatedUpdate {
+  p4.v1.Update pi = 1;
+
+  oneof pd {
+    string error = 2;
+
+    pdpi.IrUpdate ir = 3;
+  }
+
+  repeated Mutation mutations = 4;
+}
+
+// Like AnnotatedTableEntry, but for write requests.
+message AnnotatedWriteRequest {
+  uint64 device_id = 1;
+  p4.v1.Uint128 election_id = 2;
+  repeated AnnotatedUpdate updates = 3;
+}
+
+// Logs fuzzed requests (both correct and incorrect) along with their responses.
+// This is primarily intended for debugging and analysis.
+message Request {
+  // 0-based batch number
+  int64 batch_id = 1;
+
+  // Unix timestamp for the request, in milliseconds.
+  int64 timestamp_request = 2;
+
+  // Unix timestamp for the response, in milliseconds.
+  int64 timestamp_response = 3;
+
+  // The P4 write request (program independent representation)
+  p4.v1.WriteRequest pi = 4;
+
+  // TODO: add a program dependent representation after understanding
+  // p4-pdpi. Reserving field 5 for now.
+  reserved 5;
+
+  // TODO: add an open-source Status proto message. Reserving field 6
+  // for now.
+  reserved 6;
+
+  // List of errors, according to fuzzing oracle
+  repeated string errors = 7;
+
+  // The number of updates sent by the fuzzer prior to the current request.
+  // Helpful for tracking fuzzer progress.
+  int64 num_prior_updates = 8;
+}
+
+message Requests {
+  repeated Request requests = 1;
+}
