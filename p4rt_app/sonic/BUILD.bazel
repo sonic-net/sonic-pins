@@ -65,6 +65,7 @@ cc_library(
         ":vrf_entry_translation",
         "//gutil:collections",
         "//gutil:status",
+        "//gutil:table_entry_key",
         "//p4_pdpi:ir_cc_proto",
         "//p4rt_app/utils:status_utility",
         "//p4rt_app/utils:table_utility",

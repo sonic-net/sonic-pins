@@ -199,9 +199,7 @@ cc_test(
     srcs = ["packetio_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil:proto",
         "//gutil:proto_matchers",
-        "//gutil:status",
         "//gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
@@ -209,11 +207,11 @@ cc_test(
         "//p4_pdpi/string_encodings:hex_string",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic:fake_packetio_interface",
+        "//p4rt_app/sonic:packetio_interface",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
-        "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/cleanup",
@@ -222,6 +220,23 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "debug_data_dump_test",
+    srcs = ["debug_data_dump_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:io",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
     ],
 )

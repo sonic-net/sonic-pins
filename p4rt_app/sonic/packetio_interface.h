@@ -24,6 +24,20 @@
 namespace p4rt_app {
 namespace sonic {
 
+struct PacketIoCounters {
+  // Total number of packetOut packets sent with success.
+  int packet_out_sent = 0;
+
+  // Total number of packetOut packets not sent because of errors.
+  int packet_out_errors = 0;
+
+  // Total number of packetIn packets received with success.
+  int packet_in_received = 0;
+
+  // Total number of packetIn packets received with errors.
+  int packet_in_errors = 0;
+};
+
 // Base class for PacketIoInterface.
 class PacketIoInterface {
  public:
