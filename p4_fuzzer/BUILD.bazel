@@ -84,6 +84,54 @@ cc_test(
 )
 
 cc_library(
+    name = "mutation_and_fuzz_util",
+    srcs = [ 
+        "fuzz_util.cc",
+        "mutation.cc",
+    ],  
+    hdrs = [ 
+        "fuzz_util.h",
+        "mutation.h",
+    ],  
+    deps = [ 
+        ":annotation_util",
+        ":fuzzer_cc_proto",
+        ":switch_state",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/base:endian",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/strings",
+        # TODO: This target is not visible in google3.
+        # "//third_party/libprotobuf_mutator:libprotobuf_mutator_internals",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "//gutil:collections",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "//p4_pdpi/utils:ir",
+    ],  
+)
+
+cc_test(
+    name = "fuzz_util_test",
+    srcs = [
+        "fuzz_util_test.cc",
+    ],
+    data = ["acl_table_test.p4info.pb.txt"],
+    deps = [
+        ":fuzzer_cc_proto",
+        ":mutation_and_fuzz_util",
+        "//gutil:proto",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "annotation_util",
     srcs = ["annotation_util.cc"],
     hdrs = ["annotation_util.h"],
