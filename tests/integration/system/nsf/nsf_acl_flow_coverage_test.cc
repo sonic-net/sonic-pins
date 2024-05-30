@@ -22,6 +22,7 @@
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"  
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"
 #include "tests/integration/system/nsf/util.h"
