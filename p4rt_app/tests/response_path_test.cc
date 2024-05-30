@@ -268,6 +268,31 @@ TEST_F(ResponsePathTest, TableEntryModifyFailsIfEntryDoesNotExist) {
               StatusIs(absl::StatusCode::kUnknown, HasSubstr("NOT_FOUND")));
 }
 
+TEST_F(ResponsePathTest, TableEntryDeleteFailsIfEntryDoesNotExist) {
+  // P4 write request.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: DELETE
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                     write_request),
+              StatusIs(absl::StatusCode::kUnknown, HasSubstr("NOT_FOUND")));
+}
+
 TEST_F(ResponsePathTest, InsertRequestFails) {
   p4::v1::WriteRequest request;
   ASSERT_OK(gutil::ReadProtoFromString(
@@ -928,7 +953,7 @@ TEST_F(ResponsePathTest, WriteRequestsUpdateStatistics) {
           ir_p4_info_));
 
   // Statistics should monitor INSERT, MODIFY, and DELETE requests. It should
-  // also include time for requests that fail.
+  // not include the requests count that did not make it to APP_DB layer.
   EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
                                                    write_request));
   EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
@@ -950,7 +975,7 @@ TEST_F(ResponsePathTest, WriteRequestsUpdateStatistics) {
       p4rt_service_.GetP4rtServer().GetFlowProgrammingStatistics());
   EXPECT_THAT(
       flow_stats,
-      FieldsAre(/*write_batches=*/4, /*write_requests=*/4,
+      FieldsAre(/*write_batches=*/4, /*write_requests=*/3,
                 /*write_time=*/Not(absl::ZeroDuration()),
                 /*max_write_time=*/Not(absl::ZeroDuration()),
                 /*read_requests=*/0, /*read_time=*/absl::ZeroDuration()));

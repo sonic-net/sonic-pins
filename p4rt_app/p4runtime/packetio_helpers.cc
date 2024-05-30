@@ -32,8 +32,8 @@
 namespace p4rt_app {
 
 // Adds the given metadata to the PacketIn.
-absl::StatusOr<p4::v1::PacketIn> CreatePacketInMessage(
-    const std::string& source_port_id, const std::string& target_port_id) {
+p4::v1::PacketIn CreatePacketInMessage(const std::string& source_port_id,
+                                       const std::string& target_port_id) {
   p4::v1::PacketIn packet;
   p4::v1::PacketMetadata* metadata = packet.add_metadata();
   // Add Ingress port id.

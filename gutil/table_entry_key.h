@@ -27,6 +27,7 @@ namespace gutil {
 class TableEntryKey {
  public:
   TableEntryKey(const p4::v1::TableEntry& entry);
+  TableEntryKey() = default;
 
   template <typename H>
   friend H AbslHashValue(H h, const TableEntryKey& key);
