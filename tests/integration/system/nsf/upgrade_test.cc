@@ -57,8 +57,10 @@ using ::p4::v1::ReadResponse;
 
 NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
   absl::BitGen gen;
+  // the functionality of comparing two different configs and selecting
+  // upgrade scenario based on whether the two configs are equal or not.
   int random_index = absl::Uniform(
-      gen, 0, static_cast<int>(NsfUpgradeScenario::kNumNsfUpgradeScenarios));
+      gen, 1, static_cast<int>(NsfUpgradeScenario::kNumNsfUpgradeScenarios));
 
   return static_cast<NsfUpgradeScenario>(random_index);
 }
@@ -607,21 +609,18 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   bool continue_on_failure;
   std::vector<std::string> error_msgs;
   absl::Status upgrade_status;
-  ImageConfigParams curr_image_config_param;
-  ImageConfigParams next_image_config_param;
-  // N - 1 to N upgrades
+  // N - 1 to N upgrades.
   for (auto image_config_param = image_config_params.begin();
        image_config_param + 1 != image_config_params.end();
        ++image_config_param) {
-    curr_image_config_param = *image_config_param;
-    next_image_config_param = *(image_config_param + 1);
-    upgrade_status = NsfUpgradeOrReboot(
-        scenario, curr_image_config_param, next_image_config_param,
-        GetParam().enable_interface_validation_during_nsf, continue_on_failure);
+    upgrade_status = (NsfUpgradeOrReboot(
+        scenario, *image_config_param, *(image_config_param + 1),
+        GetParam().enable_interface_validation_during_nsf,
+        continue_on_failure));
     if (!upgrade_status.ok()) {
       error_msgs.push_back(absl::StrFormat(
-          "%s -> %s: %s", curr_image_config_param.image_version,
-          next_image_config_param.image_version, upgrade_status.message()));
+          "%s -> %s: %s", image_config_param->image_version,
+          (image_config_param + 1)->image_version, upgrade_status.ToString()));
       if (!continue_on_failure) {
         FAIL() << absl::StrJoin(error_msgs, "\n");
       }
@@ -629,14 +628,13 @@ TEST_P(NsfUpgradeTest, UpgradeAndReboot) {
   }
 
   // N to N upgrade
-  curr_image_config_param = image_config_params.back();
   upgrade_status = NsfUpgradeOrReboot(
-      scenario, curr_image_config_param, curr_image_config_param,
+      scenario, image_config_params.back(), image_config_params.back(),
       GetParam().enable_interface_validation_during_nsf, continue_on_failure);
   if (!upgrade_status.ok()) {
     error_msgs.push_back(absl::StrFormat(
-        "%s -> %s: %s", curr_image_config_param.image_version,
-        curr_image_config_param.image_version, upgrade_status.message()));
+        "%s -> %s: %s", image_config_params.back().image_version,
+        image_config_params.back().image_version, upgrade_status.ToString()));
   }
   if (!error_msgs.empty()) {
     FAIL() << absl::StrJoin(error_msgs, "\n");
