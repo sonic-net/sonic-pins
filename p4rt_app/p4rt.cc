@@ -354,15 +354,14 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
-
-/* TODO(PINS):
-  // Get the P4RT component helper which can be used to put the switch into
+  
+  /*TODO(PINS): Get the P4RT component helper which can be used to put the switch into
   // critical state.
   swss::ComponentStateHelperInterface& component_state_singleton =
       swss::StateHelperManager::ComponentSingleton(
           swss::SystemComponent::kP4rt);
 
-  // Get the system state helper which will be used to verify the switch is
+  //TODO(PINS): Get the system state helper which will be used to verify the switch is
   // healthy, and not in a critical state before handling P4 Runtime requests.
   swss::SystemStateHelperInterface& system_state_singleton =
       swss::StateHelperManager::SystemSingleton();

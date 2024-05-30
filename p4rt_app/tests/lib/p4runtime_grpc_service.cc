@@ -135,7 +135,7 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       absl::make_unique<sonic::FakePacketIoInterface>();
   fake_packetio_interface_ = fake_packetio_interface.get();
 
-  //TODO(PINS): Add the P4RT component helper into the system state helper so they can
+  // TODO(PINS): Add the P4RT component helper into the system state helper so they can
   // interact around critical state handling.
   // fake_system_state_helper_.AddComponent(/*name=*/"p4rt-con",
   //                                     fake_component_state_helper_);
