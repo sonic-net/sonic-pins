@@ -49,13 +49,15 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       fake_vrf_table_("AppDb:VRF_TABLE", &fake_vrf_state_table_),
       fake_hash_table_("AppDb:HASH_TABLE", &fake_hash_state_table_),
       fake_switch_table_("AppDb:SWITCH_TABLE", &fake_switch_state_table_),
-      fake_port_table_("AppDb:PORT_TABLE", &fake_port_state_table_) {
+      fake_port_table_("AppDb:PORT_TABLE", &fake_port_state_table_),
+      fake_host_stats_table_("StateDb:HOST") {
   LOG(INFO) << "Starting the P4 runtime gRPC service.";
   const std::string kP4rtTableName = "P4RT_TABLE";
   const std::string kPortTableName = "PORT_TABLE";
   const std::string kVrfTableName = "VRF_TABLE";
   const std::string kHashTableName = "HASH_TABLE";
   const std::string kSwitchTableName = "SWITCH_TABLE";
+  const std::string kHostStatsTableName = "HOST_STATS_TABLE";
 
   // Choose a random gRPC port. While not strictly necessary each test brings up
   // a new gRPC service, and randomly choosing a TCP port will minimize issues.
@@ -123,23 +125,27 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
           &fake_port_state_table_, kPortTableName),
   };
 
+  sonic::HostStatsTable host_stats_table{
+      .state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_host_stats_table_, kHostStatsTableName),
+  };
+
   // Create FakePacketIoInterface and save the pointer.
   auto fake_packetio_interface =
       absl::make_unique<sonic::FakePacketIoInterface>();
   fake_packetio_interface_ = fake_packetio_interface.get();
 
-// TODO(PINS):
-  // Add the P4RT component helper into the system state helper so they can
+  // TODO(PINS): Add the P4RT component helper into the system state helper so they can
   // interact around critical state handling.
-//  fake_system_state_helper_.AddComponent(/*name=*/"p4rt-con",
-//                                       fake_component_state_helper_);
+  // fake_system_state_helper_.AddComponent(/*name=*/"p4rt-con",
+  //                                     fake_component_state_helper_);
 
   // Create the P4RT server.
   p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
-      std::move(fake_packetio_interface),
-     // TODO(PINS):
+      std::move(host_stats_table), std::move(fake_packetio_interface),
+     // TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
      // fake_component_state_helper_, fake_system_state_helper_, fake_netdev_translator_, 
       options);
 
@@ -204,6 +210,7 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetSwitchAppStateDbTable() {
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetPortAppStateDbTable() {
   return fake_port_state_table_;
 }
+
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtCountersDbTable() {
   return fake_p4rt_counters_table_;
 }
@@ -212,11 +219,15 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtStateDbTable() {
   return fake_p4rt_state_table_;
 }
 
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHostStatsStateDbTable() {
+  return fake_host_stats_table_;
+}
+
 sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
   return *fake_packetio_interface_;
 }
 
-/*TODO(PINS):
+/*TODO(PINS): Add Component/System State Translator
 swss::FakeSystemStateHelper& P4RuntimeGrpcService::GetSystemStateHelper() {
   return fake_system_state_helper_;
 }

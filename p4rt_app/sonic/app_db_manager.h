@@ -24,6 +24,7 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -49,6 +50,7 @@ struct AppDbEntry {
   pdpi::IrTableEntry entry;
   p4::v1::Update::Type update_type;
   p4::v1::TableEntry pi_table_entry;
+  gutil::TableEntryKey table_entry_key;
   AppDbTableType appdb_table = AppDbTableType::UNKNOWN;
 };
 
@@ -82,6 +84,10 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table,
 // include any keys that are currently being handled by the lower layers (i.e.
 // keys starting with _).
 std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table);
+
+// Returns the expected P4RT_TABLE key for a given IRTableEntry.
+absl::StatusOr<std::string> GetRedisP4rtTableKey(
+    const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info);
 
 // Reads an entry from the P4RT_TABLE in the AppStateDb. Returns a failure if
 // the entry does not exist, or cannot be translated into a pdpi::IrTableEntry.

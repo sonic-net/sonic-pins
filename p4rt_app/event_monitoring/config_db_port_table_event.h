@@ -34,6 +34,7 @@ class ConfigDbPortTableEventHandler : public sonic::StateEventHandler {
   // valid as long as this event handler.
   explicit ConfigDbPortTableEventHandler(P4RuntimeImpl* p4runtime)
       : p4runtime_(*p4runtime) {}
+
   absl::Status HandleEvent(
       const std::string& operation, const std::string& key,
       const std::vector<std::pair<std::string, std::string>>& values) override;

@@ -18,9 +18,12 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
+#include "gutil/io.h"
 #include "gutil/status.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
@@ -40,28 +43,28 @@ DebugDataDumpEventHandler::DebugDataDumpEventHandler(
       response_channel_(response_channel) {}
 
 absl::Status DebugDataDumpEventHandler::WaitForEventAndDumpDebugData() {
-  constexpr absl::Duration timeout = absl::InfiniteDuration();
   absl::MutexLock l(&event_lock_);
 
-  // 'operation' specifies the ID of the component asked for dumping debug data.
-  std::string operation;
+  // The component that is requested to dump debug data.
+  std::string component;
 
-  // 'key' specifies the artifact directory path to dump debug data to. Each
-  // request will come with a unique artifact directory.
-  std::string key;
+  // The artifact directory path to dump debug data to. Each request will come
+  // with a unique artifact directory.
+  std::string path;
 
   // We expect one field value pair to specify the log level to be dumped. The
   // field should be "level:" and the value can be "alert", "critical" or "all".
   std::vector<swss::FieldValueTuple> field_values;
   if (!notification_channel_.WaitForNotificationAndPop(
-          operation, key, field_values, absl::ToInt64Milliseconds(timeout))) {
+          component, path, field_values,
+          absl::ToInt64Milliseconds(absl::InfiniteDuration()))) {
     return gutil::UnknownErrorBuilder()
            << "Debug data dump events failed/timed-out waiting for a "
            << "notification.";
   }
 
   // We only need to dump debug data when asked about the P4RT App component.
-  if (operation != kP4rtComponentName) {
+  if (component != kP4rtComponentName) {
     return absl::OkStatus();
   }
 
@@ -69,7 +72,7 @@ absl::Status DebugDataDumpEventHandler::WaitForEventAndDumpDebugData() {
   std::string log_level = "alert";
   if (!field_values.empty()) log_level = field_values[0].second;
 
-  absl::Status status = p4runtime_.DumpDebugData(key, log_level);
+  absl::Status status = p4runtime_.DumpDebugData(path, log_level);
 
   field_values.clear();
   if (!status.ok()) {
@@ -80,9 +83,9 @@ absl::Status DebugDataDumpEventHandler::WaitForEventAndDumpDebugData() {
     field_values.push_back(swss::FieldValueTuple{"err_str", ""});
   }
 
-  response_channel_.send_with_op_key(operation, key, field_values);
+  response_channel_.send_with_op_key(component, path, field_values);
 
-  return absl::OkStatus();
+  return status;
 }
 
 void DebugDataDumpEventHandler::Start() {

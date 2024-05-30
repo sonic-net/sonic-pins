@@ -20,7 +20,9 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/repeated_field.h"
@@ -52,8 +54,59 @@ using ::gutil::StatusIs;
 using ::p4::v1::GetForwardingPipelineConfigRequest;
 using ::p4::v1::GetForwardingPipelineConfigResponse;
 using ::p4::v1::SetForwardingPipelineConfigRequest;
+using ::testing::Contains;
+using ::testing::ExplainMatchResult;
 using ::testing::IsEmpty;
+using ::testing::Key;
 using ::testing::Not;
+
+MATCHER_P2(TimeIsBetween, start, end,
+           absl::StrCat("Has a value between '", absl::FormatTime(start),
+                        "' and '", absl::FormatTime(end), "'")) {
+  if (arg < start) {
+    *result_listener << absl::FormatTime(arg) << " is too early.";
+    return false;
+  }
+  if (arg > end) {
+    *result_listener << absl::FormatTime(arg) << " is too late.";
+    return false;
+  }
+  return true;
+}
+
+MATCHER_P2(ContainsConfigTimeBetween, start, end,
+           absl::StrCat("Contains a Table Entry with key='CONFIG' and 'value "
+                        "of 'last-configuration-timestamp' between ",
+                        absl::FormatTime(start), " and ",
+                        absl::FormatTime(end))) {
+  if (!ExplainMatchResult(Contains("CONFIG"), arg.GetAllKeys(),
+                          result_listener)) {
+    return false;
+  }
+  auto table_entry = *arg.ReadTableEntry("CONFIG");
+  if (!ExplainMatchResult(Contains(Key("last-configuration-timestamp")),
+                          table_entry, result_listener)) {
+    return false;
+  }
+  absl::Time config_time;
+  const std::string& last_configuration_timestamp =
+      table_entry.at("last-configuration-timestamp");
+  int64_t timestamp_nanos;
+  if (!absl::SimpleAtoi(last_configuration_timestamp, &timestamp_nanos)) {
+    *result_listener << "Expected value of 'last-configuration-timestamp' "
+                        "to be an integer, but got "
+                     << last_configuration_timestamp;
+    return false;
+  }
+  config_time = absl::FromUnixNanos(timestamp_nanos);
+  if (!ExplainMatchResult(TimeIsBetween(start, end), config_time,
+                          result_listener)) {
+    *result_listener << "Raw value of 'last-configuration-timestamp' is '"
+                     << last_configuration_timestamp << "'";
+    return false;
+  }
+  return true;
+}
 
 // Get a writeable directory where bazel tests can save output files to.
 // https://docs.bazel.build/versions/main/test-encyclopedia.html#initial-conditions
@@ -156,7 +209,7 @@ class ForwardingPipelineConfigTest : public testing::Test {
 
 using VerifyTest = ForwardingPipelineConfigTest;
 
-TEST_F(VerifyTest, DoesNotUpdateAppDbState) {
+TEST_F(VerifyTest, DoesNotUpdateDatabases) {
   // By using the "middleblock" config we expect the ACL table definitions to
   // be written into the AppDb during a config push.
   auto request = GetBasicForwardingRequest();
@@ -173,6 +226,8 @@ TEST_F(VerifyTest, DoesNotUpdateAppDbState) {
       << "p4rt_app/scripts/"
       << "update_p4info_verification_schema.sh";
   EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), IsEmpty());
+  EXPECT_THAT(p4rt_service_->GetHostStatsStateDbTable().GetAllKeys(),
+              IsEmpty());
 }
 
 TEST_F(VerifyTest, FailsWhenNoConfigIsSet) {
@@ -211,12 +266,39 @@ TEST_F(VerifyAndCommitTest, UpdatesAppDbState) {
   EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), Not(IsEmpty()));
 }
 
+TEST_F(VerifyAndCommitTest, UpdatesConfigTimeInStateDb) {
+  // By using the "middleblock" config we expect the ACL table definitionss to
+  // be written into the AppDb during a config push.
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT);
+  *request.mutable_config()->mutable_p4info() =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // Since we're both verifying and committing the config we expect to see
+  // changes to the AppDb tables.
+  absl::Time rpc_start = absl::Now();
+  EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request));
+  absl::Time rpc_end = absl::Now();
+  EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), Not(IsEmpty()));
+  EXPECT_THAT(p4rt_service_->GetHostStatsStateDbTable(),
+              ContainsConfigTimeBetween(rpc_start, rpc_end));
+}
+
 TEST_F(VerifyAndCommitTest, FailsWhenNoConfigIsSet) {
   auto request = GetBasicForwardingRequest();
   request.set_action(SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT);
 
   EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
               StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST_F(VerifyAndCommitTest, DoesNotUpdateConfigTimeOnFailure) {
+  auto request = GetBasicForwardingRequest();
+  request.set_action(SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT);
+  EXPECT_THAT(p4rt_session_->SetForwardingPipelineConfig(request),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(p4rt_service_->GetHostStatsStateDbTable().GetAllKeys(),
+              IsEmpty());
 }
 
 // This is not expected P4Runtime behavior. We simply haven't implemented it

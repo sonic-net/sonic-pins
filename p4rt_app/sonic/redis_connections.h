@@ -77,6 +77,12 @@ struct PortTable {
   std::unique_ptr<TableAdapter> app_state_db;
 };
 
+// The P4RT app needs to:
+//   * Write HOST_STATS entries into the StateDB.
+struct HostStatsTable {
+  std::unique_ptr<TableAdapter> state_db;
+};
+
 }  // namespace sonic
 }  // namespace p4rt_app
 
