@@ -996,7 +996,6 @@ absl::Status P4RuntimeImpl::AddPortTranslation(const std::string& port_name,
            << "'}. Port ID is already in use for translation {'"
            << id_iter->second << "', '" << port_id << "'}.";
   }
-
   // Insert or update the port mapping.
   LOG(INFO) << "Adding translation for {'" << port_name << "', '" << port_id
             << "'}.";
