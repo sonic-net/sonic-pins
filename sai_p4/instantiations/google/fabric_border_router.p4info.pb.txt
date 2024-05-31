@@ -1,6 +1,6 @@
 pkg_info {
   name: "fabric_border_router.p4"
-  version: "2.2.0"
+  version: "2.3.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -603,6 +603,13 @@ tables {
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META)"
     bitwidth: 6
     match_type: OPTIONAL
+  }
+  match_fields {
+    id: 21
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
   }
   action_refs {
     id: 16777473
