@@ -20,6 +20,7 @@
 #include <thread>  // NOLINT
 
 #include "absl/flags/parse.h"
+#include "glog/logging.h"
 #include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -89,7 +90,8 @@ DEFINE_bool(
     "is false and mTLS is configured.");
 DEFINE_string(authorization_policy_file, "/keys/authorization_policy.json",
               "File name of the JSON authorization policy file.");
-DEFINE_string(cert_crl_dir, "", "Path to the CRL directory. Disable if empty");
+DEFINE_string(cert_crl_dir, "",
+              "Path to the CRL directory. CRL is disabled when empty.");
 
 // P4Runtime options:
 DEFINE_bool(use_genetlink, false,
@@ -147,6 +149,7 @@ absl::StatusOr<std::shared_ptr<ServerCredentials>> BuildServerCredentials() {
         opts.set_crl_directory(FLAGS_cert_crl_dir);
         LOG(INFO) << "CRL directory has been set";
       }
+
       creds = grpc::experimental::TlsServerCredentials(opts);
     }
     if (creds == nullptr) {
@@ -159,11 +162,11 @@ absl::StatusOr<std::shared_ptr<ServerCredentials>> BuildServerCredentials() {
 
 std::shared_ptr<grpc::experimental::AuthorizationPolicyProviderInterface>
 CreateAuthzPolicyProvider() {
-  constexpr int kAuthzRefreshIntervalSec = 5;
   grpc::Status status;
   auto provider =
       grpc::experimental::FileWatcherAuthorizationPolicyProvider::Create(
-          FLAGS_authorization_policy_file, kAuthzRefreshIntervalSec, &status);
+          FLAGS_authorization_policy_file,
+          /*refresh_interval_sec=*/5, &status);
   if (!status.ok()) {
     LOG(ERROR) << "Failed to create authorization provider: "
                << gutil::GrpcStatusToAbslStatus(status);
