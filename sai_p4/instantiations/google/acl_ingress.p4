@@ -309,7 +309,8 @@ control acl_ingress(in headers_t headers,
           @id(13) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
 #if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR)
-      headers.icmp.type : ternary @name("icmp_type") @id(19)
+      headers.icmp.type : ternary
+          @id(19) @name("icmp_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMP_TYPE);
 #endif
       headers.icmp.type : ternary @name("icmpv6_type") @id(14)
@@ -319,7 +320,8 @@ control acl_ingress(in headers_t headers,
       local_metadata.l4_dst_port : ternary @name("l4_dst_port") @id(15)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_TOR)
-      headers.arp.target_proto_addr : ternary @name("arp_tpa") @id(16)
+      headers.arp.target_proto_addr : ternary
+          @id(16) @name("arp_tpa")
           @composite_field(
               @sai_udf(base=SAI_UDF_BASE_L3, offset=24, length=2),
               @sai_udf(base=SAI_UDF_BASE_L3, offset=26, length=2)
@@ -330,6 +332,16 @@ control acl_ingress(in headers_t headers,
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
       local_metadata.route_metadata : optional @name("route_metadata") @id(18)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
+#endif
+#if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR)
+      local_metadata.acl_metadata : ternary
+          @id(21) @name("acl_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+#endif
+#if defined(SAI_INSTANTIATION_TOR)
+      local_metadata.vlan_id : ternary
+        @id(22) @name("vlan_id")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
 #endif
     }
     actions = {

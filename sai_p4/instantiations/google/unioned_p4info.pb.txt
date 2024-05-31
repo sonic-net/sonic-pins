@@ -1,6 +1,6 @@
 pkg_info {
   name: "Union of fabric_border_router.p4, middleblock.p4, tor.p4, wbb.p4"
-  version: "Versions 2.2.0, 2.2.0, 2.2.0, 2.2.0"
+  version: "Versions 2.3.0, 2.3.0, 2.3.0, 2.3.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -639,11 +639,25 @@ tables {
     match_type: OPTIONAL
   }
   match_fields {
+    id: 21
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
     id: 16
     name: "arp_tpa"
     annotations: "@composite_field(@ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 24 , length = 2 ) , @ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 26 , length = 2 ))"
     annotations: "@format(IPV4_ADDRESS)"
     bitwidth: 32
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 22
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
     match_type: TERNARY
   }
   action_refs {
@@ -1459,6 +1473,34 @@ tables {
   const_default_action_id: 21257015
   direct_resource_ids: 318767370
   size: 255
+}
+tables {
+  preamble {
+    id: 33554700
+    name: "egress.acl_egress.acl_egress_l2_table"
+    alias: "acl_egress_l2_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@sai_acl(EGRESS)"
+  }
+  match_fields {
+    id: 1
+    name: "src_mac"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC)"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777481
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 127
 }
 tables {
   preamble {

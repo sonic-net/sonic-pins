@@ -347,11 +347,7 @@ message AclIngressTableEntry {
     Ternary icmp_type = 19;     // ternary match / Format::HEX_STRING / 8 bits
     Ternary l4_src_port = 20;   // ternary match / Format::HEX_STRING / 16 bits
     Ternary acl_metadata = 21;  // ternary match / Format::HEX_STRING / 8 bits
-    Ternary psp_next_header =
-        22;                 // ternary match / Format::HEX_STRING / 8 bits
-    Ternary psp_info = 23;  // ternary match / Format::HEX_STRING / 8 bits
-    Ternary inner_psp_udp_dst =
-        24;  // ternary match / Format::HEX_STRING / 16 bits
+    Ternary vlan_id = 22;       // ternary match / Format::HEX_STRING / 12 bits
   }
   Match match = 1;
   message Action {
@@ -784,6 +780,19 @@ message AclIngressMirrorAndRedirectTableEntry {
   bytes controller_metadata = 8;
 }
 
+message AclEgressL2TableEntry {
+  message Match {
+    Ternary src_mac = 1;  // ternary match / Format::MAC
+  }
+  Match match = 1;
+  message Action {
+    AclDropAction acl_drop = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 // Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
 // of the v1model architecture and is not explicitly present in the P4 program.
 message MulticastGroupTableEntry {
@@ -1048,6 +1057,7 @@ message TableEntry {
     AclIngressSecurityTableEntry acl_ingress_security_table_entry = 266;
     AclIngressMirrorAndRedirectTableEntry
         acl_ingress_mirror_and_redirect_table_entry = 267;
+    AclEgressL2TableEntry acl_egress_l2_table_entry = 268;
     MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }
