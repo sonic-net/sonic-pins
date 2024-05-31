@@ -227,7 +227,7 @@ sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
   return *fake_packetio_interface_;
 }
 
-/*TODO(PINS): Add Component/System State Translator
+/*TODO(PINS): To add fake_system_state_helper and fake_component_state_helper.
 swss::FakeSystemStateHelper& P4RuntimeGrpcService::GetSystemStateHelper() {
   return fake_system_state_helper_;
 }
