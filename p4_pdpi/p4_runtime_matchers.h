@@ -26,6 +26,14 @@
 
 namespace pdpi {
 
+// gMock matcher that checks if its argument, a
+// `p4::v1::StreamMessageResponse`, contains a `p4::v1::PacketIn`.
+//
+// Sample usage:
+// ```
+// EXPECT_THAT(p4_runtime_session.ReadStreamChannelResponsesAndFinish(),
+//             IsOkAndHolds(Each(HasPacketIn())));
+// ```
 MATCHER(HasPacketIn,
         absl::StrCat("is a P4Runtime `StreamMessageResponse` containing ",
                      negation ? "no" : "a", " `packet`")) {
@@ -34,6 +42,15 @@ MATCHER(HasPacketIn,
   return testing::ExplainMatchResult(HasPacket, arg, result_listener);
 }
 
+// gMock matcher that checks if its argument, a
+// `p4::v1::StreamMessageResponse`, contains a `p4::v1::PacketIn` that matches
+// the given `packet_in_matcher`.
+//
+// Sample usage:
+// ```
+// EXPECT_THAT(p4_runtime_session.GetNextStreamMessage(absl::Seconds(1)),
+//             IsOkAndHolds(HasPacketIn(EqualsProto(expected_packet_in))));
+// ```
 MATCHER_P(HasPacketIn, packet_in_matcher,
           absl::StrCat(testing::DescribeMatcher<p4::v1::StreamMessageResponse>(
                            HasPacketIn(), negation),
@@ -45,6 +62,16 @@ MATCHER_P(HasPacketIn, packet_in_matcher,
                                      result_listener);
 }
 
+// gMock matcher that checks if its argument, a `p4::v1::PacketIn`, has a
+// `payload` that, parsed as a `packetlib::Packet` matches the given
+// `parsed_payload_matcher`.
+//
+// Sample usage:
+// ```
+// EXPECT_THAT(p4_runtime_session.ReadStreamChannelResponsesAndFinish(),
+//             IsOkAndHolds(ElementsAre(HasPacketIn(
+//                 ParsedPayloadIs(EqualsProto(expected_punt_packet))))));
+// ```
 MATCHER_P(ParsedPayloadIs, parsed_payload_matcher,
           absl::StrCat(
               "contains a `payload` that (when parsed as a packetlib.Packet) ",
@@ -56,24 +83,6 @@ MATCHER_P(ParsedPayloadIs, parsed_payload_matcher,
                    << packet.DebugString() << ">, ";
   return testing::ExplainMatchResult(parsed_payload_matcher, packet,
                                      result_listener);
-}
-
-// gMock matcher that checks if its argument, a
-// `p4::v1::StreamMessageResponse`, contains a `p4::v1::PacketIn` whose
-// `payload` parsed as a `packetlib::Packet` matches the given
-// `inner_matcher`.
-//
-// Sample usage:
-// ```
-//   EXPECT_THAT(p4_runtime_session.ReadStreamChannelResponsesAndFinish(),
-//               IsOkAndHolds(ElementsAre(IsPacketInWhoseParsedPayloadSatisfies(
-//                   EqualsProto(expected_punt_packet)))));
-// ```
-template <class InnerMatcher>
-testing::Matcher<const p4::v1::StreamMessageResponse&>
-IsPacketInWhoseParsedPayloadSatisfies(InnerMatcher&& inner_matcher) {
-  return HasPacketIn(
-      ParsedPayloadIs(std::forward<InnerMatcher>(inner_matcher)));
 }
 
 }  // namespace pdpi
