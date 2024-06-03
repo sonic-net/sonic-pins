@@ -386,8 +386,8 @@ tables {
   }
   match_fields {
     id: 5
-    name: "unused_field"
-    annotations: "@unused"
+    name: "unsupported_field"
+    annotations: "@unsupported"
     bitwidth: 1
     match_type: TERNARY
   }
@@ -759,9 +759,9 @@ tables {
 tables {
   preamble {
     id: 33554447
-    name: "ingress.unused_table"
-    alias: "unused_table"
-    annotations: "@unused"
+    name: "ingress.unsupported_table"
+    alias: "unsupported_table"
+    annotations: "@unsupported"
   }
   match_fields {
     id: 2
@@ -1041,9 +1041,9 @@ actions {
 actions {
   preamble {
     id: 16777223
-    name: "unused_action"
-    alias: "unused_action"
-    annotations: "@unused"
+    name: "unsupported_action"
+    alias: "unsupported_action"
+    annotations: "@unsupported"
   }
 }
 actions {
@@ -1765,8 +1765,8 @@ tables_by_id {
       value {
         match_field {
           id: 5
-          name: "unused_field"
-          annotations: "@unused"
+          name: "unsupported_field"
+          annotations: "@unsupported"
           bitwidth: 1
           match_type: TERNARY
         }
@@ -1878,12 +1878,12 @@ tables_by_id {
       }
     }
     match_fields_by_name {
-      key: "unused_field"
+      key: "unsupported_field"
       value {
         match_field {
           id: 5
-          name: "unused_field"
-          annotations: "@unused"
+          name: "unsupported_field"
+          annotations: "@unsupported"
           bitwidth: 1
           match_type: TERNARY
         }
@@ -1951,9 +1951,9 @@ tables_by_id {
       action {
         preamble {
           id: 16777223
-          name: "unused_action"
-          alias: "unused_action"
-          annotations: "@unused"
+          name: "unsupported_action"
+          alias: "unsupported_action"
+          annotations: "@unsupported"
         }
       }
       proto_id: 2
@@ -2790,9 +2790,9 @@ tables_by_id {
   value {
     preamble {
       id: 33554447
-      name: "ingress.unused_table"
-      alias: "unused_table"
-      annotations: "@unused"
+      name: "ingress.unsupported_table"
+      alias: "unsupported_table"
+      annotations: "@unsupported"
     }
     match_fields_by_id {
       key: 1
@@ -6034,8 +6034,8 @@ tables_by_name {
       value {
         match_field {
           id: 5
-          name: "unused_field"
-          annotations: "@unused"
+          name: "unsupported_field"
+          annotations: "@unsupported"
           bitwidth: 1
           match_type: TERNARY
         }
@@ -6147,12 +6147,12 @@ tables_by_name {
       }
     }
     match_fields_by_name {
-      key: "unused_field"
+      key: "unsupported_field"
       value {
         match_field {
           id: 5
-          name: "unused_field"
-          annotations: "@unused"
+          name: "unsupported_field"
+          annotations: "@unsupported"
           bitwidth: 1
           match_type: TERNARY
         }
@@ -6220,9 +6220,9 @@ tables_by_name {
       action {
         preamble {
           id: 16777223
-          name: "unused_action"
-          alias: "unused_action"
-          annotations: "@unused"
+          name: "unsupported_action"
+          alias: "unsupported_action"
+          annotations: "@unsupported"
         }
       }
       proto_id: 2
@@ -6359,13 +6359,13 @@ tables_by_name {
   }
 }
 tables_by_name {
-  key: "unused_table"
+  key: "unsupported_table"
   value {
     preamble {
       id: 33554447
-      name: "ingress.unused_table"
-      alias: "unused_table"
-      annotations: "@unused"
+      name: "ingress.unsupported_table"
+      alias: "unsupported_table"
+      annotations: "@unsupported"
     }
     match_fields_by_id {
       key: 1
@@ -7050,9 +7050,9 @@ actions_by_id {
   value {
     preamble {
       id: 16777223
-      name: "unused_action"
-      alias: "unused_action"
-      annotations: "@unused"
+      name: "unsupported_action"
+      alias: "unsupported_action"
+      annotations: "@unsupported"
     }
   }
 }
@@ -7643,13 +7643,13 @@ actions_by_name {
   }
 }
 actions_by_name {
-  key: "unused_action"
+  key: "unsupported_action"
   value {
     preamble {
       id: 16777223
-      name: "unused_action"
-      alias: "unused_action"
-      annotations: "@unused"
+      name: "unsupported_action"
+      alias: "unsupported_action"
+      annotations: "@unsupported"
     }
   }
 }
