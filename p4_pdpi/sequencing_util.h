@@ -1,10 +1,11 @@
-#ifndef PINS_INFRA_P4_PDPI_SEQUENCING_UTIL_H_
-#define PINS_INFRA_P4_PDPI_SEQUENCING_UTIL_H_
+#ifndef PINS_P4_PDPI_SEQUENCING_UTIL_H_
+#define PINS_P4_PDPI_SEQUENCING_UTIL_H_
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -14,6 +15,43 @@
 // TODO rename this file to reachability_util.h once reachability
 // analysis replaces p4 sequencing.
 namespace pdpi {
+
+struct ReferenceRelationKey {
+  // TODO Add referring table name to handle cases where two or
+  // more tables refer to the same table and need to form a ReferenceRelationKey
+  // for each referring table.
+  std::string referred_table_name;
+
+  bool operator==(const ReferenceRelationKey& rhs) const {
+    return referred_table_name == rhs.referred_table_name;
+  }
+  bool operator!=(const ReferenceRelationKey& rhs) const {
+    return !(*this == rhs);
+  }
+  bool operator<(const ReferenceRelationKey& rhs) const {
+    return referred_table_name < rhs.referred_table_name;
+  }
+  template <typename H>
+  friend H AbslHashValue(H h, const ReferenceRelationKey& key) {
+    return H::combine(std::move(h), key.referred_table_name);
+  }
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink, const ReferenceRelationKey& key) {
+    absl::Format(&sink, "ReferenceRelationKey{referred_table_name: %s}",
+                 key.referred_table_name);
+  }
+};
+
+// Struct to represent a reference relationship.
+// It contains a btree_set of match field names.
+struct ReferenceRelation {
+  absl::btree_set<std::string> match_field_names;
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink, const ReferenceRelation& relation) {
+    absl::Format(&sink, "ReferenceRelation{match_field_names: [%s]}",
+                 absl::StrJoin(relation.match_field_names, ", "));
+  }
+};
 
 // Struct to represent a concrete match field with a value that could be
 // referred to by another table entry. For example, it is used as a concrete
@@ -83,6 +121,10 @@ struct ReferredTableEntry {
         table_entry.table, absl::StrJoin(table_entry.referred_fields, ", "));
   }
 };
+// Returns a map from table names to the match fields that the table contains
+// that can be referred to.
+absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>
+CreateReferenceRelations(const IrP4Info& ir_p4info);
 
 // Returns a vector of ReferredTableEntries that `table_entry` refers to.
 // What table entries `table_entry` refers to depends on `ir_p4info`'s reference
@@ -95,4 +137,4 @@ absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByTableEntry(
 
 }  // namespace pdpi
 
-#endif  // PINS_INFRA_P4_PDPI_SEQUENCING_UTIL_H_
+#endif  // PINS_P4_PDPI_SEQUENCING_UTIL_H_

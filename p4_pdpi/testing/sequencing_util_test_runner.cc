@@ -3,6 +3,8 @@
 #include <string>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/btree_map.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "gutil/proto.h"
@@ -18,7 +20,31 @@ constexpr absl::string_view kInputBanner =
     "-----------------------------------------------------------------------\n";
 const absl::string_view kOutputBanner =
     "-- OUTPUT "
-    "---------------------------------------------------------------------\n";
+    "----------------------------------------------------------------------\n";
+
+// Runs golden file test for CreateReferenceRelations
+void CreateReferenceRelationsTest(const pdpi::IrP4Info& ir_p4info) {
+  std::cout << TestHeader("CreateReferenceRelationsTest") << std::endl;
+  absl::flat_hash_map<pdpi::ReferenceRelationKey, pdpi::ReferenceRelation>
+      reference_relations = pdpi::CreateReferenceRelations(ir_p4info);
+
+  std::cout << kInputBanner << "-- IrP4Info's references --" << std::endl;
+  for (const pdpi::IrMatchFieldReference& reference : ir_p4info.references()) {
+    std::cout << gutil::PrintTextProto(reference);
+  }
+  std::cout << std::endl;
+  std::cout << kOutputBanner << "-- ReferenceRelations --" << std::endl;
+
+  // Use btree_map to maintain order and make golden file stable.
+  absl::btree_map<pdpi::ReferenceRelationKey, pdpi::ReferenceRelation>
+      ordered_reference_relations(reference_relations.begin(),
+                                  reference_relations.end());
+  for (const auto& [key, reference_relation] : ordered_reference_relations) {
+    std::cout << absl::StrCat(key) << ", " << absl::StrCat(reference_relation)
+              << std::endl;
+  }
+  std::cout << std::endl;
+}
 
 // Runs golden file test for EntriesReferredToByTableEntry function.
 void EntriesReferredToByTableEntryTest(absl::string_view test_name,
@@ -55,6 +81,7 @@ void EntriesReferredToByTableEntryTest(absl::string_view test_name,
 }
 
 int main(int argc, char** argv) {
+  CreateReferenceRelationsTest(pdpi::GetTestIrP4Info());
   EntriesReferredToByTableEntryTest(
       "Referring to using an entry with 1 match field",
       R"pb(
