@@ -39,6 +39,17 @@ jobs:
           https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-${ARCH}
         sudo chmod +x /usr/local/bin/bazel
 
+    - name: Keyword check
+      run: |
+	grep -r 'butter\|financial\|exchange\|stock\|market\|trading\|GCPTP\|CME\|bubble\|coarse-grained equalization\|CGE\|coarse' *
+	if [ $? -eq 0 ]
+	then
+		echo "Keyword Check Failed. Pl. check and fix it"
+		exit 1
+	else
+		echo "Keyword check Passed."
+	fi
+
     # Authentication is enabled for R/W access for builds on main and branch PRs
     # Unauthenticated reads are allowed for PRs from forks
     - name: Build and Test
