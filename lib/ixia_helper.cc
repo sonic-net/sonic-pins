@@ -1066,11 +1066,11 @@ absl::Status AppendPfc(absl::string_view tref,
     return absl::InternalError("no PFC template");
   std::size_t ixqt = proto_response.response.find('"', ixhref + 8);
   if (ixqt == std::string::npos) return absl::InternalError("no PFC template");
-  std::string tcpref =
+  std::string pfcref =
       proto_response.response.substr(ixhref + 8, ixqt - ixhref - 8);
-  std::size_t ixfield = tcpref.find("/field");
+  std::size_t ixfield = pfcref.find("/field");
   if (ixfield != std::string::npos) {
-    tcpref = tcpref.substr(0, ixfield);
+    pfcref = pfcref.substr(0, ixfield);
   }
 
   // POST to
@@ -1082,11 +1082,28 @@ absl::Status AppendPfc(absl::string_view tref,
 
   std::string append_json =
       absl::StrCat("{\"arg1\":\"", tref, "/configElement/1/stack/1",
-                   "\",\"arg2\":\"", tcpref, "\"}");
+                   "\",\"arg2\":\"", pfcref, "\"}");
   LOG(INFO) << "json " << append_json;
   ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
                    generic_testbed.SendRestRequestToIxia(
                        thinkit::RequestType::kPost, kAppendPath, append_json));
+  LOG(INFO) << "Received code: " << append_response.response_code;
+  LOG(INFO) << "Received response: "
+            << FormatJsonBestEffort(append_response.response);
+  if (!ixia::WaitForComplete(append_response, generic_testbed).ok()) {
+    return absl::InternalError("Failed to complete append PFC protocol");
+  };
+
+  // Remove the ethernet header.
+  std::string remove_json =
+      absl::StrCat("{\"arg1\":\"", tref, "/configElement/1/stack/1", "\"}");
+  constexpr absl::string_view kRemovePath =
+      "/ixnetwork/traffic/trafficItem/configElement/stack/operations/"
+      "remove";
+  LOG(INFO) << "json " << append_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse remove_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPost, kRemovePath, remove_json));
   LOG(INFO) << "Received code: " << append_response.response_code;
   LOG(INFO) << "Received response: "
             << FormatJsonBestEffort(append_response.response);
@@ -1098,9 +1115,10 @@ absl::Status SetPfcPriorityEnableVector(
     thinkit::GenericTestbed &generic_testbed) {
   // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/stack/1/field/5
   // with {"singleValue":"1"} to set the priroity enable vector.
-  std::string path = absl::StrCat(tref, "/configElement/1/stack/2/field/5");
+  std::string path = absl::StrCat(tref, "/configElement/1/stack/1/field/5");
   std::string json =
-      absl::StrCat("{\"singleValue\":\"", priority_enable_vector, "\"}");
+      absl::StrCat("{\"singleValue\":\"",
+                   absl::Hex(priority_enable_vector, absl::kZeroPad2), "\"}");
   LOG(INFO) << "path " << path;
   LOG(INFO) << "json " << json;
   ASSIGN_OR_RETURN(thinkit::HttpResponse sip_response,
@@ -1121,7 +1139,7 @@ absl::Status SetPfcQueuePauseQuanta(
   for (int i = 0; i < 8; ++i) {
     if (queue_pause_quanta[i] == 0) continue;
     std::string path =
-        absl::StrCat(tref, "/configElement/1/stack/2/field/", 6 + i);
+        absl::StrCat(tref, "/configElement/1/stack/1/field/", 6 + i);
     std::string json =
         absl::StrCat("{\"singleValue\":\"",
                      absl::StrFormat("%X", queue_pause_quanta[i]), "\"}");
@@ -1433,19 +1451,19 @@ absl::Status SetTrafficParameters(absl::string_view tref,
           }},
       params.traffic_speed));
 
-  RETURN_IF_ERROR(SetSrcMac(tref, params.src_mac.ToString(), testbed));
-  RETURN_IF_ERROR(SetDestMac(tref, params.dst_mac.ToString(), testbed));
-
+  if (params.pfc_parameters.has_value()) {
+    RETURN_IF_ERROR(
+        SetPfcTrafficParameters(tref, *params.pfc_parameters, testbed));
+  } else {
+    RETURN_IF_ERROR(SetSrcMac(tref, params.src_mac.ToString(), testbed));
+    RETURN_IF_ERROR(SetDestMac(tref, params.dst_mac.ToString(), testbed));
+  }
   if (params.ip_parameters.has_value()) {
     RETURN_IF_ERROR(std::visit(
         [&](const auto &ip_params) {
           return SetIpTrafficParameters(tref, ip_params, testbed);
         },
         *params.ip_parameters));
-  }
-  if (params.pfc_parameters.has_value()) {
-    RETURN_IF_ERROR(
-        SetPfcTrafficParameters(tref, *params.pfc_parameters, testbed));
   }
 
   return absl::OkStatus();
