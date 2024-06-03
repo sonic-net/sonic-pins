@@ -815,7 +815,7 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
     std::string name = std::string(StripQuotes(element_name_json->dump()));
 
     // TODO: Remove once CPU contains the oper-state subtree.
-    if (absl::StartsWith(name, "CPU")) {
+    if (absl::StartsWith(name, "CPU") || absl::StartsWith(name, "br")) {
       LOG(INFO) << "Skipping " << name << ".";
       continue;
     }

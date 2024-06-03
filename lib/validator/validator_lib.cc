@@ -179,7 +179,6 @@ absl::Status P4rtAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
 
   grpc::ClientContext context;
   context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
-  context.set_wait_for_ready(true);
   grpc::Status status = p4rt_stub->Write(&context, request, &response);
 
   // Because we don't have an active stream acting as the controller
@@ -207,7 +206,6 @@ absl::Status GnoiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
   gnoi::system::TimeResponse response;
   grpc::ClientContext context;
   context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
-  context.set_wait_for_ready(true);
   return gutil::GrpcStatusToAbslStatus(
       gnoi_system_stub->Time(&context, request, &response));
 }
@@ -229,6 +227,17 @@ absl::Status PortsDown(thinkit::Switch& thinkit_switch,
   LOG(INFO) << "Running PortsDown on " << thinkit_switch.ChassisName() << ".";
   return pins_test::CheckInterfaceOperStateOverGnmi(
       *gnmi_stub, /*interface_oper_state=*/"DOWN", interfaces,
+      /*skip_non_ethernet_interfaces=*/false, timeout);
+}
+
+absl::Status PortsNotPresent(thinkit::Switch &thinkit_switch,
+                             absl::Span<const std::string> interfaces,
+                             bool with_healthz, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto gnmi_stub, thinkit_switch.CreateGnmiStub());
+  LOG(INFO) << "Running PortsNotPresent on " << thinkit_switch.ChassisName()
+            << ".";
+  return pins_test::CheckInterfaceOperStateOverGnmi(
+      *gnmi_stub, /*interface_oper_state=*/"NOT_PRESENT", interfaces,
       /*skip_non_ethernet_interfaces=*/false, timeout);
 }
 
