@@ -272,9 +272,9 @@ StatusOr<IrMatch> PiMatchFieldToIr(
   absl::string_view match_name = match_field.name();
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnused(match_field.annotations())) {
+  if (IsElementUnsupported(match_field.annotations())) {
     invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Match field has @unused annotation."));
+        absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
   }
 
   switch (match_field.match_type()) {
@@ -470,9 +470,9 @@ StatusOr<IrActionInvocation> PiActionToIr(
   std::vector<std::string> invalid_reasons;
   absl::flat_hash_set<std::string> actual_params;
 
-  if (IsElementUnused(ir_action_definition->preamble().annotations())) {
+  if (IsElementUnsupported(ir_action_definition->preamble().annotations())) {
     invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Action has @unused annotation."));
+        absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
 
   for (const auto &param : pi_action.params()) {
@@ -647,9 +647,9 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
 
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnused(match_field.annotations())) {
+  if (IsElementUnsupported(match_field.annotations())) {
     invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Match field has @unused annotation."));
+        absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
   }
 
   switch (match_field.match_type()) {
@@ -879,9 +879,9 @@ StatusOr<p4::v1::Action> IrActionInvocationToPi(
   absl::flat_hash_set<std::string> used_params;
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnused(ir_action_definition->preamble().annotations())) {
+  if (IsElementUnsupported(ir_action_definition->preamble().annotations())) {
     invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Action has @unused annotation."));
+        absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
 
   for (const auto &param : ir_table_action.params()) {
@@ -1393,10 +1393,10 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
   absl::string_view table_name = ir.table_name();
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnused(table->preamble().annotations())) {
+  if (IsElementUnsupported(table->preamble().annotations())) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Table entry for table '", table_name,
-                     "' has @unused annotation."));
+                     "' has @unsupported annotation."));
   }
 
   // Validate and translate the matches
@@ -1850,10 +1850,10 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
 
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnused(table->preamble().annotations())) {
+  if (IsElementUnsupported(table->preamble().annotations())) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Table entry for table '", table_name,
-                     "' has @unused annotation."));
+                     "' has @unsupported annotation."));
   }
 
   // Validate and translate the matches

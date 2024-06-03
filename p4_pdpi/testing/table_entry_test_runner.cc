@@ -565,7 +565,7 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         action { action_profile_member_id: 12 }
                       )pb"));
 
-  RunPiTableEntryTest(info, "unused table used",
+  RunPiTableEntryTest(info, "unsupported table used",
                       gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
                         table_id: 33554447
                         match {
@@ -578,7 +578,7 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         }
                       )pb"));
 
-  RunPiTableEntryTest(info, "ternary table - unused action used",
+  RunPiTableEntryTest(info, "ternary table - unsupported action used",
                       gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
                         table_id: 33554435
                         match {
@@ -589,7 +589,7 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         priority: 32
                       )pb"));
 
-  RunPiTableEntryTest(info, "ternary table - unused match field used",
+  RunPiTableEntryTest(info, "ternary table - unsupported match field used",
                       gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
                         table_id: 33554435
                         match {
@@ -688,9 +688,9 @@ static void RunIrNoActionTableTests(const pdpi::IrP4Info& info) {
 }
 
 static void RunIrTernaryTableTests(const pdpi::IrP4Info info) {
-  RunIrTableEntryTest(info, "unused table used",
+  RunIrTableEntryTest(info, "unsupported table used",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-                        table_name: "unused_table"
+                        table_name: "unsupported_table"
                         matches {
                           name: "ipv4"
                           exact { ipv4: "10.10.10.10" }
@@ -700,21 +700,21 @@ static void RunIrTernaryTableTests(const pdpi::IrP4Info info) {
                           exact { ipv6: "::ff22" }
                         }
                       )pb"));
-  RunIrTableEntryTest(info, "ternary table - unused action used",
+  RunIrTableEntryTest(info, "ternary table - unsupported action used",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
                         table_name: "ternary_table"
                         matches {
                           name: "normal"
                           ternary { value { hex_str: "0x00" } }
                         }
-                        action { name: "unused_action" }
+                        action { name: "unsupported_action" }
                         priority: 32
                       )pb"));
-  RunIrTableEntryTest(info, "ternary table - unused match field used",
+  RunIrTableEntryTest(info, "ternary table - unsupported match field used",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
                         table_name: "ternary_table"
                         matches {
-                          name: "unused_field"
+                          name: "unsupported_field"
                           ternary { value { hex_str: "0x00" } }
                         }
                         priority: 32
@@ -2073,25 +2073,26 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
       INPUT_IS_INVALID, /*key_only=*/true);
 
   RunPdTableEntryTest(
-      info, "unused table used", gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
-        unused_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
+      info, "unsupported table used",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        unsupported_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
       )pb"),
       INPUT_IS_INVALID);
 
-  RunPdTableEntryTest(info, "ternary table - unused action used",
+  RunPdTableEntryTest(info, "ternary table - unsupported action used",
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
                         ternary_table_entry {
                           match { normal { value: "0x052" mask: "0x273" } }
                           priority: 32
-                          action { unused_action {} }
+                          action { unsupported_action {} }
                         }
                       )pb"),
                       INPUT_IS_INVALID);
 
-  RunPdTableEntryTest(info, "ternary table - unused match field used",
+  RunPdTableEntryTest(info, "ternary table - unsupported match field used",
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
                         ternary_table_entry {
-                          match { unused_field { value: "0x052" } }
+                          match { unsupported_field { value: "0x052" } }
                           priority: 32
                           action { do_thing_3 { arg1: "0x23" arg2: "0x0251" } }
                         }

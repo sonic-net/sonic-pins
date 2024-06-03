@@ -533,10 +533,10 @@ std::string MetadataName(absl::string_view metadata_name) {
   return absl::StrCat("Metadata '", metadata_name, "'");
 }
 
-bool IsElementUnused(
+bool IsElementUnsupported(
     const google::protobuf::RepeatedPtrField<std::string> &annotations) {
   return absl::c_any_of(annotations, [](absl::string_view annotation) {
-    return annotation == "@unused";
+    return annotation == "@unsupported";
   });
 }
 
