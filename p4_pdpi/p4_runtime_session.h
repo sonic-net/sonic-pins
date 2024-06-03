@@ -182,17 +182,6 @@ class P4RuntimeSession {
   // Returns the role of this session.
   std::string Role() const { return role_; }
 
-  // Thread-safe wrapper around the stream channel's `Read` method.
-  //
-  // StreamChannelRead is a blocking call that only returns if a message is
-  // received or the stream is closed (i.e. Finish is called). Using this API
-  // can complicate testing logic. Consider using GetNextStreamMessage() or
-  // GetAllStreamMessagesFor() before deciding to use this API.
-  ABSL_DEPRECATED(
-      "Prefer to use GetNextStreamMessage() or GetAllStreamMessagesFor()")
-  ABSL_MUST_USE_RESULT bool StreamChannelRead(
-      p4::v1::StreamMessageResponse& response)
-      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
   // Thread-safe wrapper around the stream channel's `Write` method.
   ABSL_MUST_USE_RESULT bool StreamChannelWrite(
       const p4::v1::StreamMessageRequest& request)
