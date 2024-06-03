@@ -889,7 +889,7 @@ action {
 INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action found for table which has no actions defined.
 
 =========================================================================
-unused table used
+unsupported table used
 =========================================================================
 
 --- PI (Input):
@@ -908,10 +908,10 @@ match {
 }
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'unused_table' is invalid: Table entry for table 'unused_table' has @unused annotation.
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table entry for table 'unsupported_table' has @unsupported annotation.
 
 =========================================================================
-ternary table - unused action used
+ternary table - unsupported action used
 =========================================================================
 
 --- PI (Input):
@@ -931,10 +931,10 @@ action {
 priority: 32
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unused_action' is invalid: Action has @unused annotation.
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unsupported_action' is invalid: Action has @unsupported annotation.
 
 =========================================================================
-ternary table - unused match field used
+ternary table - unsupported match field used
 =========================================================================
 
 --- PI (Input):
@@ -956,8 +956,8 @@ priority: 32
 
 --- PI is invalid/unsupported:
 INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
-  - Match field 'unused_field' is invalid for the following reasons:
-    - Match field has @unused annotation.
+  - Match field 'unsupported_field' is invalid for the following reasons:
+    - Match field has @unsupported annotation.
     - Bytestring of length 6 bits does not fit in 1 bits.
   - Action is required.
 
@@ -2129,11 +2129,11 @@ action {
 INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action found for table which has no actions defined.
 
 =========================================================================
-unused table used
+unsupported table used
 =========================================================================
 
 --- IR (Input):
-table_name: "unused_table"
+table_name: "unsupported_table"
 matches {
   name: "ipv4"
   exact {
@@ -2148,10 +2148,10 @@ matches {
 }
 
 --- IR (converting to PI) is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'unused_table' is invalid: Table entry for table 'unused_table' has @unused annotation.
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table entry for table 'unsupported_table' has @unsupported annotation.
 
 =========================================================================
-ternary table - unused action used
+ternary table - unsupported action used
 =========================================================================
 
 --- IR (Input):
@@ -2166,22 +2166,22 @@ matches {
 }
 priority: 32
 action {
-  name: "unused_action"
+  name: "unsupported_action"
 }
 
 --- IR (converting to PI) is invalid/unsupported:
 INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
   - Match field 'normal' is invalid: Oneof field "format" is not set
-  - Action 'unused_action' is invalid: Action has @unused annotation.
+  - Action 'unsupported_action' is invalid: Action has @unsupported annotation.
 
 =========================================================================
-ternary table - unused match field used
+ternary table - unsupported match field used
 =========================================================================
 
 --- IR (Input):
 table_name: "ternary_table"
 matches {
-  name: "unused_field"
+  name: "unsupported_field"
   ternary {
     value {
       hex_str: "0x00"
@@ -2192,8 +2192,8 @@ priority: 32
 
 --- IR (converting to PI) is invalid/unsupported:
 INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following reasons:
-  - Match field 'unused_field' is invalid for the following reasons:
-    - Match field has @unused annotation.
+  - Match field 'unsupported_field' is invalid for the following reasons:
+    - Match field has @unsupported annotation.
     - Oneof field "format" is not set
   - Action is required.
 
@@ -5471,11 +5471,11 @@ ternary_table_entry {
 --- PD is invalid/unsupported (detected when translating IR to PI):
 Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
 =========================================================================
-unused table used
+unsupported table used
 =========================================================================
 
 --- PD (Input):
-unused_table_entry {
+unsupported_table_entry {
   match {
     ipv6: "::ff22"
     ipv4: "10.10.10.10"
@@ -5483,9 +5483,9 @@ unused_table_entry {
 }
 
 --- PD is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'unused_table' is invalid: Table entry for table 'unused_table' has @unused annotation.
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table entry for table 'unsupported_table' has @unsupported annotation.
 =========================================================================
-ternary table - unused action used
+ternary table - unsupported action used
 =========================================================================
 
 --- PD (Input):
@@ -5497,22 +5497,22 @@ ternary_table_entry {
     }
   }
   action {
-    unused_action {
+    unsupported_action {
     }
   }
   priority: 32
 }
 
 --- PD is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unused_action' is invalid: Action has @unused annotation.
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unsupported_action' is invalid: Action has @unsupported annotation.
 =========================================================================
-ternary table - unused match field used
+ternary table - unsupported match field used
 =========================================================================
 
 --- PD (Input):
 ternary_table_entry {
   match {
-    unused_field {
+    unsupported_field {
       value: "0x052"
     }
   }
@@ -5526,7 +5526,7 @@ ternary_table_entry {
 }
 
 --- PD is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Match field 'unused_field' is invalid: Match field has @unused annotation.
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Match field 'unsupported_field' is invalid: Match field has @unsupported annotation.
 =========================================================================
 ipv4 LPM table with key_only=true
 =========================================================================

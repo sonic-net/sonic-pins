@@ -33,7 +33,7 @@
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
-//TODO(PINS): Add Component/System Translator
+//TODO(PINS): Add Component/System state Translator
 // #include "swss/fakes/fake_component_state_helper.h"
 // #include "swss/fakes/fake_system_state_helper.h"
 

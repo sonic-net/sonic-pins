@@ -782,9 +782,9 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
       continue;
     }
     const auto *ir_match_info = *status_or_ir_match_info;
-    if (IsElementUnused((ir_match_info->match_field().annotations()))) {
+    if (IsElementUnsupported((ir_match_info->match_field().annotations()))) {
       invalid_match_reasons.push_back(
-          absl::StrCat(kNewBullet, "Match field has @unused annotation."));
+          absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
     }
 
     switch (ir_match_info->match_field().match_type()) {
@@ -943,9 +943,9 @@ static absl::Status IrActionInvocationToPd(
         absl::StrCat(kNewBullet, pd_action.status().message())));
   }
   std::vector<std::string> invalid_reasons;
-  if (IsElementUnused((ir_action_info->preamble().annotations()))) {
+  if (IsElementUnsupported((ir_action_info->preamble().annotations()))) {
     invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Action has @unused annotation."));
+        absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
 
   for (const auto &ir_param : ir_action.params()) {
@@ -1056,10 +1056,10 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
 
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnused((ir_table_info->preamble().annotations()))) {
+  if (IsElementUnsupported((ir_table_info->preamble().annotations()))) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Table entry for table '", ir.table_name(),
-                     "' has @unused annotation."));
+                     "' has @unsupported annotation."));
   }
 
   const absl::StatusOr<google::protobuf::Message *> &pd_match =
@@ -1627,9 +1627,9 @@ static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
       continue;
     }
 
-    if (IsElementUnused(ir_match_info->match_field().annotations())) {
+    if (IsElementUnsupported(ir_match_info->match_field().annotations())) {
       invalid_match_reasons.push_back(
-          absl::StrCat(kNewBullet, "Match field has @unused annotation."));
+          absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
     }
 
     auto *ir_match = ir_table_entry->add_matches();
@@ -1815,9 +1815,10 @@ static absl::StatusOr<IrActionInvocation> PdActionInvocationToIr(
   ir_action.set_name(action_name);
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnused((*status_or_ir_action_info)->preamble().annotations())) {
+  if (IsElementUnsupported(
+          (*status_or_ir_action_info)->preamble().annotations())) {
     invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Action has @unused annotation."));
+        absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
 
   for (const auto &pd_arg_name : GetAllFieldNames(*pd_action)) {
@@ -1929,10 +1930,10 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
 
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnused(ir_table_info->preamble().annotations())) {
+  if (IsElementUnsupported(ir_table_info->preamble().annotations())) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Table entry for table '", *p4_table_name,
-                     "' has @unused annotation."));
+                     "' has @unsupported annotation."));
   }
 
   const auto &status_or_pd_table = GetMessageField(pd, *pd_table_field_name);
