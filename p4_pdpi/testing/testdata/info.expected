@@ -15,7 +15,7 @@ tables {
   size: 1024
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 NOT_FOUND: Key not found; Missing definition for action with id 1
 
 =========================================================================
@@ -38,7 +38,7 @@ tables {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found several tables with the same ID 1
 
 =========================================================================
@@ -66,7 +66,7 @@ tables {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found several match fields with the same ID 1 in table "table1"
 
 =========================================================================
@@ -89,7 +89,7 @@ actions {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found several actions with the same ID: 1
 
 =========================================================================
@@ -113,7 +113,7 @@ actions {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found several parameters with the same ID 1 for action do_thing_1
 
 =========================================================================
@@ -136,7 +136,7 @@ tables {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found several tables with the same name "table1"
 
 =========================================================================
@@ -164,7 +164,7 @@ tables {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found several match fields with the same name "field1" in table "table1"
 
 =========================================================================
@@ -187,7 +187,7 @@ actions {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found several actions with the same name: do_thing_2
 
 =========================================================================
@@ -211,7 +211,7 @@ actions {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found several parameters with the same name "param1" for action "do_thing_1"
 
 =========================================================================
@@ -236,7 +236,7 @@ actions {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 INVALID_ARGUMENT: Found invalid format annotation: '@format(IPVx_ADDRESS)'.
 
 =========================================================================
@@ -1255,7 +1255,7 @@ type_info {
   }
 }
 
-pdpi::CreateIrP4Info() result:
+-- pdpi::CreateIrP4Info result --------------------------------------
 pkg_info {
   arch: "v1model"
 }
@@ -7803,3 +7803,15 @@ action_profiles_by_name {
     }
   }
 }
+
+-- pdpi::RemoveUnsupportedEntities diff ---------------------------
+deleted: tables_by_id[33554435].match_fields_by_id[5]: { match_field { id: 5 name: "unsupported_field" annotations: "@unsupported" bitwidth: 1 match_type: TERNARY } is_unsupported: true }
+deleted: tables_by_id[33554435].match_fields_by_name[unsupported_field]: { match_field { id: 5 name: "unsupported_field" annotations: "@unsupported" bitwidth: 1 match_type: TERNARY } is_unsupported: true }
+deleted: tables_by_id[33554435].entry_actions[1]: { ref { id: 16777223 annotations: "@proto_id(2)" } action { preamble { id: 16777223 name: "unsupported_action" alias: "unsupported_action" annotations: "@unsupported" } is_unsupported: true } proto_id: 2 }
+deleted: tables_by_id[33554447]: { preamble { id: 33554447 name: "ingress.unsupported_table" alias: "unsupported_table" annotations: "@unsupported" } match_fields_by_id { key: 1 value { match_field { id: 1 name: "ipv6" annotations: "@format(IPV6_ADDRESS)" bitwidth: 128 match_type: EXACT } format: IPV6 } } match_fields_by_id { key: 2 value { match_field { id: 2 name: "ipv4" annotations: "@format(IPV4_ADDRESS)" bitwidth: 32 match_type: EXACT } format: IPV4 } } match_fields_by_name { key: "ipv4" value { match_field { id: 2 name: "ipv4" annotations: "@format(IPV4_ADDRESS)" bitwidth: 32 match_type: EXACT } format: IPV4 } } match_fields_by_name { key: "ipv6" value { match_field { id: 1 name: "ipv6" annotations: "@format(IPV6_ADDRESS)" bitwidth: 128 match_type: EXACT } format: IPV6 } } default_only_actions { ref { id: 21257015 annotations: "@defaultonly" scope: DEFAULT_ONLY } action { preamble { id: 21257015 name: "NoAction" alias: "NoAction" annotations: "@noWarn(\"unused\")" } } } size: 1024 const_default_action { preamble { id: 21257015 name: "NoAction" alias: "NoAction" annotations: "@noWarn(\"unused\")" } } is_unsupported: true }
+deleted: tables_by_name[ternary_table].match_fields_by_id[5]: { match_field { id: 5 name: "unsupported_field" annotations: "@unsupported" bitwidth: 1 match_type: TERNARY } is_unsupported: true }
+deleted: tables_by_name[ternary_table].match_fields_by_name[unsupported_field]: { match_field { id: 5 name: "unsupported_field" annotations: "@unsupported" bitwidth: 1 match_type: TERNARY } is_unsupported: true }
+deleted: tables_by_name[ternary_table].entry_actions[1]: { ref { id: 16777223 annotations: "@proto_id(2)" } action { preamble { id: 16777223 name: "unsupported_action" alias: "unsupported_action" annotations: "@unsupported" } is_unsupported: true } proto_id: 2 }
+deleted: tables_by_name[unsupported_table]: { preamble { id: 33554447 name: "ingress.unsupported_table" alias: "unsupported_table" annotations: "@unsupported" } match_fields_by_id { key: 1 value { match_field { id: 1 name: "ipv6" annotations: "@format(IPV6_ADDRESS)" bitwidth: 128 match_type: EXACT } format: IPV6 } } match_fields_by_id { key: 2 value { match_field { id: 2 name: "ipv4" annotations: "@format(IPV4_ADDRESS)" bitwidth: 32 match_type: EXACT } format: IPV4 } } match_fields_by_name { key: "ipv4" value { match_field { id: 2 name: "ipv4" annotations: "@format(IPV4_ADDRESS)" bitwidth: 32 match_type: EXACT } format: IPV4 } } match_fields_by_name { key: "ipv6" value { match_field { id: 1 name: "ipv6" annotations: "@format(IPV6_ADDRESS)" bitwidth: 128 match_type: EXACT } format: IPV6 } } default_only_actions { ref { id: 21257015 annotations: "@defaultonly" scope: DEFAULT_ONLY } action { preamble { id: 21257015 name: "NoAction" alias: "NoAction" annotations: "@noWarn(\"unused\")" } } } size: 1024 const_default_action { preamble { id: 21257015 name: "NoAction" alias: "NoAction" annotations: "@noWarn(\"unused\")" } } is_unsupported: true }
+deleted: actions_by_id[16777223]: { preamble { id: 16777223 name: "unsupported_action" alias: "unsupported_action" annotations: "@unsupported" } is_unsupported: true }
+deleted: actions_by_name[unsupported_action]: { preamble { id: 16777223 name: "unsupported_action" alias: "unsupported_action" annotations: "@unsupported" } is_unsupported: true }
