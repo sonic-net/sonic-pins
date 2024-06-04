@@ -355,11 +355,6 @@ static void RunReadRequestTests(pdpi::IrP4Info info) {
                          entities { table_entry {} }
                          entities { table_entry {} }
                        )pb"));
-  RunPiReadRequestTest(info, "valid",
-                       gutil::ParseProtoOrDie<p4::v1::ReadRequest>(R"pb(
-                         device_id: 10
-                         entities { table_entry {} }
-                       )pb"));
 
   // There are no invalid IR read requests, so no RunIrReadRequestTest is
   // needed.

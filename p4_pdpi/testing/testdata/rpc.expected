@@ -50,22 +50,6 @@ entities {
 UNIMPLEMENTED: Only wildcard reads of all table entries are supported. Only 1 entity is supported. Found 2 entities in read request.
 
 =========================================================================
-ReadRequest test: valid
-=========================================================================
-
---- PI (Input):
-device_id: 10
-entities {
-  table_entry {
-  }
-}
-
-TEST FAILED (DO NOT SUBMIT)
-TEST NAME: ReadRequest test: valid
-FAILURE REASON: Expected PI to be invalid (valid PI should instead be tested using RunGenericPdTest.
-
-
-=========================================================================
 ReadRequest test: no meter, no counter
 =========================================================================
 
