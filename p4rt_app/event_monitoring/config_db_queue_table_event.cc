@@ -20,6 +20,7 @@
 
 #include "absl/status/status.h"
 #include "gutil/status.h"
+#include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/p4runtime/queue_translator.h"
 #include "swss/schema.h"
 
@@ -28,16 +29,19 @@ namespace p4rt_app {
 absl::Status ConfigDbQueueTableEventHandler::HandleEvent(
     const std::string& operation, const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {
-  // Ignore Queue mappings for other keys.
-  if (key != queue_table_key_) return absl::OkStatus();
-  if (operation == DEL_COMMAND) {
-    p4runtime_.SetQueueTranslator(QueueTranslator::Empty(), queue_table_key_);
-  } else {
-    ASSIGN_OR_RETURN(
-        auto translator, QueueTranslator::Create(values),
-        _ << "Unable create queue translator for table " << queue_table_key_);
-    p4runtime_.SetQueueTranslator(std::move(translator), queue_table_key_);
+  if (key == "CPU" || key == "FRONT_PANEL") {
+    QueueType queue_type =
+        key == "CPU" ? QueueType::kCpu : QueueType::kFrontPanel;
+    if (operation == DEL_COMMAND) {
+      p4runtime_.AssignQueueTranslator(queue_type, QueueTranslator::Empty());
+    } else {
+      ASSIGN_OR_RETURN(
+          auto translator, QueueTranslator::Create(values),
+          _ << "Unable to create queue translator for table " << key);
+      p4runtime_.AssignQueueTranslator(queue_type, std::move(translator));
+    }
   }
+  // Ignore Queue mappings for other keys.
   return absl::OkStatus();
 }
 

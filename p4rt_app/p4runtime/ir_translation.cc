@@ -39,6 +39,10 @@ bool IsCpuQueue(const p4::config::v1::P4NamedType& type) {
   return type.name() == "qos_queue_t" || type.name() == "cpu_queue_t";
 }
 
+bool IsFrontPanelQueue(const p4::config::v1::P4NamedType& type) {
+  return type.name() == "front_panel_queue_t";
+}
+
 absl::Status TranslatePortValue(
     TranslationDirection direction,
     const boost::bimap<std::string, std::string>& port_map,
@@ -53,20 +57,25 @@ absl::Status TranslatePortValue(
   return absl::OkStatus();
 }
 
-// Optionally translates a CPU queue between CPU queue name and CPU Queue ID
-// syntax.
-absl::Status OptionallyTranslateCpuQueue(TranslationDirection direction,
-					 const QueueTranslator& translator,
-                                         pdpi::IrValue& value) {
+// Optionally translates a queue between queue name and queue ID syntax.
+absl::Status OptionallyTranslateQueue(TranslationDirection direction,
+                                      const QueueTranslator& translator,
+                                      pdpi::IrValue& value) {
   if (value.format_case() != pdpi::IrValue::kStr) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "CPU Queue must use Format::STRING, but found "
-           << value.format_case() << " instead.";
+           << "Queue must use Format::STRING, but found " << value.format_case()
+           << " instead.";
   }
   switch (direction) {
     case TranslationDirection::kForController: {
-      ASSIGN_OR_RETURN(*value.mutable_str(),
-                       translator.OptionallyTranslateIdToName(value.str()));
+      int queue_id;
+      if (!absl::SimpleHexAtoi(value.str(), &queue_id)) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Expected AppDB queue as hex string. Got '" << value.str()
+               << "'.";
+      }
+      auto queue_name = translator.IdToName(queue_id);
+      if (queue_name.ok()) value.set_str(*queue_name);
       return absl::OkStatus();
     }
     case TranslationDirection::kForOrchAgent: {
@@ -113,10 +122,15 @@ absl::Status TranslateAction(const TranslateTableEntryOptions& options,
           << action.name() << "'.";
       continue;
     }
+
     if (IsCpuQueue(param_def->param().type_name())) {
-      RETURN_IF_ERROR(OptionallyTranslateCpuQueue(options.direction,
-                                                  options.cpu_queue_translator,
-                                                  *param.mutable_value()));
+      RETURN_IF_ERROR(OptionallyTranslateQueue(options.direction,
+                                               options.cpu_queue_translator,
+                                               *param.mutable_value()));
+    } else if (IsFrontPanelQueue(param_def->param().type_name())) {
+      RETURN_IF_ERROR(OptionallyTranslateQueue(
+          options.direction, options.front_panel_queue_translator,
+          *param.mutable_value()));
     }
   }
   return absl::OkStatus();
@@ -347,7 +361,9 @@ absl::StatusOr<pdpi::IrEntity> TranslatePiEntityForOrchAgent(
     const p4::v1::Entity& pi_entity, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator, bool translate_key_only) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator,
+    bool translate_key_only) {
   pdpi::IrEntity ir_entity;
   switch (pi_entity.entity_case()) {
     case p4::v1::Entity::kTableEntry: {
@@ -355,15 +371,17 @@ absl::StatusOr<pdpi::IrEntity> TranslatePiEntityForOrchAgent(
           *ir_entity.mutable_table_entry(),
           TranslatePiTableEntryForOrchAgent(
               pi_entity.table_entry(), ir_p4_info, translate_port_ids,
-              port_translation_map, cpu_queue_translator, translate_key_only));
+              port_translation_map, cpu_queue_translator,
+              front_panel_queue_translator, translate_key_only));
       break;
     }
     case p4::v1::Entity::kPacketReplicationEngineEntry: {
-      ASSIGN_OR_RETURN(*ir_entity.mutable_packet_replication_engine_entry(),
-                       TranslatePiPacketReplicationEngineEntryForOrchAgent(
-                           pi_entity.packet_replication_engine_entry(),
-                           ir_p4_info, translate_port_ids, port_translation_map,
-                           cpu_queue_translator, translate_key_only));
+      ASSIGN_OR_RETURN(
+          *ir_entity.mutable_packet_replication_engine_entry(),
+          TranslatePiPacketReplicationEngineEntryForOrchAgent(
+              pi_entity.packet_replication_engine_entry(), ir_p4_info,
+              translate_port_ids, port_translation_map, cpu_queue_translator,
+              front_panel_queue_translator, translate_key_only));
       break;
     }
     default: {
@@ -381,7 +399,9 @@ absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
     const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator, bool translate_key_only) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator,
+    bool translate_key_only) {
   auto ir_table_entry =
       pdpi::PiTableEntryToIr(ir_p4_info, pi_table_entry,
                              pdpi::TranslationOptions{
@@ -396,7 +416,7 @@ absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
 
   RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
       *ir_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
-      cpu_queue_translator));
+      cpu_queue_translator, front_panel_queue_translator));
   return *ir_table_entry;
 }
 
@@ -405,7 +425,9 @@ TranslatePiPacketReplicationEngineEntryForOrchAgent(
     const p4::v1::PacketReplicationEngineEntry& pi_packet_replication_entry,
     const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator, bool translate_key_only) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator,
+    bool translate_key_only) {
   auto ir_packet_replication_engine_entry =
       pdpi::PiPacketReplicationEngineEntryToIr(
           ir_p4_info, pi_packet_replication_entry,
@@ -422,7 +444,8 @@ TranslatePiPacketReplicationEngineEntryForOrchAgent(
   }
   RETURN_IF_ERROR(UpdateIrPacketReplicationEngineEntryForOrchAgent(
       *ir_packet_replication_engine_entry, ir_p4_info, translate_port_ids,
-      port_translation_map, cpu_queue_translator));
+      port_translation_map, cpu_queue_translator,
+      front_panel_queue_translator));
   return *ir_packet_replication_engine_entry;
 }
 
@@ -430,17 +453,20 @@ absl::Status UpdateIrEntityForOrchAgent(
     pdpi::IrEntity& ir_entity, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator) {
   switch (ir_entity.entity_case()) {
     case pdpi::IrEntity::kTableEntry:
       RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
           *ir_entity.mutable_table_entry(), ir_p4_info, translate_port_ids,
-          port_translation_map, cpu_queue_translator));
+          port_translation_map, cpu_queue_translator,
+          front_panel_queue_translator));
       break;
     case pdpi::IrEntity::kPacketReplicationEngineEntry:
       RETURN_IF_ERROR(UpdateIrPacketReplicationEngineEntryForOrchAgent(
           *ir_entity.mutable_packet_replication_engine_entry(), ir_p4_info,
-          translate_port_ids, port_translation_map, cpu_queue_translator));
+          translate_port_ids, port_translation_map, cpu_queue_translator,
+          front_panel_queue_translator));
       break;
     default:
       return gutil::InvalidArgumentErrorBuilder()
@@ -455,7 +481,8 @@ absl::Status UpdateIrTableEntryForOrchAgent(
     pdpi::IrTableEntry& ir_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator) {
   // TODO: Remove this when P4Info uses 64-bit IPv6 ACL matchess.
   // We don't allow overwriting of the p4info, so static is ok here.
 
@@ -467,6 +494,7 @@ absl::Status UpdateIrTableEntryForOrchAgent(
           .translate_port_ids = translate_port_ids,
           .port_map = port_translation_map,
           .cpu_queue_translator = cpu_queue_translator,
+          .front_panel_queue_translator = front_panel_queue_translator,
       },
       ir_table_entry));
   return absl::OkStatus();
@@ -476,7 +504,8 @@ absl::Status UpdateIrPacketReplicationEngineEntryForOrchAgent(
     pdpi::IrPacketReplicationEngineEntry& ir_packet_replication_entry,
     const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const QueueTranslator& cpu_queue_translator) {
+    const QueueTranslator& cpu_queue_translator,
+    const QueueTranslator& front_panel_queue_translator) {
   RETURN_IF_ERROR(TranslatePacketReplicationEntry(
       TranslateTableEntryOptions{
           .direction = TranslationDirection::kForOrchAgent,
@@ -484,6 +513,7 @@ absl::Status UpdateIrPacketReplicationEngineEntryForOrchAgent(
           .translate_port_ids = translate_port_ids,
           .port_map = port_translation_map,
           .cpu_queue_translator = cpu_queue_translator,
+          .front_panel_queue_translator = front_panel_queue_translator,
       },
       ir_packet_replication_entry));
   return absl::OkStatus();
