@@ -63,6 +63,15 @@ using ::pdpi::IrP4Info;
 using ::pdpi::IrTableDefinition;
 
 namespace {
+
+// Checks for an "@unsupported" annotation in the argument.
+bool IsElementUnsupported(
+    const google::protobuf::RepeatedPtrField<std::string> &annotations) {
+  return absl::c_any_of(annotations, [](absl::string_view annotation) {
+    return annotation == "@unsupported";
+  });
+}
+
 // Helper for GetFormat that extracts the necessary info from a P4Info
 // element. T could be p4::config::v1::ControllerPacketMetadata::Metadata,
 // p4::config::v1::MatchField, or p4::config::v1::Action::Param (basically
@@ -1093,6 +1102,8 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
                        param.name(), "\" for action \"",
                        action.preamble().alias(), "\"")));
     }
+    ir_action.set_is_unsupported(
+        IsElementUnsupported(action.preamble().annotations()));
     RETURN_IF_ERROR(gutil::InsertIfUnique(
         info.mutable_actions_by_id(), action.preamble().id(), ir_action,
         absl::StrCat("Found several actions with the same ID: ",
@@ -1151,6 +1162,9 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
         default:
           break;
       }
+
+      ir_match_definition.set_is_unsupported(
+          IsElementUnsupported(match_field.annotations()));
 
       RETURN_IF_ERROR(gutil::InsertIfUnique(
           ir_table_definition.mutable_match_fields_by_id(), match_field.id(),
@@ -1245,6 +1259,9 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
     }
 
     ir_table_definition.set_size(table.size());
+    ir_table_definition.set_is_unsupported(
+        IsElementUnsupported(table.preamble().annotations()));
+
     RETURN_IF_ERROR(gutil::InsertIfUnique(
         info.mutable_tables_by_id(), table_id, ir_table_definition,
         absl::StrCat("Found several tables with the same ID ",
