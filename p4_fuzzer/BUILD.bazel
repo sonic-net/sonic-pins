@@ -97,6 +97,33 @@ cc_library(
 )
 
 cc_library(
+    name = "oracle_util",
+    srcs = [ 
+        "oracle_util.cc",
+    ],  
+    hdrs = ["oracle_util.h"],
+    deps = [ 
+        ":fuzzer_cc_proto",
+        ":switch_state",
+        ":table_entry_key",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:span",
+    ],  
+)
+
+cc_library(
     name = "p4_programs/sai-p4-google/ids",
     hdrs = ["p4_programs/sai-p4-google/ids.h"],
 )
