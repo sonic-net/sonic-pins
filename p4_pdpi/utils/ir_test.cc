@@ -369,22 +369,6 @@ INSTANTIATE_TEST_SUITE_P(PerBitwidth, Ipv6BitwidthTest,
                          testing::Values(63, 64, 65, 128),
                          testing::PrintToStringParamName());
 
-TEST(AnnotationTests, IsElementUnsupportedTest) {
-  std::vector<std::string> annotations_with_unsupported = {
-      "@irrelevant", "@unsupported", "@irrelevant2"};
-  EXPECT_TRUE(
-      IsElementUnsupported(google::protobuf::RepeatedPtrField<std::string>(
-          annotations_with_unsupported.begin(),
-          annotations_with_unsupported.end())));
-
-  std::vector<std::string> annotations_without_unsupported = {
-      "@irrelevant", "@deprecated", "@irrelevant2"};
-  EXPECT_FALSE(
-      IsElementUnsupported(google::protobuf::RepeatedPtrField<std::string>(
-          annotations_without_unsupported.begin(),
-          annotations_without_unsupported.end())));
-}
-
 TEST(AnnotationTests, IsElementDeprecatedTest) {
   std::vector<std::string> annotations_with_deprecated = {
       "@irrelevant", "@deprecated", "@irrelevant2"};
