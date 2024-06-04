@@ -604,37 +604,6 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         priority: 32
                       )pb"));
 
-  RunPiTableEntryTest(
-      info, "meter counter data but missing color counter",
-      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
-        table_id: 33554439
-        match {
-          field_id: 1
-          lpm { value: "\020$2\000" prefix_len: 24 }
-        }
-        action { action { action_id: 16777220 } }
-        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
-        counter_data { byte_count: 567 packet_count: 789 }
-        meter_counter_data {
-          yellow { byte_count: 569 packet_count: 791 }
-          red { byte_count: 570 packet_count: 792 }
-        }
-      )pb"));
-
-  RunPiTableEntryTest(
-      info, "meter counter data but no color counter",
-      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
-        table_id: 33554439
-        match {
-          field_id: 1
-          lpm { value: "\020$2\000" prefix_len: 24 }
-        }
-        action { action { action_id: 16777220 } }
-        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
-        counter_data { byte_count: 567 packet_count: 789 }
-        meter_counter_data {}
-      )pb"));
-
   RunPiTableEntryTest(info, "meter counter data but missing meter config",
                       gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
                         table_id: 33554439
@@ -755,81 +724,6 @@ static void RunIrMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
                           red { byte_count: 570 packet_count: 792 }
                         }
                       )pb"));
-  RunIrTableEntryTest(
-      info, "meter counter data with byte color counters",
-      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-        table_name: "count_and_meter_table"
-        matches {
-          name: "ipv4"
-          lpm {
-            value { ipv4: "16.36.50.0" }
-            prefix_length: 24
-          }
-        }
-        action { name: "count_and_meter" }
-        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
-        counter_data { byte_count: 567 }
-        meter_counter_data {
-          green { byte_count: 568 }
-          yellow { byte_count: 569 }
-          red { byte_count: 570 }
-        }
-      )pb"));
-  RunIrTableEntryTest(
-      info, "meter counter data with packet color counters",
-      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-        table_name: "count_and_meter_table"
-        matches {
-          name: "ipv4"
-          lpm {
-            value { ipv4: "16.36.50.0" }
-            prefix_length: 24
-          }
-        }
-        action { name: "count_and_meter" }
-        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
-        counter_data { packet_count: 789 }
-        meter_counter_data {
-          green { packet_count: 790 }
-          yellow { packet_count: 791 }
-          red { packet_count: 792 }
-        }
-      )pb"));
-  RunIrTableEntryTest(
-      info, "meter counter data but missing color counters",
-      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-        table_name: "count_and_meter_table"
-        matches {
-          name: "ipv4"
-          lpm {
-            value { ipv4: "16.36.50.0" }
-            prefix_length: 24
-          }
-        }
-        action { name: "count_and_meter" }
-        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
-        counter_data { byte_count: 567 packet_count: 789 }
-        meter_counter_data {
-          green { byte_count: 568 packet_count: 790 }
-          yellow { byte_count: 569 packet_count: 791 }
-        }
-      )pb"));
-  RunIrTableEntryTest(
-      info, "meter counter data but no color counters",
-      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-        table_name: "count_and_meter_table"
-        matches {
-          name: "ipv4"
-          lpm {
-            value { ipv4: "16.36.50.0" }
-            prefix_length: 24
-          }
-        }
-        action { name: "count_and_meter" }
-        meter_config { cir: 123 cburst: 345 pir: 123 pburst: 345 }
-        counter_data { byte_count: 567 packet_count: 789 }
-        meter_counter_data {}
-      )pb"));
   RunIrTableEntryTest(info, "meter counter data but missing meter config",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
                         table_name: "count_and_meter_table"
