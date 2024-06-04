@@ -22,6 +22,43 @@ cc_proto_library(
 )
 
 cc_library(
+    name = "switch_state",
+    srcs = ["switch_state.cc"],
+    hdrs = ["switch_state.h"],
+    deps = [ 
+        ":table_entry_key",
+        "//gutil:collections",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:optional",
+    ],  
+)
+
+cc_test(
+    name = "switch_state_test",
+    srcs = ["switch_state_test.cc"],
+    deps = [ 
+        ":switch_state",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "@com_github_google_glog//:glog",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "table_entry_key",
     srcs = ["table_entry_key.cc"],
     hdrs = ["table_entry_key.h"],
