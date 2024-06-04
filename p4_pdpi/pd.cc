@@ -782,7 +782,7 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
       continue;
     }
     const auto *ir_match_info = *status_or_ir_match_info;
-    if (IsElementUnsupported((ir_match_info->match_field().annotations()))) {
+    if (ir_match_info->is_unsupported()) {
       invalid_match_reasons.push_back(
           absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
     }
@@ -921,14 +921,14 @@ static absl::Status IrActionInvocationToPd(
     const IrP4Info &ir_p4info, const IrActionInvocation &ir_action,
     google::protobuf::Message *parent_message) {
   absl::string_view action_name = ir_action.name();
-  const auto &status_or_ir_action_info = gutil::FindPtrOrStatus(
-      ir_p4info.actions_by_name(), std::string(action_name));
-  if (!status_or_ir_action_info.ok()) {
+  absl::StatusOr<const pdpi::IrActionDefinition *> ir_action_info_wrapper =
+      gutil::FindPtrOrStatus(ir_p4info.actions_by_name(), action_name);
+  if (!ir_action_info_wrapper.ok()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
         ActionName(action_name),
         absl::StrCat(kNewBullet, "It does not exist in the P4Info.")));
   }
-  const auto *ir_action_info = *status_or_ir_action_info;
+  const pdpi::IrActionDefinition &ir_action_info = **ir_action_info_wrapper;
   const auto &pd_action_name =
       P4NameToProtobufFieldName(ir_action.name(), kP4Action);
   if (!pd_action_name.ok()) {
@@ -943,7 +943,7 @@ static absl::Status IrActionInvocationToPd(
         absl::StrCat(kNewBullet, pd_action.status().message())));
   }
   std::vector<std::string> invalid_reasons;
-  if (IsElementUnsupported((ir_action_info->preamble().annotations()))) {
+  if (ir_action_info.is_unsupported()) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
@@ -1056,7 +1056,7 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
 
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnsupported((ir_table_info->preamble().annotations()))) {
+  if (ir_table_info->is_unsupported()) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Table entry for table '", ir.table_name(),
                      "' has @unsupported annotation."));
@@ -1627,7 +1627,7 @@ static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
       continue;
     }
 
-    if (IsElementUnsupported(ir_match_info->match_field().annotations())) {
+    if (ir_match_info->is_unsupported()) {
       invalid_match_reasons.push_back(
           absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
     }
@@ -1804,26 +1804,26 @@ static absl::StatusOr<IrActionInvocation> PdActionInvocationToIr(
   }
   const auto *pd_action = *status_or_pd_action;
 
-  const auto &status_or_ir_action_info =
+  absl::StatusOr<const pdpi::IrActionDefinition *> ir_action_info_wrapper =
       gutil::FindPtrOrStatus(ir_p4info.actions_by_name(), action_name);
-  if (!status_or_ir_action_info.ok()) {
+  if (!ir_action_info_wrapper.ok()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
         ActionName(action_name),
         absl::StrCat(kNewBullet, "It does not exist in the P4Info.")));
   }
+  const pdpi::IrActionDefinition &ir_action_info = **ir_action_info_wrapper;
   IrActionInvocation ir_action;
   ir_action.set_name(action_name);
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnsupported(
-          (*status_or_ir_action_info)->preamble().annotations())) {
+  if (ir_action_info.is_unsupported()) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
 
   for (const auto &pd_arg_name : GetAllFieldNames(*pd_action)) {
-    const auto &status_or_param_info = gutil::FindPtrOrStatus(
-        (*status_or_ir_action_info)->params_by_name(), pd_arg_name);
+    const auto &status_or_param_info =
+        gutil::FindPtrOrStatus(ir_action_info.params_by_name(), pd_arg_name);
     if (!status_or_param_info.ok()) {
       invalid_reasons.push_back(GenerateReason(
           ParamName(pd_arg_name), status_or_param_info.status().message()));
@@ -1930,7 +1930,7 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
 
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnsupported(ir_table_info->preamble().annotations())) {
+  if (ir_table_info->is_unsupported()) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Table entry for table '", *p4_table_name,
                      "' has @unsupported annotation."));
