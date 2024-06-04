@@ -13,10 +13,12 @@
 // limitations under the License.
 
 #include <iostream>
+#include <ostream>
 #include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "glog/logging.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -33,14 +35,30 @@ static void RunP4InfoTest(const std::string& test_name, const P4Info& p4info) {
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "P4Info input:" << std::endl;
   std::cout << PrintTextProto(p4info) << std::endl;
-  absl::StatusOr<pdpi::IrP4Info> status_or_info = pdpi::CreateIrP4Info(p4info);
-  std::cout << "pdpi::CreateIrP4Info() result:" << std::endl;
-  if (!status_or_info.ok()) {
-    std::cout << TestStatusToString(status_or_info.status()) << std::endl;
-  } else {
-    std::cout << PrintTextProto(status_or_info.value()) << std::endl;
+  absl::StatusOr<pdpi::IrP4Info> info = pdpi::CreateIrP4Info(p4info);
+  std::cout
+      << "-- pdpi::CreateIrP4Info result --------------------------------------"
+      << std::endl;
+  if (!info.ok()) {
+    std::cout << TestStatusToString(info.status()) << std::endl << std::endl;
+    return;
   }
-  std::cout << std::endl;
+  std::cout << PrintTextProto(*info) << std::endl;
+
+  auto info_without_unsupported = *info;
+  pdpi::RemoveUnsupportedEntities(info_without_unsupported);
+  std::string diff = gutil::ProtoDiff(*info, info_without_unsupported).value();
+
+  std::cout
+      << "-- pdpi::RemoveUnsupportedEntities diff ---------------------------"
+      << std::endl
+      << diff << std::endl
+      << std::endl;
+  if (absl::StrContains(info_without_unsupported.DebugString(),
+                        "unsupported")) {
+    std::cout << "DO NOT SUBMIT: P4Info still contains unsupported entities "
+                 "after call to `pdpi::RemoveUnsupportedEntities`";
+  }
 }
 
 int main(int argc, char** argv) {

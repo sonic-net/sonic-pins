@@ -80,6 +80,7 @@ message TernaryTableEntry {
     Ternary ipv4 = 2; // ternary match / Format::IPV4
     Ternary ipv6 = 3; // ternary match / Format::IPV6 / 128 bits
     Ternary mac = 4; // ternary match / Format::MAC
+    // CAUTION: This match field is not (yet) supported.
     Ternary unsupported_field = 5; // ternary match / Format::HEX_STRING / 1 bits
     Ternary ipv6_upper_64_bits = 6; // ternary match / Format::IPV6 / upper 64 bits
     Ternary ipv6_upper_63_bits = 7; // ternary match / Format::IPV6 / upper 63 bits
@@ -88,6 +89,7 @@ message TernaryTableEntry {
   message Action {
   oneof action {
     DoThing3Action do_thing_3 = 1;
+    // CAUTION: This action is not (yet) supported.
     UnsupportedAction unsupported_action = 2;
   }
   }
@@ -199,6 +201,7 @@ message NoActionTableEntry {
   bytes controller_metadata = 8;
 }
 
+// CAUTION: This table is not (yet) supported.
 message UnsupportedTableEntry {
   message Match {
     string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
@@ -398,6 +401,7 @@ message CountAndMeterAction {
 message DoThing4Action {
 }
 
+// CAUTION: This action is not (yet) supported.
 message UnsupportedAction {
 }
 
@@ -438,6 +442,7 @@ message TableEntry {
     Wcmp2TableEntry wcmp2_table_entry = 8;
     OptionalTableEntry optional_table_entry = 9;
     NoActionTableEntry no_action_table_entry = 13;
+    // CAUTION: This table is not (yet) supported.
     UnsupportedTableEntry unsupported_table_entry = 15;
     PacketCountAndMeterTableEntry packet_count_and_meter_table_entry = 19;
     ByteCountAndMeterTableEntry byte_count_and_meter_table_entry = 23;

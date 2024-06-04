@@ -60,6 +60,10 @@ entities {
   }
 }
 
+TEST FAILED (DO NOT SUBMIT)
+TEST NAME: ReadRequest test: valid
+FAILURE REASON: Expected PI to be invalid (valid PI should instead be tested using RunGenericPdTest.
+
 
 =========================================================================
 ReadRequest test: no meter, no counter
