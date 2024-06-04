@@ -156,10 +156,6 @@ std::string ParamName(absl::string_view param_name);
 // Returns a "Metadata <packet_name>" string.
 std::string MetadataName(absl::string_view metadata_name);
 
-// Checks for an "@unsupported" annotation in the argument.
-bool IsElementUnsupported(
-    const google::protobuf::RepeatedPtrField<std::string> &annotations);
-
 // Checks for an "@deprecated" annotation in the argument.
 bool IsElementDeprecated(
     const google::protobuf::RepeatedPtrField<std::string> &annotations);
