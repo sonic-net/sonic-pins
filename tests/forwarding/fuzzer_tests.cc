@@ -27,6 +27,7 @@
 #include "absl/random/random.h"
 #include "absl/random/seed_sequences.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
@@ -56,6 +57,8 @@
 // TODO: A temporary dependence on SAI to mask a bug. Ideally, safe
 // to remove in April 2024.
 #include "sai_p4/instantiations/google/versions.h"
+#include "tests/integration/system/nsf/interfaces/testbed.h"
+#include "tests/integration/system/nsf/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/thinkit_sanity_tests.h"
 #include "thinkit/mirror_testbed.h"
@@ -441,6 +444,21 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
         << iteration << " out of " << *num_iterations << " iterations."
         << " Fuzzer_Duration set to " << absl::GetFlag(FLAGS_fuzzer_duration)
         << " seconds.";
+  }
+  // NSF Reboot the switch after fuzzing.
+  if (GetParam().ssh_client_for_nsf_reboot.has_value()) {
+    LOG(INFO) << "NSF Reboot the switch after fuzzing.";
+    pins_test::Testbed testbed_variant;
+    testbed_variant.emplace<thinkit::MirrorTestbed*>(&mirror_testbed);
+    absl::StatusOr<std::string> NSF_TestState =
+        pins_test::DoNsfRebootAndWaitForSwitchReady(
+            testbed_variant, **GetParam().ssh_client_for_nsf_reboot);
+    ASSERT_OK(NSF_TestState);
+    LOG(INFO) << "Read switch entries after NSF reboot.";
+    ASSERT_OK_AND_ASSIGN(session, pdpi::P4RuntimeSession::Create(sut));
+    ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> table_entries,
+                         pdpi::ReadPiTableEntries(session.get()));
+    EXPECT_OK(state.AssertEntriesAreEqualToState(table_entries));
   }
 
   LOG(INFO) << "Finished " << iteration << " iterations.";

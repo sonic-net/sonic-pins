@@ -15,6 +15,7 @@
 #define PINS_TESTS_P4_FUZZER_FUZZER_TESTS_H_
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -27,7 +28,7 @@
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "thinkit/mirror_testbed_fixture.h"
-#include "gtest/gtest.h"
+#include "thinkit/ssh_client.h"
 
 namespace p4_fuzzer {
 
@@ -58,7 +59,7 @@ struct FuzzerTestFixtureParams {
   std::optional<int> max_batch_size;
   // The probability of performing a mutation on a given table entry.
   float mutate_update_probability = 0.1;
-  // TODO: b/286413264 - Remove once multicast resources are modeled in p4.
+  // Remove once multicast resources are modeled in p4.
   // The size of the built-in multicast group table.
   int multicast_group_table_size = 512;
   // Determines which type of issues the fuzzer detects. If left out, the fuzzer
@@ -102,9 +103,9 @@ struct FuzzerTestFixtureParams {
   // parameter.
   bool do_not_enforce_fail_on_first_switch_ordering;
   // A function for masking any updates that should not be sent to the switch.
-  std::function<bool(const AnnotatedUpdate &)>
-      IsBuggyUpdateThatShouldBeSkipped =
-          [](const AnnotatedUpdate &update) { return false; };
+  std::function<bool(const AnnotatedUpdate&)> IsBuggyUpdateThatShouldBeSkipped =
+      [](const AnnotatedUpdate& update) { return false; };
+  std::optional<std::shared_ptr<thinkit::SSHClient>> ssh_client_for_nsf_reboot;
 };
 
 class FuzzerTestFixture

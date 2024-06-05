@@ -80,14 +80,18 @@ absl::Status SetUpIngressAclForwardingAllPackets(
   return pdpi::InstallPiTableEntry(p4_session, pi_entry);
 }
 
-// Helper function to build a UDP packet
-dvaas::PacketTestVector UdpPacket(
+// Helper function to build:
+// - an IPv4 UDP input packet with output expectations depending on
+//   `punt_action`.
+// - an IPv6 UDP input packet with output expectations depending on
+//   `punt_action`.
+std::vector<dvaas::PacketTestVector> MakePackets(
     absl::string_view egress_port,
     const sai::NexthopRewriteOptions& rewrite_options,
     std::optional<sai::PuntAction> punt_action) {
   ProtoFixtureRepository repo;
-
-  repo.RegisterValue("@payload", dvaas::MakeTestPacketTagFromUniqueId(1))
+  repo.RegisterValue("@payload_ipv4", dvaas::MakeTestPacketTagFromUniqueId(1))
+      .RegisterValue("@payload_ipv6", dvaas::MakeTestPacketTagFromUniqueId(2))
       .RegisterValue("@ingress_port", egress_port)
       .RegisterValue("@egress_port", egress_port)
       .RegisterValue("@ingress_dst_mac", "00:aa:bb:cc:cc:dd")
@@ -103,83 +107,149 @@ dvaas::PacketTestVector UdpPacket(
       .RegisterValue("@ttl", "0x10")
       .RegisterValue("@decremented_ttl", "0x0f");
 
-  dvaas::PacketTestVector test_vector =
-      repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet", R"pb(
-            ethernet_header {
-              ethernet_destination: @ingress_dst_mac,
-              ethernet_source: @ingress_src_mac,
-              ethertype: "0x0800"  # Udp
-            }
-          )pb")
-          .RegisterSnippetOrDie<packetlib::Header>("@ipv4", R"pb(
-            ipv4_header {
-              version: "0x4"
-              dscp: "0x1b"
-              ecn: "0x1"
-              ihl: "0x5"
-              identification: "0x0000"
-              flags: "0x0"
-              ttl: @ttl
-              fragment_offset: "0x0000"
-              # payload_length: filled in automatically.
-              protocol: "0x11"
-              ipv4_source: "10.0.0.8"
-              ipv4_destination: "10.0.0.1"
-            }
-          )pb")
-          .RegisterSnippetOrDie<packetlib::Header>("@udp", R"pb(
-            udp_header { source_port: "0x0014" destination_port: "0x000a" }
-          )pb")
-          .RegisterMessage("@input_packet", ParsePacketAndFillInComputedFields(
-                                                repo,
-                                                R"pb(
-                                                  headers: @ethernet
-                                                  headers: @ipv4
-                                                  headers: @udp
-                                                  payload: @payload
-                                                )pb"))
-          .RegisterMessage(
-              "@output_packet", ParsePacketAndFillInComputedFields(repo, R"pb(
-                headers: @ethernet {
-                  ethernet_header {
-                    ethernet_destination: @egress_dst_mac
-                    ethernet_source: @egress_src_mac
-                  }
-                }
-                headers: @ipv4 { ipv4_header { ttl: @decremented_ttl } }
-                headers: @udp
-                payload: @payload
-              )pb"))
-          .ParseTextOrDie<dvaas::PacketTestVector>(R"pb(
-            input {
-              type: DATAPLANE
-              packet { port: @ingress_port parsed: @input_packet }
-            }
-            acceptable_outputs {
-              packets { port: @egress_port parsed: @output_packet }
-              packet_ins {
-                metadata {
-                  name: "ingress_port"
-                  value: { str: @ingress_port }
-                }
-                metadata {
-                  name: "target_egress_port"
-                  value: { str: @egress_port }
-                }
-                parsed: @input_packet
+  repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv4", R"pb(
+        ethernet_header {
+          ethernet_destination: @ingress_dst_mac,
+          ethernet_source: @ingress_src_mac,
+          ethertype: "0x0800"  # IPv4
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@ipv4", R"pb(
+        ipv4_header {
+          version: "0x4"
+          dscp: "0x1b"
+          ecn: "0x1"
+          ihl: "0x5"
+          identification: "0x0000"
+          flags: "0x0"
+          ttl: @ttl
+          fragment_offset: "0x0000"
+          # payload_length: filled in automatically.
+          protocol: "0x11"  # UDP
+          ipv4_source: "10.0.0.8"
+          ipv4_destination: "10.0.0.1"
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@udp", R"pb(
+        udp_header { source_port: "0x0014" destination_port: "0x000a" }
+      )pb")
+      .RegisterMessage("@input_packet_ipv4", ParsePacketAndFillInComputedFields(
+                                                 repo,
+                                                 R"pb(
+                                                   headers: @ethernet_ipv4
+                                                   headers: @ipv4
+                                                   headers: @udp
+                                                   payload: @payload_ipv4
+                                                 )pb"))
+      .RegisterMessage(
+          "@output_packet_ipv4", ParsePacketAndFillInComputedFields(repo, R"pb(
+            headers: @ethernet_ipv4 {
+              ethernet_header {
+                ethernet_destination: @egress_dst_mac
+                ethernet_source: @egress_src_mac
               }
             }
-          )pb");
+            headers: @ipv4 { ipv4_header { ttl: @decremented_ttl } }
+            headers: @udp
+            payload: @payload_ipv4
+          )pb"))
+      .RegisterSnippetOrDie<packetlib::Header>("@ethernet_ipv6", R"pb(
+        ethernet_header {
+          ethernet_destination: @ingress_dst_mac,
+          ethernet_source: @ingress_src_mac,
+          ethertype: "0x86dd"  # IPv6
+        }
+      )pb")
+      .RegisterSnippetOrDie<packetlib::Header>("@ipv6", R"pb(
+        ipv6_header {
+          version: "0x6"
+          dscp: "0x1b"
+          ecn: "0x1"
+          flow_label: "0x12345"
+          # payload_length: filled in automatically.
+          next_header: "0x11"  # UDP
+          hop_limit: @ttl
+          ipv6_source: "2002:ad12:4100:3::"
+          ipv6_destination: "2002:ad12:4100:1::"
+        }
+      )pb")
+      .RegisterMessage("@input_packet_ipv6", ParsePacketAndFillInComputedFields(
+                                                 repo,
+                                                 R"pb(
+                                                   headers: @ethernet_ipv6
+                                                   headers: @ipv6
+                                                   headers: @udp
+                                                   payload: @payload_ipv6
+                                                 )pb"))
+      .RegisterMessage(
+          "@output_packet_ipv6", ParsePacketAndFillInComputedFields(repo, R"pb(
+            headers: @ethernet_ipv6 {
+              ethernet_header {
+                ethernet_destination: @egress_dst_mac
+                ethernet_source: @egress_src_mac
+              }
+            }
+            headers: @ipv6 { ipv6_header { hop_limit: @decremented_ttl } }
+            headers: @udp
+            payload: @payload_ipv6
+          )pb"));
 
-  for (dvaas::SwitchOutput& output :
-       *test_vector.mutable_acceptable_outputs()) {
-    if (!punt_action.has_value()) {
-      output.clear_packet_ins();
-    } else if (punt_action.value() == sai::PuntAction::kTrap) {
-      output.clear_packets();
+  std::vector<dvaas::PacketTestVector> test_vectors;
+  // Add IPv4 test vector.
+  test_vectors.push_back(repo.ParseTextOrDie<dvaas::PacketTestVector>(R"pb(
+    input {
+      type: DATAPLANE
+      packet { port: @ingress_port parsed: @input_packet_ipv4 }
+    }
+    acceptable_outputs {
+      packets { port: @egress_port parsed: @output_packet_ipv4 }
+      packet_ins {
+        metadata {
+          name: "ingress_port"
+          value: { str: @ingress_port }
+        }
+        metadata {
+          name: "target_egress_port"
+          value: { str: @egress_port }
+        }
+        parsed: @input_packet_ipv4
+      }
+    }
+  )pb"));
+
+  // Add IPv6 test vector.
+  test_vectors.push_back(repo.ParseTextOrDie<dvaas::PacketTestVector>(R"pb(
+    input {
+      type: DATAPLANE
+      packet { port: @ingress_port parsed: @input_packet_ipv6 }
+    }
+    acceptable_outputs {
+      packets { port: @egress_port parsed: @output_packet_ipv6 }
+      packet_ins {
+        metadata {
+          name: "ingress_port"
+          value: { str: @ingress_port }
+        }
+        metadata {
+          name: "target_egress_port"
+          value: { str: @egress_port }
+        }
+        parsed: @input_packet_ipv6
+      }
+    }
+  )pb"));
+
+  for (dvaas::PacketTestVector& test_vector : test_vectors) {
+    for (dvaas::SwitchOutput& output :
+         *test_vector.mutable_acceptable_outputs()) {
+      if (!punt_action.has_value()) {
+        output.clear_packet_ins();
+      } else if (punt_action.value() == sai::PuntAction::kTrap) {
+        output.clear_packets();
+      }
     }
   }
-  return test_vector;
+  return test_vectors;
 }
 
 // Helper routine to install L3 route
@@ -209,7 +279,6 @@ absl::Status InstallL3Route(pdpi::P4RuntimeSession* switch_session,
 }
 
 TEST_P(AclFeatureTestFixture, AclDenyAction) {
-  dvaas::PacketTestVector test_vector;
   const AclFeatureTestParams& params = GetParam();
   dvaas::DataplaneValidationParams dvaas_params = params.dvaas_params;
 
@@ -252,10 +321,9 @@ TEST_P(AclFeatureTestFixture, AclDenyAction) {
   ASSERT_OK(InstallL3Route(sut_p4rt_session.get(), sut_ir_p4info, control_port,
                            rewrite_options, params.punt_action));
 
-  test_vector = UdpPacket(control_port, rewrite_options, params.punt_action);
-
   // Run test with custom packet test vector.
-  dvaas_params.packet_test_vector_override = {test_vector};
+  dvaas_params.packet_test_vector_override =
+      MakePackets(control_port, rewrite_options, params.punt_action);
   ASSERT_OK_AND_ASSIGN(
       dvaas::ValidationResult validation_result,
       GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
@@ -276,13 +344,15 @@ TEST_P(AclFeatureTestFixture, AclDenyAction) {
                            )pb"));
 
   EXPECT_OK(pdpi::InstallIrTableEntry(*sut_p4rt_session.get(), proto_entry));
-  for (dvaas::SwitchOutput& output :
-       *test_vector.mutable_acceptable_outputs()) {
-    output.clear_packet_ins();
-    output.clear_packets();
+  for (dvaas::PacketTestVector& test_vector :
+       dvaas_params.packet_test_vector_override) {
+    for (dvaas::SwitchOutput& output :
+         *test_vector.mutable_acceptable_outputs()) {
+      output.clear_packet_ins();
+      output.clear_packets();
+    }
   }
 
-  dvaas_params.packet_test_vector_override = {test_vector};
   ASSERT_OK_AND_ASSIGN(
       dvaas::ValidationResult validation_result2,
       GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
