@@ -1,0 +1,1066 @@
+header_types {
+  name: "scalars_0"
+}
+header_types {
+  name: "standard_metadata"
+  id: 1
+  fields {
+    values {
+      string_value: "ingress_port"
+    }
+    values {
+      number_value: 9
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "egress_spec"
+    }
+    values {
+      number_value: 9
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "egress_port"
+    }
+    values {
+      number_value: 9
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "instance_type"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "packet_length"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "enq_timestamp"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "enq_qdepth"
+    }
+    values {
+      number_value: 19
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "deq_timedelta"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "deq_qdepth"
+    }
+    values {
+      number_value: 19
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "ingress_global_timestamp"
+    }
+    values {
+      number_value: 48
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "egress_global_timestamp"
+    }
+    values {
+      number_value: 48
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "mcast_grp"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "egress_rid"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "checksum_error"
+    }
+    values {
+      number_value: 1
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "parser_error"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "priority"
+    }
+    values {
+      number_value: 3
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "_padding"
+    }
+    values {
+      number_value: 3
+    }
+    values {
+      bool_value: false
+    }
+  }
+}
+header_types {
+  name: "ethernet_t"
+  id: 2
+  fields {
+    values {
+      string_value: "dstAddr"
+    }
+    values {
+      number_value: 48
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "srcAddr"
+    }
+    values {
+      number_value: 48
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "etherType"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+}
+header_types {
+  name: "ipv4_t"
+  id: 3
+  fields {
+    values {
+      string_value: "version"
+    }
+    values {
+      number_value: 4
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "ihl"
+    }
+    values {
+      number_value: 4
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "diffserv"
+    }
+    values {
+      number_value: 8
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "totalLen"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "identification"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "flags"
+    }
+    values {
+      number_value: 3
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "fragOffset"
+    }
+    values {
+      number_value: 13
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "ttl"
+    }
+    values {
+      number_value: 8
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "protocol"
+    }
+    values {
+      number_value: 8
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "hdrChecksum"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "srcAddr"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "dstAddr"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+}
+headers {
+  name: "scalars"
+  header_type: "scalars_0"
+  metadata: true
+}
+headers {
+  id: 1
+  name: "standard_metadata"
+  header_type: "standard_metadata"
+  metadata: true
+}
+headers {
+  id: 2
+  name: "ethernet"
+  header_type: "ethernet_t"
+}
+headers {
+  id: 3
+  name: "ipv4"
+  header_type: "ipv4_t"
+}
+parsers {
+  name: "parser"
+  init_state: "start"
+  parse_states {
+    name: "start"
+    transitions {
+      value: "0x0800"
+      type: hexstr
+      next_state: "parse_ipv4"
+    }
+    transitions {
+    }
+  }
+  parse_states {
+    name: "parse_ipv4"
+    id: 1
+    transitions {
+    }
+  }
+}
+deparsers {
+  name: "deparser"
+  source_info {
+    line: 172
+    column: 8
+    source_fragment: "MyDeparser"
+  }
+}
+actions {
+  name: "NoAction"
+}
+actions {
+  name: "MyIngress.drop"
+  id: 1
+  primitives {
+    fields {
+      key: "op"
+      value {
+        string_value: "mark_to_drop"
+      }
+    }
+    fields {
+      key: "parameters"
+      value {
+        list_value {
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "header"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  string_value: "standard_metadata"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    fields {
+      key: "source_info"
+      value {
+        struct_value {
+          fields {
+            key: "column"
+            value {
+              number_value: 8
+            }
+          }
+          fields {
+            key: "filename"
+            value {
+              string_value: ""
+            }
+          }
+          fields {
+            key: "line"
+            value {
+              number_value: 104
+            }
+          }
+          fields {
+            key: "source_fragment"
+            value {
+              string_value: "mark_to_drop(standard_metadata)"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  name: "MyIngress.ipv4_forward"
+  id: 2
+  runtime_data {
+    name: "dstAddr"
+    bitwidth: 48
+  }
+  runtime_data {
+    name: "port"
+    bitwidth: 9
+  }
+  primitives {
+    fields {
+      key: "op"
+      value {
+        string_value: "assign"
+      }
+    }
+    fields {
+      key: "parameters"
+      value {
+        list_value {
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "field"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  list_value {
+                    values {
+                      string_value: "standard_metadata"
+                    }
+                    values {
+                      string_value: "egress_spec"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "runtime_data"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  number_value: 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    fields {
+      key: "source_info"
+      value {
+        struct_value {
+          fields {
+            key: "column"
+            value {
+              number_value: 8
+            }
+          }
+          fields {
+            key: "filename"
+            value {
+              string_value: ""
+            }
+          }
+          fields {
+            key: "line"
+            value {
+              number_value: 108
+            }
+          }
+          fields {
+            key: "source_fragment"
+            value {
+              string_value: "standard_metadata.egress_spec = port"
+            }
+          }
+        }
+      }
+    }
+  }
+  primitives {
+    fields {
+      key: "op"
+      value {
+        string_value: "assign"
+      }
+    }
+    fields {
+      key: "parameters"
+      value {
+        list_value {
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "field"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  list_value {
+                    values {
+                      string_value: "ethernet"
+                    }
+                    values {
+                      string_value: "srcAddr"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "field"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  list_value {
+                    values {
+                      string_value: "ethernet"
+                    }
+                    values {
+                      string_value: "dstAddr"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    fields {
+      key: "source_info"
+      value {
+        struct_value {
+          fields {
+            key: "column"
+            value {
+              number_value: 8
+            }
+          }
+          fields {
+            key: "filename"
+            value {
+              string_value: ""
+            }
+          }
+          fields {
+            key: "line"
+            value {
+              number_value: 109
+            }
+          }
+          fields {
+            key: "source_fragment"
+            value {
+              string_value: "hdr.ethernet.srcAddr = hdr.ethernet.dstAddr"
+            }
+          }
+        }
+      }
+    }
+  }
+  primitives {
+    fields {
+      key: "op"
+      value {
+        string_value: "assign"
+      }
+    }
+    fields {
+      key: "parameters"
+      value {
+        list_value {
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "field"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  list_value {
+                    values {
+                      string_value: "ethernet"
+                    }
+                    values {
+                      string_value: "dstAddr"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "runtime_data"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  number_value: 0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    fields {
+      key: "source_info"
+      value {
+        struct_value {
+          fields {
+            key: "column"
+            value {
+              number_value: 8
+            }
+          }
+          fields {
+            key: "filename"
+            value {
+              string_value: ""
+            }
+          }
+          fields {
+            key: "line"
+            value {
+              number_value: 110
+            }
+          }
+          fields {
+            key: "source_fragment"
+            value {
+              string_value: "hdr.ethernet.dstAddr = dstAddr"
+            }
+          }
+        }
+      }
+    }
+  }
+  primitives {
+    fields {
+      key: "op"
+      value {
+        string_value: "assign"
+      }
+    }
+    fields {
+      key: "parameters"
+      value {
+        list_value {
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "field"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  list_value {
+                    values {
+                      string_value: "ipv4"
+                    }
+                    values {
+                      string_value: "ttl"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "expression"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  struct_value {
+                    fields {
+                      key: "type"
+                      value {
+                        string_value: "expression"
+                      }
+                    }
+                    fields {
+                      key: "value"
+                      value {
+                        struct_value {
+                          fields {
+                            key: "left"
+                            value {
+                              struct_value {
+                                fields {
+                                  key: "type"
+                                  value {
+                                    string_value: "expression"
+                                  }
+                                }
+                                fields {
+                                  key: "value"
+                                  value {
+                                    struct_value {
+                                      fields {
+                                        key: "left"
+                                        value {
+                                          struct_value {
+                                            fields {
+                                              key: "type"
+                                              value {
+                                                string_value: "field"
+                                              }
+                                            }
+                                            fields {
+                                              key: "value"
+                                              value {
+                                                list_value {
+                                                  values {
+                                                    string_value: "ipv4"
+                                                  }
+                                                  values {
+                                                    string_value: "ttl"
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                      fields {
+                                        key: "op"
+                                        value {
+                                          string_value: "+"
+                                        }
+                                      }
+                                      fields {
+                                        key: "right"
+                                        value {
+                                          struct_value {
+                                            fields {
+                                              key: "type"
+                                              value {
+                                                string_value: "hexstr"
+                                              }
+                                            }
+                                            fields {
+                                              key: "value"
+                                              value {
+                                                string_value: "0xff"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                          fields {
+                            key: "op"
+                            value {
+                              string_value: "&"
+                            }
+                          }
+                          fields {
+                            key: "right"
+                            value {
+                              struct_value {
+                                fields {
+                                  key: "type"
+                                  value {
+                                    string_value: "hexstr"
+                                  }
+                                }
+                                fields {
+                                  key: "value"
+                                  value {
+                                    string_value: "0xff"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    fields {
+      key: "source_info"
+      value {
+        struct_value {
+          fields {
+            key: "column"
+            value {
+              number_value: 8
+            }
+          }
+          fields {
+            key: "filename"
+            value {
+              string_value: ""
+            }
+          }
+          fields {
+            key: "line"
+            value {
+              number_value: 111
+            }
+          }
+          fields {
+            key: "source_fragment"
+            value {
+              string_value: "hdr.ipv4.ttl = hdr.ipv4.ttl - 1"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+pipelines {
+  name: "ingress"
+  source_info {
+    line: 100
+    column: 8
+    source_fragment: "MyIngress"
+  }
+  init_table: "node_2"
+  tables {
+    name: "MyIngress.ipv4_lpm"
+    source_info {
+      line: 114
+      column: 10
+      source_fragment: "ipv4_lpm"
+    }
+    key {
+      match_type: lpm
+      name: "hdr.ipv4.dstAddr"
+      target: "ipv4"
+      target: "dstAddr"
+    }
+    match_type: lpm
+    max_size: 1024
+    action_ids: 2
+    action_ids: 1
+    action_ids: 0
+    actions: "MyIngress.ipv4_forward"
+    actions: "MyIngress.drop"
+    actions: "NoAction"
+    default_entry {
+      action_id: 1
+    }
+    next_tables {
+      key: "MyIngress.drop"
+      value: ""
+    }
+    next_tables {
+      key: "MyIngress.ipv4_forward"
+      value: ""
+    }
+    next_tables {
+      key: "NoAction"
+      value: ""
+    }
+  }
+  conditionals {
+    name: "node_2"
+    expression {
+      fields {
+        key: "type"
+        value {
+          string_value: "expression"
+        }
+      }
+      fields {
+        key: "value"
+        value {
+          struct_value {
+            fields {
+              key: "left"
+              value {
+                null_value: NULL_VALUE
+              }
+            }
+            fields {
+              key: "op"
+              value {
+                string_value: "d2b"
+              }
+            }
+            fields {
+              key: "right"
+              value {
+                struct_value {
+                  fields {
+                    key: "type"
+                    value {
+                      string_value: "field"
+                    }
+                  }
+                  fields {
+                    key: "value"
+                    value {
+                      list_value {
+                        values {
+                          string_value: "ipv4"
+                        }
+                        values {
+                          string_value: "$valid$"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    true_next: "MyIngress.ipv4_lpm"
+  }
+}
+pipelines {
+  name: "egress"
+  id: 1
+  source_info {
+    line: 138
+    column: 8
+    source_fragment: "MyEgress"
+  }
+}
