@@ -4978,12 +4978,6 @@ counter_data {
   packet_count: 789
 }
 meter_counter_data {
-  green {
-  }
-  yellow {
-  }
-  red {
-  }
 }
 
 --- PI:
@@ -5011,51 +5005,8 @@ counter_data {
   packet_count: 789
 }
 meter_counter_data {
-  green {
-  }
-  yellow {
-  }
-  red {
-  }
 }
 
-TEST FAILED (DO NOT SUBMIT)
-TEST NAME: table entry with meter counter data but no color counters
-FAILURE REASON: Reverse translation from IR to PD resulted in a different PD.
-
-Differences: added: count_and_meter_table_entry.meter_counter_data.green: { }
-added: count_and_meter_table_entry.meter_counter_data.yellow: { }
-added: count_and_meter_table_entry.meter_counter_data.red: { }
-
-PD (after reverse translation):
-count_and_meter_table_entry {
-  match {
-    ipv4 {
-      value: "16.36.50.0"
-      prefix_length: 24
-    }
-  }
-  action {
-    count_and_meter {
-    }
-  }
-  meter_config {
-    bytes_per_second: 123
-    burst_bytes: 345
-  }
-  counter_data {
-    byte_count: 567
-    packet_count: 789
-  }
-  meter_counter_data {
-    green {
-    }
-    yellow {
-    }
-    red {
-    }
-  }
-}
 
 =========================================================================
 table entry with meter counter data but missing some colors
@@ -5122,8 +5073,6 @@ meter_counter_data {
     byte_count: 568
     packet_count: 790
   }
-  yellow {
-  }
   red {
     byte_count: 570
     packet_count: 792
@@ -5159,53 +5108,12 @@ meter_counter_data {
     byte_count: 568
     packet_count: 790
   }
-  yellow {
-  }
   red {
     byte_count: 570
     packet_count: 792
   }
 }
 
-TEST FAILED (DO NOT SUBMIT)
-TEST NAME: table entry with meter counter data but missing some colors
-FAILURE REASON: Reverse translation from IR to PD resulted in a different PD.
-
-Differences: added: count_and_meter_table_entry.meter_counter_data.yellow: { }
-
-PD (after reverse translation):
-count_and_meter_table_entry {
-  match {
-    ipv4 {
-      value: "16.36.50.0"
-      prefix_length: 24
-    }
-  }
-  action {
-    count_and_meter {
-    }
-  }
-  meter_config {
-    bytes_per_second: 123
-    burst_bytes: 345
-  }
-  counter_data {
-    byte_count: 567
-    packet_count: 789
-  }
-  meter_counter_data {
-    green {
-      byte_count: 568
-      packet_count: 790
-    }
-    yellow {
-    }
-    red {
-      byte_count: 570
-      packet_count: 792
-    }
-  }
-}
 
 =========================================================================
 missing matches with key_only=true
