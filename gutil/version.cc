@@ -59,8 +59,6 @@ absl::StatusOr<Version> ParseVersion(absl::string_view version_string) {
   if (!RE2::FullMatch(version_string, *kSemanticVersionRegex,
                       &version.major_version, &version.minor_version,
                       &version.patch_version)) {
-    // TODO: Remove this hack once all P4Infos have versions.
-    if (version_string.empty()) return Version{0, 0, 0};
     return gutil::InvalidArgumentErrorBuilder()
            << "unable to parse '" << version_string
            << "' as a semantic version string; expected string of the form "
