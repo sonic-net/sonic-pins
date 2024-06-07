@@ -292,5 +292,104 @@ TEST_P(AclFeatureTestFixture, AclDenyAction) {
   EXPECT_OK(validation_result2.HasSuccessRateOfAtLeast(1.0));
 }
 
+TEST_P(AclFeatureTestFixture, AclEgressL2Table) {
+  const AclFeatureTestParams& params = GetParam();
+  dvaas::DataplaneValidationParams dvaas_params = params.dvaas_params;
+  dvaas_params.artifact_prefix = "sanity_dvaas";
+  const netaddr::MacAddress output_src_mac(0x1, 0x2, 0x3, 0x1, 0x2, 0x3);
+
+  // we are not testing punt action in this test
+  // so skip for those variants
+  if (params.punt_action.has_value()) {
+    GTEST_SKIP();
+  }
+
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+
+  // Initialize the connection, clear all entities, and (for the SUT) push
+  // P4Info.
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), /*gnmi_config=*/std::nullopt, GetParam().sut_p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> control_switch_p4rt_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.ControlSwitch(), /*gnmi_config=*/std::nullopt,
+          /*p4info=*/std::nullopt));
+  ASSERT_NE(sut_p4rt_session, nullptr);
+  ASSERT_NE(control_switch_p4rt_session, nullptr);
+
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::GetForwardingPipelineConfigResponse sut_config,
+      pdpi::GetForwardingPipelineConfig(sut_p4rt_session.get()));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "sut_p4Info.textproto", sut_config.config().p4info().DebugString()));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info sut_ir_p4info,
+                       pdpi::CreateIrP4Info(sut_config.config().p4info()));
+
+  // Get control ports to test on.
+  ASSERT_OK_AND_ASSIGN(
+      auto gnmi_stub_control,
+      GetParam().mirror_testbed->GetMirrorTestbed().Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::string control_port,
+                       pins_test::GetAnyUpInterfacePortId(*gnmi_stub_control));
+
+  const sai::NexthopRewriteOptions rewrite_options = {.src_mac_rewrite =
+                                                          output_src_mac};
+
+  ASSERT_OK(InstallL3Route(sut_p4rt_session.get(), sut_ir_p4info, control_port,
+                           rewrite_options, /*punt_action=*/std::nullopt));
+
+  // Run test with custom packet test vector.
+  dvaas_params.packet_test_vector_override =
+      MakePackets(control_port, rewrite_options, /*punt_action=*/std::nullopt);
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+
+  // Log statistics and check that things succeeded.
+  validation_result.LogStatistics();
+  EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
+
+  ASSERT_OK_AND_ASSIGN(sut_p4rt_session,
+                       pdpi::P4RuntimeSession::Create(testbed.Sut()));
+
+  // Install AclEgress Drop
+  ASSERT_OK_AND_ASSIGN(auto proto_entry,
+                       gutil::ParseTextProto<pdpi::IrTableEntry>(
+                           R"pb(table_name: "acl_egress_l2_table"
+                                priority: 1
+                                matches {
+                                  name: "src_mac"
+                                  ternary {
+                                    value { mac: "01:02:03:01:02:03" }
+                                    mask { mac: "ff:ff:ff:ff:ff:ff" }
+                                  }
+                                }
+                                action { name: "acl_drop" }
+                           )pb"));
+
+  EXPECT_OK(pdpi::InstallIrTableEntry(*sut_p4rt_session.get(), proto_entry));
+
+  for (dvaas::PacketTestVector& test_vector :
+       dvaas_params.packet_test_vector_override) {
+    for (dvaas::SwitchOutput& output :
+         *test_vector.mutable_acceptable_outputs()) {
+      output.clear_packets();
+    }
+  }
+
+  dvaas_params.artifact_prefix = "real_test_dvaas";
+  ASSERT_OK_AND_ASSIGN(
+      dvaas::ValidationResult validation_result2,
+      GetParam().dvaas->ValidateDataplane(testbed, dvaas_params));
+
+  // Log statistics and check that things succeeded.
+  validation_result2.LogStatistics();
+  EXPECT_OK(validation_result2.HasSuccessRateOfAtLeast(1.0));
+}
+
 }  // namespace
 }  // namespace pins_test
