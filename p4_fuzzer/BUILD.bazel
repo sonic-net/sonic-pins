@@ -171,9 +171,66 @@ cc_library(
     ],  
 )
 
+cc_test(
+    name = "fuzzer_showcase_test",
+    srcs = [
+        "fuzzer_showcase_test.cc",
+    ],
+    data = ["sai_main_info.pb.txt"],
+    deps = [
+        ":annotation_util",
+        ":fuzzer_cc_proto",
+        ":mutation_and_fuzz_util",
+        "//gutil:proto",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "constraints_util",
+    srcs = ["constraints_util.cc"],
+    hdrs = ["constraints_util.h"],
+    deps = [
+        "//gutil:status",
+        "@com_github_google_glog//:glog",
+        "@com_github_ivmai_cudd//:cudd",
+        "@com_github_p4lang_p4_constraints//p4_constraints:ast_cc_proto",
+        "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
+        "@com_gnu_gmp//:gmp",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:variant",
+    ],
+)
+
 cc_library(
     name = "p4_programs/sai-p4-google/ids",
     hdrs = ["p4_programs/sai-p4-google/ids.h"],
+)
+
+cc_test(
+    name = "constraints_util_integration_test",
+    srcs = [
+        "constraints_util_integration_test.cc",
+    ],
+    data = [
+        "constraints_equals.p4info.pb.txt",
+        "constraints_not_equals.p4info.pb.txt",
+    ],
+    deps = [
+        ":constraints_util",
+        "//gutil:proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
+        "@com_github_p4lang_p4_constraints//p4_constraints/backend:interpreter",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
 
 p4_library(
