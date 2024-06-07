@@ -139,9 +139,12 @@ def pins_infra_deps():
     if not native.existing_rule("com_gnu_gmp"):
         http_archive(
             name = "com_gnu_gmp",
-            url = "https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz",
-            strip_prefix = "gmp-6.1.2",
-            sha256 = "87b565e89a9a684fe4ebeeddb8399dce2599f9c9049854ca8c0dfbdea0e21912",
+            urls = [
+                "https://gmplib.org/download/gmp/gmp-6.2.1.tar.xz",
+                "https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.xz",
+            ],
+            strip_prefix = "gmp-6.2.1",
+            sha256 = "fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2",
             build_file = "@//:bazel/BUILD.gmp.bazel",
         )
     if not native.existing_rule("com_github_z3prover_z3"):
