@@ -25,6 +25,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
 #include "gutil/collections.h"
