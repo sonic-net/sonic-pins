@@ -225,6 +225,15 @@ message MulticastRouterInterfaceTableEntry {
     oneof action {
       SetMulticastSrcMacAction set_multicast_src_mac = 1;
       L2MulticastPassthroughAction l2_multicast_passthrough = 2;
+      // CAUTION: This action is not (yet) supported.
+      SetSrcMacAction set_src_mac = 3;
+      // CAUTION: This action is not (yet) supported.
+      SetSrcMacAndVlanIdAction set_src_mac_and_vlan_id = 4;
+      // CAUTION: This action is not (yet) supported.
+      SetSrcMacAndDstMacAndVlanIdAction set_src_mac_and_dst_mac_and_vlan_id = 5;
+      // CAUTION: This action is not (yet) supported.
+      SetSrcMacAndPreserveIngressVlanIdAction
+          set_src_mac_and_preserve_ingress_vlan_id = 6;
     }
   }
   Action action = 2;
@@ -926,6 +935,29 @@ message MirrorWithVlanTagAndIpfixEncapsulationAction {
 message EgressLoopbackAction {}
 
 message L2MulticastPassthroughAction {}
+
+// CAUTION: This action is not (yet) supported.
+message SetSrcMacAction {
+  string src_mac = 1;  // Format::MAC
+}
+
+// CAUTION: This action is not (yet) supported.
+message SetSrcMacAndVlanIdAction {
+  string src_mac = 1;  // Format::MAC
+  string vlan_id = 2;  // Format::HEX_STRING / 12 bits
+}
+
+// CAUTION: This action is not (yet) supported.
+message SetSrcMacAndDstMacAndVlanIdAction {
+  string src_mac = 1;  // Format::MAC
+  string dst_mac = 2;  // Format::MAC
+  string vlan_id = 3;  // Format::HEX_STRING / 12 bits
+}
+
+// CAUTION: This action is not (yet) supported.
+message SetSrcMacAndPreserveIngressVlanIdAction {
+  string src_mac = 1;  // Format::MAC
+}
 
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.

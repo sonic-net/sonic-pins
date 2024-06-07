@@ -984,6 +984,22 @@ tables {
     annotations: "@proto_id(2)"
   }
   action_refs {
+    id: 16777248
+    annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 16777249
+    annotations: "@proto_id(4)"
+  }
+  action_refs {
+    id: 16777250
+    annotations: "@proto_id(5)"
+  }
+  action_refs {
+    id: 16777251
+    annotations: "@proto_id(6)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1663,6 +1679,78 @@ actions {
     id: 16777241
     name: "egress.packet_rewrites.multicast_rewrites.set_multicast_src_mac"
     alias: "set_multicast_src_mac"
+  }
+  params {
+    id: 1
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+}
+actions {
+  preamble {
+    id: 16777249
+    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_vlan_id"
+    alias: "set_src_mac_and_vlan_id"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+  params {
+    id: 2
+    name: "vlan_id"
+    bitwidth: 12
+  }
+}
+actions {
+  preamble {
+    id: 16777248
+    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac"
+    alias: "set_src_mac"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+}
+actions {
+  preamble {
+    id: 16777250
+    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_dst_mac_and_vlan_id"
+    alias: "set_src_mac_and_dst_mac_and_vlan_id"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+  params {
+    id: 2
+    name: "dst_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+  params {
+    id: 3
+    name: "vlan_id"
+    bitwidth: 12
+  }
+}
+actions {
+  preamble {
+    id: 16777251
+    name: "egress.packet_rewrites.multicast_rewrites.set_src_mac_and_preserve_ingress_vlan_id"
+    alias: "set_src_mac_and_preserve_ingress_vlan_id"
+    annotations: "@unsupported"
   }
   params {
     id: 1
