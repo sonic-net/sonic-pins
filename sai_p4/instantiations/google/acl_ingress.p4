@@ -227,6 +227,22 @@ control acl_ingress(in headers_t headers,
     local_metadata.wcmp_group_id_valid = false;
   }
 
+  @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
+  action redirect_to_nexthop(
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
+    @refers_to(nexthop_table, nexthop_id)
+    nexthop_id_t nexthop_id) {
+
+    // Set nexthop id.
+    local_metadata.nexthop_id_valid = true;
+    local_metadata.nexthop_id_value = nexthop_id;
+
+    // Cancel other forwarding decisions (if any).
+    local_metadata.wcmp_group_id_valid = false;
+    standard_metadata.mcast_grp = 0;
+  }
+
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_INGRESS_TABLE_ID)
   @sai_acl(INGRESS)
@@ -351,6 +367,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(local_metadata);
       @proto_id(6) redirect_to_l2mc_group();
+      @proto_id(7) redirect_to_nexthop();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -505,22 +522,6 @@ control acl_ingress(in headers_t headers,
     const default_action = NoAction;
     counters = acl_ingress_counting_counter;
     size = ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
-  @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
-  action redirect_to_nexthop(
-    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
-    @sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)
-    @refers_to(nexthop_table, nexthop_id)
-    nexthop_id_t nexthop_id) {
-
-    // Set nexthop id.
-    local_metadata.nexthop_id_valid = true;
-    local_metadata.nexthop_id_value = nexthop_id;
-
-    // Cancel other forwarding decisions (if any).
-    local_metadata.wcmp_group_id_valid = false;
-    standard_metadata.mcast_grp = 0;
   }
 
   @id(ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_ACTION_ID)

@@ -636,6 +636,10 @@ tables {
     annotations: "@proto_id(6)"
   }
   action_refs {
+    id: 16777490
+    annotations: "@proto_id(7)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1584,6 +1588,23 @@ actions {
     annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_L2MC_GROUP)"
     annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
+  }
+}
+actions {
+  preamble {
+    id: 16777490
+    name: "ingress.acl_ingress.redirect_to_nexthop"
+    alias: "redirect_to_nexthop"
+  }
+  params {
+    id: 1
+    name: "nexthop_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)"
+    annotations: "@refers_to(nexthop_table , nexthop_id)"
+    type_name {
+      name: "nexthop_id_t"
+    }
   }
 }
 actions {
