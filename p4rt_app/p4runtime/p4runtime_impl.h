@@ -40,6 +40,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -333,6 +334,13 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   // read performance we cache table entries in software.
   absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>
       table_entry_cache_ ABSL_GUARDED_BY(server_state_lock_);
+
+  // Monitoring resources in hardware can be difficult. For example in WCMP if a
+  // port is down the lower layers will remove those path both freeing resources
+  // and ensuring packets are not routed to a down port. To ensure we do not
+  // overuse space we track resource usage in the P4RT layer.
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name_ ABSL_GUARDED_BY(server_state_lock_);
 
   // Performance statistics for P4RT Write().
   EventDataTracker<int> write_batch_requests_
