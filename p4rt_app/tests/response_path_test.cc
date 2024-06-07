@@ -1213,5 +1213,65 @@ TEST_F(ResponsePathTest, ReadCacheUsesCanonicalFormToStoreTableEntries) {
   EXPECT_EQ(read_response.entities_size(), 1);
 }
 
+TEST_F(ResponsePathTest, OnlyTheFirstErrorShouldNotBeMarkedAborted) {
+  // P4 write request.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "80"
+                    ipv6_dst { value: "2002:a17:506:c115::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Expected P4RT AppDb entry.
+  auto table_entry1 = test_lib::AppDbEntryBuilder{}
+                          .SetTableName("FIXED_IPV6_TABLE")
+                          .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
+                          .AddMatchField("vrf_id", "80")
+                          .SetAction("set_nexthop_id")
+                          .AddActionParam("nexthop_id", "20");
+  auto table_entry2 = test_lib::AppDbEntryBuilder{}
+                          .SetTableName("FIXED_IPV6_TABLE")
+                          .AddMatchField("ipv6_dst", "2002:a17:506:c115::/64")
+                          .AddMatchField("vrf_id", "80")
+                          .SetAction("set_nexthop_id")
+                          .AddActionParam("nexthop_id", "20");
+
+  // Simulate 2 errors from the lower layers.
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      table_entry1.GetKey(), "SWSS_RC_INVALID_PARAM", "my error message");
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      table_entry2.GetKey(), "SWSS_RC_INVALID_PARAM", "my error message");
+
+  EXPECT_THAT(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                     write_request),
+              StatusIs(absl::StatusCode::kUnknown,
+                       AllOf(HasSubstr("#1: INVALID_ARGUMENT"),
+                             HasSubstr("#2: ABORTED"))));
+}
+
 }  // namespace
 }  // namespace p4rt_app

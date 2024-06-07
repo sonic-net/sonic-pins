@@ -16,14 +16,12 @@
 #ifndef PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_
 #define PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_
 
-#include <memory>
+#include <cstdint>
+#include <optional>
+#include <string>
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/ascii.h"
-#include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
 #include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
@@ -43,14 +41,52 @@ enum class AppDbTableType {
   VRF_TABLE,
 };
 
+// Action profiles are used to model things like WCMP where we can have multiple
+// actions with different weights. Resource accounting can be measured either
+// against the total number of actions, or the sum total of all the action
+// weights.
+struct ActionProfileResources {
+  std::string name;
+  int32_t number_of_actions = 0;
+  int64_t total_weight = 0;
+};
+
+// Each table resource usually only counts as 1 (i.e. one table entry), but
+// depending on the table they may include an action profile (e.g. WCMP).
+struct TableResources {
+  std::string name;
+  std::optional<ActionProfileResources> action_profile;
+};
+
 // AppDb entries can be handled in any order by P4RT, but for error reporting
 // purposes we need to keep track of the RPC update index.
 struct AppDbEntry {
-  int rpc_index;
+  // A write request sends a list of TableEntries that need to be handled. The
+  // rpc_index is the index into that list.
+  int rpc_index = 0;
+
+  // The IR translation of the PI request.
   pdpi::IrTableEntry entry;
+
+  // Specifies if this request is an INSERT MODIFY or DELETE.
   p4::v1::Update::Type update_type;
+
+  // Normalized PI table entries. Note this will be semantically the same as the
+  // original request, but does not have to be syntactically the same.
   p4::v1::TableEntry pi_table_entry;
+
+  // A unique hash of the entries match fields. Used to identify duplicates and
+  // any caching of entries.
   gutil::TableEntryKey table_entry_key;
+
+  // The net utilization change for table entries with group actions. If the
+  // update_type is an insert then this value will simply be the resources for
+  // the entry. If the update_type is a modify then this value is the difference
+  // between the new and old entries. If the update_type is a delete then this
+  // value is the resources of the old entry.
+  TableResources resource_utilization_change;
+
+  // The SWSS OrchAgent that should handle this entry.
   AppDbTableType appdb_table = AppDbTableType::UNKNOWN;
 };
 
