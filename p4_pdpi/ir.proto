@@ -167,6 +167,10 @@ message IrPacketIoMetadataDefinition {
   // Required, the format of this parameter as deduced from the parameter type
   // and annotations.
   Format format = 2;
+  // True if metadata field has @padding (go/pdpi-padding) annotation present,
+  // otherwise false. Indicates that metadata is excluded from IR and PD proto,
+  // and zero-valued in PI proto.
+  bool is_padding = 3;
 }
 
 // Describes an entire P4 program.

@@ -1525,6 +1525,10 @@ packet {
     metadata_id: 2
     value: "\001"
   }
+  metadata {
+    metadata_id: 3
+    value: "\000"
+  }
 }
 
 
@@ -1625,6 +1629,10 @@ packet {
     metadata_id: 2
     value: "eth-1/2/3"
   }
+  metadata {
+    metadata_id: 3
+    value: "\000"
+  }
 }
 
 
@@ -1684,6 +1692,10 @@ error {
       metadata {
         metadata_id: 2
         value: "\001"
+      }
+      metadata {
+        metadata_id: 3
+        value: "\000"
       }
     }
   }

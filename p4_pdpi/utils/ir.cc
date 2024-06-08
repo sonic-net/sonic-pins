@@ -396,6 +396,25 @@ std::string IrValueString(const IrValue &value) {
   return "";
 }
 
+absl::StatusOr<std::string> IrValueToFormattedString(const IrValue &value,
+                                                     Format format) {
+  switch (format) {
+    case Format::MAC:
+      return value.mac();
+    case Format::IPV4:
+      return value.ipv4();
+    case Format::IPV6:
+      return value.ipv6();
+    case Format::STRING:
+      return value.str();
+    case Format::HEX_STRING:
+      return value.hex_str();
+    default:
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unexpected format: " << Format_Name(format);
+  }
+}
+
 bool IsAllZeros(const std::string &s) {
   bool has_non_zero_value = false;
   for (const auto &c : s) {

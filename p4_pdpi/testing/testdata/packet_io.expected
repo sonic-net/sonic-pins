@@ -12,11 +12,35 @@ metadata {
   metadata_id: 1
   value: "4"
 }
+metadata {
+  metadata_id: 2
+  value: "#"
+}
+metadata {
+  metadata_id: 3
+  value: "\000"
+}
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: 'packet-in' message is invalid for the following reasons:
-  - Duplicate metadata found with ID 1.
-  - Metadata 'target_egress_port' with id 2 is missing.
+INVALID_ARGUMENT: 'packet-in' message is invalid: Duplicate metadata found with ID 1.
+
+=========================================================================
+PacketIn test: missing metadata
+=========================================================================
+
+--- PI (Input):
+payload: "1"
+metadata {
+  metadata_id: 1
+  value: "4"
+}
+metadata {
+  metadata_id: 3
+  value: "\000"
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: 'packet-in' message is invalid: Metadata 'target_egress_port' with id 2 is missing.
 
 =========================================================================
 PacketIn test: extra metadata
@@ -34,14 +58,18 @@ metadata {
 }
 metadata {
   metadata_id: 3
+  value: "\000"
+}
+metadata {
+  metadata_id: 4
   value: "\0224"
 }
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: 'packet-in' message is invalid:  Metadata with ID 3 not defined.
+INVALID_ARGUMENT: 'packet-in' message is invalid:  Metadata with ID 4 not defined.
 
 =========================================================================
-PacketIn test: missing metadata
+PacketIn test: padding metadata is non-zero
 =========================================================================
 
 --- PI (Input):
@@ -50,9 +78,73 @@ metadata {
   metadata_id: 1
   value: "4"
 }
+metadata {
+  metadata_id: 2
+  value: "#"
+}
+metadata {
+  metadata_id: 3
+  value: "\022"
+}
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: 'packet-in' message is invalid: Metadata 'target_egress_port' with id 2 is missing.
+INVALID_ARGUMENT: 'packet-in' message is invalid:  Metadata with ID 3 has @padding annotation, so bytestring must be all zeros.
+
+=========================================================================
+PacketIn test: padding metadata present in IR during IR->PI
+=========================================================================
+
+--- IR (Input):
+payload: "1"
+metadata {
+  name: "ingress_port"
+  value {
+    hex_str: "0x034"
+  }
+}
+metadata {
+  name: "target_egress_port"
+  value {
+    str: "eth-1/2/3"
+  }
+}
+metadata {
+  name: "unused_padding"
+  value {
+    hex_str: "0x0"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: 'packet-in' message is invalid: Metadata 'unused_padding' with id 3 has @padding annotation so it must be omitted in IR representation.
+
+=========================================================================
+PacketIn test: padding metadata present in IR during IR->PD
+=========================================================================
+
+--- IR (Input):
+payload: "1"
+metadata {
+  name: "ingress_port"
+  value {
+    hex_str: "0x034"
+  }
+}
+metadata {
+  name: "target_egress_port"
+  value {
+    str: "eth-1/2/3"
+  }
+}
+metadata {
+  name: "unused_padding"
+  value {
+    hex_str: "0x0"
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: 'packet-in' message is invalid: Metadata with name 'unused_padding' has @padding annotation and so it must be omitted in IR representation.
 
 =========================================================================
 PacketIn test: ok
@@ -89,6 +181,10 @@ metadata {
 metadata {
   metadata_id: 2
   value: "eth-1/2/3"
+}
+metadata {
+  metadata_id: 3
+  value: "\000"
 }
 
 
@@ -128,6 +224,10 @@ metadata {
   metadata_id: 2
   value: "\00423"
 }
+metadata {
+  metadata_id: 3
+  value: "\000"
+}
 
 
 =========================================================================
@@ -144,11 +244,17 @@ metadata {
   metadata_id: 1
   value: "\001"
 }
+metadata {
+  metadata_id: 2
+  value: "\001"
+}
+metadata {
+  metadata_id: 3
+  value: "\000"
+}
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: 'packet-out' message is invalid for the following reasons:
-  - Duplicate metadata found with ID 1.
-  - Metadata 'submit_to_ingress' with id 2 is missing.
+INVALID_ARGUMENT: 'packet-out' message is invalid: Duplicate metadata found with ID 1.
 
 =========================================================================
 PacketOut test: missing metadata
@@ -159,6 +265,10 @@ payload: "1"
 metadata {
   metadata_id: 1
   value: "\001"
+}
+metadata {
+  metadata_id: 3
+  value: "\000"
 }
 
 --- PI is invalid/unsupported:
@@ -180,11 +290,93 @@ metadata {
 }
 metadata {
   metadata_id: 3
+  value: "\000"
+}
+metadata {
+  metadata_id: 4
   value: "\001"
 }
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: 'packet-out' message is invalid:  Metadata with ID 3 not defined.
+INVALID_ARGUMENT: 'packet-out' message is invalid:  Metadata with ID 4 not defined.
+
+=========================================================================
+PacketOut test: padding metadata is non-zero
+=========================================================================
+
+--- PI (Input):
+payload: "1"
+metadata {
+  metadata_id: 1
+  value: "\000"
+}
+metadata {
+  metadata_id: 2
+  value: "\001"
+}
+metadata {
+  metadata_id: 3
+  value: "\001"
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: 'packet-out' message is invalid:  Metadata with ID 3 has @padding annotation, so bytestring must be all zeros.
+
+=========================================================================
+PacketOut test: padding metadata present in IR during IR->PI
+=========================================================================
+
+--- IR (Input):
+payload: "1"
+metadata {
+  name: "egress_port"
+  value {
+    str: "eth-1/2/3"
+  }
+}
+metadata {
+  name: "submit_to_ingress"
+  value {
+    hex_str: "0x1"
+  }
+}
+metadata {
+  name: "unused_padding"
+  value {
+    hex_str: "0x0"
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: 'packet-out' message is invalid: Metadata 'unused_padding' with id 3 has @padding annotation so it must be omitted in IR representation.
+
+=========================================================================
+PacketOut test: padding metadata present in IR during IR->PD
+=========================================================================
+
+--- IR (Input):
+payload: "1"
+metadata {
+  name: "egress_port"
+  value {
+    str: "eth-1/2/3"
+  }
+}
+metadata {
+  name: "submit_to_ingress"
+  value {
+    hex_str: "0x1"
+  }
+}
+metadata {
+  name: "unused_padding"
+  value {
+    hex_str: "0x0"
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: 'packet-out' message is invalid: Metadata with name 'unused_padding' has @padding annotation and so it must be omitted in IR representation.
 
 =========================================================================
 PacketOut test: ok
@@ -222,6 +414,10 @@ metadata {
   metadata_id: 2
   value: "\001"
 }
+metadata {
+  metadata_id: 3
+  value: "\000"
+}
 
 
 =========================================================================
@@ -257,4 +453,8 @@ metadata {
 metadata {
   metadata_id: 2
   value: "\001"
+}
+metadata {
+  metadata_id: 3
+  value: "\000"
 }
