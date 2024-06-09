@@ -1210,6 +1210,12 @@ controller_packet_metadata {
       name: "string_id_t"
     }
   }
+  metadata {
+    id: 3
+    name: "unused_padding"
+    annotations: "@padding"
+    bitwidth: 3
+  }
 }
 controller_packet_metadata {
   preamble {
@@ -1229,6 +1235,12 @@ controller_packet_metadata {
     id: 2
     name: "submit_to_ingress"
     bitwidth: 1
+  }
+  metadata {
+    id: 3
+    name: "unused_padding"
+    annotations: "@padding"
+    bitwidth: 6
   }
 }
 type_info {
@@ -7686,6 +7698,18 @@ packet_in_metadata_by_id {
     format: STRING
   }
 }
+packet_in_metadata_by_id {
+  key: 3
+  value {
+    metadata {
+      id: 3
+      name: "unused_padding"
+      annotations: "@padding"
+      bitwidth: 3
+    }
+    is_padding: true
+  }
+}
 packet_in_metadata_by_name {
   key: "ingress_port"
   value {
@@ -7707,6 +7731,18 @@ packet_in_metadata_by_name {
       }
     }
     format: STRING
+  }
+}
+packet_in_metadata_by_name {
+  key: "unused_padding"
+  value {
+    metadata {
+      id: 3
+      name: "unused_padding"
+      annotations: "@padding"
+      bitwidth: 3
+    }
+    is_padding: true
   }
 }
 packet_out_metadata_by_id {
@@ -7732,6 +7768,18 @@ packet_out_metadata_by_id {
     }
   }
 }
+packet_out_metadata_by_id {
+  key: 3
+  value {
+    metadata {
+      id: 3
+      name: "unused_padding"
+      annotations: "@padding"
+      bitwidth: 6
+    }
+    is_padding: true
+  }
+}
 packet_out_metadata_by_name {
   key: "egress_port"
   value {
@@ -7753,6 +7801,18 @@ packet_out_metadata_by_name {
       name: "submit_to_ingress"
       bitwidth: 1
     }
+  }
+}
+packet_out_metadata_by_name {
+  key: "unused_padding"
+  value {
+    metadata {
+      id: 3
+      name: "unused_padding"
+      annotations: "@padding"
+      bitwidth: 6
+    }
+    is_padding: true
   }
 }
 references {

@@ -1280,8 +1280,21 @@ absl::Status IrPacketIoToPd(const IrP4Info &info, const std::string &kind,
                                              name, "' not defined."));
       continue;
     }
-    const absl::StatusOr<std::string> &raw_value =
-        IrValueString(metadata.value());
+
+    const pdpi::IrPacketIoMetadataDefinition &metadata_definition =
+        **status_or_metadata_definition;
+
+    // See go/pdpi-padding.
+    if (metadata_definition.is_padding()) {
+      invalid_reasons.push_back(absl::StrCat(
+          kNewBullet, "Metadata with name '", name,
+          "' has @padding annotation and so it must be omitted in IR "
+          "representation."));
+      continue;
+    }
+
+    const absl::StatusOr<std::string> &raw_value = IrValueToFormattedString(
+        metadata.value(), metadata_definition.format());
     if (!raw_value.ok()) {
       invalid_reasons.push_back(
           GenerateReason(MetadataName(name), raw_value.status().message()));
@@ -2171,21 +2184,24 @@ absl::StatusOr<T> PdPacketIoToIr(const IrP4Info &info, const std::string &kind,
         absl::StrCat(kNewBullet, pd_metadata.status().message())));
   }
   std::vector<std::string> invalid_reasons;
-  for (const auto &entry : Ordered(metadata_by_name)) {
+  for (const auto &[name, metadata] : Ordered(metadata_by_name)) {
+    // Skip metadata with @padding annotation (go/pdpi-padding).
+    if (metadata.is_padding()) continue;
+
     const absl::StatusOr<std::string> &pd_entry =
-        GetStringField(**pd_metadata, entry.first);
+        GetStringField(**pd_metadata, name);
     if (!pd_entry.ok()) {
-      invalid_reasons.push_back(GenerateReason(MetadataName(entry.first),
-                                               pd_entry.status().message()));
+      invalid_reasons.push_back(
+          GenerateReason(MetadataName(name), pd_entry.status().message()));
       continue;
     }
     auto *ir_metadata = result.add_metadata();
-    ir_metadata->set_name(entry.first);
+    ir_metadata->set_name(name);
     const absl::StatusOr<IrValue> ir_value =
-        FormattedStringToIrValue(*pd_entry, entry.second.format());
+        FormattedStringToIrValue(*pd_entry, metadata.format());
     if (!ir_value.ok()) {
-      invalid_reasons.push_back(GenerateReason(MetadataName(entry.first),
-                                               ir_value.status().message()));
+      invalid_reasons.push_back(
+          GenerateReason(MetadataName(name), ir_value.status().message()));
       continue;
     }
     *ir_metadata->mutable_value() = *ir_value;

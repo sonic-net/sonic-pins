@@ -555,7 +555,6 @@ message PacketOut {
   message Metadata {
     string egress_port = 1;        // Format::STRING
     string submit_to_ingress = 2;  // Format::HEX_STRING / 1 bits
-    string unused_pad = 3;         // Format::HEX_STRING / 7 bits
   }
   Metadata metadata = 2;
 }

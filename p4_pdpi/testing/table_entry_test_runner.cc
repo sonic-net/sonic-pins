@@ -43,7 +43,7 @@ static void RunPiTableEntryTest(const pdpi::IrP4Info& info,
 static void RunIrTableEntryTest(const pdpi::IrP4Info& info,
                                 const std::string& test_name,
                                 const pdpi::IrTableEntry& ir) {
-  RunGenericIrTest<pdpi::IrTableEntry, p4::v1::TableEntry>(
+  RunGenericIrToPiTest<pdpi::IrTableEntry, p4::v1::TableEntry>(
       info, test_name, ir,
       [](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir) {
         return IrTableEntryToPi(info, ir, false);

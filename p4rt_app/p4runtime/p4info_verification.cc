@@ -69,7 +69,7 @@ absl::Status ValidatePacketIo(const p4::config::v1::P4Info& p4info) {
         type_name { name: "port_id_t" }
       }
       metadata { id: 2 name: "submit_to_ingress" bitwidth: 1 }
-      metadata { id: 3 name: "unused_pad" bitwidth: 7 }
+      metadata { id: 3 name: "unused_pad" annotations: "@padding" bitwidth: 6 }
     }
   )pb";
 

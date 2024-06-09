@@ -90,10 +90,9 @@ void RunGenericPiTest(
 
 // Runs a generic test starting from an invalid IR and checks that it cannot be
 // translated to PI. If you want to test valid IR, instead write a
-// generic PD test. IR to PD is not tested, since only PI to PD is supported for
-// converting to PD.
+// generic PD test.
 template <typename IR, typename PI>
-void RunGenericIrTest(
+void RunGenericIrToPiTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
     const std::function<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>&
         ir_to_pi) {
