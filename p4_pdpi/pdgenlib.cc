@@ -371,6 +371,8 @@ StatusOr<std::string> GetPacketIoMessage(const IrP4Info& info) {
   absl::StrAppend(&result, "  bytes payload = 1;\n\n");
   absl::StrAppend(&result, "  message Metadata {\n");
   for (const auto& [name, meta] : Ordered(info.packet_in_metadata_by_name())) {
+    // Skip PI-only padding.
+    if (meta.is_padding()) continue;
     ASSIGN_OR_RETURN(
         const std::string meta_name,
         P4NameToProtobufFieldName(meta.metadata().name(), kP4MetaField));
@@ -387,6 +389,8 @@ StatusOr<std::string> GetPacketIoMessage(const IrP4Info& info) {
   absl::StrAppend(&result, "  bytes payload = 1;\n\n");
   absl::StrAppend(&result, "  message Metadata {\n");
   for (const auto& [name, meta] : Ordered(info.packet_out_metadata_by_name())) {
+    // Skip PI-only padding.
+    if (meta.is_padding()) continue;
     ASSIGN_OR_RETURN(
         const std::string meta_name,
         P4NameToProtobufFieldName(meta.metadata().name(), kP4MetaField));

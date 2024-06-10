@@ -4,6 +4,7 @@
 #include <v1model.p4>
 #include "../../fixed/headers.p4"
 #include "../../fixed/metadata.p4"
+#include "../../fixed/packet_io.p4"
 #include "acl_common_actions.p4"
 #include "ids.h"
 #include "minimum_guaranteed_sizes.p4"
@@ -34,10 +35,13 @@ control acl_ingress(in headers_t headers,
   action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_ingress_counter.count();
     acl_ingress_meter.read(local_metadata.color);
+    local_metadata.packet_in_target_egress_port = standard_metadata.egress_spec;
+    local_metadata.packet_in_ingress_port = standard_metadata.ingress_port;
 
     // We model the behavior for GREEN packes only below.
     // TODO: Branch on color and model behavior for all colors.
-    clone(CloneType.I2E, COPY_TO_CPU_SESSION_ID);
+    clone_preserving_field_list(CloneType.I2E, COPY_TO_CPU_SESSION_ID, 
+                                PreservedFieldList.CLONE_I2E_PACKET_IN);
   }
 
   // Copy the packet to the CPU. The original packet is dropped.

@@ -65,35 +65,24 @@
 //   packet_replication_engine_entry {
 //     clone_session_entry {
 //       session_id: COPY_TO_CPU_SESSION_ID
-//       replicas { egress_port: 0xfffffffd } # to CPU
+//       replicas {
+//        egress_port: SAI_P4_CPU_PORT
+//        instance: CLONE_REPLICA_INSTANCE_PACKET_IN
+//       }
 //     }
 //   }
 // }
 //
-#define COPY_TO_CPU_SESSION_ID 1024
+#define COPY_TO_CPU_SESSION_ID 255
 
 // --- Packet-IO ---------------------------------------------------------------
 
-// Packet-in ingress port field. Indicates which port the packet arrived at.
-// Uses @p4runtime_translation(.., string).
 #define PACKET_IN_INGRESS_PORT_ID 1
-
-// Packet-in target egress port field. Indicates the port a packet would have
-// taken if it had not gotten trapped. Uses @p4runtime_translation(.., string).
 #define PACKET_IN_TARGET_EGRESS_PORT_ID 2
+#define PACKET_IN_UNUSED_PAD_ID 3
 
-// Packet-out egress port field. Indicates the egress port for the packet-out to
-// be taken. Mutually exclusive with "submit_to_ingress". Uses
-// @p4runtime_translation(.., string).
 #define PACKET_OUT_EGRESS_PORT_ID 1
-
-// Packet-out submit_to_ingress field. Indicates that the packet should go
-// through the ingress pipeline to determine which port to take (if any).
-// Mutually exclusive with "egress_port".
 #define PACKET_OUT_SUBMIT_TO_INGRESS_ID 2
-
-// TODO: BMV2 requires the header to be multiple of 8-bits.
-// Packet-out unused padding field to align the header to 8-bit multple.
 #define PACKET_OUT_UNUSED_PAD_ID 3
 
 //--- Packet Replication Engine Instances --------------------------------------
@@ -103,6 +92,7 @@
 // replication engine (PRE) in the V1Model architecture. However, the values are
 // not defined by the P4 specification. Here we define our own values; these may
 // be changed when we adopt another architecture.
-#define CLONE_REPLICA_INSTANCE 1
+#define CLONE_REPLICA_INSTANCE_PACKET_IN 1
+#define CLONE_REPLICA_INSTANCE_MIRRORING 2
 
 #endif  // SAI_IDS_H_

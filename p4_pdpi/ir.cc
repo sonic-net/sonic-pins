@@ -118,6 +118,12 @@ absl::Status ProcessPacketIoMetadataDefinition(
     ASSIGN_OR_RETURN(const auto &format,
                      GetFormatForP4InfoElement(metadata, type_info));
     ir_metadata.set_format(format);
+    if (absl::c_any_of(metadata.annotations(),
+                       [](absl::string_view annotation) {
+                         return annotation == "@padding";
+                       })) {
+      ir_metadata.set_is_padding(true);
+    }
     RETURN_IF_ERROR(gutil::InsertIfUnique(
         by_id, metadata.id(), ir_metadata,
         absl::StrCat("Found several \"", kind,
@@ -600,22 +606,34 @@ StatusOr<O> PiPacketIoToIr(const IrP4Info &info, const std::string &kind,
       continue;
     }
 
-    const auto &status_or_metadata_definition =
+    const auto &status_or_metadata_definition_ptr =
         gutil::FindPtrOrStatus(metadata_by_id, id);
-    if (!status_or_metadata_definition.ok()) {
+    if (!status_or_metadata_definition_ptr.ok()) {
       invalid_reasons.push_back(
           absl::StrCat(kNewBullet, " Metadata with ID ", id, " not defined."));
       continue;
     }
 
-    const auto *metadata_definition = *status_or_metadata_definition;
+    const pdpi::IrPacketIoMetadataDefinition metadata_definition =
+        **status_or_metadata_definition_ptr;
+
+    // Metadata with @padding annotation must be all zeros and must not be
+    // included in IR representation (go/pdpi-padding).
+    if (metadata_definition.is_padding()) {
+      if (!IsAllZeros(metadata.value())) {
+        invalid_reasons.push_back(absl::StrCat(
+            kNewBullet, " Metadata with ID ", id,
+            " has @padding annotation, so bytestring must be all zeros."));
+      }
+      continue;
+    }
 
     IrPacketMetadata ir_metadata;
-    const std::string &metadata_name = metadata_definition->metadata().name();
+    const std::string &metadata_name = metadata_definition.metadata().name();
     ir_metadata.set_name(metadata_name);
     const absl::StatusOr<IrValue> ir_value = ArbitraryByteStringToIrValue(
-        metadata_definition->format(),
-        metadata_definition->metadata().bitwidth(), metadata.value());
+        metadata_definition.format(), metadata_definition.metadata().bitwidth(),
+        metadata.value());
     if (!ir_value.ok()) {
       invalid_reasons.push_back(GenerateReason(MetadataName(metadata_name),
                                                ir_value.status().message()));
@@ -984,6 +1002,15 @@ StatusOr<p4::v1::ActionProfileActionSet> IrActionSetToPi(
   return pi;
 }
 
+// Creates a piece of padding metadata. Metadata with the @padding annotation
+// must contain a zero value bytestring (go/pdpi-padding).
+p4::v1::PacketMetadata CreatePaddingMetadata(uint32_t metadata_id) {
+  p4::v1::PacketMetadata metadata;
+  metadata.set_metadata_id(metadata_id);
+  metadata.set_value(std::string({'\0'}));
+  return metadata;
+}
+
 template <typename I, typename O>
 StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
                            const O &packet) {
@@ -1015,31 +1042,44 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
       continue;
     }
 
-    const auto &status_or_metadata_definition =
+    const auto &status_or_metadata_definition_ptr =
         gutil::FindPtrOrStatus(metadata_by_name, name);
-    if (!status_or_metadata_definition.ok()) {
+    if (!status_or_metadata_definition_ptr.ok()) {
       invalid_reasons.push_back(absl::StrCat(kNewBullet, "Metadata with name ",
                                              name, " not defined."));
       continue;
     }
-    const auto *metadata_definition = *status_or_metadata_definition;
+    const pdpi::IrPacketIoMetadataDefinition &metadata_definition =
+        **status_or_metadata_definition_ptr;
+
+    // Metadata with @padding annotation must not be present in IR
+    // representation (go/pdpi-padding).
+    if (metadata_definition.is_padding()) {
+      invalid_reasons.push_back(absl::StrCat(
+          kNewBullet, "Metadata '", metadata_definition.metadata().name(),
+          "' with id ", metadata_definition.metadata().id(),
+          " has @padding annotation so it must be omitted in "
+          "IR representation."));
+      continue;
+    }
+
     p4::v1::PacketMetadata pi_metadata;
-    pi_metadata.set_metadata_id(metadata_definition->metadata().id());
+    pi_metadata.set_metadata_id(metadata_definition.metadata().id());
     const absl::Status &valid =
-        ValidateIrValueFormat(metadata.value(), metadata_definition->format());
+        ValidateIrValueFormat(metadata.value(), metadata_definition.format());
     if (!valid.ok()) {
       invalid_reasons.push_back(
           GenerateReason(MetadataName(name), valid.message()));
       continue;
     }
     const absl::StatusOr<std::string> value = IrValueToNormalizedByteString(
-        metadata.value(), metadata_definition->metadata().bitwidth());
+        metadata.value(), metadata_definition.metadata().bitwidth());
     if (!value.ok()) {
       invalid_reasons.push_back(
           GenerateReason(MetadataName(name), value.status().message()));
       continue;
     }
-    if (metadata_definition->format() == STRING) {
+    if (metadata_definition.format() == STRING) {
       pi_metadata.set_value(*value);
     } else {
       pi_metadata.set_value(ArbitraryToCanonicalByteString(*value));
@@ -1047,13 +1087,14 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
     *result.add_metadata() = pi_metadata;
   }
   // Check for missing metadata
-  for (const auto &item : metadata_by_name) {
-    const auto &name = item.first;
-    const auto &meta = item.second;
-    if (!used_metadata_names.contains(name)) {
+  for (const auto &[name, metadata] : metadata_by_name) {
+    // Insert padding metadata into PI representation (go/pdpi-padding).
+    if (metadata.is_padding()) {
+      *result.add_metadata() = CreatePaddingMetadata(metadata.metadata().id());
+    } else if (!used_metadata_names.contains(name)) {
       invalid_reasons.push_back(
-          absl::StrCat(kNewBullet, "Metadata '", meta.metadata().name(),
-                       "' with id ", meta.metadata().id(), " is missing."));
+          absl::StrCat(kNewBullet, "Metadata '", metadata.metadata().name(),
+                       "' with id ", metadata.metadata().id(), " is missing."));
     }
   }
 

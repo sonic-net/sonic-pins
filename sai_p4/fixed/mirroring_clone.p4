@@ -83,8 +83,9 @@ control mirroring_clone(inout headers_t headers,
       if (mirror_session_table.apply().hit) {
         // Map mirror port to Packet Replication Engine session.
         if (mirror_port_to_pre_session_table.apply().hit) {
-          clone_preserving_field_list(CloneType.I2E, pre_session,
-                                      (bit<8>)PreservedFieldList.CLONE_I2E);
+          clone_preserving_field_list(
+            CloneType.I2E, pre_session,
+            (bit<8>)PreservedFieldList.CLONE_I2E_MIRRORING);
         }
       }
     }
