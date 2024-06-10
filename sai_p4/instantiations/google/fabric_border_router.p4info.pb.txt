@@ -1,5 +1,6 @@
 pkg_info {
   name: "fabric_border_router.p4"
+  version: "2.3.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -92,7 +93,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767361
-  size: 255
+  size: 254
 }
 tables {
   preamble {
@@ -562,7 +563,7 @@ tables {
   const_default_action_id: 21257015
   direct_resource_ids: 318767362
   direct_resource_ids: 352321792
-  size: 256
+  size: 255
 }
 tables {
   preamble {
@@ -696,7 +697,7 @@ tables {
   }
   const_default_action_id: 21257015
   direct_resource_ids: 318767364
-  size: 128
+  size: 127
 }
 actions {
   preamble {

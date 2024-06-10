@@ -21,6 +21,8 @@
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
 #include "admit_google_system_mac.p4"
+#include "versions.h"
+
 
 control ingress(inout headers_t headers,
                 inout local_metadata_t local_metadata,
@@ -49,6 +51,10 @@ control egress(inout headers_t headers,
 #ifndef PKG_INFO_NAME
 #define PKG_INFO_NAME "middleblock.p4"
 #endif
-@pkginfo(name = PKG_INFO_NAME, organization = "Google")
+@pkginfo(
+  name = PKG_INFO_NAME,
+  organization = "Google",
+  version = SAI_P4_PKGINFO_VERSION_LATEST
+)
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;
