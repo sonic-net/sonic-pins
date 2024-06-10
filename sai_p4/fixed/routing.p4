@@ -194,9 +194,14 @@ control routing(in headers_t headers,
     local_metadata.route_metadata = route_metadata;
   }
 
-  @max_group_size(WCMP_GROUP_SELECTOR_MAX_SUM_OF_WEIGHTS_PER_GROUP)
+  // TODO: When the P4RT compiler supports the size selector
+  // annotation, this should be used to specify the semantics.
+  // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS)
+  // TODO: Uncomment when supported by the P4RT compiler.
+  // @max_member_weight(WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT)
+  @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE)
   action_selector(HashAlgorithm.identity,
-                  WCMP_GROUP_SELECTOR_MAX_SUM_OF_WEIGHTS_ACROSS_ALL_GROUPS,
+		  WCMP_GROUP_SELECTOR_SIZE,
                   WCMP_SELECTOR_INPUT_BITWIDTH)
       wcmp_group_selector;
 

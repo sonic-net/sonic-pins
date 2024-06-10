@@ -29,3 +29,4 @@ bazel run :union_p4info_up_to_date_test -- --update
 
 # Check P4 program.
 bazel test :sai_p4info_test
+echo "You also need to regenerate our auto-generated test packets after P4 program updates. See go/packet-synthesizer for details.";

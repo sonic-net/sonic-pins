@@ -12,6 +12,11 @@ namespace sai_pd {
 // is initialized, or `absl::nullopt` otherwise.
 absl::optional<std::string> TableEntryName(const sai::TableEntry& entry);
 
+// Returns the name of the table that `entry` belongs to provided the entry
+// is initialized, or `absl::nullopt` otherwise.
+// This function gets table name by removing "_entry" suffix
+absl::optional<std::string> TableName(const sai::TableEntry& entry);
+
 // Returns human-readable string representation of the given update status.
 std::string UpdateStatusToString(const sai::UpdateStatus& status);
 
