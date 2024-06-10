@@ -38,6 +38,22 @@ static void RunPiPacketInTest(const pdpi::IrP4Info& info,
       pdpi::PiPacketInToIr);
 }
 
+static void RunIrToPiPacketInTest(const pdpi::IrP4Info& info,
+                                  const std::string& test_name,
+                                  const pdpi::IrPacketIn& ir) {
+  RunGenericIrToPiTest<pdpi::IrPacketIn, p4::v1::PacketIn>(
+      info, absl::StrCat("PacketIn test: ", test_name), ir,
+      pdpi::IrPacketInToPi);
+}
+
+static void RunIrToPdPacketInTest(const pdpi::IrP4Info& info,
+                                  const std::string& test_name,
+                                  const pdpi::IrPacketIn& ir) {
+  RunGenericIrToPdTest<pdpi::IrPacketIn, pdpi::PacketIn>(
+      info, absl::StrCat("PacketIn test: ", test_name), ir,
+      pdpi::IrPacketInToPd);
+}
+
 static void RunPdPacketInTest(const pdpi::IrP4Info& info,
                               const std::string& test_name,
                               const pdpi::PacketIn& pd,
@@ -57,6 +73,22 @@ static void RunPiPacketOutTest(const pdpi::IrP4Info& info,
       pdpi::PiPacketOutToIr);
 }
 
+static void RunIrToPiPacketOutTest(const pdpi::IrP4Info& info,
+                                   const std::string& test_name,
+                                   const pdpi::IrPacketOut& ir) {
+  RunGenericIrToPiTest<pdpi::IrPacketOut, p4::v1::PacketOut>(
+      info, absl::StrCat("PacketOut test: ", test_name), ir,
+      pdpi::IrPacketOutToPi);
+}
+
+static void RunIrToPdPacketOutTest(const pdpi::IrP4Info& info,
+                                   const std::string& test_name,
+                                   const pdpi::IrPacketOut& ir) {
+  RunGenericIrToPdTest<pdpi::IrPacketOut, pdpi::PacketOut>(
+      info, absl::StrCat("PacketOut test: ", test_name), ir,
+      pdpi::IrPacketOutToPd);
+}
+
 static void RunPdPacketOutTest(const pdpi::IrP4Info& info,
                                const std::string& test_name,
                                const pdpi::PacketOut& pd,
@@ -74,20 +106,62 @@ static void RunPacketInTests(pdpi::IrP4Info info) {
                       payload: "1"
                       metadata { metadata_id: 1 value: "\x34" }
                       metadata { metadata_id: 1 value: "\x34" }
-                    )pb"));
-
-  RunPiPacketInTest(info, "extra metadata",
-                    gutil::ParseProtoOrDie<p4::v1::PacketIn>(R"pb(
-                      payload: "1"
-                      metadata { metadata_id: 1 value: "\x34" }
                       metadata { metadata_id: 2 value: "\x23" }
-                      metadata { metadata_id: 3 value: "\x124" }
+                      metadata { metadata_id: 3 value: "\x0" }
                     )pb"));
   RunPiPacketInTest(info, "missing metadata",
                     gutil::ParseProtoOrDie<p4::v1::PacketIn>(R"pb(
                       payload: "1"
                       metadata { metadata_id: 1 value: "\x34" }
+                      metadata { metadata_id: 3 value: "\x0" }
                     )pb"));
+  RunPiPacketInTest(info, "extra metadata",
+                    gutil::ParseProtoOrDie<p4::v1::PacketIn>(R"pb(
+                      payload: "1"
+                      metadata { metadata_id: 1 value: "\x34" }
+                      metadata { metadata_id: 2 value: "\x23" }
+                      metadata { metadata_id: 3 value: "\x0" }
+                      metadata { metadata_id: 4 value: "\x124" }
+                    )pb"));
+  RunPiPacketInTest(info, "padding metadata is non-zero",
+                    gutil::ParseProtoOrDie<p4::v1::PacketIn>(R"pb(
+                      payload: "1"
+                      metadata { metadata_id: 1 value: "\x34" }
+                      metadata { metadata_id: 2 value: "\x23" }
+                      metadata { metadata_id: 3 value: "\x12" }
+                    )pb"));
+  RunIrToPiPacketInTest(info, "padding metadata present in IR during IR->PI",
+                        gutil::ParseProtoOrDie<pdpi::IrPacketIn>(R"pb(
+                          payload: "1"
+                          metadata {
+                            name: "ingress_port"
+                            value { hex_str: "0x034" }
+                          }
+                          metadata {
+                            name: "target_egress_port"
+                            value { str: "eth-1/2/3" }
+                          }
+                          metadata {
+                            name: "unused_padding"
+                            value { hex_str: "0x0" }
+                          }
+                        )pb"));
+  RunIrToPdPacketInTest(info, "padding metadata present in IR during IR->PD",
+                        gutil::ParseProtoOrDie<pdpi::IrPacketIn>(R"pb(
+                          payload: "1"
+                          metadata {
+                            name: "ingress_port"
+                            value { hex_str: "0x034" }
+                          }
+                          metadata {
+                            name: "target_egress_port"
+                            value { str: "eth-1/2/3" }
+                          }
+                          metadata {
+                            name: "unused_padding"
+                            value { hex_str: "0x0" }
+                          }
+                        )pb"));
   RunPdPacketInTest(
       info, "ok", gutil::ParseProtoOrDie<pdpi::PacketIn>(R"pb(
         payload: "1"
@@ -109,20 +183,63 @@ static void RunPacketOutTests(pdpi::IrP4Info info) {
                        payload: "1"
                        metadata { metadata_id: 1 value: "\x1" }
                        metadata { metadata_id: 1 value: "\x1" }
+                       metadata { metadata_id: 2 value: "\x1" }
+                       metadata { metadata_id: 3 value: "\x0" }
                      )pb"));
 
   RunPiPacketOutTest(info, "missing metadata",
                      gutil::ParseProtoOrDie<p4::v1::PacketOut>(R"pb(
                        payload: "1"
                        metadata { metadata_id: 1 value: "\x1" }
+                       metadata { metadata_id: 3 value: "\x0" }
                      )pb"));
   RunPiPacketOutTest(info, "extra metadata",
                      gutil::ParseProtoOrDie<p4::v1::PacketOut>(R"pb(
                        payload: "1"
                        metadata { metadata_id: 1 value: "\x0" }
                        metadata { metadata_id: 2 value: "\x1" }
+                       metadata { metadata_id: 3 value: "\x0" }
+                       metadata { metadata_id: 4 value: "\x1" }
+                     )pb"));
+  RunPiPacketOutTest(info, "padding metadata is non-zero",
+                     gutil::ParseProtoOrDie<p4::v1::PacketOut>(R"pb(
+                       payload: "1"
+                       metadata { metadata_id: 1 value: "\x0" }
+                       metadata { metadata_id: 2 value: "\x1" }
                        metadata { metadata_id: 3 value: "\x1" }
                      )pb"));
+  RunIrToPiPacketOutTest(info, "padding metadata present in IR during IR->PI",
+                         gutil::ParseProtoOrDie<pdpi::IrPacketOut>(R"pb(
+                           payload: "1"
+                           metadata {
+                             name: "egress_port"
+                             value { str: "eth-1/2/3" }
+                           }
+                           metadata {
+                             name: "submit_to_ingress"
+                             value { hex_str: "0x1" }
+                           }
+                           metadata {
+                             name: "unused_padding"
+                             value { hex_str: "0x0" }
+                           }
+                         )pb"));
+  RunIrToPdPacketOutTest(info, "padding metadata present in IR during IR->PD",
+                         gutil::ParseProtoOrDie<pdpi::IrPacketOut>(R"pb(
+                           payload: "1"
+                           metadata {
+                             name: "egress_port"
+                             value { str: "eth-1/2/3" }
+                           }
+                           metadata {
+                             name: "submit_to_ingress"
+                             value { hex_str: "0x1" }
+                           }
+                           metadata {
+                             name: "unused_padding"
+                             value { hex_str: "0x0" }
+                           }
+                         )pb"));
   RunPdPacketOutTest(
       info, "ok", gutil::ParseProtoOrDie<pdpi::PacketOut>(R"pb(
         payload: "1"

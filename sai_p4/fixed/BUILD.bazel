@@ -29,6 +29,7 @@ filegroup(
         "minimum_guaranteed_sizes.p4",
         "mirroring_clone.p4",
         "mirroring_encap.p4",
+	"packet_io.p4",
         "packet_rewrites.p4",
         "parser.p4",
         "roles.h",

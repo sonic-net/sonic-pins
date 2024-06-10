@@ -98,7 +98,6 @@ class FakePacketIoTest : public testing::Test {
     sai::PacketOut::Metadata& metadata = *packet_out.mutable_metadata();
     metadata.set_egress_port(absl::StrCat(port));
     metadata.set_submit_to_ingress(pdpi::BitsetToHexString<1>(0));
-    metadata.set_unused_pad(pdpi::BitsetToHexString<7>(0));
 
     // Assemble PacketOut request and write to stream channel.
     p4::v1::StreamMessageRequest request;
@@ -265,7 +264,6 @@ TEST_F(FakePacketIoTest, PacketOutFailForSecondary) {
   sai::PacketOut::Metadata& metadata = *packet_out.mutable_metadata();
   metadata.set_egress_port(pdpi::BitsetToHexString<9>(/*bitset=*/0));
   metadata.set_submit_to_ingress(pdpi::BitsetToHexString<1>(0));
-  metadata.set_unused_pad(pdpi::BitsetToHexString<7>(0));
 
   // Assemble PacketOut request and write to stream channel.
   p4::v1::StreamMessageRequest request;

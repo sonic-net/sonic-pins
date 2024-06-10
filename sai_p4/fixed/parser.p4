@@ -3,6 +3,7 @@
 
 #include <v1model.p4>
 #include "headers.p4"
+#include "ids.h"
 #include "metadata.p4"
 
 parser packet_parser(packet_in packet, out headers_t headers,
@@ -85,6 +86,14 @@ parser packet_parser(packet_in packet, out headers_t headers,
 
 control packet_deparser(packet_out packet, in headers_t headers) {
   apply {
+    // We always expect the packet_out_header to be invalid at the end of the
+    // pipeline, so this line has no effect on the output packet.
+    packet.emit(headers.packet_out_header);
+// TODO: Clean up once we have better solution to handle packet-in
+// across platforms.
+#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
+    packet.emit(headers.packet_in_header);
+#endif
     packet.emit(headers.erspan_ethernet);
     packet.emit(headers.erspan_ipv4);
     packet.emit(headers.erspan_gre);

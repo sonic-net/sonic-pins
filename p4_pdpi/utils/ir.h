@@ -83,6 +83,11 @@ absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
 absl::StatusOr<IrValue> FormattedStringToIrValue(const std::string &value,
                                                  Format format);
 
+// Returns a std::string based on an IrValue value and a format. The value is
+// expected to already be formatted correctly, and is just returned as is.
+absl::StatusOr<std::string> IrValueToFormattedString(const IrValue &value,
+                                                     Format format);
+
 // Returns the string contents of an IrValue for the populated format (or "" if
 // there is no data).
 std::string IrValueString(const IrValue &value);

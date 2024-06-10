@@ -32,6 +32,10 @@ header packet_in_header_t {
   // The initial intended egress port decided for the packet by the pipeline.
   @id(2)
   string_id_t target_egress_port;
+  // Unused padding to test @padding annotation.
+  @id(3)
+  @padding
+  bit<3> unused_padding;
 }
 
 @controller_header("packet_out")
@@ -43,6 +47,10 @@ header packet_out_header_t {
   // sent directly?
   @id(2)
   bit<1> submit_to_ingress;
+  // Unused padding to test @padding annotation.
+  @id(3)
+  @padding
+  bit<6> unused_padding;
 }
 
 // Note: proto_tag annotations are only necessary until PD supports the @id annotation, which will be preferred.
