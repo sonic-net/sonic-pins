@@ -30,6 +30,7 @@ namespace {
 
 using ::gutil::StatusIs;
 using ::testing::DoAll;
+//using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::Return;
 using ::testing::SetArgReferee;
@@ -50,8 +51,15 @@ class StateVerificationEventsTest : public testing::Test {
 TEST_F(StateVerificationEventsTest, GetEventAndUpdateRedisDbState) {
   EXPECT_CALL(mock_consumer_notifier_, WaitForNotificationAndPop)
       .WillOnce(DoAll(SetArgReferee<0>("p4rt:p4rt"),
-                      SetArgReferee<1>("sample_timestamp"), Return(true)));
+                      SetArgReferee<1>("sample_timestamp"),
+                      SetArgReferee<2>(std::vector<swss::FieldValueTuple>{
+                          swss::FieldValueTuple{"alarm", "true"}}),
+                      Return(true)));
+
   EXPECT_CALL(mock_p4runtime_, VerifyState).WillOnce(Return(absl::OkStatus()));
+  //TODO(PINS): To handle Component state in November release.
+  // EXPECT_CALL(mock_p4runtime_, VerifyState(Eq(true)))
+  //    .WillOnce(Return(absl::OkStatus()));
   EXPECT_CALL(mock_table_, set("p4rt:p4rt",
                                std::vector<swss::FieldValueTuple>{
                                    {"timestamp", "sample_timestamp"},
@@ -68,6 +76,8 @@ TEST_F(StateVerificationEventsTest,
   EXPECT_CALL(mock_consumer_notifier_, WaitForNotificationAndPop)
       .WillOnce(DoAll(SetArgReferee<0>("p4rt:p4rt"),
                       SetArgReferee<1>("sample_timestamp"), Return(true)));
+  //TODO(PINS): To handle Component state in November release.
+  //EXPECT_CALL(mock_p4runtime_, VerifyState(Eq(false)))
   EXPECT_CALL(mock_p4runtime_, VerifyState)
       .WillOnce(Return(absl::UnknownError("P4RT is in a bad state!")));
   EXPECT_CALL(mock_table_,

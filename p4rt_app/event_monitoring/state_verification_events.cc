@@ -62,6 +62,15 @@ absl::Status StateVerificationEvents::WaitForEventAndVerifyP4Runtime() {
   std::string p4rt_status = "pass";
   std::string error_string = "";
   auto verification_status = p4runtime_.VerifyState();
+
+  /* TODO(PINS): To handle Component state in November release.
+  bool update_component_state = false;
+  for (const auto& field_value : field_values) {
+    if (fvField(field_value) == "alarm" && fvValue(field_value) == "true") {
+      update_component_state = true;
+    }
+  }
+  auto verification_status = p4runtime_.VerifyState(update_component_state); */
   if (!verification_status.ok()) {
     p4rt_status = "fail";
     error_string = verification_status.ToString();

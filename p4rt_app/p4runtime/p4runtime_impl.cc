@@ -68,6 +68,7 @@
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
 #include "p4rt_app/sonic/state_verification.h"
+#include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
 //TODO(PINS): Add Component/Interface Translator
@@ -427,6 +428,53 @@ absl::Status UpdateCacheAndUtilizationState(
     }
   }
   return absl::OkStatus();
+}
+
+absl::StatusOr<absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>>
+RebuildTableEntryCache(
+    const pdpi::IrP4Info& p4_info, bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
+  absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry> cache;
+  // Get all P4RT keys from the AppDb.
+  for (const auto& app_db_key : sonic::GetAllP4TableEntryKeys(p4rt_table)) {
+    // Read a single table entry out of the AppDb
+    ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,
+                     sonic::ReadP4TableEntry(p4rt_table, p4_info, app_db_key));
+    RETURN_IF_ERROR(TranslateTableEntry(
+        TranslateTableEntryOptions{
+            .direction = TranslationDirection::kForController,
+            .ir_p4_info = p4_info,
+            .translate_port_ids = translate_port_ids,
+            .port_map = port_translation_map},
+        ir_table_entry));
+
+    auto p4rt_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
+    if (!p4rt_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
+                 << ir_table_entry.ShortDebugString();
+      return gutil::StatusBuilder(p4rt_entry.status().code())
+             << "[P4RT/PDPI] " << p4rt_entry.status().message();
+    }
+    p4rt_entry->clear_counter_data();
+    p4rt_entry->clear_meter_counter_data();
+    cache[gutil::TableEntryKey(*p4rt_entry)] = *p4rt_entry;
+  }
+
+  // Get all VRF_TABLE entries from the AppDb.
+  ASSIGN_OR_RETURN(std::vector<pdpi::IrTableEntry> vrf_entries,
+                   sonic::GetAllAppDbVrfTableEntries(vrf_table));
+  for (const auto& ir_table_entry : vrf_entries) {
+    auto vrf_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
+    if (!vrf_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
+                 << ir_table_entry.ShortDebugString();
+      return gutil::StatusBuilder(vrf_entry.status().code())
+             << "[P4RT/PDPI] " << vrf_entry.status().message();
+    }
+    cache[gutil::TableEntryKey(*vrf_entry)] = *vrf_entry;
+  }
+  return cache;
 }
 
 }  // namespace
@@ -1016,6 +1064,7 @@ absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
   return gutil::WriteFile(debug_str, path + "/packet_io_counters");
 }
 
+//TODO(PINS): To handle Component State in November release.
 //absl::Status P4RuntimeImpl::VerifyState(bool update_component_state) {
 absl::Status P4RuntimeImpl::VerifyState() {
   absl::MutexLock l(&server_state_lock_);
@@ -1050,6 +1099,14 @@ absl::Status P4RuntimeImpl::VerifyState() {
   }
 
   if (failures.size() > 1) {
+    // Reports a MINOR alarm to indicate state verification failure.
+    // We do not report CRITICAL alarm here because that will stop further
+    // programming.
+    //TODO(PINS): To handle Component state in November release.
+    //if (update_component_state) {
+    //  component_state_.ReportComponentState(swss::ComponentState::kMinor,
+    //                                        absl::StrJoin(failures, "\n  "));
+    //}
     return gutil::UnknownErrorBuilder() << absl::StrJoin(failures, "\n  ");
   }
   return absl::OkStatus();
@@ -1127,9 +1184,27 @@ grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
         "RECONCILE_AND_COMMIT instead.");
   }
 
-  // Since we cannot have any state today we can use the same code path from
-  // RECONCILE_AND_COMMIT to apply the forwarding config.
-  return ReconcileAndCommitPipelineConfig(request);
+  // Apply the P4Info, and configure the switch.
+  grpc::Status commit_status = ReconcileAndCommitPipelineConfig(request);
+  if (!commit_status.ok()) {
+    return commit_status;
+  }
+
+  // Rebuild the table_entry cache.
+  auto table_entry_cache =
+      RebuildTableEntryCache(*ir_p4info_, translate_port_ids_,
+                             port_translation_map_, p4rt_table_, vrf_table_);
+  if (!table_entry_cache.ok()) {
+    LOG(ERROR) << "Failed to build the table cache during COMMIT: "
+               << table_entry_cache.status();
+    return EnterCriticalState(table_entry_cache.status().ToString());
+/*TODO(PINS): To handle component_state_ later.
+    return EnterCriticalState(table_entry_cache.status().ToString(),
+                              component_state_); */
+  }
+  table_entry_cache_ = *std::move(table_entry_cache);
+
+  return grpc::Status::OK;
 }
 
 grpc::Status P4RuntimeImpl::CommitPipelineConfig(
