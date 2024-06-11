@@ -64,7 +64,7 @@ TEST_F(StateVerificationTest, VerifyEntriesInP4rtAndVrfTables) {
       /*key=*/"switch_match",
       /*values=*/{{"action", "action0"}});
 
-  EXPECT_OK(p4rt_service_.VerifyState());
+  EXPECT_OK(p4rt_service_.GetP4rtServer().VerifyState());
 
 }
 
@@ -74,7 +74,7 @@ TEST_F(StateVerificationTest, EntryDoesNotExistInAppDbFails) {
   p4rt_service_.GetVrfAppStateDbTable().InsertTableEntry(/*key=*/"bar",
                                                          /*values=*/{});
   EXPECT_THAT(
-      p4rt_service_.VerifyState(),
+      p4rt_service_.GetP4rtServer().VerifyState(),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("AppDb is missing key")));
 }
 
@@ -83,7 +83,7 @@ TEST_F(StateVerificationTest, EntryDoesNotExistInAppStateDbFails) {
                                                      /*values=*/{});
   p4rt_service_.GetSwitchAppDbTable().InsertTableEntry(/*key=*/"bar",
                                                        /*values=*/{});
-  EXPECT_THAT(p4rt_service_.VerifyState(),
+  EXPECT_THAT(p4rt_service_.GetP4rtServer().VerifyState(),
               StatusIs(absl::StatusCode::kUnknown,
                        HasSubstr("AppStateDb is missing key")));
 }
@@ -96,7 +96,7 @@ TEST_F(StateVerificationTest, EntryValuesAreDifferentFails) {
       /*key=*/"hash_match",
       /*values=*/{{"action", "different_action"}});
 
-  EXPECT_THAT(p4rt_service_.VerifyState(),
+  EXPECT_THAT(p4rt_service_.GetP4rtServer().VerifyState(),
               StatusIs(absl::StatusCode::kUnknown, HasSubstr("do not match")));
 }
 
@@ -106,7 +106,17 @@ TEST_F(StateVerificationTest, StateVerificationFailureRaisesAlarm) {
   p4rt_service_.GetVrfAppStateDbTable().InsertTableEntry(/*key=*/"bar",
                                                          /*values=*/{});
   EXPECT_THAT(
-      p4rt_service_.VerifyState(),
+      p4rt_service_.GetP4rtServer().VerifyState(),
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("AppDb is missing key")));
+}
+
+TEST_F(StateVerificationTest, StateVerificationFailureNoAlarm) {
+  p4rt_service_.GetP4rtAppDbTable().InsertTableEntry(/*key=*/"foo",
+                                                     /*values=*/{});
+  p4rt_service_.GetVrfAppStateDbTable().InsertTableEntry(/*key=*/"bar",
+                                                         /*values=*/{});
+  EXPECT_THAT(
+      p4rt_service_.GetP4rtServer().VerifyState(),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("AppDb is missing key")));
 }
 
