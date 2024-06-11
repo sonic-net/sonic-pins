@@ -11,7 +11,11 @@
 
 namespace sai {
 
-// Describes the role of a switch.
+// P4 program instantiations for different switch roles.
+//
+// With the exception of `kWbb`, these are members of the SAI P4 family of
+// programs.
+//
 // Switches in the same role use the same P4 program (though the P4Info may be
 // slightly modified further for each switch within a role, e.g. to configure
 // the hashing seed).
@@ -43,7 +47,7 @@ inline std::vector<Instantiation> AllInstantiations() {
   };
 }
 
-// Returns the name of the given switch role.
+// Returns the name of the given P4 program instantiation.
 inline std::string InstantiationToString(Instantiation role) {
   switch (role) {
     case Instantiation::kFabricBorderRouter:
@@ -59,7 +63,7 @@ inline std::string InstantiationToString(Instantiation role) {
   return "";
 }
 
-// Returns the name of the given switch role.
+// Returns the P4 program `Instantiation` of the given name.
 inline absl::StatusOr<Instantiation> StringToInstantiation(
     absl::string_view instantiation_name) {
   for (auto instantiation : AllInstantiations()) {

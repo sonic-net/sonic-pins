@@ -53,14 +53,26 @@
 #define WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE 0
 #endif
 
-// The maximum sum of weights across all wcmp groups.
-#ifndef WCMP_GROUP_SELECTOR_MAX_SUM_OF_WEIGHTS_ACROSS_ALL_GROUPS
-#define WCMP_GROUP_SELECTOR_MAX_SUM_OF_WEIGHTS_ACROSS_ALL_GROUPS 0
+// The size semantics for WCMP group selectors. Either SUM_OF_WEIGHTS or
+// SUM_OF_MEMBERS.
+#ifndef WCMP_GROUP_SELECTOR_SIZE_SEMANTICS
+#define WCMP_GROUP_SELECTOR_SIZE_SEMANTICS "SUM_OF_WEIGHTS"
 #endif
 
-// The maximum sum of weights for each wcmp group.
-#ifndef WCMP_GROUP_SELECTOR_MAX_SUM_OF_WEIGHTS_PER_GROUP
-#define WCMP_GROUP_SELECTOR_MAX_SUM_OF_WEIGHTS_PER_GROUP 0
+// The maximum sum of weights or members across all wcmp groups.
+#ifndef WCMP_GROUP_SELECTOR_SIZE
+#define WCMP_GROUP_SELECTOR_SIZE 0
+#endif
+
+// The maximum sum of weights or members for each wcmp group.
+#ifndef WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE
+#define WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE 0
+#endif
+
+// The max weight of an individual member when using the SUM_OF_MEMBERS size 
+// semantics. This value is ignored in the SUM_OF_WEIGHTS semantics.
+#ifndef WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT
+#define WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT 0
 #endif
 
 #endif  // SAI_MINIMUM_GUARANTEED_SIZES_P4_
