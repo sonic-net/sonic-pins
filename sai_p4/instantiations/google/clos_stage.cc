@@ -15,6 +15,7 @@ bool DiffersByClosStage(Instantiation instantiation) {
     case Instantiation::kMiddleblock:
     case Instantiation::kFabricBorderRouter:
       return true;
+    case Instantiation::kTor:
     case Instantiation::kWbb:
       return false;
   }

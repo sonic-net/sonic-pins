@@ -30,6 +30,7 @@ SHARED_DEPS = [
     "acl_ingress.p4",
     "acl_pre_ingress.p4",
     "ids.h",
+    "versions.h",
     "roles.h",
     "bitwidths.p4",
     "minimum_guaranteed_sizes.p4",
@@ -42,6 +43,11 @@ MIDDLEBLOCK_DEPS = SHARED_DEPS + ["middleblock.p4"]
 FABRIC_BORDER_ROUTER_DEPS = SHARED_DEPS + [
     "acl_egress.p4",
     "fabric_border_router.p4",
+]
+
+TOR_DEPS = SHARED_DEPS + [
+    "acl_egress.p4",
+    "tor.p4",
 ]
 
 WBB_DEPS = [
@@ -57,6 +63,7 @@ INSTANTIATIONS = [
     # (<instantiation>, <dependencies>)
     ("fabric_border_router", FABRIC_BORDER_ROUTER_DEPS),
     ("middleblock", MIDDLEBLOCK_DEPS),
+    ("tor", TOR_DEPS),
     ("wbb", WBB_DEPS),
 ]
 

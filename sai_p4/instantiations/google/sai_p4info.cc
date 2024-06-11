@@ -32,6 +32,8 @@ const P4Info& GetP4Info(Instantiation instantiation) {
       new P4Info(FetchP4Info(Instantiation::kFabricBorderRouter));
   static const P4Info* const kMiddleblockP4Info =
       new P4Info(FetchP4Info(Instantiation::kMiddleblock));
+  static const P4Info* const kTopOfRackP4Info =
+      new P4Info(FetchP4Info(Instantiation::kTor));
   static const P4Info* const kWbbP4Info =
       new P4Info(FetchP4Info(Instantiation::kWbb));
 
@@ -40,6 +42,8 @@ const P4Info& GetP4Info(Instantiation instantiation) {
       return *kFabricBorderRouterP4Info;
     case Instantiation::kMiddleblock:
       return *kMiddleblockP4Info;
+    case Instantiation::kTor:
+      return *kTopOfRackP4Info;
     case Instantiation::kWbb:
       return *kWbbP4Info;
   }
@@ -61,6 +65,8 @@ const IrP4Info& GetIrP4Info(Instantiation instantiation) {
       CreateIrP4Info(GetP4Info(Instantiation::kFabricBorderRouter));
   static const IrP4Info* const kMiddleblockIrP4Info =
       CreateIrP4Info(GetP4Info(Instantiation::kMiddleblock));
+  static const IrP4Info* const kTorIrP4Info =
+      CreateIrP4Info(GetP4Info(Instantiation::kTor));
   static const IrP4Info* const kWbbIrP4Info =
       CreateIrP4Info(GetP4Info(Instantiation::kWbb));
 
@@ -69,6 +75,8 @@ const IrP4Info& GetIrP4Info(Instantiation instantiation) {
       return *kFabricBorderRouterIrP4Info;
     case Instantiation::kMiddleblock:
       return *kMiddleblockIrP4Info;
+    case Instantiation::kTor:
+      return *kTorIrP4Info;
     case Instantiation::kWbb:
       return *kWbbIrP4Info;
   }

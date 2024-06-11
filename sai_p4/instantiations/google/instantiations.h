@@ -22,6 +22,7 @@ namespace sai {
 enum class Instantiation {
   kFabricBorderRouter,
   kMiddleblock,
+  kTor,
   // Note: For historical reasons, WBB shares the same infrastructure as our
   // SAI P4 programs. However, it is not a SAI P4 instantiation.
   kWbb,
@@ -32,6 +33,7 @@ inline std::vector<Instantiation> AllSaiInstantiations() {
   return {
       Instantiation::kFabricBorderRouter,
       Instantiation::kMiddleblock,
+      Instantiation::kTor,
   };
 }
 
@@ -40,6 +42,7 @@ inline std::vector<Instantiation> AllInstantiations() {
   return {
       Instantiation::kFabricBorderRouter,
       Instantiation::kMiddleblock,
+      Instantiation::kTor,
       Instantiation::kWbb,
   };
 }
@@ -51,6 +54,8 @@ inline std::string InstantiationToString(Instantiation role) {
       return "fabric_border_router";
     case Instantiation::kMiddleblock:
       return "middleblock";
+    case Instantiation::kTor:
+      return "tor";
     case Instantiation::kWbb:
       return "wbb";
   }
