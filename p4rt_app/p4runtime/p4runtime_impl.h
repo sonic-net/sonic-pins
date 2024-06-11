@@ -173,14 +173,14 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Verifies state for the P4RT App. These are checks like:
-  //  * Do P4RT table entries match in AppStateDb and AppDb.
   //  * Do VRF_TABLE entries match in AppStateDb and AppDb.
   //  * Do HASH_TABLE entries match in AppStateDb and AppDb.
   //  * Do SWITCH_TABLE entries match in AppStateDb and AppDb.
   //
   // NOTE: We do not verify ownership of table entries today. Therefore, shared
   // tables (e.g. VRF_TABLE) could cause false positives.
-  virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
+  virtual absl::Status VerifyState()
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Dump various debug data for the P4RT App, including:
   // * PacketIO counters.
@@ -328,7 +328,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // Some switch enviornments cannot rely on the SONiC port names, and can
   // instead choose to use port ID's configured through gNMI.
-  const bool translate_port_ids_;
+  const bool translate_port_ids_ ABSL_GUARDED_BY(server_state_lock_);
 
   // Reading a large number of entries from Redis is costly. To improve the
   // read performance we cache table entries in software.
