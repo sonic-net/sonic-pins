@@ -375,11 +375,16 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
         pdpi::InstallIrEntities(*control_switch.p4rt, punt_entries));
   }
 
+  // Clear counters prior to test packet injection, so the final counters are
+  // more meaningful.
+  //
+  // CAUTION: As of 2024, this is a not supported by SONIC PINS, and behaves as
+  // a no-op on such switches.
+  RETURN_IF_ERROR(pdpi::ClearTableEntryCounters(*sut.p4rt));
+
   // Read and store table entries on SUT as an artifact.
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
                    pdpi::ReadIrEntitiesSorted(*sut.p4rt));
-  // TODO: Clear counters first, so the post-injection counters are
-  // more meaningful.
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "sut_ir_entities.pre_packet_injection.txtpb",
       gutil::PrintTextProto(entities)));

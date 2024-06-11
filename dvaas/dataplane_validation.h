@@ -92,8 +92,8 @@ struct DataplaneValidationParams {
   // append to each artifact before writing to it.
   std::optional<std::function<std::string()>> get_artifact_header;
 
-  // If set, causes DVaaS to use the given P4Specification instead of inferring
-  // one from the SUT.
+  // If set, causes DVaaS to use the given `P4Specification` instead of
+  // inferring one from the SUT.
   std::optional<P4Specification> specification_override;
 
   // Max number of packets to send per second. If no rate is given, DVaaS will
@@ -146,7 +146,7 @@ public:
       : backend_(std::move(backend)) {}
 
   // Validates that the `testbed.Sut()` processes packets according to the
-  // P4Specification of the switch as follows:
+  // `P4Specification` of the switch as follows:
   //
   // 1. Opens P4RT and gNMI connections to SUT and control switch.
   //
@@ -159,7 +159,7 @@ public:
   //    hit every table entry installed on the switch at least once.
   //
   // 4. Sends those test packets to the switch and a P4 simulator, where the
-  //    simulator is initialized using the switch's P4Specification.
+  //    simulator is initialized using the switch's `P4Specification`.
   //
   // 5. Validates that the switch forwards/punts/drops packets as the P4
   //    simulator predicts.
@@ -174,6 +174,7 @@ public:
   // 2. Any preexisting P4RT connections to SUT and control switch will be
   //    non-primary.
   // 3. The gNMI configs will be unchanged.
+  // 4. Switch counters may change arbitrarily.
   //
   // Returns an Ok status if dataplane validation succeeds, or an error status
   // detailing invalid dataplane behaviors otherwise.
@@ -287,7 +288,7 @@ public:
   virtual absl::StatusOr<pdpi::IrEntities>
   GetEntitiesToPuntAllPackets(const pdpi::IrP4Info &switch_p4info) const = 0;
 
-  // Returns the P4Specification that models the given `sut`. Used only if the
+  // Returns the `P4Specification` that models the given `sut`. Used only if the
   // `specification_override` parameter is unset.
   // May query the SUT, but should not change it.
   virtual absl::StatusOr<P4Specification>
