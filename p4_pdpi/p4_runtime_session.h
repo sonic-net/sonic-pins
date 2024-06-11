@@ -391,6 +391,13 @@ absl::Status CheckNoEntities(P4RuntimeSession &session);
 // Deletes all entities read from `session`.
 absl::Status ClearEntities(P4RuntimeSession &session);
 
+// Resets all counters in all `TableEntry`s to zero.
+// Applies to both `counter_data` and `meter_counter_data`.
+//
+// CAUTION: As of 2024, this is a not supported by SONIC PINS and behaves as
+// a no-op on such switches.
+absl::Status ClearTableEntryCounters(P4RuntimeSession& session);
+
 // Returns the `MeterCounterData` for the matching table entry, ignoring
 // `action` and `meter_config`.
 absl::StatusOr<p4::v1::MeterCounterData>

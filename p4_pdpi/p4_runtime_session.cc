@@ -822,4 +822,57 @@ absl::StatusOr<gutil::Version> GetPkgInfoVersion(P4RuntimeSession* session) {
   return gutil::ParseVersion(response.config().p4info().pkg_info().version());
 }
 
+namespace {
+
+// Returns `true` and sets all `CounterData` fields to `0` if the given message
+// contains nonzero `CounterData` fields, or returns `false` and leaves the
+// message unmodified otherwise.
+bool ClearCounters(p4::v1::CounterData& data) {
+  bool modified = data.byte_count() != 0 || data.packet_count() != 0;
+  data.set_byte_count(0);
+  data.set_packet_count(0);
+  return modified;
+}
+bool ClearCounters(p4::v1::MeterCounterData& data) {
+  bool green_cleared = data.has_green() && ClearCounters(*data.mutable_green());
+  bool yellow_cleared =
+      data.has_yellow() && ClearCounters(*data.mutable_yellow());
+  bool red_cleared = data.has_red() && ClearCounters(*data.mutable_red());
+  return green_cleared || yellow_cleared || red_cleared;
+}
+bool ClearCounters(p4::v1::TableEntry& entry) {
+  bool counter_cleared =
+      entry.has_counter_data() && ClearCounters(*entry.mutable_counter_data());
+  bool meter_counter_cleared =
+      entry.has_meter_counter_data() &&
+      ClearCounters(*entry.mutable_meter_counter_data());
+  return counter_cleared || meter_counter_cleared;
+}
+
+}  // namespace
+
+absl::Status ClearTableEntryCounters(P4RuntimeSession& session) {
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> entities,
+                   ReadPiEntities(&session),
+                   _.SetPrepend() << "while trying to reset counters: ");
+
+  // MODIFY all table entries with non-zero counters.
+  p4::v1::WriteRequest request;
+  for (p4::v1::Entity& entity : entities) {
+    if (entity.has_table_entry() &&
+        ClearCounters(*entity.mutable_table_entry())) {
+      p4::v1::Update& update = *request.add_updates();
+      *update.mutable_entity() = std::move(entity);
+      update.set_type(p4::v1::Update::MODIFY);
+    }
+  }
+  if (!request.updates().empty()) {
+    RETURN_IF_ERROR(SetMetadataAndSendPiWriteRequest(&session, request))
+            .SetPrepend()
+        << "while trying to reset counters: ";
+  }
+
+  return absl::OkStatus();
+}
+
 }  // namespace pdpi
