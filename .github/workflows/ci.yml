@@ -6,28 +6,20 @@ on:
   pull_request:
     branches: [ main ]
 
+    # Run daily at midnight to ensure we catch regressions.
+    # https://crontab.guru/#0_0_*_*_*
+    - cron: "0 0 * * *"
+
 jobs:
   build:
-    name: Bazel Build and Test
-    # We use Ubuntu 20.04 as it comes with GCC v9.3 by default.
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       BAZEL_CACHE_USER: github
       BAZEL_CACHE_PWD: ${{ secrets.BAZEL_CACHE_PWD }}
       BAZEL_CACHE_URL: pins-bazel-cache.onf.dev:9090
 
     steps:
-    - uses: actions/checkout@v2
-
-    - name: Mount bazel cache
-      uses: actions/cache@v2
-      with:
-        # See https://docs.bazel.build/versions/master/output_directories.html
-        path: "/tmp/repo-cache"
-        # See https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
-        key: bazel-repo-cache-v1-${{ runner.os }}-${{ hashFiles('**/*_deps.bzl', '.bazelrc', '.bazelversion', 'WORKSPACE.bazel') }}
-        restore-keys: |
-          bazel-repo-cache-v1-${{ runner.os }}-
+    - uses: actions/checkout@v3
 
     - name: Install system dependencies
       run: ./install_dependencies.sh
@@ -51,3 +43,52 @@ jobs:
         BAZEL_OPTS+=" --remote_download_minimal"
         bazel build ${BAZEL_OPTS} //...
         bazel test ${BAZEL_OPTS} //...
+
+    - name: Mount bazel cache
+      uses: actions/cache/restore@v3
+      with:
+        path: "~/.cache/bazel"
+        key: ci-${{ hashFiles('**/*_deps.bzl', '.bazelrc') }}-${{ github.ref_name }}
+        # The last key, `test-Linux`, is there just for boostrapping-purposes -- it matches the
+        # cache key schema prior to 2023-06-29. It can be revoved in a subsequent PR.
+        restore-keys: |
+          ci-${{ hashFiles('**/*_deps.bzl', '.bazelrc') }}
+          ci
+          test-Linux
+    
+    - name: Save start time
+      uses: josStorer/get-current-time@v2
+      id: start-time
+      with:
+        # Unix timestamp -- seconds since 1970.
+        format: X
+
+    - name: Build
+      run: ./$BAZEL build --test_output=errors //...
+
+    - name: Test
+      run: ./$BAZEL test --test_output=errors //...
+
+    - name: Save end time
+      uses: josStorer/get-current-time@v2
+      id: end-time
+      with:
+        # Unix timestamp -- seconds since 1970.
+        format: X
+
+    - name: Calculate build duration
+      run: |
+        START=${{ steps.start-time.outputs.formattedTime }}
+        END=${{ steps.end-time.outputs.formattedTime }}
+        DURATION=$(( $END - $START ))
+        echo "duration=$DURATION" | tee "$GITHUB_ENV"
+
+    - name: Save bazel cache
+      uses: actions/cache/save@v3
+      # We create a new cache entry if either of the following is true:
+      # - We are on the main branch.
+      # - It took more than 5 minutes to build and test.
+      if: github.ref_name == 'main' || env.duration > 300
+      with:
+        path: "~/.cache/bazel"
+        key: ci-${{ hashFiles('**/*_deps.bzl', '.bazelrc') }}-${{ github.ref_name }}-${{ github.run_id }}
