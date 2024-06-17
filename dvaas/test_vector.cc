@@ -32,19 +32,32 @@
 
 namespace dvaas {
 
+namespace {
 // All test packets (incl. input & output packets) must have payloads that
 // contain an ID that matches this regular expression. This ID must be:
 // * Uniform across all packets within a packet test vector.
 // * Unique across different packet test vectors.
-inline constexpr LazyRE2 kTestPacketIdRegexp{R"(test packet #([0-9]+))"};
+constexpr LazyRE2 kTestPacketIdRegexp{R"(test packet #([0-9]+))"};
 
-std::string MakeTestPacketPayloadFromUniqueId(int unique_test_packet_id,
-                                              absl::string_view description) {
+// Returns a string with a "tag" that encodes the given test packet ID.
+// Prevents the string from getting larger and larger upon each update since
+// there is no description.
+std::string MakeUnpaddedTestPacketTagFromUniqueId(int unique_test_packet_id) {
+  return absl::StrCat("test packet #", unique_test_packet_id);
+}
+
+}  // namespace
+
+// Returns a string that can be included anywhere in the packet, however it is
+// recommended to be placed in the payload of test packets.
+std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id,
+                                          absl::string_view description) {
   std::string payload =
-      absl::StrCat("test packet #", unique_test_packet_id, ": ", description);
+      absl::StrCat(MakeUnpaddedTestPacketTagFromUniqueId(unique_test_packet_id),
+                   ": ", description);
 
-  // Adds padding to the packet payload to prevent undersized packets .Any
-  // Ethernet packet containing a payload returned by this function will be at
+  // Adds padding to the packet payload to prevent undersized packets. Any
+  // Ethernet packet containing a tag returned by this function will be at
   // least the minimum size required by the Ethernet protocol.
   if (payload.size() < packetlib::kMinNumBytesInEthernetPayload) {
     payload.resize(packetlib::kMinNumBytesInEthernetPayload, ' ');
@@ -73,7 +86,7 @@ absl::Status UpdateTestTag(packetlib::Packet& packet, int new_tag) {
   // Make a new input packet with updated payload.
   std::string new_payload = packet.payload();
   if (!RE2::Replace(&new_payload, *kTestPacketIdRegexp,
-                    MakeTestPacketPayloadFromUniqueId(new_tag))) {
+                    MakeUnpaddedTestPacketTagFromUniqueId(new_tag))) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Test packets must contain a tag of the form '"
            << kTestPacketIdRegexp->pattern()
@@ -82,17 +95,16 @@ absl::Status UpdateTestTag(packetlib::Packet& packet, int new_tag) {
            << gutil::PrintTextProto(packet);
   }
   packet.set_payload(new_payload);
-  bool status;
-  ASSIGN_OR_RETURN(status, PadPacketToMinimumSize(packet),
-                   _.LogError() << "Failed to pad packet for tag: " << new_tag);
-  ASSIGN_OR_RETURN(status, UpdateAllComputedFields(packet),
-                   _.LogError()
-                       << "Failed to update payload for tag: " << new_tag);
-
+  RETURN_IF_ERROR(PadPacketToMinimumSize(packet).status()).SetAppend()
+      << "\nwhile trying to update test packet tag to " << new_tag
+      << " for packet\n: " << gutil::PrintTextProto(packet);
+  RETURN_IF_ERROR(UpdateAllComputedFields(packet).status()).SetAppend()
+      << "\nwhile trying to update test packet tag to " << new_tag
+      << " for packet\n: " << gutil::PrintTextProto(packet);
   return absl::OkStatus();
 }
 
-// Returns a serialization of the given `packet` as a hexstring.
+// Returns a serialization of the given `packet` as a hex string.
 absl::StatusOr<std::string> SerializeAsHexString(
     const packetlib::Packet& packet) {
   ASSIGN_OR_RETURN(std::string serialized_packet,

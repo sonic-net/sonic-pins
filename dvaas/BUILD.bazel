@@ -241,6 +241,7 @@ cc_test(
     deps = [
         ":test_vector",
         ":test_vector_cc_proto",
+        "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//gutil:testing",
         "//p4_pdpi/packetlib",
