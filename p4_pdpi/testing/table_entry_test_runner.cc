@@ -162,6 +162,40 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         }
                       )pb"));
 
+  RunPiTableEntryTest(info, "empty bytestring in match field",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554441
+                        match {
+                          field_id: 3
+                          optional { value: "" }
+                        }
+                        action {
+                          action {
+                            action_id: 16777217
+                            params { param_id: 1 value: "\001#Eg" }
+                            params { param_id: 2 value: "\001#Eh" }
+                          }
+                        }
+                        priority: 32
+                      )pb"));
+
+  RunPiTableEntryTest(info, "empty bytestring in action parameter",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554441
+                        match {
+                          field_id: 3
+                          optional { value: "hello" }
+                        }
+                        action {
+                          action {
+                            action_id: 16777217
+                            params { param_id: 1 value: "" }
+                            params { param_id: 2 value: "" }
+                          }
+                        }
+                        priority: 32
+                      )pb"));
+
   RunPiTableEntryTest(info, "invalid prefix length",
                       gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
                         table_id: 33554436
@@ -1161,6 +1195,63 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                       )pb"));
 
+  RunIrTableEntryTest(info, "empty bytestring in match field",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "optional_table"
+                        matches {
+                          name: "str"
+                          optional { value { str: "" } }
+                        }
+                        priority: 32
+                        action {
+                          name: "do_thing_1"
+                          params {
+                            name: "arg2"
+                            value { hex_str: "0x01234567" }
+                          }
+                          params {
+                            name: "arg1"
+                            value { hex_str: "0x01234568" }
+                          }
+                        }
+                      )pb"));
+
+  RunIrTableEntryTest(info, "empty bytestring in action parameter",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "id_test_table"
+                        matches {
+                          name: "ipv6"
+                          exact { ipv6: "::ff22" }
+                        }
+                        matches {
+                          name: "ipv4"
+                          exact { ipv4: "16.36.50.82" }
+                        }
+                        action {
+                          name: "do_thing_2"
+                          params {
+                            name: "normal"
+                            value { hex_str: "0x054" }
+                          }
+                          params {
+                            name: "ipv4"
+                            value { ipv4: "10.43.12.5" }
+                          }
+                          params {
+                            name: "ipv6"
+                            value { ipv6: "3242::fee2" }
+                          }
+                          params {
+                            name: "mac"
+                            value { mac: "00:11:22:33:44:55" }
+                          }
+                          params {
+                            name: "str"
+                            value { str: "" }
+                          }
+                        }
+                      )pb"));
+
   RunIrTableEntryTest(info, "zero priority",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
                         table_name: "ternary_table"
@@ -1627,6 +1718,21 @@ static void RunPdTests(const pdpi::IrP4Info info) {
       )pb"),
       INPUT_IS_INVALID);
 
+  RunPdTableEntryTest(info, "value with empty string for Format::STRING",
+                      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+                        exact_table_entry {
+                          match {
+                            normal: "0x054"
+                            ipv4: "10.43.12.5"
+                            ipv6: "3242::fee2"
+                            mac: "00:11:22:33:44:55"
+                            str: ""
+                          }
+                          action { NoAction {} }
+                        }
+                      )pb"),
+                      INPUT_IS_INVALID);
+
   RunPdTableEntryTest(
       info, "valid wcmp table with choice of action",
       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
@@ -1850,21 +1956,6 @@ static void RunPdTests(const pdpi::IrP4Info info) {
         }
       )pb"),
       INPUT_IS_VALID);
-
-  RunPdTableEntryTest(info, "exact match with empty string for Format::STRING",
-                      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
-                        exact_table_entry {
-                          match {
-                            normal: "0x054"
-                            ipv4: "10.43.12.5"
-                            ipv6: "3242::fee2"
-                            mac: "00:11:22:33:44:55"
-                            str: ""
-                          }
-                          action { NoAction {} }
-                        }
-                      )pb"),
-                      INPUT_IS_VALID);
 
   RunPdTableEntryTest(info, "ipv4 LPM table with /0",
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(

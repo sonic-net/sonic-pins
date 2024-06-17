@@ -799,33 +799,36 @@ TEST_F(ResponsePathTest, FailsOnFirstErrorInP4rtTable) {
             updates {
               type: INSERT
               table_entry {
-                ipv6_table_entry {
+                acl_ingress_table_entry {
                   match {
-                    vrf_id: "vrf-1"
-                    ipv6_dst { value: "2002:a17:506:c111::" prefix_length: 64 }
+                    is_ipv4 { value: "0x1" }
+                    dst_ip { value: "11.32.15.4" mask: "11.32.15.5" }
                   }
-                  action { set_nexthop_id { nexthop_id: "20" } }
+                  priority: 10
+                  action { acl_forward {} }
                 }
               }
             }
             updates {
               type: INSERT
               table_entry {
-                vrf_table_entry {
-                  match { vrf_id: "" }
-                  action { no_action {} }
+                acl_ingress_table_entry {
+                  match { dst_ip { value: "10.43.12.4" mask: "10.43.12.5" } }
+                  priority: 10
+                  action { acl_forward {} }
                 }
               }
             }
             updates {
               type: INSERT
               table_entry {
-                ipv6_table_entry {
+                acl_ingress_table_entry {
                   match {
-                    vrf_id: "vrf-3"
-                    ipv6_dst { value: "2002:a17:506:c113::" prefix_length: 64 }
+                    is_ipv4 { value: "0x1" }
+                    dst_ip { value: "51.74.32.4" mask: "51.74.32.5" }
                   }
-                  action { set_nexthop_id { nexthop_id: "20" } }
+                  priority: 10
+                  action { acl_forward {} }
                 }
               }
             }
