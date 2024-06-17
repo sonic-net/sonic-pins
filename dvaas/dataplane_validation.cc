@@ -51,11 +51,8 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_pdpi/pd.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
-#include "sai_p4/tools/auxiliary_entries_for_v1model_targets.h"
-#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 
@@ -101,20 +98,24 @@ absl::Status DetermineReproducibilityRate(
   return absl::OkStatus();
 }
 
-// Attaches the packet trace from `packet_traces` with a matching packet tag as
-// the packet in `test_outcome` to the input parameter `test_outcome`. Also
-// appends the packet trace to the test artifact writer.
+// Appends the P4 simulation packet trace summary for the input packet in
+// `failed_packet_test` to the failure description of the test. Uses
+// `packet_traces` to find the corresponding packet trace for the input packet,
+// and also stores the full textual trace as test artifact.
 absl::Status AttachPacketTrace(
-    const pdpi::IrP4Info& ir_p4info, dvaas::PacketTestOutcome& test_outcome,
+    dvaas::PacketTestOutcome& failed_packet_test,
     absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
         packet_traces,
     gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
-  ASSIGN_OR_RETURN(
-      int test_id,
-      dvaas::ExtractTestPacketTag(
-          test_outcome.test_run().test_vector().input().packet().parsed()));
+  // Store the full BMv2 textual log as test artifact.
+  ASSIGN_OR_RETURN(int test_id,
+                   dvaas::ExtractTestPacketTag(failed_packet_test.test_run()
+                                                   .test_vector()
+                                                   .input()
+                                                   .packet()
+                                                   .parsed()));
   const std::string& packet_hex =
-      test_outcome.test_run().test_vector().input().packet().hex();
+      failed_packet_test.test_run().test_vector().input().packet().hex();
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
       "packet_" + std::to_string(test_id) + ".trace.txt",
       packet_traces[packet_hex][0].bmv2_textual_log()));
@@ -125,28 +126,21 @@ absl::Status AttachPacketTrace(
         absl::StrCat("Packet trace not found for packet ", packet_hex));
   }
 
+  // Augment failure description with packet trace summary.
   std::string summarized_packet_trace;
   for (const auto& table_apply : it->second[0].table_apply()) {
-    absl::Status status = absl::UnimplementedError("Unset error status");
-    sai::TableEntry pd_table_entry;
-    if (table_apply.has_hit() && table_apply.hit().has_table_entry()) {
-      status = pdpi::IrTableEntryToPd(
-          ir_p4info, table_apply.hit().table_entry(), &pd_table_entry);
-      if (!status.ok()) {
-        LOG(ERROR) << "Failed to convert table entry to PD: " << status;
-      }
-    }
-    if (status.ok()) {
+    if (table_apply.hit().has_table_entry()) {
       absl::StrAppend(&summarized_packet_trace, "Table '",
                       table_apply.table_name(), "': hit\n",
-                      gutil::PrintTextProto(pd_table_entry), "\n");
+                      gutil::PrintTextProto(table_apply.hit().table_entry()),
+                      "\n");
     } else {
       absl::StrAppend(&summarized_packet_trace,
                       table_apply.hit_or_miss_textual_log(), "\n\n");
     }
   }
-  test_outcome.mutable_test_result()->mutable_failure()->set_description(
-      absl::StrCat(test_outcome.test_result().failure().description(),
+  failed_packet_test.mutable_test_result()->mutable_failure()->set_description(
+      absl::StrCat(failed_packet_test.test_result().failure().description(),
                    "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
                    "=========================\n",
                    summarized_packet_trace));
@@ -339,9 +333,8 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
 
 absl::Status PostProcessTestVectorFailure(
     const DataplaneValidationParams& params,
-    const PacketInjectionParams& parameters, const pdpi::IrP4Info& ir_p4info,
-    int failure_count, pdpi::P4RuntimeSession& sut,
-    pdpi::P4RuntimeSession& control_switch,
+    const PacketInjectionParams& parameters, int failure_count,
+    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     dvaas::PacketTestOutcome& test_outcome,
     absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
         packet_traces,
@@ -355,13 +348,14 @@ absl::Status PostProcessTestVectorFailure(
 
   // Print packet traces.
   if (params.failure_enhancement_options.print_packet_trace) {
-    RETURN_IF_ERROR(AttachPacketTrace(ir_p4info, test_outcome, packet_traces,
+    RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
                                       dvaas_test_artifact_writer));
   }
   return absl::OkStatus();
 }
 
-absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
+absl::StatusOr<ValidationResult>
+DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     SwitchApi& sut, SwitchApi& control_switch,
     const DataplaneValidationParams& params) {
   // Set up custom writer that prefixes artifact names and adds headers.
@@ -487,9 +481,9 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
         // Remove once packet trace, replication, and
         // minimization code is stably integrated.
         absl::Status status = PostProcessTestVectorFailure(
-            params, packet_injection_params, ir_p4info,
-            current_failures_count++, *sut.p4rt, *control_switch.p4rt,
-            test_outcome, packet_traces, dvaas_test_artifact_writer);
+            params, packet_injection_params, current_failures_count++,
+            *sut.p4rt, *control_switch.p4rt, test_outcome, packet_traces,
+            dvaas_test_artifact_writer);
         if (!status.ok()) {
           LOG(WARNING) << "Failed to extract packet trace and/or replicate: "
                        << status;
@@ -573,7 +567,7 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   // Do not return on error in order to restore the original control switch
   // gNMI interface config's P4RT IDs.
   absl::StatusOr<ValidationResult> result =
-      ValidateDataplane(sut, control_switch, params);
+      ValidateDataplaneUsingExistingSwitchApis(sut, control_switch, params);
 
   if (original_control_interfaces.has_value()) {
     RETURN_IF_ERROR(pins_test::SetInterfaceP4rtIds(
