@@ -19,7 +19,9 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "lib/utils/generic_testbed_utils.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/generic_testbed_fixture.h"
@@ -33,6 +35,14 @@ struct InErrorCounters {
   uint64_t switch_blackhole_events;
 };
 
+struct OutDiscardCounters {
+  uint64_t port_out_packets;
+  uint64_t port_out_discard_packets;
+  uint64_t port_blackhole_out_discard_events;
+  uint64_t switch_blackhole_out_discard_events;
+  uint64_t switch_blackhole_events;
+};
+
 class BlackholeCongestionCountersIxiaTestFixture
     : public thinkit::GenericTestbedFixture<> {
  protected:
@@ -40,9 +50,12 @@ class BlackholeCongestionCountersIxiaTestFixture
   void SetUp() override;
   absl::StatusOr<InErrorCounters> TriggerInFcsErrors(int frame_rate_per_second,
                                                      int frame_count);
+  absl::StatusOr<OutDiscardCounters> TriggerOutDiscards(
+      double out_discard_rate, absl::Duration traffic_duration);
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
   std::vector<InterfaceLink> traffic_generator_links_;
+  std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
 };
 
 }  // namespace pins_test
