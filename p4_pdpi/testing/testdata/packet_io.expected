@@ -147,6 +147,18 @@ metadata {
 INVALID_ARGUMENT: 'packet-in' message is invalid: Metadata with name 'unused_padding' has @padding annotation and so it must be omitted in IR representation.
 
 =========================================================================
+PacketIn test: Format::STRING with empty bytestring
+=========================================================================
+
+--- PD (Input):
+payload: "1"
+metadata {
+  ingress_port: "0x034"
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+'packet-in' message is invalid: Metadata 'target_egress_port': Bytestrings must have non-zero length.
+=========================================================================
 PacketIn test: ok
 =========================================================================
 
@@ -379,6 +391,18 @@ metadata {
 INVALID_ARGUMENT: 'packet-out' message is invalid: Metadata with name 'unused_padding' has @padding annotation and so it must be omitted in IR representation.
 
 =========================================================================
+PacketOut test: empty bytestring due to only one field set
+=========================================================================
+
+--- PD (Input):
+payload: "1"
+metadata {
+  submit_to_ingress: "0x1"
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+'packet-out' message is invalid: Metadata 'egress_port': Bytestrings must have non-zero length.
+=========================================================================
 PacketOut test: ok
 =========================================================================
 
@@ -409,46 +433,6 @@ payload: "1"
 metadata {
   metadata_id: 1
   value: "eth-1/2/3"
-}
-metadata {
-  metadata_id: 2
-  value: "\001"
-}
-metadata {
-  metadata_id: 3
-  value: "\000"
-}
-
-
-=========================================================================
-PacketOut test: only one field set
-=========================================================================
-
---- PD (Input):
-payload: "1"
-metadata {
-  submit_to_ingress: "0x1"
-}
-
---- IR:
-payload: "1"
-metadata {
-  name: "egress_port"
-  value {
-    str: ""
-  }
-}
-metadata {
-  name: "submit_to_ingress"
-  value {
-    hex_str: "0x1"
-  }
-}
-
---- PI:
-payload: "1"
-metadata {
-  metadata_id: 1
 }
 metadata {
   metadata_id: 2
