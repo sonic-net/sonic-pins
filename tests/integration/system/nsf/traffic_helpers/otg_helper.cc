@@ -273,8 +273,14 @@ absl::Status OtgHelper::StopTraffic(Testbed& testbed) {
                 ->mutable_traffic()
                 ->mutable_flow_transmit()
                 ->set_state(otg::StateTrafficFlowTransmit::State::stop);
-            return gutil::GrpcStatusToAbslStatus(
-                stub->SetControlState(&context, request, &response));
+            RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+                stub->SetControlState(&context, request, &response)));
+
+            // Add a 10 second sleep after stopping traffic, to ensure that any
+            // transit packets are accounted for while validating traffic in
+            // any further steps.
+            absl::SleepFor(absl::Seconds(10));
+            return absl::OkStatus();
           },
           [&](thinkit::MirrorTestbed* testbed) {
             return absl::UnimplementedError("MirrorTestbed not implemented");
