@@ -934,8 +934,6 @@ message MirrorWithVlanTagAndIpfixEncapsulationAction {
   string mirror_encap_udp_dst_port = 10;  // Format::HEX_STRING / 16 bits
 }
 
-message EgressLoopbackAction {}
-
 message L2MulticastPassthroughAction {}
 
 // CAUTION: This action is not (yet) supported.

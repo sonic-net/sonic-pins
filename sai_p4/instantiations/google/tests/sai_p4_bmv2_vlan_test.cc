@@ -715,7 +715,7 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
 }
 
 // VLAN-tagged punt packets keep their VLAN tags regardless of their IDs.
-TEST(ButerTorVlanTest, VlanPreservedForPuntedPackets) {
+TEST(TorVlanTest, VlanPreservedForPuntedPackets) {
   const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
