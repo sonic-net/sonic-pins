@@ -44,12 +44,9 @@ cc_library(
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:p4_runtime_session_extras",
-        "//p4_pdpi:pd",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//p4_symbolic/packet_synthesizer:coverage_goal_cc_proto",
         "//p4_symbolic/packet_synthesizer:packet_synthesizer_cc_proto",
-        "//sai_p4/tools:auxiliary_entries_for_v1model_targets",
-        "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//tests/lib:switch_test_setup_helpers",
         "//thinkit:mirror_testbed",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
@@ -228,12 +225,29 @@ cc_library(
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:bit_widths",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_googlesource_code_re2//:re2",
+    ],
+)
+
+cc_test(
+    name = "test_vector_test",
+    srcs = ["test_vector_test.cc"],
+    deps = [
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:bit_widths",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -289,21 +303,6 @@ cc_test(
     ],
 )
 
-
-cc_test(
-    name = "test_vector_test",
-    srcs = ["test_vector_test.cc"],
-    deps = [
-        ":test_vector",
-        ":test_vector_cc_proto",
-        "//gutil:status_matchers",
-        "//gutil:testing",
-        "//p4_pdpi/packetlib",
-        "//p4_pdpi/packetlib:packetlib_cc_proto",
-        "@com_google_absl//absl/status",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
 
 cc_library(
     name = "user_provided_packet_test_vector",

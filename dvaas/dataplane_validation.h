@@ -192,9 +192,9 @@ public:
   // Post-conditions:
   // 1. Pre-existing connections are left as they are.
   // 2. gNMI configs will be unchanged.
-  absl::StatusOr<ValidationResult>
-  ValidateDataplane(SwitchApi &sut, SwitchApi &control_switch,
-                    const DataplaneValidationParams &params = {});
+  absl::StatusOr<ValidationResult> ValidateDataplaneUsingExistingSwitchApis(
+      SwitchApi& sut, SwitchApi& control_switch,
+      const DataplaneValidationParams& params = {});
 
   // Returns statistics about all packets sent during the lifetime of the
   // DataplaneValidator. If dataplane validation has failed, the returned
