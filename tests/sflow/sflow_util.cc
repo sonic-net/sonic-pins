@@ -85,6 +85,8 @@ constexpr absl::string_view kSflowGnmiStateCollectorPortPath =
 // ... (class 0x80, ....)
 constexpr LazyRE2 kPacketTosMatchPattern{R"(class 0x([a-f0-9]+),)"};
 
+constexpr int kSonicMaxCollector = 2;
+
 }  // namespace
 
 absl::StatusOr<bool> IsSflowConfigEnabled(absl::string_view gnmi_config) {
@@ -306,6 +308,12 @@ absl::StatusOr<std::string> UpdateSflowConfig(
     for (const auto& [address_and_port, config_json] :
          collector_address_port_to_config_json) {
       collector_json_array.push_back(config_json);
+    }
+
+    if (collector_json_array.size() > kSonicMaxCollector) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Number of collectors exceeds max allowed value of ",
+                       kSonicMaxCollector));
     }
   }
 
