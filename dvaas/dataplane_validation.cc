@@ -347,7 +347,7 @@ absl::Status PostProcessTestVectorFailure(
   }
 
   // Print packet traces.
-  if (params.failure_enhancement_options.print_packet_trace) {
+  if (params.failure_enhancement_options.collect_packet_trace) {
     RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
                                       dvaas_test_artifact_writer));
   }
@@ -457,24 +457,27 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     }
   }
   if (!failed_switch_inputs.empty()) {
-    LOG(INFO)
-        << "Storing packet traces for failed test packets";
+    absl::btree_map<std::string, std::vector<dvaas::PacketTrace>> packet_traces;
+    if (params.failure_enhancement_options.collect_packet_trace) {
+      LOG(INFO) << "Storing packet traces for failed test packets";
 
-    // Read P4Info and control plane entities from SUT, sorted for
-    // determinism.
-    ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
-                     pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+      // Read P4Info and control plane entities from SUT, sorted for
+      // determinism.
+      ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
+                       pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+      // Retrieve auxiliary entries for v1model targets.
+      ASSIGN_OR_RETURN(
+          pdpi::IrEntities v1model_auxiliary_table_entries,
+          backend_->CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
+      v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
-    // Retrieve auxiliary entries for v1model targets.
-    ASSIGN_OR_RETURN(
-        pdpi::IrEntities v1model_auxiliary_table_entries,
-        backend_->CreateV1ModelAuxiliaryTableEntries(*sut.gnmi, ir_p4info));
-    v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
-
-    ASSIGN_OR_RETURN(auto packet_traces,
-                     backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
-                                               v1model_augmented_entities,
-                                               failed_switch_inputs));
+      ASSIGN_OR_RETURN(packet_traces,
+                       backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
+                                                 v1model_augmented_entities,
+                                                 failed_switch_inputs));
+    } else {
+      LOG(INFO) << "Skipping packet trace collection for failed test packets";
+    }
 
     int current_failures_count = 0;
     // Rerun at most `num_failures_to_rerun` to avoid timeouts if there are too
