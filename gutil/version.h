@@ -42,6 +42,11 @@ struct Version {
 // of `MAJOR`, `MINOR`, and `PATCH` is an unsigned decimal string.
 absl::StatusOr<Version> ParseVersion(absl::string_view version_string);
 
+// Parses semantic version string of the form `MAJOR.MINOR.PATCH`, where each
+// of `MAJOR`, `MINOR`, and `PATCH` is an unsigned decimal string. Causes a
+// fatal error if the given `version_string` is malformed.
+Version ParseVersionOrDie(absl::string_view version_string);
+
 // Returns semantic version string of the form `MAJOR.MINOR.PATCH`.
 std::string VersionToString(const Version& v);
 
