@@ -1,7 +1,100 @@
 pkg_info {
   name: "tor.p4"
+  version: "1.1.0"
   arch: "v1model"
   organization: "Google"
+}
+tables {
+  preamble {
+    id: 33554693
+    name: "ingress.acl_pre_ingress_vlan.acl_pre_ingress_vlan_table"
+    alias: "acl_pre_ingress_vlan_table"
+    annotations: "@sai_acl(PRE_INGRESS)"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+  }
+  match_fields {
+    id: 1
+    name: "ether_type"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE)"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777482
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  direct_resource_ids: 318767366
+  size: 255
+}
+tables {
+  preamble {
+    id: 33554694
+    name: "ingress.acl_pre_ingress_metadata.acl_pre_ingress_metadata_table"
+    alias: "acl_pre_ingress_metadata_table"
+    annotations: "@sai_acl(PRE_INGRESS)"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+  }
+  match_fields {
+    id: 1
+    name: "is_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 2
+    name: "is_ipv4"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 3
+    name: "is_ipv6"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 4
+    name: "ether_type"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE)"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 5
+    name: "ip_protocol"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 6
+    name: "l4_src_port"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT)"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777483
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  direct_resource_ids: 318767365
+  size: 255
 }
 tables {
   preamble {
@@ -881,6 +974,28 @@ actions {
 }
 actions {
   preamble {
+    id: 16777482
+    name: "ingress.acl_pre_ingress_vlan.set_outer_vlan_id"
+    alias: "set_outer_vlan_id"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+  params {
+    id: 1
+    name: "vlan_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)"
+    bitwidth: 12
+  }
+}
+actions {
+  preamble {
+    id: 16777483
+    name: "ingress.acl_pre_ingress_metadata.set_acl_metadata"
+    alias: "set_acl_metadata"
+    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD)"
+  }
+}
+actions {
+  preamble {
     id: 16777472
     name: "ingress.acl_pre_ingress.set_vrf"
     alias: "set_vrf"
@@ -1263,6 +1378,28 @@ action_profiles {
   with_selector: true
   size: 49152
   max_group_size: 512
+}
+direct_counters {
+  preamble {
+    id: 318767366
+    name: "ingress.acl_pre_ingress_vlan.acl_pre_ingress_vlan_counter"
+    alias: "acl_pre_ingress_vlan_counter"
+  }
+  spec {
+    unit: BOTH
+  }
+  direct_table_id: 33554693
+}
+direct_counters {
+  preamble {
+    id: 318767365
+    name: "ingress.acl_pre_ingress_metadata.acl_pre_ingress_metadata_counter"
+    alias: "acl_pre_ingress_metadata_counter"
+  }
+  spec {
+    unit: BOTH
+  }
+  direct_table_id: 33554694
 }
 direct_counters {
   preamble {

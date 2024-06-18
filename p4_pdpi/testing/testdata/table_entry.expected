@@ -146,6 +146,67 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
+empty bytestring in match field
+=========================================================================
+
+--- PI (Input):
+table_id: 33554441
+match {
+  field_id: 3
+  optional {
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+      value: "\001#Eg"
+    }
+    params {
+      param_id: 2
+      value: "\001#Eh"
+    }
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid: Match field 'str' is invalid: Bytestrings must have non-zero length.
+
+=========================================================================
+empty bytestring in action parameter
+=========================================================================
+
+--- PI (Input):
+table_id: 33554441
+match {
+  field_id: 3
+  optional {
+    value: "hello"
+  }
+}
+action {
+  action {
+    action_id: 16777217
+    params {
+      param_id: 1
+    }
+    params {
+      param_id: 2
+    }
+  }
+}
+priority: 32
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid for the following reasons:
+  - Action 'do_thing_1' is invalid for the following reasons:
+    - Param 'arg2': Bytestrings must have non-zero length.
+    - Param 'arg1': Bytestrings must have non-zero length.
+    - Missing parameters: 'arg1'. 'arg2'. Expected 2 parameters, but found 0 instead.
+
+=========================================================================
 invalid prefix length
 =========================================================================
 
@@ -908,7 +969,7 @@ match {
 }
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table entry for table 'unsupported_table' has @unsupported annotation.
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
 
 =========================================================================
 ternary table - unsupported action used
@@ -1040,7 +1101,7 @@ INVALID_ARGUMENT: Table entry for 'wcmp2_table' is invalid for the following rea
   - Table does not have a counter, but table entry contained counter data.
 
 =========================================================================
-empty IR
+empty IR (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1049,7 +1110,16 @@ empty IR
 INVALID_ARGUMENT: Table entry for '' does not exist in the P4Info.
 
 =========================================================================
-invalid table name
+empty IR (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for '' is invalid: It does not exist in the P4Info. The PD proto and P4Info file are out of sync
+
+=========================================================================
+invalid table name (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1059,7 +1129,17 @@ table_name: "invalid"
 INVALID_ARGUMENT: Table entry for 'invalid' does not exist in the P4Info.
 
 =========================================================================
-missing matches
+invalid table name (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "invalid"
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'invalid' is invalid: It does not exist in the P4Info. The PD proto and P4Info file are out of sync
+
+=========================================================================
+missing matches (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1071,7 +1151,7 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-invalid match type - expect exact
+invalid match type - expect exact (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1093,7 +1173,7 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-invalid match type - expect optional
+invalid match type - expect optional (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1117,7 +1197,7 @@ INVALID_ARGUMENT: Table entry for 'optional_table' is invalid for the following 
   - Action is required.
 
 =========================================================================
-invalid match type - expect lpm
+invalid match type - expect lpm (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1140,7 +1220,7 @@ INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid for the following reas
   - Action is required.
 
 =========================================================================
-invalid match type - expect ternary
+invalid match type - expect ternary (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1159,7 +1239,7 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-invalid value - address not in bounds for upper 64 bits of ipv6
+invalid value - address not in bounds for upper 64 bits of ipv6 (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1183,7 +1263,7 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-invalid value - address not in bounds for upper 63 bits of ipv6
+invalid value - address not in bounds for upper 63 bits of ipv6 (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1207,7 +1287,7 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-invalid match field name
+invalid match field name (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1226,7 +1306,7 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-invalid IR value
+invalid IR value (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1245,7 +1325,7 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-invalid prefix length
+invalid prefix length (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1266,7 +1346,7 @@ INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reas
   - Action is required.
 
 =========================================================================
-duplicate match field name
+duplicate match field name (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1291,7 +1371,7 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-lpm value - masked bits set
+lpm value - masked bits set (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1314,7 +1394,7 @@ INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid for the following reas
   - Action is required.
 
 =========================================================================
-ternary value too long
+ternary value too long (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1338,7 +1418,7 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-ternary value and mask too long
+ternary value and mask too long (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1362,7 +1442,7 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-ternary value - masked bits set
+ternary value - masked bits set (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1389,7 +1469,7 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-Invalid match field format
+Invalid match field format (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1413,7 +1493,7 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-missing action
+missing action (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1435,7 +1515,7 @@ matches {
 INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action is required.
 
 =========================================================================
-missing action name
+missing action name (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1459,7 +1539,31 @@ action {
 INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action '' does not exist in the P4Info.
 
 =========================================================================
-invalid action name
+missing action name (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action '' is invalid: It does not exist in the P4Info.
+
+=========================================================================
+invalid action name (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1484,7 +1588,32 @@ action {
 INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'invalid' does not exist in the P4Info.
 
 =========================================================================
-missing action params
+invalid action name (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "invalid"
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'invalid' is invalid: It does not exist in the P4Info.
+
+=========================================================================
+missing action params (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1515,7 +1644,7 @@ action {
 INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
 
 =========================================================================
-duplicate action param name
+duplicate action param name (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1555,7 +1684,7 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
     - Missing parameters: 'arg1'. Expected 2 parameters, but found 1 instead.
 
 =========================================================================
-bad action param format
+bad action param format (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1595,7 +1724,7 @@ INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid for the following r
     - Param 'arg2': Expected format 'HEX_STRING', but got 'STR' instead.
 
 =========================================================================
-invalid action param name
+invalid action param name (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1632,7 +1761,44 @@ action {
 INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Unable to find parameter 'arg'.
 
 =========================================================================
-action set in table with action
+invalid action param name (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_1' is invalid: Param 'arg': Field arg missing in pdpi.DoThing1Action
+
+=========================================================================
+action set in table with action (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1674,7 +1840,7 @@ action_set {
 INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Table requires an action since it does not use onseshot. Got action set instead.
 
 =========================================================================
-action in table with action set
+action in table with action set (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1708,7 +1874,7 @@ action {
 INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table requires an action set since it uses onseshot. Got action instead.
 
 =========================================================================
-zero lpm prefix length
+zero lpm prefix length (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1729,7 +1895,7 @@ action {
 INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Match field 'ipv4' is invalid: A wild-card LPM match (i.e., prefix length of 0) must be represented by omitting the match altogether.
 
 =========================================================================
-zero ternary mask
+zero ternary mask (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1768,7 +1934,133 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action 'do_thing_1' is invalid: It is not a valid action for this table.
 
 =========================================================================
-zero priority
+zero ternary mask (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x100"
+    }
+    mask {
+      hex_str: "0x000"
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.TernaryTableEntry.Action
+
+=========================================================================
+empty bytestring in match field (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_name: "optional_table"
+matches {
+  name: "str"
+  optional {
+    value {
+      str: ""
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'optional_table' is invalid: Match field 'str' is invalid: Bytestrings must have non-zero length.
+
+=========================================================================
+empty bytestring in action parameter (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+table_name: "id_test_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "16.36.50.82"
+  }
+}
+action {
+  name: "do_thing_2"
+  params {
+    name: "normal"
+    value {
+      hex_str: "0x054"
+    }
+  }
+  params {
+    name: "ipv4"
+    value {
+      ipv4: "10.43.12.5"
+    }
+  }
+  params {
+    name: "ipv6"
+    value {
+      ipv6: "3242::fee2"
+    }
+  }
+  params {
+    name: "mac"
+    value {
+      mac: "00:11:22:33:44:55"
+    }
+  }
+  params {
+    name: "str"
+    value {
+      str: ""
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Param 'str': Bytestrings must have non-zero length.
+
+=========================================================================
+zero priority (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1806,7 +2098,43 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action 'do_thing_1' is invalid: It is not a valid action for this table.
 
 =========================================================================
-negative priority
+zero priority (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x100"
+    }
+    mask {
+      hex_str: "0x1ff"
+    }
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.TernaryTableEntry.Action
+
+=========================================================================
+negative priority (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1845,7 +2173,44 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action 'do_thing_1' is invalid: It is not a valid action for this table.
 
 =========================================================================
-absent priority
+negative priority (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x100"
+    }
+    mask {
+      hex_str: "0x1ff"
+    }
+  }
+}
+priority: -32
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.TernaryTableEntry.Action
+
+=========================================================================
+absent priority (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1883,7 +2248,43 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action 'do_thing_1' is invalid: It is not a valid action for this table.
 
 =========================================================================
-unexpected priority
+absent priority (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x100"
+    }
+    mask {
+      hex_str: "0x1ff"
+    }
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x01234568"
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.TernaryTableEntry.Action
+
+=========================================================================
+unexpected priority (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1906,7 +2307,30 @@ action {
 INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Table entries with no ternary or optional matches require a zero priority. Got 32 instead.
 
 =========================================================================
-action set with negative weight
+unexpected priority (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "lpm1_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "10.32.41.0"
+    }
+    prefix_length: 24
+  }
+}
+priority: 32
+action {
+  name: "NoAction"
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'lpm1_table' is invalid: Field priority missing in pdpi.Lpm1TableEntry
+
+=========================================================================
+action set with negative weight (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1945,7 +2369,7 @@ action_set {
 INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Expected positive action set weight, but got -1 instead.
 
 =========================================================================
-action set with invalid action
+action set with invalid action (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -1984,7 +2408,46 @@ action_set {
 INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Action 'invalid_do_thing_1' does not exist in the P4Info.
 
 =========================================================================
-counter in a table with no counters
+action set with invalid action (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "wcmp_table"
+matches {
+  name: "ipv4"
+  lpm {
+    value {
+      ipv4: "0.0.255.0"
+    }
+    prefix_length: 24
+  }
+}
+action_set {
+  actions {
+    action {
+      name: "invalid_do_thing_1"
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x00000008"
+        }
+      }
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x00000009"
+        }
+      }
+    }
+    weight: -1
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Action 'invalid_do_thing_1' is invalid: It does not exist in the P4Info.
+
+=========================================================================
+counter in a table with no counters (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -2026,7 +2489,7 @@ counter_data {
 INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid: Table does not have a counter, but table entry contained counter data.
 
 =========================================================================
-action in a table with no actions defined
+action in a table with no actions defined (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -2057,7 +2520,38 @@ action {
 INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action found for table which has no actions defined.
 
 =========================================================================
-unsupported table used
+action in a table with no actions defined (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "no_action_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.24.32.52"
+  }
+}
+action {
+  name: "do_thing_1"
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x01234567"
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'no_action_table' is invalid: Action 'do_thing_1' is invalid: Field do_thing_1 missing in pdpi.NoActionTableEntry.Action
+
+=========================================================================
+unsupported table used (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -2076,10 +2570,32 @@ matches {
 }
 
 --- IR (converting to PI) is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table entry for table 'unsupported_table' has @unsupported annotation.
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
 
 =========================================================================
-ternary table - unsupported action used
+unsupported table used (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "unsupported_table"
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.10.10.10"
+  }
+}
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
+
+=========================================================================
+ternary table - unsupported action used (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -2103,7 +2619,29 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action 'unsupported_action' is invalid: Action has @unsupported annotation.
 
 =========================================================================
-ternary table - unsupported match field used
+ternary table - unsupported action used (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x00"
+    }
+  }
+}
+priority: 32
+action {
+  name: "unsupported_action"
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unsupported_action' is invalid: Action has @unsupported annotation.
+
+=========================================================================
+ternary table - unsupported match field used (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -2126,7 +2664,26 @@ INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid for the following r
   - Action is required.
 
 =========================================================================
-meter counter data in a table with no counters
+ternary table - unsupported match field used (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+table_name: "ternary_table"
+matches {
+  name: "unsupported_field"
+  ternary {
+    value {
+      hex_str: "0x00"
+    }
+  }
+}
+priority: 32
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Match field 'unsupported_field' is invalid: Match field has @unsupported annotation.
+
+=========================================================================
+meter counter data in a table with no counters (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -2181,7 +2738,7 @@ INVALID_ARGUMENT: Table entry for 'wcmp_table' is invalid for the following reas
   - IR entry does not have a meter config but contained a meter counter.
 
 =========================================================================
-meter counter data but missing meter config
+meter counter data but missing meter config (IR -> PI)
 =========================================================================
 
 --- IR (Input):
@@ -2619,6 +3176,28 @@ wcmp_table_entry {
 
 --- PD is invalid/unsupported (detected when translating IR to PI):
 Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Expected positive action set weight, but got -1 instead.
+=========================================================================
+value with empty string for Format::STRING
+=========================================================================
+
+--- PD (Input):
+exact_table_entry {
+  match {
+    normal: "0x054"
+    ipv4: "10.43.12.5"
+    ipv6: "3242::fee2"
+    mac: "00:11:22:33:44:55"
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+--- PD is invalid/unsupported (detected when translating IR to PI):
+Table entry for 'exact_table' is invalid for the following reasons:
+  - Match field 'str' is invalid: Bytestrings must have non-zero length.
+  - Missing matches: 'str'. Expected 5 mandatory match conditions, but found 4 instead.
 =========================================================================
 valid wcmp table with choice of action
 =========================================================================
@@ -4080,98 +4659,6 @@ counter_data {
 
 
 =========================================================================
-exact match with empty string for Format::STRING
-=========================================================================
-
---- PD (Input):
-exact_table_entry {
-  match {
-    normal: "0x054"
-    ipv4: "10.43.12.5"
-    ipv6: "3242::fee2"
-    mac: "00:11:22:33:44:55"
-  }
-  action {
-    NoAction {
-    }
-  }
-}
-
---- IR:
-table_name: "exact_table"
-matches {
-  name: "normal"
-  exact {
-    hex_str: "0x054"
-  }
-}
-matches {
-  name: "ipv4"
-  exact {
-    ipv4: "10.43.12.5"
-  }
-}
-matches {
-  name: "ipv6"
-  exact {
-    ipv6: "3242::fee2"
-  }
-}
-matches {
-  name: "mac"
-  exact {
-    mac: "00:11:22:33:44:55"
-  }
-}
-matches {
-  name: "str"
-  exact {
-    str: ""
-  }
-}
-action {
-  name: "NoAction"
-}
-
---- PI:
-table_id: 33554434
-match {
-  field_id: 1
-  exact {
-    value: "T"
-  }
-}
-match {
-  field_id: 2
-  exact {
-    value: "\n+\014\005"
-  }
-}
-match {
-  field_id: 3
-  exact {
-    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
-  }
-}
-match {
-  field_id: 4
-  exact {
-    value: "\021\"3DU"
-  }
-}
-match {
-  field_id: 5
-  exact {
-  }
-}
-action {
-  action {
-    action_id: 21257015
-  }
-}
-
-
-=========================================================================
 ipv4 LPM table with /0
 =========================================================================
 
@@ -5175,7 +5662,7 @@ unsupported_table_entry {
 }
 
 --- PD is invalid/unsupported:
-INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table entry for table 'unsupported_table' has @unsupported annotation.
+INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
 =========================================================================
 ternary table - unsupported action used
 =========================================================================

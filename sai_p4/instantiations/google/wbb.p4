@@ -49,6 +49,14 @@ control compute_ipv4_checksum(inout headers_t headers,
   apply {}
 }
 
-@pkginfo(name = "wbb.p4", organization = "Google")
+#ifndef PKG_INFO_NAME
+#define PKG_INFO_NAME "wbb.p4"
+#endif
+
+@pkginfo(
+  name = PKG_INFO_NAME,
+  organization = "Google",
+  version = SAI_P4_PKGINFO_VERSION_LATEST
+)
 V1Switch(packet_parser(), verify_ipv4_checksum(), ingress(), egress(),
          compute_ipv4_checksum(), packet_deparser()) main;

@@ -1,5 +1,6 @@
 pkg_info {
   name: "fabric_border_router.p4"
+  version: "1.1.0"
   arch: "v1model"
   organization: "Google"
 }
