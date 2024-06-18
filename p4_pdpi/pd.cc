@@ -1030,7 +1030,7 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
   if (!status_or_ir_table_info.ok()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
         TableName(ir.table_name()),
-        absl::StrCat(kNewBullet, "It does not exist in the P4Info.",
+        absl::StrCat(kNewBullet, "It does not exist in the P4Info. ",
                      kPdProtoAndP4InfoOutOfSync)));
   }
   const auto *ir_table_info = *status_or_ir_table_info;
@@ -1053,9 +1053,9 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
   std::vector<std::string> invalid_reasons;
 
   if (ir_table_info->is_unsupported()) {
-    invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Table entry for table '", ir.table_name(),
-                     "' has @unsupported annotation."));
+    invalid_reasons.push_back(absl::StrCat(kNewBullet, "Table '",
+                                           ir.table_name(),
+                                           "' has @unsupported annotation."));
   }
 
   const absl::StatusOr<google::protobuf::Message *> &pd_match =
@@ -1931,7 +1931,7 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
   if (!status_or_ir_table_info.ok()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
         TableName(*p4_table_name),
-        absl::StrCat(kNewBullet, "It does not exist in the P4Info.",
+        absl::StrCat(kNewBullet, "It does not exist in the P4Info. ",
                      kPdProtoAndP4InfoOutOfSync)));
   }
   const auto *ir_table_info = *status_or_ir_table_info;
@@ -1940,9 +1940,9 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
   std::vector<std::string> invalid_reasons;
 
   if (ir_table_info->is_unsupported()) {
-    invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Table entry for table '", *p4_table_name,
-                     "' has @unsupported annotation."));
+    invalid_reasons.push_back(absl::StrCat(kNewBullet, "Table '",
+                                           *p4_table_name,
+                                           "' has @unsupported annotation."));
   }
 
   const auto &status_or_pd_table = GetMessageField(pd, *pd_table_field_name);
@@ -2467,7 +2467,7 @@ absl::StatusOr<IrWriteRpcStatus> PdWriteRpcStatusToIr(
     return ir_write_rpc_status;
   } else {
     return gutil::InvalidArgumentErrorBuilder()
-           << status_oneof_name << " is not a valid status one_of value."
+           << status_oneof_name << " is not a valid status one_of value. "
            << kPdProtoAndP4InfoOutOfSync;
   }
   return ir_write_rpc_status;
@@ -2514,7 +2514,7 @@ absl::Status PdTableEntryToOnlyKeyPd(const IrP4Info &info,
   ASSIGN_OR_RETURN(const auto &ir_table_info,
                    gutil::FindOrStatus(info.tables_by_name(), p4_table_name),
                    _ << "Table \"" << p4_table_name
-                     << "\" does not exist in P4Info."
+                     << "\" does not exist in P4Info. "
                      << kPdProtoAndP4InfoOutOfSync);
   ASSIGN_OR_RETURN(auto *pd_table,
                    GetMutableMessage(key_only_pd, pd_table_field_name));
