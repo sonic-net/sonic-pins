@@ -49,8 +49,12 @@ control compute_ipv4_checksum(inout headers_t headers,
   apply {}
 }
 
+#ifndef PKG_INFO_NAME
+#define PKG_INFO_NAME "wbb.p4"
+#endif
+
 @pkginfo(
-  name = "wbb.p4",
+  name = PKG_INFO_NAME,
   organization = "Google",
   version = SAI_P4_PKGINFO_VERSION_LATEST
 )

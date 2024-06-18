@@ -33,8 +33,12 @@
 #include "../../fixed/drop_martians.p4"
 #include "../../fixed/packet_rewrites.p4"
 #include "acl_egress.p4"
+#include "acl_egress_dhcp_to_host.p4"
 #include "acl_ingress.p4"
+#include "acl_ingress_qos.p4"
 #include "acl_pre_ingress.p4"
+#include "acl_pre_ingress_metadata.p4"
+#include "acl_pre_ingress_vlan.p4"
 #include "admit_google_system_mac.p4"
 //#include "hashing.p4"
 #include "ids.h"
@@ -62,6 +66,7 @@ control ingress(inout headers_t headers,
       // The INGRESS stage can redirect (e.g. drop, punt or copy) packets, apply
       // rate-limits or modify header data.
       acl_ingress.apply(headers, local_metadata, standard_metadata);
+      acl_ingress_qos.apply(headers, local_metadata, standard_metadata);
       ttl.apply(headers, local_metadata, standard_metadata);
       mirroring_clone.apply(headers, local_metadata, standard_metadata);
     }
