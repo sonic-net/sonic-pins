@@ -14,6 +14,8 @@
 
 #include "gutil/version.h"
 
+#include <sstream>
+
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -26,9 +28,16 @@ using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::Eq;
 
-bool RoundTrips(const Version& version) {
+bool VersionToStringRoundTrips(const Version& version) {
   absl::StatusOr<Version> roundtripped_version =
       ParseVersion(VersionToString(version));
+  return roundtripped_version.ok() && *roundtripped_version == version;
+}
+
+bool StreamInsertionOperatorRoundTrips(const Version& version) {
+  std::ostringstream oss;
+  oss << version;
+  absl::StatusOr<Version> roundtripped_version = ParseVersion(oss.str());
   return roundtripped_version.ok() && *roundtripped_version == version;
 }
 
@@ -55,10 +64,29 @@ TEST(ParseVersionTest, NegativeExamples) {
   EXPECT_THAT(ParseVersion(""), StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
+TEST(ParseVersionOrDieTest, PositiveExamples) {
+  EXPECT_THAT(ParseVersionOrDie("1.2.3"), Eq(Version{1, 2, 3}));
+  EXPECT_THAT(ParseVersionOrDie("01.2.3"), Eq(Version{1, 2, 3}));
+  EXPECT_THAT(ParseVersionOrDie("255.512.1024"), Eq(Version{255, 512, 1024}));
+}
+
+TEST(ParseVersionOrDieTest, NegativeExamples) {
+  // ParseVersionOrDie should die on not-OK input.
+  // Only testing two failures since EXPECT_DEATH takes a long time to run.
+  EXPECT_DEATH(ParseVersionOrDie("100"), /*regex=*/"");
+  EXPECT_DEATH(ParseVersionOrDie("1.1"), /*regex=*/"");
+}
+
 TEST(VersionTest, VersionToStringAndParseVersionRoundTrip) {
-  EXPECT_TRUE(RoundTrips(Version{1, 2, 3}));
-  EXPECT_TRUE(RoundTrips(Version{0, 2, 0}));
-  EXPECT_TRUE(RoundTrips(Version{1024, 987654321, 0}));
+  EXPECT_TRUE(VersionToStringRoundTrips(Version{1, 2, 3}));
+  EXPECT_TRUE(VersionToStringRoundTrips(Version{0, 2, 0}));
+  EXPECT_TRUE(VersionToStringRoundTrips(Version{1024, 987654321, 0}));
+}
+
+TEST(VersionTest, StreamInsertionOperatorAndParseVersionRoundTrip) {
+  EXPECT_TRUE(StreamInsertionOperatorRoundTrips(Version{1, 2, 3}));
+  EXPECT_TRUE(StreamInsertionOperatorRoundTrips(Version{0, 2, 0}));
+  EXPECT_TRUE(StreamInsertionOperatorRoundTrips(Version{1024, 987654321, 0}));
 }
 
 TEST(ComparisonTest, OrderingIsLexicographic) {
