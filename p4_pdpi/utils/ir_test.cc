@@ -303,6 +303,26 @@ TEST(ArbitraryByteStringToIrValueTest, Ipv6FullBitwidthTest) {
       IsOkAndHolds(EqualsProto(absl::Substitute(R"pb(ipv6: "$0")pb", kIp))));
 }
 
+TEST(ArbitraryByteStringToIrValueTest, EmptyBytestringReturnsError) {
+  EXPECT_THAT(
+      ArbitraryByteStringToIrValue(Format::IPV6, /*bitwidth=*/kNumBitsInIpv6,
+                                   /*bytes=*/""),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(ArbitraryToNormalizedByteString, EmptyBytestringReturnsError) {
+  EXPECT_THAT(
+      ArbitraryToNormalizedByteString(/*bytes=*/"", /*expected_bitwidth=*/8),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(IrValueToNormalizedByteString, kStrWithEmptyStringReturnsError) {
+  IrValue empty_string;
+  empty_string.set_str("");
+  EXPECT_THAT(IrValueToNormalizedByteString(empty_string, /*bitwidth=*/8),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
 class Ipv6BitwidthTest : public testing::TestWithParam<int> {};
 
 TEST_P(Ipv6BitwidthTest, ArbitraryByteStringToIrValueReturnsIp) {

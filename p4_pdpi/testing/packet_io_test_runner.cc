@@ -162,6 +162,12 @@ static void RunPacketInTests(pdpi::IrP4Info info) {
                             value { hex_str: "0x0" }
                           }
                         )pb"));
+  RunPdPacketInTest(info, "Format::STRING with empty bytestring",
+                    gutil::ParseProtoOrDie<pdpi::PacketIn>(R"pb(
+                      payload: "1"
+                      metadata { ingress_port: "0x034" target_egress_port: "" }
+                    )pb"),
+                    INPUT_IS_INVALID);
   RunPdPacketInTest(
       info, "ok", gutil::ParseProtoOrDie<pdpi::PacketIn>(R"pb(
         payload: "1"
@@ -240,18 +246,18 @@ static void RunPacketOutTests(pdpi::IrP4Info info) {
                              value { hex_str: "0x0" }
                            }
                          )pb"));
+  RunPdPacketOutTest(info, "empty bytestring due to only one field set",
+                     gutil::ParseProtoOrDie<pdpi::PacketOut>(R"pb(
+                       payload: "1"
+                       metadata { submit_to_ingress: "0x1" }
+                     )pb"),
+                     INPUT_IS_INVALID);
   RunPdPacketOutTest(
       info, "ok", gutil::ParseProtoOrDie<pdpi::PacketOut>(R"pb(
         payload: "1"
         metadata { submit_to_ingress: "0x1" egress_port: "eth-1/2/3" }
       )pb"),
       INPUT_IS_VALID);
-  RunPdPacketOutTest(info, "only one field set",
-                     gutil::ParseProtoOrDie<pdpi::PacketOut>(R"pb(
-                       payload: "1"
-                       metadata { submit_to_ingress: "0x1" }
-                     )pb"),
-                     INPUT_IS_VALID);
 }
 
 int main(int argc, char** argv) {

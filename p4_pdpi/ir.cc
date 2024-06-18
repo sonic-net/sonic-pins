@@ -1452,9 +1452,8 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
   std::vector<std::string> invalid_reasons;
 
   if (IsElementUnsupported(table->preamble().annotations())) {
-    invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Table entry for table '", table_name,
-                     "' has @unsupported annotation."));
+    invalid_reasons.push_back(absl::StrCat(kNewBullet, "Table '", table_name,
+                                           "' has @unsupported annotation."));
   }
 
   // Validate and translate the matches
@@ -1909,9 +1908,8 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
   std::vector<std::string> invalid_reasons;
 
   if (IsElementUnsupported(table->preamble().annotations())) {
-    invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Table entry for table '", table_name,
-                     "' has @unsupported annotation."));
+    invalid_reasons.push_back(absl::StrCat(kNewBullet, "Table '", table_name,
+                                           "' has @unsupported annotation."));
   }
 
   // Validate and translate the matches
