@@ -16,35 +16,56 @@
 // IDs of ACL tables (8 most significant bits = 0x02).
 // Since these IDs are user defined, they need to be separate from the fixed SAI
 // table ID space. We achieve this by starting the IDs at 0x100.
-#define ACL_INGRESS_TABLE_ID 0x02000100      // 33554688
-#define ACL_PRE_INGRESS_TABLE_ID 0x02000101  // 33554689
-#define ACL_WBB_INGRESS_TABLE_ID 0x02000103  // 33554691
-#define ACL_EGRESS_TABLE_ID 0x02000104       // 33554692
+#define ACL_INGRESS_TABLE_ID 0x02000100               // 33554688
+#define ACL_INGRESS_QOS_TABLE_ID 0x02000107           // 33554695
+#define ACL_PRE_INGRESS_TABLE_ID 0x02000101           // 33554689
+#define ACL_PRE_INGRESS_VLAN_TABLE_ID 0x02000105      // 33554693
+#define ACL_PRE_INGRESS_METADATA_TABLE_ID 0x02000106  // 33554694
+#define ACL_WBB_INGRESS_TABLE_ID 0x02000103           // 33554691
+#define ACL_EGRESS_TABLE_ID 0x02000104                // 33554692
+#define ACL_EGRESS_DHCP_TO_HOST_TABLE_ID 0x02000108   // 33554696
 
 // --- Actions -----------------------------------------------------------------
 
 // IDs of ACL actions (8 most significant bits = 0x01).
 // Since these IDs are user defined, they need to be separate from the fixed SAI
 // actions ID space. We achieve this by starting the IDs at 0x100.
-#define ACL_PRE_INGRESS_SET_VRF_ACTION_ID 0x01000100        // 16777472
-#define ACL_INGRESS_COPY_ACTION_ID 0x01000101               // 16777473
-#define ACL_INGRESS_TRAP_ACTION_ID 0x01000102               // 16777474
-#define ACL_INGRESS_EXPERIMENTAL_TRAP_ACTION_ID 0x01000199  // 16777625
-#define ACL_INGRESS_FORWARD_ACTION_ID 0x01000103            // 16777475
-#define ACL_INGRESS_MIRROR_ACTION_ID 0x01000104             // 16777476
-#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107           // 16777479
-#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108           // 16777480
-#define ACL_DROP_ACTION_ID 0x01000109                       // 16777481
+#define ACL_PRE_INGRESS_SET_VRF_ACTION_ID 0x01000100           // 16777472
+#define ACL_PRE_INGRESS_SET_OUTER_VLAN_ACTION_ID 0x0100010A    // 16777482
+#define ACL_PRE_INGRESS_SET_ACL_METADATA_ACTION_ID 0x0100010B  // 16777483
+#define ACL_INGRESS_COPY_ACTION_ID 0x01000101                  // 16777473
+#define ACL_INGRESS_TRAP_ACTION_ID 0x01000102                  // 16777474
+#define ACL_INGRESS_EXPERIMENTAL_TRAP_ACTION_ID 0x01000199     // 16777625
+#define ACL_INGRESS_FORWARD_ACTION_ID 0x01000103               // 16777475
+#define ACL_INGRESS_MIRROR_ACTION_ID 0x01000104                // 16777476
+#define ACL_INGRESS_RATE_LIMIT_COPY_ACTION_ID 0x0100010C       // 16777484
+#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107              // 16777479
+#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108              // 16777480
+#define ACL_DROP_ACTION_ID 0x01000109                          // 16777481
 
 // --- Meters ------------------------------------------------------------------
 #define ACL_INGRESS_METER_ID 0x15000100      // 352321792
 #define ACL_WBB_INGRESS_METER_ID 0x15000101  // 352321793
 
 // --- Counters ----------------------------------------------------------------
-#define ACL_PRE_INGRESS_COUNTER_ID 0x13000101  // 318767361
-#define ACL_INGRESS_COUNTER_ID 0x13000102      // 318767362
-#define ACL_WBB_INGRESS_COUNTER_ID 0x13000103  // 318767363
-#define ACL_EGRESS_COUNTER_ID 0x13000104       // 318767364
+#define ACL_PRE_INGRESS_COUNTER_ID 0x13000101           // 318767361
+#define ACL_PRE_INGRESS_METADATA_COUNTER_ID 0x13000105  // 318767365
+#define ACL_PRE_INGRESS_VLAN_COUNTER_ID 0x13000106      // 318767366
+#define ACL_INGRESS_COUNTER_ID 0x13000102               // 318767362
+#define ACL_INGRESS_QOS_COUNTER_ID 0x13000107           // 318767367
+#define ACL_WBB_INGRESS_COUNTER_ID 0x13000103           // 318767363
+#define ACL_EGRESS_COUNTER_ID 0x13000104                // 318767364
+#define ACL_EGRESS_DHCP_TO_HOST_COUNTER_ID 0x13000108   // 318767368
+
+// --- PkgInfo versions --------------------------------------------------------
+// For use in `@pkginfo(..., version = VERSION)` annotations.
+// We use semantic versioning. Version numbers must increase monotonically.
+
+// Indicates that the program has packet out support.
+#define SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT "1.0.0"
+
+// Indicates that the program has packet in support.
+#define SAI_P4_PKGINFO_VERSION_HAS_PACKET_IN_SUPPORT "1.1.0"
 
 // --- PkgInfo versions --------------------------------------------------------
 // For use in `@pkginfo(..., version = VERSION)` annotations.

@@ -36,6 +36,7 @@ filegroup(
         "roles.h",
         "routing.p4",
         "ttl.p4",
+	"vlan.p4",
     ],
 )
 
