@@ -56,6 +56,19 @@
 // legacy reasons.
 #define ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID 0x11DC4EC8  // 299650760
 
+// --- Intrinsic ports ---------------------------------------------------------
+
+// Port used for PacketIO. Packets sent to this port go to the CPU.
+// Packets received on this port come from the CPU.
+// TODO For simplicity, we went with 510/511 as CPU/drop port to
+// begin with, which are the values used by BMv2 by default, and the values
+// hard-coded in p4-symbolic. We should revisit these arbitrary values.
+#define SAI_P4_CPU_PORT 510
+
+// The port used by `mark_to_drop` from v1model.p4. For details, see the
+// documentation of `mark_to_drop`.
+#define SAI_P4_DROP_PORT 511
+
 // --- Copy to CPU session -----------------------------------------------------
 
 // The COPY_TO_CPU_SESSION_ID must be programmed in the target using P4Runtime:

@@ -341,6 +341,8 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
       config_db_monitor, "PORT", p4runtime_server);
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
       config_db_monitor, "PORTCHANNEL", p4runtime_server);
+  RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
+      config_db_monitor, "CPU_PORT", p4runtime_server);
 
   while (*monitor_config_db_events) {
     absl::Status status = config_db_monitor.WaitForNextEventAndHandle();

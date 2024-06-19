@@ -24,6 +24,7 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/p4info_verification_schema.pb.h"
 #include "p4rt_app/utils/ir_builder.h"
@@ -885,8 +886,11 @@ class GoogleInstantiationTest
 // P4RT app/GPINS.
 TEST_P(GoogleInstantiationTest, SchemaSupportsInstantiation) {
   sai::Instantiation instantiation = GetParam();
+  pdpi::IrP4Info p4info = sai::GetIrP4Info(instantiation);
   ASSERT_OK_AND_ASSIGN(P4InfoVerificationSchema schema, SupportedSchema());
-  EXPECT_OK(IsSupportedBySchema(sai::GetIrP4Info(instantiation), schema));
+  // Not supporting entities that are explicitly marked as `@unsupported` is ok.
+  pdpi::RemoveUnsupportedEntities(p4info);
+  EXPECT_OK(IsSupportedBySchema(p4info, schema));
 }
 
 INSTANTIATE_TEST_SUITE_P(

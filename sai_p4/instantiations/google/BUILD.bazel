@@ -46,7 +46,11 @@ FABRIC_BORDER_ROUTER_DEPS = SHARED_DEPS + [
 ]
 
 TOR_DEPS = SHARED_DEPS + [
+    "acl_ingress_qos.p4",
     "acl_egress.p4",
+    "acl_egress_dhcp_to_host.p4",
+    "acl_pre_ingress_metadata.p4",
+    "acl_pre_ingress_vlan.p4",
     "tor.p4",
 ]
 
@@ -255,6 +259,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
