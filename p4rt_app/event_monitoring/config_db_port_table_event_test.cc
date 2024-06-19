@@ -53,10 +53,12 @@ TEST(PortTableIdEventTest, AcceptPortChannelPortIds) {
                                       {{"id", "2001"}}));
 }
 
-TEST(PortTableIdEventTest, IgnoreUnexpectedPortNames) {
-  StrictMock<MockP4RuntimeImpl> mock_p4runtime_impl;  // Expect no calls.
+TEST(PortTableIdEventTest, AcceptCpuPortIds) {
+  MockP4RuntimeImpl mock_p4runtime_impl;
+  EXPECT_CALL(mock_p4runtime_impl, AddPortTranslation("CPU", "3"))
+      .WillOnce(Return(absl::OkStatus()));
   ConfigDbPortTableEventHandler event_handler(&mock_p4runtime_impl);
-  EXPECT_OK(event_handler.HandleEvent(kDelCommand, "loopback0", {{"id", "1"}}));
+  EXPECT_OK(event_handler.HandleEvent(kSetCommand, "CPU", {{"id", "3"}}));
 }
 
 TEST(PortTableIdEventTest, SetMultiplePortIds) {

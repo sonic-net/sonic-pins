@@ -68,6 +68,7 @@ cc_test(
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//gutil:testing",
+        "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4rt_app/utils:ir_builder",
         "//sai_p4/instantiations/google:instantiations",
