@@ -27,6 +27,7 @@
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/testing/test_helper.h"
 #include "p4_pdpi/testing/union_main_p4_pd.pb.h"
+#include "p4_pdpi/translation_options.h"
 
 using ::p4::config::v1::P4Info;
 
@@ -36,7 +37,7 @@ static void RunPiTableEntryTest(const pdpi::IrP4Info& info,
   RunGenericPiTest<pdpi::IrTableEntry, p4::v1::TableEntry>(
       info, test_name, pi,
       [](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi) {
-        return pdpi::PiTableEntryToIr(info, pi, false);
+        return pdpi::PiTableEntryToIr(info, pi);
       });
 }
 
@@ -47,58 +48,39 @@ static void RunIrTableEntryTest(const pdpi::IrP4Info& info,
   RunGenericIrToPiTest<pdpi::IrTableEntry, p4::v1::TableEntry>(
       info, absl::StrCat(test_name, " (IR -> PI)"), ir,
       [](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir) {
-        return pdpi::IrTableEntryToPi(info, ir, false);
+        return pdpi::IrTableEntryToPi(info, ir);
       });
   if (test_ir_to_pd) {
     RunGenericIrToPdTest<pdpi::IrTableEntry, pdpi::TableEntry>(
         info, absl::StrCat(test_name, " (IR -> PD)"), ir,
         [](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir,
            google::protobuf::Message* pd) {
-          return pdpi::IrTableEntryToPd(info, ir, pd, false);
+          return pdpi::IrTableEntryToPd(info, ir, pd);
         });
   }
 }
 
 static void RunPdTableEntryTest(const pdpi::IrP4Info& info,
-                                const std::string& test_name,
+                                std::string test_name,
                                 const pdpi::TableEntry& pd,
-                                InputValidity validity, bool key_only = false) {
+                                InputValidity validity,
+                                pdpi::TranslationOptions options = {}) {
+  absl::StrAppend(&test_name, "\n", options);
   RunGenericPdTest<pdpi::TableEntry, pdpi::IrTableEntry, p4::v1::TableEntry>(
-      info, test_name, pd,
-      [&](const pdpi::IrP4Info& ir_p4info,
-          const google::protobuf::Message& pd) {
-        return pdpi::PdTableEntryToIr(ir_p4info, pd, key_only);
-      },
-      [&](const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntry& ir,
-          google::protobuf::Message* pd) {
-        return pdpi::IrTableEntryToPd(ir_p4info, ir, pd, key_only);
-      },
-      [&](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir) {
-        return pdpi::IrTableEntryToPi(info, ir, key_only);
-      },
-      [&](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi) {
-        return pdpi::PiTableEntryToIr(info, pi, key_only);
-      },
-      [&](const pdpi::IrP4Info& info, const google::protobuf::Message& pd) {
-        return pdpi::PdTableEntryToPi(info, pd, key_only);
-      },
-      [&](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi,
-          google::protobuf::Message* pd) {
-        return pdpi::PiTableEntryToPd(info, pi, pd, key_only);
-      },
-      validity,
+      info, test_name, pd, options, pdpi::PdTableEntryToIr,
+      pdpi::IrTableEntryToPd, pdpi::IrTableEntryToPi, pdpi::PiTableEntryToIr,
+      pdpi::PdTableEntryToPi, pdpi::PiTableEntryToPd, validity,
+      /*relevant_pd_fields=*/
       [&](const pdpi::IrP4Info& info, const pdpi::TableEntry& pd) {
-        if (key_only) {
-          pdpi::TableEntry key_only_pd;
-          auto res = pdpi::PdTableEntryToOnlyKeyPd(info, pd, &key_only_pd);
-          if (res.ok()) {
-            return key_only_pd;
-          } else {
-            Fail(test_name,
-                 "Unable to extract only the key part from PD table entry");
-          }
+        if (!options.key_only) return pd;
+        pdpi::TableEntry key_only_pd;
+        absl::Status status =
+            pdpi::PdTableEntryToOnlyKeyPd(info, pd, &key_only_pd);
+        if (!status.ok()) {
+          Fail(test_name,
+               "Unable to extract only the key part from PD table entry");
         }
-        return pd;
+        return key_only_pd;
       });
 }
 
@@ -2110,7 +2092,8 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
                         id_test_table_entry {}
                       )pb"),
-                      INPUT_IS_INVALID, /*key_only=*/true);
+                      INPUT_IS_INVALID,
+                      pdpi::TranslationOptions{.key_only = true});
 
   RunPdTableEntryTest(
       info, "ternary table with priority absent with key_only=true",
@@ -2125,7 +2108,7 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
           action { do_thing_3 { arg1: "0x01234567" arg2: "0x01234568" } }
         }
       )pb"),
-      INPUT_IS_INVALID, /*key_only=*/true);
+      INPUT_IS_INVALID, pdpi::TranslationOptions{.key_only = true});
 
   RunPdTableEntryTest(
       info, "unsupported table used",
@@ -2133,6 +2116,12 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
         unsupported_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
       )pb"),
       INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "unsupported table used",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        unsupported_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
+      )pb"),
+      INPUT_IS_VALID, pdpi::TranslationOptions{.allow_unsupported = true});
 
   RunPdTableEntryTest(info, "ternary table - unsupported action used",
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
@@ -2143,16 +2132,37 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
                         }
                       )pb"),
                       INPUT_IS_INVALID);
-
-  RunPdTableEntryTest(info, "ternary table - unsupported match field used",
+  RunPdTableEntryTest(info, "ternary table - unsupported action used",
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
                         ternary_table_entry {
-                          match { unsupported_field { value: "0x052" } }
+                          match { normal { value: "0x052" mask: "0x273" } }
                           priority: 32
-                          action { do_thing_3 { arg1: "0x23" arg2: "0x0251" } }
+                          action { unsupported_action {} }
                         }
                       )pb"),
-                      INPUT_IS_INVALID);
+                      INPUT_IS_VALID,
+                      pdpi::TranslationOptions{.allow_unsupported = true});
+
+  RunPdTableEntryTest(
+      info, "ternary table - unsupported match field used",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        ternary_table_entry {
+          match { unsupported_field { value: "0x1" mask: "0x1" } }
+          priority: 32
+          action { do_thing_3 { arg1: "0x12345678" arg2: "0x87654321" } }
+        }
+      )pb"),
+      INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "ternary table - unsupported match field used",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        ternary_table_entry {
+          match { unsupported_field { value: "0x1" mask: "0x1" } }
+          priority: 32
+          action { do_thing_3 { arg1: "0x12345678" arg2: "0x87654321" } }
+        }
+      )pb"),
+      INPUT_IS_VALID, pdpi::TranslationOptions{.allow_unsupported = true});
 
   RunPdTableEntryTest(
       info, "ipv4 LPM table with key_only=true",
@@ -2162,7 +2172,7 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
           action { NoAction {} }
         }
       )pb"),
-      INPUT_IS_VALID, /*key_only=*/true);
+      INPUT_IS_VALID, pdpi::TranslationOptions{.key_only = true});
 
   RunPdTableEntryTest(
       info, "ternary match with key_only=true",
@@ -2173,7 +2183,7 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
           action { do_thing_3 { arg1: "0x01234567" arg2: "0x01234568" } }
         }
       )pb"),
-      INPUT_IS_VALID, /*key_only=*/true);
+      INPUT_IS_VALID, pdpi::TranslationOptions{.key_only = true});
 }
 
 int main(int argc, char** argv) {
