@@ -25,6 +25,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "absl/synchronization/mutex.h"
 #include "glog/logging.h"
 
 namespace p4rt_app {
@@ -34,6 +35,7 @@ void FakeSonicDbTable::InsertTableEntry(const std::string &key,
                                         const SonicDbEntryList &values) {
   VLOG(1) << absl::StreamFormat("'%s' insert table entry: %s",
                                 debug_table_name_, key);
+  absl::WriterMutexLock lock(&entries_mutex_);
   auto &entry = entries_[key];
   for (const auto &[field, data] : values) {
     entry.insert_or_assign(field, data);
@@ -43,6 +45,7 @@ void FakeSonicDbTable::InsertTableEntry(const std::string &key,
 void FakeSonicDbTable::DeleteTableEntry(const std::string &key) {
   VLOG(1) << absl::StreamFormat("'%s' delete table entry: %s",
                                 debug_table_name_, key);
+  absl::WriterMutexLock lock(&entries_mutex_);
   if (auto iter = entries_.find(key); iter != entries_.end()) {
     entries_.erase(iter);
   }
@@ -67,6 +70,7 @@ bool FakeSonicDbTable::PushNotification(const std::string &key) {
   }
 
   // If the key exists Insert into the StateDb, otherwise delete.
+  absl::WriterMutexLock lock(&entries_mutex_);
   auto entry_iter = entries_.find(key);
   if (entry_iter != entries_.end()) {
     InsertStateDbTableEntry(key, entry_iter->second);
@@ -125,8 +129,11 @@ absl::StatusOr<SonicDbEntryMap> FakeSonicDbTable::ReadTableEntry(
     const std::string &key) const {
   VLOG(1) << absl::StreamFormat("'%s' read table entry: %s", debug_table_name_,
                                 key);
-  if (auto entry = entries_.find(key); entry != entries_.end()) {
-    return entry->second;
+  {
+    absl::ReaderMutexLock lock(&entries_mutex_);
+    if (auto entry = entries_.find(key); entry != entries_.end()) {
+      return entry->second;
+    }
   }
   return absl::Status(absl::StatusCode::kNotFound,
                       absl::StrCat("AppDb missing: ", key));
@@ -135,8 +142,11 @@ absl::StatusOr<SonicDbEntryMap> FakeSonicDbTable::ReadTableEntry(
 std::vector<std::string> FakeSonicDbTable::GetAllKeys() const {
   std::vector<std::string> result;
   VLOG(1) << absl::StreamFormat("'%s' get all keys.", debug_table_name_);
-  for (const auto &entry : entries_) {
-    result.push_back(entry.first);
+  {
+    absl::ReaderMutexLock lock(&entries_mutex_);
+    for (const auto &entry : entries_) {
+      result.push_back(entry.first);
+    }
   }
   VLOG(2) << absl::StreamFormat("'%s' found  keys: %s", debug_table_name_,
                                 absl::StrJoin(result, ", "));
@@ -144,6 +154,7 @@ std::vector<std::string> FakeSonicDbTable::GetAllKeys() const {
 }
 
 void FakeSonicDbTable::DebugState() const {
+  absl::ReaderMutexLock lock(&entries_mutex_);
   for (const auto &[key, values] : entries_) {
     LOG(INFO) << "AppDb entry: " << key;
     for (const auto &[field, data] : values) {
