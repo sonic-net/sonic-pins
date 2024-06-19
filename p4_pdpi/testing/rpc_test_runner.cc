@@ -71,16 +71,21 @@ static void RunPiReadResponseTest(const pdpi::IrP4Info& info,
                                   const p4::v1::ReadResponse& pi) {
   RunGenericPiTest<pdpi::IrReadResponse, p4::v1::ReadResponse>(
       info, absl::StrCat("ReadResponse test: ", test_name), pi,
-      pdpi::PiReadResponseToIr);
+      // We cannot pass `PiReadResponseToIr` directly, since it takes an
+      // optional third parameter, which `RunGenericPiTest` does not expect.
+      [](const pdpi::IrP4Info& info, const p4::v1::ReadResponse& pi) {
+        return pdpi::PiReadResponseToIr(info, pi);
+      });
 }
 
 static void RunPdReadResponseTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
                                   const pdpi::ReadResponse& pd,
-                                  const InputValidity validity) {
+                                  const InputValidity validity,
+                                  pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::ReadResponse, pdpi::IrReadResponse,
                    p4::v1::ReadResponse>(
-      info, absl::StrCat("ReadResponse test: ", test_name), pd,
+      info, absl::StrCat("ReadResponse test: ", test_name), pd, options,
       pdpi::PdReadResponseToIr, pdpi::IrReadResponseToPd,
       pdpi::IrReadResponseToPi, pdpi::PiReadResponseToIr,
       pdpi::PdReadResponseToPi, pdpi::PiReadResponseToPd, validity);
@@ -90,17 +95,23 @@ static void RunPiUpdateTest(const pdpi::IrP4Info& info,
                             const std::string& test_name,
                             const p4::v1::Update& pi) {
   RunGenericPiTest<pdpi::IrUpdate, p4::v1::Update>(
-      info, absl::StrCat("Update test: ", test_name), pi, pdpi::PiUpdateToIr);
+      info, absl::StrCat("Update test: ", test_name), pi,
+      // We cannot pass `PiUpdateToIr` directly, since it takes an optional
+      // third parameter, which `RunGenericPiTest` does not expect.
+      [](const pdpi::IrP4Info& info, const p4::v1::Update& pi) {
+        return pdpi::PiUpdateToIr(info, pi);
+      });
 }
 
 static void RunPdUpdateTest(const pdpi::IrP4Info& info,
                             const std::string& test_name,
                             const pdpi::Update& pd,
-                            const InputValidity validity) {
+                            const InputValidity validity,
+                            pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::Update, pdpi::IrUpdate, p4::v1::Update>(
-      info, absl::StrCat("Update test: ", test_name), pd, pdpi::PdUpdateToIr,
-      pdpi::IrUpdateToPd, pdpi::IrUpdateToPi, pdpi::PiUpdateToIr,
-      pdpi::PdUpdateToPi, pdpi::PiUpdateToPd, validity);
+      info, absl::StrCat("Update test: ", test_name), pd, options,
+      pdpi::PdUpdateToIr, pdpi::IrUpdateToPd, pdpi::IrUpdateToPi,
+      pdpi::PiUpdateToIr, pdpi::PdUpdateToPi, pdpi::PiUpdateToPd, validity);
 }
 
 static void RunPiWriteRequestTest(const pdpi::IrP4Info& info,
@@ -108,16 +119,21 @@ static void RunPiWriteRequestTest(const pdpi::IrP4Info& info,
                                   const p4::v1::WriteRequest& pi) {
   RunGenericPiTest<pdpi::IrWriteRequest, p4::v1::WriteRequest>(
       info, absl::StrCat("WriteRequest test: ", test_name), pi,
-      pdpi::PiWriteRequestToIr);
+      // We cannot pass `PiWriteRequestToIr` directly, since it takes an
+      // optional third parameter, which `RunGenericPiTest` does not expect.
+      [](const pdpi::IrP4Info& info, const p4::v1::WriteRequest& pi) {
+        return pdpi::PiWriteRequestToIr(info, pi);
+      });
 }
 
 static void RunPdWriteRequestTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
                                   const pdpi::WriteRequest& pd,
-                                  const InputValidity validity) {
+                                  const InputValidity validity,
+                                  pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::WriteRequest, pdpi::IrWriteRequest,
                    p4::v1::WriteRequest>(
-      info, absl::StrCat("WriteRequest test: ", test_name), pd,
+      info, absl::StrCat("WriteRequest test: ", test_name), pd, options,
       pdpi::PdWriteRequestToIr, pdpi::IrWriteRequestToPd,
       pdpi::IrWriteRequestToPi, pdpi::PiWriteRequestToIr,
       pdpi::PdWriteRequestToPi, pdpi::PiWriteRequestToPd, validity);

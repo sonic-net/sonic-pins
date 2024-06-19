@@ -2779,6 +2779,7 @@ INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid: IR entry d
 
 =========================================================================
 empty PD
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2787,6 +2788,7 @@ empty PD
 INVALID_ARGUMENT: Table is invalid: Oneof field "entry" is not set
 =========================================================================
 missing matches
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2801,6 +2803,7 @@ Table entry for 'id_test_table' is invalid for the following reasons:
   - Action is required.
 =========================================================================
 missing action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2815,6 +2818,7 @@ id_test_table_entry {
 Table entry for 'id_test_table' is invalid: Action is required.
 =========================================================================
 exact match missing
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2839,6 +2843,7 @@ Table entry for 'id_test_table' is invalid for the following reasons:
   - Missing matches: 'ipv4'. Expected 2 mandatory match conditions, but found 1 instead.
 =========================================================================
 negative prefix length
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2859,6 +2864,7 @@ lpm2_table_entry {
 INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: Prefix length -4 is out of bounds.
 =========================================================================
 prefix length too large
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2879,6 +2885,7 @@ lpm2_table_entry {
 INVALID_ARGUMENT: Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: Prefix length 132 is out of bounds.
 =========================================================================
 zero prefix length
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2898,6 +2905,7 @@ lpm2_table_entry {
 Table entry for 'lpm2_table' is invalid: Match field 'ipv6' is invalid: A wild-card LPM match (i.e., prefix length of 0) must be represented by omitting the match altogether.
 =========================================================================
 ternary entry with zero mask
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2937,6 +2945,7 @@ Table entry for 'ternary_table' is invalid for the following reasons:
     - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
 =========================================================================
 lpm value - masked bits set
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -2960,6 +2969,7 @@ Table entry for 'lpm2_table' is invalid for the following reasons:
     Prefix Length: 96
 =========================================================================
 ternary value - masked bits set
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3002,6 +3012,7 @@ Table entry for 'ternary_table' is invalid for the following reasons:
     - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
 =========================================================================
 action with missing arguments
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3023,6 +3034,7 @@ id_test_table_entry {
 Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Missing parameters: 'ipv4'. 'ipv6'. Expected 5 parameters, but found 3 instead.
 =========================================================================
 action with wrong argument format
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3046,6 +3058,7 @@ id_test_table_entry {
 Table entry for 'id_test_table' is invalid: Action 'do_thing_2' is invalid: Param 'normal': IR Value '10.23.43.1' with hex string format does not start with 0x.
 =========================================================================
 ternary table with zero priority
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3084,6 +3097,7 @@ Table entry for 'ternary_table' is invalid for the following reasons:
     - Param 'arg2': IR Value '0x0251' has the wrong number of characters. Has 6 characters, but expected 10 instead.
 =========================================================================
 ternary table with negative priority
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3119,6 +3133,7 @@ ternary_table_entry {
 Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got -43 instead.
 =========================================================================
 ternary table with priority absent
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3153,6 +3168,7 @@ ternary_table_entry {
 Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
 =========================================================================
 wcmp table with negative weight
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3178,6 +3194,7 @@ wcmp_table_entry {
 Table entry for 'wcmp_table' is invalid: ActionSet is invalid: Expected positive action set weight, but got -1 instead.
 =========================================================================
 value with empty string for Format::STRING
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3200,6 +3217,7 @@ Table entry for 'exact_table' is invalid for the following reasons:
   - Missing matches: 'str'. Expected 5 mandatory match conditions, but found 4 instead.
 =========================================================================
 valid wcmp table with choice of action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3325,6 +3343,7 @@ action {
 
 =========================================================================
 valid wcmp table with watch_port
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3453,6 +3472,7 @@ action {
 
 =========================================================================
 valid wcmp table
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3578,6 +3598,7 @@ action {
 
 =========================================================================
 exact matches of all formats
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3672,6 +3693,7 @@ action {
 
 =========================================================================
 valid optional table missing a match
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3743,6 +3765,7 @@ priority: 32
 
 =========================================================================
 ternary with wildcard
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3819,6 +3842,7 @@ priority: 32
 
 =========================================================================
 metadata
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -3898,6 +3922,7 @@ metadata: "abc"
 
 =========================================================================
 ternary table for all formats
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4084,6 +4109,7 @@ priority: 32
 
 =========================================================================
 ipv4 LPM table
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4133,6 +4159,7 @@ action {
 
 =========================================================================
 ipv6 LPM table
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4182,6 +4209,7 @@ action {
 
 =========================================================================
 action with all formats as arguments
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4292,6 +4320,7 @@ action {
 
 =========================================================================
 table entry without counters and meters
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4341,6 +4370,7 @@ action {
 
 =========================================================================
 table entry with a meter
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4406,6 +4436,7 @@ meter_config {
 
 =========================================================================
 table entry with a byte counter
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4464,6 +4495,7 @@ counter_data {
 
 =========================================================================
 table entry with a packet counter
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4522,6 +4554,7 @@ counter_data {
 
 =========================================================================
 table entry with a counter (both units)
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4583,6 +4616,7 @@ counter_data {
 
 =========================================================================
 table entry with counters and meters
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4660,6 +4694,7 @@ counter_data {
 
 =========================================================================
 ipv4 LPM table with /0
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4689,6 +4724,7 @@ action {
 
 =========================================================================
 exact match with string containing null characters for Format::STRING
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4783,6 +4819,7 @@ action {
 
 =========================================================================
 optional match with string containing null characters for Format::STRING
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4854,6 +4891,7 @@ priority: 32
 
 =========================================================================
 valid wcmp table with watch_port containing null characters for Format::STRING
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -4982,6 +5020,7 @@ action {
 
 =========================================================================
 valid no action table
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5025,6 +5064,7 @@ match {
 
 =========================================================================
 unsupported field in pd
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5043,6 +5083,7 @@ optional_table_entry {
 INVALID_ARGUMENT: Table entry for 'optional_table' is invalid: Match field 'mac' is invalid: Match field does not exist in the P4Info.
 =========================================================================
 table entry with a meter counter data (packet counter)
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5150,6 +5191,7 @@ meter_counter_data {
 
 =========================================================================
 table entry with a meter counter data (byte counter)
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5257,6 +5299,7 @@ meter_counter_data {
 
 =========================================================================
 table entry with counters, meters and meter counter data
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5376,6 +5419,7 @@ meter_counter_data {
 
 =========================================================================
 table entry with counters, meter counter data but no meter config
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5414,6 +5458,7 @@ count_and_meter_table_entry {
 Table entry for 'count_and_meter_table' is invalid: IR entry does not have a meter config but contained a meter counter.
 =========================================================================
 table entry with meter counter data but no color counters
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5497,6 +5542,7 @@ meter_counter_data {
 
 =========================================================================
 table entry with meter counter data but missing some colors
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5604,6 +5650,7 @@ meter_counter_data {
 
 =========================================================================
 missing matches with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5617,6 +5664,7 @@ Table entry for 'id_test_table' is invalid for the following reasons:
   - Missing matches: 'ipv4', 'ipv6'. Expected 2 mandatory match conditions, but found 0 instead.
 =========================================================================
 ternary table with priority absent with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5651,6 +5699,7 @@ ternary_table_entry {
 Table entry for 'ternary_table' is invalid: Table entries with ternary or optional matches require a positive non-zero priority. Got 0 instead.
 =========================================================================
 unsupported table used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5664,7 +5713,52 @@ unsupported_table_entry {
 --- PD is invalid/unsupported:
 INVALID_ARGUMENT: Table entry for 'unsupported_table' is invalid: Table 'unsupported_table' has @unsupported annotation.
 =========================================================================
+unsupported table used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = true}
+=========================================================================
+
+--- PD (Input):
+unsupported_table_entry {
+  match {
+    ipv6: "::ff22"
+    ipv4: "10.10.10.10"
+  }
+}
+
+--- IR:
+table_name: "unsupported_table"
+matches {
+  name: "ipv6"
+  exact {
+    ipv6: "::ff22"
+  }
+}
+matches {
+  name: "ipv4"
+  exact {
+    ipv4: "10.10.10.10"
+  }
+}
+
+--- PI:
+table_id: 33554447
+match {
+  field_id: 1
+  exact {
+    value: "\377\""
+  }
+}
+match {
+  field_id: 2
+  exact {
+    value: "\n\n\n\n"
+  }
+}
+
+
+=========================================================================
 ternary table - unsupported action used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5685,20 +5779,77 @@ ternary_table_entry {
 --- PD is invalid/unsupported:
 INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Action 'unsupported_action' is invalid: Action has @unsupported annotation.
 =========================================================================
+ternary table - unsupported action used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = true}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    normal {
+      value: "0x052"
+      mask: "0x273"
+    }
+  }
+  action {
+    unsupported_action {
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_name: "ternary_table"
+matches {
+  name: "normal"
+  ternary {
+    value {
+      hex_str: "0x052"
+    }
+    mask {
+      hex_str: "0x273"
+    }
+  }
+}
+priority: 32
+action {
+  name: "unsupported_action"
+}
+
+--- PI:
+table_id: 33554435
+match {
+  field_id: 1
+  ternary {
+    value: "R"
+    mask: "\002s"
+  }
+}
+action {
+  action {
+    action_id: 16777223
+  }
+}
+priority: 32
+
+
+=========================================================================
 ternary table - unsupported match field used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
 ternary_table_entry {
   match {
     unsupported_field {
-      value: "0x052"
+      value: "0x1"
+      mask: "0x1"
     }
   }
   action {
     do_thing_3 {
-      arg1: "0x23"
-      arg2: "0x0251"
+      arg1: "0x12345678"
+      arg2: "0x87654321"
     }
   }
   priority: 32
@@ -5707,7 +5858,85 @@ ternary_table_entry {
 --- PD is invalid/unsupported:
 INVALID_ARGUMENT: Table entry for 'ternary_table' is invalid: Match field 'unsupported_field' is invalid: Match field has @unsupported annotation.
 =========================================================================
+ternary table - unsupported match field used
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = true}
+=========================================================================
+
+--- PD (Input):
+ternary_table_entry {
+  match {
+    unsupported_field {
+      value: "0x1"
+      mask: "0x1"
+    }
+  }
+  action {
+    do_thing_3 {
+      arg1: "0x12345678"
+      arg2: "0x87654321"
+    }
+  }
+  priority: 32
+}
+
+--- IR:
+table_name: "ternary_table"
+matches {
+  name: "unsupported_field"
+  ternary {
+    value {
+      hex_str: "0x1"
+    }
+    mask {
+      hex_str: "0x1"
+    }
+  }
+}
+priority: 32
+action {
+  name: "do_thing_3"
+  params {
+    name: "arg1"
+    value {
+      hex_str: "0x12345678"
+    }
+  }
+  params {
+    name: "arg2"
+    value {
+      hex_str: "0x87654321"
+    }
+  }
+}
+
+--- PI:
+table_id: 33554435
+match {
+  field_id: 5
+  ternary {
+    value: "\001"
+    mask: "\001"
+  }
+}
+action {
+  action {
+    action_id: 16777219
+    params {
+      param_id: 1
+      value: "\0224Vx"
+    }
+    params {
+      param_id: 2
+      value: "\207eC!"
+    }
+  }
+}
+priority: 32
+
+
+=========================================================================
 ipv4 LPM table with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
@@ -5749,6 +5978,7 @@ match {
 
 =========================================================================
 ternary match with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
 =========================================================================
 
 --- PD (Input):
