@@ -11,22 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
+#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
-#include "google/protobuf/repeated_field.h"
-#include "grpcpp/client_context.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
@@ -35,13 +38,12 @@
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
-#include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
+#include "sai_p4/instantiations/google/clos_stage.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_p4info_fetcher.h"
@@ -651,6 +653,28 @@ TEST_F(ForwardingPipelineConfigTest,
   EXPECT_THAT(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
       StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST_F(ForwardingPipelineConfigTest, InvalidP4ConstraintDoesNotGoCritical) {
+  constexpr absl::string_view kEntryRestrictionStr = "@entry_restriction";
+
+  // Go through all the tables an replace any P4 constraint annotation with an
+  // invalid one.
+  auto p4_info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  for (p4::config::v1::Table& table : *p4_info.mutable_tables()) {
+    for (std::string& annon :
+         *table.mutable_preamble()->mutable_annotations()) {
+      if (absl::StartsWith(annon, kEntryRestrictionStr)) {
+        annon = absl::StrCat(kEntryRestrictionStr, "(invalid constraint)");
+      }
+    }
+  }
+
+  ASSERT_THAT(
+      pdpi::SetMetadataAndSetForwardingPipelineConfig(
+          p4rt_session_.get(),
+          SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4_info),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 class PerConfigTest : public ForwardingPipelineConfigTest,
