@@ -115,6 +115,15 @@ absl::Status ValidateP4Info(const p4::config::v1::P4Info& p4info) {
                    _.SetPayload(kLibraryUrl, absl::Cord("PDPI")));
   RETURN_IF_ERROR(IsSupportedBySchema(ir_result, schema));
 
+  for (const auto& [table_name, table] : ir_result.tables_by_name()) {
+    ASSIGN_OR_RETURN(table::Type table_type, GetTableType(table),
+                     _.SetPrepend()
+                         << "Failed to process table '" << table_name << "'. ");
+    if (table_type == table::Type::kAcl) {
+      RETURN_IF_ERROR(sonic::VerifyAclTableDefinition(table)).SetPrepend()
+          << "Table '" << table_name << "' failed ACL table verification. ";
+    }
+  }
   return absl::OkStatus();
 }
 
