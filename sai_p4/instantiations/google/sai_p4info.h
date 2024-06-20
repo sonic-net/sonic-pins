@@ -37,6 +37,11 @@ const pdpi::IrP4Info& GetIrP4Info(Instantiation instantiation);
 // unioning process, see p4info_union_lib.h
 const p4::config::v1::P4Info& GetUnionedP4Info();
 
+// Returns a reference to a static unioned IrP4info message for the SAI P4
+// program. The reference is guaranteed to remain valid at all times. For
+// details of the unioning process, see p4info_union_lib.h
+const pdpi::IrP4Info& GetUnionedIrP4Info();
+
 }  // namespace sai
 
 #endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_P4INFO_H_

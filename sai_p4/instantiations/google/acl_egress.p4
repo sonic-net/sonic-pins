@@ -23,6 +23,13 @@ control acl_egress(in headers_t headers,
   @id(ACL_EGRESS_DHCP_TO_HOST_COUNTER_ID)
   direct_counter(CounterType.packets_and_bytes) acl_egress_dhcp_to_host_counter;
 
+  // A forwarding action specific to the egress pipeline.
+  @id(ACL_EGRESS_FORWARD_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  action acl_egress_forward() {
+    acl_egress_counter.count();
+  }
+
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_EGRESS_TABLE_ID)
   @sai_acl(EGRESS)
@@ -65,6 +72,9 @@ control acl_egress(in headers_t headers,
     }
     actions = {
       @proto_id(1) acl_drop(standard_metadata);
+#ifdef SAI_INSTANTIATION_TOR
+      @proto_id(2) acl_egress_forward();
+#endif
       @defaultonly NoAction;
     }
     const default_action = NoAction;
