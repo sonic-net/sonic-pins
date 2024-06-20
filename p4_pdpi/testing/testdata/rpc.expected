@@ -398,9 +398,7 @@ Update test: empty
 --- PI (Input):
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: Update is invalid for the following reasons:
-  - Only table entries are supported in Update.
-  - Update type should be specified.
+INVALID_ARGUMENT: Update is invalid: Update type should be specified.
 
 =========================================================================
 Update test: missing type
@@ -427,7 +425,7 @@ entity {
 }
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: Update is invalid: Only table entries are supported in Update.
+UNIMPLEMENTED: Entity is invalid: Entity 'action_profile_member' is not supported.
 
 =========================================================================
 Update test: missing type
@@ -480,32 +478,34 @@ table_entry {
 
 --- IR:
 type: MODIFY
-table_entry {
-  table_name: "ternary_table"
-  matches {
-    name: "normal"
-    ternary {
-      value {
-        hex_str: "0x052"
-      }
-      mask {
-        hex_str: "0x273"
-      }
-    }
-  }
-  priority: 32
-  action {
-    name: "do_thing_3"
-    params {
-      name: "arg1"
-      value {
-        hex_str: "0x01234567"
+entity {
+  table_entry {
+    table_name: "ternary_table"
+    matches {
+      name: "normal"
+      ternary {
+        value {
+          hex_str: "0x052"
+        }
+        mask {
+          hex_str: "0x273"
+        }
       }
     }
-    params {
-      name: "arg2"
-      value {
-        hex_str: "0x01234568"
+    priority: 32
+    action {
+      name: "do_thing_3"
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234568"
+        }
       }
     }
   }
@@ -637,32 +637,34 @@ election_id {
 }
 updates {
   type: MODIFY
-  table_entry {
-    table_name: "ternary_table"
-    matches {
-      name: "normal"
-      ternary {
-        value {
-          hex_str: "0x052"
-        }
-        mask {
-          hex_str: "0x273"
-        }
-      }
-    }
-    priority: 32
-    action {
-      name: "do_thing_3"
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234567"
+  entity {
+    table_entry {
+      table_name: "ternary_table"
+      matches {
+        name: "normal"
+        ternary {
+          value {
+            hex_str: "0x052"
+          }
+          mask {
+            hex_str: "0x273"
+          }
         }
       }
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234568"
+      priority: 32
+      action {
+        name: "do_thing_3"
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
     }
@@ -765,32 +767,34 @@ election_id {
 }
 updates {
   type: MODIFY
-  table_entry {
-    table_name: "ternary_table"
-    matches {
-      name: "normal"
-      ternary {
-        value {
-          hex_str: "0x052"
-        }
-        mask {
-          hex_str: "0x273"
-        }
-      }
-    }
-    priority: 32
-    action {
-      name: "do_thing_3"
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234567"
+  entity {
+    table_entry {
+      table_name: "ternary_table"
+      matches {
+        name: "normal"
+        ternary {
+          value {
+            hex_str: "0x052"
+          }
+          mask {
+            hex_str: "0x273"
+          }
         }
       }
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234568"
+      priority: 32
+      action {
+        name: "do_thing_3"
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
     }
@@ -798,32 +802,34 @@ updates {
 }
 updates {
   type: DELETE
-  table_entry {
-    table_name: "ternary_table"
-    matches {
-      name: "normal"
-      ternary {
-        value {
-          hex_str: "0x052"
-        }
-        mask {
-          hex_str: "0x273"
-        }
-      }
-    }
-    priority: 32
-    action {
-      name: "do_thing_3"
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234567"
+  entity {
+    table_entry {
+      table_name: "ternary_table"
+      matches {
+        name: "normal"
+        ternary {
+          value {
+            hex_str: "0x052"
+          }
+          mask {
+            hex_str: "0x273"
+          }
         }
       }
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234568"
+      priority: 32
+      action {
+        name: "do_thing_3"
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
     }

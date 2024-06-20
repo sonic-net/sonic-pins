@@ -84,28 +84,30 @@ TEST_F(P4ConstraintsTest,
   EXPECT_OK(SendIrWriteRequestAndPrintGoldenOutput(R"pb(
     updates {
       type: INSERT
-      table_entry {
-        table_name: "acl_ingress_table"
-        matches {
-          name: "dst_mac"
-          ternary {
-            value { mac: "02:02:02:02:02:02" }
-            mask { mac: "ff:ff:ff:ff:ff:ff" }
+      entity {
+        table_entry {
+          table_name: "acl_ingress_table"
+          matches {
+            name: "dst_mac"
+            ternary {
+              value { mac: "02:02:02:02:02:02" }
+              mask { mac: "ff:ff:ff:ff:ff:ff" }
+            }
           }
-        }
-        matches {
-          name: "ecn"
-          ternary {
-            value { hex_str: "0x3" }
-            mask { hex_str: "0x3" }
+          matches {
+            name: "ecn"
+            ternary {
+              value { hex_str: "0x3" }
+              mask { hex_str: "0x3" }
+            }
           }
-        }
-        priority: 1
-        action {
-          name: "acl_copy"
-          params {
-            name: "qos_queue"
-            value { str: "2" }
+          priority: 1
+          action {
+            name: "acl_copy"
+            params {
+              name: "qos_queue"
+              value { str: "2" }
+            }
           }
         }
       }
@@ -122,35 +124,37 @@ TEST_F(P4ConstraintsTest, AclEgressTableDisallowsIpEtherTypeMatches) {
   EXPECT_OK(SendIrWriteRequestAndPrintGoldenOutput(R"pb(
     updates {
       type: INSERT
-      table_entry {
-        table_name: "acl_egress_table"
-        matches {
-          name: "ether_type"
-          ternary {
-            value { hex_str: "0x0800" }
-            mask { hex_str: "0xffff" }
+      entity {
+        table_entry {
+          table_name: "acl_egress_table"
+          matches {
+            name: "ether_type"
+            ternary {
+              value { hex_str: "0x0800" }
+              mask { hex_str: "0xffff" }
+            }
           }
-        }
-        matches {
-          name: "ip_protocol"
-          ternary {
-            value { hex_str: "0x11" }
-            mask { hex_str: "0xff" }
+          matches {
+            name: "ip_protocol"
+            ternary {
+              value { hex_str: "0x11" }
+              mask { hex_str: "0xff" }
+            }
           }
-        }
-        matches {
-          name: "l4_dst_port"
-          ternary {
-            value { hex_str: "0x03ea" }
-            mask { hex_str: "0xffff" }
+          matches {
+            name: "l4_dst_port"
+            ternary {
+              value { hex_str: "0x03ea" }
+              mask { hex_str: "0xffff" }
+            }
           }
+          matches {
+            name: "out_port"
+            optional { value { str: "518" } }
+          }
+          priority: 3100
+          action { name: "acl_drop" }
         }
-        matches {
-          name: "out_port"
-          optional { value { str: "518" } }
-        }
-        priority: 3100
-        action { name: "acl_drop" }
       }
     })pb"));
 
@@ -158,32 +162,34 @@ TEST_F(P4ConstraintsTest, AclEgressTableDisallowsIpEtherTypeMatches) {
   EXPECT_OK(SendIrWriteRequestAndPrintGoldenOutput(R"pb(
     updates {
       type: INSERT
-      table_entry {
-        table_name: "acl_egress_table"
-        matches {
-          name: "is_ipv4"
-          optional { value { hex_str: "0x1" } }
-        }
-        matches {
-          name: "ip_protocol"
-          ternary {
-            value { hex_str: "0x11" }
-            mask { hex_str: "0xff" }
+      entity {
+        table_entry {
+          table_name: "acl_egress_table"
+          matches {
+            name: "is_ipv4"
+            optional { value { hex_str: "0x1" } }
           }
-        }
-        matches {
-          name: "l4_dst_port"
-          ternary {
-            value { hex_str: "0x03ea" }
-            mask { hex_str: "0xffff" }
+          matches {
+            name: "ip_protocol"
+            ternary {
+              value { hex_str: "0x11" }
+              mask { hex_str: "0xff" }
+            }
           }
+          matches {
+            name: "l4_dst_port"
+            ternary {
+              value { hex_str: "0x03ea" }
+              mask { hex_str: "0xffff" }
+            }
+          }
+          matches {
+            name: "out_port"
+            optional { value { str: "518" } }
+          }
+          priority: 3100
+          action { name: "acl_drop" }
         }
-        matches {
-          name: "out_port"
-          optional { value { str: "518" } }
-        }
-        priority: 3100
-        action { name: "acl_drop" }
       }
     })pb"));
 }

@@ -52,13 +52,15 @@ TEST_F(VrfTableTest, InsertReadAndDeleteEntry) {
                            R"pb(
                              updates {
                                type: INSERT
-                               table_entry {
-                                 table_name: "vrf_table"
-                                 matches {
-                                   name: "vrf_id"
-                                   exact { str: "vrf-0" }
+                               entity {
+                                 table_entry {
+                                   table_name: "vrf_table"
+                                   matches {
+                                     name: "vrf_id"
+                                     exact { str: "vrf-0" }
+                                   }
+                                   action { name: "no_action" }
                                  }
-                                 action { name: "no_action" }
                                }
                              })pb",
                            ir_p4_info_));
@@ -92,13 +94,15 @@ TEST_F(VrfTableTest, CannotModifyEntries) {
                            R"pb(
                              updates {
                                type: INSERT
-                               table_entry {
-                                 table_name: "vrf_table"
-                                 matches {
-                                   name: "vrf_id"
-                                   exact { str: "vrf-0" }
+                               entity {
+                                 table_entry {
+                                   table_name: "vrf_table"
+                                   matches {
+                                     name: "vrf_id"
+                                     exact { str: "vrf-0" }
+                                   }
+                                   action { name: "no_action" }
                                  }
-                                 action { name: "no_action" }
                                }
                              })pb",
                            ir_p4_info_));
@@ -118,13 +122,15 @@ TEST_F(VrfTableTest, CannotInsertDuplicateEntries) {
                            R"pb(
                              updates {
                                type: INSERT
-                               table_entry {
-                                 table_name: "vrf_table"
-                                 matches {
-                                   name: "vrf_id"
-                                   exact { str: "vrf-0" }
+                               entity {
+                                 table_entry {
+                                   table_name: "vrf_table"
+                                   matches {
+                                     name: "vrf_id"
+                                     exact { str: "vrf-0" }
+                                   }
+                                   action { name: "no_action" }
                                  }
-                                 action { name: "no_action" }
                                }
                              })pb",
                            ir_p4_info_));
@@ -141,13 +147,15 @@ TEST_F(VrfTableTest, InsertRequestFails) {
                            R"pb(
                              updates {
                                type: INSERT
-                               table_entry {
-                                 table_name: "vrf_table"
-                                 matches {
-                                   name: "vrf_id"
-                                   exact { str: "vrf-0" }
+                               entity {
+                                 table_entry {
+                                   table_name: "vrf_table"
+                                   matches {
+                                     name: "vrf_id"
+                                     exact { str: "vrf-0" }
+                                   }
+                                   action { name: "no_action" }
                                  }
-                                 action { name: "no_action" }
                                }
                              })pb",
                            ir_p4_info_));
@@ -172,13 +180,15 @@ TEST_F(VrfTableTest, CannotDeleteMissingEntry) {
                            R"pb(
                              updates {
                                type: DELETE
-                               table_entry {
-                                 table_name: "vrf_table"
-                                 matches {
-                                   name: "vrf_id"
-                                   exact { str: "vrf-0" }
+                               entity {
+                                 table_entry {
+                                   table_name: "vrf_table"
+                                   matches {
+                                     name: "vrf_id"
+                                     exact { str: "vrf-0" }
+                                   }
+                                   action { name: "no_action" }
                                  }
-                                 action { name: "no_action" }
                                }
                              })pb",
                            ir_p4_info_));
@@ -193,13 +203,15 @@ TEST_F(VrfTableTest, DeleteRequestFails) {
                            R"pb(
                              updates {
                                type: INSERT
-                               table_entry {
-                                 table_name: "vrf_table"
-                                 matches {
-                                   name: "vrf_id"
-                                   exact { str: "vrf-0" }
+                               entity {
+                                 table_entry {
+                                   table_name: "vrf_table"
+                                   matches {
+                                     name: "vrf_id"
+                                     exact { str: "vrf-0" }
+                                   }
+                                   action { name: "no_action" }
                                  }
-                                 action { name: "no_action" }
                                }
                              })pb",
                            ir_p4_info_));
