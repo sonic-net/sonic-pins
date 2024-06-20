@@ -69,17 +69,21 @@ absl::StatusOr<p4::v1::Update> WcmpUpdateWithNMembers(
   // Set the update type, and table name.
   pdpi::IrUpdate update;
   update.set_type(update_type);
-  update.mutable_table_entry()->set_table_name("wcmp_group_table");
+  update.mutable_entity()->mutable_table_entry()->set_table_name(
+      "wcmp_group_table");
 
   // Set the match fields.
-  pdpi::IrMatch* match = update.mutable_table_entry()->add_matches();
+  pdpi::IrMatch* match =
+      update.mutable_entity()->mutable_table_entry()->add_matches();
   match->set_name("wcmp_group_id");
   match->mutable_exact()->set_str(group_id);
 
   // Add all the member actions.
   for (int action_id = 0; action_id < size; ++action_id) {
-    pdpi::IrActionSetInvocation* action_set =
-        update.mutable_table_entry()->mutable_action_set()->add_actions();
+    pdpi::IrActionSetInvocation* action_set = update.mutable_entity()
+                                                  ->mutable_table_entry()
+                                                  ->mutable_action_set()
+                                                  ->add_actions();
     pdpi::IrActionInvocation::IrActionParam* param =
         action_set->mutable_action()->add_params();
 
