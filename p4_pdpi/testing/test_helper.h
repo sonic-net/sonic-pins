@@ -20,6 +20,7 @@
 #include <ostream>
 #include <string>
 
+#include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -31,6 +32,7 @@
 #include "gutil/testing.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 
 constexpr char kBanner[] =
     "=========================================================================";
@@ -68,7 +70,7 @@ inline std::string TestStatusToString(absl::Status status) {
 template <typename IR, typename PI>
 void RunGenericPiTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const PI& pi,
-    const std::function<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>&
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>
         pi_to_ir) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
@@ -94,7 +96,7 @@ void RunGenericPiTest(
 template <typename IR, typename PI>
 void RunGenericIrToPiTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
-    const std::function<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>&
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>
         ir_to_pi) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
@@ -121,8 +123,9 @@ void RunGenericIrToPiTest(
 template <typename IR, typename PD>
 void RunGenericIrToPdTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
-    const std::function<absl::Status(const pdpi::IrP4Info&, const IR&,
-                                     google::protobuf::Message*)>& ir_to_pd) {
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
+                                   google::protobuf::Message*)>
+        ir_to_pd) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- IR (Input):" << std::endl;
@@ -149,20 +152,22 @@ void RunGenericIrToPdTest(
 template <typename PD, typename IR, typename PI>
 void RunGenericPdTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const PD& pd,
-    const std::function<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PD&)>&
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PD&)>
         pd_to_ir,
-    const std::function<absl::Status(const pdpi::IrP4Info&, const IR&,
-                                     google::protobuf::Message*)>& ir_to_pd,
-    const std::function<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>&
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
+                                   google::protobuf::Message*)>
+        ir_to_pd,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>
         ir_to_pi,
-    const std::function<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>&
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>
         pi_to_ir,
-    const std::function<absl::StatusOr<PI>(const pdpi::IrP4Info&, const PD&)>&
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const PD&)>
         pd_to_pi,
-    const std::function<absl::Status(const pdpi::IrP4Info&, const PI&,
-                                     google::protobuf::Message*)>& pi_to_pd,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const PI&,
+                                   google::protobuf::Message*)>
+        pi_to_pd,
     const InputValidity& validity,
-    const std::function<PD(const pdpi::IrP4Info& info, const PD&)>&
+    absl::FunctionRef<PD(const pdpi::IrP4Info& info, const PD&)>
         relevant_pd_fields =
             [](const pdpi::IrP4Info& info, const PD& pd) { return pd; }) {
   // Input and header.
@@ -268,6 +273,56 @@ void RunGenericPdTest(
   if (!status_pd3.ok()) Fail(test_name, "pi_to_pd failed.");
 
   std::cout << std::endl;
+}
+// Overload with `TranslationOptions`.
+template <typename PD, typename IR, typename PI>
+void RunGenericPdTest(
+    const pdpi::IrP4Info& info, const std::string& test_name, const PD& pd,
+    pdpi::TranslationOptions options,
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PD&,
+                                         pdpi::TranslationOptions)>
+        pd_to_ir,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
+                                   google::protobuf::Message*,
+                                   pdpi::TranslationOptions)>
+        ir_to_pd,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&,
+                                         pdpi::TranslationOptions)>
+        ir_to_pi,
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&,
+                                         pdpi::TranslationOptions)>
+        pi_to_ir,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const PD&,
+                                         pdpi::TranslationOptions)>
+        pd_to_pi,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const PI&,
+                                   google::protobuf::Message*,
+                                   pdpi::TranslationOptions)>
+        pi_to_pd,
+    const InputValidity& validity,
+    absl::FunctionRef<PD(const pdpi::IrP4Info& info, const PD&)>
+        relevant_pd_fields = [](const auto&, const PD& pd) { return pd; }) {
+  return RunGenericPdTest<PD, IR, PI>(
+      info, test_name, pd,
+      [&](const auto& info, const auto& pd) {
+        return pd_to_ir(info, pd, options);
+      },
+      [&](const auto& info, const auto& ir, auto* pd) {
+        return ir_to_pd(info, ir, pd, options);
+      },
+      [&](const auto& info, const auto& ir) {
+        return ir_to_pi(info, ir, options);
+      },
+      [&](const auto& info, const auto& pi) {
+        return pi_to_ir(info, pi, options);
+      },
+      [&](const auto& info, const auto& pd) {
+        return pd_to_pi(info, pd, options);
+      },
+      [&](const auto& info, const auto& pi, auto* pd) {
+        return pi_to_pd(info, pi, pd, options);
+      },
+      validity, relevant_pd_fields);
 }
 
 #endif  // P4_PDPI_TESTING_TEST_HELPER_H_

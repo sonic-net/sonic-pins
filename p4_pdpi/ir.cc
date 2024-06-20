@@ -44,6 +44,7 @@
 #include "p4/config/v1/p4types.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 #include "p4_pdpi/utils/ir.h"
 
 namespace pdpi {
@@ -63,14 +64,6 @@ using ::pdpi::IrP4Info;
 using ::pdpi::IrTableDefinition;
 
 namespace {
-
-// Checks for an "@unsupported" annotation in the argument.
-bool IsElementUnsupported(
-    const google::protobuf::RepeatedPtrField<std::string> &annotations) {
-  return absl::c_any_of(annotations, [](absl::string_view annotation) {
-    return annotation == "@unsupported";
-  });
-}
 
 // Helper for GetFormat that extracts the necessary info from a P4Info
 // element. T could be p4::config::v1::ControllerPacketMetadata::Metadata,
@@ -279,7 +272,8 @@ absl::Status CheckParams(const absl::flat_hash_set<std::string> &actual_params,
 // Verifies the contents of the PI representation and translates to the IR
 // message
 StatusOr<IrMatch> PiMatchFieldToIr(
-    const IrP4Info &info, const IrMatchFieldDefinition &ir_match_definition,
+    const IrP4Info &info, TranslationOptions options,
+    const IrMatchFieldDefinition &ir_match_definition,
     const p4::v1::FieldMatch &pi_match) {
   IrMatch match_entry;
   const MatchField &match_field = ir_match_definition.match_field();
@@ -287,7 +281,7 @@ StatusOr<IrMatch> PiMatchFieldToIr(
   absl::string_view match_name = match_field.name();
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnsupported(match_field.annotations())) {
+  if (ir_match_definition.is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
   }
@@ -457,7 +451,8 @@ StatusOr<IrMatch> PiMatchFieldToIr(
 
 // Translates the action invocation from its PI form to IR.
 StatusOr<IrActionInvocation> PiActionToIr(
-    const IrP4Info &info, const p4::v1::Action &pi_action,
+    const IrP4Info &info, TranslationOptions options,
+    const p4::v1::Action &pi_action,
     const google::protobuf::RepeatedPtrField<IrActionReference>
         &valid_actions) {
   IrActionInvocation action_entry;
@@ -485,7 +480,7 @@ StatusOr<IrActionInvocation> PiActionToIr(
   std::vector<std::string> invalid_reasons;
   absl::flat_hash_set<std::string> actual_params;
 
-  if (IsElementUnsupported(ir_action_definition->preamble().annotations())) {
+  if (ir_action_definition->is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
@@ -536,7 +531,8 @@ StatusOr<IrActionInvocation> PiActionToIr(
 
 // Translates the action set from its PI form to IR.
 StatusOr<IrActionSet> PiActionSetToIr(
-    const IrP4Info &info, const p4::v1::ActionProfileActionSet &pi_action_set,
+    const IrP4Info &info, TranslationOptions options,
+    const p4::v1::ActionProfileActionSet &pi_action_set,
     const google::protobuf::RepeatedPtrField<IrActionReference>
         &valid_actions) {
   IrActionSet ir_action_set;
@@ -544,7 +540,7 @@ StatusOr<IrActionSet> PiActionSetToIr(
   for (const auto &pi_profile_action : pi_action_set.action_profile_actions()) {
     auto *ir_action = ir_action_set.add_actions();
     const absl::StatusOr<IrActionInvocation> &action =
-        PiActionToIr(info, pi_profile_action.action(), valid_actions);
+        PiActionToIr(info, options, pi_profile_action.action(), valid_actions);
     // On failure check the returned status as well as the invalid reasons
     // field.
     if (!action.ok()) {
@@ -665,7 +661,8 @@ StatusOr<O> PiPacketIoToIr(const IrP4Info &info, const std::string &kind,
 // Verifies the contents of the IR representation and translates to the PI
 // message.
 StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
-    const IrP4Info &info, const IrMatchFieldDefinition &ir_match_definition,
+    const IrP4Info &info, TranslationOptions options,
+    const IrMatchFieldDefinition &ir_match_definition,
     const IrMatch &ir_match) {
   p4::v1::FieldMatch match_entry;
   const MatchField &match_field = ir_match_definition.match_field();
@@ -674,7 +671,7 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
 
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnsupported(match_field.annotations())) {
+  if (ir_match_definition.is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
   }
@@ -880,7 +877,8 @@ StatusOr<p4::v1::FieldMatch> IrMatchFieldToPi(
 
 // Translates the action invocation from its IR form to PI.
 StatusOr<p4::v1::Action> IrActionInvocationToPi(
-    const IrP4Info &info, const IrActionInvocation &ir_table_action,
+    const IrP4Info &info, TranslationOptions options,
+    const IrActionInvocation &ir_table_action,
     const google::protobuf::RepeatedPtrField<IrActionReference>
         &valid_actions) {
   const std::string &action_name = ir_table_action.name();
@@ -906,7 +904,7 @@ StatusOr<p4::v1::Action> IrActionInvocationToPi(
   absl::flat_hash_set<std::string> used_params;
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnsupported(ir_action_definition->preamble().annotations())) {
+  if (ir_action_definition->is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
@@ -968,15 +966,16 @@ StatusOr<p4::v1::Action> IrActionInvocationToPi(
 
 // Translates the action set from its IR form to PI.
 StatusOr<p4::v1::ActionProfileActionSet> IrActionSetToPi(
-    const IrP4Info &info, const IrActionSet &ir_action_set,
+    const IrP4Info &info, TranslationOptions options,
+    const IrActionSet &ir_action_set,
     const google::protobuf::RepeatedPtrField<IrActionReference>
         &valid_actions) {
   p4::v1::ActionProfileActionSet pi;
   std::vector<std::string> invalid_reasons;
   for (const auto &ir_action : ir_action_set.actions()) {
     auto *pi_action = pi.add_action_profile_actions();
-    const absl::StatusOr<p4::v1::Action> action =
-        IrActionInvocationToPi(info, ir_action.action(), valid_actions);
+    const absl::StatusOr<p4::v1::Action> action = IrActionInvocationToPi(
+        info, options, ir_action.action(), valid_actions);
     if (!action.ok()) {
       invalid_reasons.push_back(
           absl::StrCat(kNewBullet, action.status().message()));
@@ -1106,6 +1105,17 @@ StatusOr<I> IrPacketIoToPi(const IrP4Info &info, const std::string &kind,
   return result;
 }
 
+// Checks for an "@unsupported" annotation in the argument.
+//
+// CAUTION: Calling this function is relatively expensive and should only be
+// done during IrP4Info generation. The result is cached in the IrP4Info.
+bool ExpensiveIsElementUnsupported(
+    const google::protobuf::RepeatedPtrField<std::string> &annotations) {
+  return absl::c_any_of(annotations, [](absl::string_view annotation) {
+    return annotation == "@unsupported";
+  });
+}
+
 }  // namespace
 
 StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
@@ -1144,7 +1154,7 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
                        action.preamble().alias(), "\"")));
     }
     ir_action.set_is_unsupported(
-        IsElementUnsupported(action.preamble().annotations()));
+        ExpensiveIsElementUnsupported(action.preamble().annotations()));
     RETURN_IF_ERROR(gutil::InsertIfUnique(
         info.mutable_actions_by_id(), action.preamble().id(), ir_action,
         absl::StrCat("Found several actions with the same ID: ",
@@ -1205,7 +1215,7 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
       }
 
       ir_match_definition.set_is_unsupported(
-          IsElementUnsupported(match_field.annotations()));
+          ExpensiveIsElementUnsupported(match_field.annotations()));
 
       RETURN_IF_ERROR(gutil::InsertIfUnique(
           ir_table_definition.mutable_match_fields_by_id(), match_field.id(),
@@ -1301,7 +1311,7 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
 
     ir_table_definition.set_size(table.size());
     ir_table_definition.set_is_unsupported(
-        IsElementUnsupported(table.preamble().annotations()));
+        ExpensiveIsElementUnsupported(table.preamble().annotations()));
 
     RETURN_IF_ERROR(gutil::InsertIfUnique(
         info.mutable_tables_by_id(), table_id, ir_table_definition,
@@ -1438,7 +1448,7 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
 
 StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
                                         const p4::v1::TableEntry &pi,
-                                        bool key_only /*=false*/) {
+                                        TranslationOptions options) {
   IrTableEntry ir;
   const auto &status_or_table =
       gutil::FindPtrOrStatus(info.tables_by_id(), pi.table_id());
@@ -1451,7 +1461,7 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
   absl::string_view table_name = ir.table_name();
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnsupported(table->preamble().annotations())) {
+  if (table->is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(absl::StrCat(kNewBullet, "Table '", table_name,
                                            "' has @unsupported annotation."));
   }
@@ -1479,7 +1489,7 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
     }
     const auto *match = *status_or_match;
     const absl::StatusOr<IrMatch> &match_entry =
-        PiMatchFieldToIr(info, *match, pi_match);
+        PiMatchFieldToIr(info, options, *match, pi_match);
     if (!match_entry.ok()) {
       invalid_reasons.push_back(
           absl::StrCat(kNewBullet, match_entry.status().message()));
@@ -1517,7 +1527,7 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
                      pi.priority(), " instead."));
   }
 
-  if (!key_only) {
+  if (!options.key_only) {
     ir.set_controller_metadata(pi.metadata());
     // Validate and translate the action.
     if (table->entry_actions().empty()) {
@@ -1541,7 +1551,7 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
               break;
             }
             const absl::StatusOr<IrActionInvocation> &ir_action = PiActionToIr(
-                info, pi.action().action(), table->entry_actions());
+                info, options, pi.action().action(), table->entry_actions());
             if (!ir_action.ok()) {
               invalid_reasons.push_back(
                   absl::StrCat(kNewBullet, ir_action.status().message()));
@@ -1558,9 +1568,9 @@ StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info &info,
                                "oneshot. Got action set instead."));
               break;
             }
-            const absl::StatusOr<IrActionSet> &ir_action_set =
-                PiActionSetToIr(info, pi.action().action_profile_action_set(),
-                                table->entry_actions());
+            const absl::StatusOr<IrActionSet> &ir_action_set = PiActionSetToIr(
+                info, options, pi.action().action_profile_action_set(),
+                table->entry_actions());
             if (!ir_action_set.ok()) {
               invalid_reasons.push_back(
                   absl::StrCat(kNewBullet, ir_action_set.status().message()));
@@ -1695,7 +1705,8 @@ StatusOr<IrReadRequest> PiReadRequestToIr(
 }
 
 StatusOr<IrReadResponse> PiReadResponseToIr(
-    const IrP4Info &info, const p4::v1::ReadResponse &read_response) {
+    const IrP4Info &info, const p4::v1::ReadResponse &read_response,
+    TranslationOptions options) {
   IrReadResponse result;
   for (const auto &entity : read_response.entities()) {
     if (!entity.has_table_entry()) {
@@ -1703,13 +1714,14 @@ StatusOr<IrReadResponse> PiReadResponseToIr(
              << "Only table entries are supported in ReadResponse.";
     }
     ASSIGN_OR_RETURN(*result.add_table_entries(),
-                     PiTableEntryToIr(info, entity.table_entry()));
+                     PiTableEntryToIr(info, entity.table_entry(), options));
   }
   return result;
 }
 
 StatusOr<IrUpdate> PiUpdateToIr(const IrP4Info &info,
-                                const p4::v1::Update &update) {
+                                const p4::v1::Update &update,
+                                TranslationOptions options) {
   IrUpdate ir_update;
   std::vector<std::string> invalid_reasons;
   if (!update.entity().has_table_entry()) {
@@ -1726,13 +1738,15 @@ StatusOr<IrUpdate> PiUpdateToIr(const IrP4Info &info,
         GenerateFormattedError("Update", absl::StrJoin(invalid_reasons, "\n")));
   }
   ir_update.set_type(update.type());
-  ASSIGN_OR_RETURN(*ir_update.mutable_table_entry(),
-                   PiTableEntryToIr(info, update.entity().table_entry()));
+  ASSIGN_OR_RETURN(
+      *ir_update.mutable_table_entry(),
+      PiTableEntryToIr(info, update.entity().table_entry(), options));
   return ir_update;
 }
 
 StatusOr<IrWriteRequest> PiWriteRequestToIr(
-    const IrP4Info &info, const p4::v1::WriteRequest &write_request) {
+    const IrP4Info &info, const p4::v1::WriteRequest &write_request,
+    TranslationOptions options) {
   IrWriteRequest ir_write_request;
 
   std::vector<std::string> invalid_reasons;
@@ -1762,7 +1776,8 @@ StatusOr<IrWriteRequest> PiWriteRequestToIr(
 
   for (int idx = 0; idx < write_request.updates_size(); ++idx) {
     const auto &update = write_request.updates(idx);
-    const absl::StatusOr<IrUpdate> &ir_update = PiUpdateToIr(info, update);
+    const absl::StatusOr<IrUpdate> &ir_update =
+        PiUpdateToIr(info, update, options);
     if (!ir_update.ok()) {
       invalid_update_reasons.push_back(GenerateFormattedError(
           absl::StrCat("updates[", idx, "]"), ir_update.status().message()));
@@ -1859,41 +1874,43 @@ StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
 }
 
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
-    const IrP4Info &info, const IrTableEntries &ir, bool key_only) {
+    const IrP4Info &info, const IrTableEntries &ir,
+    TranslationOptions options) {
   std::vector<p4::v1::TableEntry> pi;
   pi.reserve(ir.entries_size());
   for (const IrTableEntry &ir_entry : ir.entries()) {
     ASSIGN_OR_RETURN(pi.emplace_back(),
-                     IrTableEntryToPi(info, ir_entry, key_only));
+                     IrTableEntryToPi(info, ir_entry, options));
   }
   return pi;
 }
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
-    const IrP4Info &info, absl::Span<const IrTableEntry> ir, bool key_only) {
+    const IrP4Info &info, absl::Span<const IrTableEntry> ir,
+    TranslationOptions options) {
   std::vector<p4::v1::TableEntry> pi;
   pi.reserve(ir.size());
   for (const IrTableEntry &ir_entry : ir) {
     ASSIGN_OR_RETURN(pi.emplace_back(),
-                     IrTableEntryToPi(info, ir_entry, key_only));
+                     IrTableEntryToPi(info, ir_entry, options));
   }
   return pi;
 }
 
 absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
     const IrP4Info &info, absl::Span<const p4::v1::TableEntry> pi,
-    bool key_only) {
+    TranslationOptions options) {
   IrTableEntries ir;
   ir.mutable_entries()->Reserve(pi.size());
   for (const auto &pi_entry : pi) {
     ASSIGN_OR_RETURN(*ir.add_entries(),
-                     PiTableEntryToIr(info, pi_entry, key_only));
+                     PiTableEntryToIr(info, pi_entry, options));
   }
   return ir;
 }
 
 StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
                                               const IrTableEntry &ir,
-                                              bool key_only /*=false*/) {
+                                              TranslationOptions options) {
   p4::v1::TableEntry pi;
   absl::string_view table_name = ir.table_name();
   const auto &status_or_table =
@@ -1907,7 +1924,7 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
 
   std::vector<std::string> invalid_reasons;
 
-  if (IsElementUnsupported(table->preamble().annotations())) {
+  if (table->is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(absl::StrCat(kNewBullet, "Table '", table_name,
                                            "' has @unsupported annotation."));
   }
@@ -1934,7 +1951,7 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
     }
     const auto *match = *status_or_match;
     const absl::StatusOr<p4::v1::FieldMatch> &match_entry =
-        IrMatchFieldToPi(info, *match, ir_match);
+        IrMatchFieldToPi(info, options, *match, ir_match);
     if (!match_entry.ok()) {
       invalid_reasons.push_back(
           absl::StrCat(kNewBullet, match_entry.status().message()));
@@ -1970,7 +1987,7 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
                      "matches require a zero priority. Got ",
                      ir.priority(), " instead."));
   }
-  if (!key_only) {
+  if (!options.key_only) {
     pi.set_metadata(ir.controller_metadata());
 
     // Validate and translate the action.
@@ -1990,7 +2007,8 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
           break;
         }
         const absl::StatusOr<p4::v1::Action> &pi_action =
-            IrActionInvocationToPi(info, ir.action(), table->entry_actions());
+            IrActionInvocationToPi(info, options, ir.action(),
+                                   table->entry_actions());
         if (!pi_action.ok()) {
           invalid_reasons.push_back(
               absl::StrCat(kNewBullet, pi_action.status().message()));
@@ -2013,7 +2031,8 @@ StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info &info,
               "Action set found for table which has no actions defined."));
         }
         const absl::StatusOr<p4::v1::ActionProfileActionSet> &pi_action_set =
-            IrActionSetToPi(info, ir.action_set(), table->entry_actions());
+            IrActionSetToPi(info, options, ir.action_set(),
+                            table->entry_actions());
         if (!pi_action_set.ok()) {
           invalid_reasons.push_back(
               absl::StrCat(kNewBullet, pi_action_set.status().message()));
@@ -2113,12 +2132,13 @@ StatusOr<p4::v1::ReadRequest> IrReadRequestToPi(
 }
 
 StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
-    const IrP4Info &info, const IrReadResponse &read_response) {
+    const IrP4Info &info, const IrReadResponse &read_response,
+    TranslationOptions options) {
   p4::v1::ReadResponse result;
   std::vector<std::string> invalid_reasons;
   for (const auto &entity : read_response.table_entries()) {
     const absl::StatusOr<p4::v1::TableEntry> &table_entry =
-        IrTableEntryToPi(info, entity);
+        IrTableEntryToPi(info, entity, options);
     if (!table_entry.ok()) {
       invalid_reasons.push_back(std::string(table_entry.status().message()));
       continue;
@@ -2134,7 +2154,8 @@ StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
 }
 
 StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info &info,
-                                      const IrUpdate &update) {
+                                      const IrUpdate &update,
+                                      TranslationOptions options) {
   p4::v1::Update pi_update;
 
   std::vector<std::string> invalid_reasons;
@@ -2152,12 +2173,13 @@ StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info &info,
   }
   pi_update.set_type(update.type());
   ASSIGN_OR_RETURN(*pi_update.mutable_entity()->mutable_table_entry(),
-                   IrTableEntryToPi(info, update.table_entry()));
+                   IrTableEntryToPi(info, update.table_entry(), options));
   return pi_update;
 }
 
 StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
-    const IrP4Info &info, const IrWriteRequest &ir_write_request) {
+    const IrP4Info &info, const IrWriteRequest &ir_write_request,
+    TranslationOptions options) {
   p4::v1::WriteRequest pi_write_request;
 
   pi_write_request.set_role_id(0);
@@ -2173,7 +2195,7 @@ StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
   for (int idx = 0; idx < ir_write_request.updates_size(); ++idx) {
     const auto &update = ir_write_request.updates(idx);
     const absl::StatusOr<p4::v1::Update> &pi_update =
-        IrUpdateToPi(info, update);
+        IrUpdateToPi(info, update, options);
     if (!pi_update.ok()) {
       invalid_reasons.push_back(GenerateFormattedError(
           absl::StrCat("updates[", idx, "]"), pi_update.status().message()));

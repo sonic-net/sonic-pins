@@ -27,6 +27,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 
 namespace pdpi {
 
@@ -64,14 +65,14 @@ absl::Status PdTableEntryToOnlyKeyPd(const IrP4Info &info,
 absl::Status PiTableEntryToPd(const IrP4Info &info,
                               const p4::v1::TableEntry &pi,
                               google::protobuf::Message *pd,
-                              bool key_only = false);
+                              TranslationOptions options = {});
 
 // Like `PiTableEntryToPd`, but for a sequence of `pi` entries.
 // Assumes that `pd` has a `repeated TableEntry entries` field.
 absl::Status PiTableEntriesToPd(const IrP4Info &info,
                                 const absl::Span<const p4::v1::TableEntry> &pi,
                                 google::protobuf::Message *pd,
-                                bool key_only = false);
+                                TranslationOptions options = {});
 
 absl::Status PiPacketInToPd(const IrP4Info &info,
                             const p4::v1::PacketIn &pi_packet,
@@ -87,14 +88,17 @@ absl::Status PiReadRequestToPd(const IrP4Info &info,
 
 absl::Status PiReadResponseToPd(const IrP4Info &info,
                                 const p4::v1::ReadResponse &pi,
-                                google::protobuf::Message *pd);
+                                google::protobuf::Message *pd,
+                                TranslationOptions options = {});
 
 absl::Status PiUpdateToPd(const IrP4Info &info, const p4::v1::Update &pi,
-                          google::protobuf::Message *pd);
+                          google::protobuf::Message *pd,
+                          TranslationOptions options = {});
 
 absl::Status PiWriteRequestToPd(const IrP4Info &info,
                                 const p4::v1::WriteRequest &pi,
-                                google::protobuf::Message *pd);
+                                google::protobuf::Message *pd,
+                                TranslationOptions options = {});
 
 absl::Status PiStreamMessageRequestToPd(const IrP4Info &info,
                                         const p4::v1::StreamMessageRequest &pi,
@@ -107,10 +111,10 @@ absl::Status PiStreamMessageResponseToPd(
 // -- Conversions from PD to PI ------------------------------------------------
 absl::StatusOr<p4::v1::TableEntry> PdTableEntryToPi(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    bool key_only = false);
+    TranslationOptions options = {});
 absl::StatusOr<std::vector<p4::v1::TableEntry>> PdTableEntriesToPi(
     const IrP4Info &info, const google::protobuf::Message &pd,
-    bool key_only = false);
+    TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::PacketIn> PdPacketInToPi(
     const IrP4Info &info, const google::protobuf::Message &packet);
@@ -122,13 +126,16 @@ absl::StatusOr<p4::v1::ReadRequest> PdReadRequestToPi(
     const IrP4Info &info, const google::protobuf::Message &pd);
 
 absl::StatusOr<p4::v1::ReadResponse> PdReadResponseToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd);
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options = {});
 
-absl::StatusOr<p4::v1::Update> PdUpdateToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd);
+absl::StatusOr<p4::v1::Update> PdUpdateToPi(const IrP4Info &info,
+                                            const google::protobuf::Message &pd,
+                                            TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::WriteRequest> PdWriteRequestToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd);
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::StreamMessageRequest> PdStreamMessageRequestToPi(
     const IrP4Info &info,
@@ -151,15 +158,15 @@ absl::StatusOr<grpc::Status> PdWriteRpcStatusToGrpcStatus(
 
 absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
                               google::protobuf::Message *pd,
-                              bool key_only = false);
+                              TranslationOptions options = {});
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 const IrTableEntries &ir,
                                 google::protobuf::Message *pd,
-                                bool key_only = false);
+                                TranslationOptions options = {});
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 absl::Span<const IrTableEntry> ir,
                                 google::protobuf::Message *pd,
-                                bool key_only = false);
+                                TranslationOptions options = {});
 
 absl::Status IrPacketInToPd(const IrP4Info &info, const IrPacketIn &packet,
                             google::protobuf::Message *pd_packet);
@@ -171,13 +178,16 @@ absl::Status IrReadRequestToPd(const IrP4Info &info, const IrReadRequest &ir,
                                google::protobuf::Message *pd);
 
 absl::Status IrReadResponseToPd(const IrP4Info &info, const IrReadResponse &ir,
-                                google::protobuf::Message *read_response);
+                                google::protobuf::Message *read_response,
+                                TranslationOptions options = {});
 
 absl::Status IrUpdateToPd(const IrP4Info &info, const IrUpdate &ir,
-                          google::protobuf::Message *update);
+                          google::protobuf::Message *update,
+                          TranslationOptions options = {});
 
 absl::Status IrWriteRequestToPd(const IrP4Info &info, const IrWriteRequest &ir,
-                                google::protobuf::Message *write_request);
+                                google::protobuf::Message *write_reques,
+                                TranslationOptions options = {});
 
 absl::Status IrStreamMessageRequestToPd(
     const IrP4Info &info, const IrStreamMessageRequest &ir,
@@ -197,10 +207,10 @@ absl::Status IrWriteRpcStatusToPd(const IrWriteRpcStatus &ir_write_status,
 
 absl::StatusOr<IrTableEntry> PdTableEntryToIr(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
-    bool key_only = false);
+    TranslationOptions options = {});
 absl::StatusOr<IrTableEntries> PdTableEntriesToIr(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
-    bool key_only = false);
+    TranslationOptions options = {});
 
 absl::StatusOr<IrPacketIn> PdPacketInToIr(
     const IrP4Info &info, const google::protobuf::Message &packet);
@@ -212,13 +222,16 @@ absl::StatusOr<IrReadRequest> PdReadRequestToIr(
     const IrP4Info &info, const google::protobuf::Message &read_request);
 
 absl::StatusOr<IrReadResponse> PdReadResponseToIr(
-    const IrP4Info &info, const google::protobuf::Message &read_response);
+    const IrP4Info &info, const google::protobuf::Message &read_response,
+    TranslationOptions options = {});
 
 absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
-                                      const google::protobuf::Message &update);
+                                      const google::protobuf::Message &update,
+                                      TranslationOptions options = {});
 
 absl::StatusOr<IrWriteRequest> PdWriteRequestToIr(
-    const IrP4Info &info, const google::protobuf::Message &write_request);
+    const IrP4Info &info, const google::protobuf::Message &write_request,
+    TranslationOptions options = {});
 
 absl::StatusOr<IrStreamMessageRequest> PdStreamMessageRequestToIr(
     const IrP4Info &info, const google::protobuf::Message &stream_message);
