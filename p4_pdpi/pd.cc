@@ -42,6 +42,7 @@
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 #include "p4_pdpi/utils/ir.h"
 
 namespace pdpi {
@@ -576,39 +577,42 @@ absl::StatusOr<std::string> P4NameToProtobufFieldName(
 absl::Status PiTableEntryToPd(const IrP4Info &info,
                               const p4::v1::TableEntry &pi,
                               google::protobuf::Message *pd,
-                              bool key_only /*=false*/) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PiTableEntryToIr(info, pi, key_only));
-  return IrTableEntryToPd(info, ir_entry, pd, key_only);
+                              TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry, PiTableEntryToIr(info, pi, options));
+  return IrTableEntryToPd(info, ir_entry, pd, options);
 }
 
 absl::Status PiTableEntriesToPd(const IrP4Info &info,
                                 const absl::Span<const p4::v1::TableEntry> &pi,
-                                google::protobuf::Message *pd, bool key_only) {
+                                google::protobuf::Message *pd,
+                                TranslationOptions options) {
   for (const auto &pi_entry : pi) {
     ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
                      AddRepeatedMutableMessage(pd, "entries"));
-    RETURN_IF_ERROR(PiTableEntryToPd(info, pi_entry, pd_entry, key_only));
+    RETURN_IF_ERROR(PiTableEntryToPd(info, pi_entry, pd_entry, options));
   }
   return absl::OkStatus();
 }
 
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 const IrTableEntries &ir,
-                                google::protobuf::Message *pd, bool key_only) {
+                                google::protobuf::Message *pd,
+                                TranslationOptions options) {
   for (const auto &ir_entry : ir.entries()) {
     ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
                      AddRepeatedMutableMessage(pd, "entries"));
-    RETURN_IF_ERROR(IrTableEntryToPd(ir_p4info, ir_entry, pd_entry, key_only));
+    RETURN_IF_ERROR(IrTableEntryToPd(ir_p4info, ir_entry, pd_entry, options));
   }
   return absl::OkStatus();
 }
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 absl::Span<const IrTableEntry> ir,
-                                google::protobuf::Message *pd, bool key_only) {
+                                google::protobuf::Message *pd,
+                                TranslationOptions options) {
   for (const auto &ir_entry : ir) {
     ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
                      AddRepeatedMutableMessage(pd, "entries"));
-    RETURN_IF_ERROR(IrTableEntryToPd(ir_p4info, ir_entry, pd_entry, key_only));
+    RETURN_IF_ERROR(IrTableEntryToPd(ir_p4info, ir_entry, pd_entry, options));
   }
   return absl::OkStatus();
 }
@@ -636,22 +640,25 @@ absl::Status PiReadRequestToPd(const IrP4Info &info,
 
 absl::Status PiReadResponseToPd(const IrP4Info &info,
                                 const p4::v1::ReadResponse &pi,
-                                google::protobuf::Message *pd) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PiReadResponseToIr(info, pi));
-  return IrReadResponseToPd(info, ir_entry, pd);
+                                google::protobuf::Message *pd,
+                                TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry, PiReadResponseToIr(info, pi, options));
+  return IrReadResponseToPd(info, ir_entry, pd, options);
 }
 
 absl::Status PiUpdateToPd(const IrP4Info &info, const p4::v1::Update &pi,
-                          google::protobuf::Message *pd) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PiUpdateToIr(info, pi));
-  return IrUpdateToPd(info, ir_entry, pd);
+                          google::protobuf::Message *pd,
+                          TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry, PiUpdateToIr(info, pi, options));
+  return IrUpdateToPd(info, ir_entry, pd, options);
 }
 
 absl::Status PiWriteRequestToPd(const IrP4Info &info,
                                 const p4::v1::WriteRequest &pi,
-                                google::protobuf::Message *pd) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PiWriteRequestToIr(info, pi));
-  return IrWriteRequestToPd(info, ir_entry, pd);
+                                google::protobuf::Message *pd,
+                                TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry, PiWriteRequestToIr(info, pi, options));
+  return IrWriteRequestToPd(info, ir_entry, pd, options);
 }
 
 absl::Status PiStreamMessageRequestToPd(const IrP4Info &info,
@@ -669,26 +676,28 @@ absl::Status PiStreamMessageResponseToPd(
 }
 
 absl::StatusOr<p4::v1::TableEntry> PdTableEntryToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd, bool key_only) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PdTableEntryToIr(info, pd, key_only));
-  return IrTableEntryToPi(info, ir_entry, key_only);
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry, PdTableEntryToIr(info, pd, options));
+  return IrTableEntryToPi(info, ir_entry, options);
 }
 
 absl::StatusOr<std::vector<p4::v1::TableEntry>> PdTableEntriesToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd, bool key_only) {
-  ASSIGN_OR_RETURN(auto ir, PdTableEntriesToIr(info, pd, key_only));
-  return IrTableEntriesToPi(info, ir, key_only);
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  ASSIGN_OR_RETURN(auto ir, PdTableEntriesToIr(info, pd, options));
+  return IrTableEntriesToPi(info, ir, options);
 }
 
 absl::StatusOr<IrTableEntries> PdTableEntriesToIr(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
-    bool key_only) {
+    TranslationOptions options) {
   ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
                    GetRepeatedFieldMessages(pd, "entries"));
   IrTableEntries ir;
   for (auto *pd_entry : pd_entries) {
     ASSIGN_OR_RETURN(*ir.add_entries(),
-                     PdTableEntryToIr(ir_p4info, *pd_entry, key_only));
+                     PdTableEntryToIr(ir_p4info, *pd_entry, options));
   }
   return ir;
 }
@@ -712,21 +721,24 @@ absl::StatusOr<p4::v1::ReadRequest> PdReadRequestToPi(
 }
 
 absl::StatusOr<p4::v1::ReadResponse> PdReadResponseToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PdReadResponseToIr(info, pd));
-  return IrReadResponseToPi(info, ir_entry);
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry, PdReadResponseToIr(info, pd, options));
+  return IrReadResponseToPi(info, ir_entry, options);
 }
 
-absl::StatusOr<p4::v1::Update> PdUpdateToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PdUpdateToIr(info, pd));
-  return IrUpdateToPi(info, ir_entry);
+absl::StatusOr<p4::v1::Update> PdUpdateToPi(const IrP4Info &info,
+                                            const google::protobuf::Message &pd,
+                                            TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry, PdUpdateToIr(info, pd, options));
+  return IrUpdateToPi(info, ir_entry, options);
 }
 
 absl::StatusOr<p4::v1::WriteRequest> PdWriteRequestToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PdWriteRequestToIr(info, pd));
-  return IrWriteRequestToPi(info, ir_entry);
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry, PdWriteRequestToIr(info, pd, options));
+  return IrWriteRequestToPi(info, ir_entry, options);
 }
 
 absl::StatusOr<p4::v1::StreamMessageRequest> PdStreamMessageRequestToPi(
@@ -764,6 +776,7 @@ absl::StatusOr<grpc::Status> PdWriteRpcStatusToGrpcStatus(
 // Converts all IR matches to their PD form and stores them in the match field
 // of the PD table entry.
 static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
+                                     TranslationOptions options,
                                      const IrTableEntry &ir_table_entry,
                                      google::protobuf::Message *pd_match) {
   std::vector<std::string> invalid_reasons;
@@ -778,7 +791,7 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
       continue;
     }
     const auto *ir_match_info = *status_or_ir_match_info;
-    if (ir_match_info->is_unsupported()) {
+    if (ir_match_info->is_unsupported() && !options.allow_unsupported) {
       invalid_match_reasons.push_back(
           absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
     }
@@ -914,7 +927,8 @@ static absl::Status IrMatchEntryToPd(const IrTableDefinition &ir_table_info,
 // Converts an IR action invocation to its PD form and stores it in the parent
 // message.
 static absl::Status IrActionInvocationToPd(
-    const IrP4Info &ir_p4info, const IrActionInvocation &ir_action,
+    const IrP4Info &ir_p4info, TranslationOptions options,
+    const IrActionInvocation &ir_action,
     google::protobuf::Message *parent_message) {
   absl::string_view action_name = ir_action.name();
   absl::StatusOr<const pdpi::IrActionDefinition *> ir_action_info_wrapper =
@@ -939,7 +953,7 @@ static absl::Status IrActionInvocationToPd(
         absl::StrCat(kNewBullet, pd_action.status().message())));
   }
   std::vector<std::string> invalid_reasons;
-  if (ir_action_info.is_unsupported()) {
+  if (ir_action_info.is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
@@ -971,6 +985,7 @@ static absl::Status IrActionInvocationToPd(
 // Converts an IR action set to its PD form and stores it in the
 // PD table entry.
 static absl::Status IrActionSetToPd(const IrP4Info &ir_p4info,
+                                    TranslationOptions options,
                                     const IrTableEntry &ir_table_entry,
                                     google::protobuf::Message *pd_table) {
   const auto &pd_wcmp_action_set_descriptor =
@@ -994,7 +1009,7 @@ static absl::Status IrActionSetToPd(const IrP4Info &ir_p4info,
       continue;
     }
     const auto &action_status = IrActionInvocationToPd(
-        ir_p4info, ir_action_set_invocation.action(), *pd_action_set);
+        ir_p4info, options, ir_action_set_invocation.action(), *pd_action_set);
     if (!action_status.ok()) {
       invalid_reasons.push_back(
           absl::StrCat(kNewBullet, action_status.message()));
@@ -1024,7 +1039,8 @@ static absl::Status IrActionSetToPd(const IrP4Info &ir_p4info,
 }
 
 absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
-                              google::protobuf::Message *pd, bool key_only) {
+                              google::protobuf::Message *pd,
+                              TranslationOptions options) {
   const auto &status_or_ir_table_info =
       gutil::FindPtrOrStatus(ir_p4info.tables_by_name(), ir.table_name());
   if (!status_or_ir_table_info.ok()) {
@@ -1052,7 +1068,7 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
 
   std::vector<std::string> invalid_reasons;
 
-  if (ir_table_info->is_unsupported()) {
+  if (ir_table_info->is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(absl::StrCat(kNewBullet, "Table '",
                                            ir.table_name(),
                                            "' has @unsupported annotation."));
@@ -1064,7 +1080,8 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, pd_match.status().message()));
   } else {
-    const auto &match_status = IrMatchEntryToPd(*ir_table_info, ir, *pd_match);
+    const auto &match_status =
+        IrMatchEntryToPd(*ir_table_info, options, ir, *pd_match);
     if (!match_status.ok()) {
       invalid_reasons.push_back(
           absl::StrCat(kNewBullet, match_status.message()));
@@ -1079,7 +1096,7 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
           absl::StrCat(kNewBullet, priority_status.message()));
     }
   }
-  if (!key_only) {
+  if (!options.key_only) {
     const auto &metadata_status = SetBytesField(pd_table, "controller_metadata",
                                                 ir.controller_metadata());
     if (!metadata_status.ok()) {
@@ -1088,7 +1105,8 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
     }
 
     if (ir_table_info->uses_oneshot()) {
-      const auto &action_set_status = IrActionSetToPd(ir_p4info, ir, pd_table);
+      const auto &action_set_status =
+          IrActionSetToPd(ir_p4info, options, ir, pd_table);
       if (!action_set_status.ok()) {
         invalid_reasons.push_back(
             absl::StrCat(kNewBullet, action_set_status.message()));
@@ -1101,7 +1119,7 @@ absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
             absl::StrCat(kNewBullet, pd_action.status().message()));
       } else {
         const auto &action_status =
-            IrActionInvocationToPd(ir_p4info, ir.action(), *pd_action);
+            IrActionInvocationToPd(ir_p4info, options, ir.action(), *pd_action);
         if (!action_status.ok()) {
           invalid_reasons.push_back(
               absl::StrCat(kNewBullet, action_status.message()));
@@ -1367,7 +1385,8 @@ absl::Status IrReadRequestToPd(const IrP4Info &info, const IrReadRequest &ir,
 }
 
 absl::Status IrReadResponseToPd(const IrP4Info &info, const IrReadResponse &ir,
-                                google::protobuf::Message *read_response) {
+                                google::protobuf::Message *read_response,
+                                TranslationOptions options) {
   std::vector<std::string> invalid_reasons;
   for (const auto &ir_table_entry : ir.table_entries()) {
     const absl::StatusOr<const FieldDescriptor *> &table_entries_descriptor =
@@ -1380,7 +1399,8 @@ absl::Status IrReadResponseToPd(const IrP4Info &info, const IrReadResponse &ir,
     const auto &table_entry_status =
         IrTableEntryToPd(info, ir_table_entry,
                          read_response->GetReflection()->AddMessage(
-                             read_response, *table_entries_descriptor));
+                             read_response, *table_entries_descriptor),
+                         options);
     if (!table_entry_status.ok()) {
       invalid_reasons.push_back(std::string(table_entry_status.message()));
       continue;
@@ -1394,7 +1414,8 @@ absl::Status IrReadResponseToPd(const IrP4Info &info, const IrReadResponse &ir,
 }
 
 absl::Status IrUpdateToPd(const IrP4Info &info, const IrUpdate &ir,
-                          google::protobuf::Message *update) {
+                          google::protobuf::Message *update,
+                          TranslationOptions options) {
   ASSIGN_OR_RETURN(const auto *type_descriptor,
                    GetFieldDescriptor(*update, "type"));
   RETURN_IF_ERROR(
@@ -1403,12 +1424,14 @@ absl::Status IrUpdateToPd(const IrP4Info &info, const IrUpdate &ir,
 
   ASSIGN_OR_RETURN(auto *pd_table_entry,
                    GetMutableMessage(update, "table_entry"));
-  RETURN_IF_ERROR(IrTableEntryToPd(info, ir.table_entry(), pd_table_entry));
+  RETURN_IF_ERROR(
+      IrTableEntryToPd(info, ir.table_entry(), pd_table_entry, options));
   return absl::OkStatus();
 }
 
 absl::Status IrWriteRequestToPd(const IrP4Info &info, const IrWriteRequest &ir,
-                                google::protobuf::Message *write_request) {
+                                google::protobuf::Message *write_request,
+                                TranslationOptions options) {
   RETURN_IF_ERROR(SetUint64Field(write_request, "device_id", ir.device_id()));
   if (ir.election_id().high() > 0 || ir.election_id().low() > 0) {
     ASSIGN_OR_RETURN(auto *election_id,
@@ -1426,7 +1449,8 @@ absl::Status IrWriteRequestToPd(const IrP4Info &info, const IrWriteRequest &ir,
     const auto &update_status =
         IrUpdateToPd(info, ir_update,
                      write_request->GetReflection()->AddMessage(
-                         write_request, updates_descriptor));
+                         write_request, updates_descriptor),
+                     options);
     if (!update_status.ok()) {
       invalid_reasons.push_back(GenerateFormattedError(
           absl::StrCat("updates[", idx, "]"), update_status.message()));
@@ -1594,6 +1618,7 @@ absl::Status IrWriteRpcStatusToPd(const IrWriteRpcStatus &ir_write_status,
 // Converts all PD matches to their IR form and stores them in the matches
 // field of ir_table_entry.
 static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
+                                     TranslationOptions options,
                                      const google::protobuf::Message &pd_match,
                                      IrTableEntry *ir_table_entry) {
   // Verify that there are no matches in PD that are not supported by the
@@ -1636,7 +1661,7 @@ static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
       continue;
     }
 
-    if (ir_match_info->is_unsupported()) {
+    if (ir_match_info->is_unsupported() && !options.allow_unsupported) {
       invalid_match_reasons.push_back(
           absl::StrCat(kNewBullet, "Match field has @unsupported annotation."));
     }
@@ -1795,7 +1820,7 @@ static absl::Status PdMatchEntryToIr(const IrTableDefinition &ir_table_info,
 
 // Converts a PD action invocation to its IR form and returns it.
 static absl::StatusOr<IrActionInvocation> PdActionInvocationToIr(
-    const IrP4Info &ir_p4info,
+    const IrP4Info &ir_p4info, TranslationOptions options,
     const google::protobuf::Message &pd_action_invocation) {
   const std::vector<std::string> all_fields =
       GetAllFieldNames(pd_action_invocation);
@@ -1825,7 +1850,7 @@ static absl::StatusOr<IrActionInvocation> PdActionInvocationToIr(
   ir_action.set_name(action_name);
   std::vector<std::string> invalid_reasons;
 
-  if (ir_action_info.is_unsupported()) {
+  if (ir_action_info.is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(
         absl::StrCat(kNewBullet, "Action has @unsupported annotation."));
   }
@@ -1867,7 +1892,8 @@ static absl::StatusOr<IrActionInvocation> PdActionInvocationToIr(
 // Converts a PD action set to its IR form and stores it in the
 // ir_table_entry.
 static absl::StatusOr<IrActionSetInvocation> PdActionSetToIr(
-    const IrP4Info &ir_p4info, const google::protobuf::Message &pd_action_set) {
+    const IrP4Info &ir_p4info, TranslationOptions options,
+    const google::protobuf::Message &pd_action_set) {
   IrActionSetInvocation ir_action_set_invocation;
   std::vector<std::string> invalid_reasons;
   {
@@ -1894,7 +1920,7 @@ static absl::StatusOr<IrActionSetInvocation> PdActionSetToIr(
     const auto &pd_action = GetMessageField(pd_action_set, "action");
     if (pd_action.ok() && !GetAllFieldNames(**pd_action).empty()) {
       const absl::StatusOr<IrActionInvocation> &ir_action =
-          PdActionInvocationToIr(ir_p4info, **pd_action);
+          PdActionInvocationToIr(ir_p4info, options, **pd_action);
       if (!ir_action.ok()) {
         invalid_reasons.push_back(
             absl::StrCat(kNewBullet, ir_action.status().message()));
@@ -1912,7 +1938,7 @@ static absl::StatusOr<IrActionSetInvocation> PdActionSetToIr(
 
 absl::StatusOr<IrTableEntry> PdTableEntryToIr(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
-    bool key_only /*=false*/) {
+    TranslationOptions options) {
   IrTableEntry ir;
   const auto &pd_table_field_name = gutil::GetOneOfFieldName(pd, "entry");
   if (!pd_table_field_name.ok()) {
@@ -1939,7 +1965,7 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
 
   std::vector<std::string> invalid_reasons;
 
-  if (ir_table_info->is_unsupported()) {
+  if (ir_table_info->is_unsupported() && !options.allow_unsupported) {
     invalid_reasons.push_back(absl::StrCat(kNewBullet, "Table '",
                                            *p4_table_name,
                                            "' has @unsupported annotation."));
@@ -1959,7 +1985,8 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
         TableName(*p4_table_name),
         absl::StrCat(kNewBullet, pd_match.status().message())));
   }
-  const auto &match_status = PdMatchEntryToIr(*ir_table_info, **pd_match, &ir);
+  const auto &match_status =
+      PdMatchEntryToIr(*ir_table_info, options, **pd_match, &ir);
   if (!match_status.ok()) {
     invalid_reasons.push_back(absl::StrCat(kNewBullet, match_status.message()));
   }
@@ -1968,7 +1995,7 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
   if (status_or_priority.ok()) {
     ir.set_priority(status_or_priority.value());
   }
-  if (!key_only) {
+  if (!options.key_only) {
     const auto &status_or_metadata =
         GetBytesField(*pd_table, "controller_metadata");
     if (status_or_metadata.ok()) {
@@ -1987,7 +2014,7 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
                                  *pd_table, *pd_action_set);
              ++i) {
           const absl::StatusOr<IrActionSetInvocation> &ir_action_set =
-              PdActionSetToIr(ir_p4info,
+              PdActionSetToIr(ir_p4info, options,
                               pd_table->GetReflection()->GetRepeatedMessage(
                                   *pd_table, *pd_action_set, i));
           if (!ir_action_set.ok()) {
@@ -2003,7 +2030,7 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
       if (status_or_pd_action.ok() &&
           !GetAllFieldNames(**status_or_pd_action).empty()) {
         const absl::StatusOr<IrActionInvocation> &ir_action =
-            PdActionInvocationToIr(ir_p4info, **status_or_pd_action);
+            PdActionInvocationToIr(ir_p4info, options, **status_or_pd_action);
         if (!ir_action.ok()) {
           invalid_reasons.push_back(
               absl::StrCat(kNewBullet, ir_action.status().message()));
@@ -2243,7 +2270,8 @@ absl::StatusOr<IrReadRequest> PdReadRequestToIr(
 }
 
 absl::StatusOr<IrReadResponse> PdReadResponseToIr(
-    const IrP4Info &info, const google::protobuf::Message &read_response) {
+    const IrP4Info &info, const google::protobuf::Message &read_response,
+    TranslationOptions options) {
   IrReadResponse ir_response;
   ASSIGN_OR_RETURN(const auto table_entries_descriptor,
                    GetFieldDescriptor(read_response, "table_entries"));
@@ -2251,9 +2279,11 @@ absl::StatusOr<IrReadResponse> PdReadResponseToIr(
   for (auto i = 0; i < read_response.GetReflection()->FieldSize(
                            read_response, table_entries_descriptor);
        ++i) {
-    const absl::StatusOr<IrTableEntry> &table_entry = PdTableEntryToIr(
-        info, read_response.GetReflection()->GetRepeatedMessage(
-                  read_response, table_entries_descriptor, i));
+    const absl::StatusOr<IrTableEntry> &table_entry =
+        PdTableEntryToIr(info,
+                         read_response.GetReflection()->GetRepeatedMessage(
+                             read_response, table_entries_descriptor, i),
+                         options);
     if (!table_entry.ok()) {
       invalid_reasons.push_back(std::string(table_entry.status().message()));
       continue;
@@ -2268,7 +2298,8 @@ absl::StatusOr<IrReadResponse> PdReadResponseToIr(
 }
 
 absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
-                                      const google::protobuf::Message &update) {
+                                      const google::protobuf::Message &update,
+                                      TranslationOptions options) {
   IrUpdate ir_update;
   ASSIGN_OR_RETURN(const auto *type_descriptor,
                    GetFieldDescriptor(update, "type"));
@@ -2284,12 +2315,13 @@ absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
   ASSIGN_OR_RETURN(const auto *table_entry,
                    GetMessageField(update, "table_entry"));
   ASSIGN_OR_RETURN(*ir_update.mutable_table_entry(),
-                   PdTableEntryToIr(info, *table_entry));
+                   PdTableEntryToIr(info, *table_entry, options));
   return ir_update;
 }
 
 absl::StatusOr<IrWriteRequest> PdWriteRequestToIr(
-    const IrP4Info &info, const google::protobuf::Message &write_request) {
+    const IrP4Info &info, const google::protobuf::Message &write_request,
+    TranslationOptions options) {
   IrWriteRequest ir_write_request;
   ASSIGN_OR_RETURN(const auto &device_id,
                    GetUint64Field(write_request, "device_id"));
@@ -2312,8 +2344,10 @@ absl::StatusOr<IrWriteRequest> PdWriteRequestToIr(
                            write_request, updates_descriptor);
        ++i) {
     absl::StatusOr<IrUpdate> ir_update =
-        PdUpdateToIr(info, write_request.GetReflection()->GetRepeatedMessage(
-                               write_request, updates_descriptor, i));
+        PdUpdateToIr(info,
+                     write_request.GetReflection()->GetRepeatedMessage(
+                         write_request, updates_descriptor, i),
+                     options);
     if (!ir_update.ok()) {
       invalid_reasons.push_back(GenerateFormattedError(
           absl::StrCat("updates[", i, "]"), ir_update.status().message()));
