@@ -56,6 +56,7 @@
 #include "p4_constraints/backend/interpreter.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
 #include "p4rt_app/p4runtime/p4runtime_read.h"
@@ -243,10 +244,13 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
            << *reason_entry_violates_constraint;
   }
 
-  // When deleting we only consider the key. Actions do matter so we don't waste
-  // time trying to translate that part even if the controller sent it. Also,
-  // per the spec, the control plane is not required to send the full entry.
-  bool only_translate_the_key = pi_update.type() == p4::v1::Update::DELETE;
+  const auto pdpi_options = pdpi::TranslationOptions{
+      // When deleting we only consider the key. Actions don't matter so we
+      // don't waste time trying to translate that part even if the controller
+      // sent it. Also, per the spec, the control plane is not required to send
+      // the full entry.
+      .key_only = pi_update.type() == p4::v1::Update::DELETE,
+  };
 
   // Translating between PI and IR, and vice versa, is non-negligable. To save
   // redundant work by doing both translations here. The IR to PI translation
@@ -255,7 +259,7 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
   // hardware has successfully programmed the entry. We do the PI to IR
   // translation here so we can efficently handle the cache.
   auto ir_table_entry = pdpi::PiTableEntryToIr(
-      p4_info, pi_update.entity().table_entry(), only_translate_the_key);
+      p4_info, pi_update.entity().table_entry(), pdpi_options);
   if (!ir_table_entry.ok()) {
     LOG(ERROR) << "PDPI could not translate a PI table entry to IR: "
                << pi_update.entity().table_entry().ShortDebugString();
@@ -263,7 +267,7 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
            << "[P4RT/PDPI] " << ir_table_entry.status().message();
   }
   auto normalized_pi_entry =
-      pdpi::IrTableEntryToPi(p4_info, *ir_table_entry, only_translate_the_key);
+      pdpi::IrTableEntryToPi(p4_info, *ir_table_entry, pdpi_options);
   if (!ir_table_entry.ok()) {
     LOG(ERROR) << "PDPI could not translate an IR table entry to PI: "
                << ir_table_entry->ShortDebugString();
@@ -1268,6 +1272,8 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
           ir_p4info.status().code(),
           absl::StrCat("[P4RT/PDPI] ", ir_p4info.status().message())));
     }
+    // Remove `@unsupported` entities so their use in requests will be rejected.
+    pdpi::RemoveUnsupportedEntities(*ir_p4info);
     TranslateIrP4InfoForOrchAgent(*ir_p4info);
 
     // Apply a config if we don't currently have one.

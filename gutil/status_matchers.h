@@ -78,7 +78,7 @@ MATCHER_P2(StatusIs, status_code, message_matcher,
            absl::StrFormat("is %s%s, %s has a status message that %s",
                            negation ? "not " : "",
                            absl::StatusCodeToString(status_code),
-                           negation ? "and" : "or",
+                           negation ? "or" : "and",
                            testing::DescribeMatcher<const std::string&>(
                                message_matcher, negation))) {
   const absl::Status& status = internal::GetStatus(arg);

@@ -1,0 +1,112 @@
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 37375156
+      match {
+        field_id: 1
+        lpm {
+          value: "\n\n\000\000"
+          prefix_len: 16
+        }
+      }
+      action {
+        action {
+          action_id: 28792405
+          params {
+            param_id: 1
+            value: "\000\000\000\000\000\000"
+          }
+          params {
+            param_id: 2
+            value: "\00"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 37375156
+      match {
+        field_id: 1
+        lpm {
+          value: "\n\n\000\000"
+          prefix_len: 32
+        }
+      }
+      action {
+        action {
+          action_id: 28792405
+          params {
+            param_id: 1
+            value: "\000\000\000\000\000\000"
+          }
+          params {
+            param_id: 2
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 37375156
+      match {
+        field_id: 1
+        lpm {
+          value: "\n\000\000\000"
+          prefix_len: 8
+        }
+      }
+      action {
+        action {
+          action_id: 28792405
+          params {
+            param_id: 1
+            value: "\000\000\000\000\000\n"
+          }
+          params {
+            param_id: 2
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 37375156
+      match {
+        field_id: 1
+        lpm {
+          value: "\024\024\000\000"
+          prefix_len: 16
+        }
+      }
+      action {
+        action {
+          action_id: 28792405
+          params {
+            param_id: 1
+            value: "\026\000\000\000\000\026"
+          }
+          params {
+            param_id: 2
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}
