@@ -23,10 +23,10 @@
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "grpcpp/grpcpp.h"
-#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 
 namespace pdpi {
 
@@ -40,10 +40,10 @@ void RemoveUnsupportedEntities(IrP4Info& p4_info);
 // -- Conversions from PI to IR ------------------------------------------------
 absl::StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info& info,
                                               const p4::v1::TableEntry& pi,
-                                              bool key_only = false);
+                                              TranslationOptions options = {});
 absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
     const IrP4Info& info, absl::Span<const p4::v1::TableEntry> pi,
-    bool key_only = false);
+    TranslationOptions options = {});
 
 absl::StatusOr<IrPacketIn> PiPacketInToIr(const IrP4Info& info,
                                           const p4::v1::PacketIn& packet);
@@ -55,13 +55,16 @@ absl::StatusOr<IrReadRequest> PiReadRequestToIr(
     const IrP4Info& info, const p4::v1::ReadRequest& read_request);
 
 absl::StatusOr<IrReadResponse> PiReadResponseToIr(
-    const IrP4Info& info, const p4::v1::ReadResponse& read_response);
+    const IrP4Info& info, const p4::v1::ReadResponse& read_response,
+    TranslationOptions options = {});
 
 absl::StatusOr<IrUpdate> PiUpdateToIr(const IrP4Info& info,
-                                      const p4::v1::Update& update);
+                                      const p4::v1::Update& update,
+                                      TranslationOptions options = {});
 
 absl::StatusOr<IrWriteRequest> PiWriteRequestToIr(
-    const IrP4Info& info, const p4::v1::WriteRequest& write_request);
+    const IrP4Info& info, const p4::v1::WriteRequest& write_request,
+    TranslationOptions options = {});
 
 absl::StatusOr<IrStreamMessageRequest> PiStreamMessageRequestToIr(
     const IrP4Info& info,
@@ -72,14 +75,15 @@ absl::StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
     const p4::v1::StreamMessageResponse& stream_message_response);
 
 // -- Conversions from IR to PI ------------------------------------------------
-absl::StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info& info,
-                                                    const IrTableEntry& ir,
-                                                    bool key_only = false);
+absl::StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
+    const IrP4Info& info, const IrTableEntry& ir,
+    TranslationOptions options = {});
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
-    const IrP4Info& info, const IrTableEntries& ir, bool key_only = false);
+    const IrP4Info& info, const IrTableEntries& ir,
+    TranslationOptions options = {});
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     const IrP4Info& info, absl::Span<const IrTableEntry> ir,
-    bool key_only = false);
+    TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::PacketIn> IrPacketInToPi(const IrP4Info& info,
                                                 const IrPacketIn& packet);
@@ -91,13 +95,16 @@ absl::StatusOr<p4::v1::ReadRequest> IrReadRequestToPi(
     const IrP4Info& info, const IrReadRequest& read_request);
 
 absl::StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
-    const IrP4Info& info, const IrReadResponse& read_response);
+    const IrP4Info& info, const IrReadResponse& read_response,
+    TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info& info,
-                                            const IrUpdate& update);
+                                            const IrUpdate& update,
+                                            TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
-    const IrP4Info& info, const IrWriteRequest& write_request);
+    const IrP4Info& info, const IrWriteRequest& write_request,
+    TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::StreamMessageRequest> IrStreamMessageRequestToPi(
     const IrP4Info& info,
