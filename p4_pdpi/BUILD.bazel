@@ -84,6 +84,7 @@ cc_library(
     deps = [
         ":ir",
         ":ir_cc_proto",
+        ":translation_options",
         "//gutil:collections",
         "//gutil:proto",
         "//gutil:status",
@@ -195,6 +196,7 @@ cc_library(
     ],
     deps = [
         ":ir_cc_proto",
+        ":translation_options",
         "//gutil:collections",
         "//gutil:proto",
         "//gutil:status",
@@ -380,4 +382,10 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
     ],
+)
+
+cc_library(
+    name = "translation_options",
+    hdrs = ["translation_options.h"],
+    deps = ["@com_google_absl//absl/strings:str_format"],
 )
