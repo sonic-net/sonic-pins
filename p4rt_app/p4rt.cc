@@ -282,19 +282,22 @@ void LogStatsEveryMinute(absl::Notification* stop,
 
     // Reads and writes happen independently, but the controller will read every
     // few seconds to verify correctness. To avoid being spammy we will only log
-    // performance when changes are made to the swtich (i.e. when we see a
+    // performance when changes are made to the switch (i.e. when we see a
     // write).
     if (stats->write_batch_count > 0) {
       LOG(INFO) << absl::StreamFormat(
-          "Handled %d write requests from %d batches in: %dus (max: %dus)",
-          stats->write_requests_count, stats->write_batch_count,
+          "Spent %d microseconds handling %d write requests from %d batches "
+          "over the past minute with the longest batch taking %dus.",
           absl::ToInt64Microseconds(stats->write_time),
+          stats->write_requests_count, stats->write_batch_count,
           absl::ToInt64Microseconds(stats->max_write_time));
 
       if (stats->read_request_count > 0) {
         LOG(INFO) << absl::StreamFormat(
-            "Handled %d read requests in: %dus", stats->read_request_count,
-            absl::ToInt64Microseconds(stats->read_time));
+            "Spent %d microseconds handling %d read requests over the past "
+            "minute.",
+            absl::ToInt64Microseconds(stats->read_time),
+            stats->read_request_count);
       }
     }
   }
