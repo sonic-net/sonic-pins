@@ -32,7 +32,7 @@ namespace sai {
 //
 // Required by native v1model targets (e.g. BMv2, p4-symbolic).
 // Not required by PINS targets, since PINS has this config built-in.
-p4::v1::Entity MakeBmv2PacketReplicationEngineEntryRequiredForPunts();
+p4::v1::Entity MakeV1modelPacketReplicationEngineEntryRequiredForPunts();
 
 }  // namespace sai
 
