@@ -219,13 +219,28 @@ class IrP4InfoBuilder {
     return *this;
   }
 
+  IrP4InfoBuilder& action(pdpi::IrActionDefinition ir_action) {
+    if (ir_action.preamble().id() == 0) {
+      ir_action.mutable_preamble()->set_id(++action_id_);
+    }
+    (*p4info_.mutable_actions_by_id())[ir_action.preamble().id()] = ir_action;
+    (*p4info_.mutable_actions_by_name())[ir_action.preamble().alias()] =
+        std::move(ir_action);
+    return *this;
+  }
+
   IrP4InfoBuilder& table(const IrTableDefinitionBuilder& builder) {
     return table(builder());
+  }
+
+  IrP4InfoBuilder& action(const IrActionDefinitionBuilder& builder) {
+    return action(builder());
   }
 
  private:
   pdpi::IrP4Info p4info_;
   int table_id_ = 1;
+  int action_id_ = 1;
 };
 
 }  // namespace p4rt_app

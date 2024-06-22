@@ -46,11 +46,7 @@ FABRIC_BORDER_ROUTER_DEPS = SHARED_DEPS + [
 ]
 
 TOR_DEPS = SHARED_DEPS + [
-    "acl_ingress_qos.p4",
     "acl_egress.p4",
-    "acl_egress_dhcp_to_host.p4",
-    "acl_pre_ingress_metadata.p4",
-    "acl_pre_ingress_vlan.p4",
     "tor.p4",
 ]
 
@@ -58,6 +54,7 @@ WBB_DEPS = [
     "acl_wbb_ingress.p4",
     "ids.h",
     "roles.h",
+    "versions.h",
     "bitwidths.p4",
     "minimum_guaranteed_sizes.p4",
     "//sai_p4/fixed",

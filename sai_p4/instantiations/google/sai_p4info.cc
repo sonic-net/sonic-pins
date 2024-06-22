@@ -91,4 +91,10 @@ const p4::config::v1::P4Info& GetUnionedP4Info() {
   return *unioned_p4info;
 }
 
+const IrP4Info& GetUnionedIrP4Info() {
+  static const IrP4Info* const kUnionedIrP4Info =
+      CreateIrP4Info(GetUnionedP4Info());
+  return *kUnionedIrP4Info;
+}
+
 }  // namespace sai
