@@ -51,5 +51,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST(GetUnionedP4InfoTest, DoesNotCrashTest) { GetUnionedP4Info(); }
 
+TEST(GetUnionedIrP4InfoTest, DoesNotCrashTest) { GetUnionedIrP4Info(); }
+
 }  // namespace
 }  // namespace sai

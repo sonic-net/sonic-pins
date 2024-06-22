@@ -13,8 +13,10 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/p4info_verification.h"
 
+#include "absl/algorithm/container.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
@@ -35,11 +37,63 @@ namespace p4rt_app {
 namespace {
 
 using ::gutil::EqualsProto;
+using ::gutil::IsOk;
 using ::gutil::StatusIs;
 using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::Not;
 using ::testing::Optional;
+
+bool IsAclTable(const p4::config::v1::Table& table) {
+  return absl::c_any_of(table.preamble().annotations(),
+                        [](absl::string_view annotation) {
+                          return absl::StartsWith(annotation, "@sai_acl");
+                        });
+}
+
+bool IsAclAction(const p4::config::v1::Action& action) {
+  return absl::c_any_of(action.preamble().annotations(),
+                        [](absl::string_view annotation) {
+                          return absl::StartsWith(annotation, "@sai_action");
+                        });
+}
+
+template <class Entity>
+bool IsSupported(const Entity& entity) {
+  return !absl::c_any_of(entity.preamble().annotations(),
+                         [](absl::string_view annotation) {
+                           return annotation == "@unsupported";
+                         });
+}
+
+p4::config::v1::Table* GetSupportedAclTable(p4::config::v1::P4Info& p4info) {
+  for (auto& table : *p4info.mutable_tables()) {
+    if (IsAclTable(table) && IsSupported(table)) return &table;
+  }
+  return nullptr;
+}
+
+p4::config::v1::Table* GetSupportedNonAclTable(p4::config::v1::P4Info& p4info) {
+  for (auto& table : *p4info.mutable_tables()) {
+    if (!IsAclTable(table) && IsSupported(table)) return &table;
+  }
+  return nullptr;
+}
+
+p4::config::v1::Action* GetSupportedAclAction(p4::config::v1::P4Info& p4info) {
+  for (auto& action : *p4info.mutable_actions()) {
+    if (IsAclAction(action) && IsSupported(action)) return &action;
+  }
+  return nullptr;
+}
+
+p4::config::v1::Action* GetSupportedNonAclAction(
+    p4::config::v1::P4Info& p4info) {
+  for (auto& action : *p4info.mutable_actions()) {
+    if (!IsAclAction(action) && IsSupported(action)) return &action;
+  }
+  return nullptr;
+}
 
 class InstantiationTest : public testing::TestWithParam<sai::Instantiation> {};
 TEST_P(InstantiationTest, SaiP4InfoIsOk) {
@@ -100,6 +154,142 @@ TEST(P4InfoVerificationTest, ReturnsErrorWhenSchemaVerificationFails) {
   EXPECT_THAT(
       ValidateP4Info(p4info),
       gutil::StatusIs(absl::StatusCode::kInvalidArgument, HasSubstr("LPM")));
+}
+
+TEST(P4InfoVerificationTest, ToleratesUnsupportedTable) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // A random `@unsupported` table is tolerated.
+  *p4info.add_tables()->mutable_preamble()->add_annotations() = "@unsupported";
+  EXPECT_THAT(ValidateP4Info(p4info), IsOk());
+
+  // In contrast, a random table without that annotation is not tolerated.
+  p4info.add_tables();
+  EXPECT_THAT(ValidateP4Info(p4info), Not(IsOk()));
+}
+
+TEST(P4InfoVerificationTest, ToleratesUnsupportedAclMatchField) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // Pick a random ACL table.
+  auto* acl_table = GetSupportedAclTable(p4info);
+  ASSERT_NE(acl_table, nullptr);
+  SCOPED_TRACE(absl::StrCat("table name: ", acl_table->preamble().name()));
+
+  // Add a random match field.
+  auto& match_field = *acl_table->add_match_fields();
+  ASSERT_OK_AND_ASSIGN(match_field,
+                       gutil::ParseTextProto<p4::config::v1::MatchField>(R"pb(
+                         id: 12345678
+                         name: "unsupported_match_field"
+                         bitwidth: 10
+                         match_type: TERNARY
+                       )pb"));
+
+  // Validation fails because match field is invalid...
+  EXPECT_THAT(
+      ValidateP4Info(p4info),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("failed ACL table verification. Failed to process "
+                         "match field 'unsupported_match_field'")));
+
+  // ...unless we add an `@unsupported` annotation.
+  *match_field.add_annotations() = "@unsupported";
+  EXPECT_THAT(ValidateP4Info(p4info), IsOk());
+}
+
+TEST(P4InfoVerificationTest, ToleratesUnsupportedNonAclMatchField) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // Pick a random non-ACL table.
+  auto* table = GetSupportedNonAclTable(p4info);
+  ASSERT_NE(table, nullptr);
+  SCOPED_TRACE(absl::StrCat("table name: ", table->preamble().name()));
+
+  // Add a unknown match field.
+  auto& match_field = *table->add_match_fields();
+  ASSERT_OK_AND_ASSIGN(match_field,
+                       gutil::ParseTextProto<p4::config::v1::MatchField>(R"pb(
+                         id: 12345678
+                         name: "unsupported_match_field"
+                         bitwidth: 10
+                         match_type: TERNARY
+                       )pb"));
+
+  // Validation fails because match field is unknown...
+  EXPECT_THAT(
+      ValidateP4Info(p4info),
+      StatusIs(
+          absl::StatusCode::kNotFound,
+          HasSubstr("contains unknown match field 'unsupported_match_field'")));
+
+  // ...unless we add an `@unsupported` annotation.
+  *match_field.add_annotations() = "@unsupported";
+  EXPECT_THAT(ValidateP4Info(p4info), IsOk());
+}
+
+TEST(P4InfoVerificationTest, ToleratesUnsupportedAclAction) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // Pick a random ACL table.
+  auto* acl_table = GetSupportedAclTable(p4info);
+  ASSERT_NE(acl_table, nullptr);
+  SCOPED_TRACE(absl::StrCat("table name: ", acl_table->preamble().name()));
+
+  // Pick a random non-ACL action. This cannot be an ACL action, because adding
+  // those is always allowed anyhow.
+  auto* action = GetSupportedNonAclAction(p4info);
+  ASSERT_NE(action, nullptr);
+  SCOPED_TRACE(absl::StrCat("action: ", action->preamble().name()));
+
+  // Add action to table.
+  p4::config::v1::ActionRef& action_ref = *acl_table->add_action_refs();
+  action_ref.set_id(action->preamble().id());
+  action_ref.set_scope(p4::config::v1::ActionRef::TABLE_ONLY);
+  *action_ref.add_annotations() = "@proto_id(42)";
+
+  // Validation fails because action is unknown...
+  EXPECT_THAT(ValidateP4Info(p4info),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("failed ACL table verification")));
+
+  // ...unless we mark the action as @unsupported.
+  *action->mutable_preamble()->add_annotations() = "@unsupported";
+  EXPECT_THAT(ValidateP4Info(p4info), IsOk());
+}
+
+TEST(P4InfoVerificationTest, ToleratesUnsupportedNonAclAction) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+
+  // Pick a random non-ACL table.
+  auto* table = GetSupportedNonAclTable(p4info);
+  ASSERT_NE(table, nullptr);
+  SCOPED_TRACE(absl::StrCat("table = ", table->preamble().name()));
+
+  // Pick a random action that's not already supported by the table.
+  // Any ACL action fits the bill.
+  auto* action = GetSupportedAclAction(p4info);
+  SCOPED_TRACE(absl::StrCat("action = ", action->preamble().name()));
+  ASSERT_NE(action, nullptr);
+
+  // Add action to table.
+  p4::config::v1::ActionRef& action_ref = *table->add_action_refs();
+  action_ref.set_id(action->preamble().id());
+  action_ref.set_scope(p4::config::v1::ActionRef::TABLE_ONLY);
+  *action_ref.add_annotations() = "@proto_id(42)";
+
+  // Validation fails because action is unknown...
+  EXPECT_THAT(ValidateP4Info(p4info), StatusIs(absl::StatusCode::kNotFound,
+                                               HasSubstr("unknown action")));
+
+  // ...unless we mark the action as @unsupported.
+  *action->mutable_preamble()->add_annotations() = "@unsupported";
+  EXPECT_THAT(ValidateP4Info(p4info), IsOk());
 }
 
 }  // namespace

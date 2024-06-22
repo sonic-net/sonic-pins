@@ -2,6 +2,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -15,6 +16,7 @@
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/testing/main_p4_pd.pb.h"
 #include "p4_pdpi/testing/test_p4info.h"
+#include "p4_pdpi/translation_options.h"
 
 namespace pdpi {
 namespace {
@@ -65,11 +67,11 @@ absl::StatusOr<IrTableEntries> ValidIrTableEntries() {
   return PdTableEntriesToIr(GetTestIrP4Info(), pd);
 }
 
-using VectorTranslationTest = testing::TestWithParam<bool>;  // key_only?
+using VectorTranslationTest = testing::TestWithParam<pdpi::TranslationOptions>;
 
 TEST_P(VectorTranslationTest,
        FooTableEntriesToBarPointWiseEqualFooTableEntryToBar) {
-  const bool key_only = GetParam();
+  const TranslationOptions options = GetParam();
   const auto& info = GetTestIrP4Info();
   ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
 
@@ -79,20 +81,20 @@ TEST_P(VectorTranslationTest,
   std::vector<p4::v1::TableEntry> pi_entries_from_ir,
       expected_pi_entries_from_ir;
   ASSERT_OK_AND_ASSIGN(ir_entries,
-                       PdTableEntriesToIr(info, pd_entries, key_only));
+                       PdTableEntriesToIr(info, pd_entries, options));
   ASSERT_OK_AND_ASSIGN(pi_entries_from_pd,
-                       PdTableEntriesToPi(info, pd_entries, key_only));
+                       PdTableEntriesToPi(info, pd_entries, options));
   ASSERT_OK_AND_ASSIGN(pi_entries_from_ir,
-                       IrTableEntriesToPi(info, ir_entries, key_only));
+                       IrTableEntriesToPi(info, ir_entries, options));
   for (const auto& pd_entry : pd_entries.entries()) {
     ASSERT_OK_AND_ASSIGN(*expected_ir_entries.add_entries(),
-                         PdTableEntryToIr(info, pd_entry, key_only));
+                         PdTableEntryToIr(info, pd_entry, options));
     ASSERT_OK_AND_ASSIGN(expected_pi_entries_from_pd.emplace_back(),
-                         PdTableEntryToPi(info, pd_entry, key_only));
+                         PdTableEntryToPi(info, pd_entry, options));
   }
   for (const auto& ir_entry : ir_entries.entries()) {
     ASSERT_OK_AND_ASSIGN(expected_pi_entries_from_ir.emplace_back(),
-                         IrTableEntryToPi(info, ir_entry, key_only));
+                         IrTableEntryToPi(info, ir_entry, options));
   }
 
   // Check pointwise equality for PD -> IR.
@@ -120,36 +122,47 @@ TEST_P(VectorTranslationTest,
   }
 }
 
-TEST(PdTableEntriesToPiTest, RoundTripsWithPiTableEntriesToPd) {
+using PdTableEntriesToPiTest = testing::TestWithParam<pdpi::TranslationOptions>;
+
+TEST_P(PdTableEntriesToPiTest, RoundTripsWithPiTableEntriesToPd) {
+  const TranslationOptions& options = GetParam();
   const auto& info = GetTestIrP4Info();
   ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
 
   TableEntries roundtripped_pd_entries;
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> pi_entries,
-                       PdTableEntriesToPi(info, pd_entries));
-  ASSERT_OK(PiTableEntriesToPd(info, pi_entries, &roundtripped_pd_entries));
+                       PdTableEntriesToPi(info, pd_entries, options));
+  ASSERT_OK(
+      PiTableEntriesToPd(info, pi_entries, &roundtripped_pd_entries, options));
   EXPECT_THAT(roundtripped_pd_entries, EqualsProto(pd_entries));
 }
 
-TEST(PdTableEntriesToIrTest, RoundTripsWithIrTableEntriesToPd) {
+using PdTableEntriesToIrTest = testing::TestWithParam<pdpi::TranslationOptions>;
+
+TEST_P(PdTableEntriesToIrTest, RoundTripsWithIrTableEntriesToPd) {
+  const TranslationOptions& options = GetParam();
   const auto& info = GetTestIrP4Info();
   ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
 
   TableEntries roundtripped_pd_entries;
   ASSERT_OK_AND_ASSIGN(IrTableEntries ir_entries,
-                       PdTableEntriesToIr(info, pd_entries));
-  ASSERT_OK(IrTableEntriesToPd(info, ir_entries, &roundtripped_pd_entries));
+                       PdTableEntriesToIr(info, pd_entries, options));
+  ASSERT_OK(
+      IrTableEntriesToPd(info, ir_entries, &roundtripped_pd_entries, options));
   EXPECT_THAT(roundtripped_pd_entries, EqualsProto(pd_entries));
 }
 
-TEST(IrTableEntriesToPiTest, RoundTripsWithPiTableEntriesToIr) {
+using IrTableEntriesToPiTest = testing::TestWithParam<pdpi::TranslationOptions>;
+
+TEST_P(IrTableEntriesToPiTest, RoundTripsWithPiTableEntriesToIr) {
+  const TranslationOptions& options = GetParam();
   const auto& info = GetTestIrP4Info();
   ASSERT_OK_AND_ASSIGN(IrTableEntries ir_entries, ValidIrTableEntries());
 
   ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> pi_entries,
-                       IrTableEntriesToPi(info, ir_entries));
+                       IrTableEntriesToPi(info, ir_entries, options));
   ASSERT_OK_AND_ASSIGN(IrTableEntries roundtripped_ir_entries,
-                       PiTableEntriesToIr(info, pi_entries));
+                       PiTableEntriesToIr(info, pi_entries, options));
 
   ASSERT_EQ(roundtripped_ir_entries.entries_size(), ir_entries.entries_size());
   for (int i = 0; i < roundtripped_ir_entries.entries_size(); ++i) {
@@ -158,11 +171,149 @@ TEST(IrTableEntriesToPiTest, RoundTripsWithPiTableEntriesToIr) {
   }
 }
 
-INSTANTIATE_TEST_SUITE_P(, VectorTranslationTest, testing::Bool(),
-                         [](const auto& info) -> std::string {
-                           return absl::StrCat("key_only_",
-                                               info.param ? "true" : "false");
-                         });
+TEST(PdTableEntryToPiTest,
+     OptionAllowUnsupportedDoesNotAffectTranslationResult) {
+  const auto& info = GetTestIrP4Info();
+  ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
+
+  for (const auto& pd_entry : pd_entries.entries()) {
+    for (bool key_only : {false, true}) {
+      SCOPED_TRACE(absl::StrFormat("key_only = %v", key_only));
+      SCOPED_TRACE(absl::StrCat("pd entry = ", pd_entry.DebugString()));
+      ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_without_allow_unsupported,
+                           PdTableEntryToPi(info, pd_entry,
+                                            TranslationOptions{
+                                                .key_only = key_only,
+                                                .allow_unsupported = false,
+                                            }));
+      ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_with_allow_unsupported,
+                           PdTableEntryToPi(info, pd_entry,
+                                            TranslationOptions{
+                                                .key_only = key_only,
+                                                .allow_unsupported = true,
+                                            }));
+      EXPECT_THAT(pi_with_allow_unsupported,
+                  EqualsProto(pi_without_allow_unsupported));
+    }
+  }
+}
+
+TEST(PdTableEntryToIrTest,
+     OptionAllowUnsupportedDoesNotAffectTranslationResult) {
+  const auto& info = GetTestIrP4Info();
+  ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
+
+  for (const auto& pd_entry : pd_entries.entries()) {
+    for (bool key_only : {false, true}) {
+      SCOPED_TRACE(absl::StrFormat("key_only = %v", key_only));
+      SCOPED_TRACE(absl::StrCat("pd entry = ", pd_entry.DebugString()));
+      ASSERT_OK_AND_ASSIGN(IrTableEntry ir_without_allow_unsupported,
+                           PdTableEntryToIr(info, pd_entry,
+                                            TranslationOptions{
+                                                .key_only = key_only,
+                                                .allow_unsupported = false,
+                                            }));
+      ASSERT_OK_AND_ASSIGN(IrTableEntry ir_with_allow_unsupported,
+                           PdTableEntryToIr(info, pd_entry,
+                                            TranslationOptions{
+                                                .key_only = key_only,
+                                                .allow_unsupported = true,
+                                            }));
+      EXPECT_THAT(ir_with_allow_unsupported,
+                  EqualsProto(ir_without_allow_unsupported));
+    }
+  }
+}
+
+TEST(IrTableEntryToPiTest,
+     OptionAllowUnsupportedDoesNotAffectTranslationResult) {
+  const auto& info = GetTestIrP4Info();
+  ASSERT_OK_AND_ASSIGN(IrTableEntries ir_entries, ValidIrTableEntries());
+
+  for (const auto& ir_entry : ir_entries.entries()) {
+    for (bool key_only : {false, true}) {
+      SCOPED_TRACE(absl::StrFormat("key_only = %v", key_only));
+      SCOPED_TRACE(absl::StrCat("ir entry = ", ir_entry.DebugString()));
+      ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_without_allow_unsupported,
+                           IrTableEntryToPi(info, ir_entry,
+                                            TranslationOptions{
+                                                .key_only = key_only,
+                                                .allow_unsupported = false,
+                                            }));
+      ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_with_allow_unsupported,
+                           IrTableEntryToPi(info, ir_entry,
+                                            TranslationOptions{
+                                                .key_only = key_only,
+                                                .allow_unsupported = true,
+                                            }));
+      EXPECT_THAT(pi_with_allow_unsupported,
+                  EqualsProto(pi_without_allow_unsupported));
+    }
+  }
+}
+
+TEST(IrTableEntryToPdTest,
+     OptionAllowUnsupportedDoesNotAffectTranslationResult) {
+  const auto& info = GetTestIrP4Info();
+  ASSERT_OK_AND_ASSIGN(IrTableEntries ir_entries, ValidIrTableEntries());
+
+  for (const auto& ir_entry : ir_entries.entries()) {
+    for (bool key_only : {false, true}) {
+      SCOPED_TRACE(absl::StrFormat("key_only = %v", key_only));
+      SCOPED_TRACE(absl::StrCat("ir entry = ", ir_entry.DebugString()));
+      TableEntry pd_without_allow_unsupported, pd_with_allow_unsupported;
+      ASSERT_OK(IrTableEntryToPd(info, ir_entry, &pd_without_allow_unsupported,
+                                 TranslationOptions{
+                                     .key_only = key_only,
+                                     .allow_unsupported = false,
+                                 }));
+      ASSERT_OK(IrTableEntryToPd(info, ir_entry, &pd_with_allow_unsupported,
+                                 TranslationOptions{
+                                     .key_only = key_only,
+                                     .allow_unsupported = true,
+                                 }));
+      EXPECT_THAT(pd_with_allow_unsupported,
+                  EqualsProto(pd_without_allow_unsupported));
+    }
+  }
+}
+
+std::string GetTestNameSuffix(
+    const testing::TestParamInfo<TranslationOptions>& info) {
+  return absl::StrFormat("key_only_%v_and_allow_unsupported_%v",
+                         info.param.key_only, info.param.allow_unsupported);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    , VectorTranslationTest,
+    testing::ValuesIn({
+        TranslationOptions{.key_only = false, .allow_unsupported = false},
+        TranslationOptions{.key_only = true, .allow_unsupported = false},
+        TranslationOptions{.key_only = false, .allow_unsupported = true},
+        TranslationOptions{.key_only = true, .allow_unsupported = true},
+    }),
+    GetTestNameSuffix);
+
+INSTANTIATE_TEST_SUITE_P(, PdTableEntriesToPiTest,
+                         testing::ValuesIn({
+                             TranslationOptions{.allow_unsupported = false},
+                             TranslationOptions{.allow_unsupported = true},
+                         }),
+                         GetTestNameSuffix);
+
+INSTANTIATE_TEST_SUITE_P(, PdTableEntriesToIrTest,
+                         testing::ValuesIn({
+                             TranslationOptions{.allow_unsupported = false},
+                             TranslationOptions{.allow_unsupported = true},
+                         }),
+                         GetTestNameSuffix);
+
+INSTANTIATE_TEST_SUITE_P(, IrTableEntriesToPiTest,
+                         testing::ValuesIn({
+                             TranslationOptions{.allow_unsupported = false},
+                             TranslationOptions{.allow_unsupported = true},
+                         }),
+                         GetTestNameSuffix);
 
 }  // namespace
 }  // namespace pdpi

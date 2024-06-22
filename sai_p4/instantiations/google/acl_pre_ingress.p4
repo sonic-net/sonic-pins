@@ -14,8 +14,17 @@ control acl_pre_ingress(in headers_t headers,
   // First 6 bits of IPv4 TOS or IPv6 traffic class (or 0, for non-IP packets)
   bit<6> dscp = 0;
 
+  // IPv4 IP protocol or IPv6 next_header (or 0, for non-IP packets)
+  bit<8> ip_protocol = 0;
+
   @id(ACL_PRE_INGRESS_COUNTER_ID)
   direct_counter(CounterType.packets_and_bytes) acl_pre_ingress_counter;
+
+  @id(ACL_PRE_INGRESS_VLAN_COUNTER_ID)
+  direct_counter(CounterType.packets_and_bytes) acl_pre_ingress_vlan_counter;
+
+  @id(ACL_PRE_INGRESS_METADATA_COUNTER_ID)
+  direct_counter(CounterType.packets_and_bytes) acl_pre_ingress_metadata_counter;
 
   @id(ACL_PRE_INGRESS_SET_VRF_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
@@ -25,6 +34,30 @@ control acl_pre_ingress(in headers_t headers,
                  vrf_id_t vrf_id) {
     local_metadata.vrf_id = vrf_id;
     acl_pre_ingress_counter.count();
+  }
+
+  @id(ACL_PRE_INGRESS_SET_OUTER_VLAN_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  action set_outer_vlan_id(
+      @id(1) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)
+        vlan_id_t vlan_id) {
+    // TODO: Add modeling support for VLANs if needed.
+    // local_metadata.vlan_id_valid = true;
+    // local_metadata.vlan_id = vlan_id;
+    acl_pre_ingress_vlan_counter.count();
+  }
+
+  @id(ACL_PRE_INGRESS_SET_ACL_METADATA_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  // TODO: OA does not support SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA
+  // action set_acl_metadata(
+  //      @id(1) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)
+  //        acl_metadata_t acl_metadata) {
+  //   local_metadata.acl_metadata = acl_metadata;
+  //   acl_pre_ingress_metadata_counter.count();
+  // }
+  action set_acl_metadata() {
+    acl_pre_ingress_metadata_counter.count();
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
@@ -81,15 +114,86 @@ control acl_pre_ingress(in headers_t headers,
     size = ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  @id(ACL_PRE_INGRESS_VLAN_TABLE_ID)
+  @sai_acl(PRE_INGRESS)
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  table acl_pre_ingress_vlan_table {
+    key = {
+      headers.ethernet.ether_type : ternary
+         @id(1) @name("ether_type")
+         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
+    }
+    actions = {
+      @proto_id(1) set_outer_vlan_id;
+      @defaultonly NoAction;
+    }
+    const default_action = NoAction;
+    counters = acl_pre_ingress_vlan_counter;
+    size = ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
+  @id(ACL_PRE_INGRESS_METADATA_TABLE_ID)
+  @sai_acl(PRE_INGRESS)
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @entry_restriction("
+    // Forbid illegal combinations of IP_TYPE fields.
+    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+    // Forbid unsupported combinations of IP_TYPE fields.
+    is_ipv4::mask != 0 -> (is_ipv4 == 1);
+    is_ipv6::mask != 0 -> (is_ipv6 == 1);
+  ")
+  table acl_pre_ingress_metadata_table {
+    key = {
+      headers.ipv4.isValid() || headers.ipv6.isValid() : optional
+          @id(1) @name("is_ip")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
+      headers.ipv4.isValid() : optional
+          @id(2) @name("is_ipv4")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV4ANY);
+      headers.ipv6.isValid() : optional
+          @id(3) @name("is_ipv6")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
+      headers.ethernet.ether_type : ternary
+          @id(4) @name("ether_type")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
+      ip_protocol : ternary
+          @id(5) @name("ip_protocol")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
+      local_metadata.l4_src_port : ternary
+          @id(6) @name("l4_src_port")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT);
+    }
+    actions = {
+      @proto_id(1) set_acl_metadata;
+      @defaultonly NoAction;
+    }
+    const default_action = NoAction;
+    counters = acl_pre_ingress_metadata_counter;
+    size = ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
   apply {
     if (headers.ipv4.isValid()) {
       dscp = headers.ipv4.dscp;
+      ip_protocol = headers.ipv4.protocol;
     } else if (headers.ipv6.isValid()) {
       dscp = headers.ipv6.dscp;
+      ip_protocol = headers.ipv6.next_header;
     }
 
     local_metadata.vrf_id = kDefaultVrf;
+
+#if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_pre_ingress_table.apply();
+#elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
+    acl_pre_ingress_table.apply();
+#elif defined(SAI_INSTANTIATION_TOR)
+    acl_pre_ingress_vlan_table.apply();
+    acl_pre_ingress_metadata_table.apply();
+    acl_pre_ingress_table.apply();
+#endif
   }
 }  // control acl_pre_ingress
 
