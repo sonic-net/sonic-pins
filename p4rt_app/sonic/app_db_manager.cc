@@ -57,17 +57,12 @@ absl::StatusOr<std::string> CreateEntryForDelete(
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_deletes) {
   VLOG(2) << "Delete PDPI IR entry: " << entry.ShortDebugString();
   ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
-  // Get table entry from the AppDB (before delete) instead of the one from the
-  // request.
-  ASSIGN_OR_RETURN(auto ir_table_entry,
-                   AppDbKeyAndValuesToIrTableEntry(
-                       p4_info, key, p4rt_table.app_db->get(key)));
 
   VLOG(1) << "Delete AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
   kfvOp(key_value) = "DEL";
-  p4rt_deletes.push_back(key_value);
+  p4rt_deletes.push_back(std::move(key_value));
   return key;
 }
 

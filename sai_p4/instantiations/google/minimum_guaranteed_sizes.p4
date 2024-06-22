@@ -62,7 +62,9 @@
 // 2^8 - 1 to avoid allocation of 2^9 entries on such switches.
 #define ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 255
 
-#define ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 128
+#define ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE 255
+
+#define ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 127
 
 // 1 entry for LLDP, 1 entry for ND, and 6 entries for traceroute: TTL 0,1,2 for
 // IPv4 and IPv6
