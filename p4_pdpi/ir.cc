@@ -1704,6 +1704,30 @@ StatusOr<IrReadRequest> PiReadRequestToIr(
   return result;
 }
 
+StatusOr<IrEntity> PiEntityToIr(const IrP4Info &info, const p4::v1::Entity &pi,
+                                TranslationOptions options) {
+  IrEntity ir_entity;
+  switch (pi.entity_case()) {
+    case p4::v1::Entity::kTableEntry: {
+      ASSIGN_OR_RETURN(*ir_entity.mutable_table_entry(),
+                       PiTableEntryToIr(info, pi.table_entry(), options));
+      break;
+    }
+    // TODO: Add PacketReplicationEngine support to IR.
+    default: {
+      auto entity_name = gutil::GetOneOfFieldName(pi, "entity");
+      if (!entity_name.ok()) {
+        return absl::InvalidArgumentError(
+            GenerateFormattedError("Entity", entity_name.status().message()));
+      }
+      return absl::UnimplementedError(GenerateFormattedError(
+          "Entity",
+          absl::StrCat("Entity '", *entity_name, "' is not supported.")));
+    }
+  }
+  return ir_entity;
+}
+
 StatusOr<IrReadResponse> PiReadResponseToIr(
     const IrP4Info &info, const p4::v1::ReadResponse &read_response,
     TranslationOptions options) {
@@ -1723,24 +1747,13 @@ StatusOr<IrUpdate> PiUpdateToIr(const IrP4Info &info,
                                 const p4::v1::Update &update,
                                 TranslationOptions options) {
   IrUpdate ir_update;
-  std::vector<std::string> invalid_reasons;
-  if (!update.entity().has_table_entry()) {
-    invalid_reasons.push_back(absl::StrCat(
-        kNewBullet, "Only table entries are supported in Update."));
-  }
   if (update.type() == p4::v1::Update_Type_UNSPECIFIED) {
-    invalid_reasons.push_back(
-        absl::StrCat(kNewBullet, "Update type should be specified."));
-  }
-
-  if (!invalid_reasons.empty()) {
     return absl::InvalidArgumentError(
-        GenerateFormattedError("Update", absl::StrJoin(invalid_reasons, "\n")));
+        GenerateFormattedError("Update", "Update type should be specified."));
   }
+  ASSIGN_OR_RETURN(*ir_update.mutable_entity(),
+                   PiEntityToIr(info, update.entity(), options));
   ir_update.set_type(update.type());
-  ASSIGN_OR_RETURN(
-      *ir_update.mutable_table_entry(),
-      PiTableEntryToIr(info, update.entity().table_entry(), options));
   return ir_update;
 }
 
@@ -2131,6 +2144,30 @@ StatusOr<p4::v1::ReadRequest> IrReadRequestToPi(
   return result;
 }
 
+StatusOr<p4::v1::Entity> IrEntityToPi(const IrP4Info &info, const IrEntity &ir,
+                                      TranslationOptions options) {
+  p4::v1::Entity pi_entity;
+  switch (ir.entity_case()) {
+    case IrEntity::kTableEntry: {
+      ASSIGN_OR_RETURN(*pi_entity.mutable_table_entry(),
+                       IrTableEntryToPi(info, ir.table_entry(), options));
+      break;
+    }
+    // TODO: Add PacketReplicationEngine support to IR.
+    default: {
+      auto entity_name = gutil::GetOneOfFieldName(ir, "entity");
+      if (!entity_name.ok()) {
+        return absl::InvalidArgumentError(
+            GenerateFormattedError("Entity", entity_name.status().message()));
+      }
+      return absl::UnimplementedError(GenerateFormattedError(
+          "Entity",
+          absl::StrCat("Entity '", *entity_name, "' is not supported.")));
+    }
+  }
+  return pi_entity;
+}
+
 StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
     const IrP4Info &info, const IrReadResponse &read_response,
     TranslationOptions options) {
@@ -2171,9 +2208,11 @@ StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info &info,
     return absl::InvalidArgumentError(
         GenerateFormattedError("Update", absl::StrJoin(invalid_reasons, "\n")));
   }
+
+  ASSIGN_OR_RETURN(*pi_update.mutable_entity(),
+                   IrEntityToPi(info, update.entity()));
+
   pi_update.set_type(update.type());
-  ASSIGN_OR_RETURN(*pi_update.mutable_entity()->mutable_table_entry(),
-                   IrTableEntryToPi(info, update.table_entry(), options));
   return pi_update;
 }
 

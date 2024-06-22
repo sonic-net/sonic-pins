@@ -38,6 +38,10 @@ absl::StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info& p4_info);
 void RemoveUnsupportedEntities(IrP4Info& p4_info);
 
 // -- Conversions from PI to IR ------------------------------------------------
+absl::StatusOr<IrEntity> PiEntityToIr(const IrP4Info& info,
+                                      const p4::v1::Entity& pi,
+                                      TranslationOptions options = {});
+
 absl::StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info& info,
                                               const p4::v1::TableEntry& pi,
                                               TranslationOptions options = {});
@@ -75,6 +79,10 @@ absl::StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
     const p4::v1::StreamMessageResponse& stream_message_response);
 
 // -- Conversions from IR to PI ------------------------------------------------
+absl::StatusOr<p4::v1::Entity> IrEntityToPi(const IrP4Info& info,
+                                            const IrEntity& ir,
+                                            TranslationOptions options = {});
+
 absl::StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
     const IrP4Info& info, const IrTableEntry& ir,
     TranslationOptions options = {});

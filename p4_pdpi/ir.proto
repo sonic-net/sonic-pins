@@ -324,12 +324,19 @@ message IrPacketMetadata {
 
 // -- RPC messages -------------------------------------------------------------
 
+// Describes an entity within an Update.
+message IrEntity {
+  oneof entity {
+    IrTableEntry table_entry = 1;
+  }
+}
+
 // Describes an update in a Write RPC request.
 message IrUpdate {
   // Required.
   p4.v1.Update.Type type = 1;
   // Required.
-  IrTableEntry table_entry = 2;
+  IrEntity entity = 2;
 }
 
 // Describes a Write RPC request.
