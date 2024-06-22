@@ -306,85 +306,79 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     pdpi::IrWriteResponse* response) {
-  bool fail_on_first_error = false;
   absl::flat_hash_set<gutil::TableEntryKey> keys_in_request;
   bool has_duplicates = false;
   sonic::AppDbUpdates ir_updates;
   absl::flat_hash_map<std::string, int64_t> resources_in_batch;
-  for (const p4::v1::Update& pi_update : request.updates()) {
-    // An RPC response should be created for every updater.
-    auto entry_status = response->add_statuses();
 
-    // Just update the statuses as not attempted if any entry in the batch
-    // failed earlier.
-    if (fail_on_first_error) {
-      *entry_status =
-          GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
-      continue;
-    }
+  // Fail on first error.
+  for (const p4::v1::Update& pi_update : request.updates()) {
+    pdpi::IrUpdateStatus& entry_status = *response->add_statuses();
 
     // If we cannot translate it then we should just report an error (i.e. do
     // not try to handle it in lower layers).
-    auto app_db_entry_statusor = PiUpdateToAppDbEntry(
+    absl::StatusOr<sonic::AppDbEntry> app_db_entry = PiUpdateToAppDbEntry(
         p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
         port_translation_map);
-    if (!app_db_entry_statusor.ok()) {
-      fail_on_first_error = true;
-      *entry_status = GetIrUpdateStatus(app_db_entry_statusor.status());
-      continue;
+    if (!app_db_entry.ok()) {
+      entry_status = GetIrUpdateStatus(app_db_entry.status());
+      break;
     }
-    sonic::AppDbEntry app_db_entry = *app_db_entry_statusor;
 
-    has_duplicates |= keys_in_request.contains(app_db_entry.table_entry_key);
-    keys_in_request.insert(app_db_entry.table_entry_key);
+    if (keys_in_request.contains(app_db_entry->table_entry_key)) {
+      // We will rewrite all responses below; no need to set entry_status here.
+      has_duplicates = true;
+      break;
+    }
+    keys_in_request.insert(app_db_entry->table_entry_key);
 
     // Verify the entry exists (for MODIFY/DELETE) or not exists (for DELETE)
     // against the cache.
-    absl::Status cache_verify_status =
-        VerifyTableCacheForExistence(table_cache, app_db_entry);
-    if (!cache_verify_status.ok()) {
-      fail_on_first_error = true;
-      *entry_status = GetIrUpdateStatus(cache_verify_status);
-      continue;
+    if (absl::Status cache_verification =
+            VerifyTableCacheForExistence(table_cache, *app_db_entry);
+        !cache_verification.ok()) {
+      entry_status = GetIrUpdateStatus(cache_verification);
+      break;
     }
 
-    auto resource_change = VerifyCapacityAndGetTableResourceChange(
-        p4_info, app_db_entry, table_cache, capacity_by_action_profile_name,
-        resources_in_batch);
+    absl::StatusOr<sonic::TableResources> resource_change =
+        VerifyCapacityAndGetTableResourceChange(
+            p4_info, *app_db_entry, table_cache,
+            capacity_by_action_profile_name, resources_in_batch);
     if (!resource_change.ok()) {
-      fail_on_first_error = true;
-      *entry_status = GetIrUpdateStatus(resource_change.status());
-      continue;
-    } else if (resource_change->action_profile.has_value()) {
+      entry_status = GetIrUpdateStatus(resource_change.status());
+      break;
+    }
+
+    entry_status = GetIrUpdateStatus(absl::OkStatus());
+    if (resource_change->action_profile.has_value()) {
       // When accounting for the total batch resources we do not assume a MODIFY
       // or DELETE will succeed. So if a request would free resources we act as
       // if it does not (i.e. max of 0).
       resources_in_batch[resource_change->action_profile->name] +=
           resource_change->action_profile->total_weight;
     }
-    app_db_entry.resource_utilization_change = *resource_change;
-
-    app_db_entry.rpc_index = response->statuses_size() - 1;
-    ir_updates.entries.push_back(app_db_entry);
+    app_db_entry->resource_utilization_change = *resource_change;
+    app_db_entry->rpc_index = response->statuses_size() - 1;
+    ir_updates.entries.push_back(*app_db_entry);
     ++ir_updates.total_rpc_updates;
-    *entry_status = GetIrUpdateStatus(cache_verify_status);
   }
 
-  // Check if duplicate requests exist in the batch, if so, mark the
-  // first one invalid and the rest as aborted.
+  // Abandon the whole write request if any duplicate was found in the batch.
   if (has_duplicates) {
-    *response->mutable_statuses(0) = GetIrUpdateStatus(
-        gutil::InvalidArgumentErrorBuilder()
-        << "[P4RT App] Found duplicated key in the same batch request.");
-
-    for (int i = 1; i < response->statuses_size(); i++) {
-      *response->mutable_statuses(i) =
-          GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
-    }
-
-    // Erase all app_db entries since the whole batch is invalid.
+    response->clear_statuses();
+    *response->add_statuses() = GetIrUpdateStatus(
+        absl::StatusCode::kInvalidArgument,
+        "[P4RT App] Found duplicated key in the same batch request.");
     ir_updates.entries.clear();
     ir_updates.total_rpc_updates = 0;
+  }
+
+  // Mark any remaining unprocessed updates as aborted.
+  const pdpi::IrUpdateStatus kAborted =
+      GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+  for (int i = response->statuses().size(); i < request.updates().size(); ++i) {
+    *response->add_statuses() = kAborted;
   }
 
   return ir_updates;

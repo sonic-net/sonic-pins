@@ -8,6 +8,10 @@ tables {
     parameters { name: "route_metadata" bitwidth: 6 }
   }
   actions {
+    name: "set_multicast_group_id"
+    parameters { name: "multicast_group_id" format: HEX_STRING }
+  }
+  actions {
     name: "set_nexthop_id"
     parameters { name: "nexthop_id" format: STRING }
   }
@@ -35,6 +39,10 @@ tables {
   actions {
     name: "set_metadata_and_drop"
     parameters { name: "route_metadata" bitwidth: 6 }
+  }
+  actions {
+    name: "set_multicast_group_id"
+    parameters { name: "multicast_group_id" format: HEX_STRING }
   }
   actions {
     name: "set_nexthop_id"
@@ -82,6 +90,15 @@ tables {
     parameters { name: "src_mac" format: MAC }
     parameters { name: "tos" bitwidth: 8 }
     parameters { name: "ttl" bitwidth: 8 }
+  }
+}
+tables {
+  name: "multicast_source_mac_table"
+  match_fields { name: "multicast_replica_port" format: STRING type: EXACT }
+  match_fields { name: "multicast_replica_instance" format: STRING type: EXACT }
+  actions {
+    name: "set_multicast_src_mac"
+    parameters { name: "src_mac" format: MAC }
   }
 }
 tables {

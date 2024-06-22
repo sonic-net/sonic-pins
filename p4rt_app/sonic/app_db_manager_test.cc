@@ -20,6 +20,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "glog/logging.h"
+#include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "google/rpc/code.pb.h"
 #include "gtest/gtest.h"
@@ -48,6 +49,7 @@ using ::testing::DoAll;
 using ::testing::Eq;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::StrictMock;
 
 const std::vector<std::pair<std::string, std::string>>&
 GetSuccessfulResponseValues() {
@@ -63,7 +65,7 @@ class AppDbManagerTest : public ::testing::Test {
     auto p4rt_notification_producer =
         std::make_unique<MockNotificationProducerAdapter>();
     auto p4rt_notifier = std::make_unique<MockConsumerNotifierAdapter>();
-    auto p4rt_app_db = std::make_unique<MockTableAdapter>();
+    auto p4rt_app_db = std::make_unique<StrictMock<MockTableAdapter>>();
     auto p4rt_counter_db = std::make_unique<MockTableAdapter>();
     auto vrf_producer_state = std::make_unique<MockProducerStateTableAdapter>();
 
@@ -92,7 +94,7 @@ class AppDbManagerTest : public ::testing::Test {
   // Mock AppDb tables.
   MockNotificationProducerAdapter* mock_p4rt_notification_producer_;
   MockConsumerNotifierAdapter* mock_p4rt_notifier_;
-  MockTableAdapter* mock_p4rt_app_db_;
+  StrictMock<MockTableAdapter>* mock_p4rt_app_db_;
   MockTableAdapter* mock_p4rt_counter_db_;
   P4rtTable mock_p4rt_table_;
   VrfTable mock_vrf_table_;
@@ -321,6 +323,7 @@ TEST_F(AppDbManagerTest, ReadTableAclEntryWithoutCounterData) {
                                 .AddMatchField("ether_type", "0x0800&0xFFFF")
                                 .SetAction("drop");
 
+  EXPECT_CALL(*mock_p4rt_app_db_, getTablePrefix());
   EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
       .WillOnce(Return(app_db_entry.GetValueList()));
 
@@ -355,6 +358,7 @@ TEST_F(AppDbManagerTest, ReadAclTableEntryWithCounterData) {
                                 .AddMatchField("ether_type", "0x0800&0xFFFF")
                                 .SetAction("drop");
 
+  EXPECT_CALL(*mock_p4rt_app_db_, getTablePrefix());
   EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
       .WillOnce(Return(app_db_entry.GetValueList()));
 
@@ -399,6 +403,7 @@ TEST_F(AppDbManagerTest, ReadAclTableEntryIgnoresInvalidCounterData) {
                                 .AddMatchField("ether_type", "0x0800&0xFFFF")
                                 .SetAction("drop");
 
+  EXPECT_CALL(*mock_p4rt_app_db_, getTablePrefix());
   EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
       .WillOnce(Return(app_db_entry.GetValueList()));
 
