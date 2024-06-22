@@ -1732,13 +1732,20 @@ StatusOr<IrReadResponse> PiReadResponseToIr(
     const IrP4Info &info, const p4::v1::ReadResponse &read_response,
     TranslationOptions options) {
   IrReadResponse result;
+  std::vector<std::string> invalid_reasons;
   for (const auto &entity : read_response.entities()) {
-    if (!entity.has_table_entry()) {
-      return UnimplementedErrorBuilder()
-             << "Only table entries are supported in ReadResponse.";
+    absl::StatusOr<pdpi::IrEntity> ir_entity = PiEntityToIr(info, entity);
+    if (!ir_entity.ok()) {
+      invalid_reasons.push_back(
+          gutil::StableStatusToString(ir_entity.status()));
+      continue;
     }
-    ASSIGN_OR_RETURN(*result.add_table_entries(),
-                     PiTableEntryToIr(info, entity.table_entry(), options));
+    *result.add_entities() = std::move(*ir_entity);
+  }
+
+  if (!invalid_reasons.empty()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "Read response", absl::StrJoin(invalid_reasons, "\n")));
   }
   return result;
 }
@@ -2173,14 +2180,14 @@ StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
     TranslationOptions options) {
   p4::v1::ReadResponse result;
   std::vector<std::string> invalid_reasons;
-  for (const auto &entity : read_response.table_entries()) {
-    const absl::StatusOr<p4::v1::TableEntry> &table_entry =
-        IrTableEntryToPi(info, entity, options);
-    if (!table_entry.ok()) {
-      invalid_reasons.push_back(std::string(table_entry.status().message()));
+  for (const auto &entity : read_response.entities()) {
+    absl::StatusOr<p4::v1::Entity> pi_entity = IrEntityToPi(info, entity);
+    if (!pi_entity.ok()) {
+      invalid_reasons.push_back(
+          std::string(gutil::StableStatusToString(pi_entity.status())));
       continue;
     }
-    *result.add_entities()->mutable_table_entry() = *table_entry;
+    *result.add_entities() = std::move(*pi_entity);
   }
 
   if (!invalid_reasons.empty()) {

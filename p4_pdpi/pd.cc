@@ -1388,21 +1388,21 @@ absl::Status IrReadResponseToPd(const IrP4Info &info, const IrReadResponse &ir,
                                 google::protobuf::Message *read_response,
                                 TranslationOptions options) {
   std::vector<std::string> invalid_reasons;
-  for (const auto &ir_table_entry : ir.table_entries()) {
-    const absl::StatusOr<const FieldDescriptor *> &table_entries_descriptor =
+  for (const auto &ir_entity : ir.entities()) {
+    absl::StatusOr<const FieldDescriptor *> table_entries_descriptor =
         GetFieldDescriptor(*read_response, "table_entries");
     if (!table_entries_descriptor.ok()) {
       invalid_reasons.push_back(
           absl::StrCat(table_entries_descriptor.status().message()));
       continue;
     }
-    const auto &table_entry_status =
-        IrTableEntryToPd(info, ir_table_entry,
-                         read_response->GetReflection()->AddMessage(
-                             read_response, *table_entries_descriptor),
-                         options);
-    if (!table_entry_status.ok()) {
-      invalid_reasons.push_back(std::string(table_entry_status.message()));
+    absl::Status status =
+        IrEntityToPdTableEntry(info, ir_entity,
+                               read_response->GetReflection()->AddMessage(
+                                   read_response, *table_entries_descriptor),
+                               options);
+    if (!status.ok()) {
+      invalid_reasons.push_back(gutil::StableStatusToString(status));
       continue;
     }
   }
@@ -2310,7 +2310,8 @@ absl::StatusOr<IrReadResponse> PdReadResponseToIr(
       invalid_reasons.push_back(std::string(table_entry.status().message()));
       continue;
     }
-    *ir_response.add_table_entries() = *table_entry;
+    *ir_response.add_entities()->mutable_table_entry() =
+        std::move(*table_entry);
   }
   if (!invalid_reasons.empty()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
