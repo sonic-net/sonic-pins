@@ -156,6 +156,10 @@ absl::StatusOr<grpc::Status> PdWriteRpcStatusToGrpcStatus(
 
 // -- Conversions from IR (intermediate representation) to PD ------------------
 
+absl::Status IrEntityToPdTableEntry(const IrP4Info &info, const IrEntity &ir,
+                                    google::protobuf::Message *pd,
+                                    TranslationOptions options = {});
+
 absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
                               google::protobuf::Message *pd,
                               TranslationOptions options = {});

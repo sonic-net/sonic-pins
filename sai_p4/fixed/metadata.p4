@@ -202,7 +202,7 @@ struct local_metadata_t {
   bool apply_tunnel_encap_at_egress;
   ipv6_addr_t tunnel_encap_src_ipv6;
   ipv6_addr_t tunnel_encap_dst_ipv6;
-  // mirroring data, we can't group the into a struct, because BMv2 doesn't
+  // mirroring data, we can't group them into a struct, because BMv2 doesn't
   // support passing structs in clone3.
   bool mirror_session_id_valid;
   mirror_session_id_t mirror_session_id_value;

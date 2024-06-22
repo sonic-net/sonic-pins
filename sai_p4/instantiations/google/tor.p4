@@ -19,8 +19,6 @@
 #include "roles.h"
 #include "bitwidths.p4"
 #include "minimum_guaranteed_sizes.p4"
-
-#include "../../fixed/packet_io.p4"
 #include "../../fixed/headers.p4"
 #include "../../fixed/metadata.p4"
 #include "../../fixed/parser.p4"
@@ -35,16 +33,12 @@
 #include "../../fixed/drop_martians.p4"
 #include "../../fixed/packet_rewrites.p4"
 #include "acl_egress.p4"
-#include "acl_egress_dhcp_to_host.p4"
 #include "acl_ingress.p4"
-#include "acl_ingress_qos.p4"
 #include "acl_pre_ingress.p4"
-#include "acl_pre_ingress_metadata.p4"
-#include "acl_pre_ingress_vlan.p4"
 #include "admit_google_system_mac.p4"
 //#include "hashing.p4"
 #include "ids.h"
-//#include "versions.h"
+#include "versions.h" 
 
 control ingress(inout headers_t headers,
                 inout local_metadata_t local_metadata,
@@ -56,9 +50,6 @@ control ingress(inout headers_t headers,
       // the pre-ingress metadata for certain types of traffic we want to handle
       // uniquely in later stages.
       vlan_untag.apply(headers, local_metadata, standard_metadata);
-      acl_pre_ingress_vlan.apply(headers, local_metadata, standard_metadata);
-      acl_pre_ingress_metadata.apply(
-          headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
 
       // Standard L3 pipeline for routing packets.
@@ -71,7 +62,6 @@ control ingress(inout headers_t headers,
       // The INGRESS stage can redirect (e.g. drop, punt or copy) packets, apply
       // rate-limits or modify header data.
       acl_ingress.apply(headers, local_metadata, standard_metadata);
-      acl_ingress_qos.apply(headers, local_metadata, standard_metadata);
       ttl.apply(headers, local_metadata, standard_metadata);
       mirroring_clone.apply(headers, local_metadata, standard_metadata);
     }
@@ -86,8 +76,6 @@ control egress(inout headers_t headers,
     mirroring_encap.apply(headers, local_metadata, standard_metadata);
     packet_in_encap.apply(headers, local_metadata, standard_metadata);
     acl_egress.apply(headers, local_metadata, standard_metadata);
-    // TODO: Not enough SAI resources for the second EFP bank.
-    // acl_egress_dhcp_to_host.apply(headers, local_metadata, standard_metadata);
     vlan_tag.apply(headers, local_metadata, standard_metadata);
   }
 }  // control egress
