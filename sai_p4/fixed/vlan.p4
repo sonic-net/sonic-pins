@@ -86,16 +86,46 @@ control ingress_vlan_checks(inout headers_t headers,
 control egress_vlan_checks(inout headers_t headers,
                            inout local_metadata_t local_metadata,
                            inout standard_metadata_t standard_metadata) {
+  port_id_t port = (port_id_t)standard_metadata.egress_port;
+  bool egress_port_is_member_of_vlan = false;
+
+  @id(VLAN_MAKE_TAGGED_MEMBER_ACTION_ID)
+  action make_tagged_member() {
+    egress_port_is_member_of_vlan = true;
+  }
+
+  @id(VLAN_MAKE_UNTAGGED_MEMBER_ACTION_ID)
+  action make_untagged_member() {
+    egress_port_is_member_of_vlan = true;
+    local_metadata.omit_vlan_tag_on_egress_packet = true;
+  }
+
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(VLAN_MEMBERSHIP_TABLE_ID)
+  // TODO: Remove @unsupported once the table is supported in SWSS.
+  @unsupported
+  table vlan_membership_table {
+    key = {
+      local_metadata.vlan_id : exact
+        @id(1) @name("vlan_id");
+      port: exact
+        @id(2) @name("port");
+    }
+    actions = {
+      @proto_id(1) make_tagged_member;
+      @proto_id(2) make_untagged_member;
+      @defaultonly NoAction;
+    }
+  }
+
   apply {
-    if (local_metadata.enable_vlan_checks) {
-      // For mirrored-encapped packets, the encapped VLAN header's VLAN ID
-      // metadata is different from that of normal VLAN header.
-      if (IS_MIRROR_COPY(standard_metadata) &&
-          !IS_RESERVED_VLAN_ID(local_metadata.mirror_encap_vlan_id)) {
+    if (!IS_PACKET_IN_COPY(standard_metadata) &&
+        !IS_MIRROR_COPY(standard_metadata)) {
+      vlan_membership_table.apply();
+      if (local_metadata.enable_vlan_checks &&
+          !egress_port_is_member_of_vlan &&
+          !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
         mark_to_drop(standard_metadata);
-      } else if (!IS_PACKET_IN_COPY(standard_metadata) &&
-                 !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
-          mark_to_drop(standard_metadata);
       }
     }
   }
@@ -107,7 +137,8 @@ control vlan_tag(inout headers_t headers,
                  inout standard_metadata_t standard_metadata) {
   apply {
     if (!IS_RESERVED_VLAN_ID(local_metadata.vlan_id) &&
-        !IS_MIRROR_COPY(standard_metadata)) {
+        !IS_MIRROR_COPY(standard_metadata) &&
+        !local_metadata.omit_vlan_tag_on_egress_packet) {
       // Mirroring encapsulates a series of headers, including a VLAN header.
       // To seperate concerns, vlan encapping for mirroring is skipped here.
       headers.vlan.setValid();
