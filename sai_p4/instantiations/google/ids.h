@@ -38,13 +38,18 @@
 #define ACL_INGRESS_EXPERIMENTAL_TRAP_ACTION_ID 0x01000199     // 16777625
 #define ACL_INGRESS_FORWARD_ACTION_ID 0x01000103               // 16777475
 #define ACL_INGRESS_MIRROR_ACTION_ID 0x01000104                // 16777476
-#define ACL_INGRESS_RATE_LIMIT_COPY_ACTION_ID 0x0100010C       // 16777484
-#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107              // 16777479
-#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108              // 16777480
-#define ACL_DROP_ACTION_ID 0x01000109                          // 16777481
+#define ACL_INGRESS_SET_QOS_QUEUE_AND_CANCEL_COPY_ABOVE_RATE_LIMIT_ACTION_ID \
+  0x0100010C  // 16777484
+#define ACL_INGRESS_SET_QOS_QUEUE_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID \
+  0x0100010E                                       // 16777486
+#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D    // 16777485
+#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107  // 16777479
+#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108  // 16777480
+#define ACL_DROP_ACTION_ID 0x01000109              // 16777481
 
 // --- Meters ------------------------------------------------------------------
 #define ACL_INGRESS_METER_ID 0x15000100      // 352321792
+#define ACL_INGRESS_QOS_METER_ID 0x15000102  // 352321794
 #define ACL_WBB_INGRESS_METER_ID 0x15000101  // 352321793
 
 // --- Counters ----------------------------------------------------------------
@@ -66,19 +71,5 @@
 
 // Indicates that the program has packet in support.
 #define SAI_P4_PKGINFO_VERSION_HAS_PACKET_IN_SUPPORT "1.1.0"
-
-// --- PkgInfo versions --------------------------------------------------------
-// For use in `@pkginfo(..., version = VERSION)` annotations.
-// We use semantic versioning. Version numbers must increase monotonically.
-
-// Indicates that the program has packet out support.
-#define SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT "1.0.0"
-
-// Indicates that the program has packet in support.
-#define SAI_P4_PKGINFO_VERSION_HAS_PACKET_IN_SUPPORT "1.1.0"
-
-// Macros that always points to the latest SAI P4 version.
-#define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_HAS_PACKET_IN_SUPPORT
 
 #endif  // GOOGLE_SAI_IDS_H_
