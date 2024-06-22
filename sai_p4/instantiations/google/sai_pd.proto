@@ -545,7 +545,9 @@ message AclIngressCountingTableEntry {
   }
   Action action = 2;
   int32 priority = 3;
+  BytesMeterConfig meter_config = 4;
   BytesAndPacketsCounterData counter_data = 6;
+  MeterBytesAndPacketsCounterData meter_counter_data = 9;
   bytes controller_metadata = 8;
 }
 

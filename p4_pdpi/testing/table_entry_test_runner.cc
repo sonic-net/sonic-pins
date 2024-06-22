@@ -27,78 +27,72 @@
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/testing/test_helper.h"
 #include "p4_pdpi/testing/union_main_p4_pd.pb.h"
+#include "p4_pdpi/translation_options.h"
 
 using ::p4::config::v1::P4Info;
 
+// Used to configure an IrTableEntryTest.
+struct IrTestConfig {
+  // Whether the test is expected to fail or not.
+  InputValidity validity = INPUT_IS_INVALID;
+  // Whether IR->PD should be tested or not.
+  bool test_ir_to_pd = true;
+};
+
 static void RunPiTableEntryTest(const pdpi::IrP4Info& info,
                                 const std::string& test_name,
-                                const p4::v1::TableEntry& pi) {
+                                const p4::v1::TableEntry& pi,
+                                InputValidity validity = INPUT_IS_INVALID) {
   RunGenericPiTest<pdpi::IrTableEntry, p4::v1::TableEntry>(
       info, test_name, pi,
       [](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi) {
-        return pdpi::PiTableEntryToIr(info, pi, false);
-      });
+        return pdpi::PiTableEntryToIr(info, pi);
+      },
+      validity);
 }
 
 static void RunIrTableEntryTest(const pdpi::IrP4Info& info,
                                 const std::string& test_name,
                                 const pdpi::IrTableEntry& ir,
-                                bool test_ir_to_pd = true) {
+                                IrTestConfig config = IrTestConfig()) {
   RunGenericIrToPiTest<pdpi::IrTableEntry, p4::v1::TableEntry>(
       info, absl::StrCat(test_name, " (IR -> PI)"), ir,
       [](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir) {
-        return pdpi::IrTableEntryToPi(info, ir, false);
-      });
-  if (test_ir_to_pd) {
+        return pdpi::IrTableEntryToPi(info, ir);
+      },
+      config.validity);
+  if (config.test_ir_to_pd) {
     RunGenericIrToPdTest<pdpi::IrTableEntry, pdpi::TableEntry>(
         info, absl::StrCat(test_name, " (IR -> PD)"), ir,
         [](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir,
            google::protobuf::Message* pd) {
-          return pdpi::IrTableEntryToPd(info, ir, pd, false);
-        });
+          return pdpi::IrTableEntryToPd(info, ir, pd);
+        },
+        config.validity);
   }
 }
 
 static void RunPdTableEntryTest(const pdpi::IrP4Info& info,
-                                const std::string& test_name,
+                                std::string test_name,
                                 const pdpi::TableEntry& pd,
-                                InputValidity validity, bool key_only = false) {
+                                InputValidity validity,
+                                pdpi::TranslationOptions options = {}) {
+  absl::StrAppend(&test_name, "\n", options);
   RunGenericPdTest<pdpi::TableEntry, pdpi::IrTableEntry, p4::v1::TableEntry>(
-      info, test_name, pd,
-      [&](const pdpi::IrP4Info& ir_p4info,
-          const google::protobuf::Message& pd) {
-        return pdpi::PdTableEntryToIr(ir_p4info, pd, key_only);
-      },
-      [&](const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntry& ir,
-          google::protobuf::Message* pd) {
-        return pdpi::IrTableEntryToPd(ir_p4info, ir, pd, key_only);
-      },
-      [&](const pdpi::IrP4Info& info, const pdpi::IrTableEntry& ir) {
-        return pdpi::IrTableEntryToPi(info, ir, key_only);
-      },
-      [&](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi) {
-        return pdpi::PiTableEntryToIr(info, pi, key_only);
-      },
-      [&](const pdpi::IrP4Info& info, const google::protobuf::Message& pd) {
-        return pdpi::PdTableEntryToPi(info, pd, key_only);
-      },
-      [&](const pdpi::IrP4Info& info, const p4::v1::TableEntry& pi,
-          google::protobuf::Message* pd) {
-        return pdpi::PiTableEntryToPd(info, pi, pd, key_only);
-      },
-      validity,
+      info, test_name, pd, options, pdpi::PdTableEntryToIr,
+      pdpi::IrTableEntryToPd, pdpi::IrTableEntryToPi, pdpi::PiTableEntryToIr,
+      pdpi::PdTableEntryToPi, pdpi::PiTableEntryToPd, validity,
+      /*relevant_pd_fields=*/
       [&](const pdpi::IrP4Info& info, const pdpi::TableEntry& pd) {
-        if (key_only) {
-          pdpi::TableEntry key_only_pd;
-          auto res = pdpi::PdTableEntryToOnlyKeyPd(info, pd, &key_only_pd);
-          if (res.ok()) {
-            return key_only_pd;
-          } else {
-            Fail(test_name,
-                 "Unable to extract only the key part from PD table entry");
-          }
+        if (!options.key_only) return pd;
+        pdpi::TableEntry key_only_pd;
+        absl::Status status =
+            pdpi::PdTableEntryToOnlyKeyPd(info, pd, &key_only_pd);
+        if (!status.ok()) {
+          Fail(test_name,
+               "Unable to extract only the key part from PD table entry");
         }
-        return pd;
+        return key_only_pd;
       });
 }
 
@@ -675,6 +669,26 @@ static void RunPiTests(const pdpi::IrP4Info info) {
         counter_data { byte_count: 567 packet_count: 789 }
         meter_counter_data {}
       )pb"));
+  RunPiTableEntryTest(info, "simple valid table translation",
+                      gutil::ParseProtoOrDie<p4::v1::TableEntry>(R"pb(
+                        table_id: 33554433
+                        match {
+                          field_id: 1
+                          exact { value: "\377\"" }
+                        }
+                        match {
+                          field_id: 2
+                          exact { value: "\020$2R" }
+                        }
+                        action {
+                          action {
+                            action_id: 16777217
+                            params { param_id: 1 value: "\010" }
+                            params { param_id: 2 value: "\t" }
+                          }
+                        }
+                      )pb"),
+                      /*validity=*/INPUT_IS_VALID);
 }  // NOLINT(readability/fn_size)
 
 static void RunIrNoActionTableTests(const pdpi::IrP4Info& info) {
@@ -767,8 +781,10 @@ static void RunIrMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
                           red { byte_count: 570 packet_count: 792 }
                         }
                       )pb"),
-                      // Not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
   RunIrTableEntryTest(info, "meter counter data but missing meter config",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
                         table_name: "count_and_meter_table"
@@ -787,8 +803,10 @@ static void RunIrMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
                           red { byte_count: 570 packet_count: 792 }
                         }
                       )pb"),
-                      // Not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 }
 
 static void RunIrTests(const pdpi::IrP4Info info) {
@@ -800,12 +818,14 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         table_name: "invalid"
                       )pb"));
 
-  RunIrTableEntryTest(info, "missing matches",
-                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-                        table_name: "id_test_table"
-                      )pb"),
-                      // Missing matches are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+  RunIrTableEntryTest(
+      info, "missing matches", gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "id_test_table"
+      )pb"),
+      IrTestConfig{
+          // Missing matches are not currently checked for IR->PD.
+          .test_ir_to_pd = false,
+      });
 
   RunIrTableEntryTest(info, "invalid match type - expect exact",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -818,8 +838,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Match types are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Match types are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "invalid match type - expect optional",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -832,8 +854,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Match types are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Match types are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "invalid match type - expect lpm",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -846,8 +870,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Match types are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Match types are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "invalid match type - expect ternary",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -858,8 +884,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                         priority: 32
                       )pb"),
-                      // Match types are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Match types are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(
       info, "invalid value - address not in bounds for upper 64 bits of ipv6",
@@ -874,8 +902,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
         }
         priority: 32
       )pb"),
-      // Bitwidths are not currently checked for IR->PD.
-      /*test_ir_to_pd=*/false);
+      IrTestConfig{
+          // Bitwidths are not currently checked for IR->PD.
+          .test_ir_to_pd = false,
+      });
 
   RunIrTableEntryTest(
       info, "invalid value - address not in bounds for upper 63 bits of ipv6",
@@ -890,8 +920,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
         }
         priority: 32
       )pb"),
-      // Bitwidths are not currently checked for IR->PD.
-      /*test_ir_to_pd=*/false);
+      IrTestConfig{
+          // Bitwidths are not currently checked for IR->PD.
+          .test_ir_to_pd = false,
+      });
 
   RunIrTableEntryTest(
       info, "invalid match field name",
@@ -902,8 +934,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
           exact { ipv6: "::ff22" }
         }
       )pb"),
-      // Invalid match field names are not currently checked for IR->PD.
-      /*test_ir_to_pd=*/false);
+      IrTestConfig{
+          // Invalid match field names are not currently checked for IR->PD.
+          .test_ir_to_pd = false,
+      });
 
   RunIrTableEntryTest(info, "invalid IR value",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -913,8 +947,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           exact { ipv6: "::ff22" }
                         }
                       )pb"),
-                      // Formats are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Formats are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "invalid prefix length",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -927,8 +963,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Formats are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Formats are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "duplicate match field name",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -942,8 +980,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           exact { ipv4: "10.24.32.52" }
                         }
                       )pb"),
-                      // Duplicates are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Duplicates are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "lpm value - masked bits set",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -956,8 +996,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Formats are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Formats are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "ternary value too long",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -971,8 +1013,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                         priority: 32
                       )pb"),
-                      // Formats are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Formats are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "ternary value and mask too long",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -986,8 +1030,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                         priority: 32
                       )pb"),
-                      // Formats are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Formats are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "ternary value - masked bits set",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1001,8 +1047,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                         priority: 32
                       )pb"),
-                      // Formats are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Formats are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "Invalid match field format",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1016,23 +1064,27 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                         priority: 32
                       )pb"),
-                      // Formats are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Formats are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
-  RunIrTableEntryTest(info, "missing action",
-                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-                        table_name: "id_test_table"
-                        matches {
-                          name: "ipv6"
-                          exact { ipv6: "::ff22" }
-                        }
-                        matches {
-                          name: "ipv4"
-                          exact { ipv4: "10.24.32.52" }
-                        }
-                      )pb"),
-                      // Missing actions are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+  RunIrTableEntryTest(
+      info, "missing action", gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "id_test_table"
+        matches {
+          name: "ipv6"
+          exact { ipv6: "::ff22" }
+        }
+        matches {
+          name: "ipv4"
+          exact { ipv4: "10.24.32.52" }
+        }
+      )pb"),
+      IrTestConfig{
+          // Missing actions are not currently checked for IR->PD.
+          .test_ir_to_pd = false,
+      });
 
   RunIrTableEntryTest(info, "missing action name",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1062,53 +1114,59 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         action { name: "invalid" }
                       )pb"));
 
-  RunIrTableEntryTest(info, "missing action params",
-                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-                        table_name: "id_test_table"
-                        matches {
-                          name: "ipv6"
-                          exact { ipv6: "::ff22" }
-                        }
-                        matches {
-                          name: "ipv4"
-                          exact { ipv4: "10.24.32.52" }
-                        }
-                        action {
-                          name: "do_thing_1"
-                          params {
-                            name: "arg2"
-                            value { hex_str: "0x01234567" }
-                          }
-                        }
-                      )pb"),
-                      // Action parameters are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+  RunIrTableEntryTest(
+      info, "missing action params",
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "id_test_table"
+        matches {
+          name: "ipv6"
+          exact { ipv6: "::ff22" }
+        }
+        matches {
+          name: "ipv4"
+          exact { ipv4: "10.24.32.52" }
+        }
+        action {
+          name: "do_thing_1"
+          params {
+            name: "arg2"
+            value { hex_str: "0x01234567" }
+          }
+        }
+      )pb"),
+      IrTestConfig{
+          // Action parameters are not currently checked for IR->PD.
+          .test_ir_to_pd = false,
+      });
 
-  RunIrTableEntryTest(info, "duplicate action param name",
-                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
-                        table_name: "id_test_table"
-                        matches {
-                          name: "ipv6"
-                          exact { ipv6: "::ff22" }
-                        }
-                        matches {
-                          name: "ipv4"
-                          exact { ipv4: "10.24.32.52" }
-                        }
-                        action {
-                          name: "do_thing_1"
-                          params {
-                            name: "arg2"
-                            value { hex_str: "0x01234567" }
-                          }
-                          params {
-                            name: "arg2"
-                            value { hex_str: "0x01234568" }
-                          }
-                        }
-                      )pb"),
-                      // Action parameters are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+  RunIrTableEntryTest(
+      info, "duplicate action param name",
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "id_test_table"
+        matches {
+          name: "ipv6"
+          exact { ipv6: "::ff22" }
+        }
+        matches {
+          name: "ipv4"
+          exact { ipv4: "10.24.32.52" }
+        }
+        action {
+          name: "do_thing_1"
+          params {
+            name: "arg2"
+            value { hex_str: "0x01234567" }
+          }
+          params {
+            name: "arg2"
+            value { hex_str: "0x01234568" }
+          }
+        }
+      )pb"),
+      IrTestConfig{
+          // Action parameters are not currently checked for IR->PD.
+          .test_ir_to_pd = false,
+      });
 
   RunIrTableEntryTest(
       info, "bad action param format",
@@ -1134,8 +1192,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
           }
         }
       )pb"),
-      // Action parameter formats are not currently checked for IR->PD.
-      /*test_ir_to_pd=*/false);
+      IrTestConfig{
+          // Action parameter formats are not currently checked for IR->PD.
+          .test_ir_to_pd = false,
+      });
 
   RunIrTableEntryTest(info, "invalid action param name",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1189,8 +1249,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Actions are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Actions are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "action in table with action set",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1214,8 +1276,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Actions are not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Actions are not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "zero lpm prefix length",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1229,8 +1293,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                         action { name: "NoAction" }
                       )pb"),
-                      // Not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "zero ternary mask",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1276,8 +1342,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "empty bytestring in action parameter",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1314,8 +1382,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "zero priority",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1429,8 +1499,10 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                           }
                         }
                       )pb"),
-                      // Not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
 
   RunIrTableEntryTest(info, "action set with invalid action",
                       gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
@@ -1488,11 +1560,40 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                         }
                         counter_data { byte_count: 4213 }
                       )pb"),
-                      // Not currently checked for IR->PD.
-                      /*test_ir_to_pd=*/false);
+                      IrTestConfig{
+                          // Not currently checked for IR->PD.
+                          .test_ir_to_pd = false,
+                      });
   RunIrNoActionTableTests(info);
   RunIrTernaryTableTests(info);
   RunIrMeterCounterTableEntryTests(info);
+  // Example test for INPUT_IS_VALID setting.
+  RunIrTableEntryTest(info, "valid table translation with INPUT_IS_VALID set",
+                      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+                        table_name: "id_test_table"
+                        matches {
+                          name: "ipv6"
+                          exact { ipv6: "::ff22" }
+                        }
+                        matches {
+                          name: "ipv4"
+                          exact { ipv4: "16.36.50.82" }
+                        }
+                        action {
+                          name: "do_thing_1"
+                          params {
+                            name: "arg2"
+                            value { hex_str: "0x00000008" }
+                          }
+                          params {
+                            name: "arg1"
+                            value { hex_str: "0x00000009" }
+                          }
+                        }
+                      )pb"),
+                      IrTestConfig{
+                          .validity = INPUT_IS_VALID,
+                      });
 }  // NOLINT(readability/fn_size)
 
 static void RunPdMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
@@ -2110,7 +2211,8 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
                         id_test_table_entry {}
                       )pb"),
-                      INPUT_IS_INVALID, /*key_only=*/true);
+                      INPUT_IS_INVALID,
+                      pdpi::TranslationOptions{.key_only = true});
 
   RunPdTableEntryTest(
       info, "ternary table with priority absent with key_only=true",
@@ -2125,7 +2227,7 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
           action { do_thing_3 { arg1: "0x01234567" arg2: "0x01234568" } }
         }
       )pb"),
-      INPUT_IS_INVALID, /*key_only=*/true);
+      INPUT_IS_INVALID, pdpi::TranslationOptions{.key_only = true});
 
   RunPdTableEntryTest(
       info, "unsupported table used",
@@ -2133,6 +2235,12 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
         unsupported_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
       )pb"),
       INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "unsupported table used",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        unsupported_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
+      )pb"),
+      INPUT_IS_VALID, pdpi::TranslationOptions{.allow_unsupported = true});
 
   RunPdTableEntryTest(info, "ternary table - unsupported action used",
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
@@ -2143,16 +2251,37 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
                         }
                       )pb"),
                       INPUT_IS_INVALID);
-
-  RunPdTableEntryTest(info, "ternary table - unsupported match field used",
+  RunPdTableEntryTest(info, "ternary table - unsupported action used",
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
                         ternary_table_entry {
-                          match { unsupported_field { value: "0x052" } }
+                          match { normal { value: "0x052" mask: "0x273" } }
                           priority: 32
-                          action { do_thing_3 { arg1: "0x23" arg2: "0x0251" } }
+                          action { unsupported_action {} }
                         }
                       )pb"),
-                      INPUT_IS_INVALID);
+                      INPUT_IS_VALID,
+                      pdpi::TranslationOptions{.allow_unsupported = true});
+
+  RunPdTableEntryTest(
+      info, "ternary table - unsupported match field used",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        ternary_table_entry {
+          match { unsupported_field { value: "0x1" mask: "0x1" } }
+          priority: 32
+          action { do_thing_3 { arg1: "0x12345678" arg2: "0x87654321" } }
+        }
+      )pb"),
+      INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "ternary table - unsupported match field used",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        ternary_table_entry {
+          match { unsupported_field { value: "0x1" mask: "0x1" } }
+          priority: 32
+          action { do_thing_3 { arg1: "0x12345678" arg2: "0x87654321" } }
+        }
+      )pb"),
+      INPUT_IS_VALID, pdpi::TranslationOptions{.allow_unsupported = true});
 
   RunPdTableEntryTest(
       info, "ipv4 LPM table with key_only=true",
@@ -2162,7 +2291,7 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
           action { NoAction {} }
         }
       )pb"),
-      INPUT_IS_VALID, /*key_only=*/true);
+      INPUT_IS_VALID, pdpi::TranslationOptions{.key_only = true});
 
   RunPdTableEntryTest(
       info, "ternary match with key_only=true",
@@ -2173,7 +2302,7 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
           action { do_thing_3 { arg1: "0x01234567" arg2: "0x01234568" } }
         }
       )pb"),
-      INPUT_IS_VALID, /*key_only=*/true);
+      INPUT_IS_VALID, pdpi::TranslationOptions{.key_only = true});
 }
 
 int main(int argc, char** argv) {
