@@ -365,8 +365,7 @@ message AclWbbIngressTableEntry {
 //   ether_type != 0x0800 && ether_type != 0x86dd;
 //   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 // ## Only allow IP field matches for IP packets.
-// ## TODO: Enable once p4-constraints bug is fixed.
-// ## ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+//   ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 // ## Only allow l4_dst_port matches for TCP/UDP packets.
 //   l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
 // ## Forbid illegal combinations of IP_TYPE fields.
@@ -593,6 +592,35 @@ message AclIngressSecurityTableEntry {
   Action action = 2;
   int32 priority = 3;
   BytesAndPacketsCounterData counter_data = 6;
+  bytes controller_metadata = 8;
+}
+
+// Table entry restrictions:
+//   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+// ## Forbid illegal combinations of IP_TYPE fields.
+//   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+// ## Forbid unsupported combinations of IP_TYPE fields.
+//   is_ipv4::mask != 0 -> (is_ipv4 == 1);
+//   is_ipv6::mask != 0 -> (is_ipv6 == 1);
+message AclIngressCountingTableEntry {
+  message Match {
+    Optional is_ip = 1;    // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;  // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;  // optional match / Format::HEX_STRING / 1 bits
+    Ternary dscp = 11;     // ternary match / Format::HEX_STRING / 6 bits
+    Ternary route_metadata = 18;  // ternary match / Format::HEX_STRING / 6 bits
+  }
+  Match match = 1;
+  message Action {
+    AclCountAction acl_count = 3;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  BytesMeterConfig meter_config = 4;
+  BytesAndPacketsCounterData counter_data = 6;
+  MeterBytesAndPacketsCounterData meter_counter_data = 9;
   bytes controller_metadata = 8;
 }
 

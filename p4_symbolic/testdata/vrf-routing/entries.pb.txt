@@ -1,0 +1,186 @@
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 37541331
+      match {
+        field_id: 1
+        ternary {
+          value: "\000!\001\000"
+          mask: "\011!\011\011"
+        }
+      }
+      action {
+        action {
+          action_id: 26074559
+          params {
+            param_id: 1
+            value: "VRF2"
+          }
+        }
+      }
+      priority: 2
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 37541331
+      match {
+        field_id: 1
+        ternary {
+          value: "!!\000\000"
+          mask: "!!\011\011"
+        }
+      }
+      action {
+        action {
+          action_id: 26074559
+          params {
+            param_id: 1
+            value: "VRF1"
+          }
+        }
+      }
+      priority: 1
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44809600
+      match {
+        field_id: 1
+        lpm {
+          value: "\n\n\000\000"
+          prefix_len: 16
+        }
+      }
+      match {
+        field_id: 2
+        exact {
+          value: "VRF1"
+        }
+      }
+      action {
+        action {
+          action_id: 27807574
+          params {
+            param_id: 1
+            value: "\000\000\000\000\000\000"
+          }
+          params {
+            param_id: 2
+            value: "\00"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44809600
+      match {
+        field_id: 1
+        lpm {
+          value: "\n\n\000\000"
+          prefix_len: 32
+        }
+      }
+      match {
+        field_id: 2
+        exact {
+          value: "VRF1"
+        }
+      }
+      action {
+        action {
+          action_id: 27807574
+          params {
+            param_id: 1
+            value: "\000\000\000\000\000\000"
+          }
+          params {
+            param_id: 2
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44809600
+      match {
+        field_id: 1
+        lpm {
+          value: "\n\000\000\000"
+          prefix_len: 8
+        }
+      }
+      match {
+        field_id: 2
+        exact {
+          value: "VRF1"
+        }
+      }
+      action {
+        action {
+          action_id: 27807574
+          params {
+            param_id: 1
+            value: "\000\000\000\000\000\n"
+          }
+          params {
+            param_id: 2
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44809600
+      match {
+        field_id: 1
+        lpm {
+          value: "\024\024\000\000"
+          prefix_len: 16
+        }
+      }
+      match {
+        field_id: 2
+        exact {
+          value: "VRF2"
+        }
+      }
+      action {
+        action {
+          action_id: 27807574
+          params {
+            param_id: 1
+            value: "\026\000\000\000\000\026"
+          }
+          params {
+            param_id: 2
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}

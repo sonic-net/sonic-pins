@@ -67,7 +67,7 @@ std::string GetStageName(swss::acl::Stage stage) {
 
 bool IsValidColor(absl::string_view color) {
   return color == "SAI_PACKET_COLOR_GREEN" ||
-         color == "SAI_PACKET_COLOR_YELLOW" | color == "SAI_PACKET_COLOR_RED";
+         color == "SAI_PACKET_COLOR_YELLOW" || color == "SAI_PACKET_COLOR_RED";
 }
 
 // Generates the AppDB DEFINITION:ACL_* Entry key for an ACL table.
