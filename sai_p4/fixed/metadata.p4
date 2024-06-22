@@ -186,12 +186,19 @@ struct packet_rewrites_t {
 
 // Local metadata for each packet being processed.
 struct local_metadata_t {
-  // If true, ingress packets with ingress VID and egress packets with
-  // egress VID besides the reserved ones (0, 4095) get dropped.
+  // When `enable_vlan_checks` is true, if the ingress/egress port is not a
+  // member of the VLAN in ingress/egress pipeline, the packet gets dropped
+  // except for reserved VIDs (0, 4095).
   // This field is preserved after replication since VLAN checks should be
   // applied regardless of instance type of a packet.
   @field_list(PreservedFieldList.MIRROR_AND_PACKET_IN_COPY)
   bool enable_vlan_checks;
+
+  // If true, the egress packet goes out WITHOUT a VLAN tag, otherwise if the
+  // packet does not get dropped (e.g. by egress VLAN filtering, egress ACLs,
+  // etc) it goes out tagged with the VID in the egress pipeline (except for
+  // reserved VIDs 0 and 4095, which are always tagged).
+  bool omit_vlan_tag_on_egress_packet;
 
   // The VLAN ID used for the packet throughout the pipeline. If the input
   // packet has a VLAN tag, the VID from the outer VLAN tag is used
