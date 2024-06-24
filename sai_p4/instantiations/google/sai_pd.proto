@@ -365,7 +365,8 @@ message AclWbbIngressTableEntry {
 //   ether_type != 0x0800 && ether_type != 0x86dd;
 //   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 // ## Only allow IP field matches for IP packets.
-//   ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+// ## TODO: Enable once p4-constraints bug is fixed.
+// ## ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 // ## Only allow l4_dst_port matches for TCP/UDP packets.
 //   l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
 // ## Forbid illegal combinations of IP_TYPE fields.
@@ -460,18 +461,19 @@ message AclPreIngressMetadataTableEntry {
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclIngressQosTableEntry {
   message Match {
-    Optional is_ip = 1;        // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv4 = 2;      // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv6 = 3;      // optional match / Format::HEX_STRING / 1 bits
-    Ternary ether_type = 4;    // ternary match / Format::HEX_STRING / 16 bits
-    Ternary dst_mac = 5;       // ternary match / Format::MAC
-    Ternary dst_ip = 6;        // ternary match / Format::IPV4
-    Ternary ttl = 7;           // ternary match / Format::HEX_STRING / 8 bits
-    Ternary ip_protocol = 8;   // ternary match / Format::HEX_STRING / 8 bits
-    Ternary l4_src_port = 9;   // ternary match / Format::HEX_STRING / 16 bits
-    Ternary l4_dst_port = 10;  // ternary match / Format::HEX_STRING / 16 bits
-    Optional in_port = 11;     // optional match / Format::STRING
-    Optional out_port = 12;    // optional match / Format::STRING
+    Optional is_ip = 1;         // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;       // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;       // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 4;     // ternary match / Format::HEX_STRING / 16 bits
+    Ternary dst_mac = 5;        // ternary match / Format::MAC
+    Ternary dst_ip = 6;         // ternary match / Format::IPV4
+    Ternary ttl = 7;            // ternary match / Format::HEX_STRING / 8 bits
+    Ternary ip_protocol = 8;    // ternary match / Format::HEX_STRING / 8 bits
+    Ternary l4_src_port = 9;    // ternary match / Format::HEX_STRING / 16 bits
+    Ternary l4_dst_port = 10;   // ternary match / Format::HEX_STRING / 16 bits
+    Optional in_port = 11;      // optional match / Format::STRING
+    Optional out_port = 12;     // optional match / Format::STRING
+    Ternary acl_metadata = 13;  // ternary match / Format::HEX_STRING / 8 bits
   }
   Match match = 1;
   message Action {
@@ -580,6 +582,7 @@ message AclIngressSecurityTableEntry {
     Ternary l4_src_port = 11;  // ternary match / Format::HEX_STRING / 16 bits
     Ternary l4_dst_port = 12;  // ternary match / Format::HEX_STRING / 16 bits
     Ternary route_metadata = 13;  // ternary match / Format::HEX_STRING / 6 bits
+    Ternary acl_metadata = 14;    // ternary match / Format::HEX_STRING / 8 bits
   }
   Match match = 1;
   message Action {
