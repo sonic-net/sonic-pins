@@ -1263,6 +1263,120 @@ table_entry {
 
 
 =========================================================================
+multicast group entry with deprecated egress_port set
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      egress_port: 3
+      instance: 1
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: expected `port` field to be set in Replica, but found < egress_port: 3 instance: 1 >
+
+=========================================================================
+multicast group entry with duplicate replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+  }
+}
+
+--- PI is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple replicas with pair ('some_port', 1).
+
+=========================================================================
+valid multicast group entry
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry without explicit instance
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
 empty IR (IR -> PI)
 =========================================================================
 
@@ -3188,6 +3302,102 @@ id_test_table_entry {
     do_thing_1 {
       arg2: "0x00000008"
       arg1: "0x00000009"
+    }
+  }
+}
+
+
+=========================================================================
+multicast group entry with duplicate replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+  }
+}
+
+--- IR (converting to PI) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple replicas with pair ('some_port', 1).
+
+=========================================================================
+valid multicast group entry (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry without explicit instance (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
     }
   }
 }

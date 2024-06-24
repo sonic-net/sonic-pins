@@ -97,6 +97,51 @@ static void RunPdTableEntryTest(const pdpi::IrP4Info& info,
       });
 }
 
+static void RunPiMulticastTest(const pdpi::IrP4Info& info) {
+  RunPiEntityTest(info, "multicast group entry with deprecated egress_port set",
+                  gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+                    packet_replication_engine_entry {
+                      multicast_group_entry {
+                        multicast_group_id: 7
+                        replicas { egress_port: 3 instance: 1 }
+                      }
+                    }
+                  )pb"));
+  RunPiEntityTest(info, "multicast group entry with duplicate replica",
+                  gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+                    packet_replication_engine_entry {
+                      multicast_group_entry {
+                        multicast_group_id: 7
+                        replicas { port: "some_port" instance: 1 }
+                        replicas { port: "some_port" instance: 1 }
+                      }
+                    }
+                  )pb"));
+  RunPiEntityTest(info, "valid multicast group entry",
+                  gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+                    packet_replication_engine_entry {
+                      multicast_group_entry {
+                        multicast_group_id: 7
+                        replicas { port: "some_port" instance: 1 }
+                        replicas { port: "some_port" instance: 2 }
+                        replicas { port: "some_other_port" instance: 1 }
+                      }
+                    }
+                  )pb"),
+                  /*validity=*/INPUT_IS_VALID);
+  RunPiEntityTest(info, "valid multicast group entry without explicit instance",
+                  gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+                    packet_replication_engine_entry {
+                      multicast_group_entry {
+                        multicast_group_id: 7
+                        replicas { port: "some_port" }
+                        replicas { port: "some_other_port" }
+                      }
+                    }
+                  )pb"),
+                  /*validity=*/INPUT_IS_VALID);
+}
+
 static void RunPiTests(const pdpi::IrP4Info info) {
   RunPiEntityTest(info, "empty PI", gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
                   )pb"));
@@ -776,6 +821,7 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                     }
                   )pb"),
                   /*validity=*/INPUT_IS_VALID);
+  RunPiMulticastTest(info);
 }  // NOLINT(readability/fn_size)
 
 static void RunIrNoActionTableTests(const pdpi::IrP4Info& info) {
@@ -842,6 +888,54 @@ static void RunIrTernaryTableTests(const pdpi::IrP4Info info) {
                       priority: 32
                     }
                   )pb"));
+}
+
+static void RunIrMulticastTest(const pdpi::IrP4Info& info) {
+  RunIrEntityTest(info, "multicast group entry with duplicate replica",
+                  gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+                    packet_replication_engine_entry {
+                      multicast_group_entry {
+                        multicast_group_id: 7
+                        replicas { port: "some_port" instance: 1 }
+                        replicas { port: "some_port" instance: 1 }
+                      }
+                    }
+                  )pb"),
+                  IrTestConfig{
+                      // TODO: Add PRE support to PD.
+                      .test_ir_to_pd = false,
+                  });
+  RunIrEntityTest(info, "valid multicast group entry",
+                  gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+                    packet_replication_engine_entry {
+                      multicast_group_entry {
+                        multicast_group_id: 7
+                        replicas { port: "some_port" instance: 1 }
+                        replicas { port: "some_port" instance: 2 }
+                        replicas { port: "some_other_port" instance: 1 }
+                      }
+                    }
+                  )pb"),
+                  IrTestConfig{
+                      .validity = INPUT_IS_VALID,
+                      // TODO: Add PRE support to PD.
+                      .test_ir_to_pd = false,
+                  });
+  RunIrEntityTest(info, "valid multicast group entry without explicit instance",
+                  gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+                    packet_replication_engine_entry {
+                      multicast_group_entry {
+                        multicast_group_id: 7
+                        replicas { port: "some_port" }
+                        replicas { port: "some_other_port" }
+                      }
+                    }
+                  )pb"),
+                  IrTestConfig{
+                      .validity = INPUT_IS_VALID,
+                      // TODO: Add PRE support to PD.
+                      .test_ir_to_pd = false,
+                  });
 }
 
 static void RunIrMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
@@ -1769,6 +1863,7 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                   IrTestConfig{
                       .validity = INPUT_IS_VALID,
                   });
+  RunIrMulticastTest(info);
 }  // NOLINT(readability/fn_size)
 
 static void RunPdMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {

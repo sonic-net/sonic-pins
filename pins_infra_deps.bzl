@@ -82,27 +82,27 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_p4lang_p4c"):
         http_archive(
             name = "com_github_p4lang_p4c",
-            # Newest commit on main on 2021-12-07.
-            url = "https://github.com/p4lang/p4c/archive/a9aa5ff46affe8fd5dde78c2411d1bc58a715b33.zip",
-            strip_prefix = "p4c-a9aa5ff46affe8fd5dde78c2411d1bc58a715b33",
-            sha256 = "fa22c3d2b3105a39a73fc3938cbc6cd5d7895113a3e6ed6c5a48fbbd958a28af",
+            # Newest commit on main on 2022-11-23.
+            url = "https://github.com/p4lang/p4c/archive/bc1798bb8529c9f71f2794dbc690b29f040549c4.zip",
+            strip_prefix = "p4c-bc1798bb8529c9f71f2794dbc690b29f040549c4",
+            sha256 = "21fece70b3fc2d1430ccc3e023b038ce0ca74e1682e6249fb350809d1c61215f",            
         )
     if not native.existing_rule("com_github_p4lang_p4runtime"):
         # We frequently need bleeding-edge, unreleased version of P4Runtime, so we use a commit
         # rather than a release.
         http_archive(
             name = "com_github_p4lang_p4runtime",
-            # 13f0d0 is the newest commit on main as of 2022-08-02.
-            urls = ["https://github.com/p4lang/p4runtime/archive/13f0d02a521e38b4252f4fddfc98e2bfa1dbf7e6.zip"],
-            strip_prefix = "p4runtime-13f0d02a521e38b4252f4fddfc98e2bfa1dbf7e6/proto",
-            sha256 = "ad18b27341ea1a875919a63d37eaa347d3d85299a1f90c4bbc33789c1d0580b7",
+            # 90553b9 is the newest commit on main as of 2023-05-05.
+            urls = ["https://github.com/p4lang/p4runtime/archive/90553b90a12ead5c19700e7fef21164dea5b6d22.zip"],
+            strip_prefix = "p4runtime-90553b90a12ead5c19700e7fef21164dea5b6d22/proto",
+            sha256 = "21f060e8cb590174c9be0fbe22665cb9a896f5f0b9399e17794defc9bcda3adc",
         )
     if not native.existing_rule("com_github_p4lang_p4_constraints"):
         http_archive(
             name = "com_github_p4lang_p4_constraints",
-            urls = ["https://github.com/p4lang/p4-constraints/archive/50a7ddc19faf912f5a6cb61cbfa94bf1aaa9bf82.zip"],
-            strip_prefix = "p4-constraints-50a7ddc19faf912f5a6cb61cbfa94bf1aaa9bf82",
-            sha256 = "62d810efbadfe6b5428370f2f4f1f40622563344a0ef27a8c3a631115945a795",
+            urls = ["https://github.com/p4lang/p4-constraints/archive/11a08877ae8e3cf60acfa90c0f020d65b5a91ed5.zip"],
+            strip_prefix = "p4-constraints-11a08877ae8e3cf60acfa90c0f020d65b5a91ed5",
+            sha256 = "e85039af2378264f5e980984ab95f28903baebb3f515f1097377e294e681b2b6",
         )
     if not native.existing_rule("com_github_nlohmann_json"):
         http_archive(
