@@ -314,6 +314,7 @@ cc_test(
         ":clos_stage",
         ":instantiations",
         "//gutil:status_matchers",
+        "//gutil:testing",
         "@com_google_googletest//:gtest_main",
     ],
 )
