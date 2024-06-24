@@ -253,6 +253,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
       }
       actions = {
         @proto_id(1) do_thing_4;
+        @proto_id(2) do_thing_1;
         @defaultonly NoAction();
       }
       const default_action = NoAction();

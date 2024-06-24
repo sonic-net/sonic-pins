@@ -34,6 +34,11 @@ message Packet {
   repeated string reasons_invalid = 4;
 }
 
+// Multiple packets.
+message Packets {
+  repeated Packet packets = 1;
+}
+
 // Describes a network packet header. This is not an exhaustive list of headers,
 // and not every header may support all fields available for that particular
 // header (e.g. optional fields may not be supported).

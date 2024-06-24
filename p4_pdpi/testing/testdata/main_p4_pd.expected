@@ -251,7 +251,10 @@ message TwoMatchFieldsTableEntry {
   }
   Match match = 1;
   message Action {
+  oneof action {
+    DoThing1Action do_thing_1 = 2;
     DoThing4Action do_thing_4 = 1;
+  }
   }
   Action action = 2;
   bytes controller_metadata = 8;
