@@ -326,10 +326,9 @@ control acl_ingress(in headers_t headers,
       (port_id_t)standard_metadata.egress_port: optional
           @id(12) @name("out_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT);
-      // TODO: OA does not support SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META.
-      // local_metadata.acl_metadata : ternary
-      //     @id(13) @name("acl_metadata")
-      //     @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+      local_metadata.acl_metadata : ternary
+          @id(13) @name("acl_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
     }
     actions = {
       @proto_id(1) set_qos_queue_and_cancel_copy_above_rate_limit();
@@ -438,10 +437,9 @@ control acl_ingress(in headers_t headers,
       local_metadata.route_metadata : ternary
           @id(13) @name("route_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
-      // TODO: OA does not support SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META.
-      // local_metadata.acl_metadata : ternary
-      //     @id(14) @name("acl_metadata")
-      //     @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+      local_metadata.acl_metadata : ternary
+          @id(14) @name("acl_metadata")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
     }
     actions = {
       @proto_id(1) acl_forward();

@@ -718,6 +718,13 @@ tables {
       name: "port_id_t"
     }
   }
+  match_fields {
+    id: 13
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
   action_refs {
     id: 16777484
     annotations: "@proto_id(1)"
@@ -822,6 +829,13 @@ tables {
     name: "route_metadata"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META)"
     bitwidth: 6
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 14
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
     match_type: TERNARY
   }
   action_refs {
