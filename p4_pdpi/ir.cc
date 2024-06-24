@@ -17,7 +17,6 @@
 #include <ctype.h>
 #include <stdint.h>
 
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -35,7 +34,7 @@
 #include "absl/strings/strip.h"
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/map.h"
-#include "google/protobuf/repeated_field.h"
+#include "google/protobuf/message.h"
 #include "google/rpc/code.pb.h"
 #include "google/rpc/status.pb.h"
 #include "gutil/collections.h"
@@ -194,11 +193,42 @@ absl::Status ValidateMatchFieldDefinition(const IrMatchFieldDefinition &match) {
   }
 }
 
+absl::StatusOr<uint32_t> TableAliasToId(const p4::config::v1::P4Info &p4_info,
+                                        absl::string_view table_alias) {
+  absl::flat_hash_map<std::string, uint32_t> table_alias_to_table_id;
+  for (const p4::config::v1::Table &table : p4_info.tables()) {
+    if (table.preamble().alias() == table_alias) {
+      return table.preamble().id();
+    }
+  }
+  return absl::NotFoundError(
+      absl::StrCat("Can't find table id for alias `", table_alias, "`"));
+}
+
+absl::StatusOr<uint32_t> MatchFieldNameToId(
+    const p4::config::v1::P4Info &p4_info, uint32_t table_id,
+    absl::string_view match_field_name) {
+  for (const p4::config::v1::Table &table : p4_info.tables()) {
+    if (table.preamble().id() != table_id) {
+      continue;
+    }
+    for (const p4::config::v1::MatchField &match_field : table.match_fields()) {
+      if (match_field.name() == match_field_name) {
+        return match_field.id();
+      }
+    }
+  }
+  return absl::NotFoundError(
+      absl::StrCat("Can't find match field id for match field name `",
+                   match_field_name, "` in table `", table_id, "`"));
+}
+
 // Returns the set of references for a given set of annotations. Does not
 // validate the table or match field yet.
 absl::StatusOr<std::vector<IrMatchFieldReference>> GetRefersToAnnotations(
+    const p4::config::v1::P4Info &p4info,
     const ::google::protobuf::RepeatedPtrField<std::string> &annotations) {
-  static constexpr char kError[] = "Found invalid @refers_to annotation: ";
+  constexpr absl::string_view kError = "Found invalid @refers_to annotation: ";
   std::vector<IrMatchFieldReference> result;
   for (absl::string_view annotation_contents : annotations) {
     if (absl::ConsumePrefix(&annotation_contents, "@refers_to(")) {
@@ -211,11 +241,19 @@ absl::StatusOr<std::vector<IrMatchFieldReference>> GetRefersToAnnotations(
                << kError << "Incorrect number of arguments, required 2 but got "
                << parts.size() << " instead.";
       }
+
       absl::string_view table = absl::StripAsciiWhitespace(parts[0]);
       absl::string_view match_field = absl::StripAsciiWhitespace(parts[1]);
+
+      ASSIGN_OR_RETURN(uint32_t table_id, TableAliasToId(p4info, table));
+      ASSIGN_OR_RETURN(uint32_t match_field_id,
+                       MatchFieldNameToId(p4info, table_id, match_field));
+
       IrMatchFieldReference reference;
       reference.set_table(std::string(table));
       reference.set_match_field(std::string(match_field));
+      reference.set_table_id(table_id);
+      reference.set_match_field_id(match_field_id);
       result.push_back(reference);
     }
   }
@@ -1125,7 +1163,6 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
   const P4TypeInfo &type_info = p4_info.type_info();
 
   // Translate all action definitions to IR.
-  absl::flat_hash_set<std::pair<std::string, std::string>> seen_references;
   for (const auto &action : p4_info.actions()) {
     IrActionDefinition ir_action;
     *ir_action.mutable_preamble() = action.preamble();
@@ -1135,12 +1172,19 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
       ASSIGN_OR_RETURN(const auto format,
                        GetFormatForP4InfoElement(param, type_info));
       ir_param.set_format(format);
-      ASSIGN_OR_RETURN(const auto references,
-                       GetRefersToAnnotations(ir_param.param().annotations()));
-      for (const auto &reference : references) {
+      ASSIGN_OR_RETURN(
+          const std::vector<IrMatchFieldReference> references,
+          GetRefersToAnnotations(p4_info, ir_param.param().annotations()));
+      for (const IrMatchFieldReference &reference : references) {
         *ir_param.add_references() = reference;
-        if (seen_references.insert({reference.table(), reference.match_field()})
-                .second) {
+        // If an identical reference already exists, don't add it to the global
+        // list of references.
+        if (!absl::c_any_of(
+                info.references(),
+                [&reference](const IrMatchFieldReference &existing_reference) {
+                  return google::protobuf::util::MessageDifferencer::Equals(
+                      reference, existing_reference);
+                })) {
           *info.add_references() = reference;
         }
       }
@@ -1195,12 +1239,18 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
       ir_match_definition.set_format(format);
       RETURN_IF_ERROR(ValidateMatchFieldDefinition(ir_match_definition))
           << "Table " << table.preamble().alias() << " has invalid match field";
-      ASSIGN_OR_RETURN(const auto &references,
-                       GetRefersToAnnotations(match_field.annotations()));
+
+      ASSIGN_OR_RETURN(
+          const auto &references,
+          GetRefersToAnnotations(p4_info, match_field.annotations()));
       for (const auto &reference : references) {
         *ir_match_definition.add_references() = reference;
-        if (seen_references.insert({reference.table(), reference.match_field()})
-                .second) {
+        if (!absl::c_any_of(
+                info.references(),
+                [&reference](const IrMatchFieldReference &existing_reference) {
+                  return google::protobuf::util::MessageDifferencer::Equals(
+                      reference, existing_reference);
+                })) {
           *info.add_references() = reference;
         }
       }

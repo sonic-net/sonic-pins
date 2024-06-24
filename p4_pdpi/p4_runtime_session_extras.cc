@@ -78,6 +78,14 @@ absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
 }
 
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
+                               absl::Span<const p4::v1::Entity> entities) {
+  for (const p4::v1::Entity& entity : entities) {
+    RETURN_IF_ERROR(InstallPiEntity(&p4rt, entity));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                absl::string_view entities) {
   ASSIGN_OR_RETURN(auto parsed_entities,
                    gutil::ParseTextProto<PiEntities>(entities));
