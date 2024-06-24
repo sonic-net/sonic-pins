@@ -14,6 +14,7 @@
 
 // Given a P4Info file, generates the corresponding PD proto.
 
+#include <cstdint>
 #include <iostream>
 #include <string>
 
@@ -36,6 +37,12 @@ ABSL_FLAG(std::string, p4info, "", "p4info file (required)");
 ABSL_FLAG(std::string, package, "", "protobuf package name (required)");
 ABSL_FLAG(std::string, roles, "",
           "the @p4runtime_role's for which to generate PD");
+ABSL_FLAG(
+    std::optional<int16_t>, multicast_table_field_number, 2047,
+    "Optional field number used for multicast_group_table_entry in TableEntry "
+    "oneof. If set to nullopt, then multicast_group_table_entry is omitted "
+    "from PD proto. Defaults to 2047 to avoid conflicts with other tables and "
+    "remain small go/fast/11#small-field-number");
 
 constexpr char kUsage[] =
     "--p4info=<file> --package=<package> --roles=<comma-separated-role-list>";
@@ -61,10 +68,6 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // Roles
-  std::vector<std::string> roles =
-      absl::StrSplit(absl::GetFlag(FLAGS_roles), ',');
-
   // Parse p4info file.
   P4Info p4info;
   absl::Status status = gutil::ReadProtoFromFile(p4info_filename, &p4info);
@@ -83,8 +86,13 @@ int main(int argc, char** argv) {
   pdpi::IrP4Info info = status_or_info.value();
 
   // Output PD proto.
-  absl::StatusOr<std::string> status_or_pdproto =
-      pdpi::IrP4InfoToPdProto(info, package, roles);
+  absl::StatusOr<std::string> status_or_pdproto = pdpi::IrP4InfoToPdProto(
+      info, pdpi::PdGenOptions{
+                .package = package,
+                .roles = absl::StrSplit(absl::GetFlag(FLAGS_roles), ','),
+                .multicast_table_field_number =
+                    absl::GetFlag(FLAGS_multicast_table_field_number),
+            });
   if (!status_or_pdproto.ok()) {
     std::cerr << "Failed to generate PD proto: " << status_or_pdproto.status()
               << std::endl;
