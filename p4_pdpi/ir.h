@@ -41,6 +41,9 @@ void RemoveUnsupportedEntities(IrP4Info& p4_info);
 absl::StatusOr<IrEntity> PiEntityToIr(const IrP4Info& info,
                                       const p4::v1::Entity& pi,
                                       TranslationOptions options = {});
+absl::StatusOr<IrEntities> PiEntitiesToIr(const IrP4Info& info,
+                                          absl::Span<const p4::v1::Entity> pi,
+                                          TranslationOptions options = {});
 
 absl::StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info& info,
                                               const p4::v1::TableEntry& pi,
@@ -86,6 +89,9 @@ absl::StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
 absl::StatusOr<p4::v1::Entity> IrEntityToPi(const IrP4Info& info,
                                             const IrEntity& ir,
                                             TranslationOptions options = {});
+absl::StatusOr<std::vector<p4::v1::Entity>> IrEntitiesToPi(
+    const IrP4Info& info, const IrEntities& ir,
+    TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
     const IrP4Info& info, const IrTableEntry& ir,
