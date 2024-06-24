@@ -19,7 +19,7 @@
 
 namespace sai {
 
-p4::v1::Entity MakeBmv2PacketReplicationEngineEntryRequiredForPunts() {
+p4::v1::Entity MakeV1modelPacketReplicationEngineEntryRequiredForPunts() {
   p4::v1::Entity entity;
 
   p4::v1::CloneSessionEntry& clone_session =
