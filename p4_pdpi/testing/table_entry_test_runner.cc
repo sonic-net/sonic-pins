@@ -72,17 +72,16 @@ static void RunIrEntityTest(const pdpi::IrP4Info& info,
   }
 }
 
-// TODO: Transition to IR/PI entities when multicast is added.
 static void RunPdTableEntryTest(const pdpi::IrP4Info& info,
                                 std::string test_name,
                                 const pdpi::TableEntry& pd,
                                 InputValidity validity,
                                 pdpi::TranslationOptions options = {}) {
   absl::StrAppend(&test_name, "\n", options);
-  RunGenericPdTest<pdpi::TableEntry, pdpi::IrTableEntry, p4::v1::TableEntry>(
-      info, test_name, pd, options, pdpi::PartialPdTableEntryToIrTableEntry,
-      pdpi::IrTableEntryToPd, pdpi::IrTableEntryToPi, pdpi::PiTableEntryToIr,
-      pdpi::PartialPdTableEntryToPiTableEntry, pdpi::PiTableEntryToPd, validity,
+  RunGenericPdTest<pdpi::TableEntry, pdpi::IrEntity, p4::v1::Entity>(
+      info, test_name, pd, options, pdpi::PdTableEntryToIrEntity,
+      pdpi::IrEntityToPdTableEntry, pdpi::IrEntityToPi, pdpi::PiEntityToIr,
+      pdpi::PdTableEntryToPiEntity, pdpi::PiEntityToPdTableEntry, validity,
       /*relevant_pd_fields=*/
       [&](const pdpi::IrP4Info& info, const pdpi::TableEntry& pd) {
         if (!options.key_only) return pd;
@@ -900,11 +899,7 @@ static void RunIrMulticastTest(const pdpi::IrP4Info& info) {
                         replicas { port: "some_port" instance: 1 }
                       }
                     }
-                  )pb"),
-                  IrTestConfig{
-                      // TODO: Add PRE support to PD.
-                      .test_ir_to_pd = false,
-                  });
+                  )pb"));
   RunIrEntityTest(info, "valid multicast group entry",
                   gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
                     packet_replication_engine_entry {
@@ -918,8 +913,6 @@ static void RunIrMulticastTest(const pdpi::IrP4Info& info) {
                   )pb"),
                   IrTestConfig{
                       .validity = INPUT_IS_VALID,
-                      // TODO: Add PRE support to PD.
-                      .test_ir_to_pd = false,
                   });
   RunIrEntityTest(info, "valid multicast group entry without explicit instance",
                   gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
@@ -933,9 +926,120 @@ static void RunIrMulticastTest(const pdpi::IrP4Info& info) {
                   )pb"),
                   IrTestConfig{
                       .validity = INPUT_IS_VALID,
-                      // TODO: Add PRE support to PD.
-                      .test_ir_to_pd = false,
                   });
+}
+
+static void RunPdMulticastTest(const pdpi::IrP4Info& info) {
+  RunPdTableEntryTest(
+      info, "multicast group entry with missing match field",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          action {
+            replicate { replicas { port: "some_port" instance: "0x0001" } }
+          }
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "multicast group entry with empty match field ",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match {}
+          action {
+            replicate { replicas { port: "some_port" instance: "0x0001" } }
+          }
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "multicast group entry with invalid multicast_group_id format",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match { multicast_group_id: "not_a_hexstring" }
+          action {
+            replicate { replicas { port: "some_port" instance: "0x0001" } }
+          }
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "multicast group entry with missing action",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry { match { multicast_group_id: "0x0007" } }
+      )pb"),
+      /*validity=*/INPUT_IS_INVALID);
+  RunPdTableEntryTest(info, "multicast group entry with empty action",
+                      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+                        multicast_group_table_entry {
+                          match { multicast_group_id: "0x0007" }
+                          action {}
+                        }
+                      )pb"),
+                      /*validity=*/INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "multicast group entry with invalid instance format",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match { multicast_group_id: "0x0007" }
+          action {
+            replicate {
+              replicas { port: "some_port" instance: "not_a_hexstring" }
+            }
+          }
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_INVALID);
+  RunPdTableEntryTest(info, "multicast group entry with duplicate replica",
+                      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+                        multicast_group_table_entry {
+                          match { multicast_group_id: "0x0007" }
+                          action {
+                            replicate {
+                              replicas { port: "some_port" instance: "0x0001" }
+                              replicas { port: "some_port" instance: "0x0001" }
+                            }
+                          }
+                        }
+                      )pb"),
+                      /*validity=*/INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      info, "valid multicast group entry",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match { multicast_group_id: "0x0007" }
+          action {
+            replicate {
+              replicas { port: "some_port" instance: "0x0001" }
+              replicas { port: "some_port" instance: "0x0002" }
+              replicas { port: "some_other_port" instance: "0x0001" }
+            }
+          }
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_VALID);
+  RunPdTableEntryTest(
+      info, "valid multicast group entry with instance set to 0",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match { multicast_group_id: "0x0007" }
+          action {
+            replicate {
+              replicas { port: "some_port" instance: "0x0000" }
+              replicas { port: "some_other_port" instance: "0x0000" }
+            }
+          }
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_VALID);
+  RunPdTableEntryTest(info,
+                      "valid multicast group entry with empty replicate action",
+                      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+                        multicast_group_table_entry {
+                          match { multicast_group_id: "0x0007" }
+                          action { replicate {} }
+                        }
+                      )pb"),
+                      /*validity=*/INPUT_IS_VALID);
 }
 
 static void RunIrMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
@@ -2474,6 +2578,7 @@ static void RunPdTests(const pdpi::IrP4Info info) {
                       INPUT_IS_INVALID);
 
   RunPdMeterCounterTableEntryTests(info);
+  RunPdMulticastTest(info);
 }
 
 static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
@@ -2573,6 +2678,21 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
         }
       )pb"),
       INPUT_IS_VALID, pdpi::TranslationOptions{.key_only = true});
+  RunPdTableEntryTest(
+      info, "multicast group entry with key_only=true",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        multicast_group_table_entry {
+          match { multicast_group_id: "0x0007" }
+          action {
+            replicate {
+              replicas { port: "some_port" instance: "0x0001" }
+              replicas { port: "some_port" instance: "0x0002" }
+              replicas { port: "some_other_port" instance: "0x0001" }
+            }
+          }
+        }
+      )pb"),
+      /*validity=*/INPUT_IS_VALID, pdpi::TranslationOptions{.key_only = true});
 }
 
 int main(int argc, char** argv) {
