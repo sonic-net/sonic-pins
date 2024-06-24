@@ -601,6 +601,10 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 16777217
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -3128,6 +3132,60 @@ tables_by_id {
       }
       proto_id: 1
     }
+    entry_actions {
+      ref {
+        id: 16777217
+        annotations: "@proto_id(2)"
+      }
+      action {
+        preamble {
+          id: 16777217
+          name: "do_thing_1"
+          alias: "do_thing_1"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "arg2"
+              bitwidth: 32
+            }
+          }
+        }
+        params_by_id {
+          key: 2
+          value {
+            param {
+              id: 2
+              name: "arg1"
+              bitwidth: 32
+            }
+          }
+        }
+        params_by_name {
+          key: "arg1"
+          value {
+            param {
+              id: 2
+              name: "arg1"
+              bitwidth: 32
+            }
+          }
+        }
+        params_by_name {
+          key: "arg2"
+          value {
+            param {
+              id: 1
+              name: "arg2"
+              bitwidth: 32
+            }
+          }
+        }
+      }
+      proto_id: 2
+    }
     default_only_actions {
       ref {
         id: 21257015
@@ -3178,6 +3236,8 @@ tables_by_id {
         references {
           table: "referring_by_match_field_table"
           match_field: "referring_id_1"
+          table_id: 49592401
+          match_field_id: 1
         }
       }
     }
@@ -3197,6 +3257,8 @@ tables_by_id {
         references {
           table: "referring_by_match_field_table"
           match_field: "referring_id_1"
+          table_id: 49592401
+          match_field_id: 1
         }
       }
     }
@@ -3329,6 +3391,8 @@ tables_by_id {
         references {
           table: "one_match_field_table"
           match_field: "id"
+          table_id: 46253494
+          match_field_id: 1
         }
       }
     }
@@ -3451,6 +3515,8 @@ tables_by_id {
         references {
           table: "one_match_field_table"
           match_field: "id"
+          table_id: 46253494
+          match_field_id: 1
         }
       }
     }
@@ -3773,6 +3839,8 @@ tables_by_id {
             references {
               table: "two_match_fields_table"
               match_field: "id_1"
+              table_id: 34805412
+              match_field_id: 1
             }
           }
         }
@@ -3791,6 +3859,8 @@ tables_by_id {
             references {
               table: "two_match_fields_table"
               match_field: "id_2"
+              table_id: 34805412
+              match_field_id: 2
             }
           }
         }
@@ -3809,6 +3879,8 @@ tables_by_id {
             references {
               table: "two_match_fields_table"
               match_field: "id_1"
+              table_id: 34805412
+              match_field_id: 1
             }
           }
         }
@@ -3827,6 +3899,8 @@ tables_by_id {
             references {
               table: "two_match_fields_table"
               match_field: "id_2"
+              table_id: 34805412
+              match_field_id: 2
             }
           }
         }
@@ -3860,10 +3934,14 @@ tables_by_id {
             references {
               table: "one_match_field_table"
               match_field: "id"
+              table_id: 46253494
+              match_field_id: 1
             }
             references {
               table: "two_match_fields_table"
               match_field: "id_1"
+              table_id: 34805412
+              match_field_id: 1
             }
           }
         }
@@ -3883,10 +3961,14 @@ tables_by_id {
             references {
               table: "one_match_field_table"
               match_field: "id"
+              table_id: 46253494
+              match_field_id: 1
             }
             references {
               table: "two_match_fields_table"
               match_field: "id_1"
+              table_id: 34805412
+              match_field_id: 1
             }
           }
         }
@@ -3943,6 +4025,8 @@ tables_by_id {
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -3962,6 +4046,8 @@ tables_by_id {
         references {
           table: "two_match_fields_table"
           match_field: "id_2"
+          table_id: 34805412
+          match_field_id: 2
         }
       }
     }
@@ -3981,6 +4067,8 @@ tables_by_id {
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -4000,6 +4088,8 @@ tables_by_id {
         references {
           table: "two_match_fields_table"
           match_field: "id_2"
+          table_id: 34805412
+          match_field_id: 2
         }
       }
     }
@@ -4214,6 +4304,8 @@ tables_by_name {
         references {
           table: "one_match_field_table"
           match_field: "id"
+          table_id: 46253494
+          match_field_id: 1
         }
       }
     }
@@ -4336,6 +4428,8 @@ tables_by_name {
         references {
           table: "one_match_field_table"
           match_field: "id"
+          table_id: 46253494
+          match_field_id: 1
         }
       }
     }
@@ -5627,6 +5721,8 @@ tables_by_name {
             references {
               table: "two_match_fields_table"
               match_field: "id_1"
+              table_id: 34805412
+              match_field_id: 1
             }
           }
         }
@@ -5645,6 +5741,8 @@ tables_by_name {
             references {
               table: "two_match_fields_table"
               match_field: "id_2"
+              table_id: 34805412
+              match_field_id: 2
             }
           }
         }
@@ -5663,6 +5761,8 @@ tables_by_name {
             references {
               table: "two_match_fields_table"
               match_field: "id_1"
+              table_id: 34805412
+              match_field_id: 1
             }
           }
         }
@@ -5681,6 +5781,8 @@ tables_by_name {
             references {
               table: "two_match_fields_table"
               match_field: "id_2"
+              table_id: 34805412
+              match_field_id: 2
             }
           }
         }
@@ -5714,10 +5816,14 @@ tables_by_name {
             references {
               table: "one_match_field_table"
               match_field: "id"
+              table_id: 46253494
+              match_field_id: 1
             }
             references {
               table: "two_match_fields_table"
               match_field: "id_1"
+              table_id: 34805412
+              match_field_id: 1
             }
           }
         }
@@ -5737,10 +5843,14 @@ tables_by_name {
             references {
               table: "one_match_field_table"
               match_field: "id"
+              table_id: 46253494
+              match_field_id: 1
             }
             references {
               table: "two_match_fields_table"
               match_field: "id_1"
+              table_id: 34805412
+              match_field_id: 1
             }
           }
         }
@@ -5797,6 +5907,8 @@ tables_by_name {
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -5816,6 +5928,8 @@ tables_by_name {
         references {
           table: "two_match_fields_table"
           match_field: "id_2"
+          table_id: 34805412
+          match_field_id: 2
         }
       }
     }
@@ -5835,6 +5949,8 @@ tables_by_name {
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -5854,6 +5970,8 @@ tables_by_name {
         references {
           table: "two_match_fields_table"
           match_field: "id_2"
+          table_id: 34805412
+          match_field_id: 2
         }
       }
     }
@@ -5922,6 +6040,8 @@ tables_by_name {
         references {
           table: "referring_by_match_field_table"
           match_field: "referring_id_1"
+          table_id: 49592401
+          match_field_id: 1
         }
       }
     }
@@ -5941,6 +6061,8 @@ tables_by_name {
         references {
           table: "referring_by_match_field_table"
           match_field: "referring_id_1"
+          table_id: 49592401
+          match_field_id: 1
         }
       }
     }
@@ -6350,6 +6472,60 @@ tables_by_name {
         }
       }
       proto_id: 1
+    }
+    entry_actions {
+      ref {
+        id: 16777217
+        annotations: "@proto_id(2)"
+      }
+      action {
+        preamble {
+          id: 16777217
+          name: "do_thing_1"
+          alias: "do_thing_1"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "arg2"
+              bitwidth: 32
+            }
+          }
+        }
+        params_by_id {
+          key: 2
+          value {
+            param {
+              id: 2
+              name: "arg1"
+              bitwidth: 32
+            }
+          }
+        }
+        params_by_name {
+          key: "arg1"
+          value {
+            param {
+              id: 2
+              name: "arg1"
+              bitwidth: 32
+            }
+          }
+        }
+        params_by_name {
+          key: "arg2"
+          value {
+            param {
+              id: 1
+              name: "arg2"
+              bitwidth: 32
+            }
+          }
+        }
+      }
+      proto_id: 2
     }
     default_only_actions {
       ref {
@@ -7131,6 +7307,8 @@ actions_by_id {
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -7149,6 +7327,8 @@ actions_by_id {
         references {
           table: "two_match_fields_table"
           match_field: "id_2"
+          table_id: 34805412
+          match_field_id: 2
         }
       }
     }
@@ -7167,6 +7347,8 @@ actions_by_id {
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -7185,6 +7367,8 @@ actions_by_id {
         references {
           table: "two_match_fields_table"
           match_field: "id_2"
+          table_id: 34805412
+          match_field_id: 2
         }
       }
     }
@@ -7214,10 +7398,14 @@ actions_by_id {
         references {
           table: "one_match_field_table"
           match_field: "id"
+          table_id: 46253494
+          match_field_id: 1
         }
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -7237,10 +7425,14 @@ actions_by_id {
         references {
           table: "one_match_field_table"
           match_field: "id"
+          table_id: 46253494
+          match_field_id: 1
         }
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -7549,10 +7741,14 @@ actions_by_name {
         references {
           table: "one_match_field_table"
           match_field: "id"
+          table_id: 46253494
+          match_field_id: 1
         }
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -7572,10 +7768,14 @@ actions_by_name {
         references {
           table: "one_match_field_table"
           match_field: "id"
+          table_id: 46253494
+          match_field_id: 1
         }
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -7604,6 +7804,8 @@ actions_by_name {
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -7622,6 +7824,8 @@ actions_by_name {
         references {
           table: "two_match_fields_table"
           match_field: "id_2"
+          table_id: 34805412
+          match_field_id: 2
         }
       }
     }
@@ -7640,6 +7844,8 @@ actions_by_name {
         references {
           table: "two_match_fields_table"
           match_field: "id_1"
+          table_id: 34805412
+          match_field_id: 1
         }
       }
     }
@@ -7658,6 +7864,8 @@ actions_by_name {
         references {
           table: "two_match_fields_table"
           match_field: "id_2"
+          table_id: 34805412
+          match_field_id: 2
         }
       }
     }
@@ -7818,18 +8026,26 @@ packet_out_metadata_by_name {
 references {
   table: "two_match_fields_table"
   match_field: "id_1"
+  table_id: 34805412
+  match_field_id: 1
 }
 references {
   table: "two_match_fields_table"
   match_field: "id_2"
+  table_id: 34805412
+  match_field_id: 2
 }
 references {
   table: "one_match_field_table"
   match_field: "id"
+  table_id: 46253494
+  match_field_id: 1
 }
 references {
   table: "referring_by_match_field_table"
   match_field: "referring_id_1"
+  table_id: 49592401
+  match_field_id: 1
 }
 action_profiles_by_id {
   key: 290772822
