@@ -49,6 +49,10 @@ absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
     const IrP4Info& info, absl::Span<const p4::v1::TableEntry> pi,
     TranslationOptions options = {});
 
+absl::StatusOr<IrMulticastGroupEntry> PiMulticastGroupEntryToIr(
+    const IrP4Info& info, const p4::v1::MulticastGroupEntry& pi,
+    TranslationOptions options = {});
+
 absl::StatusOr<IrPacketIn> PiPacketInToIr(const IrP4Info& info,
                                           const p4::v1::PacketIn& packet);
 
@@ -91,6 +95,10 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     TranslationOptions options = {});
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     const IrP4Info& info, absl::Span<const IrTableEntry> ir,
+    TranslationOptions options = {});
+
+absl::StatusOr<p4::v1::MulticastGroupEntry> IrMulticastGroupEntryToPi(
+    const IrP4Info& info, const IrMulticastGroupEntry& ir,
     TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::PacketIn> IrPacketInToPi(const IrP4Info& info,

@@ -49,6 +49,8 @@ enum Format {
 message IrMatchFieldReference {
   string table = 1;
   string match_field = 2;
+  uint32 table_id = 3;
+  uint32 match_field_id = 4;
 }
 
 // Describes a match field.
@@ -303,6 +305,26 @@ message IrTableEntries {
   repeated IrTableEntry entries = 1;
 }
 
+//-- Packet Replication Engine -------------------------------------------------
+
+// Describes a PacketReplicationEngine (PRE) entry. Currently, the only
+// supported PRE entry is multicast group entry.
+message IrPacketReplicationEngineEntry {
+  oneof type {
+    IrMulticastGroupEntry multicast_group_entry = 1;
+  }
+}
+
+message IrReplica {
+  string port = 1;
+  uint32 instance = 2;
+}
+
+message IrMulticastGroupEntry {
+  uint32 multicast_group_id = 1;
+  repeated IrReplica replicas = 2;
+}
+
 // -- Packet IO ----------------------------------------------------------------
 
 // Describes a packet in.
@@ -328,6 +350,7 @@ message IrPacketMetadata {
 message IrEntity {
   oneof entity {
     IrTableEntry table_entry = 1;
+    IrPacketReplicationEngineEntry packet_replication_engine_entry = 2;
   }
 }
 
