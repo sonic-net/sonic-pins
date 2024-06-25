@@ -610,6 +610,7 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
       for (int action_num = 0; action_num < members_per_group; ++action_num) {
         actions[action_num].nexthop_id = nexthops[action_num];
       }
+
       std::vector<int> weights =
           RandmizeWeights(bitgen, actions.size(), total_group_weight);
       for (size_t i = 0; i < actions.size(); ++i) {
@@ -838,6 +839,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
                                  requests_per_batch, members_per_group,
                                  total_group_weight));
     UpdateRequestMetadata(requests);
+
     ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
                          SendBatchRequest(requests.inserts));
     ASSERT_OK_AND_ASSIGN(absl::Duration modify_time,
