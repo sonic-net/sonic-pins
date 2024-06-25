@@ -656,20 +656,6 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
                absl::ToInt64Milliseconds(execution_time))
         << std::endl;
   }
-  // Pre-compute all the IPv4 requests so they can be sent as quickly as
-  // possible to the switch under test.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::WriteRequest> requests,
-      ComputeIpv4WriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
-                               requests_per_batch));
-  UpdateRequestMetadata(requests);
-
-  // Measure the execution time and write to stdout so that callers can parse
-  // the output.
-  ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
-                       SendBatchRequest(requests));
-  std::cout << "Successfully wrote IpTable entries to the switch, time: "
-            << ToInt64Milliseconds(execution_time) << "(msecs)" << std::endl;
 }
 
 }  // namespace
