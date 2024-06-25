@@ -500,21 +500,6 @@ absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeWcmpWriteRequests(
                            ir_p4info, p4::v1::Update::INSERT,
                            absl::StrCat("group-", ++group_id), actions));
     }
-
-    netaddr::Ipv4Address ip(address);
-    std::string vrf = vrfs[absl::Uniform<size_t>(bitgen, 0, vrfs.size())];
-    std::string nexthop =
-        nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
-    ASSIGN_OR_RETURN(
-        *requests.back().add_updates(),
-        gpins::Ipv4TableUpdate(
-            ir_p4info, p4::v1::Update::INSERT,
-            gpins::IpTableOptions{
-                .vrf_id = vrf,
-                .dst_addr_lpm = std::make_pair(ip.ToString(), 32),
-                .action = gpins::IpTableOptions::Action::kSetNextHopId,
-                .nexthop_id = nexthop,
-            }));
   }
 
   // Verify that we generated the correct number of members and their weights.
