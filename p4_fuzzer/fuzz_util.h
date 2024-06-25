@@ -61,11 +61,11 @@ using P4ValuePredicate =
 
 bool IsPort(const p4::config::v1::P4NamedType &type_name,
             const google::protobuf::RepeatedPtrField<
-                pdpi::IrMatchFieldReference> &references = {});
-bool IsQosQueue(const p4::config::v1::P4NamedType &type_name,
-                const google::protobuf::RepeatedPtrField<
-                    pdpi::IrMatchFieldReference> &references = {});
-bool IsNeighbor(const p4::config::v1::P4NamedType &type_name,
+                pdpi::IrMatchFieldReference>& references = {});
+bool IsUnknownQosQueue(const p4::config::v1::P4NamedType& type_name,
+                       const google::protobuf::RepeatedPtrField<
+                           pdpi::IrMatchFieldReference>& references = {});
+bool IsNeighbor(const p4::config::v1::P4NamedType& type_name,
                 const google::protobuf::RepeatedPtrField<
                     pdpi::IrMatchFieldReference> &references = {});
 bool IsReferring(
