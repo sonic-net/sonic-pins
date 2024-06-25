@@ -400,7 +400,8 @@ absl::Status MutateUpdate(BitGen* gen, const FuzzerConfig& config,
       return MutateInvalidValue(gen, update, config, switch_state, IsPort);
 
     case Mutation::INVALID_QOS_QUEUE:
-      return MutateInvalidValue(gen, update, config, switch_state, IsQosQueue);
+      return MutateInvalidValue(gen, update, config, switch_state,
+                                IsUnknownQosQueue);
 
     case Mutation::INVALID_NEIGHBOR_ID:
       return MutateInvalidValue(gen, update, config, switch_state, IsNeighbor);

@@ -2047,7 +2047,7 @@ actions {
     name: "green_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -2055,7 +2055,7 @@ actions {
     name: "red_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -2063,7 +2063,7 @@ actions {
     name: "green_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
   params {
@@ -2071,7 +2071,7 @@ actions {
     name: "red_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
 }
@@ -2121,7 +2121,7 @@ actions {
     name: "green_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -2129,7 +2129,7 @@ actions {
     name: "red_multicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_MCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "multicast_queue_t"
     }
   }
   params {
@@ -2137,7 +2137,7 @@ actions {
     name: "green_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_GREEN)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
   params {
@@ -2145,7 +2145,7 @@ actions {
     name: "red_unicast_queue"
     annotations: "@sai_action_param(SAI_POLICER_ATTR_COLORED_PACKET_SET_UCAST_COS_QUEUE_ACTION , SAI_PACKET_COLOR_RED)"
     type_name {
-      name: "qos_queue_t"
+      name: "unicast_queue_t"
     }
   }
 }
@@ -2856,6 +2856,15 @@ type_info {
     }
   }
   new_types {
+    key: "multicast_queue_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
     key: "nexthop_id_t"
     value {
       translated_type {
@@ -2893,6 +2902,15 @@ type_info {
   }
   new_types {
     key: "tunnel_id_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
+    key: "unicast_queue_t"
     value {
       translated_type {
         sdn_string {
