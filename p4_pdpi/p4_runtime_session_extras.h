@@ -84,6 +84,8 @@ absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
 // Installs the given `entities` via the given `P4RuntimeSession`.
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                const PiEntities& entities);
+absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
+                               absl::Span<const p4::v1::Entity> entities);
 
 // Like the `InstallPiEntities` above, but takes in the `PiEntities` message in
 // text format.
