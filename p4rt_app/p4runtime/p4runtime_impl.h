@@ -40,6 +40,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/packetio_interface.h"
@@ -197,6 +198,11 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   absl::StatusOr<FlowProgrammingStatistics> GetFlowProgrammingStatistics()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  // Sets the CPU Queue translator.
+  virtual void SetCpuQueueTranslator(
+      std::unique_ptr<CpuQueueTranslator> translator)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
   sonic::PacketIoCounters GetPacketIoCounters()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
@@ -342,6 +348,9 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
       capacity_by_action_profile_name_ ABSL_GUARDED_BY(server_state_lock_);
 
+  // Utility to perform translations between CPU queue name and id.
+  std::unique_ptr<CpuQueueTranslator> cpu_queue_translator_
+      ABSL_GUARDED_BY(server_state_lock_);
   // Performance statistics for P4RT Write().
   EventDataTracker<int> write_batch_requests_
       ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};
