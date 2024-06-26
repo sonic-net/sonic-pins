@@ -15,11 +15,13 @@
 #define PINS_P4RT_APP_P4RUNTIME_RESOURCE_UTILIZATION_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
@@ -46,23 +48,37 @@ absl::StatusOr<TableResources> GetResourceUsageForPiTableEntry(
 // by a selector (e.g. hash). These selectors can place hard limits on the
 // profile that need to be enforced.
 struct ActionProfileResourceCapacity {
-  int32_t max_group_size = 0;
-  int64_t max_weight_for_all_groups = 0;
+  // Records the `max_group_size`, the `selector_size_semantics` and the related
+  // max `size`.
+  p4::config::v1::ActionProfile action_profile;
 
-  // Utilization can be based SumOfActions or SumOfWeights in the P4Info. Today
-  // we always assume SumOfWeights.
-  int64_t current_utilization = 0;
+  int64_t current_total_weight = 0;
+  int64_t current_total_members = 0;
 
   template <typename Sink>
   friend void AbslStringify(Sink& sink,
                             const ActionProfileResourceCapacity& capacity) {
-    absl::Format(&sink, R"({
+    absl::Format(
+        &sink, R"({
   max_group_size = %d,
-  max_weight_for_all_groups = %d,
-  current_utilization = %d,
+  max_weight_for_all_groups = %s,
+  max_members_for_all_groups = %s,
+  max_weight_per_member = %s,
+  current_total_weight = %d,
+  current_total_members = %d,
 })",
-                 capacity.max_group_size, capacity.max_weight_for_all_groups,
-                 capacity.current_utilization);
+        capacity.action_profile.max_group_size(),
+        !capacity.action_profile.has_sum_of_members()
+            ? std::to_string(capacity.action_profile.size())
+            : "N/A",
+        capacity.action_profile.has_sum_of_members()
+            ? std::to_string(capacity.action_profile.size())
+            : "N/A",
+        capacity.action_profile.has_sum_of_members()
+            ? std::to_string(
+                  capacity.action_profile.sum_of_members().max_member_weight())
+            : "N/A",
+        capacity.current_total_weight, capacity.current_total_members);
   }
 };
 
@@ -90,6 +106,58 @@ absl::StatusOr<TableResources> VerifyCapacityAndGetTableResourceChange(
         capacity_by_action_profile_name,
     absl::flat_hash_map<std::string, int64_t>& current_batch_resources);
 
-} // namespace p4rt_app
+// -- Getters ------------------------------------------------------------------
+// TODO: These should be moved into a class based version of
+// ActionProfileResourceCapacity (if they're still necessary at that point).
+inline bool UsesSumOfMembers(const ActionProfileResourceCapacity& capacity) {
+  return capacity.action_profile.has_sum_of_members();
+}
+
+inline bool UsesSumOfWeights(const ActionProfileResourceCapacity& capacity) {
+  // If an action profile doesn't use SumOfMembers, it uses SumOfWeights.
+  return !UsesSumOfMembers(capacity);
+}
+
+inline std::optional<int64_t> GetMaxWeightForAllGroups(
+    const ActionProfileResourceCapacity& capacity) {
+  if (UsesSumOfWeights(capacity)) {
+    return capacity.action_profile.size();
+  }
+  return std::nullopt;
+};
+
+inline std::optional<int32_t> GetMaxWeightPerGroup(
+    const ActionProfileResourceCapacity& capacity) {
+  if (UsesSumOfWeights(capacity)) {
+    return capacity.action_profile.max_group_size();
+  }
+  return std::nullopt;
+};
+
+inline std::optional<int64_t> GetMaxMembersForAllGroups(
+    const ActionProfileResourceCapacity& capacity) {
+  if (UsesSumOfMembers(capacity)) {
+    return capacity.action_profile.size();
+  }
+  return std::nullopt;
+};
+
+inline std::optional<int32_t> GetMaxMembersPerGroup(
+    const ActionProfileResourceCapacity& capacity) {
+  if (UsesSumOfMembers(capacity)) {
+    return capacity.action_profile.max_group_size();
+  }
+  return std::nullopt;
+};
+
+inline std::optional<int32_t> GetMaxWeightPerMember(
+    const ActionProfileResourceCapacity& capacity) {
+  if (UsesSumOfMembers(capacity)) {
+    return capacity.action_profile.sum_of_members().max_member_weight();
+  }
+  return std::nullopt;
+};
+
+}  // namespace p4rt_app
 
 #endif // PINS_P4RT_APP_P4RUNTIME_RESOURCE_UTILIZATION_H_
