@@ -54,6 +54,8 @@ class IrActionProfileDefinitionBuilder {
   IrActionProfileDefinitionBuilder& name(absl::string_view name_str) {
     action_profile_.mutable_action_profile()->mutable_preamble()->set_name(
         name_str);
+    action_profile_.mutable_action_profile()->mutable_preamble()->set_alias(
+        name_str);
     return *this;
   }
   IrActionProfileDefinitionBuilder& id(int id_number) {
@@ -88,10 +90,12 @@ class IrActionProfileDefinitionBuilder {
 
   // Set up the action definition with sum-of-weights accounting. Overwrites any
   // previous static_size, wcmp_selector_size, or max_sum_of_members setting.
-  IrActionProfileDefinitionBuilder& max_sum_of_weights(int64_t size) {
-    action_profile_.mutable_action_profile()->set_size(0);
+  IrActionProfileDefinitionBuilder& max_sum_of_weights(int64_t size,
+                                                       int max_group_size) {
+    action_profile_.mutable_action_profile()->set_size(size);
     action_profile_.mutable_action_profile()->set_with_selector(true);
-    action_profile_.mutable_action_profile()->set_max_group_size(size);
+    action_profile_.mutable_action_profile()->set_max_group_size(
+        max_group_size);
     action_profile_.mutable_action_profile()->mutable_sum_of_weights();
     return *this;
   }
@@ -99,10 +103,12 @@ class IrActionProfileDefinitionBuilder {
   // Set up the action definition with sum-of-members accounting. Overwrites any
   // previous static_size, wcmp_selector_size, or max_sum_of_weights setting.
   IrActionProfileDefinitionBuilder& max_sum_of_members(int64_t size,
+                                                       int max_group_size,
                                                        int max_member_weight) {
-    action_profile_.mutable_action_profile()->set_size(0);
+    action_profile_.mutable_action_profile()->set_size(size);
     action_profile_.mutable_action_profile()->set_with_selector(true);
-    action_profile_.mutable_action_profile()->set_max_group_size(size);
+    action_profile_.mutable_action_profile()->set_max_group_size(
+        max_group_size);
     action_profile_.mutable_action_profile()
         ->mutable_sum_of_members()
         ->set_max_member_weight(max_member_weight);

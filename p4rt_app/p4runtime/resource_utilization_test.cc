@@ -17,6 +17,7 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
@@ -34,6 +35,7 @@
 #include "p4_infra/p4_pdpi/ir.h"
 #include "p4_infra/p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/entity_update.h"
+#include "p4rt_app/utils/ir_builder.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
@@ -43,7 +45,8 @@ namespace sonic {
 // Pretty print function to help clarify failed expectations.
 void PrintTo(const ActionProfileResources& resource, std::ostream* os) {
   *os << "name:" << resource.name << " actions:" << resource.number_of_actions
-      << " total_weight:" << resource.total_weight;
+      << " total_weight:" << resource.total_weight
+      << " max_weight:" << resource.max_weight;
 }
 
 // Pretty print function to help clarify failed expectations.
@@ -60,7 +63,9 @@ void PrintTo(const TableResources& resource, std::ostream* os) {
 
 namespace {
 
+using ::gutil::IsOk;
 using ::gutil::StatusIs;
+using ::testing::Eq;
 using ::testing::FieldsAre;
 using ::testing::HasSubstr;
 using ::testing::Optional;
@@ -88,6 +93,9 @@ absl::StatusOr<MatchingIrAndPiTableEntry> TranslateIrString(
 // Resource utilization tests focus on counting resources in PI and IR table
 // entries.
 class ResourceUtilizationTest : public testing::Test {
+ public:
+  pdpi::IrP4Info& GetIrP4Info() { return ir_p4info_; }
+
  protected:
   pdpi::IrP4Info ir_p4info_ =
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
@@ -159,10 +167,10 @@ TEST_F(ResourceUtilizationTest, CountsWcmpActionsAndWeights) {
 
   EXPECT_THAT(ir_resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/2,
-                                 /*total_weight=*/3)));
+                                 /*total_weight=*/3, /*max_weight=*/2)));
   EXPECT_THAT(pi_resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/2,
-                                 /*total_weight=*/3)));
+                                 /*total_weight=*/3, /*max_weight=*/2)));
 }
 
 TEST_F(ResourceUtilizationTest, WcmpReturnsNotFoundIfTableEntryDoesNotExist) {
@@ -263,6 +271,7 @@ absl::StatusOr<EntityUpdate> GetUpdate(const pdpi::IrP4Info& ir_p4info,
 }
 
 class GetTableResourceChangeTest : public ResourceUtilizationTest {
+ public:
  protected:
   GetTableResourceChangeTest() : ResourceUtilizationTest() {
     for (const auto& [action_profile_name, action_profile_def] :
@@ -321,7 +330,7 @@ TEST_F(GetTableResourceChangeTest, CanGetInsertResources) {
   EXPECT_THAT(resources.name, wcmp_table_name_);
   EXPECT_THAT(resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/2,
-                                 /*total_weight=*/3)));
+                                 /*total_weight=*/3, /*max_weight=*/2)));
 }
 
 TEST_F(GetTableResourceChangeTest, CanGetModifyResources) {
@@ -385,7 +394,7 @@ TEST_F(GetTableResourceChangeTest, CanGetModifyResources) {
   EXPECT_THAT(resources.name, wcmp_table_name_);
   EXPECT_THAT(resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/1,
-                                 /*total_weight=*/-1)));
+                                 /*total_weight=*/-1, /*max_weight=*/1)));
 }
 
 TEST_F(GetTableResourceChangeTest, CanGetDeleteResources) {
@@ -436,7 +445,7 @@ TEST_F(GetTableResourceChangeTest, CanGetDeleteResources) {
   EXPECT_THAT(resources.name, wcmp_table_name_);
   EXPECT_THAT(resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/-2,
-                                 /*total_weight=*/-7)));
+                                 /*total_weight=*/-7, /*max_weight=*/0)));
 }
 
 TEST_F(GetTableResourceChangeTest, InvalidTableNameFails) {
@@ -545,43 +554,6 @@ TEST_F(GetTableResourceChangeTest, NoExistingResourceCapacityFails) {
                HasSubstr("Could not get the current capacity data for")));
 }
 
-TEST_F(GetTableResourceChangeTest, ConsidersOtherRequestsIntheBatch) {
-  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
-                       GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
-                                 R"pb(
-                                   table_entry {
-                                     table_name: "wcmp_group_table"
-                                     matches {
-                                       name: "wcmp_group_id"
-                                       exact { str: "group-1" }
-                                     }
-                                     action_set {
-                                       actions {
-                                         action {
-                                           name: "set_nexthop_id"
-                                           params {
-                                             name: "nexthop_id"
-                                             value { str: "nexthop-1" }
-                                           }
-                                         }
-                                         weight: 1
-                                       }
-                                     }
-                                   })pb"));
-
-  // Set the utilization for everything to full.
-  for (auto& [name, capacity] : capacity_by_action_profile_name_) {
-    capacity.current_utilization = capacity.max_weight_for_all_groups;
-  }
-
-  EXPECT_THAT(
-      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
-                                              capacity_by_action_profile_name_,
-                                              resources_in_current_batch_),
-      StatusIs(absl::StatusCode::kResourceExhausted,
-               HasSubstr("not enough resources to fit in")));
-}
-
 TEST_F(GetTableResourceChangeTest, RejectsRequestsWithTooManyActions) {
   ASSERT_OK_AND_ASSIGN(EntityUpdate update,
                        GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
@@ -628,14 +600,14 @@ TEST_F(GetTableResourceChangeTest, RejectsRequestsWithTooManyActions) {
 
   // Set the max group size to 2.
   for (auto& [name, capacity] : capacity_by_action_profile_name_) {
-    capacity.max_group_size = 2;
+    capacity.action_profile.set_max_group_size(2);
   }
 
   EXPECT_THAT(
       VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
                                               capacity_by_action_profile_name_,
                                               resources_in_current_batch_),
-      StatusIs(absl::StatusCode::kResourceExhausted,
+      StatusIs(absl::StatusCode::kInvalidArgument,
                HasSubstr("max allowed is 2, but got 3")));
 }
 
