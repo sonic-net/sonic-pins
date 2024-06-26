@@ -224,26 +224,34 @@ GetUpdatedResourceCapacities(
         GetActionProfileResourceCapacity(action_profile_def);
     const ActionProfileResourceCapacity* original_capacity =
         gutil::FindOrNull(original, action_profile_name);
-    capacity.current_utilization = original_capacity == nullptr
-                                       ? 0
-                                       : original_capacity->current_utilization;
-    if (capacity.current_utilization > capacity.max_weight_for_all_groups) {
+    if (original_capacity != nullptr) {
+      capacity.current_total_weight = original_capacity->current_total_weight;
+      capacity.current_total_members = original_capacity->current_total_members;
+    }
+
+    if (auto max_total_weight = GetMaxWeightForAllGroups(capacity);
+        max_total_weight.has_value() && *max_total_weight != 0 &&
+        capacity.current_total_weight > *max_total_weight) {
       return gutil::FailedPreconditionErrorBuilder()
              << "The new ForwardingPipelineConfig capacity for action profile '"
-             << action_profile_name << "' ("
-             << capacity.max_weight_for_all_groups
-             << ") is less than the current usage ("
-             << capacity.current_utilization << ")";
+             << action_profile_name << "' with SumOfWeight size semantics ("
+             << *max_total_weight << ") is less than the current usage ("
+             << capacity.current_total_weight << ")";
     }
+    // TODO: b/330375908 - Handle new SumOfMembers circumstances.
+
     // TODO: Check against the current usage.
-    if (capacity.current_utilization > 0 &&
-        capacity.max_group_size < original_capacity->max_group_size) {
+    // If the action profile is in use, then we do not allow shrinking max group
+    // size.
+    if (capacity.current_total_weight > 0 &&
+        capacity.action_profile.max_group_size() <
+            original_capacity->action_profile.max_group_size()) {
       return gutil::FailedPreconditionErrorBuilder()
              << "The new ForwardingPipelineConfig max group size for action "
              << "profile '" << action_profile_name << "' ("
-             << capacity.max_group_size
+             << capacity.action_profile.max_group_size()
              << ") is smaller than the original size ("
-             << original_capacity->max_group_size
+             << original_capacity->action_profile.max_group_size()
              << "). Shrinking the max group size is currently unsupported.";
     }
 

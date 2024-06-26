@@ -373,6 +373,7 @@ cc_test(
         "//p4_pdpi:entity_keys",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
+        "//p4rt_app/utils:ir_builder",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -380,6 +381,7 @@ cc_test(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
     ],
@@ -451,6 +453,7 @@ cc_test(
         "@com_google_absl//absl/functional:any_invocable",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
     ],
 )

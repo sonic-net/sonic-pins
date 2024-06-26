@@ -17,6 +17,7 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/log.h"
@@ -34,6 +35,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/entity_update.h"
+#include "p4rt_app/utils/ir_builder.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 
@@ -43,7 +45,8 @@ namespace sonic {
 // Pretty print function to help clarify failed expectations.
 void PrintTo(const ActionProfileResources& resource, std::ostream* os) {
   *os << "name:" << resource.name << " actions:" << resource.number_of_actions
-      << " total_weight:" << resource.total_weight;
+      << " total_weight:" << resource.total_weight
+      << " max_weight:" << resource.max_weight;
 }
 
 // Pretty print function to help clarify failed expectations.
@@ -60,7 +63,9 @@ void PrintTo(const TableResources& resource, std::ostream* os) {
 
 namespace {
 
+using ::gutil::IsOk;
 using ::gutil::StatusIs;
+using ::testing::Eq;
 using ::testing::FieldsAre;
 using ::testing::HasSubstr;
 using ::testing::Optional;
@@ -88,6 +93,9 @@ absl::StatusOr<MatchingIrAndPiTableEntry> TranslateIrString(
 // Resource utilization tests focus on counting resources in PI and IR table
 // entries.
 class ResourceUtilizationTest : public testing::Test {
+ public:
+  pdpi::IrP4Info& GetIrP4Info() { return ir_p4info_; }
+
  protected:
   pdpi::IrP4Info ir_p4info_ =
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
@@ -159,10 +167,10 @@ TEST_F(ResourceUtilizationTest, CountsWcmpActionsAndWeights) {
 
   EXPECT_THAT(ir_resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/2,
-                                 /*total_weight=*/3)));
+                                 /*total_weight=*/3, /*max_weight=*/2)));
   EXPECT_THAT(pi_resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/2,
-                                 /*total_weight=*/3)));
+                                 /*total_weight=*/3, /*max_weight=*/2)));
 }
 
 TEST_F(ResourceUtilizationTest, WcmpReturnsNotFoundIfTableEntryDoesNotExist) {
@@ -263,6 +271,7 @@ absl::StatusOr<EntityUpdate> GetUpdate(const pdpi::IrP4Info& ir_p4info,
 }
 
 class GetTableResourceChangeTest : public ResourceUtilizationTest {
+ public:
  protected:
   GetTableResourceChangeTest() : ResourceUtilizationTest() {
     for (const auto& [action_profile_name, action_profile_def] :
@@ -321,7 +330,7 @@ TEST_F(GetTableResourceChangeTest, CanGetInsertResources) {
   EXPECT_THAT(resources.name, wcmp_table_name_);
   EXPECT_THAT(resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/2,
-                                 /*total_weight=*/3)));
+                                 /*total_weight=*/3, /*max_weight=*/2)));
 }
 
 TEST_F(GetTableResourceChangeTest, CanGetModifyResources) {
@@ -385,7 +394,7 @@ TEST_F(GetTableResourceChangeTest, CanGetModifyResources) {
   EXPECT_THAT(resources.name, wcmp_table_name_);
   EXPECT_THAT(resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/1,
-                                 /*total_weight=*/-1)));
+                                 /*total_weight=*/-1, /*max_weight=*/1)));
 }
 
 TEST_F(GetTableResourceChangeTest, CanGetDeleteResources) {
@@ -436,7 +445,7 @@ TEST_F(GetTableResourceChangeTest, CanGetDeleteResources) {
   EXPECT_THAT(resources.name, wcmp_table_name_);
   EXPECT_THAT(resources.action_profile,
               Optional(FieldsAre(wcmp_selector_name_, /*number_of_actions=*/-2,
-                                 /*total_weight=*/-7)));
+                                 /*total_weight=*/-7, /*max_weight=*/0)));
 }
 
 TEST_F(GetTableResourceChangeTest, InvalidTableNameFails) {
@@ -545,43 +554,6 @@ TEST_F(GetTableResourceChangeTest, NoExistingResourceCapacityFails) {
                HasSubstr("Could not get the current capacity data for")));
 }
 
-TEST_F(GetTableResourceChangeTest, ConsidersOtherRequestsIntheBatch) {
-  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
-                       GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
-                                 R"pb(
-                                   table_entry {
-                                     table_name: "wcmp_group_table"
-                                     matches {
-                                       name: "wcmp_group_id"
-                                       exact { str: "group-1" }
-                                     }
-                                     action_set {
-                                       actions {
-                                         action {
-                                           name: "set_nexthop_id"
-                                           params {
-                                             name: "nexthop_id"
-                                             value { str: "nexthop-1" }
-                                           }
-                                         }
-                                         weight: 1
-                                       }
-                                     }
-                                   })pb"));
-
-  // Set the utilization for everything to full.
-  for (auto& [name, capacity] : capacity_by_action_profile_name_) {
-    capacity.current_utilization = capacity.max_weight_for_all_groups;
-  }
-
-  EXPECT_THAT(
-      VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
-                                              capacity_by_action_profile_name_,
-                                              resources_in_current_batch_),
-      StatusIs(absl::StatusCode::kResourceExhausted,
-               HasSubstr("not enough resources to fit in")));
-}
-
 TEST_F(GetTableResourceChangeTest, RejectsRequestsWithTooManyActions) {
   ASSERT_OK_AND_ASSIGN(EntityUpdate update,
                        GetUpdate(ir_p4info_, p4::v1::Update::INSERT,
@@ -628,14 +600,14 @@ TEST_F(GetTableResourceChangeTest, RejectsRequestsWithTooManyActions) {
 
   // Set the max group size to 2.
   for (auto& [name, capacity] : capacity_by_action_profile_name_) {
-    capacity.max_group_size = 2;
+    capacity.action_profile.set_max_group_size(2);
   }
 
   EXPECT_THAT(
       VerifyCapacityAndGetTableResourceChange(ir_p4info_, update, entity_cache_,
                                               capacity_by_action_profile_name_,
                                               resources_in_current_batch_),
-      StatusIs(absl::StatusCode::kResourceExhausted,
+      StatusIs(absl::StatusCode::kInvalidArgument,
                HasSubstr("max allowed is 2, but got 3")));
 }
 
@@ -660,6 +632,621 @@ TEST_F(GetTableResourceChangeTest, PacketReplicationEntriesIgnored) {
 
   EXPECT_EQ(resources.name, "");
   EXPECT_EQ(resources.action_profile, std::nullopt);
+}
+
+TEST(VerifyCapacityAndGetTableResourceChangeTest,
+     ValidWeightIsAcceptedInSumOfWeights) {
+  constexpr int kSize = 12000;
+  constexpr int kMaxGroupSize = 512;
+  constexpr int kActionProfileId = 3;
+  constexpr absl::string_view kActionProfileName = "wcmp_selector_profile";
+  const IrActionDefinitionBuilder no_action_builder =
+      IrActionDefinitionBuilder().name("NoAction");
+
+  const pdpi::IrP4Info ir_p4info =
+      IrP4InfoBuilder()
+          .table(IrTableDefinitionBuilder()
+                     .name("wcmp_group_table")
+                     .match_field(R"pb(
+                                    id: 1
+                                    name: "wcmp_group_id"
+                                    match_type: EXACT
+                                  )pb",
+                                  pdpi::Format::STRING)
+                     .entry_action(no_action_builder)
+                     .size(100))
+          .action(no_action_builder)
+          .action_profile(IrActionProfileDefinitionBuilder()
+                              .id(kActionProfileId)
+                              .name(kActionProfileName)
+                              .max_sum_of_weights(kSize, kMaxGroupSize)
+                              .table_ids({1}))();
+
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 5
+                                       }
+                                     }
+                                   })pb"));
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name = {
+          {std::string(kActionProfileName),
+           GetActionProfileResourceCapacity(
+               ir_p4info.action_profiles_by_id().at(kActionProfileId))},
+      };
+  absl::flat_hash_map<std::string, int64_t> current_batch_resources;
+
+  EXPECT_THAT(VerifyCapacityAndGetTableResourceChange(
+                  ir_p4info, update, /*entity_cache=*/{},
+                  capacity_by_action_profile_name, current_batch_resources),
+              IsOk());
+}
+
+TEST(VerifyCapacityAndGetTableResourceChangeTest,
+     VeryHighWeightIsAcceptedInSumOfMembers) {
+  constexpr int kSize = 12000;
+  constexpr int kMaxGroupSize = 512;
+  // Greater than size.
+  constexpr int kMaxMemberWeight = 60000;
+  constexpr int kActionProfileId = 3;
+  constexpr absl::string_view kActionProfileName = "wcmp_selector_profile";
+  const IrActionDefinitionBuilder no_action_builder =
+      IrActionDefinitionBuilder().name("NoAction");
+
+  const pdpi::IrP4Info ir_p4info =
+      IrP4InfoBuilder()
+          .table(IrTableDefinitionBuilder()
+                     .name("wcmp_group_table")
+                     .match_field(R"pb(
+                                    id: 1
+                                    name: "wcmp_group_id"
+                                    match_type: EXACT
+                                  )pb",
+                                  pdpi::Format::STRING)
+                     .entry_action(no_action_builder)
+                     .size(100))
+          .action(no_action_builder)
+          .action_profile(
+              IrActionProfileDefinitionBuilder()
+                  .id(kActionProfileId)
+                  .name(kActionProfileName)
+                  .max_sum_of_members(kSize, kMaxGroupSize, kMaxMemberWeight)
+                  .table_ids({1}))();
+
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action { name: "NoAction" }
+                                         # More than the size.
+                                         weight: 30000
+                                       }
+                                       actions {
+                                         action { name: "NoAction" }
+                                         # More than the size again.
+                                         weight: 35000
+                                       }
+                                     }
+                                   })pb"));
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name = {
+          {std::string(kActionProfileName),
+           GetActionProfileResourceCapacity(
+               ir_p4info.action_profiles_by_id().at(kActionProfileId))},
+      };
+  absl::flat_hash_map<std::string, int64_t> current_batch_resources;
+
+  EXPECT_THAT(VerifyCapacityAndGetTableResourceChange(
+                  ir_p4info, update, /*entity_cache=*/{},
+                  capacity_by_action_profile_name, current_batch_resources),
+              IsOk());
+}
+
+TEST(VerifyCapacityAndGetTableResourceChangeTest,
+     RejectsTooMuchWeightInSumOfWeights) {
+  constexpr int kSize = 10;
+  constexpr int kMaxGroupSize = 512;
+  constexpr int kActionProfileId = 3;
+  constexpr absl::string_view kActionProfileName = "wcmp_selector_profile";
+  const IrActionDefinitionBuilder no_action_builder =
+      IrActionDefinitionBuilder().name("NoAction");
+
+  const pdpi::IrP4Info ir_p4info =
+      IrP4InfoBuilder()
+          .table(IrTableDefinitionBuilder()
+                     .name("wcmp_group_table")
+                     .match_field(R"pb(
+                                    id: 1
+                                    name: "wcmp_group_id"
+                                    match_type: EXACT
+                                  )pb",
+                                  pdpi::Format::STRING)
+                     .entry_action(no_action_builder)
+                     .size(100))
+          .action(no_action_builder)
+          .action_profile(IrActionProfileDefinitionBuilder()
+                              .id(kActionProfileId)
+                              .name(kActionProfileName)
+                              .max_sum_of_weights(kSize, kMaxGroupSize)
+                              .table_ids({1}))();
+
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action { name: "NoAction" }
+                                         # More than the size.
+                                         weight: 100
+                                       }
+                                     }
+                                   })pb"));
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name = {
+          {std::string(kActionProfileName),
+           GetActionProfileResourceCapacity(
+               ir_p4info.action_profiles_by_id().at(kActionProfileId))},
+      };
+  absl::flat_hash_map<std::string, int64_t> current_batch_resources;
+
+  EXPECT_THAT(VerifyCapacityAndGetTableResourceChange(
+                  ir_p4info, update, /*entity_cache=*/{},
+                  capacity_by_action_profile_name, current_batch_resources),
+              StatusIs(absl::StatusCode::kResourceExhausted));
+}
+
+TEST(VerifyCapacityAndGetTableResourceChangeTest,
+     RejectsTooMuchWeightInASingleRequestSumOfWeights) {
+  constexpr int kSize = 12000;
+  constexpr int kMaxGroupSize = 512;
+  constexpr int kActionProfileId = 3;
+  constexpr absl::string_view kActionProfileName = "wcmp_selector_profile";
+  const IrActionDefinitionBuilder no_action_builder =
+      IrActionDefinitionBuilder().name("NoAction");
+
+  const pdpi::IrP4Info ir_p4info =
+      IrP4InfoBuilder()
+          .table(IrTableDefinitionBuilder()
+                     .name("wcmp_group_table")
+                     .match_field(R"pb(
+                                    id: 1
+                                    name: "wcmp_group_id"
+                                    match_type: EXACT
+                                  )pb",
+                                  pdpi::Format::STRING)
+                     .entry_action(no_action_builder)
+                     .size(100))
+          .action(no_action_builder)
+          .action_profile(IrActionProfileDefinitionBuilder()
+                              .id(kActionProfileId)
+                              .name(kActionProfileName)
+                              .max_sum_of_weights(kSize, kMaxGroupSize)
+                              .table_ids({1}))();
+
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 301
+                                       }
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 302
+                                       }
+                                     }
+                                   })pb"));
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name = {
+          {std::string(kActionProfileName),
+           GetActionProfileResourceCapacity(
+               ir_p4info.action_profiles_by_id().at(kActionProfileId))},
+      };
+  absl::flat_hash_map<std::string, int64_t> current_batch_resources;
+
+  EXPECT_THAT(VerifyCapacityAndGetTableResourceChange(
+                  ir_p4info, update, /*entity_cache=*/{},
+                  capacity_by_action_profile_name, current_batch_resources),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(VerifyCapacityAndGetTableResourceChangeTest,
+     RejectsTooManyMembersInSumOfMembers) {
+  constexpr int kSize = 3;
+  constexpr int kMaxGroupSize = 512;
+  constexpr int kMaxMemberWeight = 4096;
+  constexpr int kActionProfileId = 3;
+  constexpr absl::string_view kActionProfileName = "wcmp_selector_profile";
+  const IrActionDefinitionBuilder no_action_builder =
+      IrActionDefinitionBuilder().name("NoAction");
+
+  const pdpi::IrP4Info ir_p4info =
+      IrP4InfoBuilder()
+          .table(IrTableDefinitionBuilder()
+                     .name("wcmp_group_table")
+                     .match_field(R"pb(
+                                    id: 1
+                                    name: "wcmp_group_id"
+                                    match_type: EXACT
+                                  )pb",
+                                  pdpi::Format::STRING)
+                     .entry_action(no_action_builder)
+                     .size(100))
+          .action(no_action_builder)
+          .action_profile(
+              IrActionProfileDefinitionBuilder()
+                  .id(kActionProfileId)
+                  .name(kActionProfileName)
+                  .max_sum_of_members(kSize, kMaxGroupSize, kMaxMemberWeight)
+                  .table_ids({1}))();
+
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 500
+                                       }
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 501
+                                       }
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 502
+                                       }
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 503
+                                       }
+                                     }
+                                   })pb"));
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name = {
+          {std::string(kActionProfileName),
+           GetActionProfileResourceCapacity(
+               ir_p4info.action_profiles_by_id().at(kActionProfileId))},
+      };
+  absl::flat_hash_map<std::string, int64_t> current_batch_resources;
+
+  EXPECT_THAT(VerifyCapacityAndGetTableResourceChange(
+                  ir_p4info, update, /*entity_cache=*/{},
+                  capacity_by_action_profile_name, current_batch_resources),
+              StatusIs(absl::StatusCode::kResourceExhausted));
+}
+
+TEST(VerifyCapacityAndGetTableResourceChangeTest,
+     RejectsTooBigMemberInSumOfMembers) {
+  constexpr int kSize = 12000;
+  constexpr int kMaxGroupSize = 512;
+  constexpr int kMaxMemberWeight = 4096;
+  constexpr int kActionProfileId = 3;
+  constexpr absl::string_view kActionProfileName = "wcmp_selector_profile";
+  const IrActionDefinitionBuilder no_action_builder =
+      IrActionDefinitionBuilder().name("NoAction");
+
+  const pdpi::IrP4Info ir_p4info =
+      IrP4InfoBuilder()
+          .table(IrTableDefinitionBuilder()
+                     .name("wcmp_group_table")
+                     .match_field(R"pb(
+                                    id: 1
+                                    name: "wcmp_group_id"
+                                    match_type: EXACT
+                                  )pb",
+                                  pdpi::Format::STRING)
+                     .entry_action(no_action_builder)
+                     .size(100))
+          .action(no_action_builder)
+          .action_profile(
+              IrActionProfileDefinitionBuilder()
+                  .id(kActionProfileId)
+                  .name(kActionProfileName)
+                  .max_sum_of_members(kSize, kMaxGroupSize, kMaxMemberWeight)
+                  .table_ids({1}))();
+
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action { name: "NoAction" }
+                                         # More than kMaxMemberWeight.
+                                         weight: 10000
+                                       }
+                                     }
+                                   })pb"));
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name = {
+          {std::string(kActionProfileName),
+           GetActionProfileResourceCapacity(
+               ir_p4info.action_profiles_by_id().at(kActionProfileId))},
+      };
+  absl::flat_hash_map<std::string, int64_t> current_batch_resources;
+
+  EXPECT_THAT(VerifyCapacityAndGetTableResourceChange(
+                  ir_p4info, update, /*entity_cache=*/{},
+                  capacity_by_action_profile_name, current_batch_resources),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(VerifyCapacityAndGetTableResourceChangeTest,
+     ConsidersOtherRequestsIntheBatchInSumOfWeights) {
+  constexpr int kSize = 12000;
+  constexpr int kMaxGroupSize = 512;
+  constexpr int kActionProfileId = 3;
+  constexpr absl::string_view kActionProfileName = "wcmp_selector_profile";
+  const IrActionDefinitionBuilder no_action_builder =
+      IrActionDefinitionBuilder().name("NoAction");
+
+  const pdpi::IrP4Info ir_p4info =
+      IrP4InfoBuilder()
+          .table(IrTableDefinitionBuilder()
+                     .name("wcmp_group_table")
+                     .match_field(R"pb(
+                                    id: 1
+                                    name: "wcmp_group_id"
+                                    match_type: EXACT
+                                  )pb",
+                                  pdpi::Format::STRING)
+                     .entry_action(no_action_builder)
+                     .size(100))
+          .action(no_action_builder)
+          .action_profile(IrActionProfileDefinitionBuilder()
+                              .id(kActionProfileId)
+                              .name(kActionProfileName)
+                              .max_sum_of_weights(kSize, kMaxGroupSize)
+                              .table_ids({1}))();
+
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 1
+                                       }
+                                     }
+                                   })pb"));
+
+  // Set the utilization for everything to full.
+  ActionProfileResourceCapacity capacity = GetActionProfileResourceCapacity(
+      ir_p4info.action_profiles_by_id().at(kActionProfileId));
+  capacity.current_total_weight = capacity.action_profile.size();
+  capacity.current_total_members = capacity.action_profile.size();
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name = {
+          {std::string(kActionProfileName), std::move(capacity)},
+      };
+  absl::flat_hash_map<std::string, int64_t> current_batch_resources;
+
+  EXPECT_THAT(VerifyCapacityAndGetTableResourceChange(
+                  ir_p4info, update, /*entity_cache=*/{},
+                  capacity_by_action_profile_name, current_batch_resources),
+              StatusIs(absl::StatusCode::kResourceExhausted,
+                       HasSubstr("not enough resources to fit in")));
+}
+
+TEST(VerifyCapacityAndGetTableResourceChangeTest,
+     ConsidersOtherRequestsIntheBatchInSumOfMembers) {
+  constexpr int kSize = 12000;
+  constexpr int kMaxGroupSize = 512;
+  constexpr int kMaxMemberWeight = 4096;
+  constexpr int kActionProfileId = 3;
+  constexpr absl::string_view kActionProfileName = "wcmp_selector_profile";
+  const IrActionDefinitionBuilder no_action_builder =
+      IrActionDefinitionBuilder().name("NoAction");
+
+  const pdpi::IrP4Info ir_p4info =
+      IrP4InfoBuilder()
+          .table(IrTableDefinitionBuilder()
+                     .name("wcmp_group_table")
+                     .match_field(R"pb(
+                                    id: 1
+                                    name: "wcmp_group_id"
+                                    match_type: EXACT
+                                  )pb",
+                                  pdpi::Format::STRING)
+                     .entry_action(no_action_builder)
+                     .size(100))
+          .action(no_action_builder)
+          .action_profile(
+              IrActionProfileDefinitionBuilder()
+                  .id(kActionProfileId)
+                  .name(kActionProfileName)
+                  .max_sum_of_members(kSize, kMaxGroupSize, kMaxMemberWeight)
+                  .table_ids({1}))();
+
+  ASSERT_OK_AND_ASSIGN(EntityUpdate update,
+                       GetUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                 R"pb(
+                                   table_entry {
+                                     table_name: "wcmp_group_table"
+                                     matches {
+                                       name: "wcmp_group_id"
+                                       exact { str: "group-1" }
+                                     }
+                                     action_set {
+                                       actions {
+                                         action { name: "NoAction" }
+                                         weight: 1
+                                       }
+                                     }
+                                   })pb"));
+
+  // Set the utilization for everything to full.
+  ActionProfileResourceCapacity capacity = GetActionProfileResourceCapacity(
+      ir_p4info.action_profiles_by_id().at(kActionProfileId));
+  capacity.current_total_weight = capacity.action_profile.size();
+  capacity.current_total_members = capacity.action_profile.size();
+
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name = {
+          {std::string(kActionProfileName), std::move(capacity)},
+      };
+  absl::flat_hash_map<std::string, int64_t> current_batch_resources;
+
+  EXPECT_THAT(VerifyCapacityAndGetTableResourceChange(
+                  ir_p4info, update, /*entity_cache=*/{},
+                  capacity_by_action_profile_name, current_batch_resources),
+              StatusIs(absl::StatusCode::kResourceExhausted,
+                       HasSubstr("not enough resources to fit in")));
+}
+
+TEST(ActionProfileResourceCapacityTest, UsesSumOfXTests) {
+  constexpr int kSize = 1;
+  constexpr int kMaxGroupSize = 1;
+  constexpr int kMaxMemberWeight = 1;
+  {
+    ActionProfileResourceCapacity capacity_without_specified_semantics =
+        GetActionProfileResourceCapacity(
+            IrActionProfileDefinitionBuilder()
+                .name("wcmp_selector_profile_without_size_selector_semantics")
+                .wcmp_selector_size(kSize, kMaxGroupSize)());
+    EXPECT_TRUE(UsesSumOfWeights(capacity_without_specified_semantics));
+    EXPECT_FALSE(UsesSumOfMembers(capacity_without_specified_semantics));
+  }
+
+  {
+    ActionProfileResourceCapacity capacity_with_explicit_sum_of_weights =
+        GetActionProfileResourceCapacity(
+            IrActionProfileDefinitionBuilder()
+                .name("wcmp_selector_profile_with_sum_of_weights")
+                .max_sum_of_weights(kSize, kMaxGroupSize)());
+    EXPECT_TRUE(UsesSumOfWeights(capacity_with_explicit_sum_of_weights));
+    EXPECT_FALSE(UsesSumOfMembers(capacity_with_explicit_sum_of_weights));
+  }
+  {
+    ActionProfileResourceCapacity capacity_with_explicit_sum_of_members =
+        GetActionProfileResourceCapacity(
+            IrActionProfileDefinitionBuilder()
+                .name("wcmp_selector_profile_with_sum_of_members")
+                .max_sum_of_members(kSize, kMaxGroupSize, kMaxMemberWeight)());
+    EXPECT_FALSE(UsesSumOfWeights(capacity_with_explicit_sum_of_members));
+    EXPECT_TRUE(UsesSumOfMembers(capacity_with_explicit_sum_of_members));
+  }
+}
+
+TEST(ActionProfileResourceCapacityTest, GetMaxXTests) {
+  constexpr int kSize = 200;
+  constexpr int kMaxGroupSize = 150;
+  constexpr int kMaxMemberWeight = 100;
+  {
+    ActionProfileResourceCapacity capacity_without_specified_semantics =
+        GetActionProfileResourceCapacity(
+            IrActionProfileDefinitionBuilder()
+                .name("wcmp_selector_profile_without_size_selector_semantics")
+                .wcmp_selector_size(kSize, kMaxGroupSize)());
+    // Only relevant when Sum Of Weights semantics are used (like here).
+    EXPECT_THAT(GetMaxWeightForAllGroups(capacity_without_specified_semantics),
+                Optional(kSize));
+    EXPECT_THAT(GetMaxWeightPerGroup(capacity_without_specified_semantics),
+                Optional(kMaxGroupSize));
+    // Only relevant when Sum Of Members semantics are used (not here).
+    EXPECT_THAT(GetMaxMembersForAllGroups(capacity_without_specified_semantics),
+                Eq(std::nullopt));
+    EXPECT_THAT(GetMaxMembersPerGroup(capacity_without_specified_semantics),
+                Eq(std::nullopt));
+    EXPECT_THAT(GetMaxWeightPerMember(capacity_without_specified_semantics),
+                Eq(std::nullopt));
+  }
+
+  {
+    ActionProfileResourceCapacity capacity_with_explicit_sum_of_weights =
+        GetActionProfileResourceCapacity(
+            IrActionProfileDefinitionBuilder()
+                .name("wcmp_selector_profile_with_sum_of_weights")
+                .max_sum_of_weights(kSize, kMaxGroupSize)());
+    // Only relevant when Sum Of Weights semantics are used (like here).
+    EXPECT_THAT(GetMaxWeightForAllGroups(capacity_with_explicit_sum_of_weights),
+                Optional(kSize));
+    EXPECT_THAT(GetMaxWeightPerGroup(capacity_with_explicit_sum_of_weights),
+                Optional(kMaxGroupSize));
+    // Only relevant when Sum Of Members semantics are used (not here).
+    EXPECT_THAT(
+        GetMaxMembersForAllGroups(capacity_with_explicit_sum_of_weights),
+        Eq(std::nullopt));
+    EXPECT_THAT(GetMaxMembersPerGroup(capacity_with_explicit_sum_of_weights),
+                Eq(std::nullopt));
+    EXPECT_THAT(GetMaxWeightPerMember(capacity_with_explicit_sum_of_weights),
+                Eq(std::nullopt));
+  }
+  {
+    ActionProfileResourceCapacity capacity_with_explicit_sum_of_members =
+        GetActionProfileResourceCapacity(
+            IrActionProfileDefinitionBuilder()
+                .name("wcmp_selector_profile_with_sum_of_members")
+                .max_sum_of_members(kSize, kMaxGroupSize, kMaxMemberWeight)());
+    // Only relevant when Sum Of Weights semantics are used (not here).
+    EXPECT_THAT(GetMaxWeightForAllGroups(capacity_with_explicit_sum_of_members),
+                Eq(std::nullopt));
+    EXPECT_THAT(GetMaxWeightPerGroup(capacity_with_explicit_sum_of_members),
+                Eq(std::nullopt));
+    // Only relevant when Sum Of Members semantics are used (like here).
+    EXPECT_THAT(
+        GetMaxMembersForAllGroups(capacity_with_explicit_sum_of_members),
+        Optional(kSize));
+    EXPECT_THAT(GetMaxMembersPerGroup(capacity_with_explicit_sum_of_members),
+                Optional(kMaxGroupSize));
+    EXPECT_THAT(GetMaxWeightPerMember(capacity_with_explicit_sum_of_members),
+                Optional(kMaxMemberWeight));
+  }
 }
 
 }  // namespace

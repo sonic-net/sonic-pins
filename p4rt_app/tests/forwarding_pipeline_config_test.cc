@@ -1307,7 +1307,7 @@ TEST_F(ReconcileAndCommitTest, CanReconcileHashingConfigDiff) {
 }
 
 p4::v1::TableEntry WcmpTableEntry(const pdpi::IrP4Info& ir_p4info, int id,
-                                  int64_t weight, int groups) {
+                                  int64_t weight, int actions) {
   const auto& profile =
       ir_p4info.action_profiles_by_name().at("wcmp_group_selector");
 
@@ -1330,7 +1330,7 @@ p4::v1::TableEntry WcmpTableEntry(const pdpi::IrP4Info& ir_p4info, int id,
   base_action.mutable_action()->set_action_id(action_id);
   base_action.mutable_action()->add_params()->set_param_id(1);
 
-  for (int i = 0; i < groups; ++i) {
+  for (int i = 0; i < actions; ++i) {
     auto& action = *table_entry.mutable_action()
                         ->mutable_action_profile_action_set()
                         ->add_action_profile_actions();
@@ -1360,15 +1360,15 @@ TEST_F(ReconcileAndCommitTest, CanReconcileActionProfileCapacityDiff) {
   auto& update = *write_request.add_updates();
   update.set_type(p4::v1::Update::INSERT);
   *update.mutable_entity()->mutable_table_entry() =
-      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/100, /*groups=*/10);
+      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/50, /*actions=*/10);
   ASSERT_OK(p4rt_session_->Write(write_request));
 
   // Create and push the modified p4info.
   p4::config::v1::P4Info modified = original;
   for (auto& profile : *modified.mutable_action_profiles()) {
     if (profile.preamble().alias() == "wcmp_group_selector") {
-      profile.set_size(1001);
-      profile.set_max_group_size(600);
+      profile.set_size(501);
+      profile.set_max_group_size(515);
       break;
     }
   }
@@ -1377,29 +1377,29 @@ TEST_F(ReconcileAndCommitTest, CanReconcileActionProfileCapacityDiff) {
 
   // Attempt to program another entry. We should fail due to lack of resources.
   *update.mutable_entity()->mutable_table_entry() =
-      WcmpTableEntry(ir_p4info, /*id=*/2, /*weight=*/2, /*groups=*/1);
+      WcmpTableEntry(ir_p4info, /*id=*/2, /*weight=*/2, /*actions=*/1);
   /*ASSERT_THAT(
       p4rt_session_->Write(write_request),
       StatusIs(absl::StatusCode::kUnknown, HasSubstr("RESOURCE_EXHAUSTED")));*/
 
   // We should be able to program up to the new limit.
   *update.mutable_entity()->mutable_table_entry() =
-      WcmpTableEntry(ir_p4info, /*id=*/2, /*weight=*/1, /*groups=*/1);
+      WcmpTableEntry(ir_p4info, /*id=*/2, /*weight=*/1, /*actions=*/1);
   ASSERT_OK(p4rt_session_->Write(write_request));
 
   // Remove the original entry to free up space.
   *update.mutable_entity()->mutable_table_entry() =
-      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/10, /*groups=*/10);
+      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/50, /*actions=*/10);
   update.set_type(p4::v1::Update::DELETE);
   ASSERT_OK(p4rt_session_->Write(write_request));
   update.set_type(p4::v1::Update::INSERT);
 
   // A new entry with too many actions should fail.
   *update.mutable_entity()->mutable_table_entry() =
-      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/1, /*groups=*/601);
+      WcmpTableEntry(ir_p4info, /*id=*/1, /*weight=*/1, /*actions=*/516);
   ASSERT_THAT(
       p4rt_session_->Write(write_request),
-      StatusIs(absl::StatusCode::kUnknown, HasSubstr("RESOURCE_EXHAUSTED")));
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("INVALID_ARGUMENT")));
 }
 
 using GetForwardingConfigTest = ForwardingPipelineConfigTest;

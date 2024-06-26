@@ -22,6 +22,7 @@
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/proto_matchers.h"
@@ -34,6 +35,7 @@
 
 namespace p4rt_app {
 namespace {
+using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::Eq;
@@ -106,25 +108,17 @@ constexpr auto TransitionIs = TransitionIsImpl<P4InfoReconcileTransition>;
 
 MATCHER_P(CapacityIsImpl, expected, "") {
   bool failed = false;
-  if (!ExplainMatchResult(Field("max_group_size",
-                                &ActionProfileResourceCapacity::max_group_size,
-                                Eq(expected.max_group_size)),
+  if (!ExplainMatchResult(Field("action_profile",
+                                &ActionProfileResourceCapacity::action_profile,
+                                EqualsProto(expected.action_profile)),
                           arg, result_listener)) {
     *result_listener << "\n";
     failed = true;
   }
   if (!ExplainMatchResult(
-          Field("max_weight_for_all_groups",
-                &ActionProfileResourceCapacity::max_weight_for_all_groups,
-                Eq(expected.max_weight_for_all_groups)),
-          arg, result_listener)) {
-    *result_listener << "\n";
-    failed = true;
-  }
-  if (!ExplainMatchResult(
-          Field("current_utilization",
-                &ActionProfileResourceCapacity::current_utilization,
-                Eq(expected.current_utilization)),
+          Field("current_total_weight",
+                &ActionProfileResourceCapacity::current_total_weight,
+                Eq(expected.current_total_weight)),
           arg, result_listener)) {
     *result_listener << "\n";
     failed = true;
@@ -727,15 +721,48 @@ TEST(GetUpdatedResourceCapacities, ReturnsEmptyWithNoActionProfiles) {
               IsOkAndHolds(IsEmpty()));
 }
 
+struct CapacityCreatorEntry {
+  pdpi::IrActionProfileDefinition action_profile;
+  int current_total_weight;
+};
+
+absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+GetNameToCapacityMap(absl::Span<const CapacityCreatorEntry> capacity_entries) {
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_name;
+  for (const auto& capacity_entry : capacity_entries) {
+    capacity_by_name
+        [capacity_entry.action_profile.action_profile().preamble().name()] =
+            GetActionProfileResourceCapacity(capacity_entry.action_profile);
+    capacity_by_name
+        [capacity_entry.action_profile.action_profile().preamble().name()]
+            .current_total_weight = capacity_entry.current_total_weight;
+  }
+  return capacity_by_name;
+}
+
 TEST(GetUpdatedResourceCapacities, UpdatesCapacity) {
-  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original = {
-      {"action_profile1",
-       {.max_group_size = 1, .max_weight_for_all_groups = 10}},
-      {"action_profile2",
-       {.max_group_size = 2, .max_weight_for_all_groups = 20}},
-      {"action_profile3",
-       {.max_group_size = 3, .max_weight_for_all_groups = 30}},
-  };
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original =
+      GetNameToCapacityMap({
+          {
+              .action_profile =
+                  IrActionProfileDefinitionBuilder()
+                      .name("action_profile1")
+                      .wcmp_selector_size(/*size=*/10, /*max_group_size=*/1)(),
+          },
+          {
+              .action_profile =
+                  IrActionProfileDefinitionBuilder()
+                      .name("action_profile2")
+                      .wcmp_selector_size(/*size=*/20, /*max_group_size=*/2)(),
+          },
+          {
+              .action_profile =
+                  IrActionProfileDefinitionBuilder()
+                      .name("action_profile3")
+                      .wcmp_selector_size(/*size=*/30, /*max_group_size=*/3)(),
+          },
+      });
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
               IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(),
                                               CapacityMapFromIrP4Info())));
@@ -743,25 +770,36 @@ TEST(GetUpdatedResourceCapacities, UpdatesCapacity) {
 
 TEST(GetUpdatedResourceCapacities,
      UpdatesCapacityAndMaintainsCurrentResourceCounts) {
-  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original = {
-      {"action_profile1",
-       {.max_group_size = 1,
-        .max_weight_for_all_groups = 10,
-        .current_utilization = 10}},
-      {"action_profile2",
-       {.max_group_size = 2,
-        .max_weight_for_all_groups = 20,
-        .current_utilization = 11}},
-      {"action_profile3",
-       {.max_group_size = 3,
-        .max_weight_for_all_groups = 30,
-        .current_utilization = 12}},
-  };
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original =
+      GetNameToCapacityMap({
+          {
+              .action_profile =
+                  IrActionProfileDefinitionBuilder()
+                      .name("action_profile1")
+                      .wcmp_selector_size(/*size=*/10, /*max_group_size=*/1)(),
+              .current_total_weight = 10,
+          },
+          {
+              .action_profile =
+                  IrActionProfileDefinitionBuilder()
+                      .name("action_profile2")
+                      .wcmp_selector_size(/*size=*/20, /*max_group_size=*/2)(),
+              .current_total_weight = 11,
+          },
+          {
+              .action_profile =
+                  IrActionProfileDefinitionBuilder()
+                      .name("action_profile3")
+                      .wcmp_selector_size(/*size=*/30, /*max_group_size=*/3)(),
+              .current_total_weight = 12,
+          },
+      });
 
   absl::flat_hash_map<std::string, ActionProfileResourceCapacity> expected =
       CapacityMapFromIrP4Info();
   for (const auto& [name, capacity] : CapacityMapFromIrP4Info()) {
-    expected[name].current_utilization = original.at(name).current_utilization;
+    expected[name].current_total_weight =
+        original.at(name).current_total_weight;
   }
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
@@ -770,10 +808,10 @@ TEST(GetUpdatedResourceCapacities,
 
 TEST(GetUpdatedResourceCapacities, DoesNotIncludeRemovedProfiles) {
   auto original = CapacityMapFromIrP4Info();
-  original["removed_action_profile4"] = {.max_group_size = 4,
-                                         .max_weight_for_all_groups = 40};
-  original["removed_action_profile5"] = {.max_group_size = 5,
-                                         .max_weight_for_all_groups = 50};
+  original["removed_action_profile4"].action_profile.set_max_group_size(4);
+  original["removed_action_profile4"].action_profile.set_size(40);
+  original["removed_action_profile5"].action_profile.set_max_group_size(5);
+  original["removed_action_profile5"].action_profile.set_size(50);
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
               IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(),
@@ -781,21 +819,28 @@ TEST(GetUpdatedResourceCapacities, DoesNotIncludeRemovedProfiles) {
 }
 
 TEST(GetUpdatedResourceCapacities, UsesBaseCapacity0ForAddedProfiles) {
-  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original = {
-      {"action_profile1",
-       {.max_group_size = 1,
-        .max_weight_for_all_groups = 10,
-        .current_utilization = 10}},
-      {"action_profile3",
-       {.max_group_size = 3,
-        .max_weight_for_all_groups = 30,
-        .current_utilization = 12}},
-  };
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity> original =
+      GetNameToCapacityMap({
+          {
+              .action_profile =
+                  IrActionProfileDefinitionBuilder()
+                      .name("action_profile1")
+                      .wcmp_selector_size(/*size=*/10, /*max_group_size=*/1)(),
+              .current_total_weight = 10,
+          },
+          {
+              .action_profile =
+                  IrActionProfileDefinitionBuilder()
+                      .name("action_profile3")
+                      .wcmp_selector_size(/*size=*/30, /*max_group_size=*/3)(),
+              .current_total_weight = 12,
+          },
+      });
 
   auto expected = CapacityMapFromIrP4Info();
-  expected.at("action_profile1").current_utilization = 10;
-  expected.at("action_profile2").current_utilization = 0;
-  expected.at("action_profile3").current_utilization = 12;
+  expected.at("action_profile1").current_total_weight = 10;
+  expected.at("action_profile2").current_total_weight = 0;
+  expected.at("action_profile3").current_total_weight = 12;
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
               IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(), expected)));
@@ -804,8 +849,10 @@ TEST(GetUpdatedResourceCapacities, UsesBaseCapacity0ForAddedProfiles) {
 TEST(GetUpdatedResourceCapacities,
      DoesNotAllowShrinkingMaxGroupSizeForProfilesInUse) {
   auto original = CapacityMapFromIrP4Info();
-  original.at("action_profile2").current_utilization = 1;
-  ++original.at("action_profile2").max_group_size;
+  original.at("action_profile2").current_total_weight = 1;
+  original.at("action_profile2")
+      .action_profile.set_max_group_size(
+          original.at("action_profile2").action_profile.max_group_size() + 1);
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
               StatusIs(absl::StatusCode::kFailedPrecondition));
@@ -814,7 +861,9 @@ TEST(GetUpdatedResourceCapacities,
 TEST(GetUpdatedResourceCapacities,
      AllowsShrinkingMaxGroupSizeForProfilesNotInUse) {
   auto original = CapacityMapFromIrP4Info();
-  ++original.at("action_profile2").max_group_size;
+  original.at("action_profile2")
+      .action_profile.set_max_group_size(
+          original.at("action_profile2").action_profile.max_group_size() + 1);
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
               IsOkAndHolds(UnorderedPointwise(CapacityEntryEq(),
@@ -823,9 +872,11 @@ TEST(GetUpdatedResourceCapacities,
 
 TEST(GetUpdatedResourceCapacities, DoesNotAllowShrinkingCapacityBelowUsage) {
   auto original = CapacityMapFromIrP4Info();
-  original.at("action_profile2").current_utilization =
-      original.at("action_profile2").max_weight_for_all_groups + 1;
-  original.at("action_profile2").max_weight_for_all_groups += 2;
+  original.at("action_profile2").current_total_weight =
+      original.at("action_profile2").action_profile.size() + 1;
+  original.at("action_profile2")
+      .action_profile.set_size(
+          original.at("action_profile2").action_profile.size() + 2);
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),
               StatusIs(absl::StatusCode::kFailedPrecondition));
@@ -834,12 +885,12 @@ TEST(GetUpdatedResourceCapacities, DoesNotAllowShrinkingCapacityBelowUsage) {
 TEST(GetUpdatedResourceCapacities, DoesAllowShrinkingCapacityToCurrentUsage) {
   auto original = CapacityMapFromIrP4Info();
   for (auto& [_, capacity] : original) {
-    capacity.current_utilization = capacity.max_weight_for_all_groups;
-    ++capacity.max_weight_for_all_groups;
+    capacity.current_total_weight = capacity.action_profile.size();
+    capacity.action_profile.set_size(capacity.action_profile.size() + 1);
   }
   auto expected = CapacityMapFromIrP4Info();
   for (auto& [_, capacity] : expected) {
-    capacity.current_utilization = capacity.max_weight_for_all_groups;
+    capacity.current_total_weight = capacity.action_profile.size();
   }
 
   EXPECT_THAT(GetUpdatedResourceCapacities(GetIrP4Info(), original),

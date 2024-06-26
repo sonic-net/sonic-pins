@@ -398,11 +398,34 @@ std::vector<EntityUpdate> PiEntityUpdatesToIr(
 
     entry_status = GetIrUpdateStatus(absl::OkStatus());
     if (resource_change->action_profile.has_value()) {
+      const std::string& profile_name = resource_change->action_profile->name;
+
+      const auto* current_action_profile_definition =
+          gutil::FindOrNull(p4_info.action_profiles_by_name(), profile_name);
+      if (current_action_profile_definition == nullptr) {
+        entry_status = GetIrUpdateStatus(
+            gutil::NotFoundErrorBuilder()
+            << "[P4RT App] Could not find the action profile definition for '"
+            << profile_name << "'");
+        break;
+      }
+
       // When accounting for the total batch resources we do not assume a MODIFY
       // or DELETE will succeed. So if a request would free resources we act as
       // if it does not (i.e. max of 0).
-      resources_in_batch[resource_change->action_profile->name] +=
-          resource_change->action_profile->total_weight;
+      if (current_action_profile_definition->action_profile()
+              .has_sum_of_members()) {
+        // If the action profile is using SumOfMembers semantics, then
+        // resources are measured in total actions.
+        resources_in_batch[profile_name] +=
+            resource_change->action_profile->number_of_actions;
+      } else {
+        // If the action profile is using SumOfWeights semantics (which is the
+        // default if SumOfMembers is not set), then resources are measured
+        // in total weight.
+        resources_in_batch[profile_name] +=
+            resource_change->action_profile->total_weight;
+      }
     }
     update->resource_utilization_change = *resource_change;
     update->status = &*response->mutable_statuses()->rbegin();
@@ -480,7 +503,7 @@ absl::Status UpdateCacheAndUtilizationState(
     const std::vector<EntityUpdate>& entity_updates,
     const pdpi::IrWriteResponse& results) {
   for (const EntityUpdate& app_db_entry : entity_updates) {
-    // Lower layers should rervert any state on failure so a failing request
+    // Lower layers should revert any state on failure so a failing request
     // should not affect our internal state.
     if (app_db_entry.status->code() != google::rpc::Code::OK) {
       continue;
@@ -513,8 +536,12 @@ absl::Status UpdateCacheAndUtilizationState(
                << "Could not find action profile utilization for '"
                << profile_name << "' which needs to be updated.";
       }
-      utilization->current_utilization +=
+      // Update utilization.
+      utilization->current_total_weight +=
           app_db_entry.resource_utilization_change.action_profile->total_weight;
+      utilization->current_total_members +=
+          app_db_entry.resource_utilization_change.action_profile
+              ->number_of_actions;
     }
   }
   return absl::OkStatus();
@@ -1898,8 +1925,9 @@ grpc::Status P4RuntimeImpl::ReconcileAndCommitPipelineConfig(
       capacity_by_action_profile_name_[action_profile_name] =
           GetActionProfileResourceCapacity(action_profile_def);
       LOG(INFO) << "Adding action profile limits for '" << action_profile_name
-                << "': max_weights_for_all_groups="
-                << action_profile_def.action_profile().size();
+                << "':\n"
+                << absl::StrCat(
+                       capacity_by_action_profile_name_[action_profile_name]);
     }
   }
 
