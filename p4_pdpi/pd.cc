@@ -675,29 +675,32 @@ absl::Status PiStreamMessageResponseToPd(
   return IrStreamMessageResponseToPd(info, ir, pd);
 }
 
-absl::StatusOr<p4::v1::TableEntry> PdTableEntryToPi(
+absl::StatusOr<p4::v1::TableEntry> PartialPdTableEntryToPiTableEntry(
     const IrP4Info &info, const google::protobuf::Message &pd,
     TranslationOptions options) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PdTableEntryToIr(info, pd, options));
+  ASSIGN_OR_RETURN(const auto ir_entry,
+                   PartialPdTableEntryToIrTableEntry(info, pd, options));
   return IrTableEntryToPi(info, ir_entry, options);
 }
 
-absl::StatusOr<std::vector<p4::v1::TableEntry>> PdTableEntriesToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
-  ASSIGN_OR_RETURN(auto ir, PdTableEntriesToIr(info, pd, options));
+absl::StatusOr<std::vector<p4::v1::TableEntry>>
+PartialPdTableEntriesToPiTableEntries(const IrP4Info &info,
+                                      const google::protobuf::Message &pd,
+                                      TranslationOptions options) {
+  ASSIGN_OR_RETURN(auto ir,
+                   PartialPdTableEntriesToIrTableEntries(info, pd, options));
   return IrTableEntriesToPi(info, ir, options);
 }
 
-absl::StatusOr<IrTableEntries> PdTableEntriesToIr(
+absl::StatusOr<IrTableEntries> PartialPdTableEntriesToIrTableEntries(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
     TranslationOptions options) {
   ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
                    GetRepeatedFieldMessages(pd, "entries"));
   IrTableEntries ir;
   for (auto *pd_entry : pd_entries) {
-    ASSIGN_OR_RETURN(*ir.add_entries(),
-                     PdTableEntryToIr(ir_p4info, *pd_entry, options));
+    ASSIGN_OR_RETURN(*ir.add_entries(), PartialPdTableEntryToIrTableEntry(
+                                            ir_p4info, *pd_entry, options));
   }
   return ir;
 }
@@ -1958,7 +1961,7 @@ static absl::StatusOr<IrActionSetInvocation> PdActionSetToIr(
   return ir_action_set_invocation;
 }
 
-absl::StatusOr<IrTableEntry> PdTableEntryToIr(
+absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
     TranslationOptions options) {
   IrTableEntry ir;
@@ -2302,10 +2305,11 @@ absl::StatusOr<IrReadResponse> PdReadResponseToIr(
                            read_response, table_entries_descriptor);
        ++i) {
     const absl::StatusOr<IrTableEntry> &table_entry =
-        PdTableEntryToIr(info,
-                         read_response.GetReflection()->GetRepeatedMessage(
-                             read_response, table_entries_descriptor, i),
-                         options);
+        PartialPdTableEntryToIrTableEntry(
+            info,
+            read_response.GetReflection()->GetRepeatedMessage(
+                read_response, table_entries_descriptor, i),
+            options);
     if (!table_entry.ok()) {
       invalid_reasons.push_back(std::string(table_entry.status().message()));
       continue;
@@ -2338,8 +2342,9 @@ absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
   // TODO: Add PRE support to IR and PD.
   ASSIGN_OR_RETURN(const auto *table_entry,
                    GetMessageField(update, "table_entry"));
-  ASSIGN_OR_RETURN(*ir_update.mutable_entity()->mutable_table_entry(),
-                   PdTableEntryToIr(info, *table_entry, options));
+  ASSIGN_OR_RETURN(
+      *ir_update.mutable_entity()->mutable_table_entry(),
+      PartialPdTableEntryToIrTableEntry(info, *table_entry, options));
   return ir_update;
 }
 
