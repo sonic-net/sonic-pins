@@ -477,6 +477,17 @@ TEST_F(AppDbManagerTest, GetAllP4KeysReturnsInstalledKeys) {
               ContainerEq(std::vector<std::string>{"TABLE:{key}"}));
 }
 
+TEST_F(AppDbManagerTest, GetAllP4KeysIgnoresCertainTables) {
+  EXPECT_CALL(*mock_p4rt_app_db_, keys)
+      .WillOnce(Return(std::vector<std::string>{
+          "TABLE:{key}",
+          "REPLICATION_IP_MULTICAST_TABLE:{key}",
+          "ACL_TABLE_DEFINITION_TABLE:{key}",
+      }));
+  EXPECT_THAT(GetAllP4TableEntryKeys(mock_p4rt_table_),
+              ContainerEq(std::vector<std::string>{"TABLE:{key}"}));
+}
+
 }  // namespace
 }  // namespace sonic
 }  // namespace p4rt_app

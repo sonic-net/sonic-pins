@@ -588,5 +588,10 @@ absl::StatusOr<pdpi::IrTableEntry> AppDbKeyAndValuesToIrTableEntry(
   return table_entry;
 }
 
+std::string IrMulticastGroupEntryToAppDbKey(
+    const pdpi::IrMulticastGroupEntry &entry) {
+  return absl::StrCat("0x", absl::Hex(entry.multicast_group_id()));
+}
+
 }  // namespace sonic
 }  // namespace p4rt_app
