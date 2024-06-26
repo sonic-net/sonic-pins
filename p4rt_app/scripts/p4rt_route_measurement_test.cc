@@ -610,7 +610,6 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
       for (int action_num = 0; action_num < members_per_group; ++action_num) {
         actions[action_num].nexthop_id = nexthops[action_num];
       }
-
       std::vector<int> weights =
           RandmizeWeights(bitgen, actions.size(), total_group_weight);
       for (size_t i = 0; i < actions.size(); ++i) {
@@ -734,52 +733,6 @@ absl::StatusOr<P4WriteRequests> ComputeIpv6WriteRequests(
   return requests;
 }
 
-absl::StatusOr<std::vector<p4::v1::WriteRequest>> ComputeIpv6WriteRequests(
-    absl::BitGen& bitgen, const RouteEntryInfo& routes,
-    const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
-    uint32_t batch_size) {
-  ASSIGN_OR_RETURN(std::vector<std::string> vrfs, GetKeys(routes.vrfs_by_name),
-                   _ << "VRFs need to be created before IPv6");
-  ASSIGN_OR_RETURN(std::vector<std::string> nexthops,
-                   GetKeys(routes.next_hops_by_name),
-                   _ << "Next hops need to be created before IPv6");
-  ASSIGN_OR_RETURN(
-      auto addresses,
-      RandomSetOfValues<int64_t>(bitgen, /*min_value=*/0x0000'0000'0000'0001,
-                                 /*max_value=*/0x1FFF'FFFF'FFFF'FFFF,
-                                 number_batches * batch_size));
-
-  std::vector<p4::v1::WriteRequest> requests;
-  for (const int64_t address : addresses) {
-    if (requests.empty() || requests.back().updates_size() == batch_size) {
-      requests.push_back(p4::v1::WriteRequest{});
-    }
-
-    netaddr::Ipv6Address ip(absl::MakeUint128(address, /*low=*/0));
-    std::string vrf = vrfs[absl::Uniform<size_t>(bitgen, 0, vrfs.size())];
-    std::string nexthop =
-        nexthops[absl::Uniform<size_t>(bitgen, 0, nexthops.size())];
-    ASSIGN_OR_RETURN(
-        *requests.back().add_updates(),
-        gpins::Ipv6TableUpdate(
-            ir_p4info, p4::v1::Update::INSERT,
-            gpins::IpTableOptions{
-                .vrf_id = vrf,
-                .dst_addr_lpm = std::make_pair(ip.ToString(), 64),
-                .action = gpins::IpTableOptions::Action::kSetNextHopId,
-                .nexthop_id = nexthop,
-            }));
-  }
-
-  // Sanity checks.
-  if (requests.size() != number_batches) {
-    return absl::UnknownError(
-        absl::StrCat("Failed to generate enough batches: want=", number_batches,
-                     " got=", requests.size()));
-  }
-  return requests;
-}
-
 TEST_F(P4rtRouteTest, MeasureWriteLatency) {
   int32_t number_of_batches = FLAGS_number_batches;
   int32_t requests_per_batch = FLAGS_batch_size;
@@ -873,27 +826,6 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
         << std::endl;
   }
 
-  if (FLAGS_run_ipv6) {
-    // Pre-compute all the IPv6 requests so they can be sent as quickly as
-    // possible to the switch under test.
-    ASSERT_OK_AND_ASSIGN(
-        std::vector<p4::v1::WriteRequest> requests,
-        ComputeIpv6WriteRequests(bitgen, routes, ir_p4info_, number_of_batches,
-                                 requests_per_batch));
-    UpdateRequestMetadata(requests);
-    ASSERT_OK_AND_ASSIGN(absl::Duration execution_time,
-                         SendBatchRequest(requests));
-
-    // Write the results to stdout so that the callers can parse the output.
-    int64_t total_entries = number_of_batches * requests_per_batch;
-    std::cout << absl::StreamFormat(
-                     "ipv6_insert_requests=%d ipv6_insert_entry_total=%lld "
-                     "ipv6_insert_time=%lld(msecs)",
-                     number_of_batches, total_entries,
-                     absl::ToInt64Milliseconds(execution_time))
-              << std::endl;
-  }
-
   if (FLAGS_run_wcmp) {
     int members_per_group = FLAGS_wcmp_members_per_group;
     int total_group_weight = FLAGS_wcmp_total_group_weight;
@@ -906,7 +838,6 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
                                  requests_per_batch, members_per_group,
                                  total_group_weight));
     UpdateRequestMetadata(requests);
-
     ASSERT_OK_AND_ASSIGN(absl::Duration insert_time,
                          SendBatchRequest(requests.inserts));
     ASSERT_OK_AND_ASSIGN(absl::Duration modify_time,
