@@ -36,6 +36,8 @@ struct ActionProfileResources {
   std::string name;
   int32_t number_of_actions = 0;
   int64_t total_weight = 0;
+  // The max weight among all actions in the action profile entry.
+  int32_t max_weight = 0;
 };
 
 // Each table resource usually only counts as 1 (i.e. one table entry), but
