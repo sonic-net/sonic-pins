@@ -133,6 +133,27 @@ DEFINE_bool(wcmp_set_watch_port, false,
 DEFINE_string(seed_seq, "",
               "Force a specific seed_seq value to repeat a test.");
 
+// By default we only run the IPv4 tests. However, because the tested tables
+// don't overlap users can run multiple, and they will happen sequentially.
+// Users should be careful when running multiple tests since the batch sizes are
+// reused.
+DEFINE_bool(run_ipv4, true, "Run IPv4 route latency tests.");
+DEFINE_bool(run_ipv6, false, "Run IPv6 route latency tests.");
+DEFINE_bool(run_wcmp, false, "Run IPv4 route latency tests.");
+
+// Extra configs that affect WCMP batch sizes and flows.
+DEFINE_int32(wcmp_members_per_group, 2,
+             "Number of members in each WCMP group.");
+DEFINE_int32(wcmp_total_group_weight, 2,
+             "Total accumulated weight for all members in a WCMP group.");
+DEFINE_bool(wcmp_update_weights_when_modifying, true,
+            "Change weight values when modifying WCMP groups.");
+DEFINE_bool(wcmp_update_nexthops_when_modifying, false,
+            "Change nexthop values when modifying WCMP groups.");
+DEFINE_bool(wcmp_increasing_weights, false,
+            "Force the weight of a member to be >= the weight of the member "
+            "that came before it.");
+
 namespace p4rt_app {
 namespace {
 
