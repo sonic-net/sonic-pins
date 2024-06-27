@@ -50,7 +50,6 @@ control ingress(inout headers_t headers,
       // want to handle uniquely in later stages.
       vlan_untag.apply(headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
-      ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
 
       // Standard L3 pipeline for routing packets.
       admit_google_system_mac.apply(headers, local_metadata);
@@ -64,6 +63,7 @@ control ingress(inout headers_t headers,
       routing_resolution.apply(headers, local_metadata, standard_metadata);
       mirror_session_lookup.apply(headers, local_metadata, standard_metadata);
       ingress_cloning.apply(headers, local_metadata, standard_metadata);
+      ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
       drop_martians.apply(headers, local_metadata, standard_metadata);
     }
   }

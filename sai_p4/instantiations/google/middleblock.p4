@@ -36,7 +36,6 @@ control ingress(inout headers_t headers,
     if (!local_metadata.bypass_ingress) {
       vlan_untag.apply(headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
-      ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
       tunnel_termination.apply(headers, local_metadata);
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
@@ -45,6 +44,7 @@ control ingress(inout headers_t headers,
       routing_resolution.apply(headers, local_metadata, standard_metadata);
       mirror_session_lookup.apply(headers, local_metadata, standard_metadata);
       ingress_cloning.apply(headers, local_metadata, standard_metadata);
+      ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
       drop_martians.apply(headers, local_metadata, standard_metadata);
     }
   }

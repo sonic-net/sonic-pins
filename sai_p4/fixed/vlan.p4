@@ -4,8 +4,10 @@
 #define SAI_VLAN_P4_
 
 #include <v1model.p4>
+#include "common_actions.p4"
 #include "headers.p4"
 #include "metadata.p4"
+#include "minimum_guaranteed_sizes.p4"
 
 
 control vlan_untag(inout headers_t headers,
@@ -100,6 +102,31 @@ control egress_vlan_checks(inout headers_t headers,
     local_metadata.omit_vlan_tag_on_egress_packet = true;
   }
 
+  // Programming this table does not affect packet forwarding directly -- the
+  // table performs no actions -- but results in the creation/deletion of VLANs.
+  // This is a prerequisite to adding members to these VLANs in the
+  // `vlan_membership_table`, as is indicated by the
+  // `@refers_to(vlan_table, vlan_id)` annotations. Note that entries are ONLY
+  // needed for the VLAN membership table (e.g. matching on or setting VLAN
+  // does not require entries in this table).
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @id(VLAN_TABLE_ID)
+  @entry_restriction("
+    // Disallow creating reserved VLANs to rule out vendor specific behavior.
+    vlan_id != 0 && vlan_id != 4095;
+  ")
+  @unsupported
+  table vlan_table {
+    key = {
+      local_metadata.vlan_id : exact
+        @id(1) @name("vlan_id");
+    }
+    actions = {
+      @proto_id(1) no_action;
+    }
+    size = VLAN_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(VLAN_MEMBERSHIP_TABLE_ID)
   // TODO: Remove @unsupported once the table is supported in SWSS.
@@ -107,7 +134,7 @@ control egress_vlan_checks(inout headers_t headers,
   table vlan_membership_table {
     key = {
       local_metadata.vlan_id : exact
-        @id(1) @name("vlan_id");
+        @id(1) @name("vlan_id") @refers_to(vlan_table, vlan_id);
       port: exact
         @id(2) @name("port");
     }
@@ -119,6 +146,7 @@ control egress_vlan_checks(inout headers_t headers,
   }
 
   apply {
+    vlan_table.apply();
     if (!IS_PACKET_IN_COPY(standard_metadata) &&
         !IS_MIRROR_COPY(standard_metadata)) {
       vlan_membership_table.apply();
