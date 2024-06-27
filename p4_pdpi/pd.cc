@@ -17,6 +17,7 @@
 #include <stdint.h>
 
 #include <algorithm>
+#include <bitset>
 #include <string>
 #include <utility>
 #include <vector>
@@ -42,6 +43,7 @@
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/translation_options.h"
 #include "p4_pdpi/utils/ir.h"
 
@@ -594,6 +596,21 @@ absl::Status PiTableEntriesToPd(const IrP4Info &info,
   return absl::OkStatus();
 }
 
+absl::Status PiEntityToPdTableEntry(const IrP4Info &info,
+                                    const p4::v1::Entity &pi,
+                                    google::protobuf::Message *pd_table_entry,
+                                    TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir, PiEntityToIr(info, pi, options));
+  return IrEntityToPdTableEntry(info, ir, pd_table_entry, options);
+}
+
+absl::Status PiEntitiesToPdTableEntries(
+    const IrP4Info &info, const absl::Span<const p4::v1::Entity> &pi,
+    google::protobuf::Message *pd_table_entries, TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir, PiEntitiesToIr(info, pi, options));
+  return IrEntitiesToPdTableEntries(info, ir, pd_table_entries, options);
+}
+
 absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 const IrTableEntries &ir,
                                 google::protobuf::Message *pd,
@@ -675,29 +692,47 @@ absl::Status PiStreamMessageResponseToPd(
   return IrStreamMessageResponseToPd(info, ir, pd);
 }
 
-absl::StatusOr<p4::v1::TableEntry> PdTableEntryToPi(
+absl::StatusOr<p4::v1::Entity> PdTableEntryToPiEntity(
     const IrP4Info &info, const google::protobuf::Message &pd,
     TranslationOptions options) {
-  ASSIGN_OR_RETURN(const auto ir_entry, PdTableEntryToIr(info, pd, options));
+  ASSIGN_OR_RETURN(const auto ir_entry,
+                   PdTableEntryToIrEntity(info, pd, options));
+  return IrEntityToPi(info, ir_entry, options);
+}
+
+absl::StatusOr<std::vector<p4::v1::Entity>> PdTableEntriesToPiEntities(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  ASSIGN_OR_RETURN(auto ir, PdTableEntriesToIrEntities(info, pd, options));
+  return IrEntitiesToPi(info, ir, options);
+}
+
+absl::StatusOr<p4::v1::TableEntry> PartialPdTableEntryToPiTableEntry(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  ASSIGN_OR_RETURN(const auto ir_entry,
+                   PartialPdTableEntryToIrTableEntry(info, pd, options));
   return IrTableEntryToPi(info, ir_entry, options);
 }
 
-absl::StatusOr<std::vector<p4::v1::TableEntry>> PdTableEntriesToPi(
-    const IrP4Info &info, const google::protobuf::Message &pd,
-    TranslationOptions options) {
-  ASSIGN_OR_RETURN(auto ir, PdTableEntriesToIr(info, pd, options));
+absl::StatusOr<std::vector<p4::v1::TableEntry>>
+PartialPdTableEntriesToPiTableEntries(const IrP4Info &info,
+                                      const google::protobuf::Message &pd,
+                                      TranslationOptions options) {
+  ASSIGN_OR_RETURN(auto ir,
+                   PartialPdTableEntriesToIrTableEntries(info, pd, options));
   return IrTableEntriesToPi(info, ir, options);
 }
 
-absl::StatusOr<IrTableEntries> PdTableEntriesToIr(
+absl::StatusOr<IrTableEntries> PartialPdTableEntriesToIrTableEntries(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
     TranslationOptions options) {
   ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
                    GetRepeatedFieldMessages(pd, "entries"));
   IrTableEntries ir;
   for (auto *pd_entry : pd_entries) {
-    ASSIGN_OR_RETURN(*ir.add_entries(),
-                     PdTableEntryToIr(ir_p4info, *pd_entry, options));
+    ASSIGN_OR_RETURN(*ir.add_entries(), PartialPdTableEntryToIrTableEntry(
+                                            ir_p4info, *pd_entry, options));
   }
   return ir;
 }
@@ -1413,15 +1448,118 @@ absl::Status IrReadResponseToPd(const IrP4Info &info, const IrReadResponse &ir,
   return absl::OkStatus();
 }
 
+absl::Status IrReplicaToPd(const IrP4Info &info, const IrReplica &ir,
+                           google::protobuf::Message *pd_replica) {
+  RETURN_IF_ERROR(SetStringField(pd_replica, "port", ir.port()));
+  RETURN_IF_ERROR(
+      SetStringField(pd_replica, "instance",
+                     BitsetToHexString(std::bitset<16>(ir.instance()))));
+  return absl::OkStatus();
+}
+
+absl::Status IrMulticastGroupEntryToPd(
+    const IrP4Info &info, const IrMulticastGroupEntry &ir,
+    google::protobuf::Message *pd_multicast_group_entry,
+    TranslationOptions options) {
+  std::vector<std::string> invalid_reasons;
+
+  const absl::StatusOr<google::protobuf::Message *> pd_match =
+      GetMutableMessage(pd_multicast_group_entry, "match");
+  if (!pd_match.ok()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry",
+        absl::StrCat(kNewBullet, pd_match.status().message())));
+  }
+  absl::Status multicast_group_id =
+      SetStringField(*pd_match, "multicast_group_id",
+                     BitsetToHexString<16>(ir.multicast_group_id()));
+  if (!multicast_group_id.ok()) {
+    invalid_reasons.push_back(
+        absl::StrCat(kNewBullet, multicast_group_id.message()));
+  }
+
+  if (options.key_only) {
+    return absl::OkStatus();
+  }
+
+  const absl::StatusOr<google::protobuf::Message *> pd_action =
+      GetMutableMessage(pd_multicast_group_entry, "action");
+  if (!pd_action.ok()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry",
+        absl::StrCat(kNewBullet, pd_action.status().message())));
+  }
+  const absl::StatusOr<google::protobuf::Message *> pd_replicate =
+      GetMutableMessage(*pd_action, "replicate");
+  if (!pd_replicate.ok()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry",
+        absl::StrCat(kNewBullet, pd_replicate.status().message())));
+  }
+
+  const auto &pd_replicas_descriptor =
+      GetFieldDescriptor(**pd_replicate, "replicas");
+  if (!pd_replicas_descriptor.ok()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry",
+        absl::StrCat(kNewBullet, pd_replicas_descriptor.status().message())));
+  }
+
+  absl::flat_hash_map<std::string, absl::flat_hash_set<uint32_t>>
+      instances_by_port;
+  for (const auto &replica : ir.replicas()) {
+    google::protobuf::Message *pd_replica =
+        (*pd_replicate)
+            ->GetReflection()
+            ->AddMessage(*pd_replicate, *pd_replicas_descriptor);
+    absl::Status status = IrReplicaToPd(info, replica, pd_replica);
+    if (!status.ok()) {
+      invalid_reasons.push_back(absl::StrCat(kNewBullet, status.message()));
+      continue;
+    }
+    // Check that {port, instance} pair is unique.
+    bool replica_is_unique =
+        instances_by_port[replica.port()].insert(replica.instance()).second;
+    if (!replica_is_unique) {
+      invalid_reasons.push_back(absl::StrCat(
+          kNewBullet,
+          "Each replica must have a unique (port, instance)-pair, but found "
+          "multiple replicas with pair ('",
+          replica.port(), "', ", replica.instance(), ")."));
+    }
+  }
+  if (!invalid_reasons.empty()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        absl::StrCat("MulticastGroupEntry with group id '",
+                     ir.multicast_group_id(), "'"),
+        absl::StrJoin(invalid_reasons, "\n")));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status IrPacketReplicationEngineEntryToPd(
+    const IrP4Info &info, const IrPacketReplicationEngineEntry &ir,
+    google::protobuf::Message *pd, TranslationOptions options) {
+  const absl::StatusOr<google::protobuf::Message *> pd_multicast =
+      GetMutableMessage(pd, "multicast_group_table_entry");
+  if (!pd_multicast.ok()) {
+    return absl::InternalError(GenerateFormattedError(
+        "MulticastGroupEntry",
+        absl::StrCat(kNewBullet, pd_multicast.status().message())));
+  }
+  return IrMulticastGroupEntryToPd(info, ir.multicast_group_entry(),
+                                   *pd_multicast, options);
+}
+
 absl::Status IrEntityToPdTableEntry(const IrP4Info &info, const IrEntity &ir,
-                                    google::protobuf::Message *pd,
+                                    google::protobuf::Message *pd_table_entry,
                                     TranslationOptions options) {
   switch (ir.entity_case()) {
-    case IrEntity::kTableEntry: {
-      RETURN_IF_ERROR(IrTableEntryToPd(info, ir.table_entry(), pd, options));
-      return absl::OkStatus();
-    }
-      // TODO: Add PRE support to IR and PD.
+    case IrEntity::kTableEntry:
+      return IrTableEntryToPd(info, ir.table_entry(), pd_table_entry, options);
+    case pdpi::IrEntity::kPacketReplicationEngineEntry:
+      return IrPacketReplicationEngineEntryToPd(
+          info, ir.packet_replication_engine_entry(), pd_table_entry, options);
     default: {
       auto entity_name = gutil::GetOneOfFieldName(ir, "entity");
       if (!entity_name.ok()) {
@@ -1433,6 +1571,17 @@ absl::Status IrEntityToPdTableEntry(const IrP4Info &info, const IrEntity &ir,
           absl::StrCat("Entity '", *entity_name, "' is not supported.")));
     }
   }
+}
+
+absl::Status IrEntitiesToPdTableEntries(
+    const IrP4Info &info, const IrEntities &ir,
+    google::protobuf::Message *pd_table_entries, TranslationOptions options) {
+  for (const auto &ir_entity : ir.entities()) {
+    ASSIGN_OR_RETURN(google::protobuf::Message * pd_entry,
+                     AddRepeatedMutableMessage(pd_table_entries, "entries"));
+    RETURN_IF_ERROR(IrEntityToPdTableEntry(info, ir_entity, pd_entry, options));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status IrUpdateToPd(const IrP4Info &info, const IrUpdate &ir,
@@ -1958,7 +2107,7 @@ static absl::StatusOr<IrActionSetInvocation> PdActionSetToIr(
   return ir_action_set_invocation;
 }
 
-absl::StatusOr<IrTableEntry> PdTableEntryToIr(
+absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
     TranslationOptions options) {
   IrTableEntry ir;
@@ -2190,6 +2339,139 @@ absl::StatusOr<IrTableEntry> PdTableEntryToIr(
   return ir;
 }
 
+absl::StatusOr<IrReplica> PdReplicaToIr(const IrP4Info &info,
+                                        const google::protobuf::Message &pd) {
+  IrReplica ir;
+  ASSIGN_OR_RETURN(*ir.mutable_port(), GetStringField(pd, "port"));
+  ASSIGN_OR_RETURN(std::string instance_string, GetStringField(pd, "instance"));
+  ASSIGN_OR_RETURN(uint32_t instance, HexStringToUint32(instance_string));
+  ir.set_instance(instance);
+  return ir;
+}
+
+absl::StatusOr<IrMulticastGroupEntry> PdMulticastGroupEntryToIr(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  IrMulticastGroupEntry ir;
+  ASSIGN_OR_RETURN(bool has_match, HasField(pd, "match"));
+  if (!has_match) {
+    return gutil::InvalidArgumentErrorBuilder() << GenerateFormattedError(
+               "MulticastGroupEntry", "'match' field is missing.");
+  }
+  ASSIGN_OR_RETURN(const auto match, GetMessageField(pd, "match"));
+
+  ASSIGN_OR_RETURN(bool has_multicast_group_id,
+                   HasField(*match, "multicast_group_id"));
+  if (!has_multicast_group_id) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry",
+        "'multicast_group_id' field is missing in 'match'."));
+  }
+  ASSIGN_OR_RETURN(std::string multicast_group_id_string,
+                   GetStringField(*match, "multicast_group_id"));
+  const auto &multicast_group_id = HexStringToUint32(multicast_group_id_string);
+  if (!multicast_group_id.ok()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry",
+        absl::StrCat(kNewBullet, multicast_group_id.status().message())));
+  }
+  ir.set_multicast_group_id(*multicast_group_id);
+
+  if (options.key_only) {
+    return ir;
+  }
+
+  absl::flat_hash_map<std::string, absl::flat_hash_set<uint32_t>>
+      instances_by_port;
+  std::vector<std::string> invalid_reasons;
+
+  ASSIGN_OR_RETURN(bool has_action, HasField(pd, "action"));
+  if (!has_action) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry", "'action' field is missing."));
+  }
+  ASSIGN_OR_RETURN(const auto action, GetMessageField(pd, "action"));
+
+  ASSIGN_OR_RETURN(bool has_replicate, HasField(*action, "replicate"));
+  if (!has_replicate) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "MulticastGroupEntry", "'replicate' field is missing in 'action'."));
+  }
+  ASSIGN_OR_RETURN(const auto replicate, GetMessageField(*action, "replicate"));
+
+  ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> replicas,
+                   GetRepeatedFieldMessages(*replicate, "replicas"));
+  for (const auto &pd_replica : replicas) {
+    const auto ir_replica = PdReplicaToIr(info, *pd_replica);
+    if (!ir_replica.ok()) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet, "Error translating replica { ",
+                       gutil::PrintShortTextProto(*pd_replica),
+                       " }: ", ir_replica.status().message()));
+      continue;
+    }
+    // Check that {port, instance} pair is unique.
+    bool replica_is_unique = instances_by_port[ir_replica->port()]
+                                 .insert(ir_replica->instance())
+                                 .second;
+    if (!replica_is_unique) {
+      invalid_reasons.push_back(absl::StrCat(
+          kNewBullet,
+          "Each replica must have a unique (port, instance)-pair, but found "
+          "multiple replicas with pair ('",
+          ir_replica->port(), "', ", ir_replica->instance(), ")."));
+    }
+    *ir.add_replicas() = std::move(*ir_replica);
+  }
+
+  if (!invalid_reasons.empty()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        absl::StrCat("MulticastGroupEntry with group id '",
+                     ir.multicast_group_id(), "'"),
+        absl::StrJoin(invalid_reasons, "\n")));
+  }
+
+  return ir;
+}
+
+absl::StatusOr<IrEntity> PdTableEntryToIrEntity(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  IrEntity ir;
+  const auto &pd_table_field_name = gutil::GetOneOfFieldName(pd, "entry");
+  if (!pd_table_field_name.ok()) {
+    return absl::InvalidArgumentError(GenerateFormattedError(
+        "Table",
+        absl::StrCat(kNewBullet, pd_table_field_name.status().message())));
+  }
+
+  if (*pd_table_field_name == "multicast_group_table_entry") {
+    ASSIGN_OR_RETURN(const auto multicast_entry,
+                     GetMessageField(pd, *pd_table_field_name));
+    ASSIGN_OR_RETURN(
+        *ir.mutable_packet_replication_engine_entry()
+             ->mutable_multicast_group_entry(),
+        PdMulticastGroupEntryToIr(info, *multicast_entry, options));
+  } else {
+    ASSIGN_OR_RETURN(*ir.mutable_table_entry(),
+                     PartialPdTableEntryToIrTableEntry(info, pd, options));
+  }
+  return ir;
+}
+
+absl::StatusOr<IrEntities> PdTableEntriesToIrEntities(
+    const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
+    TranslationOptions options) {
+  ASSIGN_OR_RETURN(std::vector<const google::protobuf::Message *> pd_entries,
+                   GetRepeatedFieldMessages(pd, "entries"));
+  IrEntities ir;
+  for (auto *pd_entry : pd_entries) {
+    ASSIGN_OR_RETURN(*ir.add_entities(),
+                     PdTableEntryToIrEntity(ir_p4info, *pd_entry, options));
+  }
+  return ir;
+}
+
 // Generic helper that works for both packet-in and packet-out. For both, T is
 // one of {IrPacketIn, IrPacketOut}.
 template <typename T>
@@ -2302,10 +2584,11 @@ absl::StatusOr<IrReadResponse> PdReadResponseToIr(
                            read_response, table_entries_descriptor);
        ++i) {
     const absl::StatusOr<IrTableEntry> &table_entry =
-        PdTableEntryToIr(info,
-                         read_response.GetReflection()->GetRepeatedMessage(
-                             read_response, table_entries_descriptor, i),
-                         options);
+        PartialPdTableEntryToIrTableEntry(
+            info,
+            read_response.GetReflection()->GetRepeatedMessage(
+                read_response, table_entries_descriptor, i),
+            options);
     if (!table_entry.ok()) {
       invalid_reasons.push_back(std::string(table_entry.status().message()));
       continue;
@@ -2338,8 +2621,9 @@ absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
   // TODO: Add PRE support to IR and PD.
   ASSIGN_OR_RETURN(const auto *table_entry,
                    GetMessageField(update, "table_entry"));
-  ASSIGN_OR_RETURN(*ir_update.mutable_entity()->mutable_table_entry(),
-                   PdTableEntryToIr(info, *table_entry, options));
+  ASSIGN_OR_RETURN(
+      *ir_update.mutable_entity()->mutable_table_entry(),
+      PartialPdTableEntryToIrTableEntry(info, *table_entry, options));
   return ir_update;
 }
 
@@ -2566,6 +2850,13 @@ absl::Status PdTableEntryToOnlyKeyPd(const IrP4Info &info,
   key_only_pd->CopyFrom(pd);
   ASSIGN_OR_RETURN(const std::string &pd_table_field_name,
                    gutil::GetOneOfFieldName(pd, "entry"));
+
+  if (pd_table_field_name == "multicast_group_table_entry") {
+    ASSIGN_OR_RETURN(auto *pd_table,
+                     GetMutableMessage(key_only_pd, pd_table_field_name));
+    return ClearField(pd_table, "action");
+  }
+
   ASSIGN_OR_RETURN(
       const std::string &p4_table_name,
       ProtobufFieldNameToP4Name(pd_table_field_name, pdpi::kP4Table));
