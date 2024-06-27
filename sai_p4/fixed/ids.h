@@ -31,6 +31,7 @@
 #define DISABLE_VLAN_CHECKS_TABLE_ID 0x0200004D                 // 33554509
 #define INGRESS_CLONE_TABLE_ID 0x02000051                       // 33554513
 #define EGRESS_PORT_LOOPBACK_TABLE_ID 0x02000052                // 33554514
+#define VLAN_TABLE_ID 0x02000053                                // 33554515
 #define VLAN_MEMBERSHIP_TABLE_ID 0x02000054                     // 33554516
 // Next available table id: 0x02000055 (33554517)
 

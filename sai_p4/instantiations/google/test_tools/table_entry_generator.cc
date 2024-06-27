@@ -347,6 +347,7 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "multicast_router_interface_table",
           // TODO: Add support for this table once the switch
           // supports it.
+          "vlan_table",
           "vlan_membership_table",
       });
   return *kUnsupportedTables;
