@@ -64,7 +64,7 @@ absl::StatusOr<TableEntries> ValidPdTableEntries() {
 
 absl::StatusOr<IrTableEntries> ValidIrTableEntries() {
   ASSIGN_OR_RETURN(TableEntries pd, ValidPdTableEntries());
-  return PdTableEntriesToIr(GetTestIrP4Info(), pd);
+  return PartialPdTableEntriesToIrTableEntries(GetTestIrP4Info(), pd);
 }
 
 using VectorTranslationTest = testing::TestWithParam<pdpi::TranslationOptions>;
@@ -80,17 +80,20 @@ TEST_P(VectorTranslationTest,
       expected_pi_entries_from_pd;
   std::vector<p4::v1::TableEntry> pi_entries_from_ir,
       expected_pi_entries_from_ir;
-  ASSERT_OK_AND_ASSIGN(ir_entries,
-                       PdTableEntriesToIr(info, pd_entries, options));
-  ASSERT_OK_AND_ASSIGN(pi_entries_from_pd,
-                       PdTableEntriesToPi(info, pd_entries, options));
+  ASSERT_OK_AND_ASSIGN(ir_entries, PartialPdTableEntriesToIrTableEntries(
+                                       info, pd_entries, options));
+  ASSERT_OK_AND_ASSIGN(
+      pi_entries_from_pd,
+      PartialPdTableEntriesToPiTableEntries(info, pd_entries, options));
   ASSERT_OK_AND_ASSIGN(pi_entries_from_ir,
                        IrTableEntriesToPi(info, ir_entries, options));
   for (const auto& pd_entry : pd_entries.entries()) {
-    ASSERT_OK_AND_ASSIGN(*expected_ir_entries.add_entries(),
-                         PdTableEntryToIr(info, pd_entry, options));
-    ASSERT_OK_AND_ASSIGN(expected_pi_entries_from_pd.emplace_back(),
-                         PdTableEntryToPi(info, pd_entry, options));
+    ASSERT_OK_AND_ASSIGN(
+        *expected_ir_entries.add_entries(),
+        PartialPdTableEntryToIrTableEntry(info, pd_entry, options));
+    ASSERT_OK_AND_ASSIGN(
+        expected_pi_entries_from_pd.emplace_back(),
+        PartialPdTableEntryToPiTableEntry(info, pd_entry, options));
   }
   for (const auto& ir_entry : ir_entries.entries()) {
     ASSERT_OK_AND_ASSIGN(expected_pi_entries_from_ir.emplace_back(),
@@ -130,8 +133,9 @@ TEST_P(PdTableEntriesToPiTest, RoundTripsWithPiTableEntriesToPd) {
   ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
 
   TableEntries roundtripped_pd_entries;
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> pi_entries,
-                       PdTableEntriesToPi(info, pd_entries, options));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::TableEntry> pi_entries,
+      PartialPdTableEntriesToPiTableEntries(info, pd_entries, options));
   ASSERT_OK(
       PiTableEntriesToPd(info, pi_entries, &roundtripped_pd_entries, options));
   EXPECT_THAT(roundtripped_pd_entries, EqualsProto(pd_entries));
@@ -145,8 +149,9 @@ TEST_P(PdTableEntriesToIrTest, RoundTripsWithIrTableEntriesToPd) {
   ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
 
   TableEntries roundtripped_pd_entries;
-  ASSERT_OK_AND_ASSIGN(IrTableEntries ir_entries,
-                       PdTableEntriesToIr(info, pd_entries, options));
+  ASSERT_OK_AND_ASSIGN(
+      IrTableEntries ir_entries,
+      PartialPdTableEntriesToIrTableEntries(info, pd_entries, options));
   ASSERT_OK(
       IrTableEntriesToPd(info, ir_entries, &roundtripped_pd_entries, options));
   EXPECT_THAT(roundtripped_pd_entries, EqualsProto(pd_entries));
@@ -180,14 +185,16 @@ TEST(PdTableEntryToPiTest,
     for (bool key_only : {false, true}) {
       SCOPED_TRACE(absl::StrFormat("key_only = %v", key_only));
       SCOPED_TRACE(absl::StrCat("pd entry = ", pd_entry.DebugString()));
-      ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_without_allow_unsupported,
-                           PdTableEntryToPi(info, pd_entry,
+      ASSERT_OK_AND_ASSIGN(
+          p4::v1::TableEntry pi_without_allow_unsupported,
+          PartialPdTableEntryToPiTableEntry(info, pd_entry,
                                             TranslationOptions{
                                                 .key_only = key_only,
                                                 .allow_unsupported = false,
                                             }));
-      ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_with_allow_unsupported,
-                           PdTableEntryToPi(info, pd_entry,
+      ASSERT_OK_AND_ASSIGN(
+          p4::v1::TableEntry pi_with_allow_unsupported,
+          PartialPdTableEntryToPiTableEntry(info, pd_entry,
                                             TranslationOptions{
                                                 .key_only = key_only,
                                                 .allow_unsupported = true,
@@ -207,14 +214,16 @@ TEST(PdTableEntryToIrTest,
     for (bool key_only : {false, true}) {
       SCOPED_TRACE(absl::StrFormat("key_only = %v", key_only));
       SCOPED_TRACE(absl::StrCat("pd entry = ", pd_entry.DebugString()));
-      ASSERT_OK_AND_ASSIGN(IrTableEntry ir_without_allow_unsupported,
-                           PdTableEntryToIr(info, pd_entry,
+      ASSERT_OK_AND_ASSIGN(
+          IrTableEntry ir_without_allow_unsupported,
+          PartialPdTableEntryToIrTableEntry(info, pd_entry,
                                             TranslationOptions{
                                                 .key_only = key_only,
                                                 .allow_unsupported = false,
                                             }));
-      ASSERT_OK_AND_ASSIGN(IrTableEntry ir_with_allow_unsupported,
-                           PdTableEntryToIr(info, pd_entry,
+      ASSERT_OK_AND_ASSIGN(
+          IrTableEntry ir_with_allow_unsupported,
+          PartialPdTableEntryToIrTableEntry(info, pd_entry,
                                             TranslationOptions{
                                                 .key_only = key_only,
                                                 .allow_unsupported = true,

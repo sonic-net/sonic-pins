@@ -80,9 +80,9 @@ static void RunPdTableEntryTest(const pdpi::IrP4Info& info,
                                 pdpi::TranslationOptions options = {}) {
   absl::StrAppend(&test_name, "\n", options);
   RunGenericPdTest<pdpi::TableEntry, pdpi::IrTableEntry, p4::v1::TableEntry>(
-      info, test_name, pd, options, pdpi::PdTableEntryToIr,
+      info, test_name, pd, options, pdpi::PartialPdTableEntryToIrTableEntry,
       pdpi::IrTableEntryToPd, pdpi::IrTableEntryToPi, pdpi::PiTableEntryToIr,
-      pdpi::PdTableEntryToPi, pdpi::PiTableEntryToPd, validity,
+      pdpi::PartialPdTableEntryToPiTableEntry, pdpi::PiTableEntryToPd, validity,
       /*relevant_pd_fields=*/
       [&](const pdpi::IrP4Info& info, const pdpi::TableEntry& pd) {
         if (!options.key_only) return pd;

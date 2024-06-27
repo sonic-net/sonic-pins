@@ -56,8 +56,8 @@ void EntriesReferredToByTableEntryTest(absl::string_view test_name,
   pdpi::TableEntry pd_entry =
       gutil::ParseProtoOrDie<pdpi::TableEntry>(pd_string);
 
-  const auto pi_table_entry =
-      pdpi::PdTableEntryToPi(pdpi::GetTestIrP4Info(), pd_entry);
+  const auto pi_table_entry = pdpi::PartialPdTableEntryToPiTableEntry(
+      pdpi::GetTestIrP4Info(), pd_entry);
   CHECK(pi_table_entry.ok());  // Crash ok
 
   std::cout << kInputBanner << "-- PD table entry --\n";
