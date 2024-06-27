@@ -475,6 +475,37 @@ RebuildTableEntryCache(
   return cache;
 }
 
+std::vector<pdpi::IrTableEntry> GetP4rtIrTableEntriesFromCache(
+    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
+        table_entry_cache,
+    const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    std::vector<std::string>& failures) {
+  // Translate the Table cache into IR entries for comparison.
+  std::vector<pdpi::IrTableEntry> ir_entries;
+  int p4rt_translation_failures = 0;
+  for (const auto& [_, pi_table_entry] : table_entry_cache) {
+    auto ir_table_entry = TranslatePiTableEntryForOrchAgent(
+        pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
+        /*translate_key_only=*/false);
+    if (!ir_table_entry.ok()) {
+      p4rt_translation_failures++;
+      continue;
+    }
+    if (GetAppDbTableType(*ir_table_entry) != sonic::AppDbTableType::P4RT) {
+      continue;
+    }
+    ir_entries.push_back(*std::move(ir_table_entry));
+  }
+  if (p4rt_translation_failures > 0) {
+    failures.push_back(absl::StrCat("Failed to translate ",
+                                    p4rt_translation_failures,
+                                    " entries from the table entry cache."));
+  }
+
+  return ir_entries;
+}
+
 }  // namespace
 
 P4RuntimeImpl::P4RuntimeImpl(
@@ -1068,10 +1099,12 @@ absl::Status P4RuntimeImpl::VerifyState() {
   std::vector<std::string> failures = {"P4RT App State Verification failures:"};
 
   // Verify the P4RT_TABLE entries against the cache.
+  std::vector<pdpi::IrTableEntry> p4rt_entries = GetP4rtIrTableEntriesFromCache(
+      table_entry_cache_, *ir_p4info_, translate_port_ids_,
+      port_translation_map_, failures);
   std::vector<std::string> p4rt_table_failures =
-      sonic::VerifyP4rtTableWithCacheTableEntries(
-          *p4rt_table_.app_db, table_entry_cache_, *ir_p4info_,
-          translate_port_ids_, port_translation_map_);
+      sonic::VerifyP4rtTableWithCacheTableEntries(*p4rt_table_.app_db,
+                                                  p4rt_entries, *ir_p4info_);
   if (!p4rt_table_failures.empty()) {
     failures.insert(failures.end(), p4rt_table_failures.begin(),
                     p4rt_table_failures.end());
