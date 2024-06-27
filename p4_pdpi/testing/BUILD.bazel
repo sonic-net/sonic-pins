@@ -193,11 +193,13 @@ cc_test(
         ":test_p4info_cc",
         "//gutil:proto",
         "//gutil:testing",
+        "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
         "//p4_pdpi:sequencing_util",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
 )

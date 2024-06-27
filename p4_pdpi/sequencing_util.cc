@@ -1,5 +1,6 @@
 #include "p4_pdpi/sequencing_util.h"
 
+#include <cstdint>
 #include <iterator>
 #include <string>
 #include <vector>
@@ -8,6 +9,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/types/span.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -37,11 +39,11 @@ absl::StatusOr<std::string> GetExactOrOptionalMatchFieldValue(
 // refer to.
 absl::StatusOr<std::vector<ReferredTableEntry>>
 EntriesReferredToByTableEntryMatchFields(
-    const ::p4::v1::TableEntry& table_entry, const IrP4Info& info) {
+    const IrP4Info& info, const ::p4::v1::TableEntry& table_entry) {
   ASSIGN_OR_RETURN(
       const IrTableDefinition* ir_table_definition,
       gutil::FindPtrOrStatus(info.tables_by_id(), table_entry.table_id()));
-  absl::flat_hash_map<std::string, ReferredTableEntry> referred_table_entries;
+  absl::flat_hash_map<uint32_t, ReferredTableEntry> referred_table_entries;
 
   // Iterate through match fields of `table_entry` and incrementally build
   // ReferredTableEntries that `table_entry` can refer to.
@@ -58,15 +60,19 @@ EntriesReferredToByTableEntryMatchFields(
     ASSIGN_OR_RETURN(std::string value,
                      GetExactOrOptionalMatchFieldValue(field_match));
     for (const auto& ir_reference : match_field_definition->references()) {
-      referred_table_entries[ir_reference.table()].table = ir_reference.table();
-      referred_table_entries[ir_reference.table()].referred_fields.insert(
-          {ir_reference.match_field(), value});
+      referred_table_entries[ir_reference.table_id()].table_id =
+          ir_reference.table_id();
+      referred_table_entries[ir_reference.table_id()].referred_fields.insert(
+          ReferredField{
+              .match_field_id = ir_reference.match_field_id(),
+              .value = value,
+          });
     }
   }
 
   // Extract accumulated table entries into a vector to return.
   std::vector<ReferredTableEntry> referred_table_entries_vector;
-  for (auto& [table_name, referred_table_entry] : referred_table_entries) {
+  for (auto& [unused, referred_table_entry] : referred_table_entries) {
     referred_table_entries_vector.push_back(std::move(referred_table_entry));
   }
   return referred_table_entries_vector;
@@ -74,9 +80,9 @@ EntriesReferredToByTableEntryMatchFields(
 
 // Returns a vector of ReferredTableEntry that `action_params` refers to.
 absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByActionParams(
-    absl::Span<const p4::v1::Action_Param* const> action_params,
-    const IrActionDefinition& ir_action_definition, const IrP4Info& info) {
-  absl::flat_hash_map<std::string, ReferredTableEntry> referred_table_entries;
+    const IrP4Info& info, const IrActionDefinition& ir_action_definition,
+    absl::Span<const p4::v1::Action_Param* const> action_params) {
+  absl::flat_hash_map<uint32_t, ReferredTableEntry> referred_table_entries;
   for (const p4::v1::Action_Param* const param : action_params) {
     ASSIGN_OR_RETURN(
         const auto* param_definition,
@@ -86,15 +92,19 @@ absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByActionParams(
              "referred by action: Action param with ID "
           << param->param_id() << " does not exist.");
     for (const auto& ir_reference : param_definition->references()) {
-      referred_table_entries[ir_reference.table()].table = ir_reference.table();
-      referred_table_entries[ir_reference.table()].referred_fields.insert(
-          {ir_reference.match_field(), param->value()});
+      referred_table_entries[ir_reference.table_id()].table_id =
+          ir_reference.table_id();
+      referred_table_entries[ir_reference.table_id()].referred_fields.insert(
+          ReferredField{
+              .match_field_id = ir_reference.match_field_id(),
+              .value = param->value(),
+          });
     }
   }
 
   // Extract accumulated table entries into a vector to return.
   std::vector<ReferredTableEntry> referred_table_entries_vector;
-  for (auto& [table_name, referred_table_entry] : referred_table_entries) {
+  for (auto& [unused, referred_table_entry] : referred_table_entries) {
     referred_table_entries_vector.push_back(std::move(referred_table_entry));
   }
   return referred_table_entries_vector;
@@ -104,7 +114,7 @@ absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByActionParams(
 // its action parameters' values and `info` reference fields for the given
 // action.
 absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByAction(
-    const ::p4::v1::TableAction& action, const IrP4Info& info) {
+    const IrP4Info& info, const ::p4::v1::TableAction& action) {
   switch (action.type_case()) {
     case p4::v1::TableAction::kAction: {
       ASSIGN_OR_RETURN(
@@ -114,8 +124,8 @@ absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByAction(
           _ << "Failed to extract action definition when creating entries "
                "referred by action: Action with ID "
             << action.action().action_id() << " does not exist in IrP4Info.");
-      return EntriesReferredToByActionParams(action.action().params(),
-                                             *ir_action_definition, info);
+      return EntriesReferredToByActionParams(info, *ir_action_definition,
+                                             action.action().params());
     }
     case p4::v1::TableAction::kActionProfileActionSet: {
       std::vector<ReferredTableEntry> referred_table_entries_vector;
@@ -131,8 +141,8 @@ absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByAction(
 
         ASSIGN_OR_RETURN(
             std::vector<ReferredTableEntry> referred_entries_by_action,
-            EntriesReferredToByActionParams(action.action().params(),
-                                            *ir_action_definition, info));
+            EntriesReferredToByActionParams(info, *ir_action_definition,
+                                            action.action().params()));
         for (auto& referred_table_entry : referred_entries_by_action) {
           referred_table_entries_vector.push_back(
               std::move(referred_table_entry));
@@ -154,26 +164,62 @@ CreateReferenceRelations(const IrP4Info& ir_p4info) {
   absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>
       reference_relations;
   for (const IrMatchFieldReference& ir_reference : ir_p4info.references()) {
-    ReferenceRelationKey key{.referred_table_name = ir_reference.table()};
+    ReferenceRelationKey key{
+        .referred_table_id = ir_reference.table_id(),
+    };
     ReferenceRelation& reference_relation = reference_relations[key];
-    reference_relation.match_field_names.insert(ir_reference.match_field());
+    reference_relation.match_field_ids.insert(ir_reference.match_field_id());
   }
   return reference_relations;
 }
 
 absl::StatusOr<std::vector<ReferredTableEntry>> EntriesReferredToByTableEntry(
-    const ::p4::v1::TableEntry& table_entry, const IrP4Info& ir_p4info) {
+    const IrP4Info& ir_p4info, const ::p4::v1::TableEntry& table_entry) {
   ASSIGN_OR_RETURN(
       std::vector<ReferredTableEntry> referred_table_entries_by_match_fields,
-      EntriesReferredToByTableEntryMatchFields(table_entry, ir_p4info));
+      EntriesReferredToByTableEntryMatchFields(ir_p4info, table_entry));
   ASSIGN_OR_RETURN(
       std::vector<ReferredTableEntry> referred_table_entries_by_actions,
-      EntriesReferredToByAction(table_entry.action(), ir_p4info));
+      EntriesReferredToByAction(ir_p4info, table_entry.action()));
   referred_table_entries_by_match_fields.insert(
       referred_table_entries_by_match_fields.end(),
       std::make_move_iterator(referred_table_entries_by_actions.begin()),
       std::make_move_iterator(referred_table_entries_by_actions.end()));
   return referred_table_entries_by_match_fields;
+}
+
+absl::StatusOr<ReferredTableEntry> CreateReferrableTableEntry(
+    const IrP4Info& ir_p4info,
+    const absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>&
+        reference_relations,
+    const p4::v1::TableEntry& table_entry) {
+  // If `table_entry` can't be referred to by any table, returns an error.
+  ReferenceRelationKey reference_relation_key{
+      .referred_table_id = table_entry.table_id(),
+  };
+  ASSIGN_OR_RETURN(
+      const ReferenceRelation* reference_relation,
+      gutil::FindPtrOrStatus(reference_relations, reference_relation_key),
+      _ << " while trying to look up ReferenceRelation with key "
+        << absl::StrCat(reference_relation_key));
+
+  ReferredTableEntry referrable_table_entry = {
+      .table_id = table_entry.table_id(),
+  };
+  // Incrementally builds referrable_table_entry by iterating through each match
+  // field of `table_entry` and adding referred-to entry to
+  // referrable_table_entry.
+  for (const p4::v1::FieldMatch& field_match : table_entry.match()) {
+    if (reference_relation->match_field_ids.contains(field_match.field_id())) {
+      ASSIGN_OR_RETURN(std::string value,
+                       GetExactOrOptionalMatchFieldValue(field_match));
+      referrable_table_entry.referred_fields.insert(ReferredField{
+          .match_field_id = field_match.field_id(),
+          .value = value,
+      });
+    }
+  }
+  return referrable_table_entry;
 }
 
 }  // namespace pdpi
