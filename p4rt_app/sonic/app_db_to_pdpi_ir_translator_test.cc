@@ -464,6 +464,19 @@ TEST(TranslateAppDbToPdpiTest, InvalidTableNameFails) {
                        HasSubstr("table 'fake_table' does not exist")));
 }
 
+TEST(TranslateAppDbToPdpiTest, MulticastGroupEntrySuccess) {
+  pdpi::IrMulticastGroupEntry entry;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        multicast_group_id: 17
+        replicas { port: "Ethernet1/1/1" instance: 2 }
+        replicas { port: "Ethernet1/1/1" instance: 3 }
+      )pb",
+      &entry));
+
+  EXPECT_EQ(IrMulticastGroupEntryToAppDbKey(entry), "0x11");
+}
+
 }  // namespace
 }  // namespace sonic
 }  // namespace p4rt_app

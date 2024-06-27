@@ -3330,6 +3330,28 @@ packet_replication_engine_entry {
 INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple replicas with pair ('some_port', 1).
 
 =========================================================================
+multicast group entry with duplicate replica (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+  }
+}
+
+--- IR (converting to PD) is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple replicas with pair ('some_port', 1).
+
+=========================================================================
 valid multicast group entry (IR -> PI)
 =========================================================================
 
@@ -3373,6 +3395,53 @@ packet_replication_engine_entry {
 
 
 =========================================================================
+valid multicast group entry (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+  }
+}
+
+--- PD:
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+      replicas {
+        port: "some_port"
+        instance: "0x0002"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+
+=========================================================================
 valid multicast group entry without explicit instance (IR -> PI)
 =========================================================================
 
@@ -3398,6 +3467,43 @@ packet_replication_engine_entry {
     }
     replicas {
       port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry without explicit instance (IR -> PD)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+--- PD:
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0000"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0000"
+      }
     }
   }
 }
@@ -3875,93 +3981,97 @@ wcmp2_table_entry {
 }
 
 --- IR:
-table_name: "wcmp2_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "0.0.255.0"
+table_entry {
+  table_name: "wcmp2_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action_set {
-  actions {
-    action {
-      name: "do_thing_1"
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234567"
-        }
-      }
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234568"
-        }
-      }
-    }
-    weight: 1
-  }
-  actions {
-    action {
-      name: "do_thing_1"
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234569"
-        }
-      }
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234560"
-        }
-      }
-    }
-    weight: 2
-  }
-}
-
---- PI:
-table_id: 33554440
-match {
-  field_id: 1
-  lpm {
-    value: "\377\000"
-    prefix_len: 24
-  }
-}
-action {
-  action_profile_action_set {
-    action_profile_actions {
+  action_set {
+    actions {
       action {
-        action_id: 16777217
+        name: "do_thing_1"
         params {
-          param_id: 1
-          value: "\001#Eg"
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
         }
         params {
-          param_id: 2
-          value: "\001#Eh"
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
       weight: 1
     }
-    action_profile_actions {
+    actions {
       action {
-        action_id: 16777217
+        name: "do_thing_1"
         params {
-          param_id: 1
-          value: "\001#Ei"
+          name: "arg2"
+          value {
+            hex_str: "0x01234569"
+          }
         }
         params {
-          param_id: 2
-          value: "\001#E`"
+          name: "arg1"
+          value {
+            hex_str: "0x01234560"
+          }
         }
       }
       weight: 2
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554440
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Eg"
+          }
+          params {
+            param_id: 2
+            value: "\001#Eh"
+          }
+        }
+        weight: 1
+      }
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Ei"
+          }
+          params {
+            param_id: 2
+            value: "\001#E`"
+          }
+        }
+        weight: 2
+      }
     }
   }
 }
@@ -4002,95 +4112,99 @@ wcmp2_table_entry {
 }
 
 --- IR:
-table_name: "wcmp2_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "0.0.255.0"
+table_entry {
+  table_name: "wcmp2_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action_set {
-  actions {
-    action {
-      name: "do_thing_1"
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234567"
-        }
-      }
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234568"
-        }
-      }
-    }
-    weight: 1
-    watch_port: "abc"
-  }
-  actions {
-    action {
-      name: "do_thing_1"
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234569"
-        }
-      }
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234560"
-        }
-      }
-    }
-    weight: 2
-  }
-}
-
---- PI:
-table_id: 33554440
-match {
-  field_id: 1
-  lpm {
-    value: "\377\000"
-    prefix_len: 24
-  }
-}
-action {
-  action_profile_action_set {
-    action_profile_actions {
+  action_set {
+    actions {
       action {
-        action_id: 16777217
+        name: "do_thing_1"
         params {
-          param_id: 1
-          value: "\001#Eg"
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
         }
         params {
-          param_id: 2
-          value: "\001#Eh"
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
       weight: 1
       watch_port: "abc"
     }
-    action_profile_actions {
+    actions {
       action {
-        action_id: 16777217
+        name: "do_thing_1"
         params {
-          param_id: 1
-          value: "\001#Ei"
+          name: "arg2"
+          value {
+            hex_str: "0x01234569"
+          }
         }
         params {
-          param_id: 2
-          value: "\001#E`"
+          name: "arg1"
+          value {
+            hex_str: "0x01234560"
+          }
         }
       }
       weight: 2
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554440
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Eg"
+          }
+          params {
+            param_id: 2
+            value: "\001#Eh"
+          }
+        }
+        weight: 1
+        watch_port: "abc"
+      }
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Ei"
+          }
+          params {
+            param_id: 2
+            value: "\001#E`"
+          }
+        }
+        weight: 2
+      }
     }
   }
 }
@@ -4130,93 +4244,97 @@ wcmp_table_entry {
 }
 
 --- IR:
-table_name: "wcmp_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "0.0.255.0"
+table_entry {
+  table_name: "wcmp_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action_set {
-  actions {
-    action {
-      name: "do_thing_1"
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234567"
-        }
-      }
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234568"
-        }
-      }
-    }
-    weight: 1
-  }
-  actions {
-    action {
-      name: "do_thing_1"
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234569"
-        }
-      }
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234560"
-        }
-      }
-    }
-    weight: 2
-  }
-}
-
---- PI:
-table_id: 33554438
-match {
-  field_id: 1
-  lpm {
-    value: "\377\000"
-    prefix_len: 24
-  }
-}
-action {
-  action_profile_action_set {
-    action_profile_actions {
+  action_set {
+    actions {
       action {
-        action_id: 16777217
+        name: "do_thing_1"
         params {
-          param_id: 1
-          value: "\001#Eg"
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
         }
         params {
-          param_id: 2
-          value: "\001#Eh"
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
       weight: 1
     }
-    action_profile_actions {
+    actions {
       action {
-        action_id: 16777217
+        name: "do_thing_1"
         params {
-          param_id: 1
-          value: "\001#Ei"
+          name: "arg2"
+          value {
+            hex_str: "0x01234569"
+          }
         }
         params {
-          param_id: 2
-          value: "\001#E`"
+          name: "arg1"
+          value {
+            hex_str: "0x01234560"
+          }
         }
       }
       weight: 2
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554438
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Eg"
+          }
+          params {
+            param_id: 2
+            value: "\001#Eh"
+          }
+        }
+        weight: 1
+      }
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Ei"
+          }
+          params {
+            param_id: 2
+            value: "\001#E`"
+          }
+        }
+        weight: 2
+      }
     }
   }
 }
@@ -4243,76 +4361,80 @@ exact_table_entry {
 }
 
 --- IR:
-table_name: "exact_table"
-matches {
-  name: "normal"
-  exact {
-    hex_str: "0x054"
+table_entry {
+  table_name: "exact_table"
+  matches {
+    name: "normal"
+    exact {
+      hex_str: "0x054"
+    }
   }
-}
-matches {
-  name: "ipv4"
-  exact {
-    ipv4: "10.43.12.5"
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.43.12.5"
+    }
   }
-}
-matches {
-  name: "ipv6"
-  exact {
-    ipv6: "3242::fee2"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "3242::fee2"
+    }
   }
-}
-matches {
-  name: "mac"
-  exact {
-    mac: "00:11:22:33:44:55"
+  matches {
+    name: "mac"
+    exact {
+      mac: "00:11:22:33:44:55"
+    }
   }
-}
-matches {
-  name: "str"
-  exact {
-    str: "hello"
+  matches {
+    name: "str"
+    exact {
+      str: "hello"
+    }
   }
-}
-action {
-  name: "NoAction"
+  action {
+    name: "NoAction"
+  }
 }
 
 --- PI:
-table_id: 33554434
-match {
-  field_id: 1
-  exact {
-    value: "T"
+table_entry {
+  table_id: 33554434
+  match {
+    field_id: 1
+    exact {
+      value: "T"
+    }
   }
-}
-match {
-  field_id: 2
-  exact {
-    value: "\n+\014\005"
+  match {
+    field_id: 2
+    exact {
+      value: "\n+\014\005"
+    }
   }
-}
-match {
-  field_id: 3
-  exact {
-    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+  match {
+    field_id: 3
+    exact {
+      value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+    }
   }
-}
-match {
-  field_id: 4
-  exact {
-    value: "\021\"3DU"
+  match {
+    field_id: 4
+    exact {
+      value: "\021\"3DU"
+    }
   }
-}
-match {
-  field_id: 5
-  exact {
-    value: "hello"
+  match {
+    field_id: 5
+    exact {
+      value: "hello"
+    }
   }
-}
-action {
   action {
-    action_id: 21257015
+    action {
+      action_id: 21257015
+    }
   }
 }
 
@@ -4339,54 +4461,58 @@ optional_table_entry {
 }
 
 --- IR:
-table_name: "optional_table"
-matches {
-  name: "ipv6"
-  optional {
-    value {
-      ipv6: "3242::fee2"
+table_entry {
+  table_name: "optional_table"
+  matches {
+    name: "ipv6"
+    optional {
+      value {
+        ipv6: "3242::fee2"
+      }
     }
   }
-}
-priority: 32
-action {
-  name: "do_thing_1"
-  params {
-    name: "arg2"
-    value {
-      hex_str: "0x01234567"
+  priority: 32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
     }
-  }
-  params {
-    name: "arg1"
-    value {
-      hex_str: "0x01234568"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
     }
   }
 }
 
 --- PI:
-table_id: 33554441
-match {
-  field_id: 1
-  optional {
-    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+table_entry {
+  table_id: 33554441
+  match {
+    field_id: 1
+    optional {
+      value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+    }
   }
-}
-action {
   action {
-    action_id: 16777217
-    params {
-      param_id: 1
-      value: "\001#Eg"
-    }
-    params {
-      param_id: 2
-      value: "\001#Eh"
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
     }
   }
+  priority: 32
 }
-priority: 32
 
 
 =========================================================================
@@ -4412,58 +4538,62 @@ ternary_table_entry {
 }
 
 --- IR:
-table_name: "ternary_table"
-matches {
-  name: "normal"
-  ternary {
-    value {
-      hex_str: "0x052"
-    }
-    mask {
-      hex_str: "0x273"
-    }
-  }
-}
-priority: 32
-action {
-  name: "do_thing_3"
-  params {
-    name: "arg1"
-    value {
-      hex_str: "0x01234567"
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
     }
   }
-  params {
-    name: "arg2"
-    value {
-      hex_str: "0x01234568"
+  priority: 32
+  action {
+    name: "do_thing_3"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234568"
+      }
     }
   }
 }
 
 --- PI:
-table_id: 33554435
-match {
-  field_id: 1
-  ternary {
-    value: "R"
-    mask: "\002s"
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
   }
-}
-action {
   action {
-    action_id: 16777219
-    params {
-      param_id: 1
-      value: "\001#Eg"
-    }
-    params {
-      param_id: 2
-      value: "\001#Eh"
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
     }
   }
+  priority: 32
 }
-priority: 32
 
 
 =========================================================================
@@ -4490,60 +4620,64 @@ ternary_table_entry {
 }
 
 --- IR:
-table_name: "ternary_table"
-matches {
-  name: "normal"
-  ternary {
-    value {
-      hex_str: "0x052"
-    }
-    mask {
-      hex_str: "0x273"
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
     }
   }
+  priority: 32
+  action {
+    name: "do_thing_3"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234568"
+      }
+    }
+  }
+  controller_metadata: "abc"
 }
-priority: 32
-action {
-  name: "do_thing_3"
-  params {
-    name: "arg1"
-    value {
-      hex_str: "0x01234567"
-    }
-  }
-  params {
-    name: "arg2"
-    value {
-      hex_str: "0x01234568"
-    }
-  }
-}
-controller_metadata: "abc"
 
 --- PI:
-table_id: 33554435
-match {
-  field_id: 1
-  ternary {
-    value: "R"
-    mask: "\002s"
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
   }
-}
-action {
   action {
-    action_id: 16777219
-    params {
-      param_id: 1
-      value: "\001#Eg"
-    }
-    params {
-      param_id: 2
-      value: "\001#Eh"
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
     }
   }
+  priority: 32
+  metadata: "abc"
 }
-priority: 32
-metadata: "abc"
 
 
 =========================================================================
@@ -4589,148 +4723,152 @@ ternary_table_entry {
 }
 
 --- IR:
-table_name: "ternary_table"
-matches {
-  name: "normal"
-  ternary {
-    value {
-      hex_str: "0x052"
-    }
-    mask {
-      hex_str: "0x273"
-    }
-  }
-}
-matches {
-  name: "ipv4"
-  ternary {
-    value {
-      ipv4: "10.43.12.4"
-    }
-    mask {
-      ipv4: "10.43.12.5"
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
     }
   }
-}
-matches {
-  name: "ipv6"
-  ternary {
-    value {
-      ipv6: "::ee66"
-    }
-    mask {
-      ipv6: "::ff77"
-    }
-  }
-}
-matches {
-  name: "mac"
-  ternary {
-    value {
-      mac: "11:22:33:44:55:66"
-    }
-    mask {
-      mac: "33:66:77:66:77:77"
+  matches {
+    name: "ipv4"
+    ternary {
+      value {
+        ipv4: "10.43.12.4"
+      }
+      mask {
+        ipv4: "10.43.12.5"
+      }
     }
   }
-}
-matches {
-  name: "ipv6_upper_64_bits"
-  ternary {
-    value {
-      ipv6: "0:1fff:ee66:aabb::"
-    }
-    mask {
-      ipv6: "0:ffff:ffff:ffff::"
-    }
-  }
-}
-matches {
-  name: "ipv6_upper_63_bits"
-  ternary {
-    value {
-      ipv6: "0:1fff:ee66:aafe::"
-    }
-    mask {
-      ipv6: "0:ffff:ffff:fffe::"
+  matches {
+    name: "ipv6"
+    ternary {
+      value {
+        ipv6: "::ee66"
+      }
+      mask {
+        ipv6: "::ff77"
+      }
     }
   }
-}
-priority: 32
-action {
-  name: "do_thing_3"
-  params {
-    name: "arg1"
-    value {
-      hex_str: "0x01234567"
+  matches {
+    name: "mac"
+    ternary {
+      value {
+        mac: "11:22:33:44:55:66"
+      }
+      mask {
+        mac: "33:66:77:66:77:77"
+      }
     }
   }
-  params {
-    name: "arg2"
-    value {
-      hex_str: "0x01234568"
+  matches {
+    name: "ipv6_upper_64_bits"
+    ternary {
+      value {
+        ipv6: "0:1fff:ee66:aabb::"
+      }
+      mask {
+        ipv6: "0:ffff:ffff:ffff::"
+      }
+    }
+  }
+  matches {
+    name: "ipv6_upper_63_bits"
+    ternary {
+      value {
+        ipv6: "0:1fff:ee66:aafe::"
+      }
+      mask {
+        ipv6: "0:ffff:ffff:fffe::"
+      }
+    }
+  }
+  priority: 32
+  action {
+    name: "do_thing_3"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234567"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234568"
+      }
     }
   }
 }
 
 --- PI:
-table_id: 33554435
-match {
-  field_id: 1
-  ternary {
-    value: "R"
-    mask: "\002s"
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
   }
-}
-match {
-  field_id: 2
-  ternary {
-    value: "\n+\014\004"
-    mask: "\n+\014\005"
+  match {
+    field_id: 2
+    ternary {
+      value: "\n+\014\004"
+      mask: "\n+\014\005"
+    }
   }
-}
-match {
-  field_id: 3
-  ternary {
-    value: "\356f"
-    mask: "\377w"
+  match {
+    field_id: 3
+    ternary {
+      value: "\356f"
+      mask: "\377w"
+    }
   }
-}
-match {
-  field_id: 4
-  ternary {
-    value: "\021\"3DUf"
-    mask: "3fwfww"
+  match {
+    field_id: 4
+    ternary {
+      value: "\021\"3DUf"
+      mask: "3fwfww"
+    }
   }
-}
-match {
-  field_id: 6
-  ternary {
-    value: "\037\377\356f\252\273"
-    mask: "\377\377\377\377\377\377"
+  match {
+    field_id: 6
+    ternary {
+      value: "\037\377\356f\252\273"
+      mask: "\377\377\377\377\377\377"
+    }
   }
-}
-match {
-  field_id: 7
-  ternary {
-    value: "\017\377\3673U\177"
-    mask: "\177\377\377\377\377\377"
+  match {
+    field_id: 7
+    ternary {
+      value: "\017\377\3673U\177"
+      mask: "\177\377\377\377\377\377"
+    }
   }
-}
-action {
   action {
-    action_id: 16777219
-    params {
-      param_id: 1
-      value: "\001#Eg"
-    }
-    params {
-      param_id: 2
-      value: "\001#Eh"
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
     }
   }
+  priority: 32
 }
-priority: 32
 
 
 =========================================================================
@@ -4753,32 +4891,36 @@ lpm1_table_entry {
 }
 
 --- IR:
-table_name: "lpm1_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "10.43.12.0"
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.43.12.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "NoAction"
+  action {
+    name: "NoAction"
+  }
 }
 
 --- PI:
-table_id: 33554436
-match {
-  field_id: 1
-  lpm {
-    value: "\n+\014\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    lpm {
+      value: "\n+\014\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 21257015
+    action {
+      action_id: 21257015
+    }
   }
 }
 
@@ -4803,32 +4945,36 @@ lpm2_table_entry {
 }
 
 --- IR:
-table_name: "lpm2_table"
-matches {
-  name: "ipv6"
-  lpm {
-    value {
-      ipv6: "ffff::abcd:0:0"
+table_entry {
+  table_name: "lpm2_table"
+  matches {
+    name: "ipv6"
+    lpm {
+      value {
+        ipv6: "ffff::abcd:0:0"
+      }
+      prefix_length: 96
     }
-    prefix_length: 96
   }
-}
-action {
-  name: "NoAction"
+  action {
+    name: "NoAction"
+  }
 }
 
 --- PI:
-table_id: 33554437
-match {
-  field_id: 1
-  lpm {
-    value: "\377\377\000\000\000\000\000\000\000\000\253\315\000\000\000\000"
-    prefix_len: 96
+table_entry {
+  table_id: 33554437
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\377\000\000\000\000\000\000\000\000\253\315\000\000\000\000"
+      prefix_len: 96
+    }
   }
-}
-action {
   action {
-    action_id: 21257015
+    action {
+      action_id: 21257015
+    }
   }
 }
 
@@ -4856,89 +5002,93 @@ id_test_table_entry {
 }
 
 --- IR:
-table_name: "id_test_table"
-matches {
-  name: "ipv6"
-  exact {
-    ipv6: "::ff22"
-  }
-}
-matches {
-  name: "ipv4"
-  exact {
-    ipv4: "16.36.50.82"
-  }
-}
-action {
-  name: "do_thing_2"
-  params {
-    name: "normal"
-    value {
-      hex_str: "0x054"
-    }
-  }
-  params {
-    name: "ipv4"
-    value {
-      ipv4: "10.43.12.5"
-    }
-  }
-  params {
+table_entry {
+  table_name: "id_test_table"
+  matches {
     name: "ipv6"
-    value {
-      ipv6: "3242::fee2"
+    exact {
+      ipv6: "::ff22"
     }
   }
-  params {
-    name: "mac"
-    value {
-      mac: "00:11:22:33:44:55"
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "16.36.50.82"
     }
   }
-  params {
-    name: "str"
-    value {
-      str: "hello"
+  action {
+    name: "do_thing_2"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x054"
+      }
+    }
+    params {
+      name: "ipv4"
+      value {
+        ipv4: "10.43.12.5"
+      }
+    }
+    params {
+      name: "ipv6"
+      value {
+        ipv6: "3242::fee2"
+      }
+    }
+    params {
+      name: "mac"
+      value {
+        mac: "00:11:22:33:44:55"
+      }
+    }
+    params {
+      name: "str"
+      value {
+        str: "hello"
+      }
     }
   }
 }
 
 --- PI:
-table_id: 33554433
-match {
-  field_id: 1
-  exact {
-    value: "\377\""
+table_entry {
+  table_id: 33554433
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
   }
-}
-match {
-  field_id: 2
-  exact {
-    value: "\020$2R"
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
   }
-}
-action {
   action {
-    action_id: 16777218
-    params {
-      param_id: 1
-      value: "T"
-    }
-    params {
-      param_id: 2
-      value: "\n+\014\005"
-    }
-    params {
-      param_id: 3
-      value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
-    }
-    params {
-      param_id: 4
-      value: "\021\"3DU"
-    }
-    params {
-      param_id: 5
-      value: "hello"
+    action {
+      action_id: 16777218
+      params {
+        param_id: 1
+        value: "T"
+      }
+      params {
+        param_id: 2
+        value: "\n+\014\005"
+      }
+      params {
+        param_id: 3
+        value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+      }
+      params {
+        param_id: 4
+        value: "\021\"3DU"
+      }
+      params {
+        param_id: 5
+        value: "hello"
+      }
     }
   }
 }
@@ -4964,32 +5114,36 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
+  action {
+    name: "count_and_meter"
+  }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
   }
 }
 
@@ -5018,45 +5172,49 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
+  action {
+    name: "count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
   }
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
 }
 
 
@@ -5083,39 +5241,43 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
-}
-counter_data {
-  byte_count: 567
+  action {
+    name: "count_and_meter"
+  }
+  counter_data {
+    byte_count: 567
+  }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
   }
-}
-counter_data {
-  byte_count: 567
+  counter_data {
+    byte_count: 567
+  }
 }
 
 
@@ -5142,39 +5304,43 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
-}
-counter_data {
-  packet_count: 789
+  action {
+    name: "count_and_meter"
+  }
+  counter_data {
+    packet_count: 789
+  }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
   }
-}
-counter_data {
-  packet_count: 789
+  counter_data {
+    packet_count: 789
+  }
 }
 
 
@@ -5202,41 +5368,45 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
+  action {
+    name: "count_and_meter"
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
   }
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
 }
 
 
@@ -5268,53 +5438,57 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
+  action {
+    name: "count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
   }
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
 }
 
 
@@ -5334,16 +5508,20 @@ lpm1_table_entry {
 }
 
 --- IR:
-table_name: "lpm1_table"
-action {
-  name: "NoAction"
+table_entry {
+  table_name: "lpm1_table"
+  action {
+    name: "NoAction"
+  }
 }
 
 --- PI:
-table_id: 33554436
-action {
+table_entry {
+  table_id: 33554436
   action {
-    action_id: 21257015
+    action {
+      action_id: 21257015
+    }
   }
 }
 
@@ -5369,76 +5547,80 @@ exact_table_entry {
 }
 
 --- IR:
-table_name: "exact_table"
-matches {
-  name: "normal"
-  exact {
-    hex_str: "0x054"
+table_entry {
+  table_name: "exact_table"
+  matches {
+    name: "normal"
+    exact {
+      hex_str: "0x054"
+    }
   }
-}
-matches {
-  name: "ipv4"
-  exact {
-    ipv4: "10.43.12.5"
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.43.12.5"
+    }
   }
-}
-matches {
-  name: "ipv6"
-  exact {
-    ipv6: "3242::fee2"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "3242::fee2"
+    }
   }
-}
-matches {
-  name: "mac"
-  exact {
-    mac: "00:11:22:33:44:55"
+  matches {
+    name: "mac"
+    exact {
+      mac: "00:11:22:33:44:55"
+    }
   }
-}
-matches {
-  name: "str"
-  exact {
-    str: "\0001u"
+  matches {
+    name: "str"
+    exact {
+      str: "\0001u"
+    }
   }
-}
-action {
-  name: "NoAction"
+  action {
+    name: "NoAction"
+  }
 }
 
 --- PI:
-table_id: 33554434
-match {
-  field_id: 1
-  exact {
-    value: "T"
+table_entry {
+  table_id: 33554434
+  match {
+    field_id: 1
+    exact {
+      value: "T"
+    }
   }
-}
-match {
-  field_id: 2
-  exact {
-    value: "\n+\014\005"
+  match {
+    field_id: 2
+    exact {
+      value: "\n+\014\005"
+    }
   }
-}
-match {
-  field_id: 3
-  exact {
-    value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+  match {
+    field_id: 3
+    exact {
+      value: "2B\000\000\000\000\000\000\000\000\000\000\000\000\376\342"
+    }
   }
-}
-match {
-  field_id: 4
-  exact {
-    value: "\021\"3DU"
+  match {
+    field_id: 4
+    exact {
+      value: "\021\"3DU"
+    }
   }
-}
-match {
-  field_id: 5
-  exact {
-    value: "\0001u"
+  match {
+    field_id: 5
+    exact {
+      value: "\0001u"
+    }
   }
-}
-action {
   action {
-    action_id: 21257015
+    action {
+      action_id: 21257015
+    }
   }
 }
 
@@ -5465,54 +5647,58 @@ optional_table_entry {
 }
 
 --- IR:
-table_name: "optional_table"
-matches {
-  name: "str"
-  optional {
-    value {
-      str: "\000324"
+table_entry {
+  table_name: "optional_table"
+  matches {
+    name: "str"
+    optional {
+      value {
+        str: "\000324"
+      }
     }
   }
-}
-priority: 32
-action {
-  name: "do_thing_1"
-  params {
-    name: "arg2"
-    value {
-      hex_str: "0x01234567"
+  priority: 32
+  action {
+    name: "do_thing_1"
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x01234567"
+      }
     }
-  }
-  params {
-    name: "arg1"
-    value {
-      hex_str: "0x01234568"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x01234568"
+      }
     }
   }
 }
 
 --- PI:
-table_id: 33554441
-match {
-  field_id: 3
-  optional {
-    value: "\000324"
+table_entry {
+  table_id: 33554441
+  match {
+    field_id: 3
+    optional {
+      value: "\000324"
+    }
   }
-}
-action {
   action {
-    action_id: 16777217
-    params {
-      param_id: 1
-      value: "\001#Eg"
-    }
-    params {
-      param_id: 2
-      value: "\001#Eh"
+    action {
+      action_id: 16777217
+      params {
+        param_id: 1
+        value: "\001#Eg"
+      }
+      params {
+        param_id: 2
+        value: "\001#Eh"
+      }
     }
   }
+  priority: 32
 }
-priority: 32
 
 
 =========================================================================
@@ -5550,95 +5736,99 @@ wcmp2_table_entry {
 }
 
 --- IR:
-table_name: "wcmp2_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "0.0.255.0"
+table_entry {
+  table_name: "wcmp2_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "0.0.255.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action_set {
-  actions {
-    action {
-      name: "do_thing_1"
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234567"
-        }
-      }
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234568"
-        }
-      }
-    }
-    weight: 1
-    watch_port: "\000abc"
-  }
-  actions {
-    action {
-      name: "do_thing_1"
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234569"
-        }
-      }
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234560"
-        }
-      }
-    }
-    weight: 2
-  }
-}
-
---- PI:
-table_id: 33554440
-match {
-  field_id: 1
-  lpm {
-    value: "\377\000"
-    prefix_len: 24
-  }
-}
-action {
-  action_profile_action_set {
-    action_profile_actions {
+  action_set {
+    actions {
       action {
-        action_id: 16777217
+        name: "do_thing_1"
         params {
-          param_id: 1
-          value: "\001#Eg"
+          name: "arg2"
+          value {
+            hex_str: "0x01234567"
+          }
         }
         params {
-          param_id: 2
-          value: "\001#Eh"
+          name: "arg1"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
       weight: 1
       watch_port: "\000abc"
     }
-    action_profile_actions {
+    actions {
       action {
-        action_id: 16777217
+        name: "do_thing_1"
         params {
-          param_id: 1
-          value: "\001#Ei"
+          name: "arg2"
+          value {
+            hex_str: "0x01234569"
+          }
         }
         params {
-          param_id: 2
-          value: "\001#E`"
+          name: "arg1"
+          value {
+            hex_str: "0x01234560"
+          }
         }
       }
       weight: 2
+    }
+  }
+}
+
+--- PI:
+table_entry {
+  table_id: 33554440
+  match {
+    field_id: 1
+    lpm {
+      value: "\377\000"
+      prefix_len: 24
+    }
+  }
+  action {
+    action_profile_action_set {
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Eg"
+          }
+          params {
+            param_id: 2
+            value: "\001#Eh"
+          }
+        }
+        weight: 1
+        watch_port: "\000abc"
+      }
+      action_profile_actions {
+        action {
+          action_id: 16777217
+          params {
+            param_id: 1
+            value: "\001#Ei"
+          }
+          params {
+            param_id: 2
+            value: "\001#E`"
+          }
+        }
+        weight: 2
+      }
     }
   }
 }
@@ -5658,32 +5848,36 @@ no_action_table_entry {
 }
 
 --- IR:
-table_name: "no_action_table"
-matches {
-  name: "ipv6"
-  exact {
-    ipv6: "::ff22"
+table_entry {
+  table_name: "no_action_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
   }
-}
-matches {
-  name: "ipv4"
-  exact {
-    ipv4: "16.36.50.82"
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "16.36.50.82"
+    }
   }
 }
 
 --- PI:
-table_id: 33554445
-match {
-  field_id: 1
-  exact {
-    value: "\377\""
+table_entry {
+  table_id: 33554445
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
   }
-}
-match {
-  field_id: 2
-  exact {
-    value: "\020$2R"
+  match {
+    field_id: 2
+    exact {
+      value: "\020$2R"
+    }
   }
 }
 
@@ -5745,72 +5939,76 @@ packet_count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "packet_count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "packet_count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "packet_count_and_meter"
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  packet_count: 789
-}
-meter_counter_data {
-  green {
-    packet_count: 790
+  action {
+    name: "packet_count_and_meter"
   }
-  yellow {
-    packet_count: 791
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
   }
-  red {
-    packet_count: 792
+  counter_data {
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      packet_count: 790
+    }
+    yellow {
+      packet_count: 791
+    }
+    red {
+      packet_count: 792
+    }
   }
 }
 
 --- PI:
-table_id: 33554451
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554451
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777234
+    action {
+      action_id: 16777234
+    }
   }
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  packet_count: 789
-}
-meter_counter_data {
-  green {
-    packet_count: 790
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
   }
-  yellow {
-    packet_count: 791
+  counter_data {
+    packet_count: 789
   }
-  red {
-    packet_count: 792
+  meter_counter_data {
+    green {
+      packet_count: 790
+    }
+    yellow {
+      packet_count: 791
+    }
+    red {
+      packet_count: 792
+    }
   }
 }
 
@@ -5853,72 +6051,76 @@ byte_count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "byte_count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "byte_count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "byte_count_and_meter"
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-}
-meter_counter_data {
-  green {
-    byte_count: 568
+  action {
+    name: "byte_count_and_meter"
   }
-  yellow {
-    byte_count: 569
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
   }
-  red {
-    byte_count: 570
+  counter_data {
+    byte_count: 567
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+    }
+    yellow {
+      byte_count: 569
+    }
+    red {
+      byte_count: 570
+    }
   }
 }
 
 --- PI:
-table_id: 33554455
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554455
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777238
+    action {
+      action_id: 16777238
+    }
   }
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-}
-meter_counter_data {
-  green {
-    byte_count: 568
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
   }
-  yellow {
-    byte_count: 569
+  counter_data {
+    byte_count: 567
   }
-  red {
-    byte_count: 570
+  meter_counter_data {
+    green {
+      byte_count: 568
+    }
+    yellow {
+      byte_count: 569
+    }
+    red {
+      byte_count: 570
+    }
   }
 }
 
@@ -5965,80 +6167,84 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
-}
-meter_counter_data {
-  green {
-    byte_count: 568
-    packet_count: 790
+  action {
+    name: "count_and_meter"
   }
-  yellow {
-    byte_count: 569
-    packet_count: 791
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
   }
-  red {
-    byte_count: 570
-    packet_count: 792
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
   }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
   }
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
-}
-meter_counter_data {
-  green {
-    byte_count: 568
-    packet_count: 790
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
   }
-  yellow {
-    byte_count: 569
-    packet_count: 791
+  counter_data {
+    byte_count: 567
+    packet_count: 789
   }
-  red {
-    byte_count: 570
-    packet_count: 792
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    yellow {
+      byte_count: 569
+      packet_count: 791
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
   }
 }
 
@@ -6112,57 +6318,61 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
-}
-meter_counter_data {
+  action {
+    name: "count_and_meter"
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+  }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
   }
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
-}
-meter_counter_data {
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+  }
 }
 
 
@@ -6204,72 +6414,365 @@ count_and_meter_table_entry {
 }
 
 --- IR:
-table_name: "count_and_meter_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "16.36.50.0"
+table_entry {
+  table_name: "count_and_meter_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "16.36.50.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
-}
-action {
-  name: "count_and_meter"
-}
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
-}
-meter_counter_data {
-  green {
-    byte_count: 568
-    packet_count: 790
+  action {
+    name: "count_and_meter"
   }
-  red {
-    byte_count: 570
-    packet_count: 792
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
   }
 }
 
 --- PI:
-table_id: 33554439
-match {
-  field_id: 1
-  lpm {
-    value: "\020$2\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554439
+  match {
+    field_id: 1
+    lpm {
+      value: "\020$2\000"
+      prefix_len: 24
+    }
   }
-}
-action {
   action {
-    action_id: 16777220
+    action {
+      action_id: 16777220
+    }
+  }
+  meter_config {
+    cir: 123
+    cburst: 345
+    pir: 123
+    pburst: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+  meter_counter_data {
+    green {
+      byte_count: 568
+      packet_count: 790
+    }
+    red {
+      byte_count: 570
+      packet_count: 792
+    }
   }
 }
-meter_config {
-  cir: 123
-  cburst: 345
-  pir: 123
-  pburst: 345
-}
-counter_data {
-  byte_count: 567
-  packet_count: 789
-}
-meter_counter_data {
-  green {
-    byte_count: 568
-    packet_count: 790
+
+
+=========================================================================
+multicast group entry with missing match field
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+    }
   }
-  red {
-    byte_count: 570
-    packet_count: 792
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: 'match' field is missing.
+=========================================================================
+multicast group entry with empty match field 
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: 'multicast_group_id' field is missing in 'match'.
+=========================================================================
+multicast group entry with invalid multicast_group_id format
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "not_a_hexstring"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: missing '0x'-prefix in hexadecimal string: 'not_a_hexstring'
+=========================================================================
+multicast group entry with missing action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: 'action' field is missing.
+=========================================================================
+multicast group entry with empty action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry is invalid: 'replicate' field is missing in 'action'.
+=========================================================================
+multicast group entry with invalid instance format
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "not_a_hexstring"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Error translating replica { port: "some_port" instance: "not_a_hexstring" }: missing '0x'-prefix in hexadecimal string: 'not_a_hexstring'
+=========================================================================
+multicast group entry with duplicate replica
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: MulticastGroupEntry with group id '7' is invalid: Each replica must have a unique (port, instance)-pair, but found multiple replicas with pair ('some_port', 1).
+=========================================================================
+valid multicast group entry
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+      replicas {
+        port: "some_port"
+        instance: "0x0002"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0001"
+      }
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with instance set to 0
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0000"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0000"
+      }
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+  }
+}
+
+
+=========================================================================
+valid multicast group entry with empty replicate action
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+    }
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
   }
 }
 
@@ -6352,32 +6855,36 @@ unsupported_table_entry {
 }
 
 --- IR:
-table_name: "unsupported_table"
-matches {
-  name: "ipv6"
-  exact {
-    ipv6: "::ff22"
+table_entry {
+  table_name: "unsupported_table"
+  matches {
+    name: "ipv6"
+    exact {
+      ipv6: "::ff22"
+    }
   }
-}
-matches {
-  name: "ipv4"
-  exact {
-    ipv4: "10.10.10.10"
+  matches {
+    name: "ipv4"
+    exact {
+      ipv4: "10.10.10.10"
+    }
   }
 }
 
 --- PI:
-table_id: 33554447
-match {
-  field_id: 1
-  exact {
-    value: "\377\""
+table_entry {
+  table_id: 33554447
+  match {
+    field_id: 1
+    exact {
+      value: "\377\""
+    }
   }
-}
-match {
-  field_id: 2
-  exact {
-    value: "\n\n\n\n"
+  match {
+    field_id: 2
+    exact {
+      value: "\n\n\n\n"
+    }
   }
 }
 
@@ -6425,38 +6932,42 @@ ternary_table_entry {
 }
 
 --- IR:
-table_name: "ternary_table"
-matches {
-  name: "normal"
-  ternary {
-    value {
-      hex_str: "0x052"
-    }
-    mask {
-      hex_str: "0x273"
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
     }
   }
-}
-priority: 32
-action {
-  name: "unsupported_action"
+  priority: 32
+  action {
+    name: "unsupported_action"
+  }
 }
 
 --- PI:
-table_id: 33554435
-match {
-  field_id: 1
-  ternary {
-    value: "R"
-    mask: "\002s"
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
   }
-}
-action {
   action {
-    action_id: 16777223
+    action {
+      action_id: 16777223
+    }
   }
+  priority: 32
 }
-priority: 32
 
 
 =========================================================================
@@ -6506,58 +7017,62 @@ ternary_table_entry {
 }
 
 --- IR:
-table_name: "ternary_table"
-matches {
-  name: "unsupported_field"
-  ternary {
-    value {
-      hex_str: "0x1"
-    }
-    mask {
-      hex_str: "0x1"
-    }
-  }
-}
-priority: 32
-action {
-  name: "do_thing_3"
-  params {
-    name: "arg1"
-    value {
-      hex_str: "0x12345678"
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "unsupported_field"
+    ternary {
+      value {
+        hex_str: "0x1"
+      }
+      mask {
+        hex_str: "0x1"
+      }
     }
   }
-  params {
-    name: "arg2"
-    value {
-      hex_str: "0x87654321"
+  priority: 32
+  action {
+    name: "do_thing_3"
+    params {
+      name: "arg1"
+      value {
+        hex_str: "0x12345678"
+      }
+    }
+    params {
+      name: "arg2"
+      value {
+        hex_str: "0x87654321"
+      }
     }
   }
 }
 
 --- PI:
-table_id: 33554435
-match {
-  field_id: 5
-  ternary {
-    value: "\001"
-    mask: "\001"
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 5
+    ternary {
+      value: "\001"
+      mask: "\001"
+    }
   }
-}
-action {
   action {
-    action_id: 16777219
-    params {
-      param_id: 1
-      value: "\0224Vx"
-    }
-    params {
-      param_id: 2
-      value: "\207eC!"
+    action {
+      action_id: 16777219
+      params {
+        param_id: 1
+        value: "\0224Vx"
+      }
+      params {
+        param_id: 2
+        value: "\207eC!"
+      }
     }
   }
+  priority: 32
 }
-priority: 32
 
 
 =========================================================================
@@ -6580,24 +7095,28 @@ lpm1_table_entry {
 }
 
 --- IR:
-table_name: "lpm1_table"
-matches {
-  name: "ipv4"
-  lpm {
-    value {
-      ipv4: "10.43.12.0"
+table_entry {
+  table_name: "lpm1_table"
+  matches {
+    name: "ipv4"
+    lpm {
+      value {
+        ipv4: "10.43.12.0"
+      }
+      prefix_length: 24
     }
-    prefix_length: 24
   }
 }
 
 --- PI:
-table_id: 33554436
-match {
-  field_id: 1
-  lpm {
-    value: "\n+\014\000"
-    prefix_len: 24
+table_entry {
+  table_id: 33554436
+  match {
+    field_id: 1
+    lpm {
+      value: "\n+\014\000"
+      prefix_len: 24
+    }
   }
 }
 
@@ -6625,27 +7144,157 @@ ternary_table_entry {
 }
 
 --- IR:
-table_name: "ternary_table"
-matches {
-  name: "normal"
-  ternary {
-    value {
-      hex_str: "0x052"
-    }
-    mask {
-      hex_str: "0x273"
+table_entry {
+  table_name: "ternary_table"
+  matches {
+    name: "normal"
+    ternary {
+      value {
+        hex_str: "0x052"
+      }
+      mask {
+        hex_str: "0x273"
+      }
     }
   }
+  priority: 32
 }
-priority: 32
 
 --- PI:
-table_id: 33554435
-match {
-  field_id: 1
-  ternary {
-    value: "R"
-    mask: "\002s"
+table_entry {
+  table_id: 33554435
+  match {
+    field_id: 1
+    ternary {
+      value: "R"
+      mask: "\002s"
+    }
+  }
+  priority: 32
+}
+
+
+=========================================================================
+multicast group entry with key_only=true
+pdpi::TranslationOptions{.key_only = true, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0007"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "some_port"
+        instance: "0x0001"
+      }
+      replicas {
+        port: "some_port"
+        instance: "0x0002"
+      }
+      replicas {
+        port: "some_other_port"
+        instance: "0x0001"
+      }
+    }
   }
 }
-priority: 32
+
+--- IR:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  multicast_group_entry {
+    multicast_group_id: 7
+  }
+}
+
+
+=========================================================================
+table entry with unallowed meter config
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid: Table does not have a meter, but table entry contained a meter config.
+=========================================================================
+table entry with unallowed counter data
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid: Table does not have a counter, but table entry contained counter data.
+=========================================================================
+table entry with unallowed meter config and counter data
+pdpi::TranslationOptions{.key_only = false, .allow_unsupported = false}
+=========================================================================
+
+--- PD (Input):
+count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    count_and_meter {
+    }
+  }
+  meter_config {
+    bytes_per_second: 123
+    burst_bytes: 345
+  }
+  counter_data {
+    byte_count: 567
+    packet_count: 789
+  }
+}
+
+--- PD is invalid/unsupported:
+INVALID_ARGUMENT: Table entry for 'count_and_meter_table' is invalid for the following reasons:
+  - Table does not have a meter, but table entry contained a meter config.
+  - Table does not have a counter, but table entry contained counter data.

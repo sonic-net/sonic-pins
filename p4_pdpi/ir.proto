@@ -354,6 +354,11 @@ message IrEntity {
   }
 }
 
+// Describes a list of entities.
+message IrEntities {
+  repeated IrEntity entities = 1;
+}
+
 // Describes an update in a Write RPC request.
 message IrUpdate {
   // Required.
