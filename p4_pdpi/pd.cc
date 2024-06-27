@@ -2211,9 +2211,9 @@ absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
       }
     }
 
+    const absl::StatusOr<bool> &pd_has_meter_config =
+        HasField(*pd_table, "meter_config");
     if (ir_table_info->has_meter()) {
-      const absl::StatusOr<bool> &pd_has_meter_config =
-          HasField(*pd_table, "meter_config");
       if (!pd_has_meter_config.ok()) {
         invalid_reasons.push_back(
             absl::StrCat(kNewBullet, pd_has_meter_config.status().message()));
@@ -2258,11 +2258,16 @@ absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
           }
         }
       }
+    } else if (pd_has_meter_config.ok() && *pd_has_meter_config) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet,
+                       "Table does not have a meter, but table entry contained "
+                       "a meter config."));
     }
 
+    const absl::StatusOr<bool> &pd_has_counter_data =
+        HasField(*pd_table, "counter_data");
     if (ir_table_info->has_counter()) {
-      const absl::StatusOr<bool> &pd_has_counter_data =
-          HasField(*pd_table, "counter_data");
       if (!pd_has_counter_data.ok()) {
         invalid_reasons.push_back(
             absl::StrCat(kNewBullet, pd_has_counter_data.status().message()));
@@ -2321,6 +2326,11 @@ absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
           }
         }
       }
+    } else if (pd_has_counter_data.ok() && *pd_has_counter_data) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet,
+                       "Table does not have a counter, but table entry "
+                       "contained counter data."));
     }
 
     if (ir_table_info->has_meter() && ir_table_info->has_counter()) {
