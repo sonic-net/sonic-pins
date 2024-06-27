@@ -21,6 +21,9 @@
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
 #include "admit_google_system_mac.p4"
+//#include "hashing.p4"
+#include "ids.h"
+#include "versions.h"
 
 control ingress(inout headers_t headers,
                 inout local_metadata_t local_metadata,

@@ -163,7 +163,13 @@ TableEntryGenerator AclPreIngressMetadataTableGenerator(
              name: "is_ip"
              optional { value { hex_str: "0x1" } }
            }
-           action { name: "set_acl_metadata" })pb");
+           action {
+             name: "set_acl_metadata"
+             params {
+               name: "acl_metadata"
+               value { hex_str: "0x01" }
+             }
+           })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
   generator.generator = IrMatchFieldAndPriorityGenerator(
       table_definition, *base_entry, "ip_protocol");
@@ -233,8 +239,8 @@ TableEntryGenerator AclIngressQosTableGenerator(
              }
            })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
-  generator.generator =
-      IrMatchFieldAndPriorityGenerator(table_definition, *base_entry, "dst_ip");
+  generator.generator = IrMatchFieldAndPriorityGenerator(
+      table_definition, *base_entry, "arp_tpa");
   return generator;
 }
 
