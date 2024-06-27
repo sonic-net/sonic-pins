@@ -49,14 +49,10 @@ control acl_pre_ingress(in headers_t headers,
 
   @id(ACL_PRE_INGRESS_SET_ACL_METADATA_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD)
-  // TODO: OA does not support SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA
-  // action set_acl_metadata(
-  //      @id(1) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)
-  //        acl_metadata_t acl_metadata) {
-  //   local_metadata.acl_metadata = acl_metadata;
-  //   acl_pre_ingress_metadata_counter.count();
-  // }
-  action set_acl_metadata() {
+  action set_acl_metadata(
+       @id(1) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)
+         acl_metadata_t acl_metadata) {
+    local_metadata.acl_metadata = acl_metadata;
     acl_pre_ingress_metadata_counter.count();
   }
 
@@ -143,6 +139,8 @@ control acl_pre_ingress(in headers_t headers,
     // Forbid unsupported combinations of IP_TYPE fields.
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
+    // Only allow icmp_type matches for ICMP packets
+    icmpv6_type::mask != 0 -> ip_protocol == 58;
   ")
   table acl_pre_ingress_metadata_table {
     key = {
@@ -155,15 +153,12 @@ control acl_pre_ingress(in headers_t headers,
       headers.ipv6.isValid() : optional
           @id(3) @name("is_ipv6")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
-      headers.ethernet.ether_type : ternary
-          @id(4) @name("ether_type")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
       ip_protocol : ternary
-          @id(5) @name("ip_protocol")
+          @id(4) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
-      local_metadata.l4_src_port : ternary
-          @id(6) @name("l4_src_port")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT);
+      headers.icmp.type : ternary
+          @id(5) @name("icmpv6_type")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMPV6_TYPE);
     }
     actions = {
       @proto_id(1) set_acl_metadata;

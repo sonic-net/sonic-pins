@@ -1660,7 +1660,7 @@ one_match_field_table_entry {
 }
 
 =========================================================================
-GetEntriesUnreachableFromRootsTest: NonRoot referring to other NonRoot is garbage.
+GetEntriesUnreachableFromRootsTest: Garbage referring to other is garbage.
 =========================================================================
 
 --- PD entries (input):
@@ -1673,7 +1673,7 @@ referring_by_match_field_table_entry {
     }
   }
   priority: 32
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 one_match_field_table_entry {
@@ -1684,7 +1684,7 @@ one_match_field_table_entry {
     do_thing_4 {
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 --- Unreachable entries from roots (output):
@@ -1697,7 +1697,7 @@ referring_by_match_field_table_entry {
     }
   }
   priority: 32
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 one_match_field_table_entry {
@@ -1708,11 +1708,11 @@ one_match_field_table_entry {
     do_thing_4 {
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 =========================================================================
-GetEntriesUnreachableFromRootsTest: NonRoot referring to other dependency is garbage, but other dependencies that are referred by a root won't be removed.
+GetEntriesUnreachableFromRootsTest: Garbage referring to other dependency is garbage, but other dependencies that are referred by a root won't be removed.
 =========================================================================
 
 --- PD entries (input):
@@ -1747,7 +1747,7 @@ one_match_field_table_entry {
     do_thing_4 {
     }
   }
-  controller_metadata: "Grand child Dependency"
+  controller_metadata: "garbage"
 }
 
 referring_by_action_table_entry {
@@ -1759,7 +1759,7 @@ referring_by_action_table_entry {
       referring_id_1: "key-a"
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 --- Unreachable entries from roots (output):
@@ -1771,7 +1771,7 @@ one_match_field_table_entry {
     do_thing_4 {
     }
   }
-  controller_metadata: "Grand child Dependency"
+  controller_metadata: "garbage"
 }
 
 referring_by_action_table_entry {
@@ -1783,7 +1783,7 @@ referring_by_action_table_entry {
       referring_id_1: "key-a"
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 =========================================================================
@@ -1805,6 +1805,9 @@ referring_to_referring_by_match_field_table_entry {
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-a"
+    referring_id_2 {
+      value: "0x002"
+    }
   }
   action {
     do_thing_4 {
@@ -1814,9 +1817,10 @@ referring_by_match_field_table_entry {
   controller_metadata: "Child dependency"
 }
 
-one_match_field_table_entry {
+two_match_fields_table_entry {
   match {
-    id: "key-a"
+    id_1: "key-a"
+    id_2: "0x002"
   }
   action {
     do_thing_4 {
@@ -1835,7 +1839,7 @@ referring_by_action_table_entry {
       referring_id_2: "0x000"
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 one_match_field_table_entry {
@@ -1846,7 +1850,7 @@ one_match_field_table_entry {
     do_thing_4 {
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 referring_by_action_table_entry {
@@ -1859,7 +1863,7 @@ referring_by_action_table_entry {
       referring_id_2: "0x000"
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 referring_by_action_table_entry {
@@ -1867,9 +1871,8 @@ referring_by_action_table_entry {
     val: "0x001"
   }
   action {
-    referring_to_two_match_fields_action {
+    referring_to_one_match_field_action {
       referring_id_1: "key-c"
-      referring_id_2: "0x000"
     }
   }
   controller_metadata: "Root"
@@ -1900,17 +1903,6 @@ referring_by_action_table_entry {
 }
 
 --- Unreachable entries from roots (output):
-one_match_field_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-  controller_metadata: "Grand child Dependency"
-}
-
 referring_by_action_table_entry {
   match {
     val: "0x001"
@@ -1921,7 +1913,7 @@ referring_by_action_table_entry {
       referring_id_2: "0x000"
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 one_match_field_table_entry {
@@ -1932,7 +1924,7 @@ one_match_field_table_entry {
     do_thing_4 {
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
 referring_by_action_table_entry {
@@ -1945,22 +1937,161 @@ referring_by_action_table_entry {
       referring_id_2: "0x000"
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage"
 }
 
-one_match_field_table_entry {
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Reference via match fields: partially referred to non-root entries are unreachable.
+=========================================================================
+
+--- PD entries (input):
+referring_by_match_field_table_entry {
   match {
-    id: "key-c"
+    referring_id_1: "key-a"
+    referring_id_2 {
+      value: "0x000"
+    }
   }
   action {
     do_thing_4 {
     }
   }
-  controller_metadata: "Dependency"
+  priority: 32
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+--- Unreachable entries from roots (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
 }
 
 =========================================================================
-GetEntriesUnreachableFromRootsTest: [Incorrect due to false dependency] Partially referred non-root is unreachable.
+GetEntriesUnreachableFromRootsTest: Reference via match fields: partially referred to non-root entries are unreachable and the fully referred to entry is reachable.
+=========================================================================
+
+--- PD entries (input):
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2 {
+      value: "0x000"
+    }
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  priority: 32
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "fully referred to via both match fields"
+}
+
+--- Unreachable entries from roots (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Reference via action: partially referred to non-root entries are unreachable.
 =========================================================================
 
 --- PD entries (input):
@@ -1986,7 +2117,167 @@ two_match_fields_table_entry {
     do_thing_4 {
     }
   }
-  controller_metadata: "NonRoot garbage"
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+--- Unreachable entries from roots (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Reference via action: partially referred to non-root entries are unreachable and the fully referred entry is reachable.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child fully referred by all match fields"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+--- Unreachable entries from roots (output):
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_1"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "garbage partially referred to via id_2"
+}
+
+=========================================================================
+GetEntriesUnreachableFromRootsTest: Referred to Entries with same match fields but different actions and metadata are reachable
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x000"
+    }
+  }
+  controller_metadata: "Root"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Child fully referred to by all match fields"
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x000"
+  }
+  action {
+    do_thing_1 {
+      arg2: "0x00000001"
+      arg1: "0x00000002"
+    }
+  }
+  controller_metadata: "Referred to child with a :)"
 }
 
 --- Unreachable entries from roots (output):

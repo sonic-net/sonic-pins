@@ -325,8 +325,12 @@ cc_test(
     tags = ["exclusive"],
     deps = [
         "//gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
     ],
