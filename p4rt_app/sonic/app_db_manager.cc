@@ -75,6 +75,7 @@ absl::StatusOr<std::string> CreateEntryForInsert(
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_inserts) {
   VLOG(2) << "Insert PDPI IR entry: " << entry.ShortDebugString();
   ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
+
   VLOG(1) << "Insert AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
@@ -94,6 +95,7 @@ absl::StatusOr<std::string> CreateEntryForModify(
     std::vector<swss::KeyOpFieldsValuesTuple>& p4rt_modifies) {
   VLOG(2) << "Modify PDPI IR entry: " << entry.ShortDebugString();
   ASSIGN_OR_RETURN(std::string key, GetRedisP4rtTableKey(entry, p4_info));
+
   VLOG(1) << "Modify AppDb entry: " << key;
   swss::KeyOpFieldsValuesTuple key_value;
   kfvKey(key_value) = key;
@@ -382,6 +384,12 @@ std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table) {
     if (split.size() > 1 &&
                 ((split[0] == APP_P4RT_ACL_TABLE_DEFINITION_NAME) ||
                  (split[0] == APP_P4RT_TABLES_DEFINITION_TABLE_NAME))) {
+      continue;
+    }
+    // Packet replication entries stored in the P4RT_TABLE are handled by
+    // packet replication entry translation.
+    if (split.size() > 1 &&
+        split[0] == APP_P4RT_REPLICATION_IP_MULTICAST_TABLE_NAME) {
       continue;
     }
 

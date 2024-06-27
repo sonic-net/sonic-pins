@@ -274,6 +274,7 @@ cc_library(
         "@boost//:bimap",
         "@boost//:graph",
         "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",

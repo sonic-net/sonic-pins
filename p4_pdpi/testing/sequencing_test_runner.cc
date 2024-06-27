@@ -104,7 +104,8 @@ void SortTest(const pdpi::IrP4Info& info, const std::string& test_name,
     const auto pd_entry =
         gutil::ParseProtoOrDie<pdpi::TableEntry>(pd_entry_string);
     pd_entries.push_back(pd_entry);
-    const auto pi_entry_or_status = pdpi::PdTableEntryToPi(info, pd_entry);
+    const auto pi_entry_or_status =
+        pdpi::PartialPdTableEntryToPiTableEntry(info, pd_entry);
     if (!pi_entry_or_status.status().ok()) {
       std::cerr << "Unable to convert TableEntry from PD to PI."
                 << pi_entry_or_status.status() << std::endl;
@@ -156,7 +157,8 @@ void GetEntriesUnreachableFromRootsTest(
     const auto pd_entry =
         gutil::ParseProtoOrDie<pdpi::TableEntry>(pd_entry_string);
     pd_entries.push_back(pd_entry);
-    const auto pi_entry_or_status = pdpi::PdTableEntryToPi(info, pd_entry);
+    const auto pi_entry_or_status =
+        pdpi::PartialPdTableEntryToPiTableEntry(info, pd_entry);
     if (!pi_entry_or_status.status().ok()) {
       std::cerr << "Unable to convert TableEntry from PD to PI."
                 << pi_entry_or_status.status() << std::endl;

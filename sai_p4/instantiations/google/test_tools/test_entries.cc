@@ -129,7 +129,7 @@ MakePiEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
                                             const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(sai::TableEntries pd_entries,
                    MakePdEntriesForwardingIpPacketsToGivenPort(egress_port));
-  return pdpi::PdTableEntriesToPi(ir_p4info, pd_entries);
+  return pdpi::PartialPdTableEntriesToPiTableEntries(ir_p4info, pd_entries);
 }
 
 absl::StatusOr<pdpi::IrTableEntries> 
@@ -138,18 +138,18 @@ MakeIrEntriesForwardingIpPacketsToGivenPort(
                         const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(sai::TableEntries pd_entries,
                    MakePdEntriesForwardingIpPacketsToGivenPort(egress_port));
-  return pdpi::PdTableEntriesToIr(ir_p4info, pd_entries);
+  return pdpi::PartialPdTableEntriesToIrTableEntries(ir_p4info, pd_entries);
 }
 
 absl::StatusOr<p4::v1::TableEntry> MakePiEntryPuntingAllPackets(
     PuntAction action, const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(sai::TableEntry pd, MakePdEntryPuntingAllPackets(action));
-  return pdpi::PdTableEntryToPi(ir_p4info, pd);
+  return pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd);
 }
 absl::StatusOr<pdpi::IrTableEntry> MakeIrEntryPuntingAllPackets(
     PuntAction action, const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(sai::TableEntry pd, MakePdEntryPuntingAllPackets(action));
-  return pdpi::PdTableEntryToIr(ir_p4info, pd);
+  return pdpi::PartialPdTableEntryToIrTableEntry(ir_p4info, pd);
 }
 
 }  // namespace sai
