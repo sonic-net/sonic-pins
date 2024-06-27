@@ -60,15 +60,17 @@ absl::StatusOr<std::vector<std::vector<int>>> SequencePiUpdatesInPlace(
 absl::Status SortTableEntries(const IrP4Info& info,
                               std::vector<p4::v1::TableEntry>& entries);
 
-// Returns the subset of TableEntry in `entries` that is not reachable from any
-// root entry in `entries`, where a root entry is determined by the
-// `is_root_entry` function. An entry `e` is reachable from a root entry `r`
+// Returns the subset of Entities in `entities` that is not reachable from any
+// root entity in `entities`, where a root entity is determined by the
+// `is_root_entity` function. An entity `e` is reachable from a root entity `r`
 // if and only if `r` refers to `e`, directly or transitively. The reference
-// graph is computed based on `ir_p4info`.
-absl::StatusOr<std::vector<p4::v1::TableEntry>> GetEntriesUnreachableFromRoots(
-    absl::Span<const p4::v1::TableEntry> entries,
-    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::TableEntry&)>
-        is_root_entry,
+// info comes from `ir_p4info`.
+// This function only works for TableEntry entity type. Any non TableEntry type
+// in `entities` will cause this function to return UnImplemented error.
+absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
+    absl::Span<const p4::v1::Entity> entities,
+    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
+        is_root_entity,
     const IrP4Info& ir_p4info);
 
 }  // namespace pdpi
