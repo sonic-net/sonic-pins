@@ -62,6 +62,15 @@ absl::Status PdTableEntryToOnlyKeyPd(const IrP4Info &info,
 
 // -- Conversions from PI to PD ------------------------------------------------
 
+absl::Status PiEntityToPdTableEntry(const IrP4Info &info,
+                                    const p4::v1::Entity &pi,
+                                    google::protobuf::Message *pd_table_entry,
+                                    TranslationOptions options = {});
+absl::Status PiEntitiesToPdTableEntries(
+    const IrP4Info &info, const absl::Span<const p4::v1::Entity> &pi,
+    google::protobuf::Message *pd_table_entries,
+    TranslationOptions options = {});
+
 absl::Status PiTableEntryToPd(const IrP4Info &info,
                               const p4::v1::TableEntry &pi,
                               google::protobuf::Message *pd,
@@ -110,10 +119,16 @@ absl::Status PiStreamMessageResponseToPd(
 
 // -- Conversions from PD to PI ------------------------------------------------
 
+absl::StatusOr<p4::v1::Entity> PdTableEntryToPiEntity(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options = {});
+absl::StatusOr<std::vector<p4::v1::Entity>> PdTableEntriesToPiEntities(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options = {});
+
 // Translates a PdTableEntry into an IrTableEntry. 'Partial' functions do not
 // support 'MulticastGroupTableEntry', returning an InvalidArgumentError if one
-// is provided. Use of this function is discouraged since P4 infrastructure has
-// moved towards units of Entity instead of TableEntry.
+// is provided.
 //
 // TODO: Remove deprecated functions from header file.
 ABSL_DEPRECATED("Use PdTableEntryToPiEntity instead")
@@ -125,6 +140,10 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>>
 PartialPdTableEntriesToPiTableEntries(const IrP4Info &info,
                                       const google::protobuf::Message &pd,
                                       TranslationOptions options = {});
+
+absl::StatusOr<p4::v1::MulticastGroupEntry> PdMulticastGroupEntryToPi(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options = {});
 
 absl::StatusOr<p4::v1::PacketIn> PdPacketInToPi(
     const IrP4Info &info, const google::protobuf::Message &packet);
@@ -167,8 +186,12 @@ absl::StatusOr<grpc::Status> PdWriteRpcStatusToGrpcStatus(
 // -- Conversions from IR (intermediate representation) to PD ------------------
 
 absl::Status IrEntityToPdTableEntry(const IrP4Info &info, const IrEntity &ir,
-                                    google::protobuf::Message *pd,
+                                    google::protobuf::Message *pd_table_entry,
                                     TranslationOptions options = {});
+absl::Status IrEntitiesToPdTableEntries(
+    const IrP4Info &info, const IrEntities &ir,
+    google::protobuf::Message *pd_table_entries,
+    TranslationOptions options = {});
 
 absl::Status IrTableEntryToPd(const IrP4Info &ir_p4info, const IrTableEntry &ir,
                               google::protobuf::Message *pd,
@@ -181,6 +204,11 @@ absl::Status IrTableEntriesToPd(const IrP4Info &ir_p4info,
                                 absl::Span<const IrTableEntry> ir,
                                 google::protobuf::Message *pd,
                                 TranslationOptions options = {});
+
+absl::Status IrMulticastGroupEntryToPd(
+    const IrP4Info &info, const IrMulticastGroupEntry &ir,
+    google::protobuf::Message *pd_multicast_group_entry,
+    TranslationOptions options = {});
 
 absl::Status IrPacketInToPd(const IrP4Info &info, const IrPacketIn &packet,
                             google::protobuf::Message *pd_packet);
@@ -219,10 +247,16 @@ absl::Status IrWriteRpcStatusToPd(const IrWriteRpcStatus &ir_write_status,
 
 // -- Conversions from PD to IR (intermediate representation) ------------------
 
+absl::StatusOr<IrEntity> PdTableEntryToIrEntity(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options = {});
+absl::StatusOr<IrEntities> PdTableEntriesToIrEntities(
+    const IrP4Info &info, const google::protobuf::Message &pd,
+    TranslationOptions options = {});
+
 // Translates a PdTableEntry into a PI TableEntry. 'Partial' functions do not
 // support 'MulticastGroupTableEntry', returning an InvalidArgumentError if one
-// is provided. Use of this function is discouraged since P4 infrastructure has
-// moved towards units of Entity instead of TableEntry.
+// is provided.
 //
 // TODO: Remove deprecated functions from header file.
 ABSL_DEPRECATED("Use PdTableEntryToIrEntity instead")
@@ -232,6 +266,10 @@ absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
 ABSL_DEPRECATED("Use PdTableEntriesToIrEntities instead")
 absl::StatusOr<IrTableEntries> PartialPdTableEntriesToIrTableEntries(
     const IrP4Info &ir_p4info, const google::protobuf::Message &pd,
+    TranslationOptions options = {});
+
+absl::StatusOr<IrMulticastGroupEntry> PdMulticastGroupEntryToIr(
+    const IrP4Info &info, const google::protobuf::Message &pd,
     TranslationOptions options = {});
 
 absl::StatusOr<IrPacketIn> PdPacketInToIr(

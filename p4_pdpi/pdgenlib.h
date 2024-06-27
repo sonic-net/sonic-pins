@@ -15,7 +15,10 @@
 #ifndef PINS_P4_PDPI_PDGENLIB_H_
 #define PINS_P4_PDPI_PDGENLIB_H_
 
+#include <cstdint>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "gutil/status.h"
@@ -23,11 +26,21 @@
 
 namespace pdpi {
 
+// Configuration options for generated PD proto.
+struct PdGenOptions {
+  // Package name in generated proto file.
+  std::string package;
+  // Roles used to filter which tables are included in proto.
+  std::vector<std::string> roles;
+  // Field number of multicast_group_table_entry. If set to std::nullopt,
+  // multicast_group_table is omitted from generated proto.
+  std::optional<int16_t> multicast_table_field_number;
+};
+
 // Returns the PD proto definition for the given P4 info. May not be fully
 // formatted according to any style guide.
-absl::StatusOr<std::string> IrP4InfoToPdProto(
-    const IrP4Info& info, const std::string& package,
-    const std::vector<std::string>& roles);
+absl::StatusOr<std::string> IrP4InfoToPdProto(const IrP4Info& info,
+                                              const PdGenOptions& options);
 
 }  // namespace pdpi
 

@@ -1860,6 +1860,17 @@ StatusOr<IrEntity> PiEntityToIr(const IrP4Info &info, const p4::v1::Entity &pi,
   return ir_entity;
 }
 
+StatusOr<IrEntities> PiEntitiesToIr(const IrP4Info &info,
+                                    const absl::Span<const p4::v1::Entity> pi,
+                                    TranslationOptions options) {
+  IrEntities ir_entities;
+  for (auto &entity : pi) {
+    ASSIGN_OR_RETURN(*ir_entities.add_entities(),
+                     PiEntityToIr(info, entity, options));
+  }
+  return ir_entities;
+}
+
 StatusOr<IrReadResponse> PiReadResponseToIr(
     const IrP4Info &info, const p4::v1::ReadResponse &read_response,
     TranslationOptions options) {
@@ -2380,6 +2391,17 @@ StatusOr<p4::v1::Entity> IrEntityToPi(const IrP4Info &info, const IrEntity &ir,
     }
   }
   return pi_entity;
+}
+
+absl::StatusOr<std::vector<p4::v1::Entity>> IrEntitiesToPi(
+    const IrP4Info &info, const IrEntities &ir, TranslationOptions options) {
+  std::vector<p4::v1::Entity> pi_entities;
+  pi_entities.reserve(ir.entities_size());
+  for (auto &entity : ir.entities()) {
+    ASSIGN_OR_RETURN(pi_entities.emplace_back(),
+                     IrEntityToPi(info, entity, options));
+  }
+  return pi_entities;
 }
 
 StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
