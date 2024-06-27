@@ -37,6 +37,36 @@ struct TranslationOptions {
   }
 };
 
+// PDPI functions taking in `TranslationOptions` may wish to make that parameter
+// optional for the convenience of external customers. At the same time, relying
+// on that default inside the implementation of PDPI itself is extremely likely
+// to be a bug where we forgot to pass on the options argument explicitly.
+//
+// To catch such bugs at compile time while still affording external users the
+// convenience of a default argument, PDPI follows two conventions:
+//
+// 1. All PDPI `cc_library` targets that should not rely on the default
+//    parameters specify the following attribute in their BUILD rule:
+//    ```
+//    local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
+//    ```
+// 2. All functions taking `TranslationOptions` as an optional parameter are
+//    declared as follows:
+//    ```
+//    T MyFunction(
+//        ...,
+//        TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+//    ```
+// ```
+//
+// Given the preprocessor directives below, this will disable the default
+// argument internally but enable it externally.
+#ifdef PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT
+#define PDPI_TRANSLATION_OPTIONS_DEFAULT
+#else
+#define PDPI_TRANSLATION_OPTIONS_DEFAULT = {}
+#endif
+
 }  // namespace pdpi
 
 #endif  // PINS_INFRA_P4_PDPI_PACKETLIB_PDPI_OPTIONS_H_
