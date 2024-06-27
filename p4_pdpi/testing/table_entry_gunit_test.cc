@@ -1,3 +1,4 @@
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -23,6 +24,7 @@ namespace pdpi {
 namespace {
 
 using gutil::EqualsProto;
+using gutil::StatusIs;
 using testing::Eq;
 using testing::SizeIs;
 
@@ -521,6 +523,210 @@ TEST(IrToPdOptionsTest,
       EXPECT_THAT(pd_with_allow_unsupported,
                   EqualsProto(pd_without_allow_unsupported));
     }
+  }
+}
+
+absl::Status MarkTableAsUnsupportedInP4Info(const pdpi::TableEntry& table_entry,
+                                            IrP4Info& info) {
+  ASSIGN_OR_RETURN(pdpi::IrEntity ir_entity,
+                   PdTableEntryToIrEntity(info, table_entry));
+  if (!ir_entity.has_table_entry()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Only entities of type table can be marked as @unsupported.";
+  }
+  auto& table_by_name = *info.mutable_tables_by_name();
+  auto& table_by_id = *info.mutable_tables_by_id();
+
+  absl::string_view table_name = ir_entity.table_entry().table_name();
+  auto it_by_name = table_by_name.find(table_name);
+  if (it_by_name == table_by_name.end()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Table not found: " << table_name;
+  }
+  int table_id = it_by_name->second.preamble().id();
+
+  auto it_by_id = table_by_id.find(table_id);
+  if (it_by_id == table_by_id.end()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Table '" << table_name << "' found by name but not found by id '"
+           << table_id << "'";
+  }
+
+  it_by_name->second.set_is_unsupported(true);
+  it_by_id->second.set_is_unsupported(true);
+  return absl::OkStatus();
+}
+
+TEST(PdToPiOptionsTest,
+     UnsupportedEntityRequiresAllowUnsupportedOptionToSucceed) {
+  ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
+
+  for (const auto& pd_entry : pd_entries.entries()) {
+    IrP4Info info_with_unsupported_table = GetTestIrP4Info();
+    ASSERT_OK(
+        MarkTableAsUnsupportedInP4Info(pd_entry, info_with_unsupported_table));
+    // Check that PD->PI translation requires allow_unsupported.
+    ASSERT_THAT(PdTableEntryToPiEntity(info_with_unsupported_table, pd_entry,
+                                       TranslationOptions{
+                                           .allow_unsupported = false,
+                                       }),
+                StatusIs(absl::StatusCode::kInvalidArgument));
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::Entity pi_entity,
+        PdTableEntryToPiEntity(info_with_unsupported_table, pd_entry,
+                               TranslationOptions{
+                                   .allow_unsupported = true,
+                               }));
+    // Check that PI->PD translation requires allow_unsupported.
+    pdpi::TableEntry roundtrip_pd_entry;
+    ASSERT_THAT(PiEntityToPdTableEntry(info_with_unsupported_table, pi_entity,
+                                       &roundtrip_pd_entry,
+                                       TranslationOptions{
+                                           .allow_unsupported = false,
+                                       }),
+                StatusIs(absl::StatusCode::kInvalidArgument));
+    ASSERT_OK(PiEntityToPdTableEntry(info_with_unsupported_table, pi_entity,
+                                     &roundtrip_pd_entry,
+                                     TranslationOptions{
+                                         .allow_unsupported = true,
+                                     }));
+    // Check roundtrip property still holds for unsupported items.
+    EXPECT_THAT(pd_entry, (EqualsProto(roundtrip_pd_entry)));
+  }
+}
+
+TEST(PdToPiOptionsTest,
+     UnsupportedUpdateRequiresAllowUnsupportedOptionToSucceed) {
+  ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
+
+  for (const auto& pd_entry : pd_entries.entries()) {
+    IrP4Info info_with_unsupported_table = GetTestIrP4Info();
+    ASSERT_OK(
+        MarkTableAsUnsupportedInP4Info(pd_entry, info_with_unsupported_table));
+    // Construct Update.
+    pdpi::Update pd_update;
+    pd_update.set_type(p4::v1::Update::INSERT);
+    *pd_update.mutable_table_entry() = pd_entry;
+    // Check that PD->PI translation requires allow_unsupported.
+    ASSERT_THAT(PdUpdateToPi(info_with_unsupported_table, pd_update,
+                             TranslationOptions{
+                                 .allow_unsupported = false,
+                             }),
+                StatusIs(absl::StatusCode::kInvalidArgument));
+    ASSERT_OK_AND_ASSIGN(p4::v1::Update pi_update,
+                         PdUpdateToPi(info_with_unsupported_table, pd_update,
+                                      TranslationOptions{
+                                          .allow_unsupported = true,
+                                      }));
+    // Check that PI->PD translation requires allow_unsupported.
+    pdpi::Update roundtrip_pd_update;
+    ASSERT_THAT(PiUpdateToPd(info_with_unsupported_table, pi_update,
+                             &roundtrip_pd_update,
+                             TranslationOptions{
+                                 .allow_unsupported = false,
+                             }),
+                StatusIs(absl::StatusCode::kInvalidArgument));
+    ASSERT_OK(PiUpdateToPd(info_with_unsupported_table, pi_update,
+                           &roundtrip_pd_update,
+                           TranslationOptions{
+                               .allow_unsupported = true,
+                           }));
+    // Check roundtrip property still holds for unsupported items.
+    EXPECT_THAT(pd_update, (EqualsProto(roundtrip_pd_update)));
+  }
+}
+
+TEST(PdToPiOptionsTest,
+     UnsupportedWriteRequestRequiresAllowUnsupportedOptionToSucceed) {
+  ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
+
+  for (const auto& pd_entry : pd_entries.entries()) {
+    IrP4Info info_with_unsupported_table = GetTestIrP4Info();
+    ASSERT_OK(
+        MarkTableAsUnsupportedInP4Info(pd_entry, info_with_unsupported_table));
+    // Construct Write Request.
+    pdpi::Update pd_update;
+    pd_update.set_type(p4::v1::Update::INSERT);
+    *pd_update.mutable_table_entry() = pd_entry;
+    p4::v1::Uint128 election_id;
+    election_id.set_high(7);
+    election_id.set_low(1);
+    pdpi::WriteRequest pd_write_request;
+    pd_write_request.set_device_id(1);
+    *pd_write_request.mutable_election_id() = election_id;
+    *pd_write_request.add_updates() = pd_update;
+    // Check that PD->PI translation requires allow_unsupported.
+    ASSERT_THAT(
+        PdWriteRequestToPi(info_with_unsupported_table, pd_write_request,
+                           TranslationOptions{
+                               .allow_unsupported = false,
+                           }),
+        StatusIs(absl::StatusCode::kInvalidArgument));
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::WriteRequest pi_write_request,
+        PdWriteRequestToPi(info_with_unsupported_table, pd_write_request,
+                           TranslationOptions{
+                               .allow_unsupported = true,
+                           }));
+    // Check that PI->PD translation requires allow_unsupported.
+    pdpi::WriteRequest roundtrip_pd_write_request;
+    ASSERT_THAT(
+        PiWriteRequestToPd(info_with_unsupported_table, pi_write_request,
+                           &roundtrip_pd_write_request,
+                           TranslationOptions{
+                               .allow_unsupported = false,
+                           }),
+        StatusIs(absl::StatusCode::kInvalidArgument));
+    ASSERT_OK(PiWriteRequestToPd(info_with_unsupported_table, pi_write_request,
+                                 &roundtrip_pd_write_request,
+                                 TranslationOptions{
+                                     .allow_unsupported = true,
+                                 }));
+    // Check roundtrip property still holds for unsupported items.
+    EXPECT_THAT(pd_write_request, (EqualsProto(roundtrip_pd_write_request)));
+  }
+}
+
+TEST(PdToPiOptionsTest,
+     UnsupportedReadResponseRequiresAllowUnsupportedOptionToSucceed) {
+  ASSERT_OK_AND_ASSIGN(TableEntries pd_entries, ValidPdTableEntries());
+
+  for (const auto& pd_entry : pd_entries.entries()) {
+    IrP4Info info_with_unsupported_table = GetTestIrP4Info();
+    ASSERT_OK(
+        MarkTableAsUnsupportedInP4Info(pd_entry, info_with_unsupported_table));
+    // Construct Read Response.
+    pdpi::ReadResponse pd_read_response;
+    *pd_read_response.add_table_entries() = pd_entry;
+    // Check that PD->PI translation requires allow_unsupported.
+    ASSERT_THAT(
+        PdReadResponseToPi(info_with_unsupported_table, pd_read_response,
+                           TranslationOptions{
+                               .allow_unsupported = false,
+                           }),
+        StatusIs(absl::StatusCode::kInvalidArgument));
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::ReadResponse pi_read_response,
+        PdReadResponseToPi(info_with_unsupported_table, pd_read_response,
+                           TranslationOptions{
+                               .allow_unsupported = true,
+                           }));
+    // Check that PI->PD translation requires allow_unsupported.
+    pdpi::ReadResponse roundtrip_pd_read_response;
+    ASSERT_THAT(
+        PiReadResponseToPd(info_with_unsupported_table, pi_read_response,
+                           &roundtrip_pd_read_response,
+                           TranslationOptions{
+                               .allow_unsupported = false,
+                           }),
+        StatusIs(absl::StatusCode::kInvalidArgument));
+    ASSERT_OK(PiReadResponseToPd(info_with_unsupported_table, pi_read_response,
+                                 &roundtrip_pd_read_response,
+                                 TranslationOptions{
+                                     .allow_unsupported = true,
+                                 }));
+    // Check roundtrip property still holds for unsupported items.
+    EXPECT_THAT(pd_read_response, (EqualsProto(roundtrip_pd_read_response)));
   }
 }
 

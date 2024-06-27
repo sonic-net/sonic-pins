@@ -1877,7 +1877,8 @@ StatusOr<IrReadResponse> PiReadResponseToIr(
   IrReadResponse result;
   std::vector<std::string> invalid_reasons;
   for (const auto &entity : read_response.entities()) {
-    absl::StatusOr<pdpi::IrEntity> ir_entity = PiEntityToIr(info, entity);
+    absl::StatusOr<pdpi::IrEntity> ir_entity =
+        PiEntityToIr(info, entity, options);
     if (!ir_entity.ok()) {
       invalid_reasons.push_back(
           gutil::StableStatusToString(ir_entity.status()));
@@ -2410,7 +2411,8 @@ StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
   p4::v1::ReadResponse result;
   std::vector<std::string> invalid_reasons;
   for (const auto &entity : read_response.entities()) {
-    absl::StatusOr<p4::v1::Entity> pi_entity = IrEntityToPi(info, entity);
+    absl::StatusOr<p4::v1::Entity> pi_entity =
+        IrEntityToPi(info, entity, options);
     if (!pi_entity.ok()) {
       invalid_reasons.push_back(
           std::string(gutil::StableStatusToString(pi_entity.status())));
@@ -2446,7 +2448,7 @@ StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info &info,
   }
 
   ASSIGN_OR_RETURN(*pi_update.mutable_entity(),
-                   IrEntityToPi(info, update.entity()));
+                   IrEntityToPi(info, update.entity(), options));
 
   pi_update.set_type(update.type());
   return pi_update;
