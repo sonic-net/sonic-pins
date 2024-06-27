@@ -23,9 +23,11 @@
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4types.pb.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_pdpi/translation_options.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 
 namespace p4rt_app {
@@ -296,7 +298,10 @@ absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
     const boost::bimap<std::string, std::string>& port_translation_map,
     bool translate_key_only) {
   auto ir_table_entry =
-      pdpi::PiTableEntryToIr(ir_p4_info, pi_table_entry, translate_key_only);
+      pdpi::PiTableEntryToIr(ir_p4_info, pi_table_entry,
+                             pdpi::TranslationOptions{
+                                 .key_only = translate_key_only,
+                             });
   if (!ir_table_entry.ok()) {
     LOG(ERROR) << "PDPI could not translate PI table entry to IR: "
                << pi_table_entry.ShortDebugString();

@@ -27,13 +27,13 @@
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
-#include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
@@ -41,52 +41,31 @@ namespace p4rt_app {
 namespace {
 
 class P4ConstraintsTest : public test_lib::P4RuntimeComponentTestFixture {
+ public:
+  static void SetUpTestSuite() {
+    // Insert log marker to indicate where "actual test" log begins.
+    // Everything up to this marker is stripped for golden testing.
+    std::cout << "### START OF GOLDEN OUTPUT ###############################\n";
+  }
+
  protected:
   P4ConstraintsTest()
       : test_lib::P4RuntimeComponentTestFixture(
-            sai::Instantiation::kMiddleblock) {}
+            sai::Instantiation::kFabricBorderRouter) {}
+
+  // Sends the given write request to P4RT app and prints the request and the
+  // resulting response to stdout for the purpose of golden testing.
+  absl::Status SendIrWriteRequestAndPrintGoldenOutput(
+      absl::string_view ir_request_pb_string);
 };
 
-TEST_F(P4ConstraintsTest,
-       AclIngressRequiresIPMatchFieldWhenUsingEcnMatchField) {
-  pdpi::IrWriteRequest ir_request =
-      gutil::ParseProtoOrDie<pdpi::IrWriteRequest>(
-          R"pb(updates {
-                 type: INSERT
-                 table_entry {
-                   table_name: "acl_ingress_table"
-                   matches {
-                     name: "dst_mac"
-                     ternary {
-                       value { mac: "02:02:02:02:02:02" }
-                       mask { mac: "ff:ff:ff:ff:ff:ff" }
-                     }
-                   }
-                   matches {
-                     name: "ecn"
-                     ternary {
-                       value { hex_str: "0x3" }
-                       mask { hex_str: "0x3" }
-                     }
-                   }
-                   priority: 1
-                   action {
-                     name: "acl_copy"
-                     params {
-                       name: "qos_queue"
-                       value { str: "2" }
-                     }
-                   }
-                 }
-               })pb");
-
-  // P4 write request.
-  ASSERT_OK_AND_ASSIGN(
-      p4::v1::WriteRequest pi_request,
-      test_lib::IrWriteRequestToPi(ir_request.DebugString(), ir_p4_info_));
-
-  // Used to strip unnecessary lines for golden testing.
-  std::cout << "### REMOVE UP TO HERE ######################################\n";
+absl::Status P4ConstraintsTest::SendIrWriteRequestAndPrintGoldenOutput(
+    absl::string_view ir_request_pb_string) {
+  ASSIGN_OR_RETURN(
+      pdpi::IrWriteRequest ir_request,
+      gutil::ParseTextProto<pdpi::IrWriteRequest>(ir_request_pb_string));
+  ASSIGN_OR_RETURN(p4::v1::WriteRequest pi_request,
+                   pdpi::IrWriteRequestToPi(ir_p4_info_, ir_request));
 
   std::cout << "=== Test: "
             << testing::UnitTest::GetInstance()->current_test_info()->name()
@@ -97,6 +76,122 @@ TEST_F(P4ConstraintsTest,
   absl::Status response =
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), pi_request);
   std::cout << gutil::StableStatusToString(response);
+  return absl::OkStatus();
+}
+
+TEST_F(P4ConstraintsTest,
+       AclIngressRequiresIPMatchFieldWhenUsingEcnMatchField) {
+  EXPECT_OK(SendIrWriteRequestAndPrintGoldenOutput(R"pb(
+    updates {
+      type: INSERT
+      entity {
+        table_entry {
+          table_name: "acl_ingress_table"
+          matches {
+            name: "dst_mac"
+            ternary {
+              value { mac: "02:02:02:02:02:02" }
+              mask { mac: "ff:ff:ff:ff:ff:ff" }
+            }
+          }
+          matches {
+            name: "ecn"
+            ternary {
+              value { hex_str: "0x3" }
+              mask { hex_str: "0x3" }
+            }
+          }
+          priority: 1
+          action {
+            name: "acl_copy"
+            params {
+              name: "qos_queue"
+              value { str: "2" }
+            }
+          }
+        }
+      }
+    })pb"));
+}
+
+// Reproduction of b/223688222.
+TEST_F(P4ConstraintsTest, AclEgressTableDisallowsIpEtherTypeMatches) {
+  // Configure P4RT port id "518", so P4RT app allows us to match on it.
+  ASSERT_OK(
+      p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet4", "518"));
+
+  // Incorrect table entry, matching on IPv4 EtherType.
+  EXPECT_OK(SendIrWriteRequestAndPrintGoldenOutput(R"pb(
+    updates {
+      type: INSERT
+      entity {
+        table_entry {
+          table_name: "acl_egress_table"
+          matches {
+            name: "ether_type"
+            ternary {
+              value { hex_str: "0x0800" }
+              mask { hex_str: "0xffff" }
+            }
+          }
+          matches {
+            name: "ip_protocol"
+            ternary {
+              value { hex_str: "0x11" }
+              mask { hex_str: "0xff" }
+            }
+          }
+          matches {
+            name: "l4_dst_port"
+            ternary {
+              value { hex_str: "0x03ea" }
+              mask { hex_str: "0xffff" }
+            }
+          }
+          matches {
+            name: "out_port"
+            optional { value { str: "518" } }
+          }
+          priority: 3100
+          action { name: "acl_drop" }
+        }
+      }
+    })pb"));
+
+  // Corrrected table entry, matching on is_ipv4 = 1 instead.
+  EXPECT_OK(SendIrWriteRequestAndPrintGoldenOutput(R"pb(
+    updates {
+      type: INSERT
+      entity {
+        table_entry {
+          table_name: "acl_egress_table"
+          matches {
+            name: "is_ipv4"
+            optional { value { hex_str: "0x1" } }
+          }
+          matches {
+            name: "ip_protocol"
+            ternary {
+              value { hex_str: "0x11" }
+              mask { hex_str: "0xff" }
+            }
+          }
+          matches {
+            name: "l4_dst_port"
+            ternary {
+              value { hex_str: "0x03ea" }
+              mask { hex_str: "0xffff" }
+            }
+          }
+          matches {
+            name: "out_port"
+            optional { value { str: "518" } }
+          }
+          priority: 3100
+          action { name: "acl_drop" }
+        }
+      }
+    })pb"));
 }
 
 }  // namespace

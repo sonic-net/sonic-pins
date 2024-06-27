@@ -19,8 +19,9 @@ absl::Status InstallPdTableEntries(
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
-  ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> pi_entries,
-                   PdTableEntriesToPi(info, pd_table_entries));
+  ASSIGN_OR_RETURN(
+      std::vector<p4::v1::TableEntry> pi_entries,
+      PartialPdTableEntriesToPiTableEntries(info, pd_table_entries));
 
   // Install entries.
   return InstallPiTableEntries(&p4rt, info, pi_entries);
@@ -33,7 +34,7 @@ absl::Status InstallPdTableEntry(
                    GetForwardingPipelineConfig(&p4rt));
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
   ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
-                   PdTableEntryToPi(info, pd_table_entry));
+                   PartialPdTableEntryToPiTableEntry(info, pd_table_entry));
 
   // Install entry.
   return InstallPiTableEntry(&p4rt, pi_entry);
@@ -72,6 +73,14 @@ absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                const PiEntities& entities) {
   for (const p4::v1::Entity& entity : entities.entities()) {
+    RETURN_IF_ERROR(InstallPiEntity(&p4rt, entity));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
+                               absl::Span<const p4::v1::Entity> entities) {
+  for (const p4::v1::Entity& entity : entities) {
     RETURN_IF_ERROR(InstallPiEntity(&p4rt, entity));
   }
   return absl::OkStatus();

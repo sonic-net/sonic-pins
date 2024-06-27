@@ -49,6 +49,8 @@ enum Format {
 message IrMatchFieldReference {
   string table = 1;
   string match_field = 2;
+  uint32 table_id = 3;
+  uint32 match_field_id = 4;
 }
 
 // Describes a match field.
@@ -303,6 +305,26 @@ message IrTableEntries {
   repeated IrTableEntry entries = 1;
 }
 
+//-- Packet Replication Engine -------------------------------------------------
+
+// Describes a PacketReplicationEngine (PRE) entry. Currently, the only
+// supported PRE entry is multicast group entry.
+message IrPacketReplicationEngineEntry {
+  oneof type {
+    IrMulticastGroupEntry multicast_group_entry = 1;
+  }
+}
+
+message IrReplica {
+  string port = 1;
+  uint32 instance = 2;
+}
+
+message IrMulticastGroupEntry {
+  uint32 multicast_group_id = 1;
+  repeated IrReplica replicas = 2;
+}
+
 // -- Packet IO ----------------------------------------------------------------
 
 // Describes a packet in.
@@ -324,12 +346,25 @@ message IrPacketMetadata {
 
 // -- RPC messages -------------------------------------------------------------
 
+// Describes an entity within an Update.
+message IrEntity {
+  oneof entity {
+    IrTableEntry table_entry = 1;
+    IrPacketReplicationEngineEntry packet_replication_engine_entry = 2;
+  }
+}
+
+// Describes a list of entities.
+message IrEntities {
+  repeated IrEntity entities = 1;
+}
+
 // Describes an update in a Write RPC request.
 message IrUpdate {
   // Required.
   p4.v1.Update.Type type = 1;
   // Required.
-  IrTableEntry table_entry = 2;
+  IrEntity entity = 2;
 }
 
 // Describes a Write RPC request.
@@ -377,7 +412,7 @@ message IrReadRequest {
 // A read request response.
 message IrReadResponse {
   // The table entries read by the switch.
-  repeated IrTableEntry table_entries = 1;
+  repeated IrEntity entities = 1;
 }
 
 // A stream message request

@@ -1,0 +1,2 @@
+table_add ports_exact set_egress_spec 0 => 1
+table_add ports_exact set_egress_spec 1 => 0
