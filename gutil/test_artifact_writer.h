@@ -15,8 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef PINS_INFRA_GUTIL_TEST_WRITER_H_
-#define PINS_INFRA_GUTIL_TEST_WRITER_H_
+#ifndef PINS_GUTIL_TEST_WRITER_H_
+#define PINS_GUTIL_TEST_WRITER_H_
 
 #include <fstream>
 #include <ios>
@@ -66,4 +66,4 @@ class TestArtifactWriter {
 
 }  // namespace gutil
 
-#endif  // PINS_INFRA_GUTIL_TEST_WRITER_H_
+#endif  // PINS_GUTIL_TEST_WRITER_H_
