@@ -29,6 +29,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/strings/substitute.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -419,8 +420,7 @@ bool IsActionUnused(const IrActionDefinition& action,
 }  // namespace
 
 StatusOr<std::string> IrP4InfoToPdProto(const IrP4Info& info,
-                                        const std::string& package,
-                                        const std::vector<std::string>& roles) {
+                                        const PdGenOptions& options) {
   std::string result = "";
 
   // Header comment.
@@ -430,7 +430,7 @@ StatusOr<std::string> IrP4InfoToPdProto(const IrP4Info& info,
 // NOTE: This file is automatically created from the P4 program, do not modify manually.
 
 syntax = "proto3";
-package )" + package + R"(;
+package )" + options.package + R"(;
 
 import "p4/v1/p4runtime.proto";
 import "google/rpc/code.proto";
@@ -472,7 +472,7 @@ message Optional {
   // Filter by role and sort by ID.
   std::vector<IrTableDefinition> tables;
   for (const auto& [id, table] : Ordered(info.tables_by_id())) {
-    if (absl::c_find(roles, table.role()) != roles.end()) {
+    if (absl::c_find(options.roles, table.role()) != options.roles.end()) {
       tables.push_back(table);
     }
   }
@@ -504,12 +504,47 @@ message Optional {
     absl::StrAppend(&result, table_pd, "\n\n");
   }
 
+  if (options.multicast_table_field_number.has_value()) {
+    absl::StrAppend(&result, R"(
+// Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
+// of the v1model architecture and is not explicitly present in the P4 program.
+message MulticastGroupTableEntry {
+  message Match {
+    string multicast_group_id = 1;  // exact match / Format::HEX_STRING / 16 bits
+  }
+  Match match = 1;
+  message Action {
+    ReplicateAction replicate = 1;
+  }
+  Action action = 2;
+}
+
+)");
+  }
+
   // Action messages.
   absl::StrAppend(&result, HeaderComment("Actions"), "\n");
   for (const auto& action : actions) {
     if (IsActionUnused(action, tables)) continue;
     ASSIGN_OR_RETURN(const auto& action_pd, GetActionMessage(action));
     absl::StrAppend(&result, action_pd, "\n\n");
+  }
+  if (options.multicast_table_field_number.has_value()) {
+    absl::StrAppend(&result, R"(
+// This action is unique to `MulticastGroupTableEntry` and is not explicitly
+// present in the P4 program.
+message ReplicateAction {
+  // Corresponds to `Replica` in p4runtime.proto.
+  message Replica {
+    string port = 1;  // Format::STRING
+    string instance = 2;  // Format::HEX_STRING / 16 bits
+  }
+  // Each `Replica` must have a unique (port, instance)-pair within the scope of
+  // the `ReplicateAction` that contains it.
+  repeated Replica replicas = 1;
+}
+
+)");
   }
 
   // Overall TableEntry message.
@@ -527,6 +562,13 @@ message Optional {
                      P4NameToProtobufFieldName(name, kP4Table));
     absl::StrAppend(&result, "    ", table_message_name, " ", table_field_name,
                     " = ", IdWithoutTag(table.preamble().id()), ";\n");
+  }
+  if (options.multicast_table_field_number.has_value()) {
+    absl::StrAppend(
+        &result,
+        absl::Substitute(
+            "    MulticastGroupTableEntry multicast_group_table_entry = $0;\n",
+            *options.multicast_table_field_number));
   }
   absl::StrAppend(&result, "  }\n");
   absl::StrAppend(&result, "}\n\n");
