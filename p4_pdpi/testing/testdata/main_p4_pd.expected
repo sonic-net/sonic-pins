@@ -378,6 +378,20 @@ message ReferringByMatchFieldTableEntry {
 }
 
 
+// Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
+// of the v1model architecture and is not explicitly present in the P4 program.
+message MulticastGroupTableEntry {
+  message Match {
+    string multicast_group_id = 1;  // exact match / Format::HEX_STRING / 16 bits
+  }
+  Match match = 1;
+  message Action {
+    ReplicateAction replicate = 1;
+  }
+  Action action = 2;
+}
+
+
 // -- Actions ------------------------------------------------------------------
 
 message DoThing1Action {
@@ -431,6 +445,20 @@ message ReferringToOneMatchFieldAction {
 }
 
 
+// This action is unique to `MulticastGroupTableEntry` and is not explicitly
+// present in the P4 program.
+message ReplicateAction {
+  // Corresponds to `Replica` in p4runtime.proto.
+  message Replica {
+    string port = 1;  // Format::STRING
+    string instance = 2;  // Format::HEX_STRING / 16 bits
+  }
+  // Each `Replica` must have a unique (port, instance)-pair within the scope of
+  // the `ReplicateAction` that contains it.
+  repeated Replica replicas = 1;
+}
+
+
 // -- All tables ---------------------------------------------------------------
 
 message TableEntry {
@@ -456,6 +484,7 @@ message TableEntry {
     OneMatchFieldTableEntry one_match_field_table_entry = 12699062;
     ReferringByActionTableEntry referring_by_action_table_entry = 14558547;
     ReferringByMatchFieldTableEntry referring_by_match_field_table_entry = 16037969;
+    MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }
 
