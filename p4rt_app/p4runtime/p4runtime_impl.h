@@ -77,7 +77,7 @@ struct FlowProgrammingStatistics {
   // into account batch size.
   absl::Duration max_write_time;
 
-  // Total number of Read() calls handled by the switc.
+  // Total number of Read() calls handled by the switch.
   int read_request_count;
 
   // Total time the switch spent handing all Read() requests. Note that P4RT
