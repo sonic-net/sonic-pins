@@ -1065,8 +1065,17 @@ absl::Status P4RuntimeImpl::DumpDebugData(const std::string& path,
 //absl::Status P4RuntimeImpl::VerifyState(bool update_component_state) {
 absl::Status P4RuntimeImpl::VerifyState() {
   absl::MutexLock l(&server_state_lock_);
-
   std::vector<std::string> failures = {"P4RT App State Verification failures:"};
+
+  // Verify the P4RT_TABLE entries against the cache.
+  std::vector<std::string> p4rt_table_failures =
+      sonic::VerifyP4rtTableWithCacheTableEntries(
+          *p4rt_table_.app_db, table_entry_cache_, *ir_p4info_,
+          translate_port_ids_, port_translation_map_);
+  if (!p4rt_table_failures.empty()) {
+    failures.insert(failures.end(), p4rt_table_failures.begin(),
+                    p4rt_table_failures.end());
+  }
 
   // Verify the VRF_TABLE entries.
   std::vector<std::string> vrf_table_failures =

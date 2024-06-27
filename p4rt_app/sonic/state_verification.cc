@@ -20,13 +20,19 @@
 
 #include "absl/container/btree_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "gutil/status.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "p4rt_app/sonic/app_db_manager.h"
+#include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -108,6 +114,45 @@ RedisTable ReadAllEntriesFromRedisTable(TableAdapter& table,
     result.entries[table_key] = std::move(table_entry);
   }
 
+  return result;
+}
+
+RedisTable TranslateIrEntriesIntoRedisTable(
+    const std::vector<pdpi::IrTableEntry>& ir_entries,
+    absl::string_view db_name, const pdpi::IrP4Info& ir_p4_info) {
+  RedisTable result{.db_name = std::string{db_name}};
+  for (const auto& ir_table_entry : ir_entries) {
+    RedisTableEntry table_entry;
+
+    // If we fail to get the key we won't be able to add it as a table entry. In
+    // this case, later checks should still fail because the value will appear
+    // to be missing from the cache.
+    auto table_key = GetRedisP4rtTableKey(ir_table_entry, ir_p4_info);
+    if (!table_key.ok()) {
+      LOG(ERROR) << db_name << " could not get key for: "
+                 << ir_table_entry.ShortDebugString();
+      continue;
+    }
+
+    auto app_db_values = IrTableEntryToAppDbValues(ir_table_entry);
+    if (!app_db_values.ok()) {
+      table_entry.errors = absl::StrCat(
+          db_name,
+          " entry values could not be translated for key: ", *table_key);
+      result.entries[*table_key] = std::move(table_entry);
+      continue;
+    }
+
+    auto redis_values = ListToMap(*app_db_values);
+    if (!redis_values.ok()) {
+      table_entry.errors =
+          absl::StrCat(db_name, " has duplicate fields for key: ", *table_key);
+    } else {
+      table_entry.values = *std::move(redis_values);
+    }
+
+    result.entries[*table_key] = std::move(table_entry);
+  }
   return result;
 }
 
@@ -198,6 +243,48 @@ std::vector<std::string> VerifyAppStateDbAndAppDbEntries(
   return CompareTables(
       ReadAllEntriesFromRedisTable(app_db, "AppDb"),
       ReadAllEntriesFromRedisTable(app_state_db, "AppStateDb"));
+}
+
+std::vector<std::string> VerifyP4rtTableWithCacheTableEntries(
+    TableAdapter& app_db,
+    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
+        table_entry_cache,
+    const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map) {
+  std::vector<std::string> failures;
+
+  // Translate the Table cache into IR entries for comparison.
+  std::vector<pdpi::IrTableEntry> ir_entries;
+  int p4rt_translation_failures = 0;
+  for (const auto& [_, pi_table_entry] : table_entry_cache) {
+    auto ir_table_entry = TranslatePiTableEntryForOrchAgent(
+        pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
+        /*translate_key_only=*/false);
+    if (ir_table_entry.ok()) {
+      ir_entries.push_back(*std::move(ir_table_entry));
+    } else {
+      p4rt_translation_failures++;
+    }
+  }
+  if (p4rt_translation_failures > 0) {
+    failures.push_back(absl::StrCat("Failed to translate ",
+                                    p4rt_translation_failures,
+                                    " entries from the table entry cache."));
+  }
+
+  RedisTable redis_db_entries = ReadAllEntriesFromRedisTable(app_db, "AppDb");
+
+  // Remove any entries for ACL table definitions.
+  absl::erase_if(redis_db_entries.entries, [](const auto& iter) {
+    return (absl::StartsWith(iter.first, "ACL_TABLE_DEFINITION_TABLE:") || absl::StartsWith(iter.first, "TABLES_DEFINITION_TABLE:"));
+  });
+
+  std::vector<std::string> comparison_failures = CompareTables(
+      redis_db_entries, TranslateIrEntriesIntoRedisTable(
+                            ir_entries, "TableEntryCache", ir_p4_info));
+  failures.insert(failures.end(), comparison_failures.begin(),
+                  comparison_failures.end());
+  return failures;
 }
 
 }  // namespace sonic
