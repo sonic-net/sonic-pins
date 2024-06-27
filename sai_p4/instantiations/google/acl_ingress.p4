@@ -274,11 +274,9 @@ control acl_ingress(in headers_t headers,
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
     // Only allow IP field matches for IP packets.
-    dst_ip::mask != 0 -> is_ipv4 == 1;
     ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
-    l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
@@ -287,6 +285,10 @@ control acl_ingress(in headers_t headers,
     // Forbid unsupported combinations of IP_TYPE fields.
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
+    // Only allow icmp_type matches for ICMP packets
+    icmpv6_type::mask != 0 -> ip_protocol == 58;
+    // Only allow arp_tpa matches for ARP packets.
+    arp_tpa::mask != 0 -> ether_type == 0x0806;
   ")
   table acl_ingress_qos_table {
     key = {
@@ -305,18 +307,21 @@ control acl_ingress(in headers_t headers,
       headers.ethernet.dst_addr : ternary
           @id(5) @name("dst_mac")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
-      headers.ipv4.dst_addr : ternary
-          @id(6) @name("dst_ip")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP) @format(IPV4_ADDRESS);
+      headers.arp.target_proto_addr : ternary
+          @id(6) @name("arp_tpa")
+          @composite_field(
+              @sai_udf(base=SAI_UDF_BASE_L3, offset=24, length=2),
+              @sai_udf(base=SAI_UDF_BASE_L3, offset=26, length=2)
+          ) @format(IPV4_ADDRESS);
       ttl : ternary
           @id(7) @name("ttl")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_TTL);
       ip_protocol : ternary
           @id(8) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
-      local_metadata.l4_src_port : ternary
-          @id(9) @name("l4_src_port")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT);
+      headers.icmp.type : ternary
+          @id(9) @name("icmpv6_type")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMPV6_TYPE);
       local_metadata.l4_dst_port : ternary
           @id(10) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);

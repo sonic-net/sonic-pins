@@ -27,7 +27,7 @@ namespace p4rt_app {
 namespace sonic {
 
 // The P4RT app needs to:
-//   * Write P4RT_TABLE entries into a notification channel .
+//   * Write P4RT_TABLE entries into a notification channel.
 //   * Read P4RT_TABLE entries out out of the AppDb and CountersDb.
 struct P4rtTable {
   std::unique_ptr<NotificationProducerAdapter> notification_producer;
