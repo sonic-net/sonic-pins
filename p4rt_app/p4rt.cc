@@ -41,6 +41,7 @@
 #include "gutil/status.h"
 #include "p4rt_app/event_monitoring/app_state_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
+#include "p4rt_app/event_monitoring/config_db_cpu_queue_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_node_cfg_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/debug_data_dump_events.h"
@@ -346,6 +347,8 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
       config_db_monitor, "PORTCHANNEL", p4runtime_server);
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
       config_db_monitor, "CPU_PORT", p4runtime_server);
+  RegisterTableHandlerOrDie<p4rt_app::ConfigDbCpuQueueTableEventHandler>(
+      config_db_monitor, "QUEUE_NAME_TO_ID_MAP", p4runtime_server);
 
   while (*monitor_config_db_events) {
     absl::Status status = config_db_monitor.WaitForNextEventAndHandle();
