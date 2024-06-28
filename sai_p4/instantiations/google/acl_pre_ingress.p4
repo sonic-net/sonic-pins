@@ -8,6 +8,14 @@
 #include "roles.h"
 #include "minimum_guaranteed_sizes.p4"
 
+#if defined(SAI_INSTANTIATION_TOR)
+#define ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE \
+  ACL_TOR_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE
+#else
+#define ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE \
+  ACL_DEFAULT_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE
+#endif
+
 control acl_pre_ingress(in headers_t headers,
                    inout local_metadata_t local_metadata,
                    in standard_metadata_t standard_metadata) {
