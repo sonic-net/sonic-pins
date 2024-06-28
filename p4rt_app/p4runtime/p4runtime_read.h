@@ -22,6 +22,7 @@
 #include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/sonic/redis_connections.h"
 
 namespace p4rt_app {
@@ -34,7 +35,7 @@ absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
         table_entry_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::P4rtTable& p4rt_table);
+    CpuQueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table);
 
 }  // namespace p4rt_app
 
