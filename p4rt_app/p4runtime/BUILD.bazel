@@ -129,6 +129,7 @@ cc_library(
     srcs = ["p4runtime_impl.cc"],
     hdrs = ["p4runtime_impl.h"],
     deps = [
+        ":cpu_queue_translator",
         ":ir_translation",
         ":p4info_verification",
         ":p4runtime_read",
@@ -184,6 +185,7 @@ cc_library(
     testonly = True,
     hdrs = ["mock_p4runtime_impl.h"],
     deps = [
+        ":cpu_queue_translator",
         ":p4runtime_impl",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest",
@@ -195,6 +197,7 @@ cc_library(
     srcs = ["p4runtime_read.cc"],
     hdrs = ["p4runtime_read.h"],
     deps = [
+        ":cpu_queue_translator",
         ":ir_translation",
         "//gutil:status",
         "//gutil:table_entry_key",
@@ -264,6 +267,7 @@ cc_library(
     srcs = ["ir_translation.cc"],
     hdrs = ["ir_translation.h"],
     deps = [
+        ":cpu_queue_translator",
         "//gutil:collections",
         "//gutil:status",
         "//p4_pdpi:ir",
@@ -280,6 +284,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -287,6 +292,7 @@ cc_test(
     name = "ir_translation_test",
     srcs = ["ir_translation_test.cc"],
     deps = [
+        ":cpu_queue_translator",
         ":ir_translation",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
@@ -296,7 +302,6 @@ cc_test(
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@boost//:bimap",
         "@boost//:graph",
-        "@com_github_google_glog//:glog",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
@@ -364,5 +369,30 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "cpu_queue_translator",
+    srcs = ["cpu_queue_translator.cc"],
+    hdrs = ["cpu_queue_translator.h"],
+    deps = [
+        "//gutil:collections",
+        "//gutil:status",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "cpu_queue_translator_test",
+    srcs = ["cpu_queue_translator_test.cc"],
+    deps = [
+        ":cpu_queue_translator",
+        "//gutil:status_matchers",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )
