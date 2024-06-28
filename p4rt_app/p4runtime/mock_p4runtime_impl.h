@@ -18,6 +18,7 @@
 #include "grpcpp/grpcpp.h"
 #include "grpcpp/server_context.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 
 namespace p4rt_app {
@@ -71,6 +72,9 @@ class MockP4RuntimeImpl : public P4RuntimeImpl {
   MOCK_METHOD(absl::Status, DumpDebugData,
               (const std::string& path, const std::string& log_level),
               (override));
+
+  MOCK_METHOD(void, SetCpuQueueTranslator,
+              (std::unique_ptr<CpuQueueTranslator>), (override));
 
 /* TODO(PINS): To handle Component, System & Interface Translator in November release.
  private:
