@@ -1828,10 +1828,6 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
     case Header::kSaiP4Bmv2PacketInHeader:
       return SerializeSaiP4BMv2PacketInHeader(
           header.sai_p4_bmv2_packet_in_header(), output);
-    // TODO: replace stubs
-    case Header::kIpfixHeader:
-    case Header::kPsampHeader:
-      return absl::OkStatus();
     case Header::HEADER_NOT_SET:
       return gutil::InvalidArgumentErrorBuilder()
              << "Found invalid HEADER_NOT_SET in header.";
@@ -2073,9 +2069,6 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         break;
       }
       case Header::kSaiP4Bmv2PacketInHeader:
-      // TODO: remove stubs
-      case Header::kIpfixHeader:
-      case Header::kPsampHeader:
         break;
       case Header::kIpfixHeader: {
         IpfixHeader& ipfix_header = *header.mutable_ipfix_header();
