@@ -23,14 +23,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
-            url = "https://github.com/grpc/grpc/archive/v1.56.1.zip",
-            strip_prefix = "grpc-1.56.1",
-            sha256 = "04a52a313926f0f6ec2ed489ac7552aa5949693b071eaf45ae13b66e5910c32f",
-            patch_args = ["-p1"],
-            patches = [
-                "//:bazel/patches/grpc-001-fix_file_watcher_race_condition.patch",
-                "//:bazel/patches/grpc-002-change_authz_log_level.patch",
-            ],
+            url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
+            strip_prefix = "grpc-1.46.0",
+            sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
         )
     if not native.existing_rule("com_google_absl"):
         http_archive(
@@ -38,7 +33,7 @@ def pins_infra_deps():
             url = "https://github.com/abseil/abseil-cpp/archive/20230802.0.tar.gz",
             strip_prefix = "abseil-cpp-20230802.0",
             sha256 = "59d2976af9d6ecf001a81a35749a6e551a335b949d34918cfade07737b9d93c5",
-        )
+        )   
     if not native.existing_rule("com_google_googletest"):
         http_archive(
             name = "com_google_googletest",
@@ -56,9 +51,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_google_protobuf"):
         http_archive(
             name = "com_google_protobuf",
-            url = "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v23.1.zip",
-            strip_prefix = "protobuf-23.1",
-            sha256 = "c0ea9f4d75b37ea8e9d78ce4c670d066bcb7cebdba190fa5fc8c57b1f00c0c2c",
+            url = "https://github.com/protocolbuffers/protobuf/releases/download/v3.20.1/protobuf-all-3.20.1.tar.gz",
+            strip_prefix = "protobuf-3.20.1",
+            sha256 = "3a400163728db996e8e8d21c7dfb3c239df54d0813270f086c4030addeae2fad",
         )
     if not native.existing_rule("com_googlesource_code_re2"):
         http_archive(

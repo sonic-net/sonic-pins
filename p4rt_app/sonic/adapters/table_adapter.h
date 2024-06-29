@@ -32,7 +32,7 @@ namespace sonic {
 //   AppDb:    PORT_TABLE:Ethernet0
 //   StateDb:  PORT_TABLE|Ethernet0
 //
-// Notice how the delineator for AppDb is ':', but StateDb uses '|' for the same
+// Notice how the deliniator for AppDb is ':', but StateDb uses '|' for the same
 // entry. The TableAdapter automatically handles this formatting for us. So if
 // we wanted to read data about Ethernet0 we only need to call:
 //   auto data = table_adapter.get("Ethernet0");
@@ -50,8 +50,6 @@ class TableAdapter {
   virtual void set(
       const std::string& key,
       const std::vector<std::pair<std::string, std::string>>& values);
-  virtual void batch_set(
-      const std::vector<swss::KeyOpFieldsValuesTuple>& values);
 
   virtual void del(const std::string& key);
   virtual void batch_del(const std::vector<std::string>& keys);

@@ -20,7 +20,7 @@
 #include "absl/strings/str_cat.h"
 #include "glog/logging.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
-#include "swss/table.h"
+#include "p4rt_app/sonic/adapters/table_adapter.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -61,13 +61,6 @@ void FakeTableAdapter::set(
     const std::string& key,
     const std::vector<std::pair<std::string, std::string>>& values) {
   sonic_db_table_->InsertTableEntry(key, values);
-}
-
-void FakeTableAdapter::batch_set(
-    const std::vector<swss::KeyOpFieldsValuesTuple>& values) {
-  for (const swss::KeyOpFieldsValuesTuple& value : values) {
-    sonic_db_table_->InsertTableEntry(kfvKey(value), kfvFieldsValues(value));
-  }
 }
 
 void FakeTableAdapter::del(const std::string& key) {

@@ -52,12 +52,6 @@ void TableAdapter::set(
   table_->set(key, values);
 }
 
-void TableAdapter::batch_set(
-    const std::vector<swss::KeyOpFieldsValuesTuple>& values) {
-  for (const swss::KeyOpFieldsValuesTuple& value : values) {
-    table_->set(kfvKey(value), kfvFieldsValues(value));
-  }
-}
 void TableAdapter::del(const std::string& key) { table_->del(key); }
 
 void TableAdapter::batch_del(const std::vector<std::string>& keys) {
