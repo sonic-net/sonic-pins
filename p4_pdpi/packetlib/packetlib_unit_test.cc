@@ -20,6 +20,8 @@
 
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
@@ -182,7 +184,7 @@ TEST(PacketLib, ICMPWithIpv4Header) {
 }
 
 // TODO: Add unit test using example GRE header with checksum. This is not
-// done for now because it's difficult to find an exammple GRE header with
+// done for now because it's difficult to find an example GRE header with
 // checksum.
 
 TEST(PacketLib, GreHeaderIpv4EncapsulatedWithIpv4) {
@@ -464,6 +466,56 @@ TEST(PacketLib, PadPacketWithEthernetHeader) {
   ASSERT_THAT(PadPacket(current_size + 1, packet), IsOkAndHolds(Eq(true)));
   ASSERT_OK_AND_ASSIGN(int updated_size, PacketSizeInBytes(packet));
   EXPECT_EQ(current_size + 1, updated_size);
+}
+
+TEST(PacketLib, ButterEncapsulatedPacket) {
+  // Packet structure is:
+  // Ethernet -> IP -> UDP -> IPFIX -> PSAMP ->
+  // Sampled packet (ETH -> IP -> TCP/UDP -> payload)
+  Packet packet;
+
+  EthernetHeader* eth = packet.add_headers()->mutable_ethernet_header();
+  eth->set_ethertype(EtherType(ETHERTYPE_IPV6));
+  eth->set_ethernet_source(std::string(kEthernetSourceAddress));
+  eth->set_ethernet_destination(std::string(kEthernetDestinationAddress));
+
+  Ipv6Header* ipv6 = packet.add_headers()->mutable_ipv6_header();
+  ipv6->set_ipv6_source("5:6:7:8::");
+  ipv6->set_ipv6_destination("2607:f8b0:c150:8114::");
+  ipv6->set_flow_label(IpFlowLabel(0x12345));
+  ipv6->set_next_header(IpNextHeader(17));
+  ipv6->set_hop_limit(IpHopLimit(32));
+  ipv6->set_dscp(IpDscp(3));
+  ipv6->set_ecn(IpEcn(0));
+
+  UdpHeader* udp = packet.add_headers()->mutable_udp_header();
+  udp->set_source_port(UdpPort(2222));
+  udp->set_destination_port(UdpPort(kIpfixUdpDestPort));
+  // Checksum is always zero for psamp packets
+  udp->set_checksum(UdpChecksum(0x0));
+
+  IpfixHeader* ipfix = packet.add_headers()->mutable_ipfix_header();
+  ipfix->set_version(IpfixVersion(0x0A));
+  // Packet came 10 seconds ago
+  ipfix->set_export_time(
+      IpfixExportTime(absl::ToUnixSeconds(absl::Now()) - 10));
+  ipfix->set_sequence_number(IpfixSequenceNumber(1));
+  ipfix->set_observation_domain_id(IpfixObservationDomainId(1));
+
+  PsampHeader* psamp = packet.add_headers()->mutable_psamp_header();
+  psamp->set_template_id(PsampTemplateId(0));
+  psamp->set_observation_time(
+      PsampObservationTime(absl::ToUnixNanos(absl::Now())));
+  psamp->set_flowset(PsampFlowset(0x1234));
+  psamp->set_next_hop_index(PsampNextHopIndex(0));
+  psamp->set_epoch(PsampEpoch(0xABCD));
+  psamp->set_ingress_port(PsampIngressPort(0x0d));
+  psamp->set_egress_port(PsampEgressPort(0x0f));
+  psamp->set_user_meta_field(PsampUserMetaField(0));
+  psamp->set_dlb_id(PsampDlbId(0));
+  packet.set_payload("000000000000000000");  // 18 octets
+
+  ASSERT_OK(SerializePacket(packet));
 }
 
 }  // namespace
