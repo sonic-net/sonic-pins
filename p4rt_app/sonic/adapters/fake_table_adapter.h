@@ -20,6 +20,7 @@
 
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "swss/rediscommand.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -42,6 +43,9 @@ class FakeTableAdapter final : public TableAdapter {
   void set(
       const std::string& key,
       const std::vector<std::pair<std::string, std::string>>& values) override;
+
+  void batch_set(
+      const std::vector<swss::KeyOpFieldsValuesTuple>& values) override;
 
   void del(const std::string& key) override;
   void batch_del(const std::vector<std::string>& keys) override;

@@ -28,9 +28,9 @@ cc_binary(
     deps = [
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_github_grpc_grpc//:grpc++_authorization_provider",
-        "@com_github_gflags_gflags//:gflags",
         "@com_google_absl//absl/flags:parse",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_github_grpc_grpc//:grpc++_authorization_provider",
         "@com_google_absl//absl/functional:bind_front",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -56,6 +56,7 @@ cc_binary(
         "//p4rt_app/sonic/adapters:producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:system_call_adapter",
         "//p4rt_app/sonic/adapters:table_adapter",
+        "//p4rt_app/utils:authz_logger",
         "@sonic_swss_common//:libswsscommon",
     ],
 )
