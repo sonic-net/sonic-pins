@@ -113,7 +113,7 @@ absl::Status AppendTableEntryReads(
 
 }  // namespace
 
-absl::StatusOr<p4::v1::ReadResponse> ReadAllEntities(
+absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
     const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
         table_entry_cache,
@@ -132,10 +132,6 @@ absl::StatusOr<p4::v1::ReadResponse> ReadAllEntities(
               port_translation_map, cpu_queue_translator, p4rt_table));
         }
         break;
-      }
-      case p4::v1::Entity::kPacketReplicationEngineEntry: {
-        // TODO: 298489493 - Add support for reading back multicast entries.
-        continue;
       }
       default:
         return gutil::UnimplementedErrorBuilder()

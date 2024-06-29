@@ -146,7 +146,6 @@ cc_library(
     deps = [
         ":table_adapter",
         "@com_google_googletest//:gtest",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -160,7 +159,6 @@ cc_library(
         ":table_adapter",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/strings",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
