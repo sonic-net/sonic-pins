@@ -23,8 +23,9 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/numeric/int128.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
@@ -33,19 +34,15 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
-#include "google/protobuf/text_format.h"
-#include "grpcpp/client_context.h"
-#include "grpcpp/grpcpp.h"
 #include "gtest/gtest.h"
-#include "gutil/proto.h"
 #include "gutil/collections.h"
 #include "gutil/io.h"
 #include "gutil/status.h"
@@ -103,14 +100,17 @@ DEFINE_int32(next_hops, 512, "The number of next-hop entries to install.");
 // A run will automatically generate `number_batches` write requests each with
 // `batch_size` updates (i.e. number_batches x batch_size total flows). Runtime
 // only includes the P4RT Write() time, and not the generation.
-DEFINE_int32(number_batches, 10, "Number of batches");
-DEFINE_int32(batch_size, 1000, "Number of entries in each batch");
+DEFINE_int32(number_batches, 10,
+             "Total number of gRPC write calls made to the switch.");
+DEFINE_int32(batch_size, 100,
+             "Total number of table entries in each gRPC write.");
 
-// By default we only run the IPv4 tests. However, because the tested tables
-// don't overlap users can run multiple, and they will happen sequentially.
-// Users should be careful when running multiple tests since the batch sizes are
-// reused.
-DEFINE_bool(run_ipv4, true, "Run IPv4 route latency tests.");
+// Users should select the specific test they want to run.  Because the tested
+// tables don't overlap users can run multiple, and they will happen
+// sequentially. Users should be careful when running multiple tests since the
+// batch sizes are reused (i.e. 10k IPv4 flows may be reasonable, but 10k WCMP
+// groups may not be).
+DEFINE_bool(run_ipv4, false, "Run IPv4 route latency tests.");
 DEFINE_bool(run_ipv6, false, "Run IPv6 route latency tests.");
 DEFINE_bool(run_wcmp, false, "Run IPv4 route latency tests.");
 
@@ -126,22 +126,57 @@ DEFINE_bool(wcmp_update_nexthops_when_modifying, false,
 DEFINE_bool(wcmp_increasing_weights, false,
             "Force the weight of a member to be >= the weight of the member "
             "that came before it.");
+DEFINE_bool(wcmp_set_watch_port, false,
+            "Use the port from the next hop as the WCMP watch port.");
+
+// Pass a comma separated list of digits to reproduce a specific test.
+DEFINE_string(seed_seq, "",
+              "Force a specific seed_seq value to repeat a test.");
 
 namespace p4rt_app {
 namespace {
 
-using P4RTUpdateByNameMap = absl::flat_hash_map<std::string, p4::v1::Update>;
+// To make runs reproducible we intentionally use a absl::btree_map.
+using P4RTUpdateByNameMap = absl::btree_map<std::string, p4::v1::Update>;
 
+// Uses the seed sequence passed by the `--seed_seq` flag. If no sequence is set
+// then it will choose a random one.
+std::seed_seq GetSeedSeq() {
+  std::string forced_seq = FLAGS_seed_seq;
+  std::vector<int> seq;
+  if (forced_seq.empty()) {
+    absl::BitGen bitgen;
+    seq.resize(32);
+    for (int& s : seq) {
+      s = absl::Uniform<int>(bitgen, 1, 10);
+    }
+  } else {
+    for (const auto& s : absl::StrSplit(forced_seq, ',')) {
+      int value;
+      if (!absl::SimpleAtoi(s, &value)) {
+        std::cout << "--seed_seq is invalid: " << forced_seq << std::endl;
+      } else {
+        seq.push_back(value);
+      }
+    }
+  }
+
+  std::cout << "--seed_seq=" << absl::StrJoin(seq, ",", absl::StreamFormatter())
+            << std::endl;
+  return std::seed_seq(seq.begin(), seq.end());
+}
+
+// To make runs reproducible we intentionally return a absl::btree_set.
 template <typename T>
-absl::StatusOr<absl::flat_hash_set<T>> RandomSetOfValues(absl::BitGen& bitgen,
-                                                         const T& min_value,
-                                                         const T& max_value,
-                                                         int size) {
+absl::StatusOr<absl::btree_set<T>> RandomSetOfValues(absl::BitGen& bitgen,
+                                                     const T& min_value,
+                                                     const T& max_value,
+                                                     int size) {
   // We use the max strikes count to prevent infinite loops.
   const int max_strikes = 2 * size;
   int strikes = 0;
 
-  absl::flat_hash_set<T> result;
+  absl::btree_set<T> result;
   while (result.size() < size) {
     if (!result.insert(absl::Uniform<T>(bitgen, min_value, max_value)).second) {
       strikes++;
@@ -387,6 +422,11 @@ struct RouteEntryInfo {
   P4RTUpdateByNameMap router_interfaces_by_name;
   P4RTUpdateByNameMap neighbors_by_name;
   P4RTUpdateByNameMap next_hops_by_name;
+
+  // Track the port for RIFs and NHs so that we can use them as watch ports if
+  // needed.
+  absl::flat_hash_map<std::string, std::string> port_by_rif_name;
+  absl::flat_hash_map<std::string, std::string> port_by_next_hop_name;
 };
 
 absl::StatusOr<std::vector<int32_t>> ParsePortIds(
@@ -437,13 +477,15 @@ absl::Status GenerateRandomRIFs(absl::BitGen& bitgen, RouteEntryInfo& routes,
                                  /*max_value=*/0x00'FF'FF'FF'FF'FF, count));
   for (const auto& address : addresses) {
     netaddr::MacAddress mac(0x10'00'00'00'00'00 + address);
-    std::string name = absl::StrCat("rif-", mac.ToString());
+    std::string rif_name = absl::StrCat("rif-", mac.ToString());
 
     size_t port = absl::Uniform<size_t>(bitgen, 0, routes.port_ids.size());
-    ASSIGN_OR_RETURN(routes.router_interfaces_by_name[name],
-                     gpins::RouterInterfaceTableUpdate(
-                         ir_p4info, p4::v1::Update::INSERT, name,
-                         absl::StrCat(routes.port_ids[port]), mac.ToString()));
+    std::string port_name = absl::StrCat(routes.port_ids[port]);
+    ASSIGN_OR_RETURN(
+        routes.router_interfaces_by_name[rif_name],
+        gpins::RouterInterfaceTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                          rif_name, port_name, mac.ToString()));
+    routes.port_by_rif_name[rif_name] = port_name;
   }
   return absl::OkStatus();
 }
@@ -473,6 +515,13 @@ absl::Status GenerateRandomNextHops(absl::BitGen& bitgen,
         routes.next_hops_by_name[nexthop_name],
         gpins::NexthopTableUpdate(ir_p4info, p4::v1::Update::INSERT,
                                   nexthop_name, rif, neighbor_name));
+
+    std::string* port_name = gutil::FindOrNull(routes.port_by_rif_name, rif);
+    if (port_name == nullptr) {
+      return gutil::NotFoundErrorBuilder()
+             << "Could not find port name for rif '" << rif << "'.";
+    }
+    routes.port_by_next_hop_name[nexthop_name] = *port_name;
   }
   return absl::OkStatus();
 }
@@ -573,18 +622,52 @@ std::vector<int> RandmizeWeights(absl::BitGen& bitgen, int size,
   return weights;
 }
 
+absl::StatusOr<std::vector<gpins::WcmpAction>> ComputeWcmpGroupAction(
+    absl::BitGen& bitgen, int members_per_group, bool set_watch_port,
+    const std::vector<std::string>& nexthops,
+    const absl::flat_hash_map<std::string, std::string>& port_by_nexthop_name) {
+  std::vector<gpins::WcmpAction> actions(members_per_group);
+
+  // Get a random set of next hops, but don't allow duplicates.
+  ASSIGN_OR_RETURN(
+      auto nexthop_indices,
+      RandomSetOfValues<size_t>(bitgen, 0, nexthops.size(), members_per_group));
+
+  int action_num = 0;
+  for (const auto& nexthop : nexthop_indices) {
+    std::string nexthop_name = nexthops[nexthop];
+    actions[action_num].nexthop_id = nexthop_name;
+
+    if (set_watch_port) {
+      const std::string* port_name =
+          gutil::FindOrNull(port_by_nexthop_name, nexthop_name);
+      if (port_name == nullptr) {
+        return gutil::NotFoundErrorBuilder()
+               << "Could not find port for nexthop '" << nexthop_name << "'.";
+      }
+      actions[action_num].watch_port = *port_name;
+    }
+
+    ++action_num;
+  }
+
+  return actions;
+}
+
 absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
     absl::BitGen& bitgen, const RouteEntryInfo& routes,
     const pdpi::IrP4Info& ir_p4info, uint32_t number_batches,
     uint32_t batch_size, int members_per_group, int total_group_weight) {
-  bool change_weights_on_modify = FLAGS_wcmp_update_weights_when_modifying;
-  bool change_nexthops_on_modify = FLAGS_wcmp_update_nexthops_when_modifying;
   // If both these flags are false then modify will have no affect. Report a
   // warning incase of user error.
+  bool change_weights_on_modify = FLAGS_wcmp_update_weights_when_modifying;
+  bool change_nexthops_on_modify = FLAGS_wcmp_update_nexthops_when_modifying;
   if (!change_weights_on_modify && !change_nexthops_on_modify) {
     LOG(WARNING) << "We are not changing the weights or the nexthops on modify "
                     "so all requests will match the inserts.";
   }
+
+  bool set_watch_port = FLAGS_wcmp_set_watch_port;
 
   // WCMP requests will reference next hops so they need to be created first.
   ASSIGN_OR_RETURN(std::vector<std::string> nexthops,
@@ -600,16 +683,11 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
     for (int entry_num = 0; entry_num < batch_size; ++entry_num) {
       std::string group_name = absl::StrCat("group-", ++group_id);
 
-      // The initial INSERT request.
-      std::vector<gpins::WcmpAction> actions(members_per_group);
-
-      // Get a random set of next hops, but don't allow duplicates.
-      ASSIGN_OR_RETURN(auto nexthop_indices,
-                       RandomSetOfValues<size_t>(bitgen, 0, nexthops.size(),
-                                                 members_per_group));
-      for (int action_num = 0; action_num < members_per_group; ++action_num) {
-        actions[action_num].nexthop_id = nexthops[action_num];
-      }
+      // The initial INSERT request with randomly assigned weights.
+      ASSIGN_OR_RETURN(
+          std::vector<gpins::WcmpAction> actions,
+          ComputeWcmpGroupAction(bitgen, members_per_group, set_watch_port,
+                                 nexthops, routes.port_by_next_hop_name));
       std::vector<int> weights =
           RandmizeWeights(bitgen, actions.size(), total_group_weight);
       for (size_t i = 0; i < actions.size(); ++i) {
@@ -619,15 +697,14 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
           *requests.inserts[batch_num].add_updates(),
           gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::INSERT,
                                       group_name, actions));
+      VLOG(1) << "WCMP insert: "
+              << requests.inserts[batch_num].ShortDebugString();
 
       // MODIFY the nexthop actions and/or weights depending on FLAGs.
       if (change_nexthops_on_modify) {
-        ASSIGN_OR_RETURN(nexthop_indices,
-                         RandomSetOfValues<size_t>(bitgen, 0, nexthops.size(),
-                                                   members_per_group));
-        for (int action_num = 0; action_num < members_per_group; ++action_num) {
-          actions[action_num].nexthop_id = nexthops[action_num];
-        }
+        ASSIGN_OR_RETURN(actions, ComputeWcmpGroupAction(
+                                      bitgen, members_per_group, set_watch_port,
+                                      nexthops, routes.port_by_next_hop_name));
       }
       if (change_weights_on_modify) {
         weights = RandmizeWeights(bitgen, actions.size(), total_group_weight);
@@ -639,12 +716,16 @@ absl::StatusOr<P4WriteRequests> ComputeWcmpWriteRequests(
           *requests.modifies[batch_num].add_updates(),
           gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::MODIFY,
                                       group_name, actions));
+      VLOG(1) << "WCMP modify: "
+              << requests.modifies[batch_num].ShortDebugString();
 
       // DELETE the entries.
       ASSIGN_OR_RETURN(
           *requests.deletes[batch_num].add_updates(),
           gpins::WcmpGroupTableUpdate(ir_p4info, p4::v1::Update::DELETE,
                                       group_name, actions));
+      VLOG(1) << "WCMP delete: "
+              << requests.deletes[batch_num].ShortDebugString();
     }
   }
 
@@ -742,7 +823,7 @@ TEST_F(P4rtRouteTest, MeasureWriteLatency) {
   int32_t number_of_nexthops = FLAGS_next_hops;
 
   // Randomly generate the routes that will be used by these tests.
-  absl::BitGen bitgen;
+  absl::BitGen bitgen(GetSeedSeq());
   RouteEntryInfo routes;
   ASSERT_OK_AND_ASSIGN(routes.port_ids, ParsePortIds(available_port_ids));
   ASSERT_OK(GenerateRandomVrfs(bitgen, routes, ir_p4info_, number_of_vrfs));

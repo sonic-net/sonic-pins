@@ -422,6 +422,17 @@ static void RunReadResponseTests(pdpi::IrP4Info info) {
         }
       )pb"),
       INPUT_IS_VALID);
+  RunPdReadResponseTest(
+      info, "valid multicast group table",
+      gutil::ParseProtoOrDie<pdpi::ReadResponse>(R"pb(
+        table_entries {
+          multicast_group_table_entry {
+            match { multicast_group_id: "0x0001" }
+            action { replicate { replicas { port: "1" instance: "0x0001" } } }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
 
   RunPdReadResponseTest(
       info, "multiple tables", gutil::ParseProtoOrDie<pdpi::ReadResponse>(R"pb(
@@ -485,6 +496,18 @@ static void RunUpdateTests(pdpi::IrP4Info info) {
         }
       )pb"),
       INPUT_IS_VALID);
+  RunPdUpdateTest(
+      info, "valid mulitcast group table",
+      gutil::ParseProtoOrDie<pdpi::Update>(R"pb(
+        type: INSERT
+        table_entry {
+          multicast_group_table_entry {
+            match { multicast_group_id: "0x0001" }
+            action { replicate { replicas { port: "1" instance: "0x0001" } } }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
 }
 
 static void RunWriteRequestTests(pdpi::IrP4Info info) {
@@ -527,6 +550,22 @@ static void RunWriteRequestTests(pdpi::IrP4Info info) {
               match { normal { value: "0x052" mask: "0x273" } }
               priority: 32
               action { do_thing_3 { arg1: "0x01234567" arg2: "0x01234568" } }
+            }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
+  RunPdWriteRequestTest(
+      info, "valid multicast group table update",
+      gutil::ParseProtoOrDie<pdpi::WriteRequest>(R"pb(
+        device_id: 113
+        election_id { high: 1231 low: 77989 }
+        updates {
+          type: INSERT
+          table_entry {
+            multicast_group_table_entry {
+              match { multicast_group_id: "0x0001" }
+              action { replicate { replicas { port: "1" instance: "0x0001" } } }
             }
           }
         }

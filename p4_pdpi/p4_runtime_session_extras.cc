@@ -1,7 +1,13 @@
 #include "p4_pdpi/p4_runtime_session_extras.h"
 
+#include <vector>
+
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -18,13 +24,20 @@ absl::Status InstallPdTableEntries(
   // Convert entries to PI representation.
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
+  if (gutil::IsEmptyProto(config.config().p4info())) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "cannot install entries on switch since no P4Info has been "
+              "installed";
+  }
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
   ASSIGN_OR_RETURN(
-      std::vector<p4::v1::TableEntry> pi_entries,
-      PartialPdTableEntriesToPiTableEntries(info, pd_table_entries));
+      std::vector<p4::v1::Entity> pi_entities,
+      PdTableEntriesToPiEntities(info, pd_table_entries),
+      _.SetPrepend()
+          << "failed to translate PD entries to PI using switch P4Info: ");
 
-  // Install entries.
-  return InstallPiTableEntries(&p4rt, info, pi_entries);
+  // Install entities.
+  return InstallPiEntities(p4rt, pi_entities);
 }
 
 absl::Status InstallPdTableEntry(
@@ -32,12 +45,19 @@ absl::Status InstallPdTableEntry(
   // Convert entries to PI representation.
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
+  if (gutil::IsEmptyProto(config.config().p4info())) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "cannot install entries on switch since no P4Info has been "
+              "installed";
+  }
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
-  ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
-                   PartialPdTableEntryToPiTableEntry(info, pd_table_entry));
+  ASSIGN_OR_RETURN(
+      p4::v1::Entity pi_entity, PdTableEntryToPiEntity(info, pd_table_entry),
+      _.SetPrepend()
+          << "failed to translate PD entries to PI using switch P4Info: ");
 
   // Install entry.
-  return InstallPiTableEntry(&p4rt, pi_entry);
+  return InstallPiEntity(&p4rt, pi_entity);
 }
 
 absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
