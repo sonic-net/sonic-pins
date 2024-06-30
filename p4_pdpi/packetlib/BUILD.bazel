@@ -88,6 +88,7 @@ cc_test(
         ":packetlib",
         ":packetlib_cc_proto",
         "//gutil:status_matchers",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
