@@ -347,18 +347,24 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
       referred_relations = CreateReferenceRelations(ir_p4info);
 
   for (int i = 0; i < entities.size(); i++) {
-    if (!entities[i].has_table_entry()) {
-      return absl::UnimplementedError(
-          absl::StrCat("Only table_entry is supported for "
-                       "GetEntitiesUnreachableFromRoots. Entity: ",
-                       entities[i].DebugString()));
-    }
-    ASSIGN_OR_RETURN(bool is_root_entity, is_root_entity(entities[i]));
+    const p4::v1::Entity& entity = entities[i];
+    ASSIGN_OR_RETURN(bool is_root_entity, is_root_entity(entity));
     if (is_root_entity) {
+      // TODO: b/296443880 - Remove once MRIF entry collection is supported.
+      if (entity.has_packet_replication_engine_entry()) {
+        continue;
+      }
       frontier_indices.push(i);
       continue;
     }
-    const p4::v1::TableEntry& table_entry = entities[i].table_entry();
+    if (!entity.has_table_entry()) {
+      // TODO: b/302346101 - Add support for collection of all entities.
+      return absl::UnimplementedError(
+          absl::StrCat("Only entities of type table_entry can be garbage "
+                       "collected. Entity: ",
+                       entity.DebugString()));
+    }
+    const p4::v1::TableEntry& table_entry = entity.table_entry();
     // If the table that entries[i] belongs to is referred to, entries[i] is
     // potentially reachable. Else, entries[i] is not reachable.
     if (referred_relations.contains(ReferenceRelationKey{
