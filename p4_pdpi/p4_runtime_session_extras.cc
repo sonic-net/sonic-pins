@@ -10,12 +10,12 @@
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/pd.h"
+#include "p4_pdpi/table_entry_key.h"
 
 namespace pdpi {
 
@@ -121,7 +121,7 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
   // switch, we know that no two entries can have the same key.
   absl::c_sort(entries,
                [](const p4::v1::TableEntry& e1, const p4::v1::TableEntry& e2) {
-                 return gutil::TableEntryKey(e1) < gutil::TableEntryKey(e2);
+                 return TableEntryKey(e1) < TableEntryKey(e2);
                });
 
   return entries;
