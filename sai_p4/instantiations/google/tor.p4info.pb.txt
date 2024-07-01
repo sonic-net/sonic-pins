@@ -2314,6 +2314,8 @@ action_profiles {
     id: 299650760
     name: "ingress.routing_resolution.wcmp_group_selector"
     alias: "wcmp_group_selector"
+    annotations: "@selector_size_semantics(\"sum_of_weights\")"
+    annotations: "@max_member_weight(4095)"
   }
   table_ids: 33554499
   with_selector: true
