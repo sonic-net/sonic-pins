@@ -23,10 +23,10 @@
 #include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
-#include "gutil/table_entry_key.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 
 namespace p4rt_app {
@@ -141,7 +141,7 @@ ActionProfileResourceCapacity GetActionProfileResourceCapacity(
 
 absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
     const pdpi::IrP4Info& ir_p4info, const sonic::AppDbEntry& app_db_entry,
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
+    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
         table_cache,
     const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>&
         capacity_by_action_profile_name,

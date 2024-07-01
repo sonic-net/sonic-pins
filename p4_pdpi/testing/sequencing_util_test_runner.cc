@@ -124,26 +124,13 @@ int main(int argc, char** argv) {
                "characters and become invisible in the golde file.\n\n";
   CreateReferenceRelationsTest(pdpi::GetTestIrP4Info());
   EntriesReferredToByTableEntryTest(
-      "Referring to using an entry with 1 match field",
+      "Referring to an entry with 2 match fields",
       R"pb(
         referring_by_match_field_table_entry {
-          match { referring_id_1: "key-a" }
+          match { referring_id_1: "key-x" referring_id_2: "0x034" }
           action { do_thing_4 {} }
-          priority: 32
         }
       )pb");
-
-  EntriesReferredToByTableEntryTest("Referring to an entry with 2 match fields",
-                                    R"pb(
-                                      referring_by_match_field_table_entry {
-                                        match {
-                                          referring_id_1: "key-x"
-                                          referring_id_2 { value: "0x034" }
-                                        }
-                                        action { do_thing_4 {} }
-                                        priority: 32
-                                      }
-                                    )pb");
   EntriesReferredToByTableEntryTest("Referring to an entry with 1 action param",
                                     R"pb(
                                       referring_by_action_table_entry {
