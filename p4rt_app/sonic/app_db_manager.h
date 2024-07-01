@@ -22,9 +22,9 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/json.h"
 #include <nlohmann/json.hpp>
@@ -77,7 +77,7 @@ struct AppDbEntry {
 
   // A unique hash of the entries match fields. Used to identify duplicates and
   // any caching of entries.
-  gutil::TableEntryKey table_entry_key;
+  pdpi::TableEntryKey table_entry_key;
 
   // The net utilization change for table entries with group actions. If the
   // update_type is an insert then this value will simply be the resources for
