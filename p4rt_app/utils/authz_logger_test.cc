@@ -125,10 +125,10 @@ TEST_F(AuthzLoggerTest, PermittedRpcIsLoggedInDb) {
 
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|permitted");
+        return authz_table_adapter_->exists("service|rpc|permitted");
       },
       absl::Milliseconds(500)));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service|rpc|permitted"),
+  EXPECT_THAT(authz_table_adapter_->get("service|rpc|permitted"),
               Contains(Pair("count", "1")));
 }
 
@@ -139,10 +139,10 @@ TEST_F(AuthzLoggerTest, RejectedRpcIsLoggedInDb) {
 
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|denied");
+        return authz_table_adapter_->exists("service|rpc|denied");
       },
       absl::Milliseconds(500)));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service|rpc|denied"),
+  EXPECT_THAT(authz_table_adapter_->get("service|rpc|denied"),
               Contains(Pair("count", "1")));
 }
 
@@ -166,17 +166,15 @@ TEST_F(AuthzLoggerTest, MultipleRpcsAreLoggedInDb) {
 
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service1|rpc1|permitted") &&
-               CheckCount(
-                   authz_table_adapter_->get("p4rt|service1|rpc1|permitted"),
-                   "2") &&
-               authz_table_adapter_->exists("p4rt|service2|rpc2|permitted") &&
-               CheckCount(
-                   authz_table_adapter_->get("p4rt|service2|rpc2|permitted"),
-                   "1") &&
-               authz_table_adapter_->exists("p4rt|service2|rpc2|denied") &&
-               CheckCount(
-                   authz_table_adapter_->get("p4rt|service2|rpc2|denied"), "3");
+        return authz_table_adapter_->exists("service1|rpc1|permitted") &&
+               CheckCount(authz_table_adapter_->get("service1|rpc1|permitted"),
+                          "2") &&
+               authz_table_adapter_->exists("service2|rpc2|permitted") &&
+               CheckCount(authz_table_adapter_->get("service2|rpc2|permitted"),
+                          "1") &&
+               authz_table_adapter_->exists("service2|rpc2|denied") &&
+               CheckCount(authz_table_adapter_->get("service2|rpc2|denied"),
+                          "3");
       },
       absl::Milliseconds(500)));
 }
@@ -189,13 +187,12 @@ TEST_F(AuthzLoggerTest, PermittedRpcCounterIncrements) {
   logger_->Log(context);
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|permitted") &&
-               CheckCount(
-                   authz_table_adapter_->get("p4rt|service|rpc|permitted"),
-                   "2");
+        return authz_table_adapter_->exists("service|rpc|permitted") &&
+               CheckCount(authz_table_adapter_->get("service|rpc|permitted"),
+                          "2");
       },
       absl::Milliseconds(500)));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service|rpc|permitted"),
+  EXPECT_THAT(authz_table_adapter_->get("service|rpc|permitted"),
               Contains(Pair("count", "2")));
 }
 
@@ -206,12 +203,11 @@ TEST_F(AuthzLoggerTest, RejectedRpcCounterIncrements) {
   logger_->Log(context);
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|denied") &&
-               CheckCount(authz_table_adapter_->get("p4rt|service|rpc|denied"),
-                          "2");
+        return authz_table_adapter_->exists("service|rpc|denied") &&
+               CheckCount(authz_table_adapter_->get("service|rpc|denied"), "2");
       },
       absl::Milliseconds(500)));
-  EXPECT_THAT(authz_table_adapter_->get("p4rt|service|rpc|denied"),
+  EXPECT_THAT(authz_table_adapter_->get("service|rpc|denied"),
               Contains(Pair("count", "2")));
 }
 
@@ -223,11 +219,11 @@ TEST_F(AuthzLoggerTest, PermittedRpcCounterRecordsLatestTimestamp) {
   int64_t maximum_timestamp = absl::GetCurrentTimeNanos();
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|permitted");
+        return authz_table_adapter_->exists("service|rpc|permitted");
       },
       absl::Milliseconds(500)));
   EXPECT_THAT(
-      authz_table_adapter_->get("p4rt|service|rpc|permitted"),
+      authz_table_adapter_->get("service|rpc|permitted"),
       Contains(Pair("timestamp", AllOf(StrAsIntGe(minimum_timestamp),
                                        StrAsIntLe(maximum_timestamp)))));
 }
@@ -240,11 +236,11 @@ TEST_F(AuthzLoggerTest, RejectedRpcCounterRecordsLatestTimestamp) {
   int64_t maximum_timestamp = absl::GetCurrentTimeNanos();
   ASSERT_TRUE(WaitUntil(
       [&]() -> bool {
-        return authz_table_adapter_->exists("p4rt|service|rpc|denied");
+        return authz_table_adapter_->exists("service|rpc|denied");
       },
       absl::Milliseconds(500)));
   EXPECT_THAT(
-      authz_table_adapter_->get("p4rt|service|rpc|denied"),
+      authz_table_adapter_->get("service|rpc|denied"),
       Contains(Pair("timestamp", AllOf(StrAsIntGe(minimum_timestamp),
                                        StrAsIntLe(maximum_timestamp)))));
 }

@@ -87,8 +87,8 @@ void MetricRecorder::RecordAuthnFailure(absl::string_view deny_reason) {
 
 void MetricRecorder::RecordAuthz(bool permitted, absl::string_view service,
                                  absl::string_view rpc) {
-  RecordAuthzEntry(absl::StrCat(server_, "|", service, "|", rpc,
-                                permitted ? "|permitted" : "|denied"));
+  RecordAuthzEntry(
+      absl::StrCat(service, "|", rpc, permitted ? "|permitted" : "|denied"));
 }
 
 void MetricRecorder::RecordAuthnEntry(absl::string_view record) {
