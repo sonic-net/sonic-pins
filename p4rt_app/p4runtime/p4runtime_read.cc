@@ -22,9 +22,9 @@
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "gutil/status.h"
-#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
 #include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/sonic/app_db_manager.h"
@@ -113,9 +113,9 @@ absl::Status AppendTableEntryReads(
 
 }  // namespace
 
-absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
+absl::StatusOr<p4::v1::ReadResponse> ReadAllEntities(
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
+    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
         table_entry_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
@@ -132,6 +132,10 @@ absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
               port_translation_map, cpu_queue_translator, p4rt_table));
         }
         break;
+      }
+      case p4::v1::Entity::kPacketReplicationEngineEntry: {
+        // TODO: 298489493 - Add support for reading back multicast entries.
+        continue;
       }
       default:
         return gutil::UnimplementedErrorBuilder()
