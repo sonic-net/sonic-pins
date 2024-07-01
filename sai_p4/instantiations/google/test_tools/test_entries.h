@@ -16,11 +16,12 @@
 //
 // CAUTION: PD entries are not suitable for switch testing, as the PD
 // representation is not backward-compatible and thus will not work for release
-// testing. However, PD entries can be useful in unit testing.
+// testing. However, PD entries can be useful in unit testing, e.g. with BMv2.
 
 #ifndef GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 #define GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 
+#include <utility>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -37,6 +38,50 @@ enum class PuntAction {
   kTrap,
   // Punts copy of packet without preventing packet from being forwarded.
   kCopy,
+};
+
+enum class IpVersion {
+  kIpv4,
+  kIpv6,
+  kIpv4And6,
+};
+
+// Provides methods to conveniently build a set of SAI PD table entries for
+// testing.
+//
+// CAUTION: PD entries are not suitable for switch testing, as the PD
+// representation is not backward-compatible and thus will not work for release
+// testing. However, PD entries can be useful in unit testing, e.g. with BMv2.
+//
+// Example usage:
+// ```
+//   sai::TableEntries entries =
+//     PdEntryBuilder()
+//       .AddEntriesForwardingIpPacketsToGivenPort("egress_port")
+//       .AddEntryPuntingAllPackets(PuntAction::kCopy)
+//       .GetDedupedEntries();
+// ```
+class PdEntryBuilder {
+ public:
+  PdEntryBuilder() = default;
+  PdEntryBuilder(sai::TableEntries entries) : entries_(std::move(entries)) {}
+  sai::TableEntries GetDedupedEntries();
+
+  PdEntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
+  PdEntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
+      absl::string_view egress_port);
+  PdEntryBuilder& AddVrfEntry(absl::string_view vrf);
+  PdEntryBuilder& AddEntryAdmittingAllPacketsToL3();
+  PdEntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
+      absl::string_view egress_port, IpVersion ip_version,
+      absl::string_view vrf);
+  PdEntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
+      absl::string_view vrf, IpVersion ip_version);
+  PdEntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
+      absl::string_view vrf);
+
+ private:
+  sai::TableEntries entries_;
 };
 
 // Returns an ACL table entry that punts all packets to the controller using the
@@ -57,6 +102,7 @@ MakeIrEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
                                             const pdpi::IrP4Info& ir_p4info);
 absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
     absl::string_view egress_port);
+
 }  // namespace sai
 
 #endif  // GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
