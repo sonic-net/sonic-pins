@@ -84,7 +84,6 @@ std::vector<annotation::AnnotationComponents> GetAllAnnotations(
 }
 
 // Returns a list of the parsed body of all annotations with the given label.
-// Returns a Status with code kNotFound if there is no matching annotation.
 //
 // Note: Currently, template type deduction does not work for this function. To
 // use GetAllParsedAnnotations, declare it with the parser's StatusOr<T> T type.
@@ -110,10 +109,6 @@ absl::StatusOr<std::vector<T>> GetAllParsedAnnotations(
       values.push_back(value);
     }
   }
-  if (values.empty()) {
-    return gutil::NotFoundErrorBuilder()
-           << "No annotation contained label \"" << label << "\"";
-  }
   return values;
 }
 
@@ -136,6 +131,10 @@ absl::StatusOr<T> GetParsedAnnotation(absl::string_view label,
   // precompiler from splitting GetAllParsedAnnotations<T into its own argument.
   ASSIGN_OR_RETURN(auto values, (GetAllParsedAnnotations<T, Container>(
                                     label, annotations, parser)));
+  if (values.empty()) {
+    return gutil::NotFoundErrorBuilder()
+           << "No annotations contained label \"" << label << "\"";
+  }
   if (values.size() > 1) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Multiple annotations contained label \"" << label << "\"";
@@ -155,7 +154,6 @@ absl::StatusOr<std::vector<std::string>> GetAnnotationAsArgList(
 
 // Returns the string list form of the body of all annotations with the given
 // label.
-// Returns a Status with code kNotFound if there is no matching annotation.
 template <typename Container>
 absl::StatusOr<std::vector<std::vector<std::string>>>
 GetAllAnnotationsAsArgList(absl::string_view label,
@@ -173,7 +171,6 @@ absl::StatusOr<std::string> GetAnnotationBody(absl::string_view label,
 }
 
 // Returns all annotation bodies from all annotations with the given label.
-// Returns a Status with code kNotFound if there is no matching annotation.
 template <typename Container>
 absl::StatusOr<std::vector<std::string>> GetAllAnnotationBodies(
     absl::string_view label, const Container& annotations) {

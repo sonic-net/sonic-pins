@@ -26,7 +26,9 @@
 
 namespace pdpi {
 namespace {
-inline bool IsWhitespace(char c) { return c == ' ' || c == '\t'; }
+inline bool IsWhitespace(char c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
 }  // namespace
 
 // Use a custom parser for improved speed and error reporting compared to a
@@ -147,6 +149,8 @@ absl::StatusOr<std::vector<std::string>> ParseAsArgList(std::string value) {
           break;
         case '\t':
         case ' ':
+        case '\n':
+        case '\r':
           continue;
         case ')':
         case ']':
