@@ -35,8 +35,7 @@ filegroup(
         "parser.p4",
         "roles.h",
         "routing.p4",
-        "ttl.p4",
-	"vlan.p4",
+        "vlan.p4",
     ],
 )
 

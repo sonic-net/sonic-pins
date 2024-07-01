@@ -14,6 +14,7 @@
 
 #include "p4_pdpi/p4info_union_lib.h"
 
+#include <algorithm>
 #include <string>
 
 #include "absl/algorithm/container.h"
@@ -120,7 +121,8 @@ absl::Status AssertTableCompatibility(const p4::config::v1::Table& table1,
           DiffMessages(table1, table2,
                        /*ignored_fields=*/
                        {"preamble", "match_fields", "action_refs",
-                        "direct_resource_ids", "other_properties"});
+                        "direct_resource_ids", "other_properties",
+			"size"});
       diff_result.has_value()) {
     return absl::InvalidArgumentError(absl::StrCat(
         "tables were incompatible. Relevant differences: ", *diff_result));
@@ -281,6 +283,9 @@ absl::Status UnionFirstFieldIntoSecondAssertingIdenticalId(
              "$0 failed since tables sharing the same id, '$1', were "
              "incompatible: ",
              __func__, GetId(table));
+
+  // Use the max size of any table.
+  unioned_table.set_size(std::max(unioned_table.size(), table.size()));
 
   // For tables, we union their repeated fields and preambles.
   RETURN_IF_ERROR(UnionFirstPreambleIntoSecondAssertingIdenticalId(
