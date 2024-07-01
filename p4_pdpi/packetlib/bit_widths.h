@@ -96,6 +96,28 @@ constexpr int kSaiP4BMv2PacketInIngressPortBitwidth = 9;
 constexpr int kSaiP4BMv2PacketInTargetEgressPortBitwidth = 9;
 constexpr int kSaiP4BMv2PacketInUnusedPadBitwidth = 6;
 
+// IPFIX constants.
+constexpr int kIpfixHeaderBitwidth = 128;
+constexpr int kIpfixVersionBitwidth = 16;
+constexpr int kIpfixLengthBitwidth = 16;
+constexpr int kIpfixExportTimeBitwidth = 32;
+constexpr int kIpfixSequenceNumberBitwidth = 32;
+constexpr int kIpfixObservationDomainIdBitwidth = 32;
+
+// PSAMP constants
+constexpr int kPsampHeaderBitwidth = 224;
+constexpr int kPsampTemplateIdBitwidth = 16;
+constexpr int kPsampLengthBitwidth = 16;
+constexpr int kPsampObservationTimeBitwidth = 64;
+constexpr int kPsampFlowsetBitwidth = 16;
+constexpr int kPsampNextHopIndexBitwidth = 16;
+constexpr int kPsampEpochBitwidth = 16;
+constexpr int kPsampIngressPortBitwidth = 16;
+constexpr int kPsampEgressPortBitwidth = 16;
+constexpr int kPsampUserMetaFieldBitwidth = 16;
+constexpr int kPsampDlbIdBitwidth = 8;
+constexpr int kPsampVariableLengthBitwidth = 8;
+constexpr int kPsampPacketSampledLengthBitwidth = 16;
 }  // namespace packetlib
 
 #endif  // GOOGLE_P4_PDPI_PACKETLIB_BIT_WIDTHS_H_

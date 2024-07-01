@@ -1067,7 +1067,7 @@ updates {
 }
 
 =========================================================================
-SequenceTest: referring via one match field for INSERT
+SequenceTest: referring via match fields for INSERT
 =========================================================================
 
 --- PD updates (input):
@@ -1076,79 +1076,12 @@ table_entry {
   referring_by_match_field_table_entry {
     match {
       referring_id_1: "key-a"
+      referring_id_2: "0x001"
     }
     action {
       do_thing_4 {
       }
     }
-    priority: 32
-  }
-}
-
-type: INSERT
-table_entry {
-  one_match_field_table_entry {
-    match {
-      id: "key-a"
-    }
-    action {
-      do_thing_4 {
-      }
-    }
-  }
-}
-
---- Write requests (output):
-WriteRequest #0
-updates {
-  type: INSERT
-  table_entry {
-    referring_by_match_field_table_entry {
-      match {
-        referring_id_1: "key-a"
-      }
-      action {
-        do_thing_4 {
-        }
-      }
-      priority: 32
-    }
-  }
-}
-updates {
-  type: INSERT
-  table_entry {
-    one_match_field_table_entry {
-      match {
-        id: "key-a"
-      }
-      action {
-        do_thing_4 {
-        }
-      }
-    }
-  }
-}
-
-=========================================================================
-SequenceTest: referring via two match fields for INSERT
-=========================================================================
-
---- PD updates (input):
-type: INSERT
-table_entry {
-  referring_by_match_field_table_entry {
-    match {
-      referring_id_1: "key-a"
-      referring_id_2 {
-        value: "0x001"
-      }
-    }
-    action {
-      do_thing_4 {
-      }
-    }
-    priority: 32
   }
 }
 
@@ -1191,59 +1124,7 @@ updates {
     referring_by_match_field_table_entry {
       match {
         referring_id_1: "key-a"
-        referring_id_2 {
-          value: "0x001"
-        }
-      }
-      action {
-        do_thing_4 {
-        }
-      }
-      priority: 32
-    }
-  }
-}
-
-=========================================================================
-SequenceTest: referring via one match field for DELETE
-=========================================================================
-
---- PD updates (input):
-type: DELETE
-table_entry {
-  one_match_field_table_entry {
-    match {
-      id: "key-a"
-    }
-    action {
-      do_thing_4 {
-      }
-    }
-  }
-}
-
-type: DELETE
-table_entry {
-  referring_by_match_field_table_entry {
-    match {
-      referring_id_1: "key-a"
-    }
-    action {
-      do_thing_4 {
-      }
-    }
-    priority: 32
-  }
-}
-
---- Write requests (output):
-WriteRequest #0
-updates {
-  type: DELETE
-  table_entry {
-    one_match_field_table_entry {
-      match {
-        id: "key-a"
+        referring_id_2: "0x001"
       }
       action {
         do_thing_4 {
@@ -1252,24 +1133,9 @@ updates {
     }
   }
 }
-updates {
-  type: DELETE
-  table_entry {
-    referring_by_match_field_table_entry {
-      match {
-        referring_id_1: "key-a"
-      }
-      action {
-        do_thing_4 {
-        }
-      }
-      priority: 32
-    }
-  }
-}
 
 =========================================================================
-SequenceTest: referring via two match fields for DELETE
+SequenceTest: referring via match fields for DELETE
 =========================================================================
 
 --- PD updates (input):
@@ -1292,15 +1158,12 @@ table_entry {
   referring_by_match_field_table_entry {
     match {
       referring_id_1: "key-a"
-      referring_id_2 {
-        value: "0x001"
-      }
+      referring_id_2: "0x001"
     }
     action {
       do_thing_4 {
       }
     }
-    priority: 32
   }
 }
 
@@ -1312,15 +1175,12 @@ updates {
     referring_by_match_field_table_entry {
       match {
         referring_id_1: "key-a"
-        referring_id_2 {
-          value: "0x001"
-        }
+        referring_id_2: "0x001"
       }
       action {
         do_thing_4 {
         }
       }
-      priority: 32
     }
   }
 }
@@ -1627,18 +1487,19 @@ referring_to_referring_by_match_field_table_entry {
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-a"
+    referring_id_2: "0x001"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
   controller_metadata: "Child dependency"
 }
 
-one_match_field_table_entry {
+two_match_fields_table_entry {
   match {
-    id: "key-a"
+    id_1: "key-a"
+    id_2: "0x001"
   }
   action {
     do_thing_4 {
@@ -1648,16 +1509,7 @@ one_match_field_table_entry {
 }
 
 --- Unreachable entries from roots (output):
-one_match_field_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-  controller_metadata: "Grand child Dependency"
-}
+<empty>
 
 =========================================================================
 GetEntriesUnreachableFromRootsTest: Garbage referring to other is garbage.
@@ -1667,18 +1519,19 @@ GetEntriesUnreachableFromRootsTest: Garbage referring to other is garbage.
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-a"
+    referring_id_2: "0x001"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
   controller_metadata: "garbage"
 }
 
-one_match_field_table_entry {
+two_match_fields_table_entry {
   match {
-    id: "key-a"
+    id_1: "key-a"
+    id_2: "0x001"
   }
   action {
     do_thing_4 {
@@ -1691,18 +1544,19 @@ one_match_field_table_entry {
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-a"
+    referring_id_2: "0x001"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
   controller_metadata: "garbage"
 }
 
-one_match_field_table_entry {
+two_match_fields_table_entry {
   match {
-    id: "key-a"
+    id_1: "key-a"
+    id_2: "0x001"
   }
   action {
     do_thing_4 {
@@ -1730,24 +1584,25 @@ referring_to_referring_by_match_field_table_entry {
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-a"
+    referring_id_2: "0x001"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
   controller_metadata: "Child dependency"
 }
 
-one_match_field_table_entry {
+two_match_fields_table_entry {
   match {
-    id: "key-a"
+    id_1: "key-a"
+    id_2: "0x001"
   }
   action {
     do_thing_4 {
     }
   }
-  controller_metadata: "garbage"
+  controller_metadata: "Grandchild dependency referenced by garbage"
 }
 
 referring_by_action_table_entry {
@@ -1755,32 +1610,23 @@ referring_by_action_table_entry {
     val: "0x001"
   }
   action {
-    referring_to_one_match_field_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-a"
+      referring_id_2: "0x001"
     }
   }
   controller_metadata: "garbage"
 }
 
 --- Unreachable entries from roots (output):
-one_match_field_table_entry {
-  match {
-    id: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-  controller_metadata: "garbage"
-}
-
 referring_by_action_table_entry {
   match {
     val: "0x001"
   }
   action {
-    referring_to_one_match_field_action {
+    referring_to_two_match_fields_action {
       referring_id_1: "key-a"
+      referring_id_2: "0x001"
     }
   }
   controller_metadata: "garbage"
@@ -1805,15 +1651,12 @@ referring_to_referring_by_match_field_table_entry {
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-a"
-    referring_id_2 {
-      value: "0x002"
-    }
+    referring_id_2: "0x002"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
   controller_metadata: "Child dependency"
 }
 
@@ -1948,15 +1791,12 @@ GetEntriesUnreachableFromRootsTest: Reference via match fields: partially referr
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-a"
-    referring_id_2 {
-      value: "0x000"
-    }
+    referring_id_2: "0x000"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
   controller_metadata: "Root"
 }
 
@@ -2017,15 +1857,12 @@ GetEntriesUnreachableFromRootsTest: Reference via match fields: partially referr
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-a"
-    referring_id_2 {
-      value: "0x000"
-    }
+    referring_id_2: "0x000"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
   controller_metadata: "Root"
 }
 

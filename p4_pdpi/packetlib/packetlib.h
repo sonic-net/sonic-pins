@@ -15,6 +15,7 @@
 #define GOOGLE_P4_PDPI_PACKETLIB_PACKETLIB_H_
 
 #include <cstdint>
+#include <string>
 
 #include "absl/numeric/bits.h"
 #include "absl/status/statusor.h"
@@ -24,6 +25,8 @@
 #include "p4_pdpi/string_encodings/hex_string.h"
 
 namespace packetlib {
+
+constexpr uint32_t kIpfixUdpDestPort = 4739;  // 0x1283
 
 // Parses the given packet. Parsing is a total function, and any aspect that
 // cannot be parsed correctly will be put into `payload` of `Packet`.
@@ -192,7 +195,20 @@ std::string GreVersion(uint32_t version);
 std::string GreProtocolType(uint32_t protocol_type);
 std::string GreChecksum(uint32_t checksum);
 std::string GreReserved1(uint32_t reserved1);
-
+std::string IpfixVersion(uint32_t version);
+std::string IpfixLength(uint32_t length);
+std::string IpfixExportTime(uint32_t exported_time);
+std::string IpfixSequenceNumber(uint32_t sequence_number);
+std::string IpfixObservationDomainId(uint32_t observation_domain_id);
+std::string PsampTemplateId(uint32_t template_id);
+std::string PsampObservationTime(uint64_t observation_time);
+std::string PsampFlowset(uint32_t flowset);
+std::string PsampNextHopIndex(uint32_t next_hop_index);
+std::string PsampEpoch(uint32_t epoch);
+std::string PsampIngressPort(uint32_t ingress_port);
+std::string PsampEgressPort(uint32_t egress_port);
+std::string PsampUserMetaField(uint32_t user_meta_field);
+std::string PsampDlbId(uint32_t dlb_id);
 // -- END OF PUBLIC INTERFACE --------------------------------------------------
 
 template <int bit_limit>

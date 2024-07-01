@@ -706,103 +706,50 @@ int main(int argc, char** argv) {
                    )pb",
                });
 
-  SequenceTest(info, "referring via one match field for INSERT",
-               {
-                   R"pb(
-                     type: INSERT
-                     table_entry {
-                       referring_by_match_field_table_entry {
-                         match { referring_id_1: "key-a" }
-                         action { do_thing_4 {} }
-                         priority: 32
-                       }
-                     }
-                   )pb",
-                   R"pb(
-                     type: INSERT
-                     table_entry {
-                       one_match_field_table_entry {
-                         match { id: "key-a" }
-                         action { do_thing_4 {} }
-                       }
-                     }
-                   )pb",
-               });
-
-  SequenceTest(info, "referring via two match fields for INSERT",
-               {
-                   R"pb(
-                     type: INSERT
-                     table_entry {
-                       referring_by_match_field_table_entry {
-                         match {
-                           referring_id_1: "key-a"
-                           referring_id_2 { value: "0x001" }
-                         }
-                         action { do_thing_4 {} }
-                         priority: 32
-                       }
-                     }
-                   )pb",
-                   R"pb(
-                     type: INSERT
-                     table_entry {
-                       two_match_fields_table_entry {
-                         match { id_1: "key-a", id_2: "0x001" }
-                         action { do_thing_4 {} }
-                       }
-                     }
-                   )pb",
-               });
-
-  SequenceTest(info, "referring via one match field for DELETE",
-               {
-                   R"pb(
-                     type: DELETE
-                     table_entry {
-                       one_match_field_table_entry {
-                         match { id: "key-a" }
-                         action { do_thing_4 {} }
-                       }
-                     }
-                   )pb",
-                   R"pb(
-                     type: DELETE
-                     table_entry {
-                       referring_by_match_field_table_entry {
-                         match { referring_id_1: "key-a" }
-                         action { do_thing_4 {} }
-                         priority: 32
-                       }
-                     }
-                   )pb",
-               });
-
-  SequenceTest(info, "referring via two match fields for DELETE",
-               {
-                   R"pb(
-                     type: DELETE
-                     table_entry {
-                       two_match_fields_table_entry {
-                         match { id_1: "key-a", id_2: "0x001" }
-                         action { do_thing_4 {} }
-                       }
-                     }
-                   )pb",
-                   R"pb(
-                     type: DELETE
-                     table_entry {
-                       referring_by_match_field_table_entry {
-                         match {
-                           referring_id_1: "key-a",
-                           referring_id_2 { value: "0x001" }
-                         }
-                         action { do_thing_4 {} }
-                         priority: 32
-                       }
-                     }
-                   )pb",
-               });
+  SequenceTest(
+      info, "referring via match fields for INSERT",
+      {
+          R"pb(
+            type: INSERT
+            table_entry {
+              referring_by_match_field_table_entry {
+                match { referring_id_1: "key-a" referring_id_2: "0x001" }
+                action { do_thing_4 {} }
+              }
+            }
+          )pb",
+          R"pb(
+            type: INSERT
+            table_entry {
+              two_match_fields_table_entry {
+                match { id_1: "key-a", id_2: "0x001" }
+                action { do_thing_4 {} }
+              }
+            }
+          )pb",
+      });
+  SequenceTest(
+      info, "referring via match fields for DELETE",
+      {
+          R"pb(
+            type: DELETE
+            table_entry {
+              two_match_fields_table_entry {
+                match { id_1: "key-a", id_2: "0x001" }
+                action { do_thing_4 {} }
+              }
+            }
+          )pb",
+          R"pb(
+            type: DELETE
+            table_entry {
+              referring_by_match_field_table_entry {
+                match { referring_id_1: "key-a" referring_id_2: "0x001" }
+                action { do_thing_4 {} }
+              }
+            }
+          )pb",
+      });
 
   GetEntriesUnreachableFromRootsTest(info, "Empty input generates no garbage.",
                                      {});
@@ -1040,14 +987,13 @@ int main(int argc, char** argv) {
           )pb",
           R"pb(
             referring_by_match_field_table_entry {
-              match { referring_id_1: "key-a" }
+              match { referring_id_1: "key-a" referring_id_2: "0x001" }
               action { do_thing_4 {} }
               controller_metadata: "Child dependency"
-              priority: 32
             })pb",
           R"pb(
-            one_match_field_table_entry {
-              match { id: "key-a" }
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x001" }
               action { do_thing_4 {} }
               controller_metadata: "Grand child Dependency"
             }
@@ -1061,15 +1007,14 @@ int main(int argc, char** argv) {
       {
           R"pb(
             referring_by_match_field_table_entry {
-              match { referring_id_1: "key-a" }
+              match { referring_id_1: "key-a" referring_id_2: "0x001" }
               action { do_thing_4 {} }
               controller_metadata: "garbage"
-              priority: 32
             }
           )pb",
           R"pb(
-            one_match_field_table_entry {
-              match { id: "key-a" }
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x001" }
               action { do_thing_4 {} }
               controller_metadata: "garbage"
             }
@@ -1095,23 +1040,25 @@ int main(int argc, char** argv) {
           )pb",
           R"pb(
             referring_by_match_field_table_entry {
-              match { referring_id_1: "key-a" }
+              match { referring_id_1: "key-a" referring_id_2: "0x001" }
               action { do_thing_4 {} }
               controller_metadata: "Child dependency"
-              priority: 32
             })pb",
           R"pb(
-            one_match_field_table_entry {
-              match { id: "key-a" }
+            two_match_fields_table_entry {
+              match { id_1: "key-a", id_2: "0x001" }
               action { do_thing_4 {} }
-              controller_metadata: "garbage"
+              controller_metadata: "Grandchild dependency referenced by garbage"
             }
           )pb",
           R"pb(
             referring_by_action_table_entry {
               match { val: "0x001" }
               action {
-                referring_to_one_match_field_action { referring_id_1: "key-a" }
+                referring_to_two_match_fields_action {
+                  referring_id_1: "key-a"
+                  referring_id_2: "0x001"
+                }
               }
               controller_metadata: "garbage"
             }
@@ -1136,13 +1083,9 @@ int main(int argc, char** argv) {
           )pb",
           R"pb(
             referring_by_match_field_table_entry {
-              match {
-                referring_id_1: "key-a"
-                referring_id_2 { value: "0x002" }
-              }
+              match { referring_id_1: "key-a" referring_id_2: "0x002" }
               action { do_thing_4 {} }
               controller_metadata: "Child dependency"
-              priority: 32
             })pb",
           R"pb(
             two_match_fields_table_entry {
@@ -1227,12 +1170,8 @@ int main(int argc, char** argv) {
       {
           R"pb(
             referring_by_match_field_table_entry {
-              match {
-                referring_id_1: "key-a"
-                referring_id_2 { value: "0x000" }
-              }
+              match { referring_id_1: "key-a" referring_id_2: "0x000" }
               action { do_thing_4 {} }
-              priority: 32
               controller_metadata: "Root"
             }
           )pb",
@@ -1258,12 +1197,8 @@ int main(int argc, char** argv) {
       {
           R"pb(
             referring_by_match_field_table_entry {
-              match {
-                referring_id_1: "key-a"
-                referring_id_2 { value: "0x000" }
-              }
+              match { referring_id_1: "key-a" referring_id_2: "0x000" }
               action { do_thing_4 {} }
-              priority: 32
               controller_metadata: "Root"
             }
           )pb",

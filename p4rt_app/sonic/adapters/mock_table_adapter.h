@@ -20,6 +20,7 @@
 
 #include "gmock/gmock.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "swss/table.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -38,6 +39,10 @@ class MockTableAdapter : public TableAdapter {
       (const std::string& key,
        (const std::vector<std::pair<std::string, std::string>>& values)),
       (override));
+
+  MOCK_METHOD(void, batch_set,
+              (const std::vector<swss::KeyOpFieldsValuesTuple>& values),
+              (override));
 
   MOCK_METHOD(void, del, (const std::string& key), (override));
 

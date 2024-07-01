@@ -30,26 +30,6 @@ ReferenceRelationKey{referred_table_id: 46253494}, ReferenceRelation{match_field
 ReferenceRelationKey{referred_table_id: 49592401}, ReferenceRelation{match_field_ids: [1]}
 
 =========================================================================
-EntriesReferredToByTableEntryTest: Referring to using an entry with 1 match field
-=========================================================================
--- INPUT -----------------------------------------------------------------------
--- PD table entry --
-referring_by_match_field_table_entry {
-  match {
-    referring_id_1: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-  priority: 32
-}
-
--- OUTPUT ----------------------------------------------------------------------
--- ReferredTableEntries --
-ReferredTableEntry{table_id: 34805412, match_fields and values: [ReferredField{match_field_id: 1,field_value: key-a}]}
-
-=========================================================================
 EntriesReferredToByTableEntryTest: Referring to an entry with 2 match fields
 =========================================================================
 -- INPUT -----------------------------------------------------------------------
@@ -57,15 +37,12 @@ EntriesReferredToByTableEntryTest: Referring to an entry with 2 match fields
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-x"
-    referring_id_2 {
-      value: "0x034"
-    }
+    referring_id_2: "0x034"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
 }
 
 -- OUTPUT ----------------------------------------------------------------------

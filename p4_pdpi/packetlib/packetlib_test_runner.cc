@@ -943,6 +943,98 @@ void RunPacketParseTests() {
                        # Payload.
                        payload: "IPv4-in-IPv4 packet payload"
                      )pb");
+  RunPacketParseTest(
+      "PSAMP packet (valid)",
+      R"pb(
+        # Ethernet header.
+        ethernet_destination: 0xffeeddccbbaa
+        ethernet_source: 0x554433221100
+        ether_type: 0x86DD
+        # IPv6 header.
+        version: 0x6
+        dscp: 0b000000
+        ecn: 0b00
+        flow_label: 0x12345
+        payload_length: 0x0046
+        next_header: 0x11  # UDP
+        hop_limit: 0x42
+        ipv6_source: 0x00001111222233334444555566667777
+        ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+        # UDP Header
+        source_port: 0x08ae       # 2222
+        destination_port: 0x1283  # 4739
+        length: 0x0046            # 70
+        checksum: 0x0000          # Always zero for PSAMP
+        # IPFIX Header
+        version: 0x000A
+        length: 0x003e
+        export_time: 0x 64 c1 8c 23  # 1690405923 - 2023-07-26 5:12:03PM EST
+        sequence_number: 0x00000001
+        observation_domain_id: 0x00000001
+        # PSAMP Header
+        template_id: 0x0000
+        length: 0x002e
+        observation_time: 0x 17 75 87 3B 16 A1 9E 00  # 1690405923000000000
+        flowset: 0x04D2                               # 1234
+        next_hop_index: 0x0000
+        epoch: 0xabcd
+        ingress_port: 0x000d
+        egress_port: 0x000f
+        user_meta_field: 0x0000
+        dlb_id: 0x00
+        variable_length: 0xff
+        packet_sampled_length: 0x0012
+        # Payload - 18 octets
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22
+      )pb");
+  RunPacketParseTest(
+      "PSAMP packet (valid except for computed fields)",
+      R"pb(
+        # Ethernet header.
+        ethernet_destination: 0xffeeddccbbaa
+        ethernet_source: 0x554433221100
+        ether_type: 0x86DD
+        # IPv6 header.
+        version: 0x6
+        dscp: 0b000000
+        ecn: 0b00
+        flow_label: 0x12345
+        payload_length: 0x0000
+        next_header: 0x11  # UDP
+        hop_limit: 0x42
+        ipv6_source: 0x00001111222233334444555566667777
+        ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+        # UDP Header
+        source_port: 0x08ae       # 2222
+        destination_port: 0x1283  # 4739
+        length: 0x0000
+        checksum: 0x0012  # Always zero for PSAMP
+        # IPFIX Header
+        version: 0x000A
+        length: 0x0000
+        export_time: 0x 64 c1 8c 23  # 1690405923 - 2023-07-26 5:12:03PM EST
+        sequence_number: 0x00000001
+        observation_domain_id: 0x00000001
+        # PSAMP Header
+        template_id: 0x0000
+        length: 0x0000
+        observation_time: 0x 17 75 87 3B 16 A1 9E 00  # 1690405923000000000
+        flowset: 0x04D2                               # 1234
+        next_hop_index: 0x0000
+        epoch: 0xabcd
+        ingress_port: 0x000d
+        egress_port: 0x000f
+        user_meta_field: 0x0000
+        dlb_id: 0x00
+        variable_length: 0xff
+        packet_sampled_length: 0x0013
+        # Payload - 18 octets
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22
+      )pb");
 }  // NOLINT(readability/fn_size)
 
 void RunProtoPacketTests() {
@@ -1551,6 +1643,181 @@ void RunProtoPacketTests() {
             }
           )pb"),
       /*first_header=*/Header::kSaiP4Bmv2PacketInHeader);
+  RunProtoPacketTest(
+      "PSAMP packet header (valid)", gutil::ParseProtoOrDie<Packet>(R"pb(
+        headers {
+          ethernet_header {
+            ethernet_destination: "ff:ee:dd:cc:bb:aa"
+            ethernet_source: "55:44:33:22:11:00"
+            ethertype: "0x86dd"
+          }
+        }
+        headers {
+          ipv6_header {
+            version: "0x6"
+            dscp: "0x00"
+            ecn: "0x0"
+            flow_label: "0x12345"
+            payload_length: "0x0046"
+            next_header: "0x11"  # UDP
+            hop_limit: "0x42"
+            ipv6_source: "2607:f8b0:c150:10::"
+            ipv6_destination: "2002:a05:6860:749::"
+          }
+        }
+        headers {
+          udp_header {
+            source_port: "0x08ae"       # 2222
+            destination_port: "0x1283"  # 4739
+            length: "0x0046"            # 70
+            checksum: "0x0000"
+          }
+        }
+        headers {
+          ipfix_header {
+            version: "0x000a"
+            length: "0x003e"
+            export_time: "0x64c18c23"  # 1690405923 - 2023-07-26 5:12:03PM EST
+            sequence_number: "0x00000001"
+            observation_domain_id: "0x00000001"
+          }
+        }
+        headers {
+          psamp_header {
+            template_id: "0x0000"
+            length: "0x002e"
+            observation_time: "0x1775873b16a19e00"  # 1690405923000000000
+            flowset: "0x04d2"                       # 1234
+            next_hop_index: "0x0000"
+            epoch: "0xabcd"
+            ingress_port: "0x000d"
+            egress_port: "0x000f"
+            user_meta_field: "0x0000"
+            dlb_id: "0x00"
+            variable_length: "0xff"
+            packet_sampled_length: "0x0012"
+          }
+        }
+        payload: "AAAAAAAAAAAAAAAAAA"  # 18 octets
+      )pb"));
+  // UpdateMissingComputedFields should not update anything here - all fields
+  // are in place but not correct.
+  RunProtoPacketTest(
+      "PSAMP packet header (length of IPFIX & PSAMP is invalid)",
+      gutil::ParseProtoOrDie<Packet>(R"pb(
+        headers {
+          ethernet_header {
+            ethernet_destination: "ff:ee:dd:cc:bb:aa"
+            ethernet_source: "55:44:33:22:11:00"
+            ethertype: "0x86dd"
+          }
+        }
+        headers {
+          ipv6_header {
+            version: "0x6"
+            dscp: "0x00"
+            ecn: "0x0"
+            flow_label: "0x12345"
+            payload_length: "0x0046"
+            next_header: "0x11"  # UDP
+            hop_limit: "0x42"
+            ipv6_source: "2607:f8b0:c150:10::"
+            ipv6_destination: "2002:a05:6860:749::"
+          }
+        }
+        headers {
+          udp_header {
+            source_port: "0x08ae"       # 2222
+            destination_port: "0x1283"  # 4739
+            length: "0x0046"            # 70
+            checksum: "0x0000"
+          }
+        }
+        headers {
+          ipfix_header {
+            version: "0x000a"
+            length: "0x0000"
+            export_time: "0x64c18c23"  # 1690405923 - 2023-07-26 5:12:03PM EST
+            sequence_number: "0x00000001"
+            observation_domain_id: "0x00000001"
+          }
+        }
+        headers {
+          psamp_header {
+            template_id: "0x0000"
+            length: "0x0000"
+            observation_time: "0x1775873b16a19e00"  # 1690405923000000000
+            flowset: "0x04d2"                       # 1234
+            next_hop_index: "0x0000"
+            epoch: "0xabcd"
+            ingress_port: "0x000d"
+            egress_port: "0x000f"
+            user_meta_field: "0x0000"
+            dlb_id: "0x00"
+            variable_length: "0xff"
+            packet_sampled_length: "0x0001"
+          }
+        }
+        payload: "AAAAAAAAAAAAAAAAAA"  # 18 octets
+      )pb"));
+  RunProtoPacketTest(
+      "PSAMP packet header (UDP checksum invalid)",
+      gutil::ParseProtoOrDie<Packet>(R"pb(
+        headers {
+          ethernet_header {
+            ethernet_destination: "ff:ee:dd:cc:bb:aa"
+            ethernet_source: "55:44:33:22:11:00"
+            ethertype: "0x86dd"
+          }
+        }
+        headers {
+          ipv6_header {
+            version: "0x6"
+            dscp: "0x00"
+            ecn: "0x0"
+            flow_label: "0x12345"
+            payload_length: "0x0046"
+            next_header: "0x11"  # UDP
+            hop_limit: "0x42"
+            ipv6_source: "2607:f8b0:c150:10::"
+            ipv6_destination: "2002:a05:6860:749::"
+          }
+        }
+        headers {
+          udp_header {
+            source_port: "0x08ae"       # 2222
+            destination_port: "0x1283"  # 4739
+            length: "0x0046"            # 70
+            checksum: "0x0011"
+          }
+        }
+        headers {
+          ipfix_header {
+            version: "0x000a"
+            length: "0x003e"
+            export_time: "0x64c18c23"  # 1690405923 - 2023-07-26 5:12:03PM EST
+            sequence_number: "0x00000001"
+            observation_domain_id: "0x00000001"
+          }
+        }
+        headers {
+          psamp_header {
+            template_id: "0x0000"
+            length: "0x002e"
+            observation_time: "0x1775873b16a19e00"  # 1690405923000000000
+            flowset: "0x04d2"                       # 1234
+            next_hop_index: "0x0000"
+            epoch: "0xabcd"
+            ingress_port: "0x000d"
+            egress_port: "0x000f"
+            user_meta_field: "0x0000"
+            dlb_id: "0x00"
+            variable_length: "0xff"
+            packet_sampled_length: "0x0012"
+          }
+        }
+        payload: "AAAAAAAAAAAAAAAAAA"  # 18 octets
+      )pb"));
 }  // NOLINT(readability/fn_size)
 
 void main() {

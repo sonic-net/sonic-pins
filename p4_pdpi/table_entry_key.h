@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_GUTIL_TABLE_ENTRY_KEY_H_
-#define PINS_GUTIL_TABLE_ENTRY_KEY_H_
+#ifndef PINS_P4_PDPI_TABLE_ENTRY_KEY_H_
+#define PINS_P4_PDPI_TABLE_ENTRY_KEY_H_
 
 #include <algorithm>
 #include <string>
@@ -22,7 +22,7 @@
 #include "absl/hash/hash.h"
 #include "p4/v1/p4runtime.pb.h"
 
-namespace gutil {
+namespace pdpi {
 
 class TableEntryKey {
  public:
@@ -64,6 +64,6 @@ H AbslHashValue(H h, const TableEntryKey& key) {
   return h;
 }
 
-}  // namespace gutil
+}  // namespace pdpi
 
-#endif  // PINS_GUTIL_TABLE_ENTRY_KEY_H_
+#endif  // PINS_P4_PDPI_TABLE_ENTRY_KEY_H_
