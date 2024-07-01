@@ -20,8 +20,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/table_entry_key.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 
 namespace p4rt_app {
