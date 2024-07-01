@@ -8,11 +8,21 @@
 #include "roles.h"
 #include "minimum_guaranteed_sizes.p4"
 
+#if defined(SAI_INSTANTIATION_TOR)
+#define ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE \
+  ACL_TOR_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE
+#else
+#define ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE \
+  ACL_DEFAULT_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE
+#endif
+
 control acl_pre_ingress(in headers_t headers,
                    inout local_metadata_t local_metadata,
                    in standard_metadata_t standard_metadata) {
   // First 6 bits of IPv4 TOS or IPv6 traffic class (or 0, for non-IP packets)
   bit<6> dscp = 0;
+  // Last 2 bits of IPv4 TOS or IPv6 traffic class (or 0, for non-IP packets)
+  bit<2> ecn = 0;
 
   // IPv4 IP protocol or IPv6 next_header (or 0, for non-IP packets)
   bit<8> ip_protocol = 0;
@@ -62,6 +72,7 @@ control acl_pre_ingress(in headers_t headers,
   @entry_restriction("
     // Only allow IP field matches for IP packets.
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     dst_ip::mask != 0 -> is_ipv4 == 1;
     dst_ipv6::mask != 0 -> is_ipv6 == 1;
     // Forbid illegal combinations of IP_TYPE fields.
@@ -85,10 +96,8 @@ control acl_pre_ingress(in headers_t headers,
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
       headers.ethernet.src_addr : ternary @name("src_mac") @id(4)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
-#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
       headers.ethernet.dst_addr : ternary @name("dst_mac") @id(9)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
-#endif
       headers.ipv4.dst_addr : ternary @name("dst_ip") @id(5)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP) @format(IPV4_ADDRESS);
       headers.ipv6.dst_addr[127:64] : ternary @name("dst_ipv6") @id(6)
@@ -98,6 +107,8 @@ control acl_pre_ingress(in headers_t headers,
           ) @format(IPV6_ADDRESS);
       dscp : ternary @name("dscp") @id(7)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP);
+      ecn : ternary @name("ecn") @id(10)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
       local_metadata.ingress_port : optional @name("in_port") @id(8)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
     }
@@ -113,11 +124,26 @@ control acl_pre_ingress(in headers_t headers,
   @id(ACL_PRE_INGRESS_VLAN_TABLE_ID)
   @sai_acl(PRE_INGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @entry_restriction("
+    // Forbid illegal combinations of IP_TYPE fields.
+    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+    // Forbid unsupported combinations of IP_TYPE fields.
+    is_ipv4::mask != 0 -> (is_ipv4 == 1);
+    is_ipv6::mask != 0 -> (is_ipv6 == 1);
+  ")
   table acl_pre_ingress_vlan_table {
     key = {
-      headers.ethernet.ether_type : ternary
-         @id(1) @name("ether_type")
-         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
+      headers.ipv4.isValid() || headers.ipv6.isValid() : optional
+          @id(1) @name("is_ip")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP);
+      headers.ipv4.isValid() : optional
+          @id(2) @name("is_ipv4")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV4ANY);
+      headers.ipv6.isValid() : optional
+          @id(3) @name("is_ipv6")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
     }
     actions = {
       @proto_id(1) set_outer_vlan_id;
@@ -172,19 +198,19 @@ control acl_pre_ingress(in headers_t headers,
   apply {
     if (headers.ipv4.isValid()) {
       dscp = headers.ipv4.dscp;
+      ecn = headers.ipv4.ecn;
       ip_protocol = headers.ipv4.protocol;
     } else if (headers.ipv6.isValid()) {
       dscp = headers.ipv6.dscp;
+      ecn = headers.ipv6.ecn;
       ip_protocol = headers.ipv6.next_header;
     }
-
-    local_metadata.vrf_id = kDefaultVrf;
 
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_pre_ingress_table.apply();
 #elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     acl_pre_ingress_table.apply();
-#elif defined(SAI_INSTANTIATION_TOR)
+#elif defined(SAI_INSTANTIATION_TOR) 
     acl_pre_ingress_vlan_table.apply();
     acl_pre_ingress_metadata_table.apply();
     acl_pre_ingress_table.apply();
