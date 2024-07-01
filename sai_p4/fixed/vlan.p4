@@ -7,7 +7,7 @@
 #include "common_actions.p4"
 #include "headers.p4"
 #include "metadata.p4"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 
 
 control vlan_untag(inout headers_t headers,

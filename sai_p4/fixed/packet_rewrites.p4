@@ -4,7 +4,7 @@
 #include <v1model.p4>
 #include "headers.p4"
 #include "metadata.p4"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 #include "bmv2_intrinsics.h"
 #include "ids.h"
 
