@@ -16,13 +16,13 @@
 #include "../../fixed/mirroring_encap.p4"
 #include "../../fixed/mirroring_clone.p4"
 #include "../../fixed/l3_admit.p4"
-#include "../../fixed/ttl.p4"
+#include "../../fixed/vlan.p4"
+#include "../../fixed/drop_martians.p4"
 #include "../../fixed/packet_rewrites.p4"
 #include "acl_egress.p4"
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
 #include "admit_google_system_mac.p4"
-//#include "hashing.p4"
 #include "ids.h"
 #include "versions.h"
 
@@ -30,13 +30,17 @@ control ingress(inout headers_t headers,
                 inout local_metadata_t local_metadata,
                 inout standard_metadata_t standard_metadata) {
   apply {
-    acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
-    admit_google_system_mac.apply(headers, local_metadata);
-    l3_admit.apply(headers, local_metadata, standard_metadata);
-    routing.apply(headers, local_metadata, standard_metadata);
-    acl_ingress.apply(headers, local_metadata, standard_metadata);
-    ttl.apply(headers, local_metadata, standard_metadata);
-    mirroring_clone.apply(headers, local_metadata, standard_metadata);
+    packet_out_decap.apply(headers, local_metadata, standard_metadata);
+    if (!local_metadata.bypass_ingress) {
+      vlan_untag.apply(headers, local_metadata, standard_metadata);
+      acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
+      admit_google_system_mac.apply(headers, local_metadata);
+      l3_admit.apply(headers, local_metadata, standard_metadata);
+      routing.apply(headers, local_metadata, standard_metadata);
+      drop_martians.apply(headers, local_metadata, standard_metadata);
+      acl_ingress.apply(headers, local_metadata, standard_metadata);
+      mirroring_clone.apply(headers, local_metadata, standard_metadata);
+    }
   }
 }  // control ingress
 
