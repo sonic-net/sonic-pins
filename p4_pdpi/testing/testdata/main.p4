@@ -301,7 +301,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
       key = {
           meta.str : exact @id(1) @name("referring_id_1")
           @refers_to(two_match_fields_table, id_1);
-          meta.normal : optional @id(2) @name("referring_id_2")
+          meta.normal : exact @id(2) @name("referring_id_2")
           @refers_to(two_match_fields_table, id_2);
       }
       actions = {
@@ -459,8 +459,7 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
             meta.ipv4 : lpm @id(3) @format(IPV4_ADDRESS) @name("ipv4");
             meta.ipv6 : ternary @id(4) @format(IPV6_ADDRESS) @name("ipv6");
             meta.mac : ternary @id(5) @format(MAC_ADDRESS) @name("mac");
-            meta.str : optional @id(6) @name("referring_str")
-            @refers_to(one_match_field_table, id);
+            meta.str : optional @id(6) @name("referring_str");
             meta.str2 : optional @id(7) @name("nonreferring_str");
         }
         actions = {

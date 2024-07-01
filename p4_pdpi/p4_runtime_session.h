@@ -309,6 +309,11 @@ std::vector<p4::v1::Update> CreatePiUpdates(
     absl::Span<const p4::v1::TableEntry> pi_entries,
     p4::v1::Update_Type update_type);
 
+// Creates PI updates from PI entities.
+std::vector<p4::v1::Update> CreatePiUpdates(
+    absl::Span<const p4::v1::Entity> pi_entities,
+    p4::v1::Update_Type update_type);
+
 // Sets the request's metadata (i.e. device id, role). And sends a PI
 // (program independent) read request.
 absl::StatusOr<p4::v1::ReadResponse> SetMetadataAndSendPiReadRequest(
@@ -356,6 +361,10 @@ absl::Status InstallPiTableEntries(
 // Installs the given PI (program independent) entity on the switch.
 absl::Status InstallPiEntity(P4RuntimeSession* session,
                              p4::v1::Entity pi_entity);
+
+// Installs the given PI (program independent) entity on the switch.
+absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
+                               absl::Span<const p4::v1::Entity> pi_entities);
 
 // Sends the given PI updates to the switch.
 absl::Status SendPiUpdates(P4RuntimeSession* session,

@@ -1682,6 +1682,219 @@ headers {
 payload: "IPv4-in-IPv4 packet payload"
 
 ================================================================================
+Parsing test: PSAMP packet (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+        ethernet_destination: 0xffeeddccbbaa
+        ethernet_source: 0x554433221100
+        ether_type: 0x86DD
+        # IPv6 header.
+        version: 0x6
+        dscp: 0b000000
+        ecn: 0b00
+        flow_label: 0x12345
+        payload_length: 0x0046
+        next_header: 0x11  # UDP
+        hop_limit: 0x42
+        ipv6_source: 0x00001111222233334444555566667777
+        ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+        # UDP Header
+        source_port: 0x08ae       # 2222
+        destination_port: 0x1283  # 4739
+        length: 0x0046            # 70
+        checksum: 0x0000          # Always zero for PSAMP
+        # IPFIX Header
+        version: 0x000A
+        length: 0x003e
+        export_time: 0x 64 c1 8c 23  # 1690405923 - 2023-07-26 5:12:03PM EST
+        sequence_number: 0x00000001
+        observation_domain_id: 0x00000001
+        # PSAMP Header
+        template_id: 0x0000
+        length: 0x002e
+        observation_time: 0x 17 75 87 3B 16 A1 9E 00  # 1690405923000000000
+        flowset: 0x04D2                               # 1234
+        next_hop_index: 0x0000
+        epoch: 0xabcd
+        ingress_port: 0x000d
+        egress_port: 0x000f
+        user_meta_field: 0x0000
+        dlb_id: 0x00
+        variable_length: 0xff
+        packet_sampled_length: 0x0012
+        # Payload - 18 octets
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0046"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x08ae"
+    destination_port: "0x1283"
+    length: "0x0046"
+    checksum: "0x0000"
+  }
+}
+headers {
+  ipfix_header {
+    version: "0x000a"
+    length: "0x003e"
+    export_time: "0x64c18c23"
+    sequence_number: "0x00000001"
+    observation_domain_id: "0x00000001"
+  }
+}
+headers {
+  psamp_header {
+    template_id: "0x0000"
+    length: "0x002e"
+    observation_time: "0x1775873b16a19e00"
+    flowset: "0x04d2"
+    next_hop_index: "0x0000"
+    epoch: "0xabcd"
+    ingress_port: "0x000d"
+    egress_port: "0x000f"
+    user_meta_field: "0x0000"
+    dlb_id: "0x00"
+    variable_length: "0xff"
+    packet_sampled_length: "0x0012"
+  }
+}
+payload: "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+
+================================================================================
+Parsing test: PSAMP packet (valid except for computed fields)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+# Ethernet header.
+        ethernet_destination: 0xffeeddccbbaa
+        ethernet_source: 0x554433221100
+        ether_type: 0x86DD
+        # IPv6 header.
+        version: 0x6
+        dscp: 0b000000
+        ecn: 0b00
+        flow_label: 0x12345
+        payload_length: 0x0000
+        next_header: 0x11  # UDP
+        hop_limit: 0x42
+        ipv6_source: 0x00001111222233334444555566667777
+        ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+        # UDP Header
+        source_port: 0x08ae       # 2222
+        destination_port: 0x1283  # 4739
+        length: 0x0000
+        checksum: 0x0012  # Always zero for PSAMP
+        # IPFIX Header
+        version: 0x000A
+        length: 0x0000
+        export_time: 0x 64 c1 8c 23  # 1690405923 - 2023-07-26 5:12:03PM EST
+        sequence_number: 0x00000001
+        observation_domain_id: 0x00000001
+        # PSAMP Header
+        template_id: 0x0000
+        length: 0x0000
+        observation_time: 0x 17 75 87 3B 16 A1 9E 00  # 1690405923000000000
+        flowset: 0x04D2                               # 1234
+        next_hop_index: 0x0000
+        epoch: 0xabcd
+        ingress_port: 0x000d
+        egress_port: 0x000f
+        user_meta_field: 0x0000
+        dlb_id: 0x00
+        variable_length: 0xff
+        packet_sampled_length: 0x0013
+        # Payload - 18 octets
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22 22 22 22 22 22 22
+        payload: 0x 22 22
+-- OUTPUT ----------------------------------------------------------------------
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0000"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "0:1111:2222:3333:4444:5555:6666:7777"
+    ipv6_destination: "8888:9999:aaaa:bbbb:cccc:dddd:eeee:ffff"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x08ae"
+    destination_port: "0x1283"
+    length: "0x0000"
+    checksum: "0x0012"
+  }
+}
+headers {
+  ipfix_header {
+    version: "0x000a"
+    length: "0x0000"
+    export_time: "0x64c18c23"
+    sequence_number: "0x00000001"
+    observation_domain_id: "0x00000001"
+  }
+}
+headers {
+  psamp_header {
+    template_id: "0x0000"
+    length: "0x0000"
+    observation_time: "0x1775873b16a19e00"
+    flowset: "0x04d2"
+    next_hop_index: "0x0000"
+    epoch: "0xabcd"
+    ingress_port: "0x000d"
+    egress_port: "0x000f"
+    user_meta_field: "0x0000"
+    dlb_id: "0x00"
+    variable_length: "0xff"
+    packet_sampled_length: "0x0013"
+  }
+}
+payload: "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+reasons_invalid: "in Ipv6Header headers[1]: payload_length: Must be 0x0046, but was 0x0000 instead."
+reasons_invalid: "in UdpHeader headers[2]: length: Must be 0x0046, but was 0x0000 instead."
+reasons_invalid: "in UdpHeader headers[2]: checksum: Must be 0, but was 0x0012 instead."
+reasons_invalid: "in IpfixHeader headers[3]: length: Must be 0x003e, but was 0x0000 instead."
+reasons_invalid: "in PsampHeader headers[4]: length: Must be 0x002e, but was 0x0000 instead."
+reasons_invalid: "in PsampHeader headers[4]: packet_sampled_length: Must be 0x0012, but was 0x0013 instead."
+
+PadPacketToMinimumSize(packet) = false
+UpdateAllComputedFields(packet) = true
+ValidatePacket(packet) = OK
+================================================================================
 Proto packet test: UDP header not preceded by other header
 ================================================================================
 -- INPUT -----------------------------------------------------------------------
@@ -3086,3 +3299,214 @@ ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reas
 
 Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
 - in SaiP4BMv2PacketInHeader headers[0]: target_egress_port: invalid format: hex string '0xf00' has bit #10 set to 1; conversion to 9 bits would lose information
+
+================================================================================
+Proto packet test: PSAMP packet header (valid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0046"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "2607:f8b0:c150:10::"
+    ipv6_destination: "2002:a05:6860:749::"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x08ae"
+    destination_port: "0x1283"
+    length: "0x0046"
+    checksum: "0x0000"
+  }
+}
+headers {
+  ipfix_header {
+    version: "0x000a"
+    length: "0x003e"
+    export_time: "0x64c18c23"
+    sequence_number: "0x00000001"
+    observation_domain_id: "0x00000001"
+  }
+}
+headers {
+  psamp_header {
+    template_id: "0x0000"
+    length: "0x002e"
+    observation_time: "0x1775873b16a19e00"
+    flowset: "0x04d2"
+    next_hop_index: "0x0000"
+    epoch: "0xabcd"
+    ingress_port: "0x000d"
+    egress_port: "0x000f"
+    user_meta_field: "0x0000"
+    dlb_id: "0x00"
+    variable_length: "0xff"
+    packet_sampled_length: "0x0012"
+  }
+}
+payload: "AAAAAAAAAAAAAAAAAA"
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = OK
+
+Serialize(Packet) = OK
+
+================================================================================
+Proto packet test: PSAMP packet header (length of IPFIX & PSAMP is invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0046"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "2607:f8b0:c150:10::"
+    ipv6_destination: "2002:a05:6860:749::"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x08ae"
+    destination_port: "0x1283"
+    length: "0x0046"
+    checksum: "0x0000"
+  }
+}
+headers {
+  ipfix_header {
+    version: "0x000a"
+    length: "0x0000"
+    export_time: "0x64c18c23"
+    sequence_number: "0x00000001"
+    observation_domain_id: "0x00000001"
+  }
+}
+headers {
+  psamp_header {
+    template_id: "0x0000"
+    length: "0x0000"
+    observation_time: "0x1775873b16a19e00"
+    flowset: "0x04d2"
+    next_hop_index: "0x0000"
+    epoch: "0xabcd"
+    ingress_port: "0x000d"
+    egress_port: "0x000f"
+    user_meta_field: "0x0000"
+    dlb_id: "0x00"
+    variable_length: "0xff"
+    packet_sampled_length: "0x0001"
+  }
+}
+payload: "AAAAAAAAAAAAAAAAAA"
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in IpfixHeader headers[3]: length: Must be 0x003e, but was 0x0000 instead.
+- in PsampHeader headers[4]: length: Must be 0x002e, but was 0x0000 instead.
+- in PsampHeader headers[4]: packet_sampled_length: Must be 0x0012, but was 0x0001 instead.
+
+PadPacketToMinimumSize(packet) = false
+
+UpdateMissingComputedFields(packet) = false
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in IpfixHeader headers[3]: length: Must be 0x003e, but was 0x0000 instead.
+- in PsampHeader headers[4]: length: Must be 0x002e, but was 0x0000 instead.
+- in PsampHeader headers[4]: packet_sampled_length: Must be 0x0012, but was 0x0001 instead.
+
+================================================================================
+Proto packet test: PSAMP packet header (UDP checksum invalid)
+================================================================================
+-- INPUT -----------------------------------------------------------------------
+packet =
+headers {
+  ethernet_header {
+    ethernet_destination: "ff:ee:dd:cc:bb:aa"
+    ethernet_source: "55:44:33:22:11:00"
+    ethertype: "0x86dd"
+  }
+}
+headers {
+  ipv6_header {
+    version: "0x6"
+    dscp: "0x00"
+    ecn: "0x0"
+    flow_label: "0x12345"
+    payload_length: "0x0046"
+    next_header: "0x11"
+    hop_limit: "0x42"
+    ipv6_source: "2607:f8b0:c150:10::"
+    ipv6_destination: "2002:a05:6860:749::"
+  }
+}
+headers {
+  udp_header {
+    source_port: "0x08ae"
+    destination_port: "0x1283"
+    length: "0x0046"
+    checksum: "0x0011"
+  }
+}
+headers {
+  ipfix_header {
+    version: "0x000a"
+    length: "0x003e"
+    export_time: "0x64c18c23"
+    sequence_number: "0x00000001"
+    observation_domain_id: "0x00000001"
+  }
+}
+headers {
+  psamp_header {
+    template_id: "0x0000"
+    length: "0x002e"
+    observation_time: "0x1775873b16a19e00"
+    flowset: "0x04d2"
+    next_hop_index: "0x0000"
+    epoch: "0xabcd"
+    ingress_port: "0x000d"
+    egress_port: "0x000f"
+    user_meta_field: "0x0000"
+    dlb_id: "0x00"
+    variable_length: "0xff"
+    packet_sampled_length: "0x0012"
+  }
+}
+payload: "AAAAAAAAAAAAAAAAAA"
+
+-- OUTPUT ----------------------------------------------------------------------
+ValidatePacket(packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in UdpHeader headers[2]: checksum: Must be 0, but was 0x0011 instead.
+
+PadPacketToMinimumSize(packet) = false
+
+UpdateMissingComputedFields(packet) = false
+
+Serialize(Packet) = INVALID_ARGUMENT: Packet invalid for the following reasons:
+- in UdpHeader headers[2]: checksum: Must be 0, but was 0x0011 instead.

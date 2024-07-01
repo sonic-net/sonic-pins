@@ -21,11 +21,11 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
-#include "gutil/table_entry_key.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
+#include "p4_pdpi/table_entry_key.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -104,7 +104,7 @@ TEST_P(GeneratorTest, GeneratesValidEntries) {
   }
   ASSERT_OK(generator);
 
-  absl::flat_hash_map<gutil::TableEntryKey, int> generated_keys;
+  absl::flat_hash_map<pdpi::TableEntryKey, int> generated_keys;
   for (int i = 0;
        i <= std::min(2 * table.size(), static_cast<int64_t>(INT32_MAX - 1));
        ++i) {
@@ -117,7 +117,7 @@ TEST_P(GeneratorTest, GeneratesValidEntries) {
     ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry p4_table_entry,
                          pdpi::IrTableEntryToPi(ir_p4info, ir_table_entry));
 
-    gutil::TableEntryKey key(p4_table_entry);
+    pdpi::TableEntryKey key(p4_table_entry);
     ASSERT_FALSE(generated_keys.contains(key))
         << "Table entry key overlaps between entries " << generated_keys.at(key)
         << " and " << i << ". Entry: " << ir_table_entry.ShortDebugString();

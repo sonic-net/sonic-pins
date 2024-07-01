@@ -37,7 +37,7 @@ cc_test(
     srcs = ["annotation_parser_test.cc"],
     deps = [
         ":annotation_parser",
-        "//gutil:status",
+        "//gutil:status_matchers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

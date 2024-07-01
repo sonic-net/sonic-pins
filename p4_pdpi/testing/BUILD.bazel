@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("//gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -141,6 +141,7 @@ cc_library(
     hdrs = ["mock_p4_runtime_server.h"],
     deps = [
         "@com_github_grpc_grpc//:grpc++",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
