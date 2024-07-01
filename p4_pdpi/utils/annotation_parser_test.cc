@@ -28,13 +28,14 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"
+#include "gutil/status_matchers.h"
 
 namespace pdpi {
 namespace annotation {
 namespace {
 
-using ::testing::_;
+using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
@@ -48,32 +49,6 @@ std::set<typename T::key_type> Keys(T map_container) {
 }
 
 // === Status Matchers ===
-
-MATCHER_P2(StatusIs, code, message, "") {
-  auto code_matcher = testing::MatcherCast<absl::StatusCode>(code);
-  auto message_matcher = testing::MatcherCast<std::string>(message);
-  if (testing::Matches(code_matcher)(arg.code()) &&
-      testing::Matches(message_matcher)(arg.message())) {
-    return true;
-  }
-  *result_listener << "Expected status whose code matches ";
-  code_matcher.DescribeTo(result_listener->stream());
-  *result_listener << "and whose message matches ";
-  message_matcher.DescribeTo(result_listener->stream());
-  return false;
-}
-
-MATCHER_P(IsOkAndHolds, value, "") {
-  if (!arg.ok()) {
-    *result_listener << "Expected status is ok. Actual status is : "
-                     << arg.status();
-    return false;
-  }
-
-  auto matcher = testing::MatcherCast<
-      typename std::remove_reference<decltype(arg)>::type::value_type>(value);
-  return ExplainMatchResult(matcher, arg.value(), result_listener);
-}
 
 // Mock parser to ensure parsing is not invoked.
 absl::StatusOr<int> ExpectNoParsing(std::string) {
@@ -89,7 +64,7 @@ MATCHER_P2(AnnotationComponentsAre, label, body, "") {
       testing::Matches(body_matcher)(arg.body)) {
     return true;
   }
-  *result_listener << "Expected AnnotationComponents whose labe matches ";
+  *result_listener << "Expected AnnotationComponents whose label matches ";
   label_matcher.DescribeTo(result_listener->stream());
   *result_listener << "and whose body matches ";
   body_matcher.DescribeTo(result_listener->stream());
@@ -108,25 +83,22 @@ TEST(GetAllAnnotations, ReturnsLabelBodyAnnotations) {
 
 TEST(GetParsedAnnotation, EmptyAnnotationListReturnsNotFound) {
   std::vector<std::string> empty;
-  EXPECT_THAT(
-      GetParsedAnnotation<int>("label", empty, ExpectNoParsing).status(),
-      StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(GetParsedAnnotation<int>("label", empty, ExpectNoParsing),
+              StatusIs(absl::StatusCode::kNotFound));
 }
 
 TEST(GetParsedAnnotation, MultipleMatchingAnnotationsReturnsError) {
   EXPECT_THAT(
       GetAnnotationAsArgList(
           "label", std::vector<std::string>(
-                       {"@a(b)", "@b(a)", "@label(arg)", "@label(arg2)"}))
-          .status(),
-      StatusIs(absl::StatusCode::kInvalidArgument, _));
+                       {"@a(b)", "@b(a)", "@label(arg)", "@label(arg2)"})),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(GetAllParsedAnnotations, EmptyAnnotationListReturnsNotFound) {
+TEST(GetAllParsedAnnotations, EmptyAnnotationListReturnsEmptyList) {
   std::vector<std::string> empty;
-  EXPECT_THAT(
-      GetAllParsedAnnotations<int>("label", empty, ExpectNoParsing).status(),
-      StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(GetAllParsedAnnotations<int>("label", empty, ExpectNoParsing),
+              IsOkAndHolds(IsEmpty()));
 }
 
 TEST(GetAllParsedAnnotations, ReturnsAllMatchingAnnotations) {
@@ -190,18 +162,16 @@ TEST_P(NonMatchingAnnotationTest, GetAnnotationReturnsNotFound) {
   EXPECT_THAT(
       GetParsedAnnotation<int>(
           "label", std::vector<std::string>({TestCases().at(GetParam())}),
-          ExpectNoParsing)
-          .status(),
-      StatusIs(absl::StatusCode::kNotFound, _));
+          ExpectNoParsing),
+      StatusIs(absl::StatusCode::kNotFound));
 }
 
-TEST_P(NonMatchingAnnotationTest, GetAllParsedAnnotationsReturnsNotFound) {
+TEST_P(NonMatchingAnnotationTest, GetAllParsedAnnotationsReturnsEmptyList) {
   EXPECT_THAT(
       GetAllParsedAnnotations<int>(
           "label", std::vector<std::string>({TestCases().at(GetParam())}),
-          ExpectNoParsing)
-          .status(),
-      StatusIs(absl::StatusCode::kNotFound, _));
+          ExpectNoParsing),
+      IsOkAndHolds(IsEmpty()));
 }
 
 TEST_P(NonMatchingAnnotationTest, GetParsedAnnotationSkipsAnnotation) {
@@ -230,8 +200,7 @@ TEST(GetParsedAnnotation, ReturnsParserError) {
   };
   EXPECT_THAT(
       GetParsedAnnotation<int>("label", std::vector<std::string>({"@label()"}),
-                               parser)
-          .status(),
+                               parser),
       StatusIs(absl::StatusCode::kUnknown, testing::HasSubstr("ErrorMessage")));
 }
 
@@ -241,8 +210,7 @@ TEST(GetAllParsedAnnotations, ReturnsParserError) {
   };
   EXPECT_THAT(
       GetAllParsedAnnotations<int>(
-          "label", std::vector<std::string>({"@label()"}), parser)
-          .status(),
+          "label", std::vector<std::string>({"@label()"}), parser),
       StatusIs(absl::StatusCode::kUnknown, testing::HasSubstr("ErrorMessage")));
 }
 
@@ -556,14 +524,14 @@ std::string UnpairedCharacterCasesName(char c) {
 class UnpairedCharacterTest : public testing::TestWithParam<char> {};
 
 TEST_P(UnpairedCharacterTest, ReturnsInvalidArgument) {
-  EXPECT_THAT(ParseAsArgList(std::string(1, GetParam())).status(),
-              StatusIs(absl::StatusCode::kInvalidArgument, _));
+  EXPECT_THAT(ParseAsArgList(std::string(1, GetParam())),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_P(UnpairedCharacterTest, ReturnsInvalidArgumentWithinNest) {
-  EXPECT_THAT(ParseAsArgList(absl::StrCat("(", std::string(1, GetParam()), ")"))
-                  .status(),
-              StatusIs(absl::StatusCode::kInvalidArgument, _));
+  EXPECT_THAT(
+      ParseAsArgList(absl::StrCat("(", std::string(1, GetParam()), ")")),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 INSTANTIATE_TEST_SUITE_P(

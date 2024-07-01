@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <iostream>
 #include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -2068,6 +2068,52 @@ static void RunPdMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {
       INPUT_IS_VALID);
 }
 
+// Take the `p4info` argument in as a copy since we will be updating it for the
+// tests.
+static absl::Status RunPdTestWithMeterAndCounterDataRemoved(
+    p4::config::v1::P4Info p4info) {
+  // Remove all direct counters and meters from the P4 program.
+  p4info.clear_direct_meters();
+  p4info.clear_direct_counters();
+  for (auto& table : *p4info.mutable_tables()) {
+    table.clear_direct_resource_ids();
+  }
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4info));
+
+  RunPdTableEntryTest(
+      ir_p4info, "table entry with unallowed meter config",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { count_and_meter {} }
+          meter_config { bytes_per_second: 123 burst_bytes: 345 }
+        }
+      )pb"),
+      INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      ir_p4info, "table entry with unallowed counter data",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { count_and_meter {} }
+          counter_data { byte_count: 567 packet_count: 789 }
+        }
+      )pb"),
+      INPUT_IS_INVALID);
+  RunPdTableEntryTest(
+      ir_p4info, "table entry with unallowed meter config and counter data",
+      gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
+        count_and_meter_table_entry {
+          match { ipv4 { value: "16.36.50.0" prefix_length: 24 } }
+          action { count_and_meter {} }
+          meter_config { bytes_per_second: 123 burst_bytes: 345 }
+          counter_data { byte_count: 567 packet_count: 789 }
+        }
+      )pb"),
+      INPUT_IS_INVALID);
+  return absl::OkStatus();
+}
+
 static void RunPdTests(const pdpi::IrP4Info info) {
   RunPdTableEntryTest(info, "empty PD",
                       gutil::ParseProtoOrDie<pdpi::TableEntry>(""),
@@ -2715,5 +2761,13 @@ int main(int argc, char** argv) {
   RunIrTests(info);
   RunPdTests(info);
   RunPdTestsOnlyKey(info);
+
+  absl::Status meter_and_counter_tests =
+      RunPdTestWithMeterAndCounterDataRemoved(p4info);
+  if (!meter_and_counter_tests.ok()) {
+    std::cerr << meter_and_counter_tests.ToString() << std::endl;
+    return 1;
+  }
+
   return 0;
 }

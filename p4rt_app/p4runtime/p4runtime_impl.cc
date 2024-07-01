@@ -13,7 +13,6 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -49,14 +48,15 @@
 #include "gutil/io.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "gutil/table_entry_key.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_constraints/backend/interpreter.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
 #include "p4_pdpi/translation_options.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/p4runtime/p4info_verification.h"
 #include "p4rt_app/p4runtime/p4runtime_read.h"
@@ -82,7 +82,7 @@ namespace p4rt_app {
 namespace {
 
 using TableEntryMap =
-    absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>;
+    absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
 using ActionProfileCapacityMap =
     absl::flat_hash_map<std::string, ActionProfileResourceCapacity>;
 
@@ -168,7 +168,7 @@ bool P4InfoEquals(const p4::config::v1::P4Info& left,
 }
 
 absl::Status VerifyTableCacheForExistence(
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
+    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>& cache,
     const sonic::AppDbEntry& entry) {
   bool exists = false;
   auto iter = cache.find(entry.table_entry_key);
@@ -222,7 +222,8 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
     const std::string& role_name,
     const p4_constraints::ConstraintInfo& constraint_info,
     bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map) {
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator) {
   // If the constraints are not met then we should just report an error (i.e. do
   // not try to handle the entry in lower layers).
   absl::StatusOr<std::string> reason_entry_violates_constraint =
@@ -278,7 +279,8 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
   // Apply any custom translation that are needed on the switch side to account
   // for gNMI configs (e.g. port ID translation).
   RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
-      *ir_table_entry, p4_info, translate_port_ids, port_translation_map));
+      *ir_table_entry, p4_info, translate_port_ids, port_translation_map,
+      cpu_queue_translator));
 
   // Verify the table entry can be written to the table.
   absl::Status role_has_access =
@@ -293,7 +295,7 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
       .entry = *ir_table_entry,
       .update_type = pi_update.type(),
       .pi_table_entry = *normalized_pi_entry,
-      .table_entry_key = gutil::TableEntryKey(*normalized_pi_entry),
+      .table_entry_key = pdpi::TableEntryKey(*normalized_pi_entry),
       .appdb_table = GetAppDbTableType(*ir_table_entry),
   };
 }
@@ -305,8 +307,9 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     const p4_constraints::ConstraintInfo& constraint_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator,
     pdpi::IrWriteResponse* response) {
-  absl::flat_hash_set<gutil::TableEntryKey> keys_in_request;
+  absl::flat_hash_set<pdpi::TableEntryKey> keys_in_request;
   bool has_duplicates = false;
   sonic::AppDbUpdates ir_updates;
   absl::flat_hash_map<std::string, int64_t> resources_in_batch;
@@ -319,7 +322,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     // not try to handle it in lower layers).
     absl::StatusOr<sonic::AppDbEntry> app_db_entry = PiUpdateToAppDbEntry(
         p4_info, pi_update, request.role(), constraint_info, translate_port_ids,
-        port_translation_map);
+        port_translation_map, cpu_queue_translator);
     if (!app_db_entry.ok()) {
       entry_status = GetIrUpdateStatus(app_db_entry.status());
       break;
@@ -428,12 +431,13 @@ absl::Status UpdateCacheAndUtilizationState(
   return absl::OkStatus();
 }
 
-absl::StatusOr<absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>>
+absl::StatusOr<absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>>
 RebuildTableEntryCache(
     const pdpi::IrP4Info& p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
-  absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry> cache;
+  absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry> cache;
   // Get all P4RT keys from the AppDb.
   for (const auto& app_db_key : sonic::GetAllP4TableEntryKeys(p4rt_table)) {
     // Read a single table entry out of the AppDb
@@ -444,7 +448,9 @@ RebuildTableEntryCache(
             .direction = TranslationDirection::kForController,
             .ir_p4_info = p4_info,
             .translate_port_ids = translate_port_ids,
-            .port_map = port_translation_map},
+            .port_map = port_translation_map,
+            .cpu_queue_translator = cpu_queue_translator,
+        },
         ir_table_entry));
 
     auto p4rt_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
@@ -456,7 +462,7 @@ RebuildTableEntryCache(
     }
     p4rt_entry->clear_counter_data();
     p4rt_entry->clear_meter_counter_data();
-    cache[gutil::TableEntryKey(*p4rt_entry)] = *p4rt_entry;
+    cache[pdpi::TableEntryKey(*p4rt_entry)] = *p4rt_entry;
   }
 
   // Get all VRF_TABLE entries from the AppDb.
@@ -470,9 +476,42 @@ RebuildTableEntryCache(
       return gutil::StatusBuilder(vrf_entry.status().code())
              << "[P4RT/PDPI] " << vrf_entry.status().message();
     }
-    cache[gutil::TableEntryKey(*vrf_entry)] = *vrf_entry;
+    cache[pdpi::TableEntryKey(*vrf_entry)] = *vrf_entry;
   }
   return cache;
+}
+
+std::vector<pdpi::IrTableEntry> GetP4rtIrTableEntriesFromCache(
+    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
+        table_entry_cache,
+    const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator,
+    std::vector<std::string>& failures) {
+  // Translate the Table cache into IR entries for comparison.
+  std::vector<pdpi::IrTableEntry> ir_entries;
+  int p4rt_translation_failures = 0;
+  for (const auto& [_, pi_table_entry] : table_entry_cache) {
+    auto ir_table_entry = TranslatePiTableEntryForOrchAgent(
+        pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
+        cpu_queue_translator,
+        /*translate_key_only=*/false);
+    if (!ir_table_entry.ok()) {
+      p4rt_translation_failures++;
+      continue;
+    }
+    if (GetAppDbTableType(*ir_table_entry) != sonic::AppDbTableType::P4RT) {
+      continue;
+    }
+    ir_entries.push_back(*std::move(ir_table_entry));
+  }
+  if (p4rt_translation_failures > 0) {
+    failures.push_back(absl::StrCat("Failed to translate ",
+                                    p4rt_translation_failures,
+                                    " entries from the table entry cache."));
+  }
+
+  return ir_entries;
 }
 
 }  // namespace
@@ -499,7 +538,8 @@ P4RuntimeImpl::P4RuntimeImpl(
 /*      component_state_(component_state),
       system_state_(system_state),
       netdev_translator_(netdev_translator), */
-      translate_port_ids_(p4rt_options.translate_port_ids) {
+      translate_port_ids_(p4rt_options.translate_port_ids),
+      cpu_queue_translator_(CpuQueueTranslator::Empty()) {
   absl::optional<std::string> init_failure;
 
   // Start the controller manager.
@@ -542,7 +582,8 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     sonic::AppDbUpdates app_db_updates = PiTableEntryUpdatesToIr(
         *request, *ir_p4info_, table_entry_cache_,
         capacity_by_action_profile_name_, *p4_constraint_info_,
-        translate_port_ids_, port_translation_map_, rpc_response);
+        translate_port_ids_, port_translation_map_, *cpu_queue_translator_,
+        rpc_response);
 
     // Any AppDb update failures should be appended to the `rpc_response`. If
     // UpdateAppDb fails we should go critical.
@@ -663,9 +704,9 @@ grpc::Status P4RuntimeImpl::Read(
                           "ReadResponse writer cannot be a nullptr.");
     }
 
-    auto response_status = ReadAllTableEntries(
+    auto response_status = ReadAllEntities(
         *request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
-        port_translation_map_, p4rt_table_);
+        port_translation_map_, *cpu_queue_translator_, p4rt_table_);
     if (!response_status.ok()) {
       LOG(WARNING) << "Read failure: " << response_status.status();
       return grpc::Status(
@@ -1068,10 +1109,12 @@ absl::Status P4RuntimeImpl::VerifyState() {
   std::vector<std::string> failures = {"P4RT App State Verification failures:"};
 
   // Verify the P4RT_TABLE entries against the cache.
+  std::vector<pdpi::IrTableEntry> p4rt_entries = GetP4rtIrTableEntriesFromCache(
+      table_entry_cache_, *ir_p4info_, translate_port_ids_,
+      port_translation_map_, *cpu_queue_translator_, failures);
   std::vector<std::string> p4rt_table_failures =
-      sonic::VerifyP4rtTableWithCacheTableEntries(
-          *p4rt_table_.app_db, table_entry_cache_, *ir_p4info_,
-          translate_port_ids_, port_translation_map_);
+      sonic::VerifyP4rtTableWithCacheTableEntries(*p4rt_table_.app_db,
+                                                  p4rt_entries, *ir_p4info_);
   if (!p4rt_table_failures.empty()) {
     failures.insert(failures.end(), p4rt_table_failures.begin(),
                     p4rt_table_failures.end());
@@ -1128,6 +1171,12 @@ P4RuntimeImpl::GetFlowProgrammingStatistics() {
     stats.max_write_time = *max_write_time;
   }
   return stats;
+}
+
+void P4RuntimeImpl::SetCpuQueueTranslator(
+    std::unique_ptr<CpuQueueTranslator> translator) {
+  absl::MutexLock l(&server_state_lock_);
+  cpu_queue_translator_ = std::move(translator);
 }
 
 sonic::PacketIoCounters P4RuntimeImpl::GetPacketIoCounters() {
@@ -1189,9 +1238,9 @@ grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
   }
 
   // Rebuild the table_entry cache.
-  auto table_entry_cache =
-      RebuildTableEntryCache(*ir_p4info_, translate_port_ids_,
-                             port_translation_map_, p4rt_table_, vrf_table_);
+  auto table_entry_cache = RebuildTableEntryCache(
+      *ir_p4info_, translate_port_ids_, port_translation_map_,
+      *cpu_queue_translator_, p4rt_table_, vrf_table_);
   if (!table_entry_cache.ok()) {
     LOG(ERROR) << "Failed to build the table cache during COMMIT: "
                << table_entry_cache.status();

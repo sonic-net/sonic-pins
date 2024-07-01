@@ -369,6 +369,19 @@ std::vector<Update> CreatePiUpdates(absl::Span<const TableEntry> pi_entries,
   return pi_updates;
 }
 
+std::vector<Update> CreatePiUpdates(absl::Span<const Entity> pi_entities,
+                                    Update_Type update_type) {
+  std::vector<Update> pi_updates;
+  pi_updates.reserve(pi_entities.size());
+  for (const auto& pi_entity : pi_entities) {
+    Update update;
+    update.set_type(update_type);
+    *update.mutable_entity() = pi_entity;
+    pi_updates.push_back(std::move(update));
+  }
+  return pi_updates;
+}
+
 absl::StatusOr<ReadResponse> SetMetadataAndSendPiReadRequest(
     P4RuntimeSession* session, ReadRequest& read_request) {
   read_request.set_device_id(session->DeviceId());
@@ -539,6 +552,14 @@ absl::Status InstallPiTableEntries(P4RuntimeSession* session,
                                    const IrP4Info& info,
                                    absl::Span<const TableEntry> pi_entries) {
   std::vector<Update> pi_updates = CreatePiUpdates(pi_entries, Update::INSERT);
+  ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_write_requests,
+                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
+  return SetMetadataAndSendPiWriteRequests(session, sequenced_write_requests);
+}
+
+absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
+                               absl::Span<const Entity> pi_entities) {
+  std::vector<Update> pi_updates = CreatePiUpdates(pi_entities, Update::INSERT);
   ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_write_requests,
                    pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
   return SetMetadataAndSendPiWriteRequests(session, sequenced_write_requests);

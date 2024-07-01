@@ -2211,9 +2211,9 @@ absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
       }
     }
 
+    const absl::StatusOr<bool> &pd_has_meter_config =
+        HasField(*pd_table, "meter_config");
     if (ir_table_info->has_meter()) {
-      const absl::StatusOr<bool> &pd_has_meter_config =
-          HasField(*pd_table, "meter_config");
       if (!pd_has_meter_config.ok()) {
         invalid_reasons.push_back(
             absl::StrCat(kNewBullet, pd_has_meter_config.status().message()));
@@ -2258,11 +2258,16 @@ absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
           }
         }
       }
+    } else if (pd_has_meter_config.ok() && *pd_has_meter_config) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet,
+                       "Table does not have a meter, but table entry contained "
+                       "a meter config."));
     }
 
+    const absl::StatusOr<bool> &pd_has_counter_data =
+        HasField(*pd_table, "counter_data");
     if (ir_table_info->has_counter()) {
-      const absl::StatusOr<bool> &pd_has_counter_data =
-          HasField(*pd_table, "counter_data");
       if (!pd_has_counter_data.ok()) {
         invalid_reasons.push_back(
             absl::StrCat(kNewBullet, pd_has_counter_data.status().message()));
@@ -2321,6 +2326,11 @@ absl::StatusOr<IrTableEntry> PartialPdTableEntryToIrTableEntry(
           }
         }
       }
+    } else if (pd_has_counter_data.ok() && *pd_has_counter_data) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet,
+                       "Table does not have a counter, but table entry "
+                       "contained counter data."));
     }
 
     if (ir_table_info->has_meter() && ir_table_info->has_counter()) {
@@ -2583,18 +2593,16 @@ absl::StatusOr<IrReadResponse> PdReadResponseToIr(
   for (auto i = 0; i < read_response.GetReflection()->FieldSize(
                            read_response, table_entries_descriptor);
        ++i) {
-    const absl::StatusOr<IrTableEntry> &table_entry =
-        PartialPdTableEntryToIrTableEntry(
-            info,
-            read_response.GetReflection()->GetRepeatedMessage(
-                read_response, table_entries_descriptor, i),
-            options);
-    if (!table_entry.ok()) {
-      invalid_reasons.push_back(std::string(table_entry.status().message()));
+    const absl::StatusOr<IrEntity> &ir_entity = PdTableEntryToIrEntity(
+        info,
+        read_response.GetReflection()->GetRepeatedMessage(
+            read_response, table_entries_descriptor, i),
+        options);
+    if (!ir_entity.ok()) {
+      invalid_reasons.push_back(std::string(ir_entity.status().message()));
       continue;
     }
-    *ir_response.add_entities()->mutable_table_entry() =
-        std::move(*table_entry);
+    *ir_response.add_entities() = std::move(*ir_entity);
   }
   if (!invalid_reasons.empty()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
@@ -2618,12 +2626,10 @@ absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
   }
   ir_update.set_type((p4::v1::Update_Type)type_value);
 
-  // TODO: Add PRE support to IR and PD.
   ASSIGN_OR_RETURN(const auto *table_entry,
                    GetMessageField(update, "table_entry"));
-  ASSIGN_OR_RETURN(
-      *ir_update.mutable_entity()->mutable_table_entry(),
-      PartialPdTableEntryToIrTableEntry(info, *table_entry, options));
+  ASSIGN_OR_RETURN(*ir_update.mutable_entity(),
+                   PdTableEntryToIrEntity(info, *table_entry, options));
   return ir_update;
 }
 

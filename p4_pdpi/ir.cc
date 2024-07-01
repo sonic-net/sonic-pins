@@ -44,6 +44,7 @@
 #include "p4/config/v1/p4types.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/reference_annotations.h"
 #include "p4_pdpi/translation_options.h"
 #include "p4_pdpi/utils/ir.h"
 
@@ -62,6 +63,7 @@ using ::pdpi::IrActionInvocation;
 using ::pdpi::IrMatchFieldDefinition;
 using ::pdpi::IrP4Info;
 using ::pdpi::IrTableDefinition;
+using ::pdpi::ParsedRefersToAnnotation;
 
 namespace {
 
@@ -228,35 +230,27 @@ absl::StatusOr<uint32_t> MatchFieldNameToId(
 absl::StatusOr<std::vector<IrMatchFieldReference>> GetRefersToAnnotations(
     const p4::config::v1::P4Info &p4info,
     const ::google::protobuf::RepeatedPtrField<std::string> &annotations) {
-  constexpr absl::string_view kError = "Found invalid @refers_to annotation: ";
   std::vector<IrMatchFieldReference> result;
-  for (absl::string_view annotation_contents : annotations) {
-    if (absl::ConsumePrefix(&annotation_contents, "@refers_to(")) {
-      if (!absl::ConsumeSuffix(&annotation_contents, ")")) {
-        return gutil::InvalidArgumentErrorBuilder() << kError << "Missing )";
-      }
-      std::vector<std::string> parts = absl::StrSplit(annotation_contents, ',');
-      if (parts.size() != 2) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << kError << "Incorrect number of arguments, required 2 but got "
-               << parts.size() << " instead.";
-      }
+  ASSIGN_OR_RETURN(
+      const std::vector<ParsedRefersToAnnotation> refers_to_annotations,
+      ParseAllRefersToAnnotations(annotations));
 
-      absl::string_view table = absl::StripAsciiWhitespace(parts[0]);
-      absl::string_view match_field = absl::StripAsciiWhitespace(parts[1]);
+  for (const auto &refers_to_annotation : refers_to_annotations) {
+    absl::string_view table = refers_to_annotation.table;
+    absl::string_view match_field = refers_to_annotation.field;
 
-      ASSIGN_OR_RETURN(uint32_t table_id, TableAliasToId(p4info, table));
-      ASSIGN_OR_RETURN(uint32_t match_field_id,
-                       MatchFieldNameToId(p4info, table_id, match_field));
+    ASSIGN_OR_RETURN(uint32_t table_id, TableAliasToId(p4info, table));
+    ASSIGN_OR_RETURN(uint32_t match_field_id,
+                     MatchFieldNameToId(p4info, table_id, match_field));
 
-      IrMatchFieldReference reference;
-      reference.set_table(std::string(table));
-      reference.set_match_field(std::string(match_field));
-      reference.set_table_id(table_id);
-      reference.set_match_field_id(match_field_id);
-      result.push_back(reference);
-    }
+    IrMatchFieldReference reference;
+    reference.set_table(std::string(table));
+    reference.set_match_field(std::string(match_field));
+    reference.set_table_id(table_id);
+    reference.set_match_field_id(match_field_id);
+    result.push_back(reference);
   }
+
   return result;
 }
 
@@ -1877,7 +1871,8 @@ StatusOr<IrReadResponse> PiReadResponseToIr(
   IrReadResponse result;
   std::vector<std::string> invalid_reasons;
   for (const auto &entity : read_response.entities()) {
-    absl::StatusOr<pdpi::IrEntity> ir_entity = PiEntityToIr(info, entity);
+    absl::StatusOr<pdpi::IrEntity> ir_entity =
+        PiEntityToIr(info, entity, options);
     if (!ir_entity.ok()) {
       invalid_reasons.push_back(
           gutil::StableStatusToString(ir_entity.status()));
@@ -2410,7 +2405,8 @@ StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
   p4::v1::ReadResponse result;
   std::vector<std::string> invalid_reasons;
   for (const auto &entity : read_response.entities()) {
-    absl::StatusOr<p4::v1::Entity> pi_entity = IrEntityToPi(info, entity);
+    absl::StatusOr<p4::v1::Entity> pi_entity =
+        IrEntityToPi(info, entity, options);
     if (!pi_entity.ok()) {
       invalid_reasons.push_back(
           std::string(gutil::StableStatusToString(pi_entity.status())));
@@ -2446,7 +2442,7 @@ StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info &info,
   }
 
   ASSIGN_OR_RETURN(*pi_update.mutable_entity(),
-                   IrEntityToPi(info, update.entity()));
+                   IrEntityToPi(info, update.entity(), options));
 
   pi_update.set_type(update.type());
   return pi_update;
