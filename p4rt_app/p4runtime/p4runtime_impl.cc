@@ -48,13 +48,13 @@
 #include "gutil/io.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "gutil/table_entry_key.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_constraints/backend/interpreter.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
 #include "p4_pdpi/translation_options.h"
 #include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
@@ -82,7 +82,7 @@ namespace p4rt_app {
 namespace {
 
 using TableEntryMap =
-    absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>;
+    absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
 using ActionProfileCapacityMap =
     absl::flat_hash_map<std::string, ActionProfileResourceCapacity>;
 
@@ -168,7 +168,7 @@ bool P4InfoEquals(const p4::config::v1::P4Info& left,
 }
 
 absl::Status VerifyTableCacheForExistence(
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>& cache,
+    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>& cache,
     const sonic::AppDbEntry& entry) {
   bool exists = false;
   auto iter = cache.find(entry.table_entry_key);
@@ -295,7 +295,7 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
       .entry = *ir_table_entry,
       .update_type = pi_update.type(),
       .pi_table_entry = *normalized_pi_entry,
-      .table_entry_key = gutil::TableEntryKey(*normalized_pi_entry),
+      .table_entry_key = pdpi::TableEntryKey(*normalized_pi_entry),
       .appdb_table = GetAppDbTableType(*ir_table_entry),
   };
 }
@@ -309,7 +309,7 @@ sonic::AppDbUpdates PiTableEntryUpdatesToIr(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator,
     pdpi::IrWriteResponse* response) {
-  absl::flat_hash_set<gutil::TableEntryKey> keys_in_request;
+  absl::flat_hash_set<pdpi::TableEntryKey> keys_in_request;
   bool has_duplicates = false;
   sonic::AppDbUpdates ir_updates;
   absl::flat_hash_map<std::string, int64_t> resources_in_batch;
@@ -431,13 +431,13 @@ absl::Status UpdateCacheAndUtilizationState(
   return absl::OkStatus();
 }
 
-absl::StatusOr<absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>>
+absl::StatusOr<absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>>
 RebuildTableEntryCache(
     const pdpi::IrP4Info& p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
-  absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry> cache;
+  absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry> cache;
   // Get all P4RT keys from the AppDb.
   for (const auto& app_db_key : sonic::GetAllP4TableEntryKeys(p4rt_table)) {
     // Read a single table entry out of the AppDb
@@ -462,7 +462,7 @@ RebuildTableEntryCache(
     }
     p4rt_entry->clear_counter_data();
     p4rt_entry->clear_meter_counter_data();
-    cache[gutil::TableEntryKey(*p4rt_entry)] = *p4rt_entry;
+    cache[pdpi::TableEntryKey(*p4rt_entry)] = *p4rt_entry;
   }
 
   // Get all VRF_TABLE entries from the AppDb.
@@ -476,13 +476,13 @@ RebuildTableEntryCache(
       return gutil::StatusBuilder(vrf_entry.status().code())
              << "[P4RT/PDPI] " << vrf_entry.status().message();
     }
-    cache[gutil::TableEntryKey(*vrf_entry)] = *vrf_entry;
+    cache[pdpi::TableEntryKey(*vrf_entry)] = *vrf_entry;
   }
   return cache;
 }
 
 std::vector<pdpi::IrTableEntry> GetP4rtIrTableEntriesFromCache(
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
+    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
         table_entry_cache,
     const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
@@ -704,7 +704,7 @@ grpc::Status P4RuntimeImpl::Read(
                           "ReadResponse writer cannot be a nullptr.");
     }
 
-    auto response_status = ReadAllTableEntries(
+    auto response_status = ReadAllEntities(
         *request, *ir_p4info_, table_entry_cache_, translate_port_ids_,
         port_translation_map_, *cpu_queue_translator_, p4rt_table_);
     if (!response_status.ok()) {

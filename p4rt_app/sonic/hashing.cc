@@ -210,7 +210,7 @@ absl::StatusOr<std::vector<EcmpHashEntry>> GenerateAppDbHashFieldEntries(
   for (const auto& [action_name, action_def] : ir_p4info.actions_by_name()) {
     auto parse_results = pdpi::GetAllAnnotationsAsArgList(
         "sai_native_hash_field", action_def.preamble().annotations());
-    if (!parse_results.ok()) continue;
+    if (!parse_results.ok() || parse_results->empty()) continue;
     auto json = GenerateJsonHashFieldEntries(*parse_results);
     if (!json.ok()) {
       return gutil::InvalidArgumentErrorBuilder()
