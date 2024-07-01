@@ -113,10 +113,10 @@ cc_test(
     deps = [
         ":table_entry_generator",
         "//gutil:status_matchers",
-        "//gutil:table_entry_key",
         "//gutil:testing",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
+        "//p4_pdpi:table_entry_key",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",

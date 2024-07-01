@@ -2593,18 +2593,16 @@ absl::StatusOr<IrReadResponse> PdReadResponseToIr(
   for (auto i = 0; i < read_response.GetReflection()->FieldSize(
                            read_response, table_entries_descriptor);
        ++i) {
-    const absl::StatusOr<IrTableEntry> &table_entry =
-        PartialPdTableEntryToIrTableEntry(
-            info,
-            read_response.GetReflection()->GetRepeatedMessage(
-                read_response, table_entries_descriptor, i),
-            options);
-    if (!table_entry.ok()) {
-      invalid_reasons.push_back(std::string(table_entry.status().message()));
+    const absl::StatusOr<IrEntity> &ir_entity = PdTableEntryToIrEntity(
+        info,
+        read_response.GetReflection()->GetRepeatedMessage(
+            read_response, table_entries_descriptor, i),
+        options);
+    if (!ir_entity.ok()) {
+      invalid_reasons.push_back(std::string(ir_entity.status().message()));
       continue;
     }
-    *ir_response.add_entities()->mutable_table_entry() =
-        std::move(*table_entry);
+    *ir_response.add_entities() = std::move(*ir_entity);
   }
   if (!invalid_reasons.empty()) {
     return absl::InvalidArgumentError(GenerateFormattedError(
@@ -2628,12 +2626,10 @@ absl::StatusOr<IrUpdate> PdUpdateToIr(const IrP4Info &info,
   }
   ir_update.set_type((p4::v1::Update_Type)type_value);
 
-  // TODO: Add PRE support to IR and PD.
   ASSIGN_OR_RETURN(const auto *table_entry,
                    GetMessageField(update, "table_entry"));
-  ASSIGN_OR_RETURN(
-      *ir_update.mutable_entity()->mutable_table_entry(),
-      PartialPdTableEntryToIrTableEntry(info, *table_entry, options));
+  ASSIGN_OR_RETURN(*ir_update.mutable_entity(),
+                   PdTableEntryToIrEntity(info, *table_entry, options));
   return ir_update;
 }
 

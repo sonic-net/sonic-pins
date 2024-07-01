@@ -18,6 +18,67 @@ package(
 )
 
 cc_library(
+    name = "built_ins",
+    srcs = [
+        "built_ins.cc",
+    ],
+    hdrs = [
+        "built_ins.h",
+    ],
+    deps = [
+        ":ir_cc_proto",
+        "//gutil:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+)
+
+cc_test(
+    name = "built_ins_test",
+    srcs = [
+        "built_ins_test.cc",
+    ],
+    deps = [
+        ":built_ins",
+        ":ir_cc_proto",
+        "//gutil:status_matchers",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "reference_annotations",
+    srcs = [
+        "reference_annotations.cc",
+    ],
+    hdrs = [
+        "reference_annotations.h",
+    ],
+    deps = [
+        "//gutil:status",
+        "//p4_pdpi/utils:annotation_parser",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "reference_annotations_test",
+    srcs = [
+        "reference_annotations_test.cc",
+    ],
+    deps = [
+        ":reference_annotations",
+        "//gutil:status_matchers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
     name = "sequencing_util",
     srcs = ["sequencing_util.cc"],
     hdrs = ["sequencing_util.h"],
@@ -191,6 +252,7 @@ cc_library(
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
         ":ir_cc_proto",
+        ":reference_annotations",
         ":translation_options",
         "//gutil:collections",
         "//gutil:proto",
@@ -227,7 +289,9 @@ proto_library(
 proto_library(
     name = "p4_runtime_session_extras_proto",
     srcs = ["p4_runtime_session_extras.proto"],
-    deps = ["@com_github_p4lang_p4runtime//:p4runtime_proto"],
+    deps = [
+        "@com_github_p4lang_p4runtime//:p4runtime_proto"
+    ],
 )
 
 cc_proto_library(
@@ -257,6 +321,7 @@ cc_library(
         "//sai_p4/fixed:p4_roles",
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/base:core_headers",
@@ -346,10 +411,12 @@ cc_library(
         ":p4_runtime_session_extras_cc_proto",
         ":pd",
         "//gutil:proto",
-        "//gutil:table_entry_key",
+        "//gutil:status",
+        "//p4_pdpi:table_entry_key",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
@@ -387,4 +454,28 @@ cc_library(
     name = "translation_options",
     hdrs = ["translation_options.h"],
     deps = ["@com_google_absl//absl/strings:str_format"],
+)
+
+cc_library(
+    name = "table_entry_key",
+    srcs = ["table_entry_key.cc"],
+    hdrs = ["table_entry_key.h"],
+    deps = [
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/hash",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "table_entry_key_test",
+    srcs = [
+        "table_entry_key_test.cc",
+    ],
+    deps = [
+        ":table_entry_key",
+        "@com_google_absl//absl/hash:hash_testing",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
