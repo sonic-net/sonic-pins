@@ -6,7 +6,7 @@
 #include "../../fixed/metadata.p4"
 #include "acl_common_actions.p4"
 #include "ids.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 #include "roles.h"
 
 control acl_egress(in headers_t headers,

@@ -21,7 +21,7 @@
 #include "headers.p4"
 #include "metadata.p4"
 #include "ids.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 
 // Should be applied at the end of the pre-ingress stage.
 control tunnel_termination(inout headers_t headers,

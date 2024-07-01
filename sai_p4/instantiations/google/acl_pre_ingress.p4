@@ -6,7 +6,7 @@
 #include "../../fixed/metadata.p4"
 #include "ids.h"
 #include "roles.h"
-#include "minimum_guaranteed_sizes.p4"
+#include "minimum_guaranteed_sizes.h"
 
 #if defined(SAI_INSTANTIATION_TOR)
 #define ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE \
