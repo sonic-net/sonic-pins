@@ -35,11 +35,11 @@
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
 #include "grpcpp/support/sync_stream.h"
-#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
 #include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
@@ -338,7 +338,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // Reading a large number of entries from Redis is costly. To improve the
   // read performance we cache table entries in software.
-  absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>
+  absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>
       table_entry_cache_ ABSL_GUARDED_BY(server_state_lock_);
 
   // Monitoring resources in hardware can be difficult. For example in WCMP if a
