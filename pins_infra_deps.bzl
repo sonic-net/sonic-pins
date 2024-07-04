@@ -92,6 +92,16 @@ def pins_infra_deps():
             sha256 = "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf",
         )
 
+    if not native.existing_rule("com_github_gnmi"):
+        http_archive(
+            name = "com_github_gnmi",
+            # Newest commit on master on 2020-09-10.
+            # TODO: Upstream changes from this private repo to official gnmi repo.
+            url = "https://github.com/vamsipunati/gnmi/archive/6a51fc9396af4bb9d7b3c4cf6e9718b81ba77e80.zip",
+            strip_prefix = "gnmi-6a51fc9396af4bb9d7b3c4cf6e9718b81ba77e80",
+            sha256 = "0d3efaf85c5a2bc57474ac7900d965eec5a89416d76970f0f462f3fce15bfafc",
+        )
+
     if not native.existing_rule("com_github_gnoi"):
         http_archive(
             name = "com_github_gnoi",
