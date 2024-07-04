@@ -13,9 +13,9 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("//gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 
 package(
@@ -86,6 +86,11 @@ cc_library(
     deps = [
         "//sai_p4/fixed:p4_ids",
     ],
+)
+
+cc_library(
+    name = "p4_versions",
+    hdrs = ["versions.h"],
 )
 
 cc_library(

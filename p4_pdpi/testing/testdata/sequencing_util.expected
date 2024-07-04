@@ -1,3 +1,6 @@
+Golden file test for utils used for reachability analysis.
+Note, std::cout doesn't work nicely with hex values: certain hex values are converted, via obsecure means, to control characters and become invisible in the golde file.
+
 =========================================================================
 CreateReferenceRelationsTest
 =========================================================================
@@ -22,55 +25,32 @@ match_field_id: 1
 
 -- OUTPUT ----------------------------------------------------------------------
 -- ReferenceRelations --
-ReferenceRelationKey{referred_table_name: one_match_field_table}, ReferenceRelation{match_field_names: [id]}
-ReferenceRelationKey{referred_table_name: referring_by_match_field_table}, ReferenceRelation{match_field_names: [referring_id_1]}
-ReferenceRelationKey{referred_table_name: two_match_fields_table}, ReferenceRelation{match_field_names: [id_1, id_2]}
+ReferenceRelationKey{referred_table_id: 34805412}, ReferenceRelation{match_field_ids: [1, 2]}
+ReferenceRelationKey{referred_table_id: 46253494}, ReferenceRelation{match_field_ids: [1]}
+ReferenceRelationKey{referred_table_id: 49592401}, ReferenceRelation{match_field_ids: [1]}
 
 =========================================================================
-EntriesReferredToByTableEntryTest: Referring to using an entry with 1 match field
-=========================================================================
--- INPUT -----------------------------------------------------------------------
--- PD table entry --
-referring_by_match_field_table_entry {
-  match {
-    referring_id_1: "key-a"
-  }
-  action {
-    do_thing_4 {
-    }
-  }
-  priority: 32
-}
-
--- OUTPUT ----------------------------------------------------------------------
--- ReferredTableEntries --
-ReferredTableEntry{table_name: two_match_fields_table, match_fields and values: [ReferredField{match_field_name: id_1,field_value: key-a}]}
-
-=========================================================================
-EntriesReferredToByTableEntryTest: Referring to an entry using with 2 match fields
+EntriesReferredToByTableEntryTest: Referring to an entry with 2 match fields
 =========================================================================
 -- INPUT -----------------------------------------------------------------------
 -- PD table entry --
 referring_by_match_field_table_entry {
   match {
     referring_id_1: "key-x"
-    referring_id_2 {
-      value: "0x223"
-    }
+    referring_id_2: "0x034"
   }
   action {
     do_thing_4 {
     }
   }
-  priority: 32
 }
 
 -- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
-ReferredTableEntry{table_name: two_match_fields_table, match_fields and values: [ReferredField{match_field_name: id_1,field_value: key-x}, ReferredField{match_field_name: id_2,field_value: #}]}
+ReferredTableEntry{table_id: 34805412, match_fields and values: [ReferredField{match_field_id: 1,field_value: key-x}, ReferredField{match_field_id: 2,field_value: 4}]}
 
 =========================================================================
-EntriesReferredToByTableEntryTest: Referring to an entry using with 1 action param
+EntriesReferredToByTableEntryTest: Referring to an entry with 1 action param
 =========================================================================
 -- INPUT -----------------------------------------------------------------------
 -- PD table entry --
@@ -87,11 +67,11 @@ referring_by_action_table_entry {
 
 -- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
-ReferredTableEntry{table_name: one_match_field_table, match_fields and values: [ReferredField{match_field_name: id,field_value: key-a}]}
-ReferredTableEntry{table_name: two_match_fields_table, match_fields and values: [ReferredField{match_field_name: id_1,field_value: key-a}]}
+ReferredTableEntry{table_id: 34805412, match_fields and values: [ReferredField{match_field_id: 1,field_value: key-a}]}
+ReferredTableEntry{table_id: 46253494, match_fields and values: [ReferredField{match_field_id: 1,field_value: key-a}]}
 
 =========================================================================
-EntriesReferredToByTableEntryTest: Referring to an entry using with 2 action params
+EntriesReferredToByTableEntryTest: Referring to an entry with 2 action params
 =========================================================================
 -- INPUT -----------------------------------------------------------------------
 -- PD table entry --
@@ -109,7 +89,7 @@ referring_by_action_table_entry {
 
 -- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
-ReferredTableEntry{table_name: two_match_fields_table, match_fields and values: [ReferredField{match_field_name: id_1,field_value: key-xy}, ReferredField{match_field_name: id_2,field_value: 3}]}
+ReferredTableEntry{table_id: 34805412, match_fields and values: [ReferredField{match_field_id: 1,field_value: key-xy}, ReferredField{match_field_id: 2,field_value: 3}]}
 
 =========================================================================
 EntriesReferredToByTableEntryTest: Entry that doesn't refer to other entry will not generate ReferredTableEntry
@@ -130,3 +110,41 @@ two_match_fields_table_entry {
 -- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
 <empty>
+
+=========================================================================
+CreateReferrableTableEntryTest: Non-referred-to table entry will not generate ReferredTableEntry
+=========================================================================
+-- INPUT -----------------------------------------------------------------------
+-- PD table entry --
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x000"
+    }
+  }
+}
+-- OUTPUT ----------------------------------------------------------------------
+-- ReferredTableEntry or failure status --
+NOT_FOUND: Key not found;  while trying to look up ReferenceRelation with key ReferenceRelationKey{referred_table_id: 48112979}
+=========================================================================
+CreateReferrableTableEntryTest: Referred-to table entry will generate ReferredTableEntry
+=========================================================================
+-- INPUT -----------------------------------------------------------------------
+-- PD table entry --
+two_match_fields_table_entry {
+  match {
+    id_1: "key-b"
+    id_2: "0x034"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+-- OUTPUT ----------------------------------------------------------------------
+-- ReferredTableEntry or failure status --
+ReferredTableEntry{table_id: 34805412, match_fields and values: [ReferredField{match_field_id: 1,field_value: key-b}, ReferredField{match_field_id: 2,field_value: 4}]}

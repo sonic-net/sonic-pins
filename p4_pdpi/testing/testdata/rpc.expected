@@ -239,6 +239,54 @@ entities {
 
 
 =========================================================================
+ReadResponse test: valid multicast group table
+=========================================================================
+
+--- PD (Input):
+table_entries {
+  multicast_group_table_entry {
+    match {
+      multicast_group_id: "0x0001"
+    }
+    action {
+      replicate {
+        replicas {
+          port: "1"
+          instance: "0x0001"
+        }
+      }
+    }
+  }
+}
+
+--- IR:
+entities {
+  packet_replication_engine_entry {
+    multicast_group_entry {
+      multicast_group_id: 1
+      replicas {
+        port: "1"
+        instance: 1
+      }
+    }
+  }
+}
+
+--- PI:
+entities {
+  packet_replication_engine_entry {
+    multicast_group_entry {
+      multicast_group_id: 1
+      replicas {
+        instance: 1
+        port: "1"
+      }
+    }
+  }
+}
+
+
+=========================================================================
 ReadResponse test: multiple tables
 =========================================================================
 
@@ -550,6 +598,57 @@ entity {
 
 
 =========================================================================
+Update test: valid mulitcast group table
+=========================================================================
+
+--- PD (Input):
+type: INSERT
+table_entry {
+  multicast_group_table_entry {
+    match {
+      multicast_group_id: "0x0001"
+    }
+    action {
+      replicate {
+        replicas {
+          port: "1"
+          instance: "0x0001"
+        }
+      }
+    }
+  }
+}
+
+--- IR:
+type: INSERT
+entity {
+  packet_replication_engine_entry {
+    multicast_group_entry {
+      multicast_group_id: 1
+      replicas {
+        port: "1"
+        instance: 1
+      }
+    }
+  }
+}
+
+--- PI:
+type: INSERT
+entity {
+  packet_replication_engine_entry {
+    multicast_group_entry {
+      multicast_group_id: 1
+      replicas {
+        instance: 1
+        port: "1"
+      }
+    }
+  }
+}
+
+
+=========================================================================
 WriteRequest test: invalid role_id
 =========================================================================
 
@@ -711,6 +810,78 @@ updates {
         }
       }
       priority: 32
+    }
+  }
+}
+
+
+=========================================================================
+WriteRequest test: valid multicast group table update
+=========================================================================
+
+--- PD (Input):
+device_id: 113
+election_id {
+  high: 1231
+  low: 77989
+}
+updates {
+  type: INSERT
+  table_entry {
+    multicast_group_table_entry {
+      match {
+        multicast_group_id: "0x0001"
+      }
+      action {
+        replicate {
+          replicas {
+            port: "1"
+            instance: "0x0001"
+          }
+        }
+      }
+    }
+  }
+}
+
+--- IR:
+device_id: 113
+election_id {
+  high: 1231
+  low: 77989
+}
+updates {
+  type: INSERT
+  entity {
+    packet_replication_engine_entry {
+      multicast_group_entry {
+        multicast_group_id: 1
+        replicas {
+          port: "1"
+          instance: 1
+        }
+      }
+    }
+  }
+}
+
+--- PI:
+device_id: 113
+election_id {
+  high: 1231
+  low: 77989
+}
+updates {
+  type: INSERT
+  entity {
+    packet_replication_engine_entry {
+      multicast_group_entry {
+        multicast_group_id: 1
+        replicas {
+          instance: 1
+          port: "1"
+        }
+      }
     }
   }
 }

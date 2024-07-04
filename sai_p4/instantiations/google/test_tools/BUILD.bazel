@@ -28,10 +28,14 @@ cc_library(
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -40,9 +44,12 @@ cc_test(
     srcs = ["test_entries_test.cc"],
     deps = [
         ":test_entries",
+        "//gutil:proto_matchers",
         "//gutil:status_matchers",
+        "//gutil:testing",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -106,10 +113,10 @@ cc_test(
     deps = [
         ":table_entry_generator",
         "//gutil:status_matchers",
-        "//gutil:table_entry_key",
         "//gutil:testing",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
+        "//p4_pdpi:table_entry_key",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",

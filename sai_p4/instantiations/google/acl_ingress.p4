@@ -45,6 +45,15 @@ control acl_ingress(in headers_t headers,
 
   // Copy the packet to the CPU, and forward the original packet.
   @id(ACL_INGRESS_COPY_ACTION_ID)
+#if defined(SAI_INSTANTIATION_TOR) 
+  // In ToRs, the acl_ingress_table copy action will not apply a rate limit.
+  // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
+  @sai_action(SAI_PACKET_ACTION_COPY)
+  action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
+    acl_ingress_counter.count();
+    marked_to_copy = true;
+  }
+#else
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_RED)
@@ -56,34 +65,34 @@ control acl_ingress(in headers_t headers,
     // TODO: Branch on color and model behavior for all colors.
     marked_to_copy = true;
   }
+#endif
 
   // Copy the packet to the CPU. The original packet is dropped.
   @id(ACL_INGRESS_TRAP_ACTION_ID)
+#if defined(SAI_INSTANTIATION_TOR) 
+  // In ToRs, the acl_ingress_table trap action will not apply a rate limit.
+  // Rate limits will be applied by acl_ingress_qos_table cancel_copy actions.
+  @sai_action(SAI_PACKET_ACTION_TRAP)
+#else
   @sai_action(SAI_PACKET_ACTION_TRAP, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
+#endif
   action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_copy(qos_queue);
     mark_to_drop(standard_metadata);
-  }
-
-  // An experimental, metered version of `acl_trap`.
-  // TODO: Remove this action and meter the existing `acl_trap`
-  // action.
-  @id(ACL_INGRESS_EXPERIMENTAL_TRAP_ACTION_ID)
-  @sai_action(SAI_PACKET_ACTION_TRAP, SAI_PACKET_COLOR_GREEN)
-  @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_YELLOW)
-  @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
-  action acl_experimental_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
-    acl_ingress_meter.read(local_metadata.color);
-    // TODO: model metering by branching on color.
-    acl_trap(qos_queue);
   }
 
   // Forward the packet normally (i.e., perform no action). This is useful as
   // the default action, and to specify a meter but not otherwise perform any
   // action.
   @id(ACL_INGRESS_FORWARD_ACTION_ID)
+#if defined(SAI_INSTANTIATION_TOR) 
+  // ToRs rely on QoS queues to limit forwarded flows.
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  action acl_forward() {
+  }
+#else
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
@@ -92,6 +101,7 @@ control acl_ingress(in headers_t headers,
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
   }
+#endif
 
   // Forward the packet normally (i.e., perform no action).
   @id(ACL_INGRESS_COUNT_ACTION_ID)
@@ -156,6 +166,7 @@ control acl_ingress(in headers_t headers,
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_INGRESS_TABLE_ID)
   @sai_acl(INGRESS)
+  @sai_acl_priority(5)
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
@@ -171,7 +182,7 @@ control acl_ingress(in headers_t headers,
     // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
     l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
-#ifdef SAI_INSTANTIATION_MIDDLEBLOCK
+#if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_TOR)
     // Only allow arp_tpa matches for ARP packets.
     arp_tpa::mask != 0 -> ether_type == 0x0806;
 #endif
@@ -244,7 +255,7 @@ control acl_ingress(in headers_t headers,
               @sai_udf(base=SAI_UDF_BASE_L3, offset=26, length=2)
           ) @format(IPV4_ADDRESS);
 #endif
-#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
+#if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER) || defined(SAI_INSTANTIATION_TOR) 
       local_metadata.ingress_port : optional @name("in_port") @id(17)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
       local_metadata.route_metadata : optional @name("route_metadata") @id(18)
@@ -252,33 +263,34 @@ control acl_ingress(in headers_t headers,
 #endif
     }
     actions = {
-      // TODO: add action to set color to yellow
       @proto_id(1) acl_copy();
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
       @proto_id(4) acl_mirror();
       @proto_id(5) acl_drop(standard_metadata);
-      @proto_id(99) acl_experimental_trap();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
+#if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     meters = acl_ingress_meter;
     counters = acl_ingress_counter;
+#else
+    counters = acl_ingress_counter;
+#endif
     size = ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
   @id(ACL_INGRESS_QOS_TABLE_ID)
   @sai_acl(INGRESS)
+  @sai_acl_priority(10)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
     // Only allow IP field matches for IP packets.
-    dst_ip::mask != 0 -> is_ipv4 == 1;
     ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
-    l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
@@ -287,6 +299,10 @@ control acl_ingress(in headers_t headers,
     // Forbid unsupported combinations of IP_TYPE fields.
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
+    // Only allow icmp_type matches for ICMP packets
+    icmpv6_type::mask != 0 -> ip_protocol == 58;
+    // Only allow arp_tpa matches for ARP packets.
+    arp_tpa::mask != 0 -> ether_type == 0x0806;
   ")
   table acl_ingress_qos_table {
     key = {
@@ -305,27 +321,27 @@ control acl_ingress(in headers_t headers,
       headers.ethernet.dst_addr : ternary
           @id(5) @name("dst_mac")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
-      headers.ipv4.dst_addr : ternary
-          @id(6) @name("dst_ip")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP) @format(IPV4_ADDRESS);
+      headers.arp.target_proto_addr : ternary
+          @id(6) @name("arp_tpa")
+          @composite_field(
+              @sai_udf(base=SAI_UDF_BASE_L3, offset=24, length=2),
+              @sai_udf(base=SAI_UDF_BASE_L3, offset=26, length=2)
+          ) @format(IPV4_ADDRESS);
       ttl : ternary
           @id(7) @name("ttl")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_TTL);
       ip_protocol : ternary
           @id(8) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
-      local_metadata.l4_src_port : ternary
-          @id(9) @name("l4_src_port")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT);
+      headers.icmp.type : ternary
+          @id(9) @name("icmpv6_type")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ICMPV6_TYPE);
       local_metadata.l4_dst_port : ternary
           @id(10) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
       local_metadata.ingress_port : optional
           @id(11) @name("in_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
-      (port_id_t)standard_metadata.egress_port: optional
-          @id(12) @name("out_port")
-          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT);
       local_metadata.acl_metadata : ternary
           @id(13) @name("acl_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
@@ -333,6 +349,8 @@ control acl_ingress(in headers_t headers,
     actions = {
       @proto_id(1) set_qos_queue_and_cancel_copy_above_rate_limit();
       @proto_id(2) set_qos_queue_and_deny_above_rate_limit();
+      @proto_id(3) acl_forward();
+      @proto_id(4) acl_drop(standard_metadata);
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -387,13 +405,11 @@ control acl_ingress(in headers_t headers,
     // Only allow IP field matches for IP packets.
     dst_ip::mask != 0 -> is_ipv4 == 1;
     src_ip::mask != 0 -> is_ipv4 == 1;
-#if defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
     l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
-#endif
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
     is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -482,7 +498,6 @@ control acl_ingress(in headers_t headers,
     // additional parts of SAI in the future.
     acl_ingress_table.apply();
     acl_ingress_qos_table.apply();
-    acl_ingress_security_table.apply();
 #endif
 
     if (marked_to_copy && !cancel_copy) {

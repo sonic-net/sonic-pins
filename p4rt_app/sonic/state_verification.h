@@ -16,6 +16,9 @@
 
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 
 namespace p4rt_app {
@@ -29,6 +32,15 @@ namespace sonic {
 // one message for every error found.
 std::vector<std::string> VerifyAppStateDbAndAppDbEntries(
     TableAdapter& app_state_db, TableAdapter& app_db);
+
+// Reads all the entries out of a P4RT table, and compares the values to a
+// list of PI TableEntries. Non-P4RT table entries will be ignored.
+//
+// On success an empty vector is returned. Otherwise, the vector will contain
+// one message for every error found.
+std::vector<std::string> VerifyP4rtTableWithCacheTableEntries(
+    TableAdapter& app_db, const std::vector<pdpi::IrTableEntry>& ir_entries,
+    const pdpi::IrP4Info& ir_p4_info);
 
 }  // namespace sonic
 }  // namespace p4rt_app

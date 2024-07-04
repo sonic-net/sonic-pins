@@ -305,7 +305,6 @@ message ConstrainedTableEntry {
     Lpm ipv4 = 3; // lpm match / Format::IPV4
     Ternary ipv6 = 4; // ternary match / Format::IPV6 / 128 bits
     Ternary mac = 5; // ternary match / Format::MAC
-    // Refers to 'one_match_field_table.id'.
     Optional referring_str = 6; // optional match / Format::STRING
     Optional nonreferring_str = 7; // optional match / Format::STRING
     Ternary field10bit = 8; // ternary match / Format::HEX_STRING / 10 bits
@@ -366,15 +365,28 @@ message ReferringByMatchFieldTableEntry {
     // Refers to 'two_match_fields_table.id_1'.
     string referring_id_1 = 1; // exact match / Format::STRING
     // Refers to 'two_match_fields_table.id_2'.
-    Optional referring_id_2 = 2; // optional match / Format::HEX_STRING / 10 bits
+    string referring_id_2 = 2; // exact match / Format::HEX_STRING / 10 bits
   }
   Match match = 1;
   message Action {
     DoThing4Action do_thing_4 = 1;
   }
   Action action = 2;
-  int32 priority = 3;
   bytes controller_metadata = 8;
+}
+
+
+// Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
+// of the v1model architecture and is not explicitly present in the P4 program.
+message MulticastGroupTableEntry {
+  message Match {
+    string multicast_group_id = 1;  // exact match / Format::HEX_STRING / 16 bits
+  }
+  Match match = 1;
+  message Action {
+    ReplicateAction replicate = 1;
+  }
+  Action action = 2;
 }
 
 
@@ -431,6 +443,20 @@ message ReferringToOneMatchFieldAction {
 }
 
 
+// This action is unique to `MulticastGroupTableEntry` and is not explicitly
+// present in the P4 program.
+message ReplicateAction {
+  // Corresponds to `Replica` in p4runtime.proto.
+  message Replica {
+    string port = 1;  // Format::STRING
+    string instance = 2;  // Format::HEX_STRING / 16 bits
+  }
+  // Each `Replica` must have a unique (port, instance)-pair within the scope of
+  // the `ReplicateAction` that contains it.
+  repeated Replica replicas = 1;
+}
+
+
 // -- All tables ---------------------------------------------------------------
 
 message TableEntry {
@@ -456,6 +482,7 @@ message TableEntry {
     OneMatchFieldTableEntry one_match_field_table_entry = 12699062;
     ReferringByActionTableEntry referring_by_action_table_entry = 14558547;
     ReferringByMatchFieldTableEntry referring_by_match_field_table_entry = 16037969;
+    MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }
 

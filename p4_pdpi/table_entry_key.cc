@@ -11,16 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "gutil/table_entry_key.h"
+#include "p4_pdpi/table_entry_key.h"
 
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #include "glog/logging.h"
+#include "google/protobuf/io/zero_copy_stream_impl_lite.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
 
-namespace gutil {
+namespace pdpi {
 namespace {
 
 // Deterministically serializes a given `proto` to a returned string.
@@ -100,4 +102,4 @@ std::vector<std::string_view> TableEntryKey::NonKeyFieldPaths() {
   };
 }
 
-}  // namespace gutil
+}  // namespace pdpi
