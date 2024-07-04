@@ -64,6 +64,7 @@ cc_library(
         "@com_github_gnmi//proto/gnmi:gnmi_grpc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -117,17 +118,6 @@ cc_library(
 )
 
 cc_library(
-    name = "ssh_client",
-    hdrs = ["ssh_client.h"],
-    deps = [
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
-    ],
-)
-
-cc_library(
     name = "mock_test_environment",
     testonly = 1,
     hdrs = ["mock_test_environment.h"],
@@ -144,6 +134,40 @@ cc_test(
     srcs = ["mock_test_environment_test.cc"],
     deps = [
         ":mock_test_environment",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "ssh_client",
+    hdrs = ["ssh_client.h"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
+    name = "mock_ssh_client",
+    testonly = 1,
+    hdrs = ["mock_ssh_client.h"],
+    deps = [
+        ":ssh_client",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "mock_ssh_client_test",
+    srcs = ["mock_ssh_client_test.cc"],
+    deps = [
+        ":mock_ssh_client",
         "@com_google_googletest//:gtest_main",
     ],
 )
