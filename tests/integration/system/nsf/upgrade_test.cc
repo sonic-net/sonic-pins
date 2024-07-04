@@ -68,7 +68,6 @@ NsfUpgradeScenario GetRandomNsfUpgradeScenario() {
 }
 }  // namespace
 
-// approach than using std::variant (eg. type-erasure or typed tests).
 void NsfUpgradeTest::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
   traffic_helper_ = GetParam().create_traffic_helper();
