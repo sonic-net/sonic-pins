@@ -29,18 +29,18 @@ namespace pins_test {
 // used by the NSF Upgrade tests.
 class SwssValidator : public ComponentValidator {
  public:
-  absl::Status OnInit(absl::string_view version, Testbed& testbed,
-                      thinkit::SSHClient& ssh_client) override {
-    LOG(INFO) << "Swss Init";
-    return absl::OkStatus();
-  }
-  absl::Status OnFlowProgram(absl::string_view version, Testbed &testbed,
-                             thinkit::SSHClient &ssh_client) override {
-    LOG(INFO) << "Swss Flow Program";
-    return absl::OkStatus();
-  }
-  absl::Status OnNsfReboot(absl::string_view version, Testbed& testbed,
-                           thinkit::SSHClient& ssh_client) override;
+   absl::Status OnInit(absl::string_view version, const Testbed &testbed,
+                       thinkit::SSHClient &ssh_client) override {
+     LOG(INFO) << "Swss Init";
+     return absl::OkStatus();
+   }
+   absl::Status OnFlowProgram(absl::string_view version, const Testbed &testbed,
+                              thinkit::SSHClient &ssh_client) override {
+     LOG(INFO) << "Swss Flow Program";
+     return absl::OkStatus();
+   }
+   absl::Status OnNsfReboot(absl::string_view version, const Testbed &testbed,
+                            thinkit::SSHClient &ssh_client) override;
 };
 
 }  // namespace pins_test

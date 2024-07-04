@@ -93,20 +93,13 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
       absl::Now() - pre_nsf_link_flap_start_time;
   LOG(INFO) << "Pre-NSF Link Flap Time: " << pre_nsf_link_flap_time;
   LOG(INFO) << "Initiating NSF reboot";
-  // TODO: Directly use GenericTestbed instead of constructing
-  // Testbed and using it.
-  thinkit::GenericTestbed& generic_testbed_raw_ptr = *generic_testbed;
-  pins_test::Testbed testbed;
-  // TODO: Update the below code once the support is added for
-  // raw pointer for GenericTestbed.
-  testbed.emplace<std::unique_ptr<thinkit::GenericTestbed>>(
-      std::move(generic_testbed));
-
+  ASSERT_OK(DoNsfRebootAndWaitForSwitchReady(generic_testbed.get(),
+                                             *GetParam().ssh_client));
   LOG(INFO) << "Flap links after NSF Reboot.";
   const absl::Time post_nsf_link_flap_start_time = absl::Now();
   for (const auto& [sut_interface, host_interface_info] :
        host_interface_infos) {
-    EXPECT_OK(FlapLink(*gnmi_stub, generic_testbed_raw_ptr, sut_interface,
+    EXPECT_OK(FlapLink(*gnmi_stub, *generic_testbed, sut_interface,
                        host_interface_info));
   }
   const absl::Duration post_nsf_link_flap_time =
@@ -121,4 +114,5 @@ TEST_P(NsfLinkFlapTestFixture, NsfLinkFlapTest) {
         << "Link flap time has increased post NSF";
   }
 }
+
 }  // namespace pins_test

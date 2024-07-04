@@ -372,15 +372,15 @@ absl::Status ValidatePinsSoftwareComponentsAfterReboot(
   return absl::OkStatus();
 }
 
-std::vector<std::string> GetConnectedInterfacesForSut(Testbed& testbed) {
-  return std::visit(
-      gutil::Overload{[&](std::unique_ptr<thinkit::GenericTestbed>& testbed) {
-                        return FromTestbed(GetAllConnectedInterfaces, *testbed);
-                      },
-                      [&](thinkit::MirrorTestbed* testbed) {
-                        return testbed->GetConnectedInterfaces();
-                      }},
-      testbed);
+std::vector<std::string> GetConnectedInterfacesForSut(const Testbed &testbed) {
+  return std::visit(gutil::Overload{[&](thinkit::GenericTestbed *testbed) {
+                                      return FromTestbed(
+                                          GetAllConnectedInterfaces, *testbed);
+                                    },
+                                    [&](thinkit::MirrorTestbed *testbed) {
+                                      return testbed->GetConnectedInterfaces();
+                                    }},
+                    testbed);
 }
 
 absl::Status RunReadyValidations(thinkit::Switch& thinkit_switch,
@@ -448,7 +448,7 @@ absl::Status WaitForSwitchState(thinkit::Switch& thinkit_switch,
       GetSwitchStateString(state), elapsed_time, validator_status.message()));
 }
 
-absl::Status Reboot(RebootMethod method, Testbed& testbed) {
+absl::Status Reboot(RebootMethod method, const Testbed &testbed) {
   LOG(INFO) << "Initiating Switch reboot. Reboot method: "
             << RebootMethod_Name(method);
   thinkit::Switch& sut = GetSut(testbed);
@@ -478,11 +478,11 @@ void TearDownTestbed(TestbedInterface& testbed_interface) {
   std::visit([](auto &&testbed) { testbed->TearDown(); }, testbed_interface);
 }
 
-absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface) {
+absl::StatusOr<TestbedHolder> GetTestbed(TestbedInterface &testbed_interface) {
   return std::visit(
       gutil::Overload{
-          [&](std::unique_ptr<thinkit::GenericTestbedInterface>& testbed)
-              -> absl::StatusOr<Testbed> {
+          [](std::unique_ptr<thinkit::GenericTestbedInterface> &testbed)
+              -> absl::StatusOr<TestbedHolder> {
             // Pick a testbed with SUT connected to a traffic generator, be it a
             // software (eg. on a host) or a hardware (eg. Ixia), on 2 ports,
             // one ingress and one egress port.
@@ -496,20 +496,20 @@ absl::StatusOr<Testbed> GetTestbed(TestbedInterface& testbed_interface) {
                     )pb");
             return testbed->GetTestbedWithRequirements(requirements);
           },
-          [&](std::unique_ptr<thinkit::MirrorTestbedInterface>& testbed)
-              -> absl::StatusOr<Testbed> {
+          [](std::unique_ptr<thinkit::MirrorTestbedInterface> &testbed)
+              -> absl::StatusOr<TestbedHolder> {
             return &testbed->GetMirrorTestbed();
           }},
       testbed_interface);
 }
 
-thinkit::Switch& GetSut(Testbed& testbed) {
+thinkit::Switch &GetSut(const Testbed &testbed) {
   return std::visit(
       [](auto &&testbed) -> thinkit::Switch & { return testbed->Sut(); },
       testbed);
 }
 
-thinkit::TestEnvironment &GetTestEnvironment(Testbed &testbed) {
+thinkit::TestEnvironment &GetTestEnvironment(const Testbed &testbed) {
   return std::visit(
       [](auto &&testbed) -> thinkit::TestEnvironment & {
         return testbed->Environment();
@@ -523,15 +523,15 @@ void ExpectLinkFlaps(TestbedInterface &testbed_interface) {
       testbed_interface);
 }
 
-absl::StatusOr<std::string> ImageCopy(const std::string& image_label,
-                                      Testbed& testbed,
-                                      thinkit::SSHClient& ssh_client) {
+absl::StatusOr<std::string> ImageCopy(const std::string &image_label,
+                                      const Testbed &testbed,
+                                      thinkit::SSHClient &ssh_client) {
   return "";
 }
 
-absl::Status InstallRebootPushConfig(
-    Testbed& testbed, thinkit::SSHClient& ssh_client,
-    const ImageConfigParams& image_config_param) {
+absl::Status
+InstallRebootPushConfig(const Testbed &testbed, thinkit::SSHClient &ssh_client,
+                        const ImageConfigParams &image_config_param) {
   thinkit::Switch& sut = GetSut(testbed);
   ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
 
@@ -567,8 +567,8 @@ absl::Status InstallRebootPushConfig(
 }
 
 absl::Status ValidateTestbedState(
-    Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param,
+    const Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param,
     bool check_interfaces_up, absl::Span<const std::string> interfaces) {
   // TODO: Add validation for SUT stack image label.
   LOG(INFO) << "Validating SUT state";
@@ -582,28 +582,28 @@ absl::Status ValidateTestbedState(
       sut, ssh_client, interfaces, check_interfaces_up, /*with_healthz=*/true);
 
   return std::visit(
-      gutil::Overload{[&](std::unique_ptr<thinkit::GenericTestbed> &testbed) {
-                        return sut_status;
-                      },
-                      [&](thinkit::MirrorTestbed *testbed) -> absl::Status {
-                        absl::Status control_status;
-                        if (!testbed->ControlSwitch().ChassisName().empty()) {
-                          control_status = RunReadyValidations(
-                              testbed->ControlSwitch(), ssh_client, interfaces,
-                              check_interfaces_up,
-                              /*with_healthz=*/true);
-                        }
-                        RETURN_IF_ERROR(sut_status);
-                        return control_status;
-                      }},
+      gutil::Overload{
+          [&](thinkit::GenericTestbed *testbed) { return sut_status; },
+          [&](thinkit::MirrorTestbed *testbed) -> absl::Status {
+            absl::Status control_status;
+            if (!testbed->ControlSwitch().ChassisName().empty()) {
+              control_status =
+                  RunReadyValidations(testbed->ControlSwitch(), ssh_client,
+                                      interfaces, check_interfaces_up,
+                                      /*with_healthz=*/true);
+            }
+            RETURN_IF_ERROR(sut_status);
+            return control_status;
+          }},
       testbed);
 }
 
 absl::Status ValidateComponents(
-    absl::Status (ComponentValidator::*validate)(absl::string_view, Testbed &,
+    absl::Status (ComponentValidator::*validate)(absl::string_view,
+                                                 const Testbed &,
                                                  thinkit::SSHClient &),
     const absl::Span<const std::unique_ptr<ComponentValidator>> validators,
-    absl::string_view version, Testbed &testbed,
+    absl::string_view version, const Testbed &testbed,
     thinkit::SSHClient &ssh_client) {
   for (const std::unique_ptr<ComponentValidator>& validator : validators) {
     RETURN_IF_ERROR(
@@ -612,11 +612,12 @@ absl::Status ValidateComponents(
   return absl::OkStatus();
 }
 
-absl::Status NsfReboot(Testbed &testbed) {
+absl::Status NsfReboot(const Testbed &testbed) {
   return Reboot(RebootMethod::NSF, testbed);
 }
 
-absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
+absl::Status WaitForReboot(const Testbed &testbed,
+                           thinkit::SSHClient &ssh_client,
                            bool check_interfaces_up) {
   LOG(INFO) << "Waiting for switch to go down and come back up";
   // Wait for switch to go down and come back up.
@@ -631,11 +632,12 @@ absl::Status WaitForReboot(Testbed& testbed, thinkit::SSHClient& ssh_client,
       kTurnUpTimeout, ssh_client, GetConnectedInterfacesForSut(testbed));
 }
 
-absl::Status WaitForNsfReboot(
-    Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param,
-    bool check_interfaces_up, absl::Span<const std::string> interfaces,
-    bool collect_debug_logs_for_nsf_success) {
+absl::Status
+WaitForNsfReboot(const Testbed &testbed, thinkit::SSHClient &ssh_client,
+                 absl::Nullable<const ImageConfigParams *> image_config_param,
+                 bool check_interfaces_up,
+                 absl::Span<const std::string> interfaces,
+                 bool collect_debug_logs_for_nsf_success) {
   LOG(INFO) << "Waiting for switch to go down and come back up post NSF reboot";
   // Wait for switch to do NSF reboot.
   thinkit::Switch& sut = GetSut(testbed);
@@ -675,8 +677,8 @@ absl::Status WaitForNsfReboot(
 }
 
 absl::Status DoNsfRebootAndWaitForSwitchReady(
-    Testbed& testbed, thinkit::SSHClient& ssh_client,
-    absl::Nullable<const ImageConfigParams*> image_config_param,
+    const Testbed &testbed, thinkit::SSHClient &ssh_client,
+    absl::Nullable<const ImageConfigParams *> image_config_param,
     bool check_interfaces_up, absl::Span<const std::string> interfaces) {
   thinkit::Switch& sut = GetSut(testbed);
   ASSIGN_OR_RETURN(auto sut_gnmi_stub, sut.CreateGnmiStub());
@@ -732,8 +734,8 @@ absl::Status PushConfig(thinkit::Switch& thinkit_switch,
       p4_info);
 }
 
-absl::Status PushConfig(const ImageConfigParams& image_config_param,
-                        Testbed& testbed, thinkit::SSHClient& ssh_client,
+absl::Status PushConfig(const ImageConfigParams &image_config_param,
+                        const Testbed &testbed, thinkit::SSHClient &ssh_client,
                         bool clear_config, bool check_interfaces_up) {
   thinkit::Switch& sut = GetSut(testbed);
   RETURN_IF_ERROR(PushConfig(sut, image_config_param.gnmi_config,
@@ -763,7 +765,7 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
   return pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
 }
 
-absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
+absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(const Testbed &testbed) {
   thinkit::Switch& sut = GetSut(testbed);
   ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
@@ -773,15 +775,15 @@ absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(Testbed& testbed) {
   return pdpi::SetMetadataAndSendPiReadRequest(session.get(), read_request);
 }
 
-absl::Status SaveP4FlowSnapshot(Testbed& testbed, ReadResponse snapshot,
+absl::Status SaveP4FlowSnapshot(const Testbed &testbed, ReadResponse snapshot,
                                 absl::string_view file_name) {
   return GetTestEnvironment(testbed).StoreTestArtifact(file_name,
                                                        snapshot.DebugString());
 }
 
 absl::Status StoreSutDebugArtifacts(absl::string_view prefix,
-                                    Testbed& testbed) {
-  // TODO: Implement gNMI state path validation for comparison of
+                                    const Testbed &testbed) {
+  // Implement gNMI state path validation for comparison of
   // the various state paths before and after NSF Upgrade/Reboot.
   return absl::OkStatus();
 }
