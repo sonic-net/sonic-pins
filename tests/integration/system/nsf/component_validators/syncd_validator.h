@@ -30,23 +30,23 @@ namespace pins_test {
 // used by the NSF Upgrade tests.
 
 class SyncdValidator : public ComponentValidator {
-  absl::Status OnInit(absl::string_view version, Testbed& testbed,
-                      thinkit::SSHClient& ssh_client) override;
+  absl::Status OnInit(absl::string_view version, const Testbed &testbed,
+                      thinkit::SSHClient &ssh_client) override;
 
-  absl::Status OnFlowProgram(absl::string_view version, Testbed& testbed,
-                             thinkit::SSHClient& ssh_client) override {
+  absl::Status OnFlowProgram(absl::string_view version, const Testbed &testbed,
+                             thinkit::SSHClient &ssh_client) override {
     LOG(INFO) << "Syncd Flow Program";
     return absl::OkStatus();
   }
-  absl::Status OnFlowCleanup(absl::string_view version, Testbed &testbed,
+  absl::Status OnFlowCleanup(absl::string_view version, const Testbed &testbed,
                              thinkit::SSHClient &ssh_client) override {
     LOG(INFO) << "Syncd Flow Cleanup";
     return absl::OkStatus();
   }
-  absl::Status OnNsfReboot(absl::string_view version, Testbed& testbed,
-                           thinkit::SSHClient& ssh_client) override;
+  absl::Status OnNsfReboot(absl::string_view version, const Testbed &testbed,
+                           thinkit::SSHClient &ssh_client) override;
 
- private:
+private:
   absl::flat_hash_set<absl::string_view> allowlist_;
 };
 
