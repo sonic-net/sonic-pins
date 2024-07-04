@@ -228,8 +228,11 @@ TableEntryGenerator AclIngressQosTableGenerator(
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
       R"pb(table_name: "acl_ingress_qos_table"
            matches {
-             name: "is_ipv4"
-             optional { value { hex_str: "0x1" } }
+             name: "ether_type"
+             ternary {
+               value { hex_str: "0x0806" }
+               mask { hex_str: "0xffff" }
+             }
            }
            action {
              name: "set_qos_queue_and_cancel_copy_above_rate_limit"

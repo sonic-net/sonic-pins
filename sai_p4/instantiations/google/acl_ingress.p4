@@ -338,6 +338,8 @@ control acl_ingress(in headers_t headers,
     actions = {
       @proto_id(1) set_qos_queue_and_cancel_copy_above_rate_limit();
       @proto_id(2) set_qos_queue_and_deny_above_rate_limit();
+      @proto_id(3) acl_forward();
+      @proto_id(4) acl_drop(standard_metadata);
       @defaultonly NoAction;
     }
     const default_action = NoAction;

@@ -134,12 +134,12 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesPuntPacketIn) {
                          }
                          payload: "Test packet."
                        )pb"));
-  ASSERT_OK_AND_ASSIGN(absl::StatusOr<std::string> raw_input_packet,
+  ASSERT_OK_AND_ASSIGN(std::string raw_input_packet,
                        packetlib::SerializePacket(input_packet));
 
   ASSERT_THAT(bmv2.SendPacket(pins::PacketAtPort{
                   .port = kIngressPort,
-                  .data = *raw_input_packet,
+                  .data = raw_input_packet,
               }),
               IsOkAndHolds(IsEmpty()));
 
@@ -147,7 +147,7 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesPuntPacketIn) {
   absl::SleepFor(absl::Seconds(1));
 
   StreamMessageResponse expected_response;
-  expected_response.mutable_packet()->set_payload(*raw_input_packet);
+  expected_response.mutable_packet()->set_payload(raw_input_packet);
   // Check if the ingress port in the metadata is correct.
   PacketMetadata* ingress_port_field =
       expected_response.mutable_packet()->add_metadata();
@@ -240,7 +240,7 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesCopyPacketIn) {
                          }
                          payload: "Test packet."
                        )pb"));
-  ASSERT_OK_AND_ASSIGN(absl::StatusOr<std::string> raw_input_packet,
+  ASSERT_OK_AND_ASSIGN(std::string raw_input_packet,
                        packetlib::SerializePacket(input_packet));
 
   // The output packet that will egress out of kEgressPort.
@@ -250,19 +250,23 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesCopyPacketIn) {
   // Update the checksum of the ipv4 header because the ttl field is changed.
   output_packet.mutable_headers(1)->mutable_ipv4_header()->set_checksum(
       "0x51fb");
-  ASSERT_OK_AND_ASSIGN(absl::StatusOr<std::string> raw_output_packet,
+  ASSERT_OK_AND_ASSIGN(std::string raw_output_packet,
                        packetlib::SerializePacket(output_packet));
 
-  ASSERT_THAT(bmv2.SendPacket(pins::PacketAtPort{.port = kIngressPort,
-                                                 .data = *raw_input_packet}),
+  ASSERT_THAT(bmv2.SendPacket(pins::PacketAtPort{
+                  .port = kIngressPort,
+                  .data = raw_input_packet,
+              }),
               IsOkAndHolds(ElementsAre(pins::PacketAtPort{
-                  .port = kEgressPort, .data = *raw_output_packet})));
+                  .port = kEgressPort,
+                  .data = raw_output_packet,
+              })));
 
   // Wait for 1 second to make sure packets are fully processed by BMv2.
   absl::SleepFor(absl::Seconds(1));
 
   StreamMessageResponse expected_response;
-  expected_response.mutable_packet()->set_payload(*raw_input_packet);
+  expected_response.mutable_packet()->set_payload(raw_input_packet);
   // Check if the ingress port in the metadata is correct.
   PacketMetadata* ingress_port_field =
       expected_response.mutable_packet()->add_metadata();
