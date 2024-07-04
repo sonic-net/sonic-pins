@@ -400,9 +400,19 @@ message AclEgressTableEntry {
   bytes controller_metadata = 8;
 }
 
+// Table entry restrictions:
+// ## Forbid illegal combinations of IP_TYPE fields.
+//   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+// ## Forbid unsupported combinations of IP_TYPE fields.
+//   is_ipv4::mask != 0 -> (is_ipv4 == 1);
+//   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclPreIngressVlanTableEntry {
   message Match {
-    Ternary ether_type = 1;  // ternary match / Format::HEX_STRING / 16 bits
+    Optional is_ip = 1;    // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;  // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;  // optional match / Format::HEX_STRING / 1 bits
   }
   Match match = 1;
   message Action {
@@ -481,6 +491,8 @@ message AclIngressQosTableEntry {
   Match match = 1;
   message Action {
     oneof action {
+      AclForwardAction acl_forward = 3;
+      AclDropAction acl_drop = 4;
       SetQosQueueAndCancelCopyAboveRateLimitAction
           set_qos_queue_and_cancel_copy_above_rate_limit = 1;
       SetQosQueueAndDenyAboveRateLimitAction
