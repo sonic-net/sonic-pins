@@ -1,4 +1,4 @@
-// Copyright (c) 2024, Google Inc.
+// Copyright (c) 2020, Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,13 @@
 #ifndef THINKIT_MOCK_TEST_ENVIRONMENT_H_
 #define THINKIT_MOCK_TEST_ENVIRONMENT_H_
 
+#include <string>
+#include <vector>
+
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
+#include "thinkit/proto/metrics.pb.h"
 #include "thinkit/test_environment.h"
 
 namespace thinkit {
@@ -30,6 +34,11 @@ class MockTestEnvironment : public TestEnvironment {
   MOCK_METHOD(absl::Status, AppendToTestArtifact,
               (absl::string_view filename, absl::string_view contents),
               (override));
+  MOCK_METHOD(bool, MaskKnownFailures, (), (override));
+  MOCK_METHOD(void, SetTestCaseID, (absl::string_view), (override));
+  MOCK_METHOD(void, SetTestCaseIDs, (const std::vector<std::string> &),
+              (override));
+  MOCK_METHOD(void, RecordMetrics, (const MetricGroup &), (override));
 };
 
 }  // namespace thinkit

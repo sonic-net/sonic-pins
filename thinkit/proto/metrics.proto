@@ -1,10 +1,10 @@
-// Copyright (c) 2020, Google Inc.
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,14 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "thinkit/mock_test_environment.h"
+syntax = "proto3";
 
-#include "gtest/gtest.h"
+package thinkit;
 
-namespace thinkit {
-namespace {
+option cc_generic_services = false;
 
-TEST(MockTestEnvironment, TestBuild) { MockTestEnvironment mock; }
+message Metric {
+  string name = 1;
+  oneof value {
+    int32 int_value = 2;
+    double double_value = 3;
+    string string_value = 4;
+  }
+}
 
-}  // namespace
-}  // namespace thinkit
+message MetricGroup {
+  string name = 1;
+  repeated Metric metrics = 2;
+}

@@ -48,8 +48,14 @@ cc_library(
     hdrs = ["switch.h"],
     deps = [
         "@com_github_gnmi//proto/gnmi:gnmi_grpc_proto",
+        "@com_github_gnoi//cert:cert_cc_grpc_proto",
+        "@com_github_gnoi//diag:diag_cc_grpc_proto",
+        "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
+        "@com_github_gnoi//os:os_cc_grpc_proto",
+        "@com_github_gnoi//system:system_cc_grpc_proto",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],
@@ -62,9 +68,13 @@ cc_library(
     deps = [
         ":switch",
         "@com_github_gnmi//proto/gnmi:gnmi_grpc_proto",
+        "@com_github_gnoi//cert:cert_cc_grpc_proto",
+        "@com_github_gnoi//diag:diag_cc_grpc_proto",
+        "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
+        "@com_github_gnoi//os:os_cc_grpc_proto",
+        "@com_github_gnoi//system:system_cc_grpc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -112,8 +122,10 @@ cc_library(
     name = "test_environment",
     hdrs = ["test_environment.h"],
     deps = [
+        "//thinkit/proto:metrics_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -123,6 +135,7 @@ cc_library(
     hdrs = ["mock_test_environment.h"],
     deps = [
         ":test_environment",
+        "//thinkit/proto:metrics_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
