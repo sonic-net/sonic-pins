@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
@@ -24,6 +25,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
@@ -33,10 +35,12 @@
 #include "dvaas/packet_injection.h"
 #include "dvaas/port_id_map.h"
 #include "dvaas/switch_api.h"
+#include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
 #include "glog/logging.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/test_artifact_writer.h"
 #include "lib/p4rt/p4rt_port.h"
@@ -558,8 +562,9 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
   }
   residual_collected_traffic_by_id_.clear();
 
-  test_runs_.mutable_test_runs()->Reserve(test_runs_.test_runs_size() +
-                                          injected_traffic_vector.size());
+  std::vector<SwitchInput> failed_switch_inputs;
+  PacketTestOutcomes new_test_outcomes;
+  new_test_outcomes.mutable_outcomes()->Reserve(injected_traffic_vector.size());
 
   // Only consider traffic injected before the cut off time for validation. This
   // is done to ensure in-flight packets are accounted for. The remaining
@@ -568,14 +573,22 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
   for (const InjectedTraffic& injected_traffic : injected_traffic_vector) {
     if (injected_traffic.injection_time <
         kPacketInjectionCutoffTimeForValidation) {
-      // Add results to test_runs_.
-      PacketTestRun* packet_test_run = test_runs_.mutable_test_runs()->Add();
+      PacketTestOutcome* test_outcome = new_test_outcomes.add_outcomes();
+      PacketTestRun* packet_test_run = test_outcome->mutable_test_run();
       *packet_test_run->mutable_test_vector() =
           injected_traffic.packet_test_vector;
       if (collected_traffic_by_id.contains(injected_traffic.tag)) {
         *packet_test_run->mutable_actual_output() =
             collected_traffic_by_id[injected_traffic.tag];
         collected_traffic_by_id.erase(injected_traffic.tag);
+      }
+      // Validate test runs to create test outcomes.
+      *test_outcome->mutable_test_result() =
+          ValidateTestRun(*packet_test_run,
+                          params_.validation_params.switch_output_diff_params);
+      if (test_outcome->test_result().has_failure()) {
+        failed_switch_inputs.push_back(
+            test_outcome->test_run().test_vector().input());
       }
     } else {
       residual_injected_traffic_.push_back(injected_traffic);
@@ -588,14 +601,73 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
     residual_collected_traffic_by_id_[id] = switch_output;
   }
 
+  // Append new test outcomes to the test artifact.
+  gutil::BazelTestArtifactWriter dvaas_test_artifact_writer;
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "test_outcomes.textproto", gutil::PrintTextProto(new_test_outcomes)));
+
+  if (!failed_switch_inputs.empty() &&
+      params_.validation_params.failure_enhancement_options
+          .collect_packet_trace &&
+      packet_trace_count_ <
+          generate_test_vectors_result_.packet_test_vector_by_id.size()) {
+    LOG(INFO) << "Storing packet traces for failed test packets";
+    // Store the packet trace for all failed test outcomes.
+    SwitchApi& control_switch = testbed_configurator_->ControlSwitchApi();
+    ASSIGN_OR_RETURN(P4Specification p4_spec,
+                     InferP4Specification(params_.validation_params, *backend_,
+                                          control_switch));
+    ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
+                     pdpi::GetIrP4Info(*control_switch.p4rt));
+
+    // Read P4Info and control plane entities from control switch, sorted for
+    // determinism.
+    ASSIGN_OR_RETURN(pdpi::IrEntities v1model_augmented_entities,
+                     pdpi::ReadIrEntitiesSorted(*control_switch.p4rt));
+
+    // Retrieve auxiliary entries for v1model targets.
+    ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
+                     backend_->CreateV1ModelAuxiliaryTableEntries(
+                         *control_switch.gnmi, ir_p4info));
+    v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
+
+    ASSIGN_OR_RETURN(auto packet_traces,
+                     backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
+                                               v1model_augmented_entities,
+                                               failed_switch_inputs));
+
+    for (dvaas::PacketTestOutcome& test_outcome :
+         *new_test_outcomes.mutable_outcomes()) {
+      if (test_outcome.test_result().has_failure()) {
+        RETURN_IF_ERROR(AttachPacketTrace(test_outcome, packet_traces,
+                                          dvaas_test_artifact_writer));
+        packet_trace_count_++;
+      }
+    }
+  }
+
+  // Append `new_outcomes` to `test_outcomes_`.
+  test_outcomes_.mutable_outcomes()->Reserve(
+      test_outcomes_.outcomes().size() + new_test_outcomes.outcomes().size());
+  for (const auto& new_test_outcome : new_test_outcomes.outcomes()) {
+    *test_outcomes_.mutable_outcomes()->Add() = new_test_outcome;
+  }
+
+  ValidationResult new_validation_result(
+      new_test_outcomes, generate_test_vectors_result_.packet_synthesis_result);
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "test_vector_failures.txt",
+      absl::StrJoin(new_validation_result.GetAllFailures(), "\n\n")));
+
   return ValidationResult(
-      test_runs_, params_.validation_params.switch_output_diff_params,
+      std::move(test_outcomes_),
       generate_test_vectors_result_.packet_synthesis_result);
 }
 
 absl::StatusOr<ValidationResult>
 TrafficGeneratorWithGuaranteedRate::GetAndClearValidationResult() {
-  test_runs_.clear_test_runs();
-  return GetValidationResult();
+  ASSIGN_OR_RETURN(ValidationResult validation_result, GetValidationResult());
+  test_outcomes_.clear_outcomes();
+  return validation_result;
 }
 }  // namespace dvaas

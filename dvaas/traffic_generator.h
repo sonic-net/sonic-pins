@@ -30,7 +30,6 @@
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/mirror_testbed_config.h"
 #include "dvaas/packet_injection.h"
-#include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
 #include "thinkit/mirror_testbed.h"
@@ -274,6 +273,9 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
   // produce unique tag ids and retag test vectors per each use.
   int packet_tag_id_ = 1;
 
+  // The number of packet traces collected during `GetValidationResult`.
+  int packet_trace_count_ = 0;
+
   PacketStatistics statistics_;
 
   // Traffic injected after latest call to `Get*ValidationResult`.
@@ -322,10 +324,11 @@ class TrafficGeneratorWithGuaranteedRate : public TrafficGenerator {
   absl::Status CollectOutputTraffic()
       ABSL_LOCKS_EXCLUDED(collected_traffic_mutex_);
 
-  // Result of packet injection and collection (i.e. test vector + switch
-  // output), produced and used by `GetValidationStats` by processing
-  // `injected_traffic_` and `collected_traffic_by_id_` (and residues).
-  PacketTestRuns test_runs_;
+  // Result of packet injection, collection, and validation (i.e. test vector +
+  // switch output + validation result), produced and used by
+  // `GetValidationStats` by processing `injected_traffic_` and
+  // `collected_traffic_by_id_` (and residues).
+  PacketTestOutcomes test_outcomes_;
 
   // Parameters received in the (latest) call to `Init`.
   TrafficGenerator::Params params_;
