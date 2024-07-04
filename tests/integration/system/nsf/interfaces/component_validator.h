@@ -58,7 +58,7 @@ class ComponentValidator {
   virtual ~ComponentValidator() = default;
 
   // Called before starting every NSF test.
-  virtual absl::Status OnInit(absl::string_view version, Testbed &testbed,
+  virtual absl::Status OnInit(absl::string_view version, const Testbed &testbed,
                               thinkit::SSHClient &ssh_client) {
     LOG(INFO) << "Validating components: OnInit";
     return absl::OkStatus();
@@ -66,7 +66,7 @@ class ComponentValidator {
 
   // Called after programming flows on SUT.
   virtual absl::Status OnFlowProgram(absl::string_view version,
-                                     Testbed &testbed,
+                                     const Testbed &testbed,
                                      thinkit::SSHClient &ssh_client) {
     LOG(INFO) << "Validating components: OnFlowProgram";
     return absl::OkStatus();
@@ -75,28 +75,31 @@ class ComponentValidator {
   // Called after starting traffic from the Control Device or the Traffic
   // Generator in the testbed.
   virtual absl::Status OnStartTraffic(absl::string_view version,
-                                      Testbed &testbed,
+                                      const Testbed &testbed,
                                       thinkit::SSHClient &ssh_client) {
     LOG(INFO) << "Validating components: OnStartTraffic";
     return absl::OkStatus();
   }
 
   // Called after an image copy is performed on the SUT.
-  virtual absl::Status OnImageCopy(absl::string_view version, Testbed &testbed,
+  virtual absl::Status OnImageCopy(absl::string_view version,
+                                   const Testbed &testbed,
                                    thinkit::SSHClient &ssh_client) {
     LOG(INFO) << "Validating components: OnImageCopy";
     return absl::OkStatus();
   }
 
   // Called after a successful NSF reboot of the SUT.
-  virtual absl::Status OnNsfReboot(absl::string_view version, Testbed &testbed,
+  virtual absl::Status OnNsfReboot(absl::string_view version,
+                                   const Testbed &testbed,
                                    thinkit::SSHClient &ssh_client) {
     LOG(INFO) << "Validating components: OnNsfReboot";
     return absl::OkStatus();
   }
 
   // Called after pushing config on the SUT.
-  virtual absl::Status OnConfigPush(absl::string_view version, Testbed &testbed,
+  virtual absl::Status OnConfigPush(absl::string_view version,
+                                    const Testbed &testbed,
                                     thinkit::SSHClient &ssh_client) {
     LOG(INFO) << "Validating components: OnConfigPush";
     return absl::OkStatus();
@@ -105,7 +108,7 @@ class ComponentValidator {
   // Called after stopping traffic from the Control Device or the Traffic
   // Generator in the testbed.
   virtual absl::Status OnStopTraffic(absl::string_view version,
-                                     Testbed &testbed,
+                                     const Testbed &testbed,
                                      thinkit::SSHClient &ssh_client) {
     LOG(INFO) << "Validating components: OnStopTraffic";
     return absl::OkStatus();
@@ -113,7 +116,7 @@ class ComponentValidator {
 
   // Called after clearing up flows from the SUT.
   virtual absl::Status OnFlowCleanup(absl::string_view version,
-                                     Testbed &testbed,
+                                     const Testbed &testbed,
                                      thinkit::SSHClient &ssh_client) {
     LOG(INFO) << "Validating components: OnFlowCleanup";
     return absl::OkStatus();
