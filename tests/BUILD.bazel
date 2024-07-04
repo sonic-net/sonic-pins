@@ -14,6 +14,7 @@
 #
 # PINS test functions that can be run on any infrastructure that supports ThinKit.
 
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
@@ -23,4 +24,19 @@ package(
     licenses = ["notice"],
 )
 
-# TODO: Remove strip command and make this build.
+cc_library(
+    name = "thinkit_sanity_tests",
+    testonly = 1,
+    srcs = ["thinkit_sanity_tests.cc"],
+    hdrs = ["thinkit_sanity_tests.h"],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//thinkit:ssh_client",
+        "//thinkit:switch",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest",
+    ],
+)
