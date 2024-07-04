@@ -718,15 +718,6 @@ tables {
     }
   }
   match_fields {
-    id: 12
-    name: "out_port"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUT_PORT)"
-    match_type: OPTIONAL
-    type_name {
-      name: "port_id_t"
-    }
-  }
-  match_fields {
     id: 13
     name: "acl_metadata"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
