@@ -402,14 +402,21 @@ control acl_ingress(in headers_t headers,
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
+#if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     // Only allow IP field matches for IP packets.
     dst_ip::mask != 0 -> is_ipv4 == 1;
     src_ip::mask != 0 -> is_ipv4 == 1;
+    src_ipv6::mask != 0 -> is_ipv6 == 1;
+#endif
+  // TODO: This comment is required for the preprocessor to not
+  // spit out nonsense.
+#if defined(SAI_INSTANTIATION_TOR)
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
     l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
     l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
+#endif
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
     is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -432,30 +439,40 @@ control acl_ingress(in headers_t headers,
       headers.ethernet.ether_type : ternary
           @id(4) @name("ether_type")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
+#if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
       headers.ipv4.src_addr : ternary
           @id(5) @name("src_ip")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_IP) @format(IPV4_ADDRESS);
       headers.ipv4.dst_addr : ternary
           @id(6) @name("dst_ip")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP) @format(IPV4_ADDRESS);
+      headers.ipv6.src_addr[127:64] : ternary
+          @id(7) @name("src_ipv6")
+          @composite_field(
+              @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_IPV6_WORD3),
+              @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_IPV6_WORD2)
+          ) @format(IPV6_ADDRESS);
+#endif
+#if defined(SAI_INSTANTIATION_TOR)
       dscp : ternary
-          @id(9) @name("dscp")
+          @id(8) @name("dscp")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP);
       ip_protocol : ternary
-          @id(10) @name("ip_protocol")
+          @id(9) @name("ip_protocol")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IP_PROTOCOL);
       local_metadata.l4_src_port : ternary
-          @id(11) @name("l4_src_port")
+          @id(10) @name("l4_src_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_SRC_PORT);
       local_metadata.l4_dst_port : ternary
-          @id(12) @name("l4_dst_port")
+          @id(11) @name("l4_dst_port")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT);
       local_metadata.route_metadata : ternary
-          @id(13) @name("route_metadata")
+          @id(12) @name("route_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META);
       local_metadata.acl_metadata : ternary
-          @id(14) @name("acl_metadata")
+          @id(13) @name("acl_metadata")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META);
+#endif
     }
     actions = {
       @proto_id(1) acl_forward();
@@ -489,6 +506,7 @@ control acl_ingress(in headers_t headers,
 
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_ingress_table.apply();
+    acl_ingress_security_table.apply();
 #elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     acl_ingress_table.apply();
     acl_ingress_counting_table.apply();

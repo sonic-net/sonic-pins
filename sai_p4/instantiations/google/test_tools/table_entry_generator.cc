@@ -217,8 +217,8 @@ TableEntryGenerator AclIngressSecurityTableGenerator(
            }
            action { name: "acl_drop" })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
-  generator.generator =
-      IrMatchFieldAndPriorityGenerator(table_definition, *base_entry, "dst_ip");
+  generator.generator = IrMatchFieldAndPriorityGenerator(
+      table_definition, *base_entry, "ether_type");
   return generator;
 }
 
