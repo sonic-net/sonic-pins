@@ -36,6 +36,7 @@ cc_binary(
     testonly = True,
     srcs = ["p4rt_route_measurement_test.cc"],
     deps = [
+        "//gutil:proto",
         "//gutil:collections",
         "//gutil:io",
         "//gutil:status",
@@ -54,7 +55,6 @@ cc_binary(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/numeric:int128",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/random:distributions",
@@ -64,6 +64,7 @@ cc_binary(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
