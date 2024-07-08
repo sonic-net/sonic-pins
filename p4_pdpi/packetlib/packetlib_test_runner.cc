@@ -1107,6 +1107,158 @@ void RunPacketParseTests() {
                        sequence_id: 0x0000
                        control_field: 0x00
                      )pb");
+  RunPacketParseTest("PSP packet unencrypted UDP (valid)",
+                     R"pb(
+                       # Ethernet header
+                       ethernet_destination: 0xaabbccddeeff
+                       ethernet_source: 0x112233445566
+                       ethertype: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0032
+                       next_header: 0x11  # UDP
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # UDP header
+                       source_port: 0x0014
+                       destination_port: 0x03e8  # 1000
+                       length: 0x0032
+                       checksum: 0x0000
+                       # PSP Header
+                       next_header: 0x11  # UDP
+                       header_ext_length: 0x00
+                       reserved0: 0b00
+                       crypt_offset: 0b000010
+                       sample_bit: 0b0
+                       drop_bit: 0b0
+                       version: 0x1
+                       virtualization_cookie_present: 0b0
+                       reserved1: 0b1
+                       security_parameters_index: 0x00000000
+                       initialization_vector: 0x0000000000000000
+                       # Inner UDP Header
+                       source_port: 0xbeef
+                       destination_port: 0xabcd
+                       length: 0x001a
+                       checksum: 0x0025
+                       # Payload - 18 octets
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+                     )pb");
+  RunPacketParseTest("PSP packet with encrypted UDP (valid)",
+                     R"pb(
+                       # Ethernet header
+                       ethernet_destination: 0xaabbccddeeff
+                       ethernet_source: 0x112233445566
+                       ethertype: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x002a
+                       next_header: 0x11  # UDP
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # UDP header
+                       source_port: 0x0014
+                       destination_port: 0x03e8  # 1000
+                       length: 0x002a
+                       checksum: 0x0000
+                       # PSP Header
+                       next_header: 0x11  # UDP
+                       header_ext_length: 0x00
+                       reserved0: 0b00
+                       crypt_offset: 0b000000
+                       sample_bit: 0b0
+                       drop_bit: 0b0
+                       version: 0x1
+                       virtualization_cookie_present: 0b0
+                       reserved1: 0b1
+                       security_parameters_index: 0x00000000
+                       initialization_vector: 0x0000000000000000
+                       # Payload - 18 octets
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+                     )pb");
+  RunPacketParseTest("PSP packet with virtualization cookie (unsupported)",
+                     R"pb(
+                       # Ethernet header
+                       ethernet_destination: 0xaabbccddeeff
+                       ethernet_source: 0x112233445566
+                       ethertype: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x002a
+                       next_header: 0x11  # UDP
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # UDP header
+                       source_port: 0x0014
+                       destination_port: 0x03e8  # 1000
+                       length: 0x002a
+                       checksum: 0x0000
+                       # PSP Header
+                       next_header: 0x04
+                       header_ext_length: 0x00
+                       reserved0: 0b00
+                       crypt_offset: 0b000000
+                       sample_bit: 0b0
+                       drop_bit: 0b0
+                       version: 0x1
+                       virtualization_cookie_present: 0b1
+                       reserved1: 0b1
+                       security_parameters_index: 0x00000000
+                       initialization_vector: 0x0000000000000000
+                       # Payload - 18 octets
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22 22 22 22 22 22 22
+                       payload: 0x 22 22
+                     )pb");
+  RunPacketParseTest("PSP packet that is too short (invalid)",
+                     R"pb(
+                       # Ethernet header
+                       ethernet_destination: 0xaabbccddeeff
+                       ethernet_source: 0x112233445566
+                       ethertype: 0x86DD
+                       # IPv6 header.
+                       version: 0x6
+                       dscp: 0b000000
+                       ecn: 0b00
+                       flow_label: 0x12345
+                       payload_length: 0x0010
+                       next_header: 0x11  # UDP
+                       hop_limit: 0x42
+                       ipv6_source: 0x00001111222233334444555566667777
+                       ipv6_destination: 0x88889999aaaabbbbccccddddeeeeffff
+                       # UDP header
+                       source_port: 0x0014
+                       destination_port: 0x03e8  # 1000
+                       length: 0x0010
+                       checksum: 0x0000
+                       # PSP Header
+                       next_header: 0x11  # UDP
+                       header_ext_length: 0x00
+                       reserved0: 0b00
+                       crypt_offset: 0b000000
+                       sample_bit: 0b0
+                       drop_bit: 0b0
+                       version: 0x1
+                       virtualization_cookie_present: 0b0
+                       reserved1: 0b1
+                       security_parameters_index: 0x00000000
+                     )pb");
 }  // NOLINT(readability/fn_size)
 
 void RunProtoPacketTests() {
@@ -2136,6 +2288,312 @@ void RunProtoPacketTests() {
                                   sequence_id: "0x0000"
                                   control_field: "0x00"
                                   log_message_interval: "0x00"
+                                }
+                              }
+                              payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+                         )pb"));
+  RunProtoPacketTest("PSP packet with UDP port 1000 (valid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x86dd"
+                                }
+                              }
+                              headers {
+                                ipv6_header {
+                                  version: "0x6"
+                                  dscp: "0x00"
+                                  ecn: "0x0"
+                                  flow_label: "0x12345"
+                                  payload_length: "0x0034"
+                                  next_header: "0x11"  # UDP
+                                  hop_limit: "0x42"
+                                  ipv6_source: "2607:f8b0:11::"
+                                  ipv6_destination: "2607:f8b0:12::"
+                                }
+                              }
+                              headers {
+                                udp_header {
+                                  source_port: "0x08ae"       # 2222
+                                  destination_port: "0x03e8"  # 1000
+                                  length: "0x0034"
+                                  checksum: "0x0000"
+                                }
+                              }
+                              headers {
+                                psp_header {
+                                  next_header: "0x11"
+                                  header_ext_length: "0x00"
+                                  reserved0: "0x0"
+                                  crypt_offset: "0x02"
+                                  sample_bit: "0x0"
+                                  drop_bit: "0x0"
+                                  version: "0x1"
+                                  virtualization_cookie_present: "0x0"
+                                  reserved1: "0x1"
+                                  security_parameters_index: "0x00000000"
+                                  initialization_vector: "0x0000000000000000"
+                                }
+                              }
+                              headers {
+                                udp_header {
+                                  source_port: "0xbeef"
+                                  destination_port: "0xabcd"
+                                  length: "0x001c"
+                                  checksum: "0xfe85"
+                                }
+                              }
+                              payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+                         )pb"));
+  RunProtoPacketTest("PSP packet with inner UDP checksum empty (valid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x86dd"
+                                }
+                              }
+                              headers {
+                                ipv6_header {
+                                  version: "0x6"
+                                  dscp: "0x00"
+                                  ecn: "0x0"
+                                  flow_label: "0x12345"
+                                  payload_length: "0x0034"
+                                  next_header: "0x11"  # UDP
+                                  hop_limit: "0x42"
+                                  ipv6_source: "2607:f8b0:11::"
+                                  ipv6_destination: "2607:f8b0:12::"
+                                }
+                              }
+                              headers {
+                                udp_header {
+                                  source_port: "0x08ae"       # 2222
+                                  destination_port: "0x03e8"  # 1000
+                                  length: "0x0034"
+                                  checksum: "0x0000"
+                                }
+                              }
+                              headers {
+                                psp_header {
+                                  next_header: "0x11"
+                                  header_ext_length: "0x00"
+                                  reserved0: "0x0"
+                                  crypt_offset: "0x02"
+                                  sample_bit: "0x0"
+                                  drop_bit: "0x0"
+                                  version: "0x1"
+                                  virtualization_cookie_present: "0x0"
+                                  reserved1: "0x1"
+                                  security_parameters_index: "0x00000000"
+                                  initialization_vector: "0x0000000000000000"
+                                }
+                              }
+                              headers {
+                                udp_header {
+                                  source_port: "0xbeef"
+                                  destination_port: "0xabcd"
+                                  length: "0x001c"
+                                }
+                              }
+                              payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+                         )pb"));
+  RunProtoPacketTest("PSP packet with encrypted payload (valid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x86dd"
+                                }
+                              }
+                              headers {
+                                ipv6_header {
+                                  version: "0x6"
+                                  dscp: "0x00"
+                                  ecn: "0x0"
+                                  flow_label: "0x12345"
+                                  payload_length: "0x002c"
+                                  next_header: "0x11"  # UDP
+                                  hop_limit: "0x42"
+                                  ipv6_source: "2607:f8b0:11::"
+                                  ipv6_destination: "2607:f8b0:12::"
+                                }
+                              }
+                              headers {
+                                udp_header {
+                                  source_port: "0x08ae"       # 2222
+                                  destination_port: "0x03e8"  # 1000
+                                  length: "0x002c"
+                                  checksum: "0x0000"
+                                }
+                              }
+                              headers {
+                                psp_header {
+                                  next_header: "0x04"
+                                  header_ext_length: "0x00"
+                                  reserved0: "0x0"
+                                  crypt_offset: "0x00"
+                                  sample_bit: "0x0"
+                                  drop_bit: "0x0"
+                                  version: "0x1"
+                                  virtualization_cookie_present: "0x1"
+                                  reserved1: "0x1"
+                                  security_parameters_index: "0x00000000"
+                                  initialization_vector: "0x0000000000000000"
+                                }
+                              }
+                              payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+                         )pb"));
+  RunProtoPacketTest(
+      "PSP packet with UDP payload but not crypt_offset (invalid)",
+      gutil::ParseProtoOrDie<Packet>(
+          R"pb(headers {
+                 ethernet_header {
+                   ethernet_destination: "00:ee:dd:cc:bb:aa"
+                   ethernet_source: "00:44:33:22:11:00"
+                   ethertype: "0x86dd"
+                 }
+               }
+               headers {
+                 ipv6_header {
+                   version: "0x6"
+                   dscp: "0x00"
+                   ecn: "0x0"
+                   flow_label: "0x12345"
+                   payload_length: "0x0034"
+                   next_header: "0x11"  # UDP
+                   hop_limit: "0x42"
+                   ipv6_source: "2607:f8b0:11::"
+                   ipv6_destination: "2607:f8b0:12::"
+                 }
+               }
+               headers {
+                 udp_header {
+                   source_port: "0x08ae"
+                   destination_port: "0x03e8"  # 1000
+                   length: "0x0034"
+                   checksum: "0x0000"
+                 }
+               }
+               headers {
+                 psp_header {
+                   next_header: "0x11"
+                   header_ext_length: "0x00"
+                   reserved0: "0x0"
+                   crypt_offset: "0x00"
+                   sample_bit: "0x0"
+                   drop_bit: "0x0"
+                   version: "0x1"
+                   virtualization_cookie_present: "0x0"
+                   reserved1: "0x1"
+                   security_parameters_index: "0x00000000"
+                   initialization_vector: "0x0000000000000000"
+                 }
+               }
+               headers {
+                 udp_header {
+                   source_port: "0xbeef"
+                   destination_port: "0xabcd"
+                   length: "0x001c"
+                   checksum: "0xfe85"
+                 }
+               }
+               payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+          )pb"));
+  RunProtoPacketTest("PSP packet with UDP port 1001 (invalid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x86dd"
+                                }
+                              }
+                              headers {
+                                ipv6_header {
+                                  version: "0x6"
+                                  dscp: "0x00"
+                                  ecn: "0x0"
+                                  flow_label: "0x12345"
+                                  payload_length: "0x002c"
+                                  next_header: "0x11"  # UDP
+                                  hop_limit: "0x42"
+                                  ipv6_source: "2607:f8b0:11::"
+                                  ipv6_destination: "2607:f8b0:12::"
+                                }
+                              }
+                              headers {
+                                udp_header {
+                                  source_port: "0x08ae"       # 2222
+                                  destination_port: "0x03e9"  # 1001
+                                  length: "0x002c"
+                                  checksum: "0x0000"
+                                }
+                              }
+                              headers {
+                                psp_header {
+                                  next_header: "0x11"
+                                  header_ext_length: "0x00"
+                                  reserved0: "0x0"
+                                  crypt_offset: "0x00"
+                                  sample_bit: "0x0"
+                                  drop_bit: "0x0"
+                                  version: "0x1"
+                                  virtualization_cookie_present: "0x0"
+                                  reserved1: "0x1"
+                                  security_parameters_index: "0x00000000"
+                                  initialization_vector: "0x0000000000000000"
+                                }
+                              }
+                              payload: "ABCDABCDABCDABCDABCD"  # 20 octets
+                         )pb"));
+  RunProtoPacketTest("PSP packet with wrong reserved values (invalid)",
+                     gutil::ParseProtoOrDie<Packet>(
+                         R"pb(headers {
+                                ethernet_header {
+                                  ethernet_destination: "00:ee:dd:cc:bb:aa"
+                                  ethernet_source: "00:44:33:22:11:00"
+                                  ethertype: "0x86dd"
+                                }
+                              }
+                              headers {
+                                ipv6_header {
+                                  version: "0x6"
+                                  dscp: "0x00"
+                                  ecn: "0x0"
+                                  flow_label: "0x12345"
+                                  payload_length: "0x002c"
+                                  next_header: "0x11"  # UDP
+                                  hop_limit: "0x42"
+                                  ipv6_source: "2607:f8b0:11::"
+                                  ipv6_destination: "2607:f8b0:12::"
+                                }
+                              }
+                              headers {
+                                udp_header {
+                                  source_port: "0x08ae"       # 2222
+                                  destination_port: "0x03e8"  # 1000
+                                  length: "0x002c"
+                                  checksum: "0x0000"
+                                }
+                              }
+                              headers {
+                                psp_header {
+                                  next_header: "0x11"
+                                  header_ext_length: "0x00"
+                                  reserved0: "0x1"
+                                  crypt_offset: "0x00"
+                                  sample_bit: "0x0"
+                                  drop_bit: "0x0"
+                                  version: "0x1"
+                                  virtualization_cookie_present: "0x0"
+                                  reserved1: "0x0"
+                                  security_parameters_index: "0x00000000"
+                                  initialization_vector: "0x0000000000000000"
                                 }
                               }
                               payload: "ABCDABCDABCDABCDABCD"  # 20 octets
