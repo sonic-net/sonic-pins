@@ -17,10 +17,14 @@
 #include <ctype.h>
 #include <stdint.h>
 
+#include <algorithm>
+#include <cctype>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/base/attributes.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
@@ -43,6 +47,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/config/v1/p4types.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/reference_annotations.h"
 #include "p4_pdpi/translation_options.h"
@@ -63,6 +68,7 @@ using ::pdpi::IrActionInvocation;
 using ::pdpi::IrMatchFieldDefinition;
 using ::pdpi::IrP4Info;
 using ::pdpi::IrTableDefinition;
+using ::pdpi::IrTableReference;
 using ::pdpi::ParsedRefersToAnnotation;
 
 namespace {
@@ -227,6 +233,9 @@ absl::StatusOr<uint32_t> MatchFieldNameToId(
 
 // Returns the set of references for a given set of annotations. Does not
 // validate the table or match field yet.
+// TODO: b/306016407 - Remove this function once all p4 infrastructure has been
+// moved to IrTableEntryReference.
+ABSL_DEPRECATED("Use ParseRefersToAnnotations instead")
 absl::StatusOr<std::vector<IrMatchFieldReference>> GetRefersToAnnotations(
     const p4::config::v1::P4Info &p4info,
     const ::google::protobuf::RepeatedPtrField<std::string> &annotations) {
@@ -238,6 +247,9 @@ absl::StatusOr<std::vector<IrMatchFieldReference>> GetRefersToAnnotations(
   for (const auto &refers_to_annotation : refers_to_annotations) {
     absl::string_view table = refers_to_annotation.table;
     absl::string_view match_field = refers_to_annotation.field;
+
+    // Deprecated function should ignore new functionality.
+    if (IsBuiltInTable(table)) continue;
 
     ASSIGN_OR_RETURN(uint32_t table_id, TableAliasToId(p4info, table));
     ASSIGN_OR_RETURN(uint32_t match_field_id,
@@ -1149,6 +1161,98 @@ bool ExpensiveIsElementUnsupported(
   });
 }
 
+absl::Status InsertOutgoingReferenceInfo(const IrTableReference &reference,
+                                         IrP4Info &info) {
+  const IrTable &source = reference.source_table();
+  switch (source.table_case()) {
+    case IrTable::kP4Table: {
+      auto it_name =
+          info.mutable_tables_by_name()->find(source.p4_table().table_name());
+      if (it_name == info.mutable_tables_by_name()->end()) {
+        return gutil::InternalErrorBuilder()
+               << "Generated IrTableEntryReference contains unknown source p4 "
+                  "table name '"
+               << source.p4_table().table_name() << "'.";
+      }
+      auto it_id =
+          info.mutable_tables_by_id()->find(source.p4_table().table_id());
+      if (it_id == info.mutable_tables_by_id()->end()) {
+        return gutil::InternalErrorBuilder()
+               << "Generated IrTableEntryReference contains unknown source p4 "
+                  "table id '"
+               << source.p4_table().table_name() << "'.";
+      }
+      *(it_name->second.add_outgoing_references()) = reference;
+      *(it_id->second.add_outgoing_references()) = reference;
+      return absl::OkStatus();
+    }
+    case IrTable::kBuiltInTable: {
+      ASSIGN_OR_RETURN(const std::string built_in_table_name,
+                       IrBuiltInTableToString(source.built_in_table()));
+      auto [it, fresh] = info.mutable_built_in_tables()->insert(
+          {built_in_table_name, IrBuiltInTableDefinition()});
+      if (fresh) {
+        it->second.set_built_in_table(source.built_in_table());
+      }
+      *info.mutable_built_in_tables()
+           ->at(built_in_table_name)
+           .add_outgoing_references() = reference;
+
+      return absl::OkStatus();
+    }
+    case IrTable::TABLE_NOT_SET: {
+      return gutil::InternalErrorBuilder()
+             << "Source IrTable oneof not set." << reference.DebugString();
+    }
+  }
+}
+
+absl::Status InsertIncomingReferenceInfo(const IrTableReference &reference,
+                                         IrP4Info &info) {
+  const IrTable &destination = reference.destination_table();
+  switch (destination.table_case()) {
+    case IrTable::kP4Table: {
+      auto it_name = info.mutable_tables_by_name()->find(
+          destination.p4_table().table_name());
+      if (it_name == info.mutable_tables_by_name()->end()) {
+        return gutil::InternalErrorBuilder()
+               << "Generated IrTableEntryReference contains unknown "
+                  "destination p4 table name '"
+               << destination.p4_table().table_name() << "'.";
+      }
+      auto it_id =
+          info.mutable_tables_by_id()->find(destination.p4_table().table_id());
+      if (it_id == info.mutable_tables_by_id()->end()) {
+        return gutil::InternalErrorBuilder()
+               << "Generated IrTableEntryReference contains unknown "
+                  "destination p4 table id '"
+               << destination.p4_table().table_name() << "'.";
+      }
+      *(it_name->second.add_incoming_references()) = reference;
+      *(it_id->second.add_incoming_references()) = reference;
+      return absl::OkStatus();
+    }
+    case IrTable::kBuiltInTable: {
+      ASSIGN_OR_RETURN(const std::string built_in_table_name,
+                       IrBuiltInTableToString(destination.built_in_table()));
+      auto [it, fresh] = info.mutable_built_in_tables()->insert(
+          {built_in_table_name, IrBuiltInTableDefinition()});
+      if (fresh) {
+        it->second.set_built_in_table(destination.built_in_table());
+      }
+      *info.mutable_built_in_tables()
+           ->at(built_in_table_name)
+           .add_incoming_references() = reference;
+
+      return absl::OkStatus();
+    }
+    case IrTable::TABLE_NOT_SET: {
+      return gutil::InternalErrorBuilder()
+             << "Destination IrTable oneof not set." << reference.DebugString();
+    }
+  }
+}
+
 }  // namespace
 
 StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
@@ -1486,6 +1590,13 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
                << action_profile_id << "'.";
       }
     }
+  }
+
+  ASSIGN_OR_RETURN(std::vector<IrTableReference> references,
+                   ParseIrTableReferences(info));
+  for (const auto &reference : references) {
+    RETURN_IF_ERROR(InsertOutgoingReferenceInfo(reference, info));
+    RETURN_IF_ERROR(InsertIncomingReferenceInfo(reference, info));
   }
 
   return info;
