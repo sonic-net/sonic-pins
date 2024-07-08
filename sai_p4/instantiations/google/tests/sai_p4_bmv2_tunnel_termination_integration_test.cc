@@ -50,12 +50,14 @@ namespace {
 using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::orion::p4::test::Bmv2;
+
 using ::packetlib::HasHeaderCase;
 using ::pdpi::HasPacketIn;
 using ::pdpi::ParsedPayloadIs;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::StrEq;
+
 
 absl::StatusOr<packetlib::Packet> GetIpv4InIpv6Packet() {
   ASSIGN_OR_RETURN(auto packet, gutil::ParseTextProto<packetlib::Packet>(R"pb(
@@ -262,6 +264,7 @@ TEST_P(TunnelTerminationTest, PuntedPacketIsNotDecapsulated) {
 
 INSTANTIATE_TEST_SUITE_P(
     TunnelTerminationTest, TunnelTerminationTest,
+
     testing::Values(sai::Instantiation::kMiddleblock,
                     sai::Instantiation::kFabricBorderRouter),
     [&](const testing::TestParamInfo<sai::Instantiation>& info) {
