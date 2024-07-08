@@ -6,10 +6,12 @@
 #define ETHERTYPE_ARP   0x0806
 #define ETHERTYPE_LLDP  0x88cc
 
+#define IP_PROTOCOL_IPV4   0x04
 #define IP_PROTOCOL_TCP    0x06
 #define IP_PROTOCOL_UDP    0x11
 #define IP_PROTOCOL_ICMP   0x01
 #define IP_PROTOCOL_ICMPV6 0x3a
+#define IP_PROTOCOL_IPV6   0x29
 #define IP_PROTOCOLS_GRE   0x2f
 
 #define GRE_PROTOCOL_ERSPAN 0x88be
