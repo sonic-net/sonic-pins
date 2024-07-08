@@ -21,7 +21,6 @@
 
 #include "absl/flags/parse.h"
 #include "glog/logging.h"
-#include "utils/authz_logger.h"
 #include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -32,18 +31,16 @@
 #include "absl/time/time.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "grpcpp/security/audit_logging.h"
+#include "grpc/impl/codegen/grpc_types.h"
 #include "grpcpp/security/authorization_policy_provider.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/security/tls_certificate_provider.h"
-#include "grpcpp/security/tls_certificate_verifier.h"
 #include "grpcpp/security/tls_credentials_options.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
 #include "gutil/status.h"
 #include "p4rt_app/event_monitoring/app_state_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
-#include "p4rt_app/event_monitoring/config_db_cpu_queue_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_node_cfg_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/debug_data_dump_events.h"
@@ -349,8 +346,6 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
       config_db_monitor, "PORTCHANNEL", p4runtime_server);
   RegisterTableHandlerOrDie<p4rt_app::ConfigDbPortTableEventHandler>(
       config_db_monitor, "CPU_PORT", p4runtime_server);
-  RegisterTableHandlerOrDie<p4rt_app::ConfigDbCpuQueueTableEventHandler>(
-      config_db_monitor, "QUEUE_NAME_TO_ID_MAP", p4runtime_server);
 
   while (*monitor_config_db_events) {
     absl::Status status = config_db_monitor.WaitForNextEventAndHandle();
@@ -495,19 +490,8 @@ int main(int argc, char** argv) {
   std::string server_addr = absl::StrCat("[::]:", FLAGS_p4rt_grpc_port);
   builder.AddListeningPort(server_addr, *server_cred);
 
-  auto authn_table =
-      std::make_unique<p4rt_app::sonic::TableAdapter>(&state_db, "AUTHN_TABLE");
-  auto authz_table =
-      std::make_unique<p4rt_app::sonic::TableAdapter>(&state_db, "AUTHZ_TABLE");
-  p4rt_app::MetricRecorder recorder("p4rt", /*size=*/5000, absl::Seconds(30),
-                                    std::move(authn_table),
-                                    std::move(authz_table));
-
   // Set authorization policy.
   if (FLAGS_authz_policy_enabled && !FLAGS_ca_certificate_file.empty()) {
-    grpc::experimental::RegisterAuditLoggerFactory(
-        std::make_unique<p4rt_app::AuthzAuditLoggerFactory>(&recorder));
-
     auto provider = CreateAuthzPolicyProvider();
     if (provider == nullptr) {
       LOG(ERROR) << "Error in creating authz policy provider";

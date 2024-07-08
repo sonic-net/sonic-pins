@@ -13,15 +13,17 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/ir_translation.h"
 
+#include "absl/strings/ascii.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "boost/bimap.hpp"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/utils/ir_builder.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -38,11 +40,6 @@ using ::testing::HasSubstr;
 // Helper method so all tests use the same IrP4Info.
 const pdpi::IrP4Info& GetIrP4Info() {
   return sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
-}
-
-const CpuQueueTranslator& EmptyCpuQueueTranslator() {
-  static const auto* const kTranslator = CpuQueueTranslator::Empty().release();
-  return *kTranslator;
 }
 
 TEST(PortTranslationTest, TranslatePort) {
@@ -66,9 +63,9 @@ TEST(PortTranslationTest, TranslatePortFailsWithMissingKey) {
 }
 
 TEST(PortIdTranslationTest, ActionParameterUpdatedToPortName) {
-  boost::bimap<std::string, std::string> port_translation_map;
-  port_translation_map.insert({"Ethernet0", "1"});
-  port_translation_map.insert({"Ethernet4", "2"});
+  boost::bimap<std::string, std::string> translation_map;
+  translation_map.insert({"Ethernet0", "1"});
+  translation_map.insert({"Ethernet4", "2"});
 
   pdpi::IrTableEntry table_entry;
   ASSERT_TRUE(TextFormat::ParseFromString(
@@ -87,18 +84,16 @@ TEST(PortIdTranslationTest, ActionParameterUpdatedToPortName) {
           .direction = TranslationDirection::kForOrchAgent,
           .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = true,
-          .port_map = port_translation_map,
-          .cpu_queue_translator = EmptyCpuQueueTranslator(),
-      },
+          .port_map = translation_map},
       table_entry));
   ASSERT_EQ(table_entry.action().params_size(), 1);
   EXPECT_EQ(table_entry.action().params(0).value().str(), "Ethernet0");
 }
 
 TEST(PortIdTranslationTest, WatchPortUpdatedToPortName) {
-  boost::bimap<std::string, std::string> port_translation_map;
-  port_translation_map.insert({"Ethernet0", "1"});
-  port_translation_map.insert({"Ethernet4", "2"});
+  boost::bimap<std::string, std::string> translation_map;
+  translation_map.insert({"Ethernet0", "1"});
+  translation_map.insert({"Ethernet4", "2"});
 
   pdpi::IrTableEntry table_entry;
   ASSERT_TRUE(TextFormat::ParseFromString(R"pb(
@@ -122,9 +117,7 @@ TEST(PortIdTranslationTest, WatchPortUpdatedToPortName) {
           .direction = TranslationDirection::kForOrchAgent,
           .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = true,
-          .port_map = port_translation_map,
-          .cpu_queue_translator = EmptyCpuQueueTranslator(),
-      },
+          .port_map = translation_map},
       table_entry));
 
   // Expect the watch_port to change.
@@ -133,9 +126,9 @@ TEST(PortIdTranslationTest, WatchPortUpdatedToPortName) {
 }
 
 TEST(PortIdTranslationTest, ExactMatchFieldUpdatedToPortName) {
-  boost::bimap<std::string, std::string> port_translation_map;
-  port_translation_map.insert({"Ethernet0", "1"});
-  port_translation_map.insert({"Ethernet4", "2"});
+  boost::bimap<std::string, std::string> translation_map;
+  translation_map.insert({"Ethernet0", "1"});
+  translation_map.insert({"Ethernet4", "2"});
 
   pdpi::IrTableEntry table_entry;
   ASSERT_TRUE(TextFormat::ParseFromString(
@@ -152,18 +145,16 @@ TEST(PortIdTranslationTest, ExactMatchFieldUpdatedToPortName) {
           .direction = TranslationDirection::kForOrchAgent,
           .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = true,
-          .port_map = port_translation_map,
-          .cpu_queue_translator = EmptyCpuQueueTranslator(),
-      },
+          .port_map = translation_map},
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
   EXPECT_EQ(table_entry.matches(0).exact().str(), "Ethernet4");
 }
 
 TEST(PortIdTranslationTest, OptionalMatchFieldUpdatedToPortName) {
-  boost::bimap<std::string, std::string> port_translation_map;
-  port_translation_map.insert({"Ethernet0", "1"});
-  port_translation_map.insert({"Ethernet4", "2"});
+  boost::bimap<std::string, std::string> translation_map;
+  translation_map.insert({"Ethernet0", "1"});
+  translation_map.insert({"Ethernet4", "2"});
 
   pdpi::IrTableEntry table_entry;
   ASSERT_TRUE(TextFormat::ParseFromString(R"pb(
@@ -178,9 +169,7 @@ TEST(PortIdTranslationTest, OptionalMatchFieldUpdatedToPortName) {
           .direction = TranslationDirection::kForOrchAgent,
           .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = true,
-          .port_map = port_translation_map,
-          .cpu_queue_translator = EmptyCpuQueueTranslator(),
-      },
+          .port_map = translation_map},
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
   EXPECT_EQ(table_entry.matches(0).optional().value().str(), "Ethernet4");
@@ -206,7 +195,6 @@ TEST(PortNamePassthroughTest, ActionParametersIgnoresPortName) {
           .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = false,
           .port_map = {},
-          .cpu_queue_translator = EmptyCpuQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.action().params_size(), 1);
@@ -237,7 +225,6 @@ TEST(PortNamePassthroughTest, WatchPortIgnoresPortName) {
           .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = false,
           .port_map = {},
-          .cpu_queue_translator = EmptyCpuQueueTranslator(),
       },
       table_entry));
 
@@ -263,7 +250,6 @@ TEST(PortNamePassthroughTest, ExactMatchFieldIgnoresPortName) {
           .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = false,
           .port_map = {},
-          .cpu_queue_translator = EmptyCpuQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
@@ -286,7 +272,6 @@ TEST(PortNamePassthroughTest, OptionalMatchFieldIgnoresPortName) {
           .ir_p4_info = GetIrP4Info(),
           .translate_port_ids = false,
           .port_map = {},
-          .cpu_queue_translator = EmptyCpuQueueTranslator(),
       },
       table_entry));
   ASSERT_EQ(table_entry.matches_size(), 1);
@@ -305,15 +290,13 @@ TEST(IrTranslationTest, InvalidTableNameFails) {
                                                })pb",
                                           &table_entry));
 
-  boost::bimap<std::string, std::string> port_translation_map;
+  boost::bimap<std::string, std::string> translation_map;
   EXPECT_THAT(TranslateTableEntry(
                   TranslateTableEntryOptions{
                       .direction = TranslationDirection::kForOrchAgent,
                       .ir_p4_info = GetIrP4Info(),
                       .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
+                      .port_map = translation_map},
                   table_entry),
               StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_name")));
 }
@@ -332,15 +315,13 @@ TEST(IrTranslationTest, InvalidMatchFieldNameFails) {
         })pb",
       &table_entry));
 
-  boost::bimap<std::string, std::string> port_translation_map;
+  boost::bimap<std::string, std::string> translation_map;
   EXPECT_THAT(TranslateTableEntry(
                   TranslateTableEntryOptions{
                       .direction = TranslationDirection::kForOrchAgent,
                       .ir_p4_info = GetIrP4Info(),
                       .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
+                      .port_map = translation_map},
                   table_entry),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
@@ -356,15 +337,13 @@ TEST(IrTranslationTest, InvalidMatchFieldTypeFails) {
         })pb",
       &table_entry));
 
-  boost::bimap<std::string, std::string> port_translation_map;
+  boost::bimap<std::string, std::string> translation_map;
   EXPECT_THAT(TranslateTableEntry(
                   TranslateTableEntryOptions{
                       .direction = TranslationDirection::kForOrchAgent,
                       .ir_p4_info = GetIrP4Info(),
                       .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
+                      .port_map = translation_map},
                   table_entry),
               StatusIs(absl::StatusCode::kInternal, HasSubstr("sample_field")));
 }
@@ -383,15 +362,13 @@ TEST(IrTranslationTest, InvalidActionNameFails) {
         })pb",
       &table_entry));
 
-  boost::bimap<std::string, std::string> port_translation_map;
+  boost::bimap<std::string, std::string> translation_map;
   EXPECT_THAT(TranslateTableEntry(
                   TranslateTableEntryOptions{
                       .direction = TranslationDirection::kForOrchAgent,
                       .ir_p4_info = GetIrP4Info(),
                       .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
+                      .port_map = translation_map},
                   table_entry),
               StatusIs(absl::StatusCode::kInternal, HasSubstr("some_action")));
 }
@@ -410,15 +387,13 @@ TEST(IrTranslationTest, InvalidActionParameterNameFails) {
         })pb",
       &table_entry));
 
-  boost::bimap<std::string, std::string> port_translation_map;
+  boost::bimap<std::string, std::string> translation_map;
   EXPECT_THAT(TranslateTableEntry(
                   TranslateTableEntryOptions{
                       .direction = TranslationDirection::kForOrchAgent,
                       .ir_p4_info = GetIrP4Info(),
                       .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
+                      .port_map = translation_map},
                   table_entry),
               StatusIs(absl::StatusCode::kInternal, HasSubstr("some_param")));
 }
@@ -437,15 +412,13 @@ TEST(IrTranslationTest, ActionParametersWithUnsupportedFormatFails) {
         })pb",
       &table_entry));
 
-  boost::bimap<std::string, std::string> port_translation_map;
+  boost::bimap<std::string, std::string> translation_map;
   EXPECT_THAT(TranslateTableEntry(
                   TranslateTableEntryOptions{
                       .direction = TranslationDirection::kForController,
                       .ir_p4_info = GetIrP4Info(),
                       .translate_port_ids = true,
-                      .port_map = port_translation_map,
-                      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-                  },
+                      .port_map = translation_map},
                   table_entry),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
@@ -505,7 +478,7 @@ TEST(P4RuntimeTweaksP4InfoTest, ForOrchAgentIgnoresCompositeNonUdfFields) {
 
   pdpi::IrP4Info unchanged_ir_p4_info = ir_p4_info;
   TranslateIrP4InfoForOrchAgent(ir_p4_info);
-  EXPECT_THAT(ir_p4_info, EqualsProto(unchanged_ir_p4_info));
+  EXPECT_THAT(ir_p4_info, gutil::EqualsProto(unchanged_ir_p4_info));
 }
 
 // TODO: Remove tests below when P4Info uses 64-bit IPv6 ACL match
@@ -532,7 +505,7 @@ TEST(Convert64BitIpv6AclMatchFieldsTo128BitTest, PadsSmallAddresses) {
       )pb",
       &ir_table_entry));
   Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
-  EXPECT_THAT(ir_table_entry, EqualsProto(
+  EXPECT_THAT(ir_table_entry, gutil::EqualsProto(
                                   R"pb(
                                     table_name: "table"
                                     matches {
@@ -576,7 +549,7 @@ TEST(Convert64BitIpv6AclMatchFieldsTo128BitTest, KeepsLargeAddresses) {
 
   pdpi::IrTableEntry original_ir_table_entry = ir_table_entry;
   Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
-  EXPECT_THAT(ir_table_entry, EqualsProto(original_ir_table_entry));
+  EXPECT_THAT(ir_table_entry, gutil::EqualsProto(original_ir_table_entry));
 }
 
 TEST(Convert64BitIpv6AclMatchFieldsTo128BitTest, KeepsNonTernaryAddresses) {
@@ -597,204 +570,7 @@ TEST(Convert64BitIpv6AclMatchFieldsTo128BitTest, KeepsNonTernaryAddresses) {
 
   pdpi::IrTableEntry original_ir_table_entry = ir_table_entry;
   Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
-  EXPECT_THAT(ir_table_entry, EqualsProto(original_ir_table_entry));
-}
-
-TEST(TranslateTableEntry, TranslatesCpuQueueNameToAppDbId) {
-  pdpi::IrTableEntry queue_name_table_entry;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(
-        table_name: "acl_ingress_table"
-        matches {
-          name: "is_ip"
-          optional { value { hex_str: "0x1" } }
-        }
-        action {
-          name: "acl_trap"
-          params {
-            name: "qos_queue"
-            value { str: "queue15" }
-          }
-        }
-      )pb",
-      &queue_name_table_entry));
-
-  // Translate the table entry using the cpu queue translator.
-  ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
-                       CpuQueueTranslator::Create({{"queue15", "15"}}));
-  EXPECT_OK(UpdateIrTableEntryForOrchAgent(
-      queue_name_table_entry, GetIrP4Info(), /*translate_port_ids=*/false,
-      /*port_translation_map=*/{}, *cpu_queue_translator));
-
-  // Expect that everything is the same except the cpu queue name has been
-  // translated.
-  pdpi::IrTableEntry queue_id_table_entry = queue_name_table_entry;
-  queue_id_table_entry.mutable_action()
-      ->mutable_params(0)
-      ->mutable_value()
-      ->set_str("0xf");
-  EXPECT_THAT(queue_name_table_entry, EqualsProto(queue_id_table_entry));
-}
-
-TEST(TranslateTableEntry, IgnoresUnknownCpuQueueNameToAppDbIdTranslation) {
-  pdpi::IrTableEntry ir_table_entry;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(
-        table_name: "acl_ingress_table"
-        matches {
-          name: "is_ip"
-          optional { value { hex_str: "0x1" } }
-        }
-        action {
-          name: "acl_trap"
-          params {
-            name: "qos_queue"
-            value { str: "queue2" }
-          }
-        }
-      )pb",
-      &ir_table_entry));
-  const pdpi::IrTableEntry original_table_entry = ir_table_entry;
-
-  // Add a different queue.
-  ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
-                       CpuQueueTranslator::Create({{"queue1", "1"}}));
-
-  EXPECT_OK(UpdateIrTableEntryForOrchAgent(
-      ir_table_entry, GetIrP4Info(), /*translate_port_ids=*/false,
-      /*port_translation_map=*/{}, *cpu_queue_translator));
-  EXPECT_THAT(ir_table_entry, EqualsProto(original_table_entry));
-}
-
-TEST(TranslateTableEntry, TranslatesAppDbCpuQueueIdToName) {
-  pdpi::IrTableEntry ir_table_entry;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(
-        table_name: "acl_ingress_table"
-        matches {
-          name: "is_ip"
-          optional { value { hex_str: "0x1" } }
-        }
-        action {
-          name: "acl_trap"
-          params {
-            name: "qos_queue"
-            value { str: "0xa" }
-          }
-        }
-      )pb",
-      &ir_table_entry));
-  pdpi::IrTableEntry queue_name_table_entry = ir_table_entry;
-  queue_name_table_entry.mutable_action()
-      ->mutable_params(0)
-      ->mutable_value()
-      ->set_str("queue10");
-
-  ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
-                       CpuQueueTranslator::Create({{"queue10", "10"}}));
-
-  TranslateTableEntryOptions options = {
-      .direction = TranslationDirection::kForController,
-      .ir_p4_info = GetIrP4Info(),
-      .translate_port_ids = false,
-      .port_map = {},
-      .cpu_queue_translator = *cpu_queue_translator,
-  };
-
-  EXPECT_OK(TranslateTableEntry(options, ir_table_entry));
-  EXPECT_THAT(ir_table_entry, EqualsProto(queue_name_table_entry));
-}
-
-TEST(TranslateTableEntry, IgnoresUnknownAppDbCpuQueueIdToNameTranslation) {
-  pdpi::IrTableEntry ir_table_entry;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(
-        table_name: "acl_ingress_table"
-        matches {
-          name: "is_ip"
-          optional { value { hex_str: "0x1" } }
-        }
-        action {
-          name: "acl_trap"
-          params {
-            name: "qos_queue"
-            value { str: "0x3" }
-          }
-        }
-      )pb",
-      &ir_table_entry));
-  const pdpi::IrTableEntry original_table_entry = ir_table_entry;
-
-  // Set up a different queue.
-  ASSERT_OK_AND_ASSIGN(auto cpu_queue_translator,
-                       CpuQueueTranslator::Create({{"queue2", "2"}}));
-
-  TranslateTableEntryOptions options = {
-      .direction = TranslationDirection::kForController,
-      .ir_p4_info = GetIrP4Info(),
-      .translate_port_ids = false,
-      .port_map = {},
-      .cpu_queue_translator = *cpu_queue_translator,
-  };
-
-  EXPECT_OK(TranslateTableEntry(options, ir_table_entry));
-  EXPECT_THAT(ir_table_entry, EqualsProto(original_table_entry));
-}
-
-TEST(TranslateTableEntry, FailsIfAppDbQueueIsNotAHexStringString) {
-  pdpi::IrTableEntry ir_table_entry;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(
-        table_name: "acl_ingress_table"
-        matches {
-          name: "is_ip"
-          optional { value { hex_str: "0x1" } }
-        }
-        action {
-          name: "acl_trap"
-          params {
-            name: "qos_queue"
-            value { str: "ohhi" }  # str: <> should be hex-encoded number
-          }
-        }
-      )pb",
-      &ir_table_entry));
-  TranslateTableEntryOptions options = {
-      .direction = TranslationDirection::kForController,
-      .ir_p4_info = GetIrP4Info(),
-      .translate_port_ids = false,
-      .port_map = {},
-      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-  };
-  EXPECT_FALSE(TranslateTableEntry(options, ir_table_entry).ok());
-}
-
-TEST(TranslateTableEntry, FailsIfAppDbQueueIsNotAString) {
-  pdpi::IrTableEntry ir_table_entry;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(
-        table_name: "acl_ingress_table"
-        matches {
-          name: "is_ip"
-          optional { value { hex_str: "0x1" } }
-        }
-        action {
-          name: "acl_trap"
-          params {
-            name: "qos_queue"
-            value { hex_str: "0x1" }  # Wrong format (should be str)
-          }
-        }
-      )pb",
-      &ir_table_entry));
-  TranslateTableEntryOptions options = {
-      .direction = TranslationDirection::kForController,
-      .ir_p4_info = GetIrP4Info(),
-      .translate_port_ids = false,
-      .port_map = {},
-      .cpu_queue_translator = EmptyCpuQueueTranslator(),
-  };
-  EXPECT_FALSE(TranslateTableEntry(options, ir_table_entry).ok());
+  EXPECT_THAT(ir_table_entry, gutil::EqualsProto(original_ir_table_entry));
 }
 
 }  // namespace

@@ -125,34 +125,6 @@ cc_library(
 )
 
 cc_library(
-    name = "config_db_cpu_queue_table_event",
-    srcs = ["config_db_cpu_queue_table_event.cc"],
-    hdrs = ["config_db_cpu_queue_table_event.h"],
-    deps = [
-        ":state_event_monitor",
-        "//gutil:status",
-        "//p4rt_app/p4runtime:cpu_queue_translator",
-        "//p4rt_app/p4runtime:p4runtime_impl",
-        "@com_google_absl//absl/status",
-        "@sonic_swss_common//:libswsscommon",
-    ],
-)
-
-cc_test(
-    name = "config_db_cpu_queue_table_event_test",
-    srcs = ["config_db_cpu_queue_table_event_test.cc"],
-    deps = [
-        ":config_db_cpu_queue_table_event",
-        "//gutil:status_matchers",
-        "//p4rt_app/p4runtime:cpu_queue_translator",
-        "//p4rt_app/p4runtime:mock_p4runtime_impl",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@sonic_swss_common//:libswsscommon",
-    ],
-)
-
-cc_library(
     name = "config_db_node_cfg_table_event",
     srcs = ["config_db_node_cfg_table_event.cc"],
     hdrs = ["config_db_node_cfg_table_event.h"],

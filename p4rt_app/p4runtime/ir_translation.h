@@ -20,7 +20,6 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 
 namespace p4rt_app {
 
@@ -33,7 +32,6 @@ struct TranslateTableEntryOptions {
 
   // boost::bimap<SONiC port name, controller ID>;
   const boost::bimap<std::string, std::string>& port_map;
-  const CpuQueueTranslator& cpu_queue_translator;
 };
 
 // Translates only a port string value.
@@ -64,15 +62,14 @@ absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
     const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only);
+    bool translate_key_only);
 
 // Updates a IR table entry from the controller to an IR format with fields
 // values consumable by the OA.
 absl::Status UpdateIrTableEntryForOrchAgent(
     pdpi::IrTableEntry& ir_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
-    const boost::bimap<std::string, std::string>& port_translation_map,
-    const CpuQueueTranslator& cpu_queue_translator);
+    const boost::bimap<std::string, std::string>& port_translation_map);
 
 }  // namespace p4rt_app
 
