@@ -401,6 +401,10 @@ void SetFieldValue(Field field, int value, packetlib::Packet& packet) {
     case Field::kL4DstPort:
       // TODO: Re-allow PTP ports when traffic forwards.
       if (value > 318) value += 2;  // Skip PTP ports 319 & 320.
+      if (value > 999)
+        value += 1; // Skip PSP port 1000.
+      if (value > 4738)
+        value += 1; // Skip Ipfix port 4739.
       UdpHeader(packet).set_destination_port(packetlib::UdpPort(value));
       break;
   }
@@ -612,7 +616,7 @@ int Range(Field field, IpType ip_type) {
     case Field::kL4DstPort:
       // TODO: Re-allow PTP ports when traffic forwards.
       // Reserve PTP ports 319 & 320.
-      return BitwidthToInt(packetlib::kUdpPortBitwidth) - 2;
+      return BitwidthToInt(packetlib::kUdpPortBitwidth) - 4;
   }
   return 0;
 }

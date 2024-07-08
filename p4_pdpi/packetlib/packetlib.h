@@ -15,6 +15,7 @@
 #define GOOGLE_P4_PDPI_PACKETLIB_PACKETLIB_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "absl/numeric/bits.h"
@@ -134,10 +135,16 @@ absl::StatusOr<int> Ipv4HeaderChecksum(Ipv4Header header);
 
 // Computes the 16-bit UDP checksum for the given `packet` and
 // `udp_header_index`.
-// The header at the given index must be a UDP header, and it must be preceded
-// by an IP header. All fields in all headers following that IP header must be
-// set and valid except possibly the UDP checksum field, which is ignored.
-absl::StatusOr<int> UdpHeaderChecksum(Packet packet, int udp_header_index);
+// The header at the given index must be a UDP header. All fields in all headers
+// following the parent header must be set and valid except possibly the UDP
+// checksum field, which is ignored. Returning nullopt means the value cannot be
+// computed based on information in the packet (i.e. any value is allowed).
+//
+// NOTE: The nullopt case should not occur in the normal L4 UDP use case. It can
+// appear when the UDP header is nested deeper inside a packet. For example when
+// we are using tunnels (e.g. PSP).
+absl::StatusOr<std::optional<int>> UdpHeaderChecksum(Packet packet,
+                                                     int udp_header_index);
 
 // Computes the 16-bit ICMP checksum for the given `packet` and
 // `icmp_header_index`.
