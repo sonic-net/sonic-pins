@@ -193,6 +193,20 @@ message VrfTableEntry {
   bytes controller_metadata = 8;
 }
 
+// CAUTION: This table is not (yet) supported.
+message Ipv6TunnelTerminationTableEntry {
+  message Match {
+    Ternary dst_ipv6 = 1;  // ternary match / Format::IPV6 / 128 bits
+  }
+  Match match = 1;
+  message Action {
+    MarkForTunnelDecapAndSetVrfAction mark_for_tunnel_decap_and_set_vrf = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 message TunnelTableEntry {
   message Match {
     string tunnel_id = 1;  // exact match / Format::STRING
@@ -571,11 +585,9 @@ message AclIngressCountingTableEntry {
 // ## Only allow IP field matches for IP packets.
 //   dst_ip::mask != 0 -> is_ipv4 == 1;
 //   src_ip::mask != 0 -> is_ipv4 == 1;
-//   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
-//   ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
-// ## Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
-//   l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
-//   l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
+//   src_ipv6::mask != 0 -> is_ipv6 == 1;
+// ## TODO: This comment is required for the preprocessor to not
+// ## spit out nonsense.
 // ## Forbid illegal combinations of IP_TYPE fields.
 //   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
 //   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -585,18 +597,13 @@ message AclIngressCountingTableEntry {
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclIngressSecurityTableEntry {
   message Match {
-    Optional is_ip = 1;        // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv4 = 2;      // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv6 = 3;      // optional match / Format::HEX_STRING / 1 bits
-    Ternary ether_type = 4;    // ternary match / Format::HEX_STRING / 16 bits
-    Ternary src_ip = 5;        // ternary match / Format::IPV4
-    Ternary dst_ip = 6;        // ternary match / Format::IPV4
-    Ternary dscp = 9;          // ternary match / Format::HEX_STRING / 6 bits
-    Ternary ip_protocol = 10;  // ternary match / Format::HEX_STRING / 8 bits
-    Ternary l4_src_port = 11;  // ternary match / Format::HEX_STRING / 16 bits
-    Ternary l4_dst_port = 12;  // ternary match / Format::HEX_STRING / 16 bits
-    Ternary route_metadata = 13;  // ternary match / Format::HEX_STRING / 6 bits
-    Ternary acl_metadata = 14;    // ternary match / Format::HEX_STRING / 8 bits
+    Optional is_ip = 1;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;    // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;    // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
+    Ternary src_ip = 5;      // ternary match / Format::IPV4
+    Ternary dst_ip = 6;      // ternary match / Format::IPV4
+    Ternary src_ipv6 = 7;    // ternary match / Format::IPV6 / upper 64 bits
   }
   Match match = 1;
   message Action {
@@ -709,6 +716,10 @@ message SetMetadataAndDropAction {
   string route_metadata = 1;  // Format::HEX_STRING / 6 bits
 }
 
+message MarkForTunnelDecapAndSetVrfAction {
+  string vrf_id = 1;  // Format::STRING
+}
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -785,6 +796,8 @@ message TableEntry {
     MirrorSessionTableEntry mirror_session_table_entry = 70;
     L3AdmitTableEntry l3_admit_table_entry = 71;
     VrfTableEntry vrf_table_entry = 74;
+    // CAUTION: This table is not (yet) supported.
+    Ipv6TunnelTerminationTableEntry ipv6_tunnel_termination_table_entry = 75;
     TunnelTableEntry tunnel_table_entry = 80;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;

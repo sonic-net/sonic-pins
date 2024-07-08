@@ -6,6 +6,32 @@ pkg_info {
 }
 tables {
   preamble {
+    id: 33554507
+    name: "ingress.tunnel_termination_lookup.ipv6_tunnel_termination_table"
+    alias: "ipv6_tunnel_termination_table"
+    annotations: "@unsupported"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+  }
+  match_fields {
+    id: 1
+    name: "dst_ipv6"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777238
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 128
+}
+tables {
+  preamble {
     id: 33554689
     name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
     alias: "acl_pre_ingress_table"
@@ -778,6 +804,88 @@ tables {
 }
 tables {
   preamble {
+    id: 33554698
+    name: "ingress.acl_ingress.acl_ingress_security_table"
+    alias: "acl_ingress_security_table"
+    annotations: "@sai_acl(INGRESS)"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    src_ip::mask != 0 -> is_ipv4 == 1;\n    src_ipv6::mask != 0 -> is_ipv6 == 1;\n\n  // TODO: This comment is required for the preprocessor to not\n  // spit out nonsense.\n\n\n\n\n\n\n\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+  }
+  match_fields {
+    id: 1
+    name: "is_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IP)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 2
+    name: "is_ipv4"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV4ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 3
+    name: "is_ipv6"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE / IPV6ANY)"
+    bitwidth: 1
+    match_type: OPTIONAL
+  }
+  match_fields {
+    id: 4
+    name: "ether_type"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE)"
+    bitwidth: 16
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 5
+    name: "src_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_IP)"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 6
+    name: "dst_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP)"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 7
+    name: "src_ipv6"
+    annotations: "@composite_field(@ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_SRC_IPV6_WORD3 ) , @ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_SRC_IPV6_WORD2 ))"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 64
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777475
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777481
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777487
+    annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  direct_resource_ids: 318767370
+  size: 256
+}
+tables {
+  preamble {
     id: 33554693
     name: "ingress.acl_pre_ingress.acl_pre_ingress_vlan_table"
     alias: "acl_pre_ingress_vlan_table"
@@ -1146,6 +1254,20 @@ actions {
 }
 actions {
   preamble {
+    id: 16777238
+    name: "ingress.tunnel_termination_lookup.mark_for_tunnel_decap_and_set_vrf"
+    alias: "mark_for_tunnel_decap_and_set_vrf"
+  }
+  params {
+    id: 1
+    name: "vrf_id"
+    type_name {
+      name: "vrf_id_t"
+    }
+  }
+}
+actions {
+  preamble {
     id: 16777472
     name: "ingress.acl_pre_ingress.set_vrf"
     alias: "set_vrf"
@@ -1487,6 +1609,14 @@ actions {
 }
 actions {
   preamble {
+    id: 16777487
+    name: "ingress.acl_ingress.acl_deny"
+    alias: "acl_deny"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DROP)"
+  }
+}
+actions {
+  preamble {
     id: 16777482
     name: "ingress.acl_pre_ingress.set_outer_vlan_id"
     alias: "set_outer_vlan_id"
@@ -1625,6 +1755,17 @@ direct_counters {
     unit: BOTH
   }
   direct_table_id: 33554692
+}
+direct_counters {
+  preamble {
+    id: 318767370
+    name: "ingress.acl_ingress.acl_ingress_security_counter"
+    alias: "acl_ingress_security_counter"
+  }
+  spec {
+    unit: BOTH
+  }
+  direct_table_id: 33554698
 }
 direct_counters {
   preamble {

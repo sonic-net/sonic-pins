@@ -217,8 +217,8 @@ TableEntryGenerator AclIngressSecurityTableGenerator(
            }
            action { name: "acl_drop" })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
-  generator.generator =
-      IrMatchFieldAndPriorityGenerator(table_definition, *base_entry, "dst_ip");
+  generator.generator = IrMatchFieldAndPriorityGenerator(
+      table_definition, *base_entry, "ether_type");
   return generator;
 }
 
@@ -271,6 +271,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "wcmp_group_table",
           "mirror_session_table",
           "mirror_port_to_pre_session_table",
+          // TODO: Add support for this table once the switch
+          // supports it.
+          "ipv6_tunnel_termination_table",
       });
   return *kUnsupportedTables;
 }

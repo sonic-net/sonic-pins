@@ -162,6 +162,11 @@ struct headers_t {
 
   ipv4_t ipv4;
   ipv6_t ipv6;
+
+  // Inner IP-in-IP headers.
+  ipv4_t inner_ipv4;
+  ipv6_t inner_ipv6;
+
   icmp_t icmp;
   tcp_t tcp;
   udp_t udp;
@@ -170,7 +175,7 @@ struct headers_t {
 
 // Header fields rewritten by the ingress pipeline. Rewrites are computed and
 // stored in this struct, but actual rewriting is dealyed until the egress
-// pipeline so that the original values aren't overridden and get be matched on.
+// pipeline so that the original values aren't overridden and can be matched on.
 struct packet_rewrites_t {
   ethernet_addr_t src_mac;
   ethernet_addr_t dst_mac;
@@ -189,21 +194,23 @@ struct local_metadata_t {
   // used at the end of the egress pipeline to determine whether or not the
   // packet should be VLAN tagged (if not dropped).
   vlan_id_t vlan_id;
-  // True iff `vlan_id` is valid.
-  bool vlan_id_valid;
-
+  bool vlan_id_valid;  // True iff `vlan_id` is valid.
   bool admit_to_l3;
   vrf_id_t vrf_id;
   packet_rewrites_t packet_rewrites;
   bit<16> l4_src_port;
   bit<16> l4_dst_port;
   bit<WCMP_SELECTOR_INPUT_BITWIDTH> wcmp_selector_input;
-  // GRE tunnel encap related fields.
+
+  // Tunnel related fields.
+  bool apply_tunnel_decap_at_end_of_pre_ingress;
   bool apply_tunnel_encap_at_egress;
   ipv6_addr_t tunnel_encap_src_ipv6;
   ipv6_addr_t tunnel_encap_dst_ipv6;
-  // mirroring data, we can't group them into a struct, because BMv2 doesn't
-  // support passing structs in clone3.
+
+  // Mirroring related fields.
+  // We can't group them into a struct as BMv2 doesn't support passing structs
+  // into clone3.
   bool mirror_session_id_valid;
   mirror_session_id_t mirror_session_id_value;
   @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)

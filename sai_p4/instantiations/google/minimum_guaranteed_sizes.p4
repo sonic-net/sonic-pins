@@ -18,6 +18,8 @@
 
 // -- Fixed Table sizes --------------------------------------------------------
 
+#define IPV6_TUNNEL_TERMINATION_TABLE_MINIMUM_GUARANTEED_SIZE 128
+
 #define NEXTHOP_TABLE_MINIMUM_GUARANTEED_SIZE 1024
 
 #define NEIGHBOR_TABLE_MINIMUM_GUARANTEED_SIZE 1024
@@ -62,7 +64,6 @@
 // 2^8 - 1 to avoid allocation of 2^9 entries on such switches.
 
 #define ACL_DEFAULT_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 254
-
 
 #define ACL_TOR_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 127
 
