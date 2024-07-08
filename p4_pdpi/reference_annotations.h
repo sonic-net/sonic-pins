@@ -23,6 +23,18 @@ struct ParsedReferencedByAnnotation {
   std::string field;
 };
 
+// Returns a list of `IrTableReferences` parsed from all @refers_to and
+// @referenced by annotations in `info`.
+// Returns InvalidArgumentError if:
+//   - there are references to/from non-existing table/fields
+//   - an @reference_by annotation that can be represented as an @refer_to
+//     annotation. @referenced_by should only be used for built-ins
+// Returns UnimplementedError if:
+//   - there is a reference to an action
+//   - there is a reference involving a match field whose type is not `EXACT`
+absl::StatusOr<std::vector<IrTableReference>> ParseIrTableReferences(
+    const IrP4Info &info);
+
 // Returns a list of `RefersToAnnotation` parsed from the `annotations`.
 // Returns empty list if no annotation contained the label `@refers_to`.
 // Return InvalidArgument if any annotation with the label `@refers_to` did not
