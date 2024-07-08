@@ -318,6 +318,30 @@ message ConstrainedTableEntry {
   bytes controller_metadata = 8;
 }
 
+message RefersToMulticastByMatchFieldTableEntry {
+  message Match {
+    string group_id = 1; // exact match / Format::HEX_STRING / 10 bits
+  }
+  Match match = 1;
+  message Action {
+    RefersToMulticastAction refers_to_multicast_action = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message RefersToMulticastByActionTableEntry {
+  message Match {
+    string val = 1; // exact match / Format::HEX_STRING / 10 bits
+  }
+  Match match = 1;
+  message Action {
+    RefersToMulticastAction refers_to_multicast_action = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
 message ExactAndOptionalTableEntry {
   message Match {
     string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
@@ -355,6 +379,19 @@ message ReferringByActionTableEntry {
     ReferringToTwoMatchFieldsAction referring_to_two_match_fields_action = 1;
     ReferringToOneMatchFieldAction referring_to_one_match_field_action = 2;
   }
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message ReferencedByMulticastReplicaTableEntry {
+  message Match {
+    string port_str = 1; // exact match / Format::STRING
+    string instance_str = 2; // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -426,6 +463,10 @@ message PacketCountAndMeterAction {
 message ByteCountAndMeterAction {
 }
 
+message RefersToMulticastAction {
+  string multicast_group_id = 1; // Format::STRING
+}
+
 message NoAction {
 }
 
@@ -478,9 +519,12 @@ message TableEntry {
     TwoMatchFieldsTableEntry two_match_fields_table_entry = 1250980;
     ReferringToReferringByMatchFieldTableEntry referring_to_referring_by_match_field_table_entry = 7567824;
     ConstrainedTableEntry constrained_table_entry = 8408021;
+    RefersToMulticastByMatchFieldTableEntry refers_to_multicast_by_match_field_table_entry = 8935806;
+    RefersToMulticastByActionTableEntry refers_to_multicast_by_action_table_entry = 11813012;
     ExactAndOptionalTableEntry exact_and_optional_table_entry = 12300347;
     OneMatchFieldTableEntry one_match_field_table_entry = 12699062;
     ReferringByActionTableEntry referring_by_action_table_entry = 14558547;
+    ReferencedByMulticastReplicaTableEntry referenced_by_multicast_replica_table_entry = 15642665;
     ReferringByMatchFieldTableEntry referring_by_match_field_table_entry = 16037969;
     MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
