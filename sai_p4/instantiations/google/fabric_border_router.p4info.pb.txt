@@ -6,6 +6,32 @@ pkg_info {
 }
 tables {
   preamble {
+    id: 33554507
+    name: "ingress.tunnel_termination_lookup.ipv6_tunnel_termination_table"
+    alias: "ipv6_tunnel_termination_table"
+    annotations: "@unsupported"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+  }
+  match_fields {
+    id: 1
+    name: "dst_ipv6"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777238
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 128
+}
+tables {
+  preamble {
     id: 33554689
     name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
     alias: "acl_pre_ingress_table"
@@ -767,6 +793,20 @@ actions {
     name: "acl_drop"
     alias: "acl_drop"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP)"
+  }
+}
+actions {
+  preamble {
+    id: 16777238
+    name: "ingress.tunnel_termination_lookup.mark_for_tunnel_decap_and_set_vrf"
+    alias: "mark_for_tunnel_decap_and_set_vrf"
+  }
+  params {
+    id: 1
+    name: "vrf_id"
+    type_name {
+      name: "vrf_id_t"
+    }
   }
 }
 actions {
