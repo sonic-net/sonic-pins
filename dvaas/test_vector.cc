@@ -37,7 +37,9 @@ namespace {
 // contain an ID that matches this regular expression. This ID must be:
 // * Uniform across all packets within a packet test vector.
 // * Unique across different packet test vectors.
-constexpr LazyRE2 kTestPacketIdRegexp{R"(test packet #([0-9]+))"};
+// Note: this regexp ends on a `:`, allowing for a description or additional
+// bytes after the ID without changing the test packet ID.
+constexpr LazyRE2 kTestPacketIdRegexp{R"(test packet #([0-9]+):)"};
 
 // Returns a string with a "tag" that encodes the given test packet ID.
 // Prevents the string from getting larger and larger upon each update since
@@ -54,7 +56,7 @@ std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id,
                                           absl::string_view description) {
   std::string payload =
       absl::StrCat(MakeUnpaddedTestPacketTagFromUniqueId(unique_test_packet_id),
-                   ": ", description);
+                   ":", description);
 
   // Adds padding to the packet payload to prevent undersized packets. Any
   // Ethernet packet containing a tag returned by this function will be at
@@ -85,8 +87,9 @@ std::ostream& operator<<(std::ostream& os, const SwitchOutput& output) {
 absl::Status UpdateTestTag(packetlib::Packet& packet, int new_tag) {
   // Make a new input packet with updated payload.
   std::string new_payload = packet.payload();
-  if (!RE2::Replace(&new_payload, *kTestPacketIdRegexp,
-                    MakeUnpaddedTestPacketTagFromUniqueId(new_tag))) {
+  if (!RE2::Replace(
+          &new_payload, *kTestPacketIdRegexp,
+          absl::StrCat(MakeUnpaddedTestPacketTagFromUniqueId(new_tag), ":"))) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Test packets must contain a tag of the form '"
            << kTestPacketIdRegexp->pattern()
