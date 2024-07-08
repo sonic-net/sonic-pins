@@ -13,6 +13,10 @@
 // Instantiations of SAI P4 can override these sizes by defining the following
 // macros.
 
+#ifndef IPV6_TUNNEL_TERMINATION_TABLE_MINIMUM_GUARANTEED_SIZE
+#define IPV6_TUNNEL_TERMINATION_TABLE_MINIMUM_GUARANTEED_SIZE 0
+#endif
+
 #ifndef NEXTHOP_TABLE_MINIMUM_GUARANTEED_SIZE
 #define NEXTHOP_TABLE_MINIMUM_GUARANTEED_SIZE 0
 #endif
@@ -69,7 +73,12 @@
 #define WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE 0
 #endif
 
-// The max weight of an individual member when using the SUM_OF_MEMBERS size 
+// The maximum sum of weights or members for each wcmp group.
+#ifndef WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR
+#define WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR 0
+#endif
+
+// The max weight of an individual member when using the SUM_OF_MEMBERS size
 // semantics. This value is ignored in the SUM_OF_WEIGHTS semantics.
 #ifndef WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT
 #define WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT 0
