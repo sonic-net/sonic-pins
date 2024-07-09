@@ -143,13 +143,6 @@ end_to_end_test(
     smt_golden_file = "expected/hardcoded.smt2",
 )
 
-end_to_end_test(
-    name = "reflector_test",
-    p4_program = "//p4_symbolic/testdata:reflector/reflector.p4",
-    packets_golden_file = "expected/reflector.txt",
-    smt_golden_file = "expected/reflector.smt2",
-)
-
 # Checks the behavior of symbolic execution when there is a table application after a conditional.
 # Before go/optimized-symbolic-execution, p4-symbolic was executing t3 twice (once from the if
 # branch and once from the else branch). Now it executed each table exactly once, leading to

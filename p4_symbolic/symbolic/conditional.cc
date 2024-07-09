@@ -51,6 +51,10 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
   ASSIGN_OR_RETURN(z3::expr else_guard,
                    operators::And(guard, negated_condition));
 
+  // Simplify the guards for better performance (go/p4-symbolic-simplify).
+  if_guard = if_guard.simplify();
+  else_guard = else_guard.simplify();
+
   auto get_next_control_for_branch = [&](const std::string &branch) {
     return branch ==
                    conditional.optimized_symbolic_execution_info().merge_point()
