@@ -16,15 +16,20 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
+#include "gutil/testing.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
 namespace {
 
-using gutil::IsOkAndHolds;
-using testing::_;
+using ::gutil::EqualsProto;
+using ::gutil::IsOkAndHolds;
+using ::testing::_;
+using ::testing::SizeIs;
 
 using TestEntriesTest = ::testing::TestWithParam<sai::Instantiation>;
 
@@ -72,6 +77,110 @@ INSTANTIATE_TEST_SUITE_P(, TestEntriesTest,
                          [](const auto& info) -> std::string {
                            return sai::InstantiationToString(info.param);
                          });
+
+// -- PdEntryBuilder tests -----------------------------------------------------
+
+TEST(PdEntryBuilder,
+     GetDedupedEntriesReturnsNothingForDefaultConstructedBuilder) {
+  EXPECT_THAT(PdEntryBuilder().GetDedupedEntries().entries(),
+              testing::IsEmpty());
+}
+
+TEST(PdEntryBuilder, GetDedupedEntriesReturnsEntriesPassedToConstructor) {
+  auto entries = gutil::ParseProtoOrDie<sai::TableEntries>(
+      R"pb(
+        entries { l3_admit_table_entry { controller_metadata: "test" } }
+      )pb");
+  EXPECT_THAT(PdEntryBuilder(entries).GetDedupedEntries(),
+              EqualsProto(entries));
+}
+
+TEST(PdEntryBuilder, GetDedupedEntriesRemovesDuplicates) {
+  auto entries = gutil::ParseProtoOrDie<sai::TableEntries>(
+      R"pb(
+        entries { l3_admit_table_entry { controller_metadata: "test" } }
+        entries { l3_admit_table_entry { controller_metadata: "test" } }
+      )pb");
+  auto deduped_entries = gutil::ParseProtoOrDie<sai::TableEntries>(
+      R"pb(
+        entries { l3_admit_table_entry { controller_metadata: "test" } }
+      )pb");
+  EXPECT_THAT(PdEntryBuilder(entries).GetDedupedEntries(),
+              EqualsProto(deduped_entries));
+}
+
+TEST(PdEntryBuilder, AddEntryPuntingAllPacketsDoesNotAddsEntry) {
+  EXPECT_THAT(PdEntryBuilder()
+                  .AddEntryPuntingAllPackets(PuntAction::kCopy)
+                  .AddEntryPuntingAllPackets(PuntAction::kTrap)
+                  .GetDedupedEntries()
+                  .entries(),
+              SizeIs(2));
+}
+
+TEST(PdEntryBuilder, AddEntriesForwardingIpPacketsToGivenPortAddsEntries) {
+  EXPECT_THAT(PdEntryBuilder()
+                  .AddEntriesForwardingIpPacketsToGivenPort("egress port")
+                  .GetDedupedEntries()
+                  .entries(),
+              SizeIs(8));
+}
+
+TEST(PdEntryBuilder, AddVrfEntryAddsEntry) {
+  EXPECT_THAT(PdEntryBuilder()
+                  .AddVrfEntry("vrf-1")
+                  .AddVrfEntry("vrf-2")
+                  .AddVrfEntry("vrf-3")
+                  .GetDedupedEntries()
+                  .entries(),
+              SizeIs(3));
+}
+
+TEST(PdEntryBuilder, AddEntryAdmittingAllPacketsToL3AddsEntry) {
+  EXPECT_THAT(PdEntryBuilder()
+                  .AddEntryAdmittingAllPacketsToL3()
+                  .GetDedupedEntries()
+                  .entries(),
+              SizeIs(1));
+}
+
+TEST(PdEntryBuilder,
+     AddDefaultRouteForwardingAllPacketsToGivenPortAddsEntries) {
+  EXPECT_THAT(PdEntryBuilder()
+                  .AddDefaultRouteForwardingAllPacketsToGivenPort(
+                      "egress port 1", IpVersion::kIpv4, "vrf-1")
+                  .AddDefaultRouteForwardingAllPacketsToGivenPort(
+                      "egress port 2", IpVersion::kIpv6, "vrf-2")
+                  .AddDefaultRouteForwardingAllPacketsToGivenPort(
+                      "egress port 3", IpVersion::kIpv4And6, "vrf-3")
+                  .GetDedupedEntries()
+                  .entries(),
+              SizeIs(13));
+}
+
+TEST(PdEntryBuilder, AddPreIngressAclEntryAssigningVrfForGivenIpTypeAddsEntry) {
+  EXPECT_THAT(PdEntryBuilder()
+                  .AddPreIngressAclEntryAssigningVrfForGivenIpType(
+                      "vrf-1", IpVersion::kIpv4)
+                  .AddPreIngressAclEntryAssigningVrfForGivenIpType(
+                      "vrf-1", IpVersion::kIpv6)
+                  .AddPreIngressAclEntryAssigningVrfForGivenIpType(
+                      "vrf-1", IpVersion::kIpv4And6)
+                  .GetDedupedEntries()
+                  .entries(),
+              SizeIs(3));
+}
+
+TEST(PdEntryBuilder,
+     AddEntryDecappingAllIpInIpv6PacketsAndSettingVrfAddsEntry) {
+  EXPECT_THAT(PdEntryBuilder()
+                  .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-1")
+                  .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-2")
+                  .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-3")
+                  .GetDedupedEntries()
+                  .entries(),
+              SizeIs(3));
+}
 
 }  // namespace
 }  // namespace sai

@@ -217,8 +217,8 @@ TableEntryGenerator AclIngressSecurityTableGenerator(
            }
            action { name: "acl_drop" })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
-  generator.generator =
-      IrMatchFieldAndPriorityGenerator(table_definition, *base_entry, "dst_ip");
+  generator.generator = IrMatchFieldAndPriorityGenerator(
+      table_definition, *base_entry, "ether_type");
   return generator;
 }
 
@@ -228,8 +228,11 @@ TableEntryGenerator AclIngressQosTableGenerator(
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
       R"pb(table_name: "acl_ingress_qos_table"
            matches {
-             name: "is_ipv4"
-             optional { value { hex_str: "0x1" } }
+             name: "ether_type"
+             ternary {
+               value { hex_str: "0x0806" }
+               mask { hex_str: "0xffff" }
+             }
            }
            action {
              name: "set_qos_queue_and_cancel_copy_above_rate_limit"
@@ -268,6 +271,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "wcmp_group_table",
           "mirror_session_table",
           "mirror_port_to_pre_session_table",
+          // TODO: Add support for this table once the switch
+          // supports it.
+          "ipv6_tunnel_termination_table",
       });
   return *kUnsupportedTables;
 }

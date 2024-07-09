@@ -29,7 +29,6 @@
 #include "../../fixed/mirroring_clone.p4"
 #include "../../fixed/l3_admit.p4"
 #include "../../fixed/vlan.p4"
-#include "../../fixed/ttl.p4"
 #include "../../fixed/drop_martians.p4"
 #include "../../fixed/packet_rewrites.p4"
 #include "acl_egress.p4"
@@ -62,7 +61,6 @@ control ingress(inout headers_t headers,
       // The INGRESS stage can redirect (e.g. drop, punt or copy) packets, apply
       // rate-limits or modify header data.
       acl_ingress.apply(headers, local_metadata, standard_metadata);
-      ttl.apply(headers, local_metadata, standard_metadata);
       mirroring_clone.apply(headers, local_metadata, standard_metadata);
     }
   }
