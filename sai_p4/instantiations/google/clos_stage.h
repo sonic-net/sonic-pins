@@ -47,6 +47,11 @@ bool DiffersByClosStage(Instantiation instantiation);
 absl::Status AssertInstantiationAndClosStageAreCompatible(
     Instantiation instantiation, std::optional<ClosStage> stage);
 
+bool AbslParseFlag(absl::string_view stage_txt, ClosStage* stage,
+                   std::string* error);
+
+std::string AbslUnparseFlag(ClosStage stage);
+
 }  // namespace sai
 
 #endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_CLOS_STAGE_H_
