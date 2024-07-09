@@ -1,0 +1,39 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+cc_library(
+    name = "basic_switch",
+    hdrs = ["basic_switch.h"],
+    deps = [
+        "//p4_pdpi:p4_runtime_session",
+        "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_gnoi//cert:cert_cc_grpc_proto",
+        "@com_github_gnoi//diag:diag_cc_grpc_proto",
+        "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
+        "@com_github_gnoi//os:os_cc_grpc_proto",
+        "@com_github_gnoi//system:system_cc_grpc_proto",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
+        "@com_github_grpc_grpc//:grpc_security_base",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
