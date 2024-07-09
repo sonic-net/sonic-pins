@@ -234,7 +234,8 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
 
   RETURN_IF_ERROR(
       writer.AppendToTestArtifact("ir_entities_used_in_packet_synthesis.txt",
-                                  gutil::PrintTextProto(entities)));
+                                  absl::StrCat(gutil::PrintTextProto(entities),
+                                               std::string(80, '-'), "\n")));
 
   // Get enabled Ethernet ports from SUT's GNMI config.
   ASSIGN_OR_RETURN(std::vector<pins_test::P4rtPortId> ports,
@@ -294,9 +295,10 @@ absl::Status AttachPacketTrace(
                                                    .parsed()));
   const std::string& packet_hex =
       failed_packet_test.test_run().test_vector().input().packet().hex();
+  const std::string filename =
+      "packet_" + std::to_string(test_id) + ".trace.txt";
   RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-      "packet_" + std::to_string(test_id) + ".trace.txt",
-      packet_traces[packet_hex][0].bmv2_textual_log()));
+      filename, packet_traces[packet_hex][0].bmv2_textual_log()));
 
   auto it = packet_traces.find(packet_hex);
   if (it == packet_traces.end() || it->second.empty()) {
@@ -306,22 +308,47 @@ absl::Status AttachPacketTrace(
 
   // Augment failure description with packet trace summary.
   std::string summarized_packet_trace;
-  for (const auto& table_apply : it->second[0].table_apply()) {
-    if (table_apply.hit().has_table_entry()) {
-      absl::StrAppend(&summarized_packet_trace, "Table '",
-                      table_apply.table_name(), "': hit\n",
-                      gutil::PrintTextProto(table_apply.hit().table_entry()),
-                      "\n");
-    } else {
-      absl::StrAppend(&summarized_packet_trace,
-                      table_apply.hit_or_miss_textual_log(), "\n\n");
+  for (const auto& event : it->second[0].events()) {
+    if (event.has_table_apply()) {
+      if (event.table_apply().hit().has_table_entry()) {
+        absl::StrAppend(
+            &summarized_packet_trace, "Table '",
+            event.table_apply().table_name(), "': hit\n",
+            gutil::PrintTextProto(event.table_apply().hit().table_entry()),
+            "\n");
+      } else {
+        absl::StrAppend(&summarized_packet_trace,
+                        event.table_apply().hit_or_miss_textual_log(), "\n\n");
+      }
+    } else if (event.has_primitive_action()) {
+      switch (event.primitive_action().primitive_action_case()) {
+        case PrimitiveAction::kMarkToDrop: {
+          absl::StrAppend(
+              &summarized_packet_trace, "Primitive: 'mark_to_drop' (",
+              event.primitive_action().mark_to_drop().source_location(),
+              ")\n\n");
+          break;
+        }
+        case PrimitiveAction::PRIMITIVE_ACTION_NOT_SET:
+          LOG(WARNING) << "Primitive action in event "
+                       << event.ShortDebugString()
+                       << " not supported in summary";
+          break;
+      }
     }
   }
   failed_packet_test.mutable_test_result()->mutable_failure()->set_description(
-      absl::StrCat(failed_packet_test.test_result().failure().description(),
-                   "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
-                   "=========================\n",
-                   summarized_packet_trace));
+      absl::StrCat(
+          failed_packet_test.test_result().failure().description(),
+          "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
+          "=========================\n",
+          "DISCLAIMER: The following trace is produced from a simulation based "
+          "on the P4 model of the switch. Its sole purpose is to explain why "
+          "the test expects the output it expects. It does NOT necessarily "
+          "represent the behavior of the actual hardware under test. ",
+          "Moreover, this is a summary of the full trace and does not contain "
+          "all details. The full trace can be found in '",
+          filename, "'.\n\n", summarized_packet_trace));
   return absl::OkStatus();
 }
 
