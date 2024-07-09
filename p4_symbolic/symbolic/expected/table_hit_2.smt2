@@ -55,7 +55,7 @@
 (parsed) standard_metadata.instance_type: #x00000000
 (parsed) standard_metadata.mcast_grp: #x0000
 (parsed) standard_metadata.packet_length: standard_metadata.packet_length
-(parsed) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
+(parsed) standard_metadata.parser_error: #x00000000
 (parsed) standard_metadata.priority: #b000
 
 (egress) $got_cloned$: false
@@ -100,7 +100,7 @@
 (egress) standard_metadata.instance_type: #x00000000
 (egress) standard_metadata.mcast_grp: #x0000
 (egress) standard_metadata.packet_length: standard_metadata.packet_length
-(egress) standard_metadata.parser_error: (ite (and true (not true)) #x00000002 #x00000000)
+(egress) standard_metadata.parser_error: #x00000000
 (egress) standard_metadata.priority: #b000
 
 (solver constraints)
@@ -111,15 +111,15 @@
 (declare-fun h1.f2 () (_ BitVec 8))
 (declare-fun h1.f3 () (_ BitVec 8))
 (assert
- (let (($x95 (= standard_metadata.ingress_port (_ bv7 9))))
- (let (($x90 (= standard_metadata.ingress_port (_ bv6 9))))
- (let (($x85 (= standard_metadata.ingress_port (_ bv5 9))))
- (let (($x80 (= standard_metadata.ingress_port (_ bv4 9))))
- (let (($x75 (= standard_metadata.ingress_port (_ bv3 9))))
- (let (($x71 (= standard_metadata.ingress_port (_ bv2 9))))
- (let (($x67 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x72 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x67) $x71)))
- (or (or (or (or (or $x72 $x75) $x80) $x85) $x90) $x95))))))))))
+ (let (($x86 (= standard_metadata.ingress_port (_ bv7 9))))
+ (let (($x81 (= standard_metadata.ingress_port (_ bv6 9))))
+ (let (($x76 (= standard_metadata.ingress_port (_ bv5 9))))
+ (let (($x71 (= standard_metadata.ingress_port (_ bv4 9))))
+ (let (($x66 (= standard_metadata.ingress_port (_ bv3 9))))
+ (let (($x62 (= standard_metadata.ingress_port (_ bv2 9))))
+ (let (($x58 (= standard_metadata.ingress_port (_ bv1 9))))
+ (let (($x63 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x58) $x62)))
+ (or (or (or (or (or $x63 $x66) $x71) $x76) $x81) $x86))))))))))
 (assert
  (let (($x28 (= h1.f1 (_ bv255 8))))
  (let (($x25 (and true $x28)))
