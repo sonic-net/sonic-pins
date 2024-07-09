@@ -102,6 +102,19 @@ def pins_infra_deps():
             sha256 = "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf",
         )
 
+    if not native.existing_rule("com_github_gnmi"):
+        http_archive(
+            name = "com_github_gnmi",
+            # v0.10.0 release; commit-hash:5473f2ef722ee45c3f26eee3f4a44a7d827e3575.
+            url = "https://github.com/openconfig/gnmi/archive/refs/tags/v0.10.0.zip",
+            strip_prefix = "gnmi-0.10.0",
+            patch_args = ["-p1"],
+            patches = [
+                "@com_github_google_pins_infra//:bazel/patches/gnmi-001-fix_virtual_proto_import.patch",
+            ],
+            sha256 = "2231e1cc398a523fa840810fa6fdb8960639f7b91b57bb8f12ed8681e0142a67",
+        )
+
     if not native.existing_rule("com_github_gnoi"):
         http_archive(
             name = "com_github_gnoi",

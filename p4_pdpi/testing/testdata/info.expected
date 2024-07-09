@@ -962,6 +962,166 @@ tables {
   const_default_action_id: 21257015
   size: 1024
 }
+tables {
+  preamble {
+    id: 45367444
+    name: "ingress.refers_to_multicast_by_action_table"
+    alias: "refers_to_multicast_by_action_table"
+  }
+  match_fields {
+    id: 1
+    name: "val"
+    bitwidth: 10
+    match_type: EXACT
+    type_name {
+      name: "normal_id_t"
+    }
+  }
+  action_refs {
+    id: 18598416
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 1024
+}
+tables {
+  preamble {
+    id: 42490238
+    name: "ingress.refers_to_multicast_by_match_field_table"
+    alias: "refers_to_multicast_by_match_field_table"
+  }
+  match_fields {
+    id: 1
+    name: "group_id"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+    bitwidth: 10
+    match_type: EXACT
+    type_name {
+      name: "normal_id_t"
+    }
+  }
+  action_refs {
+    id: 18598416
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 1024
+}
+tables {
+  preamble {
+    id: 49197097
+    name: "ingress.referenced_by_multicast_replica_table"
+    alias: "referenced_by_multicast_replica_table"
+  }
+  match_fields {
+    id: 1
+    name: "port_str"
+    annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
+    match_type: EXACT
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "instance_str"
+    annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+    match_type: EXACT
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  action_refs {
+    id: 16777221
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 1024
+}
+tables {
+  preamble {
+    id: 50151603
+    name: "ingress.golden_test_friendly_table"
+    alias: "golden_test_friendly_table"
+  }
+  match_fields {
+    id: 1
+    name: "key1"
+    match_type: EXACT
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "key2"
+    match_type: EXACT
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  action_refs {
+    id: 31939749
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1024
+}
+tables {
+  preamble {
+    id: 37604604
+    name: "ingress.golden_test_friendly_wcmp_table"
+    alias: "golden_test_friendly_wcmp_table"
+    annotations: "@oneshot"
+    annotations: "@weight_proto_id(1)"
+  }
+  match_fields {
+    id: 1
+    name: "key1"
+    match_type: EXACT
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "key2"
+    match_type: EXACT
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  action_refs {
+    id: 31939749
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  implementation_id: 290772822
+  size: 1024
+}
 actions {
   preamble {
     id: 16777217
@@ -1117,12 +1277,49 @@ actions {
     alias: "byte_count_and_meter"
   }
 }
+actions {
+  preamble {
+    id: 18598416
+    name: "ingress.refers_to_multicast_action"
+    alias: "refers_to_multicast_action"
+  }
+  params {
+    id: 1
+    name: "multicast_group_id"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+    type_name {
+      name: "string_id_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 31939749
+    name: "ingress.golden_test_friendly_action"
+    alias: "golden_test_friendly_action"
+  }
+  params {
+    id: 1
+    name: "arg1"
+    type_name {
+      name: "string_id_t"
+    }
+  }
+  params {
+    id: 2
+    name: "arg2"
+    type_name {
+      name: "string_id_t"
+    }
+  }
+}
 action_profiles {
   preamble {
     id: 290772822
     name: "ingress.wcmp_group_selector"
     alias: "wcmp_group_selector"
   }
+  table_ids: 37604604
   table_ids: 33554440
   table_ids: 33554438
   with_selector: true
@@ -3209,6 +3406,262 @@ tables_by_id {
         annotations: "@noWarn(\"unused\")"
       }
     }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_action_table"
+          table_id: 48112979
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "two_match_fields_table"
+          table_id: 34805412
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_two_match_fields_action"
+            action_id: 23923420
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_two_match_fields_action"
+            action_id: 23923420
+            parameter_name: "referring_id_2"
+            parameter_id: 2
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_2"
+            field_id: 2
+          }
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_one_match_field_action"
+            action_id: 31920929
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+    }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_match_field_table"
+          table_id: 49592401
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "two_match_fields_table"
+          table_id: 34805412
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_id_1"
+            field_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_id_2"
+            field_id: 2
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_2"
+            field_id: 2
+          }
+        }
+      }
+    }
+  }
+}
+tables_by_id {
+  key: 37604604
+  value {
+    preamble {
+      id: 37604604
+      name: "ingress.golden_test_friendly_wcmp_table"
+      alias: "golden_test_friendly_wcmp_table"
+      annotations: "@oneshot"
+      annotations: "@weight_proto_id(1)"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "key1"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "key2"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "key1"
+      value {
+        match_field {
+          id: 1
+          name: "key1"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "key2"
+      value {
+        match_field {
+          id: 2
+          name: "key2"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    entry_actions {
+      ref {
+        id: 31939749
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 31939749
+          name: "ingress.golden_test_friendly_action"
+          alias: "golden_test_friendly_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_id {
+          key: 2
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg1"
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg2"
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    uses_oneshot: true
+    action_profile_id: 290772822
   }
 }
 tables_by_id {
@@ -3297,6 +3750,34 @@ tables_by_id {
         name: "NoAction"
         alias: "NoAction"
         annotations: "@noWarn(\"unused\")"
+      }
+    }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "referring_to_referring_by_match_field_table"
+          table_id: 41122256
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "referring_by_match_field_table"
+          table_id: 49592401
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_to_referring_id_1"
+            field_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "referring_id_1"
+            field_id: 1
+          }
+        }
       }
     }
   }
@@ -3558,6 +4039,275 @@ tables_by_id {
   }
 }
 tables_by_id {
+  key: 42490238
+  value {
+    preamble {
+      id: 42490238
+      name: "ingress.refers_to_multicast_by_match_field_table"
+      alias: "refers_to_multicast_by_match_field_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "group_id"
+          annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+          bitwidth: 10
+          match_type: EXACT
+          type_name {
+            name: "normal_id_t"
+          }
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "group_id"
+      value {
+        match_field {
+          id: 1
+          name: "group_id"
+          annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+          bitwidth: 10
+          match_type: EXACT
+          type_name {
+            name: "normal_id_t"
+          }
+        }
+      }
+    }
+    entry_actions {
+      ref {
+        id: 18598416
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 18598416
+          name: "ingress.refers_to_multicast_action"
+          alias: "refers_to_multicast_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "multicast_group_id"
+              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "multicast_group_id"
+          value {
+            param {
+              id: 1
+              name: "multicast_group_id"
+              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "refers_to_multicast_by_match_field_table"
+          table_id: 42490238
+        }
+      }
+      destination_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "group_id"
+            field_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "refers_to_multicast_action"
+            action_id: 18598416
+            parameter_name: "multicast_group_id"
+            parameter_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
+      }
+    }
+  }
+}
+tables_by_id {
+  key: 45367444
+  value {
+    preamble {
+      id: 45367444
+      name: "ingress.refers_to_multicast_by_action_table"
+      alias: "refers_to_multicast_by_action_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "val"
+          bitwidth: 10
+          match_type: EXACT
+          type_name {
+            name: "normal_id_t"
+          }
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "val"
+      value {
+        match_field {
+          id: 1
+          name: "val"
+          bitwidth: 10
+          match_type: EXACT
+          type_name {
+            name: "normal_id_t"
+          }
+        }
+      }
+    }
+    entry_actions {
+      ref {
+        id: 18598416
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 18598416
+          name: "ingress.refers_to_multicast_action"
+          alias: "refers_to_multicast_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "multicast_group_id"
+              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "multicast_group_id"
+          value {
+            param {
+              id: 1
+              name: "multicast_group_id"
+              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "refers_to_multicast_by_action_table"
+          table_id: 45367444
+        }
+      }
+      destination_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "refers_to_multicast_action"
+            action_id: 18598416
+            parameter_name: "multicast_group_id"
+            parameter_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
+      }
+    }
+  }
+}
+tables_by_id {
   key: 45854779
   value {
     preamble {
@@ -3758,6 +4508,36 @@ tables_by_id {
         name: "NoAction"
         alias: "NoAction"
         annotations: "@noWarn(\"unused\")"
+      }
+    }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_action_table"
+          table_id: 48112979
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "one_match_field_table"
+          table_id: 46253494
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_one_match_field_action"
+            action_id: 31920929
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id"
+            field_id: 1
+          }
+        }
       }
     }
   }
@@ -3984,6 +4764,239 @@ tables_by_id {
         annotations: "@noWarn(\"unused\")"
       }
     }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_action_table"
+          table_id: 48112979
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "one_match_field_table"
+          table_id: 46253494
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_one_match_field_action"
+            action_id: 31920929
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id"
+            field_id: 1
+          }
+        }
+      }
+    }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_action_table"
+          table_id: 48112979
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "two_match_fields_table"
+          table_id: 34805412
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_two_match_fields_action"
+            action_id: 23923420
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_two_match_fields_action"
+            action_id: 23923420
+            parameter_name: "referring_id_2"
+            parameter_id: 2
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_2"
+            field_id: 2
+          }
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_one_match_field_action"
+            action_id: 31920929
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+    }
+  }
+}
+tables_by_id {
+  key: 49197097
+  value {
+    preamble {
+      id: 49197097
+      name: "ingress.referenced_by_multicast_replica_table"
+      alias: "referenced_by_multicast_replica_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "port_str"
+          annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "instance_str"
+          annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "instance_str"
+      value {
+        match_field {
+          id: 2
+          name: "instance_str"
+          annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "port_str"
+      value {
+        match_field {
+          id: 1
+          name: "port_str"
+          annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777221
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777221
+          name: "do_thing_4"
+          alias: "do_thing_4"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    incoming_references {
+      source_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      destination_table {
+        p4_table {
+          table_name: "referenced_by_multicast_replica_table"
+          table_id: 49197097
+        }
+      }
+      field_references {
+        source {
+          built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+        }
+        destination {
+          match_field {
+            field_name: "instance_str"
+            field_id: 2
+          }
+        }
+      }
+      field_references {
+        source {
+          built_in_field: BUILT_IN_FIELD_REPLICA_PORT
+        }
+        destination {
+          match_field {
+            field_name: "port_str"
+            field_id: 1
+          }
+        }
+      }
+    }
   }
 }
 tables_by_id {
@@ -4116,6 +5129,224 @@ tables_by_id {
         annotations: "@noWarn(\"unused\")"
       }
     }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_match_field_table"
+          table_id: 49592401
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "two_match_fields_table"
+          table_id: 34805412
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_id_1"
+            field_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_id_2"
+            field_id: 2
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_2"
+            field_id: 2
+          }
+        }
+      }
+    }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "referring_to_referring_by_match_field_table"
+          table_id: 41122256
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "referring_by_match_field_table"
+          table_id: 49592401
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_to_referring_id_1"
+            field_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "referring_id_1"
+            field_id: 1
+          }
+        }
+      }
+    }
+  }
+}
+tables_by_id {
+  key: 50151603
+  value {
+    preamble {
+      id: 50151603
+      name: "ingress.golden_test_friendly_table"
+      alias: "golden_test_friendly_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "key1"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "key2"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "key1"
+      value {
+        match_field {
+          id: 1
+          name: "key1"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "key2"
+      value {
+        match_field {
+          id: 2
+          name: "key2"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    entry_actions {
+      ref {
+        id: 31939749
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 31939749
+          name: "ingress.golden_test_friendly_action"
+          alias: "golden_test_friendly_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_id {
+          key: 2
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg1"
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg2"
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
   }
 }
 tables_by_name {
@@ -4834,6 +6065,306 @@ tables_by_name {
   }
 }
 tables_by_name {
+  key: "golden_test_friendly_table"
+  value {
+    preamble {
+      id: 50151603
+      name: "ingress.golden_test_friendly_table"
+      alias: "golden_test_friendly_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "key1"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "key2"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "key1"
+      value {
+        match_field {
+          id: 1
+          name: "key1"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "key2"
+      value {
+        match_field {
+          id: 2
+          name: "key2"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    entry_actions {
+      ref {
+        id: 31939749
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 31939749
+          name: "ingress.golden_test_friendly_action"
+          alias: "golden_test_friendly_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_id {
+          key: 2
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg1"
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg2"
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+  }
+}
+tables_by_name {
+  key: "golden_test_friendly_wcmp_table"
+  value {
+    preamble {
+      id: 37604604
+      name: "ingress.golden_test_friendly_wcmp_table"
+      alias: "golden_test_friendly_wcmp_table"
+      annotations: "@oneshot"
+      annotations: "@weight_proto_id(1)"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "key1"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "key2"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "key1"
+      value {
+        match_field {
+          id: 1
+          name: "key1"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "key2"
+      value {
+        match_field {
+          id: 2
+          name: "key2"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    entry_actions {
+      ref {
+        id: 31939749
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 31939749
+          name: "ingress.golden_test_friendly_action"
+          alias: "golden_test_friendly_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_id {
+          key: 2
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg1"
+          value {
+            param {
+              id: 1
+              name: "arg1"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "arg2"
+          value {
+            param {
+              id: 2
+              name: "arg2"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    uses_oneshot: true
+    action_profile_id: 290772822
+  }
+}
+tables_by_name {
   key: "id_test_table"
   value {
     preamble {
@@ -5377,6 +6908,36 @@ tables_by_name {
         annotations: "@noWarn(\"unused\")"
       }
     }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_action_table"
+          table_id: 48112979
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "one_match_field_table"
+          table_id: 46253494
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_one_match_field_action"
+            action_id: 31920929
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id"
+            field_id: 1
+          }
+        }
+      }
+    }
   }
 }
 tables_by_name {
@@ -5630,6 +7191,147 @@ tables_by_name {
   }
 }
 tables_by_name {
+  key: "referenced_by_multicast_replica_table"
+  value {
+    preamble {
+      id: 49197097
+      name: "ingress.referenced_by_multicast_replica_table"
+      alias: "referenced_by_multicast_replica_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "port_str"
+          annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_id {
+      key: 2
+      value {
+        match_field {
+          id: 2
+          name: "instance_str"
+          annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "instance_str"
+      value {
+        match_field {
+          id: 2
+          name: "instance_str"
+          annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    match_fields_by_name {
+      key: "port_str"
+      value {
+        match_field {
+          id: 1
+          name: "port_str"
+          annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
+          match_type: EXACT
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    entry_actions {
+      ref {
+        id: 16777221
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 16777221
+          name: "do_thing_4"
+          alias: "do_thing_4"
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    incoming_references {
+      source_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      destination_table {
+        p4_table {
+          table_name: "referenced_by_multicast_replica_table"
+          table_id: 49197097
+        }
+      }
+      field_references {
+        source {
+          built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+        }
+        destination {
+          match_field {
+            field_name: "instance_str"
+            field_id: 2
+          }
+        }
+      }
+      field_references {
+        source {
+          built_in_field: BUILT_IN_FIELD_REPLICA_PORT
+        }
+        destination {
+          match_field {
+            field_name: "port_str"
+            field_id: 1
+          }
+        }
+      }
+    }
+  }
+}
+tables_by_name {
   key: "referring_by_action_table"
   value {
     preamble {
@@ -5851,6 +7553,98 @@ tables_by_name {
         annotations: "@noWarn(\"unused\")"
       }
     }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_action_table"
+          table_id: 48112979
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "one_match_field_table"
+          table_id: 46253494
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_one_match_field_action"
+            action_id: 31920929
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id"
+            field_id: 1
+          }
+        }
+      }
+    }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_action_table"
+          table_id: 48112979
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "two_match_fields_table"
+          table_id: 34805412
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_two_match_fields_action"
+            action_id: 23923420
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_two_match_fields_action"
+            action_id: 23923420
+            parameter_name: "referring_id_2"
+            parameter_id: 2
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_2"
+            field_id: 2
+          }
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_one_match_field_action"
+            action_id: 31920929
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+    }
   }
 }
 tables_by_name {
@@ -5983,6 +7777,76 @@ tables_by_name {
         annotations: "@noWarn(\"unused\")"
       }
     }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_match_field_table"
+          table_id: 49592401
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "two_match_fields_table"
+          table_id: 34805412
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_id_1"
+            field_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_id_2"
+            field_id: 2
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_2"
+            field_id: 2
+          }
+        }
+      }
+    }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "referring_to_referring_by_match_field_table"
+          table_id: 41122256
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "referring_by_match_field_table"
+          table_id: 49592401
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_to_referring_id_1"
+            field_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "referring_id_1"
+            field_id: 1
+          }
+        }
+      }
+    }
   }
 }
 tables_by_name {
@@ -6071,6 +7935,303 @@ tables_by_name {
         name: "NoAction"
         alias: "NoAction"
         annotations: "@noWarn(\"unused\")"
+      }
+    }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "referring_to_referring_by_match_field_table"
+          table_id: 41122256
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "referring_by_match_field_table"
+          table_id: 49592401
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_to_referring_id_1"
+            field_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "referring_id_1"
+            field_id: 1
+          }
+        }
+      }
+    }
+  }
+}
+tables_by_name {
+  key: "refers_to_multicast_by_action_table"
+  value {
+    preamble {
+      id: 45367444
+      name: "ingress.refers_to_multicast_by_action_table"
+      alias: "refers_to_multicast_by_action_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "val"
+          bitwidth: 10
+          match_type: EXACT
+          type_name {
+            name: "normal_id_t"
+          }
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "val"
+      value {
+        match_field {
+          id: 1
+          name: "val"
+          bitwidth: 10
+          match_type: EXACT
+          type_name {
+            name: "normal_id_t"
+          }
+        }
+      }
+    }
+    entry_actions {
+      ref {
+        id: 18598416
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 18598416
+          name: "ingress.refers_to_multicast_action"
+          alias: "refers_to_multicast_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "multicast_group_id"
+              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "multicast_group_id"
+          value {
+            param {
+              id: 1
+              name: "multicast_group_id"
+              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "refers_to_multicast_by_action_table"
+          table_id: 45367444
+        }
+      }
+      destination_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "refers_to_multicast_action"
+            action_id: 18598416
+            parameter_name: "multicast_group_id"
+            parameter_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
+      }
+    }
+  }
+}
+tables_by_name {
+  key: "refers_to_multicast_by_match_field_table"
+  value {
+    preamble {
+      id: 42490238
+      name: "ingress.refers_to_multicast_by_match_field_table"
+      alias: "refers_to_multicast_by_match_field_table"
+    }
+    match_fields_by_id {
+      key: 1
+      value {
+        match_field {
+          id: 1
+          name: "group_id"
+          annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+          bitwidth: 10
+          match_type: EXACT
+          type_name {
+            name: "normal_id_t"
+          }
+        }
+      }
+    }
+    match_fields_by_name {
+      key: "group_id"
+      value {
+        match_field {
+          id: 1
+          name: "group_id"
+          annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+          bitwidth: 10
+          match_type: EXACT
+          type_name {
+            name: "normal_id_t"
+          }
+        }
+      }
+    }
+    entry_actions {
+      ref {
+        id: 18598416
+        annotations: "@proto_id(1)"
+      }
+      action {
+        preamble {
+          id: 18598416
+          name: "ingress.refers_to_multicast_action"
+          alias: "refers_to_multicast_action"
+        }
+        params_by_id {
+          key: 1
+          value {
+            param {
+              id: 1
+              name: "multicast_group_id"
+              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+        params_by_name {
+          key: "multicast_group_id"
+          value {
+            param {
+              id: 1
+              name: "multicast_group_id"
+              annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+              type_name {
+                name: "string_id_t"
+              }
+            }
+            format: STRING
+          }
+        }
+      }
+      proto_id: 1
+    }
+    default_only_actions {
+      ref {
+        id: 21257015
+        annotations: "@defaultonly"
+        scope: DEFAULT_ONLY
+      }
+      action {
+        preamble {
+          id: 21257015
+          name: "NoAction"
+          alias: "NoAction"
+          annotations: "@noWarn(\"unused\")"
+        }
+      }
+    }
+    size: 1024
+    const_default_action {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    outgoing_references {
+      source_table {
+        p4_table {
+          table_name: "refers_to_multicast_by_match_field_table"
+          table_id: 42490238
+        }
+      }
+      destination_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "group_id"
+            field_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "refers_to_multicast_action"
+            action_id: 18598416
+            parameter_name: "multicast_group_id"
+            parameter_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
       }
     }
   }
@@ -6518,6 +8679,110 @@ tables_by_name {
         name: "NoAction"
         alias: "NoAction"
         annotations: "@noWarn(\"unused\")"
+      }
+    }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_action_table"
+          table_id: 48112979
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "two_match_fields_table"
+          table_id: 34805412
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_two_match_fields_action"
+            action_id: 23923420
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_two_match_fields_action"
+            action_id: 23923420
+            parameter_name: "referring_id_2"
+            parameter_id: 2
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_2"
+            field_id: 2
+          }
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "referring_to_one_match_field_action"
+            action_id: 31920929
+            parameter_name: "referring_id_1"
+            parameter_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+    }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "referring_by_match_field_table"
+          table_id: 49592401
+        }
+      }
+      destination_table {
+        p4_table {
+          table_name: "two_match_fields_table"
+          table_id: 34805412
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_id_1"
+            field_id: 1
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_1"
+            field_id: 1
+          }
+        }
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "referring_id_2"
+            field_id: 2
+          }
+        }
+        destination {
+          match_field {
+            field_name: "id_2"
+            field_id: 2
+          }
+        }
       }
     }
   }
@@ -7243,6 +9508,44 @@ actions_by_id {
   }
 }
 actions_by_id {
+  key: 18598416
+  value {
+    preamble {
+      id: 18598416
+      name: "ingress.refers_to_multicast_action"
+      alias: "refers_to_multicast_action"
+    }
+    params_by_id {
+      key: 1
+      value {
+        param {
+          id: 1
+          name: "multicast_group_id"
+          annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "multicast_group_id"
+      value {
+        param {
+          id: 1
+          name: "multicast_group_id"
+          annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+  }
+}
+actions_by_id {
   key: 21257015
   value {
     preamble {
@@ -7403,6 +9706,68 @@ actions_by_id {
           table_id: 34805412
           match_field_id: 1
         }
+      }
+    }
+  }
+}
+actions_by_id {
+  key: 31939749
+  value {
+    preamble {
+      id: 31939749
+      name: "ingress.golden_test_friendly_action"
+      alias: "golden_test_friendly_action"
+    }
+    params_by_id {
+      key: 1
+      value {
+        param {
+          id: 1
+          name: "arg1"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_id {
+      key: 2
+      value {
+        param {
+          id: 2
+          name: "arg2"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "arg1"
+      value {
+        param {
+          id: 1
+          name: "arg1"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "arg2"
+      value {
+        param {
+          id: 2
+          name: "arg2"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
       }
     }
   }
@@ -7677,6 +10042,68 @@ actions_by_name {
   }
 }
 actions_by_name {
+  key: "golden_test_friendly_action"
+  value {
+    preamble {
+      id: 31939749
+      name: "ingress.golden_test_friendly_action"
+      alias: "golden_test_friendly_action"
+    }
+    params_by_id {
+      key: 1
+      value {
+        param {
+          id: 1
+          name: "arg1"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_id {
+      key: 2
+      value {
+        param {
+          id: 2
+          name: "arg2"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "arg1"
+      value {
+        param {
+          id: 1
+          name: "arg1"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "arg2"
+      value {
+        param {
+          id: 2
+          name: "arg2"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+  }
+}
+actions_by_name {
   key: "packet_count_and_meter"
   value {
     preamble {
@@ -7836,6 +10263,44 @@ actions_by_name {
           table_id: 34805412
           match_field_id: 2
         }
+      }
+    }
+  }
+}
+actions_by_name {
+  key: "refers_to_multicast_action"
+  value {
+    preamble {
+      id: 18598416
+      name: "ingress.refers_to_multicast_action"
+      alias: "refers_to_multicast_action"
+    }
+    params_by_id {
+      key: 1
+      value {
+        param {
+          id: 1
+          name: "multicast_group_id"
+          annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
+      }
+    }
+    params_by_name {
+      key: "multicast_group_id"
+      value {
+        param {
+          id: 1
+          name: "multicast_group_id"
+          annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
+          type_name {
+            name: "string_id_t"
+          }
+        }
+        format: STRING
       }
     }
   }
@@ -8025,6 +10490,7 @@ action_profiles_by_id {
         name: "ingress.wcmp_group_selector"
         alias: "wcmp_group_selector"
       }
+      table_ids: 37604604
       table_ids: 33554440
       table_ids: 33554438
       with_selector: true
@@ -8041,10 +10507,109 @@ action_profiles_by_name {
         name: "ingress.wcmp_group_selector"
         alias: "wcmp_group_selector"
       }
+      table_ids: 37604604
       table_ids: 33554440
       table_ids: 33554438
       with_selector: true
       size: 1024
+    }
+  }
+}
+built_in_tables {
+  key: "builtin::multicast_group_table"
+  value {
+    built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+    outgoing_references {
+      source_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      destination_table {
+        p4_table {
+          table_name: "referenced_by_multicast_replica_table"
+          table_id: 49197097
+        }
+      }
+      field_references {
+        source {
+          built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+        }
+        destination {
+          match_field {
+            field_name: "instance_str"
+            field_id: 2
+          }
+        }
+      }
+      field_references {
+        source {
+          built_in_field: BUILT_IN_FIELD_REPLICA_PORT
+        }
+        destination {
+          match_field {
+            field_name: "port_str"
+            field_id: 1
+          }
+        }
+      }
+    }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "refers_to_multicast_by_action_table"
+          table_id: 45367444
+        }
+      }
+      destination_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "refers_to_multicast_action"
+            action_id: 18598416
+            parameter_name: "multicast_group_id"
+            parameter_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
+      }
+    }
+    incoming_references {
+      source_table {
+        p4_table {
+          table_name: "refers_to_multicast_by_match_field_table"
+          table_id: 42490238
+        }
+      }
+      destination_table {
+        built_in_table: BUILT_IN_TABLE_MULTICAST_GROUP_TABLE
+      }
+      field_references {
+        source {
+          match_field {
+            field_name: "group_id"
+            field_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
+      }
+      field_references {
+        source {
+          action_field {
+            action_name: "refers_to_multicast_action"
+            action_id: 18598416
+            parameter_name: "multicast_group_id"
+            parameter_id: 1
+          }
+        }
+        destination {
+          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+        }
+      }
     }
   }
 }

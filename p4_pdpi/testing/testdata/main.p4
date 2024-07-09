@@ -469,6 +469,99 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
         const default_action = NoAction();
     }
 
+  action refers_to_multicast_action(
+    @id(1)
+    @refers_to(builtin::multicast_group_table, multicast_group_id)
+    string_id_t multicast_group_id) {}
+
+  table refers_to_multicast_by_action_table {
+        key = {
+            meta.normal : exact @id(1) @name("val");
+        }
+        actions = {
+          @proto_id(1) refers_to_multicast_action;
+          @defaultonly NoAction();
+        }
+        const default_action = NoAction();
+  }
+
+  table refers_to_multicast_by_match_field_table {
+        key = {
+            meta.normal : exact 
+              @id(1) 
+              @name("group_id")
+              @refers_to(builtin::multicast_group_table, multicast_group_id);
+        }
+        actions = {
+          @proto_id(1) refers_to_multicast_action;
+          @defaultonly NoAction();
+        }
+        const default_action = NoAction();
+  }
+
+  table referenced_by_multicast_replica_table {
+        key = {
+            meta.str : exact
+              @id(1)
+              @name("port_str")
+              @referenced_by(builtin::multicast_group_table, replica.port);
+            meta.str2 : exact
+              @id(2)
+              @name("instance_str")
+              @referenced_by(builtin::multicast_group_table, replica.instance);
+        }
+        actions = {
+          @proto_id(1) do_thing_4;
+          @defaultonly NoAction();
+        }
+        const default_action = NoAction();
+  }
+
+  // This action only contains args whose formats are STRING. Values with the 
+  // STRING format are unchanged when translated from PD to IR/PI making it
+  // easy to read values in any representation when golden testing.
+  action golden_test_friendly_action(
+    @id(1)
+    string_id_t arg1,
+    @id(2)
+    string_id_t arg2) {}
+
+  // This table only contains fields whose formats are STRING. Values with the 
+  // STRING format are unchanged when translated from PD to IR/PI making it
+  // easy to read values in any representation when golden testing.
+  table golden_test_friendly_table {
+    key = {
+      meta.str : exact
+        @id(1)
+        @name("key1");
+      meta.str2 : exact
+        @id(2)
+        @name("key2");
+    }
+    actions = {
+      @proto_id(1) golden_test_friendly_action;
+    }
+  }
+
+  // This table is a wcmp version of `golden_test_friendly_table`.
+  @oneshot()
+  @weight_proto_id(1)
+  table golden_test_friendly_wcmp_table {
+    key = {
+      meta.str : exact
+        @id(1)
+        @name("key1");
+      meta.str2 : exact
+        @id(2)
+        @name("key2");
+      wcmp_selector_input : selector;
+    }
+    actions = {
+      @proto_id(1) golden_test_friendly_action;
+    }
+    implementation = wcmp_group_selector;
+  }
+
   apply {
     id_test_table.apply();
     exact_table.apply();
@@ -490,6 +583,11 @@ control ingress(inout headers hdr, inout metadata meta, inout standard_metadata_
     byte_count_and_meter_table.apply();
     exact_and_optional_table.apply();
     constrained_table.apply();
+    refers_to_multicast_by_action_table.apply();
+    refers_to_multicast_by_match_field_table.apply();
+    referenced_by_multicast_replica_table.apply();
+    golden_test_friendly_table.apply();
+    golden_test_friendly_wcmp_table.apply();
   }
 }
 
