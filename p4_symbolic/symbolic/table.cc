@@ -582,26 +582,33 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
 
   // Build each entry's assignment/effect guard by negating
   // higher priority entries.
+  // The accumulator guard and the current guard are simplified at every step
+  // for better performance (go/p4-symbolic-simplify).
   z3::expr default_entry_assignment_guard = guard;
   std::vector<z3::expr> assignment_guards;
   if (!entries_matches.empty()) {
     ASSIGN_OR_RETURN(z3::expr current_guard,
                      operators::And(guard, entries_matches.at(0)));
+    current_guard = current_guard.simplify();
     ASSIGN_OR_RETURN(z3::expr accumulator_guard,
                      operators::Not(entries_matches.at(0)));
+    accumulator_guard = accumulator_guard.simplify();
     assignment_guards.push_back(current_guard);
     for (size_t i = 1; i < entries_matches.size(); i++) {
       ASSIGN_OR_RETURN(z3::expr tmp, operators::And(guard, accumulator_guard));
       ASSIGN_OR_RETURN(current_guard,
                        operators::And(tmp, entries_matches.at(i)));
+      current_guard = current_guard.simplify();
       ASSIGN_OR_RETURN(tmp, operators::Not(entries_matches.at(i)));
       ASSIGN_OR_RETURN(accumulator_guard,
                        operators::And(accumulator_guard, tmp));
+      accumulator_guard = accumulator_guard.simplify();
       assignment_guards.push_back(current_guard);
     }
     ASSIGN_OR_RETURN(
         default_entry_assignment_guard,
         operators::And(default_entry_assignment_guard, accumulator_guard));
+    default_entry_assignment_guard = default_entry_assignment_guard.simplify();
   }
 
   // Build a TableEntry object for the default entry.
@@ -664,9 +671,11 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
             action == ir::TableHitAction()
                 ? (match_index != kDefaultActionEntryIndex)
                 : (match_index == kDefaultActionEntryIndex);
-        ASSIGN_OR_RETURN(SymbolicTableMatches branch_matches,
-                         control::EvaluateControl(next_control, state, headers,
-                                                  guard && branch_condition));
+        z3::expr next_guard = guard && branch_condition;
+        next_guard = next_guard.simplify();
+        ASSIGN_OR_RETURN(
+            SymbolicTableMatches branch_matches,
+            control::EvaluateControl(next_control, state, headers, next_guard));
         ASSIGN_OR_RETURN(merged_matches,
                          util::MergeMatchesOnCondition(
                              branch_condition, branch_matches, merged_matches,

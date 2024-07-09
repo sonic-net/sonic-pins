@@ -101,13 +101,13 @@ ________________________________________________________________________________
 ================================================================================
 Finding packet for table MyIngress.optional_match and row 1
 ================================================================================
-ingress_port = #b000000010
+ingress_port = #b000000001
 egress_port = #b000000001
 trace:
 dropped = 0
 got cloned = 0
 MyIngress.optional_match => was matched on entry 1
-MyIngress.set_field_table => was matched on entry 2
+MyIngress.set_field_table => was matched on entry 1
 tbl_program92 => was matched on entry -1
 
 ingress_headers:
@@ -130,7 +130,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000010
+standard_metadata.ingress_port = #b000000001
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -157,7 +157,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000010
+standard_metadata.ingress_port = #b000000001
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -170,7 +170,7 @@ $got_recirculated$ = false
 scalars.$extracted$ = false
 scalars.$valid$ = false
 scalars._padding_0 = #b0000000
-scalars.metadata.string_field = VALUE-2
+scalars.metadata.string_field = VALUE-1
 standard_metadata.$extracted$ = false
 standard_metadata.$valid$ = false
 standard_metadata._padding = #b000
@@ -184,7 +184,7 @@ standard_metadata.egress_spec = #b000000001
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000010
+standard_metadata.ingress_port = #b000000001
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
