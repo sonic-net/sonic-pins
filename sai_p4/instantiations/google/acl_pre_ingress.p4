@@ -21,6 +21,8 @@ control acl_pre_ingress(in headers_t headers,
                    in standard_metadata_t standard_metadata) {
   // First 6 bits of IPv4 TOS or IPv6 traffic class (or 0, for non-IP packets)
   bit<6> dscp = 0;
+  // Last 2 bits of IPv4 TOS or IPv6 traffic class (or 0, for non-IP packets)
+  bit<2> ecn = 0;
 
   // IPv4 IP protocol or IPv6 next_header (or 0, for non-IP packets)
   bit<8> ip_protocol = 0;
@@ -70,6 +72,7 @@ control acl_pre_ingress(in headers_t headers,
   @entry_restriction("
     // Only allow IP field matches for IP packets.
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
+    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     dst_ip::mask != 0 -> is_ipv4 == 1;
     dst_ipv6::mask != 0 -> is_ipv6 == 1;
     // Forbid illegal combinations of IP_TYPE fields.
@@ -104,6 +107,8 @@ control acl_pre_ingress(in headers_t headers,
           ) @format(IPV6_ADDRESS);
       dscp : ternary @name("dscp") @id(7)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DSCP);
+      ecn : ternary @name("ecn") @id(10)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ECN);
       local_metadata.ingress_port : optional @name("in_port") @id(8)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
     }
@@ -193,9 +198,11 @@ control acl_pre_ingress(in headers_t headers,
   apply {
     if (headers.ipv4.isValid()) {
       dscp = headers.ipv4.dscp;
+      ecn = headers.ipv4.ecn;
       ip_protocol = headers.ipv4.protocol;
     } else if (headers.ipv6.isValid()) {
       dscp = headers.ipv6.dscp;
+      ecn = headers.ipv6.ecn;
       ip_protocol = headers.ipv6.next_header;
     }
 
