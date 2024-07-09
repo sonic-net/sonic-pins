@@ -29,7 +29,7 @@ namespace p4rt_app {
 
 // Reads all table entries from a cache. For each ACL entry we also fetch
 // counter data from CounterDb.
-absl::StatusOr<p4::v1::ReadResponse> ReadAllEntities(
+absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
     const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
         table_entry_cache,
