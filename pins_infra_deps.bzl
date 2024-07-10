@@ -20,6 +20,16 @@ def pins_infra_deps():
             strip_prefix = "buildtools-4.2.4",
             url = "https://github.com/bazelbuild/buildtools/archive/4.2.4.tar.gz",
         )
+    if "boringssl" not in native.existing_rules():
+        http_archive(
+            name = "boringssl",
+            sha256 = "9f441d72fccb9a3faf96470478c8ccfaaeb8db1cffd4d78b698f782124dad1b0",
+            strip_prefix = "boringssl-b8a2bffc598f230484ff48a247526a9820facfc2",
+            urls = [
+                "https://storage.googleapis.com/grpc-bazel-mirror/github.com/google/boringssl/archive/b8a2bffc598f230484ff48a247526a9820facfc2.tar.gz",
+                "https://github.com/google/boringssl/archive/b8a2bffc598f230484ff48a247526a9820facfc2.tar.gz",
+            ],
+        )
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
