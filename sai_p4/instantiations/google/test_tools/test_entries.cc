@@ -404,6 +404,30 @@ EntryBuilder& EntryBuilder::AddIngressAclDroppingAllPackets() {
   )pb");
   return *this;
 }
+
+EntryBuilder& EntryBuilder::AddEgressAclDroppingIpPackets(
+    IpVersion ip_version) {
+  if (ip_version == IpVersion::kIpv4 || ip_version == IpVersion::kIpv4And6) {
+    *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
+      acl_egress_table_entry {
+        match { is_ipv4 { value: "0x1" } }
+        action { acl_drop {} }
+        priority: 1
+      }
+    )pb");
+  }
+  if (ip_version == IpVersion::kIpv6 || ip_version == IpVersion::kIpv4And6) {
+    *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
+      acl_egress_table_entry {
+        match { is_ipv6 { value: "0x1" } }
+        action { acl_drop {} }
+        priority: 1
+      }
+    )pb");
+  }
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddDisableVlanChecksEntry() {
   *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
     disable_vlan_checks_table_entry {
