@@ -67,6 +67,8 @@ struct ParamsForPfcTestsWithIxia {
   absl::Duration deadlock_restoration_time;
 };
 
+constexpr int kNumQueues = 8;
+
 class PfcTestWithIxia
     : public testing::TestWithParam<ParamsForPfcTestsWithIxia> {
  protected:
