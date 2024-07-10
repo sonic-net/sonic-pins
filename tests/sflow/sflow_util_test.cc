@@ -111,14 +111,6 @@ constexpr absl::string_view kResultJson = R"json({
       "collectors": {
         "collector": [
           {
-            "address": "2001:4860:f802::be",
-            "config": {
-              "address": "2001:4860:f802::be",
-              "port": 6343
-            },
-            "port": 6343
-          },
-          {
             "address": "12:34:56::78",
             "config": {
               "address": "12:34:56::78",
@@ -128,6 +120,146 @@ constexpr absl::string_view kResultJson = R"json({
           }
         ]
       },
+      "config": {
+        "agent-id-ipv6": "8002:12::aab0",
+        "enabled": true,
+        "polling-interval": 0,
+        "sample-size": 12
+      },
+      "interfaces": {
+        "interface": [
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet1"
+            },
+            "name": "Ethernet1"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet2"
+            },
+            "name": "Ethernet2"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet3"
+            },
+            "name": "Ethernet3"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet4"
+            },
+            "name": "Ethernet4"
+          }
+        ]
+      }
+    }
+  }
+})json";
+
+constexpr absl::string_view kResult2Json = R"json({
+  "openconfig-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "bond0",
+        "state": {
+          "openconfig-p4rt:id": 1,
+          "oper-status": "UP"
+        }
+      }
+    ]
+  },
+  "openconfig-sampling:sampling": {
+    "openconfig-sampling-sflow:sflow": {
+      "collectors": {
+        "collector": [
+          {
+            "address": "12:34:56::78",
+            "config": {
+              "address": "12:34:56::78",
+              "port": 6343
+            },
+            "port": 6343
+          },
+          {
+            "address": "2001:4860:f802::be",
+            "config": {
+              "address": "2001:4860:f802::be",
+              "port": 6343
+            },
+            "port": 6343
+          }
+        ]
+      },
+      "config": {
+        "agent-id-ipv6": "8002:12::aab0",
+        "enabled": true,
+        "polling-interval": 0,
+        "sample-size": 12
+      },
+      "interfaces": {
+        "interface": [
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet1"
+            },
+            "name": "Ethernet1"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet2"
+            },
+            "name": "Ethernet2"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet3"
+            },
+            "name": "Ethernet3"
+          },
+          {
+            "config": {
+              "enabled": true,
+              "ingress-sampling-rate": 1000,
+              "name": "Ethernet4"
+            },
+            "name": "Ethernet4"
+          }
+        ]
+      }
+    }
+  }
+})json";
+
+constexpr absl::string_view kResultNoCollectorJson = R"json({
+  "openconfig-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "bond0",
+        "state": {
+          "openconfig-p4rt:id": 1,
+          "oper-status": "UP"
+        }
+      }
+    ]
+  },
+  "openconfig-sampling:sampling": {
+    "openconfig-sampling-sflow:sflow": {
       "config": {
         "agent-id-ipv6": "8002:12::aab0",
         "enabled": true,
@@ -302,7 +434,7 @@ TEST(SflowconfigTest, AppendSflowConfigSuccess) {
       IsOkAndHolds(kResultJson));
 }
 
-TEST(SflowconfigTest, ModifyCollectorIpSuccess) {
+TEST(SflowconfigTest, AppendTwoCollectorSuccess) {
   EXPECT_THAT(
       UpdateSflowConfig(
           kGnmiConfig,
@@ -312,7 +444,19 @@ TEST(SflowconfigTest, ModifyCollectorIpSuccess) {
           /*sflow_interfaces=*/{{"Ethernet3", true}, {"Ethernet4", true}},
           /*sampling_rate=*/1000,
           /*sampling_header_size=*/12),
-      IsOkAndHolds(kResultJson));
+      IsOkAndHolds(kResult2Json));
+}
+
+TEST(SflowconfigTest, UpdateNoCollectorConfigSuccess) {
+  EXPECT_THAT(
+      UpdateSflowConfig(
+          kGnmiConfig,
+          /*agent_addr_ipv6=*/"8002:12::aab0",
+          /*collector_address_to_port=*/{},
+          /*sflow_interfaces=*/{{"Ethernet3", true}, {"Ethernet4", true}},
+          /*sampling_rate=*/1000,
+          /*sampling_header_size=*/12),
+      IsOkAndHolds(kResultNoCollectorJson));
 }
 
 TEST(SflowconfigTest, MoreThanTwoCollectorsFailure) {
@@ -321,7 +465,9 @@ TEST(SflowconfigTest, MoreThanTwoCollectorsFailure) {
           kGnmiConfig,
           /*agent_addr_ipv6=*/"8002:12::aab0",
           /*collector_address_to_port=*/
-          {{"12:34:56::78", 6343}, {"34:56:78::9a", 6343}},
+          {{"12:34:56::78", 6343},
+           {"34:56:78::9a", 6343},
+           {"34:56:78::9b", 6343}},
           /*sflow_interfaces=*/{{"Ethernet3", true}, {"Ethernet4", true}},
           /*sampling_rate=*/1000,
           /*sampling_header_size=*/12),
@@ -369,18 +515,6 @@ TEST(SflowconfigTest, ModifySamplingRateSuccess) {
   },
   "openconfig-sampling:sampling": {
     "openconfig-sampling-sflow:sflow": {
-      "collectors": {
-        "collector": [
-          {
-            "address": "2001:4860:f802::be",
-            "config": {
-              "address": "2001:4860:f802::be",
-              "port": 6343
-            },
-            "port": 6343
-          }
-        ]
-      },
       "config": {
         "agent-id-ipv6": "8002:12::aab0",
         "enabled": true,
