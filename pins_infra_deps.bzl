@@ -33,6 +33,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
+            # url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
+            # strip_prefix = "grpc-1.46.0",
+            # sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
             url = "https://github.com/grpc/grpc/archive/v1.56.1.zip",
             strip_prefix = "grpc-1.56.1",
             sha256 = "04a52a313926f0f6ec2ed489ac7552aa5949693b071eaf45ae13b66e5910c32f",
@@ -48,7 +51,7 @@ def pins_infra_deps():
             url = "https://github.com/abseil/abseil-cpp/archive/20230802.0.tar.gz",
             strip_prefix = "abseil-cpp-20230802.0",
             sha256 = "59d2976af9d6ecf001a81a35749a6e551a335b949d34918cfade07737b9d93c5",
-        )
+        )   
     if not native.existing_rule("com_google_googletest"):
         http_archive(
             name = "com_google_googletest",
