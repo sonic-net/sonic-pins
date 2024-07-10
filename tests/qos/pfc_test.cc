@@ -161,8 +161,12 @@ void PfcTestWithIxia::SetUp() {
       "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
       ixia_interface, sut_interface, sut_egress_interface, ixia_rx_interface);
 
+  // Save initial PFC Rx enable state.
+  ASSERT_OK_AND_ASSIGN(kInitialPfcRxEnable,
+                       GetPortPfcRxEnable(sut_egress_interface, *gnmi_stub_));
   // Enable PFC Rx on egress port
-  // ASSERT_OK(SetPortPfcRxEnable(sut_egress_interface, true, *gnmi_stub_));
+  ASSERT_OK(SetPortPfcRxEnable(sut_egress_interface,
+                               /*port_pfc_rx_enable=*/"true", *gnmi_stub_));
 
   // We will perform the following steps with Ixia:
   // Setup main Ixia forwarded traffic.
@@ -250,6 +254,10 @@ void PfcTestWithIxia::TearDown() {
       ixia::DeleteTrafficItem(main_traffic_.traffic_item, *generic_testbed_));
   ASSERT_OK(
       ixia::DeleteTrafficItem(pfc_traffic_.traffic_item, *generic_testbed_));
+  // Restore PFC Rx enable state.
+  ASSERT_OK(SetPortPfcRxEnable(ixia_links_.egress_link.sut_interface,
+                               /*port_pfc_rx_enable=*/kInitialPfcRxEnable,
+                               *gnmi_stub_));
   GetParam().testbed_interface->TearDown();
 }
 
@@ -295,9 +303,9 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
           std::get<ixia::Ipv4TrafficParameters>(
               main_traffic_parameters_.ip_parameters.value());
       ip_params.priority->dscp = GetParam().dscp_by_queue->at(queue);
-      ASSERT_OK(ixia::SetTrafficParameters(main_traffic_.traffic_item,
-                                           main_traffic_parameters_,
-                                           *generic_testbed_));
+      ASSERT_OK(ixia::SetTrafficParameters(
+          main_traffic_.traffic_item, main_traffic_parameters_,
+          *generic_testbed_, /*is_update=*/true));
 
       // Setup PFC traffic priority and pause duration for the target queue.
       pfc_traffic_parameters_.pfc_parameters->priority_enable_vector =
@@ -316,9 +324,9 @@ TEST_P(PfcTestWithIxia, PfcRxWithNoPacketDrops) {
 
       pfc_traffic_parameters_.frame_count = 1;
 
-      ASSERT_OK(ixia::SetTrafficParameters(pfc_traffic_.traffic_item,
-                                           pfc_traffic_parameters_,
-                                           *generic_testbed_));
+      ASSERT_OK(ixia::SetTrafficParameters(
+          pfc_traffic_.traffic_item, pfc_traffic_parameters_, *generic_testbed_,
+          /*is_update=*/true));
 
       // Wait for queue to be empty. Try up to 3 times waiting for the queue
       // counters to stabilize.
@@ -411,9 +419,9 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
         std::get<ixia::Ipv4TrafficParameters>(
             main_traffic_parameters_.ip_parameters.value());
     ip_params.priority->dscp = GetParam().dscp_by_queue->at(queue);
-    ASSERT_OK(ixia::SetTrafficParameters(main_traffic_.traffic_item,
-                                         main_traffic_parameters_,
-                                         *generic_testbed_));
+    ASSERT_OK(ixia::SetTrafficParameters(
+        main_traffic_.traffic_item, main_traffic_parameters_, *generic_testbed_,
+        /*is_update=*/true));
 
     // Setup PFC traffic priority.
     // TODO : Remove masking failure when issue is fixed.
@@ -445,9 +453,9 @@ TEST_P(PfcTestWithIxia, PfcWatchdog) {
         pfc_traffic_parameters_.traffic_speed =
             ixia::FramesPerSecond{rate_of_pfc_frames - 100};
       }
-      ASSERT_OK(ixia::SetTrafficParameters(pfc_traffic_.traffic_item,
-                                           pfc_traffic_parameters_,
-                                           *generic_testbed_));
+      ASSERT_OK(ixia::SetTrafficParameters(
+          pfc_traffic_.traffic_item, pfc_traffic_parameters_, *generic_testbed_,
+          /*is_update=*/true));
 
       // Read counters of the target queue.
       pins_test::QueueCounters queue_counters_before_test;
