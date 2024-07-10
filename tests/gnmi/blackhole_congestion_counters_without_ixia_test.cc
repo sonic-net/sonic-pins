@@ -60,7 +60,9 @@ const sai::Ipv6Lpm kIpv6Lpm = {.dst_ip = netaddr::Ipv6Address(0xF105, 0x102),
                                .prefix_len = 64};
 const sai::IpForwardingParams kIpForwardingParams = {.ipv4_lpm = kIpv4Lpm,
                                                      .ipv6_lpm = kIpv6Lpm};
+constexpr absl::string_view kIpv4DstIpForL3Hit = "10.10.20.10";
 constexpr absl::string_view kIpv4DstIpForL3Miss = "10.10.30.10";
+constexpr absl::string_view kIpv6DstIpForL3Hit = "F105:0102::2356";
 constexpr absl::string_view kIpv6DstIpForL3Miss = "F205:102::9845";
 
 void BlackholeCongestionCountersWithoutIxiaTestFixture::SetUp() {
@@ -177,8 +179,8 @@ absl::Status SendPackets(thinkit::ControlDevice& control_device,
 
 absl::StatusOr<LpmMissCounters>
 BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerLpmMisses(
-    sai::IpVersion ip_version, absl::string_view dst_ip,
-    uint32_t packets_count) {
+    sai::IpVersion ip_version, uint32_t lpm_miss_packets_count,
+    uint32_t lpm_hit_packets_count) {
   const std::string control_interface = control_links_[0].peer_interface;
   const std::string sut_interface = control_links_[0].sut_interface;
 
@@ -202,12 +204,24 @@ BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerLpmMisses(
       const uint64_t initial_port_in_pkts,
       GetInterfaceCounter("in-pkts", sut_interface, gnmi_stub_.get()));
   ASSIGN_OR_RETURN(
+      const uint64_t initial_port_in_discards,
+      GetInterfaceCounter("in-discards", sut_interface, gnmi_stub_.get()));
+  ASSIGN_OR_RETURN(
       const BlackholeSwitchCounters initial_blackhole_switch_counters,
       GetBlackholeSwitchCounters(*gnmi_stub_));
 
   LOG(INFO) << "Sending test packets on port: " << control_interface;
-  RETURN_IF_ERROR(SendPackets(control_device, control_interface, ip_version,
-                              dst_ip, packets_count));
+  if (ip_version == sai::IpVersion::kIpv4) {
+    RETURN_IF_ERROR(SendPackets(control_device, control_interface, ip_version,
+                                kIpv4DstIpForL3Miss, lpm_miss_packets_count));
+    RETURN_IF_ERROR(SendPackets(control_device, control_interface, ip_version,
+                                kIpv4DstIpForL3Hit, lpm_hit_packets_count));
+  } else {
+    RETURN_IF_ERROR(SendPackets(control_device, control_interface, ip_version,
+                                kIpv6DstIpForL3Miss, lpm_miss_packets_count));
+    RETURN_IF_ERROR(SendPackets(control_device, control_interface, ip_version,
+                                kIpv6DstIpForL3Hit, lpm_hit_packets_count));
+  }
 
   // Wait some time before capturing the port stats.
   absl::SleepFor(absl::Seconds(15));
@@ -217,18 +231,26 @@ BlackholeCongestionCountersWithoutIxiaTestFixture::TriggerLpmMisses(
       const uint64_t final_port_in_pkts,
       GetInterfaceCounter("in-pkts", sut_interface, gnmi_stub_.get()));
   ASSIGN_OR_RETURN(
+      const uint64_t final_port_in_discards,
+      GetInterfaceCounter("in-discards", sut_interface, gnmi_stub_.get()));
+  ASSIGN_OR_RETURN(
       const BlackholeSwitchCounters final_blackhole_switch_counters,
       GetBlackholeSwitchCounters(*gnmi_stub_));
 
   // Compute the change for each counter.
   const uint64_t port_in_pkts_delta = final_port_in_pkts - initial_port_in_pkts;
+  const uint64_t port_in_discards_delta =
+      final_port_in_discards - initial_port_in_discards;
   const BlackholeSwitchCounters blackhole_switch_delta =
       final_blackhole_switch_counters - initial_blackhole_switch_counters;
 
   return LpmMissCounters{
       .port_in_packets = port_in_pkts_delta,
+      .port_in_discards = port_in_discards_delta,
       .switch_blackhole_lpm_miss_events =
           blackhole_switch_delta.lpm_miss_events,
+      .switch_blackhole_in_discard_events =
+          blackhole_switch_delta.in_discard_events,
       // Sometimes fec_not_correctable_events occur which the test can't
       // control, so subtract those from the switch blackhole counter.
       .switch_blackhole_events =
@@ -245,8 +267,8 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
 
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv4, kIpv4DstIpForL3Miss,
-                       kAboveThreshL3MissCount));
+      TriggerLpmMisses(sai::IpVersion::kIpv4, kAboveThreshL3MissCount,
+                       /*lpm_hit_packets_count=*/0));
 
   // Check the changes are as expected.
   EXPECT_EQ(lpm_miss_counters.port_in_packets, kAboveThreshL3MissCount);
@@ -262,8 +284,8 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
 
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv6, kIpv6DstIpForL3Miss,
-                       kAboveThreshL3MissCount));
+      TriggerLpmMisses(sai::IpVersion::kIpv6, kAboveThreshL3MissCount,
+                       /*lpm_hit_packets_count=*/0));
 
   // Check the changes are as expected.
   EXPECT_EQ(lpm_miss_counters.port_in_packets, kAboveThreshL3MissCount);
@@ -279,8 +301,8 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
 
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv4, kIpv4DstIpForL3Miss,
-                       kBelowThreshL3MissCount));
+      TriggerLpmMisses(sai::IpVersion::kIpv4, kBelowThreshL3MissCount,
+                       /*lpm_hit_packets_count=*/0));
 
   // Check the changes are as expected.
   EXPECT_EQ(lpm_miss_counters.port_in_packets, kBelowThreshL3MissCount);
@@ -296,12 +318,72 @@ TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
 
   ASSERT_OK_AND_ASSIGN(
       LpmMissCounters lpm_miss_counters,
-      TriggerLpmMisses(sai::IpVersion::kIpv6, kIpv6DstIpForL3Miss,
-                       kBelowThreshL3MissCount));
+      TriggerLpmMisses(sai::IpVersion::kIpv6, kBelowThreshL3MissCount,
+                       /*lpm_hit_packets_count=*/0));
 
   // Check the changes are as expected.
   EXPECT_EQ(lpm_miss_counters.port_in_packets, kBelowThreshL3MissCount);
   EXPECT_EQ(lpm_miss_counters.switch_blackhole_lpm_miss_events, 0);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestInDiscardsAboveThreshIncrementBlackholeInDiscardCounters) {
+  // Test in-discard rate of 0.025.
+  constexpr uint32_t kL3MissCount = 5;
+  constexpr uint32_t kL3HitCount = 195;
+
+  // TODO: Connect to TestTracker for test status
+
+  // Use LPM misses to trigger in-discard events.
+  ASSERT_OK_AND_ASSIGN(
+      LpmMissCounters lpm_miss_counters,
+      TriggerLpmMisses(sai::IpVersion::kIpv4, kL3MissCount, kL3HitCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kL3MissCount + kL3HitCount);
+  EXPECT_EQ(lpm_miss_counters.port_in_discards, kL3MissCount);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_in_discard_events, 1);
+  EXPECT_GE(lpm_miss_counters.switch_blackhole_events, 1);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestInDiscardsBelowThreshNotIncrementBlackholeInDiscardCounters) {
+  // Test in-discard rate of 0.005.
+  constexpr uint32_t kL3MissCount = 1;
+  constexpr uint32_t kL3HitCount = 199;
+
+  // TODO: Connect to TestTracker for test status
+
+  // Use LPM misses to trigger in-discard events.
+  ASSERT_OK_AND_ASSIGN(
+      LpmMissCounters lpm_miss_counters,
+      TriggerLpmMisses(sai::IpVersion::kIpv4, kL3MissCount, kL3HitCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kL3MissCount + kL3HitCount);
+  EXPECT_EQ(lpm_miss_counters.port_in_discards, kL3MissCount);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_in_discard_events, 0);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
+}
+
+TEST_P(BlackholeCongestionCountersWithoutIxiaTestFixture,
+       TestPacketCountBelowThreshNotIncrementBlackholeInDiscardCounters) {
+  // Test when in-discard rate is 1, but the packet count is too low.
+  constexpr uint32_t kL3MissCount = 5;
+  constexpr uint32_t kL3HitCount = 0;
+
+  // TODO: Connect to TestTracker for test status
+
+  // Use LPM misses to trigger in-discard events.
+  ASSERT_OK_AND_ASSIGN(
+      LpmMissCounters lpm_miss_counters,
+      TriggerLpmMisses(sai::IpVersion::kIpv4, kL3MissCount, kL3HitCount));
+
+  // Check the changes are as expected.
+  EXPECT_EQ(lpm_miss_counters.port_in_packets, kL3MissCount);
+  EXPECT_EQ(lpm_miss_counters.port_in_discards, kL3MissCount);
+  EXPECT_EQ(lpm_miss_counters.switch_blackhole_in_discard_events, 0);
   EXPECT_EQ(lpm_miss_counters.switch_blackhole_events, 0);
 }
 

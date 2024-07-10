@@ -31,7 +31,9 @@ namespace pins_test {
 
 struct LpmMissCounters {
   uint64_t port_in_packets;
+  uint64_t port_in_discards;
   uint64_t switch_blackhole_lpm_miss_events;
+  uint64_t switch_blackhole_in_discard_events;
   uint64_t switch_blackhole_events;
 };
 
@@ -40,9 +42,9 @@ class BlackholeCongestionCountersWithoutIxiaTestFixture
  protected:
   void SetUp() override;
   void TearDown() override;
-  absl::StatusOr<LpmMissCounters> TriggerLpmMisses(sai::IpVersion ip_version,
-                                                   absl::string_view dst_ip,
-                                                   uint32_t packets_count);
+  absl::StatusOr<LpmMissCounters> TriggerLpmMisses(
+      sai::IpVersion ip_version, uint32_t lpm_miss_packets_count,
+      uint32_t lpm_hit_packets_count);
   std::unique_ptr<thinkit::GenericTestbed> generic_testbed_;
   std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub_;
   std::vector<InterfaceLink> control_links_;
