@@ -83,6 +83,7 @@ class PfcTestWithIxia
   ixia::TrafficParameters main_traffic_parameters_;
   TrafficItem pfc_traffic_;
   ixia::TrafficParameters pfc_traffic_parameters_;
+  std::string kInitialPfcRxEnable;
 
   void SetUp() override;
 
