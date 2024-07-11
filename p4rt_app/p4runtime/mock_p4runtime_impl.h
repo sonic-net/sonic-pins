@@ -11,18 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
-#define GOOGLE_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
+#ifndef PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
+#define PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
 
 #include "gmock/gmock.h"
 #include "grpcpp/grpcpp.h"
 #include "grpcpp/server_context.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 
 namespace p4rt_app {
 
-class MockP4RuntimeImpl final : public P4RuntimeImpl {
+class MockP4RuntimeImpl : public P4RuntimeImpl {
  public:
   MockP4RuntimeImpl()
       : P4RuntimeImpl(/*translate_port_ids=*/false) {}
@@ -67,8 +68,22 @@ class MockP4RuntimeImpl final : public P4RuntimeImpl {
               (const std::string& port_name), (override));
 
   MOCK_METHOD(absl::Status, VerifyState, (), (override));
+
+  MOCK_METHOD(absl::Status, DumpDebugData,
+              (const std::string& path, const std::string& log_level),
+              (override));
+
+  MOCK_METHOD(void, SetCpuQueueTranslator,
+              (std::unique_ptr<CpuQueueTranslator>), (override));
+
+/* TODO(PINS): To handle Component, System & Interface Translator in November release.
+ private:
+  swss::MockComponentStateHelper mock_component_state_helper_;
+  swss::MockSystemStateHelper mock_system_state_helper_; */
+//  sonic::FakeIntfTranslator fake_intf_translator_{/*enabled=*/true}; 
+
 };
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_
+#endif  // PINS_P4RT_APP_P4RUNTIME_MOCK_P4RUNTIME_IMPL_H_

@@ -11,12 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_
-#define GOOGLE_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_
+#ifndef PINS_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_
+#define PINS_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_
 
 #include "absl/status/status.h"
-#include "absl/strings/ascii.h"
-#include "gutil/status.h"
+#include "absl/status/statusor.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 
@@ -40,4 +39,4 @@ absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_
+#endif  // PINS_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_

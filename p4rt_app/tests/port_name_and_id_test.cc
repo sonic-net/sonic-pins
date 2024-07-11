@@ -18,244 +18,297 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
-#include "grpcpp/security/credentials.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
-#include "p4/config/v1/p4info.pb.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
+#include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
 #include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace p4rt_app {
 namespace {
 
+using ::gutil::EqualsProto;
+using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
+using ::testing::Contains;
+using ::testing::ElementsAre;
+using ::testing::ExplainMatchResult;
 using ::testing::HasSubstr;
+using ::testing::IsEmpty;
+using ::testing::Not;
+using ::testing::UnorderedElementsAreArray;
 
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>> StartP4rtSession(
-    const test_lib::P4RuntimeGrpcService& p4rt_service, uint64_t device_id) {
-  std::string address = absl::StrCat("localhost:", p4rt_service.GrpcPort());
-  auto stub =
-      pdpi::CreateP4RuntimeStub(address, grpc::InsecureChannelCredentials());
-
-  ASSIGN_OR_RETURN(auto p4rt_session,
-                   pdpi::P4RuntimeSession::Create(std::move(stub), device_id));
-  return p4rt_session;
+// Expects a DB to contain the provided port map.
+MATCHER_P2(
+    ContainsPortMap, port_name, port_id,
+    absl::Substitute("Contains mapping of port_name '$0' to port id '$1'",
+                     port_name, port_id)) {
+  return ExplainMatchResult(
+      IsOkAndHolds(ElementsAre(std::make_pair("id", port_id))),
+      arg.ReadTableEntry(port_name), result_listener);
 }
 
-class PortNameAndIdTest : public testing::Test {
- protected:
-  const p4::config::v1::P4Info p4_info_ =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-  const pdpi::IrP4Info ir_p4_info_ =
-      sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
-  const uint64_t device_id_ = 100405;
+// Expects a DB to contain the provided AppDB flow entry.
+MATCHER_P(
+    ContainsAppDbEntry, app_db_entry,
+    absl::Substitute("Contains an APP DB entry with key '$0' and entries [$1]",
+                     app_db_entry.GetKey(),
+                     absl::StrJoin(app_db_entry.GetValueList(), ", ",
+                                   absl::PairFormatter("=")))) {
+  return ExplainMatchResult(
+      IsOkAndHolds(UnorderedElementsAreArray(app_db_entry.GetValueMap())),
+      arg.ReadTableEntry(app_db_entry.GetKey()), result_listener);
+}
+
+absl::StatusOr<p4::v1::WriteRequest> WriteRequestWithPort(
+    const pdpi::IrP4Info& ir_p4_info, absl::string_view port) {
+  return test_lib::PdWriteRequestToPi(
+      absl::Substitute(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                router_interface_table_entry {
+                  match { router_interface_id: "16" }
+                  action {
+                    set_port_and_src_mac {
+                      port: "$0"
+                      src_mac: "00:02:03:04:05:06"
+                    }
+                  }
+                }
+              }
+            }
+          )pb",
+          port),
+      ir_p4_info);
+}
+
+test_lib::AppDbEntryBuilder AppDbEntryWithPort(absl::string_view port) {
+  test_lib::AppDbEntryBuilder builder;
+  return builder.SetTableName("FIXED_ROUTER_INTERFACE_TABLE")
+      .AddMatchField("router_interface_id", "16")
+      .SetAction("set_port_and_src_mac")
+      .AddActionParam("port", std::string(port))
+      .AddActionParam("src_mac", "00:02:03:04:05:06");
+}
+
+class PortNameAndIdTest : public test_lib::P4RuntimeComponentTestFixture {
+ public:
+  PortNameAndIdTest()
+      : test_lib::P4RuntimeComponentTestFixture(
+            sai::Instantiation::kMiddleblock,
+            P4RuntimeImplOptions{.translate_port_ids = true}) {}
 };
 
-TEST_F(PortNameAndIdTest, AddAThenDeletePortTranslation) {
-  test_lib::P4RuntimeGrpcService p4rt_service =
-      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
+TEST_F(PortNameAndIdTest, TranslatesPortIdToName) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "1"));
+  test_lib::AppDbEntryBuilder app_db_entry = AppDbEntryWithPort("Ethernet0");
 
-  EXPECT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
-  EXPECT_OK(p4rt_service.GetP4rtServer().RemovePortTranslation("Ethernet0"));
+  ASSERT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable(),
+              ContainsAppDbEntry(AppDbEntryWithPort("Ethernet0")));
+}
+
+TEST_F(PortNameAndIdTest, AddTranslationUpdatesAppDb) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  EXPECT_THAT(p4rt_service_.GetPortAppDbTable(),
+              ContainsPortMap("Ethernet0", "1"));
+  EXPECT_THAT(p4rt_service_.GetPortAppStateDbTable(),
+              ContainsPortMap("Ethernet0", "1"));
+}
+
+TEST_F(PortNameAndIdTest, PortIdTranslationFailsForUnknownPortId) {
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "2"));
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
+
+  // The port id is used in the action param, so it doesn't affect the key.
+  EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable().GetAllKeys(),
+              Not(Contains(AppDbEntryWithPort("2").GetKey())));
+}
+
+TEST_F(PortNameAndIdTest, PortIdTranslationCanBeRemoved) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK(p4rt_service_.GetP4rtServer().RemovePortTranslation("Ethernet0"));
+
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "1"));
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request),
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
+
+  EXPECT_THAT(p4rt_service_.GetPortAppDbTable().GetAllKeys(), IsEmpty());
+  EXPECT_THAT(p4rt_service_.GetPortAppStateDbTable().GetAllKeys(), IsEmpty());
 }
 
 TEST_F(PortNameAndIdTest, ResendingDuplicatePortTranslationsAreAllowed) {
-  test_lib::P4RuntimeGrpcService p4rt_service =
-      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
 
-  EXPECT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
-  EXPECT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "0"));
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable(),
+              ContainsAppDbEntry(AppDbEntryWithPort("Ethernet0")));
+
+  EXPECT_THAT(p4rt_service_.GetPortAppDbTable(),
+              ContainsPortMap("Ethernet0", "0"));
+  EXPECT_THAT(p4rt_service_.GetPortAppStateDbTable(),
+              ContainsPortMap("Ethernet0", "0"));
 }
 
-TEST_F(PortNameAndIdTest, ReusingPortNameFailsWithAlreadyExists) {
-  test_lib::P4RuntimeGrpcService p4rt_service =
-      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
+TEST_F(PortNameAndIdTest, PortNamesCanBeRemappedToUnusedPortIds) {
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
 
-  EXPECT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
-  EXPECT_THAT(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "1"),
-              StatusIs(absl::StatusCode::kAlreadyExists));
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "1"));
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable(),
+              ContainsAppDbEntry(AppDbEntryWithPort("Ethernet0")));
+  EXPECT_THAT(p4rt_service_.GetPortAppDbTable(),
+              ContainsPortMap("Ethernet0", "1"));
+  EXPECT_THAT(p4rt_service_.GetPortAppStateDbTable(),
+              ContainsPortMap("Ethernet0", "1"));
+}
+
+TEST_F(PortNameAndIdTest, RemappingPortNamesRemovesOldTranslations) {
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "0"));
+  EXPECT_FALSE(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request)
+          .ok());
 }
 
 TEST_F(PortNameAndIdTest, ReusingPortIdFailsWithAlreadyExists) {
-  test_lib::P4RuntimeGrpcService p4rt_service =
-      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
-
-  EXPECT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
-  EXPECT_THAT(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet1", "0"),
-              StatusIs(absl::StatusCode::kAlreadyExists));
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
+  EXPECT_THAT(
+      p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "0"),
+      StatusIs(absl::StatusCode::kAlreadyExists));
 }
 
-TEST_F(PortNameAndIdTest, ChangingPortIdRequiresRemovalFirst) {
-  test_lib::P4RuntimeGrpcService p4rt_service =
-      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
+TEST_F(PortNameAndIdTest, ReusingPortIdFailureHasNoSideEffects) {
+  EXPECT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "0"));
+  ASSERT_THAT(
+      p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet1", "0"),
+      StatusIs(absl::StatusCode::kAlreadyExists));
 
-  EXPECT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "10"));
-  EXPECT_OK(p4rt_service.GetP4rtServer().RemovePortTranslation("Ethernet0"));
-  EXPECT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "11"));
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "0"));
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable(),
+              ContainsAppDbEntry(AppDbEntryWithPort("Ethernet0")));
+  EXPECT_THAT(p4rt_service_.GetPortAppDbTable(),
+              ContainsPortMap("Ethernet0", "0"));
+  EXPECT_THAT(p4rt_service_.GetPortAppStateDbTable(),
+              ContainsPortMap("Ethernet0", "0"));
+}
+
+TEST_F(PortNameAndIdTest, ChangingPortIdWithRemovalUpdatesTranslations) {
+  EXPECT_OK(
+      p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "10"));
+  EXPECT_OK(p4rt_service_.GetP4rtServer().RemovePortTranslation("Ethernet0"));
+  EXPECT_OK(
+      p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "11"));
+
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "11"));
+  EXPECT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+
+  EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable(),
+              ContainsAppDbEntry(AppDbEntryWithPort("Ethernet0")));
+  EXPECT_THAT(p4rt_service_.GetPortAppDbTable(),
+              ContainsPortMap("Ethernet0", "11"));
+  EXPECT_THAT(p4rt_service_.GetPortAppStateDbTable(),
+              ContainsPortMap("Ethernet0", "11"));
 }
 
 TEST_F(PortNameAndIdTest, CannotAddPortTranslationWithEmptyValues) {
-  test_lib::P4RuntimeGrpcService p4rt_service =
-      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
+  EXPECT_THAT(p4rt_service_.GetP4rtServer().AddPortTranslation("", "1"),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", ""),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 
-  EXPECT_THAT(p4rt_service.GetP4rtServer().AddPortTranslation("", "1"),
-              StatusIs(absl::StatusCode::kInvalidArgument));
-  EXPECT_THAT(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", ""),
-              StatusIs(absl::StatusCode::kInvalidArgument));
+  EXPECT_THAT(p4rt_service_.GetPortAppDbTable().GetAllKeys(), IsEmpty());
+  EXPECT_THAT(p4rt_service_.GetPortAppStateDbTable().GetAllKeys(), IsEmpty());
 }
 
 TEST_F(PortNameAndIdTest, RemovingNonExistantPortTranslationPasses) {
-  test_lib::P4RuntimeGrpcService p4rt_service =
-      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
-
-  EXPECT_OK(p4rt_service.GetP4rtServer().RemovePortTranslation("Ethernet0"));
+  EXPECT_OK(p4rt_service_.GetP4rtServer().RemovePortTranslation("Ethernet0"));
 }
 
 TEST_F(PortNameAndIdTest, CannotRemovePortTranslationWithEmptyValues) {
-  test_lib::P4RuntimeGrpcService p4rt_service =
-      test_lib::P4RuntimeGrpcService(P4RuntimeImplOptions{});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
-
-  EXPECT_THAT(p4rt_service.GetP4rtServer().RemovePortTranslation(""),
+  EXPECT_THAT(p4rt_service_.GetP4rtServer().RemovePortTranslation(""),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST_F(PortNameAndIdTest, ExpectingName) {
-  // Start the P4RT server to accept port names, and configure a ethernet port
-  // to NOT have an ID field.
-  test_lib::P4RuntimeGrpcService p4rt_service = test_lib::P4RuntimeGrpcService(
-      P4RuntimeImplOptions{.translate_port_ids = false});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
+TEST_F(PortNameAndIdTest, NameTranslationRoundTrip) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK_AND_ASSIGN(auto request, WriteRequestWithPort(ir_p4_info_, "1"));
 
-  // Connect to the P4RT server and push a P4Info file.
-  ASSERT_OK_AND_ASSIGN(auto p4rt_session,
-                       StartP4rtSession(p4rt_service, device_id_));
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
-      p4rt_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      p4_info_));
-
-  // Send a write request using the port name.
-  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
-                       test_lib::PdWriteRequestToPi(
-                           R"pb(
-                             updates {
-                               type: INSERT
-                               table_entry {
-                                 router_interface_table_entry {
-                                   match { router_interface_id: "16" }
-                                   action {
-                                     set_port_and_src_mac {
-                                       port: "Ethernet0"
-                                       src_mac: "00:02:03:04:05:06"
-                                     }
-                                   }
-                                 }
-                               }
-                             }
-                           )pb",
-                           ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session.get(), request));
+  ASSERT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_THAT(pdpi::ReadPiTableEntries(p4rt_session_.get()),
+              IsOkAndHolds(ElementsAre(
+                  EqualsProto(request.updates(0).entity().table_entry()))));
 }
 
-TEST_F(PortNameAndIdTest, ExpectingIdGetId) {
-  // Start the P4RT server to accept port IDs, and configure a ethernet port
-  // with an ID field.
-  test_lib::P4RuntimeGrpcService p4rt_service = test_lib::P4RuntimeGrpcService(
-      P4RuntimeImplOptions{.translate_port_ids = true});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
-  ASSERT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+class PortNameAndNameTest : public test_lib::P4RuntimeComponentTestFixture {
+ public:
+  PortNameAndNameTest()
+      : test_lib::P4RuntimeComponentTestFixture(
+            sai::Instantiation::kMiddleblock,
+            P4RuntimeImplOptions{.translate_port_ids = false}) {}
+};
 
-  // Connect to the P4RT server and push a P4Info file.
-  ASSERT_OK_AND_ASSIGN(auto p4rt_session,
-                       StartP4rtSession(p4rt_service, device_id_));
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
-      p4rt_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      p4_info_));
-
-  // Send a write request using the port ID.
-  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
-                       test_lib::PdWriteRequestToPi(
-                           R"pb(
-                             updates {
-                               type: INSERT
-                               table_entry {
-                                 router_interface_table_entry {
-                                   match { router_interface_id: "16" }
-                                   action {
-                                     set_port_and_src_mac {
-                                       port: "1"
-                                       src_mac: "00:02:03:04:05:06"
-                                     }
-                                   }
-                                 }
-                               }
-                             }
-                           )pb",
-                           ir_p4_info_));
-  EXPECT_OK(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session.get(), request));
+TEST_F(PortNameAndNameTest, PassesPortNameToAppDb) {
+  ASSERT_OK_AND_ASSIGN(auto request,
+                       WriteRequestWithPort(ir_p4_info_, "Ethernet0"));
+  ASSERT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable(),
+              ContainsAppDbEntry(AppDbEntryWithPort("Ethernet0")));
 }
 
-TEST_F(PortNameAndIdTest, ExpectingIdGetName) {
-  // Start the P4RT server to accept port IDs, and configure a ethernet port
-  // with an ID field.
-  test_lib::P4RuntimeGrpcService p4rt_service = test_lib::P4RuntimeGrpcService(
-      P4RuntimeImplOptions{.translate_port_ids = true});
-  ASSERT_OK(p4rt_service.GetP4rtServer().UpdateDeviceId(device_id_));
-  ASSERT_OK(p4rt_service.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+TEST_F(PortNameAndNameTest, IgnoresMapping) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK_AND_ASSIGN(auto request,
+                       WriteRequestWithPort(ir_p4_info_, "Ethernet0"));
 
-  // Connect to the P4RT server and push a P4Info file.
-  ASSERT_OK_AND_ASSIGN(auto p4rt_session,
-                       StartP4rtSession(p4rt_service, device_id_));
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
-      p4rt_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      p4_info_));
+  ASSERT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_THAT(p4rt_service_.GetP4rtAppDbTable(),
+              ContainsAppDbEntry(AppDbEntryWithPort("Ethernet0")));
+}
 
-  // Send a write request using the port name.
-  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
-                       test_lib::PdWriteRequestToPi(
-                           R"pb(
-                             updates {
-                               type: INSERT
-                               table_entry {
-                                 router_interface_table_entry {
-                                   match { router_interface_id: "16" }
-                                   action {
-                                     set_port_and_src_mac {
-                                       port: "Ethernet0"
-                                       src_mac: "00:02:03:04:05:06"
-                                     }
-                                   }
-                                 }
-                               }
-                             }
-                           )pb",
-                           ir_p4_info_));
-  EXPECT_THAT(
-      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session.get(), request),
-      StatusIs(absl::StatusCode::kUnknown, HasSubstr("#1: INVALID_ARGUMENT")));
+TEST_F(PortNameAndNameTest, NameTranslationRoundTrip) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  ASSERT_OK_AND_ASSIGN(auto request,
+                       WriteRequestWithPort(ir_p4_info_, "Ethernet0"));
+  ASSERT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
+  EXPECT_THAT(pdpi::ReadPiTableEntries(p4rt_session_.get()),
+              IsOkAndHolds(ElementsAre(
+                  EqualsProto(request.updates(0).entity().table_entry()))));
 }
 
 }  // namespace

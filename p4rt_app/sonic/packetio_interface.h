@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
-#define GOOGLE_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
+#ifndef PINS_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
+#define PINS_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
 
 #include <memory>
 #include <string>
@@ -23,6 +23,20 @@
 
 namespace p4rt_app {
 namespace sonic {
+
+struct PacketIoCounters {
+  // Total number of packetOut packets sent with success.
+  int packet_out_sent = 0;
+
+  // Total number of packetOut packets not sent because of errors.
+  int packet_out_errors = 0;
+
+  // Total number of packetIn packets received with success.
+  int packet_in_received = 0;
+
+  // Total number of packetIn packets received with errors.
+  int packet_in_errors = 0;
+};
 
 // Base class for PacketIoInterface.
 class PacketIoInterface {
@@ -43,4 +57,4 @@ class PacketIoInterface {
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_
+#endif  // PINS_P4RT_APP_SONIC_PACKETIO_INTERFACE_H_

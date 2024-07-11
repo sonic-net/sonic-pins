@@ -17,11 +17,14 @@
 
 #include <functional>
 #include <iostream>
+#include <ostream>
 #include <string>
 
+#include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/proto.h"
@@ -29,6 +32,7 @@
 #include "gutil/testing.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 
 constexpr char kBanner[] =
     "=========================================================================";
@@ -38,15 +42,16 @@ enum InputValidity {
   INPUT_IS_INVALID = 2,
 };
 
-std::string TestHeader(const std::string& test_name) {
+inline std::string TestHeader(absl::string_view test_name) {
   return absl::StrCat(kBanner, "\n", test_name, "\n", kBanner);
 }
 
-void Fail(const std::string& message) {
+inline void Fail(absl::string_view test_name, absl::string_view message) {
   // Splitting "DO NOT SUB***" into two pieces to avoid triggering our tools.
-  std::cerr << "TEST FAILED (DO NOT "
+  std::cout << "TEST FAILED (DO NOT "
             << "SUBMIT)" << std::endl;
-  std::cerr << "FAILURE REASON: " << message << std::endl;
+  std::cout << "TEST NAME: " << test_name << std::endl;
+  std::cout << "FAILURE REASON: " << message << std::endl << std::endl;
 }
 
 // Dependencies on the exact output format of `Status::operator <<` are out
@@ -60,55 +65,129 @@ inline std::string TestStatusToString(absl::Status status) {
 }
 
 // Runs a generic test starting from an invalid PI and checks that it cannot be
-// translated to IR. If you want to test valid PI, instead write a generic PD
-// test.
+// translated to IR. If you want to test valid PI->IR, set 'validity' to
+// INPUT_IS_VALID or preferably, if possible, use a generic pd test which
+// provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
 template <typename IR, typename PI>
 void RunGenericPiTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const PI& pi,
-    const std::function<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>&
-        pi_to_ir) {
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>
+        pi_to_ir,
+    InputValidity validity = INPUT_IS_INVALID) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- PI (Input):" << std::endl;
   std::cout << ::gutil::PrintTextProto(pi) << std::endl;
 
   // Convert PI to IR.
-  const auto& status_or_ir = pi_to_ir(info, pi);
-  if (!status_or_ir.ok()) {
-    std::cout << "--- PI is invalid/unsupported:" << std::endl;
-    std::cout << TestStatusToString(status_or_ir.status()) << std::endl;
+  const auto& ir = pi_to_ir(info, pi);
+  if (!ir.ok()) {
+    if (validity == INPUT_IS_VALID) {
+      Fail(test_name,
+           "Translation from PI to IR failed even though input was marked as "
+           "valid).");
+      std::cout << ir.status().message() << std::endl;
+    } else {
+      std::cout << "--- PI is invalid/unsupported:" << std::endl;
+      std::cout << TestStatusToString(ir.status()) << std::endl;
+    }
   } else {
-    Fail(
-        "Expected PI to be invalid (valid PI should instead be tested using "
-        "RunGenericPdTest.");
+    if (validity == INPUT_IS_INVALID) {
+      Fail(
+          test_name,
+          "Translation from PI to IR succeeded even though input was marked as "
+          "invalid");
+      return;
+    } else {
+      std::cout << "--- IR:" << std::endl;
+      std::cout << ::gutil::PrintTextProto(*ir) << std::endl;
+    }
   }
   std::cout << std::endl;
 }
 
 // Runs a generic test starting from an invalid IR and checks that it cannot be
-// translated to PI. If you want to test valid IR, instead write a
-// generic PD test. IR to PD is not tested, since only PI to PD is supported for
-// converting to PD.
+// translated to PI. If you want to test valid IR->PI, set 'validity' to
+// INPUT_IS_VALID or preferably, if possible, use a generic pd test which
+// provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
 template <typename IR, typename PI>
-void RunGenericIrTest(
+void RunGenericIrToPiTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
-    const std::function<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>&
-        ir_to_pi) {
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>
+        ir_to_pi,
+    InputValidity validity = INPUT_IS_INVALID) {
   // Input and header.
   std::cout << TestHeader(test_name) << std::endl << std::endl;
   std::cout << "--- IR (Input):" << std::endl;
   std::cout << ::gutil::PrintTextProto(ir) << std::endl;
 
   // Convert IR to PI.
-  const auto& status_or_pi = ir_to_pi(info, ir);
-  if (!status_or_pi.ok()) {
-    std::cout << "--- IR (converting to PI) is invalid/unsupported:"
-              << std::endl;
-    std::cout << TestStatusToString(status_or_pi.status()) << std::endl;
+  const auto& pi = ir_to_pi(info, ir);
+  if (!pi.ok()) {
+    if (validity == INPUT_IS_VALID) {
+      Fail(test_name,
+           "Translation from IR to PI failed even though input was marked as "
+           "valid).");
+      std::cout << pi.status().message() << std::endl;
+    } else {
+      std::cout << "--- IR (converting to PI) is invalid/unsupported:"
+                << std::endl;
+      std::cout << TestStatusToString(pi.status()) << std::endl;
+    }
   } else {
-    Fail(
-        "Expected IR to be invalid (valid IR should instead be tested using "
-        "RunGenericPdTest.");
+    if (validity == INPUT_IS_INVALID) {
+      Fail(
+          test_name,
+          "Translation from IR to PI succeeded even though input was marked as "
+          "invalid");
+    } else {
+      std::cout << "--- PI:" << std::endl;
+      std::cout << ::gutil::PrintTextProto(*pi) << std::endl;
+    }
+  }
+  std::cout << std::endl;
+}
+
+// Runs a generic test starting from an invalid IR and checks that it cannot be
+// translated to PD. If you want to test valid IR->PD, set 'validity' to
+// INPUT_IS_VALID or preferably, if possible, use a generic pd test which
+// provides greater coverage (PD->IR->PI->IR->PD + roundtrip property).
+template <typename IR, typename PD>
+void RunGenericIrToPdTest(
+    const pdpi::IrP4Info& info, const std::string& test_name, const IR& ir,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
+                                   google::protobuf::Message*)>
+        ir_to_pd,
+    InputValidity validity = INPUT_IS_INVALID) {
+  // Input and header.
+  std::cout << TestHeader(test_name) << std::endl << std::endl;
+  std::cout << "--- IR (Input):" << std::endl;
+  std::cout << ::gutil::PrintTextProto(ir) << std::endl;
+
+  // Convert IR to PD.
+  PD pd;
+  const auto& status_pd = ir_to_pd(info, ir, &pd);
+  if (!status_pd.ok()) {
+    if (validity == INPUT_IS_VALID) {
+      Fail(test_name,
+           "Translation from IR to PD failed even though input was marked as "
+           "valid).");
+      std::cout << status_pd.message() << std::endl;
+    } else {
+      std::cout << "--- IR (converting to PD) is invalid/unsupported:"
+                << std::endl;
+      std::cout << TestStatusToString(status_pd) << std::endl;
+    }
+  } else {
+    if (validity == INPUT_IS_INVALID) {
+      Fail(
+          test_name,
+          "Translation from IR to PD succeeded even though input was marked as "
+          "invalid");
+    } else {
+      std::cout << "--- PD:" << std::endl;
+      std::cout << ::gutil::PrintTextProto(pd) << std::endl;
+    }
   }
   std::cout << std::endl;
 }
@@ -119,20 +198,22 @@ void RunGenericIrTest(
 template <typename PD, typename IR, typename PI>
 void RunGenericPdTest(
     const pdpi::IrP4Info& info, const std::string& test_name, const PD& pd,
-    const std::function<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PD&)>&
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PD&)>
         pd_to_ir,
-    const std::function<absl::Status(const pdpi::IrP4Info&, const IR&,
-                                     google::protobuf::Message*)>& ir_to_pd,
-    const std::function<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>&
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
+                                   google::protobuf::Message*)>
+        ir_to_pd,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&)>
         ir_to_pi,
-    const std::function<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>&
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&)>
         pi_to_ir,
-    const std::function<absl::StatusOr<PI>(const pdpi::IrP4Info&, const PD&)>&
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const PD&)>
         pd_to_pi,
-    const std::function<absl::Status(const pdpi::IrP4Info&, const PI&,
-                                     google::protobuf::Message*)>& pi_to_pd,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const PI&,
+                                   google::protobuf::Message*)>
+        pi_to_pd,
     const InputValidity& validity,
-    const std::function<PD(const pdpi::IrP4Info& info, const PD&)>&
+    absl::FunctionRef<PD(const pdpi::IrP4Info& info, const PD&)>
         relevant_pd_fields =
             [](const pdpi::IrP4Info& info, const PD& pd) { return pd; }) {
   // Input and header.
@@ -153,9 +234,9 @@ void RunGenericPdTest(
   const auto& status_or_ir = pd_to_ir(info, pd);
   if (!status_or_ir.ok()) {
     if (validity == INPUT_IS_VALID) {
-      Fail(
-          "Translation from PD to IR failed even though input was marked as "
-          "valid.");
+      Fail(test_name,
+           "Translation from PD to IR failed even though input was marked as "
+           "valid).");
       std::cout << status_or_ir.status().message() << std::endl;
       return;
     }
@@ -169,9 +250,9 @@ void RunGenericPdTest(
 
   if (validity == INPUT_IS_INVALID) {
     if (status_or_pi.status().ok()) {
-      Fail(
-          "Input was marked as invalid, but translation from PD to IR and IR "
-          "to PI both succeeded.");
+      Fail(test_name,
+           "Input was marked as invalid, but translation from PD to IR and IR "
+           "to PI both succeeded).");
       return;
     } else {
       std::cout << "--- PD is invalid/unsupported (detected when translating "
@@ -186,15 +267,15 @@ void RunGenericPdTest(
   std::cout << "--- IR:" << std::endl;
   std::cout << ::gutil::PrintTextProto(ir) << std::endl;
   if (!status_or_pi.status().ok()) {
-    Fail(
-        "Translation from IR to PI failed even though input was marked as "
-        "valid.");
+    Fail(test_name,
+         "Translation from IR to PI failed even though input was marked as "
+         "valid).");
     std::cout << status_or_pi.status().message() << std::endl;
     return;
   }
 
   const auto& status_or_pi2 = pd_to_pi(info, pd);
-  if (!status_or_pi2.ok()) Fail("pd_to_pi failed.");
+  if (!status_or_pi2.ok()) Fail(test_name, "pd_to_pi failed.");
 
   const auto& pi = status_or_pi.value();
   std::cout << "--- PI:" << std::endl;
@@ -203,12 +284,13 @@ void RunGenericPdTest(
   // Convert PI back to IR.
   const auto& status_or_ir2 = pi_to_ir(info, pi);
   if (!status_or_ir2.status().ok()) {
-    Fail("Reverse translation from PI to IR failed.");
+    Fail(test_name, "Reverse translation from PI to IR failed.");
     std::cout << status_or_ir2.status().message() << std::endl;
     return;
   }
   if (!diff.Compare(ir, status_or_ir2.value())) {
-    Fail("Reverse translation from PI to IR resulted in a different IR.");
+    Fail(test_name,
+         "Reverse translation from PI to IR resulted in a different IR.");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "IR (after reverse translation):" << std::endl
               << ::gutil::PrintTextProto(status_or_ir2.value()) << std::endl;
@@ -219,12 +301,13 @@ void RunGenericPdTest(
   PD pd2;
   const auto& status_pd2 = ir_to_pd(info, ir, &pd2);
   if (!status_pd2.ok()) {
-    Fail("Reverse translation from IR to PD failed.");
+    Fail(test_name, "Reverse translation from IR to PD failed.");
     std::cout << status_pd2.message() << std::endl;
     return;
   }
   if (!diff.Compare(relevant_pd_fields(info, pd), pd2)) {
-    Fail("Reverse translation from IR to PD resulted in a different PD.");
+    Fail(test_name,
+         "Reverse translation from IR to PD resulted in a different PD.");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "PD (after reverse translation):" << std::endl
               << ::gutil::PrintTextProto(pd2) << std::endl;
@@ -233,9 +316,59 @@ void RunGenericPdTest(
 
   PD pd3;
   const auto& status_pd3 = pi_to_pd(info, pi, &pd3);
-  if (!status_pd3.ok()) Fail("pi_to_pd failed.");
+  if (!status_pd3.ok()) Fail(test_name, "pi_to_pd failed.");
 
   std::cout << std::endl;
+}
+// Overload with `TranslationOptions`.
+template <typename PD, typename IR, typename PI>
+void RunGenericPdTest(
+    const pdpi::IrP4Info& info, const std::string& test_name, const PD& pd,
+    pdpi::TranslationOptions options,
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PD&,
+                                         pdpi::TranslationOptions)>
+        pd_to_ir,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const IR&,
+                                   google::protobuf::Message*,
+                                   pdpi::TranslationOptions)>
+        ir_to_pd,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const IR&,
+                                         pdpi::TranslationOptions)>
+        ir_to_pi,
+    absl::FunctionRef<absl::StatusOr<IR>(const pdpi::IrP4Info&, const PI&,
+                                         pdpi::TranslationOptions)>
+        pi_to_ir,
+    absl::FunctionRef<absl::StatusOr<PI>(const pdpi::IrP4Info&, const PD&,
+                                         pdpi::TranslationOptions)>
+        pd_to_pi,
+    absl::FunctionRef<absl::Status(const pdpi::IrP4Info&, const PI&,
+                                   google::protobuf::Message*,
+                                   pdpi::TranslationOptions)>
+        pi_to_pd,
+    const InputValidity& validity,
+    absl::FunctionRef<PD(const pdpi::IrP4Info& info, const PD&)>
+        relevant_pd_fields = [](const auto&, const PD& pd) { return pd; }) {
+  return RunGenericPdTest<PD, IR, PI>(
+      info, test_name, pd,
+      [&](const auto& info, const auto& pd) {
+        return pd_to_ir(info, pd, options);
+      },
+      [&](const auto& info, const auto& ir, auto* pd) {
+        return ir_to_pd(info, ir, pd, options);
+      },
+      [&](const auto& info, const auto& ir) {
+        return ir_to_pi(info, ir, options);
+      },
+      [&](const auto& info, const auto& pi) {
+        return pi_to_ir(info, pi, options);
+      },
+      [&](const auto& info, const auto& pd) {
+        return pd_to_pi(info, pd, options);
+      },
+      [&](const auto& info, const auto& pi, auto* pd) {
+        return pi_to_pd(info, pi, pd, options);
+      },
+      validity, relevant_pd_fields);
 }
 
 #endif  // P4_PDPI_TESTING_TEST_HELPER_H_

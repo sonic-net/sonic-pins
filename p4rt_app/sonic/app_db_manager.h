@@ -13,19 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_SONIC_APP_DB_MANAGER_H_
-#define GOOGLE_P4RT_APP_SONIC_APP_DB_MANAGER_H_
+#ifndef PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_
+#define PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_
 
-#include <memory>
+#include <cstdint>
+#include <optional>
+#include <string>
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/ascii.h"
-#include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "swss/json.h"
+#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace sonic {
@@ -39,12 +41,52 @@ enum class AppDbTableType {
   VRF_TABLE,
 };
 
+// Action profiles are used to model things like WCMP where we can have multiple
+// actions with different weights. Resource accounting can be measured either
+// against the total number of actions, or the sum total of all the action
+// weights.
+struct ActionProfileResources {
+  std::string name;
+  int32_t number_of_actions = 0;
+  int64_t total_weight = 0;
+};
+
+// Each table resource usually only counts as 1 (i.e. one table entry), but
+// depending on the table they may include an action profile (e.g. WCMP).
+struct TableResources {
+  std::string name;
+  std::optional<ActionProfileResources> action_profile;
+};
+
 // AppDb entries can be handled in any order by P4RT, but for error reporting
 // purposes we need to keep track of the RPC update index.
 struct AppDbEntry {
-  int rpc_index;
+  // A write request sends a list of TableEntries that need to be handled. The
+  // rpc_index is the index into that list.
+  int rpc_index = 0;
+
+  // The IR translation of the PI request.
   pdpi::IrTableEntry entry;
+
+  // Specifies if this request is an INSERT MODIFY or DELETE.
   p4::v1::Update::Type update_type;
+
+  // Normalized PI table entries. Note this will be semantically the same as the
+  // original request, but does not have to be syntactically the same.
+  p4::v1::TableEntry pi_table_entry;
+
+  // A unique hash of the entries match fields. Used to identify duplicates and
+  // any caching of entries.
+  pdpi::TableEntryKey table_entry_key;
+
+  // The net utilization change for table entries with group actions. If the
+  // update_type is an insert then this value will simply be the resources for
+  // the entry. If the update_type is a modify then this value is the difference
+  // between the new and old entries. If the update_type is a delete then this
+  // value is the resources of the old entry.
+  TableResources resource_utilization_change;
+
+  // The SWSS OrchAgent that should handle this entry.
   AppDbTableType appdb_table = AppDbTableType::UNKNOWN;
 };
 
@@ -54,10 +96,22 @@ struct AppDbUpdates {
   int total_rpc_updates = 0;
 };
 
+// Insert table definition
+absl::Status AppendExtTableDefinition(
+    nlohmann::json &tables,
+    const pdpi::IrTableDefinition& ir_table);
+
+// A definition set string in json format published to AppDb
+absl::StatusOr<std::string> PublishExtTablesDefinitionToAppDb(
+    const nlohmann::json &tables_json,
+    uint64_t cookie,
+    P4rtTable& p4rt_table);
+
 // Takes a list of AppDb updates (i.e. inserts, modifies, or deletes) and
 // translates them so that they are consumable by the AppDb. It will also
 // create, or remove, any VRF IDs as needed.
 absl::Status UpdateAppDb(P4rtTable& p4rt_table,
+                         VrfTable& vrf_table,
                          const AppDbUpdates& updates,
                          const pdpi::IrP4Info& p4_info,
                          pdpi::IrWriteResponse* response);
@@ -67,13 +121,28 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table,
 // keys starting with _).
 std::vector<std::string> GetAllP4TableEntryKeys(P4rtTable& p4rt_table);
 
+// Returns the expected P4RT_TABLE key for a given IRTableEntry.
+absl::StatusOr<std::string> GetRedisP4rtTableKey(
+    const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info);
+
 // Reads an entry from the P4RT_TABLE in the AppStateDb. Returns a failure if
 // the entry does not exist, or cannot be translated into a pdpi::IrTableEntry.
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key);
 
+// Checks CounterDB for any counter data relating to the table entry and appends
+// it to the ir_table_entry argument. The ir_table_entry is untouched if no
+// counter data is found.
+absl::Status AppendCounterDataForTableEntry(pdpi::IrTableEntry& ir_table_entry,
+                                            P4rtTable& p4rt_table,
+                                            const pdpi::IrP4Info& p4info);
+
+// Returns the expected P4RT_TABLE key for a given IRTableEntry.
+absl::StatusOr<std::string> GetRedisP4rtTableKey(
+    const pdpi::IrTableEntry& entry, const pdpi::IrP4Info& p4_info);
+
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_APP_DB_MANAGER_H_
+#endif  // PINS_P4RT_APP_SONIC_APP_DB_MANAGER_H_

@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_PACKETIO_PORT_H_
-#define GOOGLE_P4RT_APP_SONIC_PACKETIO_PORT_H_
+#ifndef PINS_P4RT_APP_SONIC_PACKETIO_PORT_H_
+#define PINS_P4RT_APP_SONIC_PACKETIO_PORT_H_
 
 #include <memory>
 #include <string>
@@ -38,10 +38,6 @@ struct PacketIoPortParams {
   std::unique_ptr<PacketInSelectable> packet_in_selectable;
 };
 
-// Checks whether the given port exists in the system or not.
-bool IsValidSystemPort(const SystemCallAdapter& system_call_adapter,
-                       absl::string_view port_name);
-
 // Adds a port to packet I/O by creating the receive & transmit sockets.
 absl::StatusOr<std::unique_ptr<PacketIoPortParams>> AddPacketIoPort(
     const SystemCallAdapter& system_call_adapter, absl::string_view port_name,
@@ -56,4 +52,4 @@ absl::Status SendPacketOut(const SystemCallAdapter& system_call_adapter,
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_PACKETIO_PORT_H_
+#endif  // PINS_P4RT_APP_SONIC_PACKETIO_PORT_H_

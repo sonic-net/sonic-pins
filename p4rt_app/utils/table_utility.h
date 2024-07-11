@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef GOOGLE_P4RT_APP_UTILS_TABLE_UTILITY_H_
-#define GOOGLE_P4RT_APP_UTILS_TABLE_UTILITY_H_
+#ifndef PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_
+#define PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_
 
 #include <string>
 
 #include "absl/strings/string_view.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
+
 
 namespace p4rt_app {
 namespace table {
@@ -30,7 +31,9 @@ namespace table {
 enum class Type {
   kAcl,        // ACL pipeline table
   kFixed,      // Fixed pipeline table
-  kDefinition  // Pipeline table definitions table (Required for ACLs)
+  kExt,        // Extended pipeline table
+  kAclDefinition,  // Pipeline table definitions table (Required for ACLs)
+  kTblsDefinitionSet,  // tables definition set table
 };
 
 // Returns a string representation of the table type.
@@ -48,4 +51,4 @@ absl::StatusOr<table::Type> GetTableType(
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_UTILS_TABLE_UTILITY_H_
+#endif  // PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_

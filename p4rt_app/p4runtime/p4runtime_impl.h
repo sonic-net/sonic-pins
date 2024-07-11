@@ -13,30 +13,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_P4RUNTIME_P4RUNTIME_IMPL_H_
-#define GOOGLE_P4RT_APP_P4RUNTIME_P4RUNTIME_IMPL_H_
+#ifndef PINS_P4RT_APP_P4RUNTIME_P4RUNTIME_IMPL_H_
+#define PINS_P4RT_APP_P4RUNTIME_P4RUNTIME_IMPL_H_
 
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
+#include <thread>  // NOLINT
 
+#include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "boost/bimap.hpp"
-#include "grpcpp/grpcpp.h"
+#include "glog/logging.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
-#include "p4/config/v1/p4info.pb.h"
+#include "grpcpp/support/sync_stream.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/table_entry_key.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
+#include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "p4rt_app/utils/event_data_tracker.h"
+//TODO(PINS):
+//#include "swss/component_state_helper_interface.h"
+//#include "swss/intf_translator.h"
 
 namespace p4rt_app {
 
@@ -46,10 +58,45 @@ struct P4RuntimeImplOptions {
   absl::optional<std::string> forwarding_config_full_path;
 };
 
+struct FlowProgrammingStatistics {
+  // Total number of batch write requests sent to the switch. The value should
+  // be equal to the number of time Write() is called.
+  int write_batch_count;
+
+  // Total number of indivindual updates sent to the switch. Because each
+  // Write() can have multiple update (i.e. batched together) this value can
+  // differ from the total number of times Write() is called.
+  int write_requests_count;
+
+  // Total time the switch spent handling Write() all requests. Note this
+  // includes P4RT App parsing the data, sending it to the OA, waiting for a
+  // response, and handling that response.
+  absl::Duration write_time;
+
+  // Time the longest request took to be handled. Notice that this does not take
+  // into account batch size.
+  absl::Duration max_write_time;
+
+  // Total number of Read() calls handled by the switch.
+  int read_request_count;
+
+  // Total time the switch spent handing all Read() requests. Note that P4RT
+  // reads everything it needs from the RedisDB layer, and the OA or other
+  // layers are not involved in these requests.
+  absl::Duration read_time;
+};
+
 class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
  public:
-  P4RuntimeImpl(sonic::P4rtTable p4rt_table,
+  P4RuntimeImpl(sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
+                sonic::HashTable hash_table, sonic::SwitchTable switch_table,
+                sonic::PortTable port_table,
+                sonic::HostStatsTable host_stats_table,
                 std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
+                //TODO(PINS): To add component_state, system_state and netdev_translator.
+                /* swss::ComponentStateHelperInterface& component_state,
+                swss::SystemStateHelperInterface& system_state,
+                swss::IntfTranslator& netdev_translator, */
                 const P4RuntimeImplOptions& p4rt_options);
   ~P4RuntimeImpl() override = default;
 
@@ -99,25 +146,65 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   virtual absl::Status RemovePacketIoPort(const std::string& port_name)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
-  // Add or remove a port name/ID translation. Duplicate name or ID values are
-  // not allowed, and will be rejected. Order matters, so if a consumer needs to
-  // swap ID values they should first remove the existing IDs then reinsert the
-  // new values.
+  // Responds with one of the following actions to port translation:
+  // * Add the new port translation for unknown name & ID
+  // * Update an existing {name, id} translation to the new ID
+  // * No-Op if the {name, id} pairing already exists
+  // * Reject if the ID is already in-use or if any input is empty ("").
+  //
+  // Consider existing port mappings: {"A", "1"}, {"B", "2"}
+  // The result map is:
+  // Port | <-----  Port ID  ------> |
+  // Name |   "1"  |   "2"  |   "3"  |
+  // =====|========|========|========|
+  //  "A" | No-Op  | Reject | Update |
+  // -----|--------|--------|--------|
+  //  "B" | Reject | No-Op  | Update |
+  // -----|--------|--------|--------|
+  //  "C" | Reject | Reject |  Add   |
+  // -----|--------|--------|--------|
   virtual absl::Status AddPortTranslation(const std::string& port_name,
                                           const std::string& port_id)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  // Removes a port translation. Returns an error for an empty port name.
+  // Triggers AppDb and AppStateDb updates even if the port translation does not
+  // currently exist.
   virtual absl::Status RemovePortTranslation(const std::string& port_name)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
   // Verifies state for the P4RT App. These are checks like:
-  //  * Do P4RT table entries match in AppStateDb and AppDb.
   //  * Do VRF_TABLE entries match in AppStateDb and AppDb.
   //  * Do HASH_TABLE entries match in AppStateDb and AppDb.
   //  * Do SWITCH_TABLE entries match in AppStateDb and AppDb.
   //
   // NOTE: We do not verify ownership of table entries today. Therefore, shared
   // tables (e.g. VRF_TABLE) could cause false positives.
-  virtual absl::Status VerifyState() ABSL_LOCKS_EXCLUDED(server_state_lock_);
+  virtual absl::Status VerifyState()
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  // Dump various debug data for the P4RT App, including:
+  // * PacketIO counters.
+  //
+  // TODO: Dump other artifacts(e.g. P4Info, internal cache and
+  // mappings etc.)
+  virtual absl::Status DumpDebugData(const std::string& path,
+                                     const std::string& log_level)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  // Returns performance statistics relating to the P4Runtime flow programming
+  // API. Data will be reset to zero on reading(i.e. results are not
+  // cumulative).
+  absl::StatusOr<FlowProgrammingStatistics> GetFlowProgrammingStatistics()
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  // Sets the CPU Queue translator.
+  virtual void SetCpuQueueTranslator(
+      std::unique_ptr<CpuQueueTranslator> translator)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
+  sonic::PacketIoCounters GetPacketIoCounters()
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
  protected:
   // Simple constructor that should only be used for testing purposes.
@@ -196,6 +283,11 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // Interfaces which are used to update entries in the RedisDB tables.
   sonic::P4rtTable p4rt_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::VrfTable vrf_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::HashTable hash_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
+  sonic::HostStatsTable host_stats_table_ ABSL_GUARDED_BY(server_state_lock_);
 
   // P4RT can accept multiple connections to a single switch for redundancy.
   // When there is >1 connection the switch chooses a primary which is used for
@@ -242,9 +334,43 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // Some switch enviornments cannot rely on the SONiC port names, and can
   // instead choose to use port ID's configured through gNMI.
-  const bool translate_port_ids_;
+  const bool translate_port_ids_ ABSL_GUARDED_BY(server_state_lock_);
+
+  // Reading a large number of entries from Redis is costly. To improve the
+  // read performance we cache table entries in software.
+  absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>
+      table_entry_cache_ ABSL_GUARDED_BY(server_state_lock_);
+
+  // Monitoring resources in hardware can be difficult. For example in WCMP if a
+  // port is down the lower layers will remove those path both freeing resources
+  // and ensuring packets are not routed to a down port. To ensure we do not
+  // overuse space we track resource usage in the P4RT layer.
+  absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+      capacity_by_action_profile_name_ ABSL_GUARDED_BY(server_state_lock_);
+
+  // Utility to perform translations between CPU queue name and id.
+  std::unique_ptr<CpuQueueTranslator> cpu_queue_translator_
+      ABSL_GUARDED_BY(server_state_lock_);
+  // Performance statistics for P4RT Write().
+  EventDataTracker<int> write_batch_requests_
+      ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};
+  EventDataTracker<int> write_total_requests_
+      ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};
+  EventDataTracker<absl::Duration> write_execution_time_
+      ABSL_GUARDED_BY(server_state_lock_){
+          EventDataTracker<absl::Duration>(absl::ZeroDuration())};
+
+  // Performance statistics for P4RT Read().
+  EventDataTracker<int> read_total_requests_
+      ABSL_GUARDED_BY(server_state_lock_){EventDataTracker<int>(0)};
+  EventDataTracker<absl::Duration> read_execution_time_
+      ABSL_GUARDED_BY(server_state_lock_){
+          EventDataTracker<absl::Duration>(absl::ZeroDuration())};
+
+  // PacketIO debug counters.
+  sonic::PacketIoCounters packetio_counters_;
 };
 
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_P4RUNTIME_P4RUNTIME_IMPL_H_
+#endif  // PINS_P4RT_APP_P4RUNTIME_P4RUNTIME_IMPL_H_

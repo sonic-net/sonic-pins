@@ -42,4 +42,19 @@
 # TODO: Avoid system dependencies like libnl, currently these are
 # coming because Sonic swss common depends on them.
 sudo apt-get update
-sudo apt-get install bison flex libfl-dev libgmp-dev libhiredis-dev libnl-3-dev libnl-genl-3-dev libnl-route-3-dev libnl-nf-3-dev libboost-dev libyang-dev libyang0.16
+sudo apt-get install \
+  bison \
+  flex \
+  libfl-dev \
+  libgmp-dev \
+  libhiredis-dev \
+  libnl-3-dev \
+  libnl-genl-3-dev \
+  libnl-route-3-dev \
+  libnl-nf-3-dev \
+  libboost-dev \
+  libboost-serialization-dev \
+  libyang-dev \
+  libzmq3-dev \
+  uuid-dev \
+  nlohmann-json3-dev

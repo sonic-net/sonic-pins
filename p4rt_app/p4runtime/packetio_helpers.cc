@@ -27,12 +27,13 @@
 #include "p4rt_app/sonic/packetio_impl.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "sai_p4/fixed/ids.h"
+#include "swss/schema.h"
 
 namespace p4rt_app {
 
 // Adds the given metadata to the PacketIn.
-absl::StatusOr<p4::v1::PacketIn> CreatePacketInMessage(
-    const std::string& source_port_id, const std::string& target_port_id) {
+p4::v1::PacketIn CreatePacketInMessage(const std::string& source_port_id,
+                                       const std::string& target_port_id) {
   p4::v1::PacketIn packet;
   p4::v1::PacketMetadata* metadata = packet.add_metadata();
   // Add Ingress port id.
@@ -93,7 +94,7 @@ absl::Status SendPacketOut(
   std::string sonic_port_name;
   if (submit_to_ingress == 1) {
     // Use submit_to_ingress attribute value netdev port.
-    sonic_port_name = std::string(sonic::kSubmitToIngress);
+    sonic_port_name = SEND_TO_INGRESS_PORT_NAME;
   } else {
     // Use egress_port_id attribute value.
     if (translate_port_ids) {

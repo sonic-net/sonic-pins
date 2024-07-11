@@ -1,42 +1,62 @@
-#ifndef GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_
-#define GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_
+#ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_
+#define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_
 
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
 
 namespace sai {
 
-// Describes the role of a switch.
+// P4 program instantiations for different switch roles.
+//
+// With the exception of `kWbb`, these are members of the SAI P4 family of
+// programs.
+//
 // Switches in the same role use the same P4 program (though the P4Info may be
 // slightly modified further for each switch within a role, e.g. to configure
 // the hashing seed).
 enum class Instantiation {
   kFabricBorderRouter,
   kMiddleblock,
+  kTor,
+  // Note: For historical reasons, WBB shares the same infrastructure as our
+  // SAI P4 programs. However, it is not a SAI P4 instantiation.
   kWbb,
 };
 
-// Returns all switch roles.
+// Returns all SAI P4 program instantiations.
+inline std::vector<Instantiation> AllSaiInstantiations() {
+  return {
+      Instantiation::kFabricBorderRouter,
+      Instantiation::kMiddleblock,
+      Instantiation::kTor,
+  };
+}
+
+// Returns all P4 program instantiations, including non-SAI P4 instantiations.
 inline std::vector<Instantiation> AllInstantiations() {
   return {
       Instantiation::kFabricBorderRouter,
       Instantiation::kMiddleblock,
+      Instantiation::kTor,
       Instantiation::kWbb,
   };
 }
 
-// Returns the name of the given switch role.
+// Returns the name of the given P4 program instantiation.
 inline std::string InstantiationToString(Instantiation role) {
   switch (role) {
     case Instantiation::kFabricBorderRouter:
       return "fabric_border_router";
     case Instantiation::kMiddleblock:
       return "middleblock";
+    case Instantiation::kTor:
+      return "tor";
     case Instantiation::kWbb:
       return "wbb";
   }
@@ -44,7 +64,7 @@ inline std::string InstantiationToString(Instantiation role) {
   return "";
 }
 
-// Returns the name of the given switch role.
+// Returns the P4 program `Instantiation` of the given name.
 inline absl::StatusOr<Instantiation> StringToInstantiation(
     absl::string_view instantiation_name) {
   for (auto instantiation : AllInstantiations()) {
@@ -71,6 +91,11 @@ inline std::ostream& operator<<(std::ostream& os, Instantiation instantiation) {
   return os << InstantiationToString(instantiation);
 }
 
+template <typename Sink>
+inline void AbslStringify(Sink& sink, Instantiation instantiation) {
+  absl::Format(&sink, "%s", InstantiationToString(instantiation));
+}
+
 }  // namespace sai
 
-#endif  // GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_
+#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_GOOGLE_INSTANTIATIONS_H_

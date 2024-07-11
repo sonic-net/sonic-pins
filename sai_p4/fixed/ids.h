@@ -23,7 +23,9 @@
 #define L3_ADMIT_TABLE_ID 0x02000047                    // 33554503
 #define MIRROR_PORT_TO_PRE_SESSION_TABLE_ID 0x02000048  // 33554504
 #define ECMP_HASHING_TABLE_ID 0x02000049                // 33554505
-#define ROUTING_TUNNEL_TABLE_ID 0x02000050              // 33554506
+#define ROUTING_TUNNEL_TABLE_ID 0x02000050              // 33554512
+#define IPV6_TUNNEL_TERMINATION_TABLE_ID 0x0200004B     // 33554507
+// Next available table id: 0x0200004C (33554508)
 
 // --- Actions -----------------------------------------------------------------
 
@@ -49,12 +51,26 @@
 #define COMPUTE_LAG_HASH_IPV6_ACTION_ID 0x0100000E                   // 16777230
 #define TRAP_ACTION_ID 0x0100000F                                    // 16777231
 #define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015           // 16777237
-// Next available action id: 0x01000016 (16777238)
+#define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016       // 16777238
+// Next available action id: 0x01000017 (16777239)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for
 // legacy reasons.
 #define ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID 0x11DC4EC8  // 299650760
+
+// --- Intrinsic ports ---------------------------------------------------------
+
+// Port used for PacketIO. Packets sent to this port go to the CPU.
+// Packets received on this port come from the CPU.
+// TODO For simplicity, we went with 510/511 as CPU/drop port to
+// begin with, which are the values used by BMv2 by default, and the values
+// hard-coded in p4-symbolic. We should revisit these arbitrary values.
+#define SAI_P4_CPU_PORT 510
+
+// The port used by `mark_to_drop` from v1model.p4. For details, see the
+// documentation of `mark_to_drop`.
+#define SAI_P4_DROP_PORT 511
 
 // --- Copy to CPU session -----------------------------------------------------
 
@@ -65,35 +81,24 @@
 //   packet_replication_engine_entry {
 //     clone_session_entry {
 //       session_id: COPY_TO_CPU_SESSION_ID
-//       replicas { egress_port: 0xfffffffd } # to CPU
+//       replicas {
+//        egress_port: SAI_P4_CPU_PORT
+//        instance: CLONE_REPLICA_INSTANCE_PACKET_IN
+//       }
 //     }
 //   }
 // }
 //
-#define COPY_TO_CPU_SESSION_ID 1024
+#define COPY_TO_CPU_SESSION_ID 255
 
 // --- Packet-IO ---------------------------------------------------------------
 
-// Packet-in ingress port field. Indicates which port the packet arrived at.
-// Uses @p4runtime_translation(.., string).
 #define PACKET_IN_INGRESS_PORT_ID 1
-
-// Packet-in target egress port field. Indicates the port a packet would have
-// taken if it had not gotten trapped. Uses @p4runtime_translation(.., string).
 #define PACKET_IN_TARGET_EGRESS_PORT_ID 2
+#define PACKET_IN_UNUSED_PAD_ID 3
 
-// Packet-out egress port field. Indicates the egress port for the packet-out to
-// be taken. Mutually exclusive with "submit_to_ingress". Uses
-// @p4runtime_translation(.., string).
 #define PACKET_OUT_EGRESS_PORT_ID 1
-
-// Packet-out submit_to_ingress field. Indicates that the packet should go
-// through the ingress pipeline to determine which port to take (if any).
-// Mutually exclusive with "egress_port".
 #define PACKET_OUT_SUBMIT_TO_INGRESS_ID 2
-
-// TODO: BMV2 requires the header to be multiple of 8-bits.
-// Packet-out unused padding field to align the header to 8-bit multple.
 #define PACKET_OUT_UNUSED_PAD_ID 3
 
 //--- Packet Replication Engine Instances --------------------------------------
@@ -103,6 +108,7 @@
 // replication engine (PRE) in the V1Model architecture. However, the values are
 // not defined by the P4 specification. Here we define our own values; these may
 // be changed when we adopt another architecture.
-#define CLONE_REPLICA_INSTANCE 1
+#define CLONE_REPLICA_INSTANCE_PACKET_IN 1
+#define CLONE_REPLICA_INSTANCE_MIRRORING 2
 
 #endif  // SAI_IDS_H_

@@ -1,5 +1,5 @@
-#ifndef PLATFORMS_NETWORKING_ORION_P4_SAI_SAI_P4INFO_H_
-#define PLATFORMS_NETWORKING_ORION_P4_SAI_SAI_P4INFO_H_
+#ifndef PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_P4INFO_H_
+#define PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_P4INFO_H_
 
 #include <vector>
 
@@ -37,6 +37,11 @@ const pdpi::IrP4Info& GetIrP4Info(Instantiation instantiation);
 // unioning process, see p4info_union_lib.h
 const p4::config::v1::P4Info& GetUnionedP4Info();
 
+// Returns a reference to a static unioned IrP4info message for the SAI P4
+// program. The reference is guaranteed to remain valid at all times. For
+// details of the unioning process, see p4info_union_lib.h
+const pdpi::IrP4Info& GetUnionedIrP4Info();
+
 }  // namespace sai
 
-#endif  // PLATFORMS_NETWORKING_ORION_P4_SAI_SAI_P4INFO_H_
+#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_SAI_P4INFO_H_

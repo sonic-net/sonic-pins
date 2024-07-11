@@ -20,6 +20,7 @@
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/p4runtime/p4info_verification_schema.h"
@@ -68,7 +69,7 @@ absl::Status ValidatePacketIo(const p4::config::v1::P4Info& p4info) {
         type_name { name: "port_id_t" }
       }
       metadata { id: 2 name: "submit_to_ingress" bitwidth: 1 }
-      metadata { id: 3 name: "unused_pad" bitwidth: 7 }
+      metadata { id: 3 name: "unused_pad" annotations: "@padding" bitwidth: 6 }
     }
   )pb";
 
@@ -84,6 +85,12 @@ absl::Status ValidatePacketIo(const p4::config::v1::P4Info& p4info) {
   // Track any differences for error reporting.
   std::string diff_str;
   diff.ReportDifferencesToString(&diff_str);
+  // Ignore metadata field annotations.
+  // Temporary workaround to allow submitting cl/493441540 without breakages.
+  // TODO: Remove this workaround once the CL has gone in.
+  diff.IgnoreField(
+      p4::config::v1::ControllerPacketMetadata::Metadata::descriptor()
+          ->FindFieldByName("annotations"));
 
   // We only want to compare the controller_packet_metadata repeated fields.
   p4::config::v1::P4Info actual_p4info;
@@ -106,8 +113,20 @@ absl::Status ValidateP4Info(const p4::config::v1::P4Info& p4info) {
   ASSIGN_OR_RETURN(P4InfoVerificationSchema schema, SupportedSchema());
   ASSIGN_OR_RETURN(auto ir_result, pdpi::CreateIrP4Info(p4info),
                    _.SetPayload(kLibraryUrl, absl::Cord("PDPI")));
+  // We allow arbitrary `@unsupported` entities in the P4Info and reject
+  // programming those entities only at runtime.
+  pdpi::RemoveUnsupportedEntities(ir_result);
   RETURN_IF_ERROR(IsSupportedBySchema(ir_result, schema));
 
+  for (const auto& [table_name, table] : ir_result.tables_by_name()) {
+    ASSIGN_OR_RETURN(table::Type table_type, GetTableType(table),
+                     _.SetPrepend()
+                         << "Failed to process table '" << table_name << "'. ");
+    if (table_type == table::Type::kAcl) {
+      RETURN_IF_ERROR(sonic::VerifyAclTableDefinition(table)).SetPrepend()
+          << "Table '" << table_name << "' failed ACL table verification. ";
+    }
+  }
   return absl::OkStatus();
 }
 

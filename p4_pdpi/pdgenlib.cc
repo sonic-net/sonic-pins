@@ -17,7 +17,6 @@
 #include <stdint.h>
 
 #include <algorithm>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -26,11 +25,11 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
-#include "google/protobuf/map.h"
+#include "absl/strings/substitute.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -45,6 +44,11 @@ using ::p4::config::v1::MatchField;
 namespace pdpi {
 
 namespace {
+
+std::string GetUnsupportedWarning(absl::string_view unsupported_entity) {
+  return absl::StrCat("// CAUTION: This ", unsupported_entity,
+                      " is not (yet) supported.\n");
+}
 
 // Returns a P4 object ID without the object tag.
 uint32_t IdWithoutTag(uint32_t id) { return id & 0xffffff; }
@@ -75,7 +79,6 @@ StatusOr<std::string> GetMatchFieldDeclaration(
     const IrMatchFieldDefinition& match) {
   std::string type;
   std::string match_kind;
-
   switch (match.match_field().match_type()) {
     case MatchField::TERNARY:
       type = "Ternary";
@@ -101,10 +104,16 @@ StatusOr<std::string> GetMatchFieldDeclaration(
   ASSIGN_OR_RETURN(
       const std::string field_name,
       P4NameToProtobufFieldName(match.match_field().name(), kP4MatchField));
-  return absl::StrCat(
-      type, " ", field_name, " = ", match.match_field().id(), "; // ",
+
+  std::string result;
+  if (match.is_unsupported()) {
+    absl::StrAppend(&result, GetUnsupportedWarning("match field"), "    ");
+  }
+  absl::StrAppend(
+      &result, type, " ", field_name, " = ", match.match_field().id(), "; // ",
       match_kind, " match / ",
       GetFormatComment(match.format(), match.match_field().bitwidth()));
+  return result;
 }
 
 // Returns the nested Match message for a given table.
@@ -161,6 +170,9 @@ StatusOr<std::string> GetTableActionMessage(const IrTableDefinition& table) {
                      P4NameToProtobufMessageName(name, kP4Action));
     ASSIGN_OR_RETURN(const std::string action_field_name,
                      P4NameToProtobufFieldName(name, kP4Action));
+    if (action.action().is_unsupported()) {
+      absl::StrAppend(&result, "    ", GetUnsupportedWarning("action"));
+    }
     absl::StrAppend(&result, "    ", action_message_name, " ",
                     action_field_name, " = ", action.proto_id(), ";\n");
   }
@@ -194,7 +206,11 @@ absl::optional<std::string> GetConstraint(const IrTableDefinition& table) {
 
 // Returns the message for a given table.
 StatusOr<std::string> GetTableMessage(const IrTableDefinition& table) {
-  std::string result = "";
+  std::string result;
+
+  if (table.is_unsupported()) {
+    absl::StrAppend(&result, GetUnsupportedWarning("table"));
+  }
 
   const absl::optional<std::string> constraint = GetConstraint(table);
   if (constraint.has_value()) {
@@ -310,6 +326,10 @@ StatusOr<std::string> GetTableMessage(const IrTableDefinition& table) {
 StatusOr<std::string> GetActionMessage(const IrActionDefinition& action) {
   std::string result = "";
 
+  if (action.is_unsupported()) {
+    absl::StrAppend(&result, GetUnsupportedWarning("action"));
+  }
+
   const std::string& name = action.preamble().alias();
   ASSIGN_OR_RETURN(const std::string message_name,
                    P4NameToProtobufMessageName(name, kP4Action));
@@ -352,6 +372,8 @@ StatusOr<std::string> GetPacketIoMessage(const IrP4Info& info) {
   absl::StrAppend(&result, "  bytes payload = 1;\n\n");
   absl::StrAppend(&result, "  message Metadata {\n");
   for (const auto& [name, meta] : Ordered(info.packet_in_metadata_by_name())) {
+    // Skip PI-only padding.
+    if (meta.is_padding()) continue;
     ASSIGN_OR_RETURN(
         const std::string meta_name,
         P4NameToProtobufFieldName(meta.metadata().name(), kP4MetaField));
@@ -368,6 +390,8 @@ StatusOr<std::string> GetPacketIoMessage(const IrP4Info& info) {
   absl::StrAppend(&result, "  bytes payload = 1;\n\n");
   absl::StrAppend(&result, "  message Metadata {\n");
   for (const auto& [name, meta] : Ordered(info.packet_out_metadata_by_name())) {
+    // Skip PI-only padding.
+    if (meta.is_padding()) continue;
     ASSIGN_OR_RETURN(
         const std::string meta_name,
         P4NameToProtobufFieldName(meta.metadata().name(), kP4MetaField));
@@ -396,8 +420,7 @@ bool IsActionUnused(const IrActionDefinition& action,
 }  // namespace
 
 StatusOr<std::string> IrP4InfoToPdProto(const IrP4Info& info,
-                                        const std::string& package,
-                                        const std::vector<std::string>& roles) {
+                                        const PdGenOptions& options) {
   std::string result = "";
 
   // Header comment.
@@ -407,7 +430,7 @@ StatusOr<std::string> IrP4InfoToPdProto(const IrP4Info& info,
 // NOTE: This file is automatically created from the P4 program, do not modify manually.
 
 syntax = "proto3";
-package )" + package + R"(;
+package )" + options.package + R"(;
 
 import "p4/v1/p4runtime.proto";
 import "google/rpc/code.proto";
@@ -449,7 +472,7 @@ message Optional {
   // Filter by role and sort by ID.
   std::vector<IrTableDefinition> tables;
   for (const auto& [id, table] : Ordered(info.tables_by_id())) {
-    if (absl::c_find(roles, table.role()) != roles.end()) {
+    if (absl::c_find(options.roles, table.role()) != options.roles.end()) {
       tables.push_back(table);
     }
   }
@@ -481,6 +504,24 @@ message Optional {
     absl::StrAppend(&result, table_pd, "\n\n");
   }
 
+  if (options.multicast_table_field_number.has_value()) {
+    absl::StrAppend(&result, R"(
+// Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
+// of the v1model architecture and is not explicitly present in the P4 program.
+message MulticastGroupTableEntry {
+  message Match {
+    string multicast_group_id = 1;  // exact match / Format::HEX_STRING / 16 bits
+  }
+  Match match = 1;
+  message Action {
+    ReplicateAction replicate = 1;
+  }
+  Action action = 2;
+}
+
+)");
+  }
+
   // Action messages.
   absl::StrAppend(&result, HeaderComment("Actions"), "\n");
   for (const auto& action : actions) {
@@ -488,12 +529,32 @@ message Optional {
     ASSIGN_OR_RETURN(const auto& action_pd, GetActionMessage(action));
     absl::StrAppend(&result, action_pd, "\n\n");
   }
+  if (options.multicast_table_field_number.has_value()) {
+    absl::StrAppend(&result, R"(
+// This action is unique to `MulticastGroupTableEntry` and is not explicitly
+// present in the P4 program.
+message ReplicateAction {
+  // Corresponds to `Replica` in p4runtime.proto.
+  message Replica {
+    string port = 1;  // Format::STRING
+    string instance = 2;  // Format::HEX_STRING / 16 bits
+  }
+  // Each `Replica` must have a unique (port, instance)-pair within the scope of
+  // the `ReplicateAction` that contains it.
+  repeated Replica replicas = 1;
+}
+
+)");
+  }
 
   // Overall TableEntry message.
   absl::StrAppend(&result, HeaderComment("All tables"), "\n");
   absl::StrAppend(&result, "message TableEntry {\n");
   absl::StrAppend(&result, "  oneof entry {\n");
   for (const auto& table : tables) {
+    if (table.is_unsupported()) {
+      absl::StrAppend(&result, "    ", GetUnsupportedWarning("table"));
+    }
     const auto& name = table.preamble().alias();
     ASSIGN_OR_RETURN(const std::string table_message_name,
                      P4NameToProtobufMessageName(name, kP4Table));
@@ -501,6 +562,13 @@ message Optional {
                      P4NameToProtobufFieldName(name, kP4Table));
     absl::StrAppend(&result, "    ", table_message_name, " ", table_field_name,
                     " = ", IdWithoutTag(table.preamble().id()), ";\n");
+  }
+  if (options.multicast_table_field_number.has_value()) {
+    absl::StrAppend(
+        &result,
+        absl::Substitute(
+            "    MulticastGroupTableEntry multicast_group_table_entry = $0;\n",
+            *options.multicast_table_field_number));
   }
   absl::StrAppend(&result, "  }\n");
   absl::StrAppend(&result, "}\n\n");

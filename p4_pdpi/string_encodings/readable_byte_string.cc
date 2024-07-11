@@ -13,14 +13,9 @@
 // limitations under the License.
 #include "p4_pdpi/string_encodings/readable_byte_string.h"
 
-#include <algorithm>
 #include <string>
 
-#include "absl/status/status.h"
 #include "absl/strings/ascii.h"
-#include "absl/strings/escaping.h"
-#include "absl/strings/match.h"
-#include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
@@ -35,11 +30,7 @@ absl::StatusOr<std::string> ReadableByteStringToByteString(
   BitString result;
 
   // Process line by line
-  for (absl::string_view line_raw :
-       absl::StrSplit(readable_byte_string, '\n')) {
-    // Remove whitespace
-    std::string line = absl::StrReplaceAll(line_raw, {{" ", ""}});
-
+  for (absl::string_view line : absl::StrSplit(readable_byte_string, '\n')) {
     // Skip label
     auto colon_pos = line.find(':');
     if (colon_pos != std::string::npos) {
@@ -52,13 +43,17 @@ absl::StatusOr<std::string> ReadableByteStringToByteString(
       line = line.substr(0, hash_pos);
     }
 
+    line = absl::StripAsciiWhitespace(line);
+
     // Skip empty lines
     if (line.empty()) continue;
 
+    const absl::string_view value = line;
+
     // Append value
-    absl::string_view value = line;
-    if (absl::ConsumePrefix(&value, "0b")) {
-      for (uint8_t character : value) {
+    if (absl::ConsumePrefix(&line, "0b")) {
+      for (uint8_t character : line) {
+        if (absl::ascii_isspace(character)) continue;
         if (character == '0') {
           result.AppendBit(0);
         } else if (character == '1') {
@@ -68,8 +63,9 @@ absl::StatusOr<std::string> ReadableByteStringToByteString(
                  << "Invalid character in 0b expression: '" << character << "'";
         }
       }
-    } else if (absl::ConsumePrefix(&value, "0x")) {
-      for (uint8_t character : value) {
+    } else if (absl::ConsumePrefix(&line, "0x")) {
+      for (uint8_t character : line) {
+        if (absl::ascii_isspace(character)) continue;
         if (auto char_value = HexCharToDigit(character); char_value.ok()) {
           result.AppendBits(std::bitset<4>(*char_value));
         } else {
@@ -77,6 +73,9 @@ absl::StatusOr<std::string> ReadableByteStringToByteString(
                  << "Invalid character in 0x expression: '" << character << "'";
         }
       }
+    } else if (absl::ConsumePrefix(&line, "\"") &&
+               absl::ConsumeSuffix(&line, "\"")) {
+      result.AppendBytes(line);
     } else {
       return gutil::InvalidArgumentErrorBuilder()
              << "Cannot parse readable byte string value: '" << value << "'";

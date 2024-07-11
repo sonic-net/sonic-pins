@@ -138,12 +138,14 @@ absl::Status TransformValuesOfType(
 absl::Status VisitValuesOfType(
     const IrP4Info& info, const p4::config::v1::P4NamedType& target_type,
     std::vector<IrTableEntry> entries,
-    const std::function<void(absl::string_view)>& visitor) {
-  return TransformValuesOfType(info, target_type, entries,
-                               /*transformer=*/[&](absl::string_view input) {
-                                 visitor(input);
-                                 return "";
-                               });
+    const absl::AnyInvocable<absl::Status(absl::string_view) const>& visitor) {
+  return TransformValuesOfType(
+      info, target_type, entries,
+      /*transformer=*/
+      [&](absl::string_view input) -> absl::StatusOr<std::string> {
+        RETURN_IF_ERROR(visitor(input));
+        return "";
+      });
 }
 
 }  // namespace pdpi

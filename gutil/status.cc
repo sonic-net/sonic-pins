@@ -13,9 +13,18 @@
 // limitations under the License.
 #include "gutil/status.h"
 
+#include <string>
+
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "grpcpp/grpcpp.h"
 
 namespace gutil {
+
+std::string StableStatusToString(const absl::Status& status) {
+  return absl::StrCat(absl::StatusCodeToString(status.code()), ": ",
+                      status.message(), "\n");
+}
 
 absl::Status gutil::StatusBuilder::GetStatusAndLog() const {
   std::string message = source_;

@@ -11,17 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_EVENT_MONITORING_STATE_EVENT_MONITOR_H_
-#define GOOGLE_P4RT_APP_EVENT_MONITORING_STATE_EVENT_MONITOR_H_
+#ifndef PINS_P4RT_APP_EVENT_MONITORING_STATE_EVENT_MONITOR_H_
+#define PINS_P4RT_APP_EVENT_MONITORING_STATE_EVENT_MONITOR_H_
 
 #include <deque>
 #include <memory>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
-#include "absl/time/time.h"
+#include "absl/strings/string_view.h"
 #include "swss/dbconnector.h"
-#include "swss/rediscommand.h"
 #include "swss/select.h"
 #include "swss/subscriberstatetable.h"
 
@@ -38,19 +37,21 @@ namespace sonic {
 //    StateEventMonitor monitor(db);
 //
 //    PortTableEventHandler handler;  // derives from StateEventHandler.
-//    monitor.RegisterTableHandler("PORT_TABLE", handler);
+//    monitor.RegisterTableHandler(handler);
 //
 // Whenver the PORT_TABLE in APPL_STATE_DB is updated the StateEventMonitor will
 // call the HandleEvent.
 class StateEventHandler {
  public:
+  // Callback to Handle events for the monitored table.
   virtual absl::Status HandleEvent(
       const std::string& operation, const std::string& key,
       const std::vector<std::pair<std::string, std::string>>& values) = 0;
 
+  virtual ~StateEventHandler() = default;
+
  protected:
   StateEventHandler() = default;
-  virtual ~StateEventHandler() = default;
 };
 
 // StateEventMonitor can monitor changes to specific tables in a Redis DB. A
@@ -72,19 +73,19 @@ class StateEventMonitor {
   // Add a new table that should be monitored for changes in the DB. Only one
   // handler can exist per table, and this method will return an AlreadyExists
   // error if a duplicate is passed.
-  absl::Status RegisterTableHandler(const std::string& table_name,
-                                    StateEventHandler& handler);
+  absl::Status RegisterTableHandler(absl::string_view table_name,
+                                    std::unique_ptr<StateEventHandler> handler);
 
-  // Blocks indefinitely until an event, or set of events occur on any of the
+  // Blocks indefinitely until an event or a set of events occur on any of the
   // monitored table.
   absl::Status WaitForNextEventAndHandle();
 
  private:
   // When an event is detected we will check the `subscriber_table` for any new
-  // events, and then call it's `event_handler`.
+  // events, and then call its `event_handler`.
   struct TableHandler {
     std::unique_ptr<swss::SubscriberStateTable> subscriber_table;
-    StateEventHandler& event_handler;
+    std::unique_ptr<StateEventHandler> event_handler;
   };
 
   // The Redis DB we are monitoring (e.g. CONFIG_DB, STATE_DB, etc.).
@@ -102,4 +103,4 @@ class StateEventMonitor {
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_EVENT_MONITORING_STATE_EVENT_MONITOR_H_
+#endif  // PINS_P4RT_APP_EVENT_MONITORING_STATE_EVENT_MONITOR_H_

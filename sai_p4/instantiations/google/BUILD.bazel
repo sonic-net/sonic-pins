@@ -13,9 +13,9 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("//gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 
 package(
@@ -30,6 +30,7 @@ SHARED_DEPS = [
     "acl_ingress.p4",
     "acl_pre_ingress.p4",
     "ids.h",
+    "versions.h",
     "roles.h",
     "bitwidths.p4",
     "minimum_guaranteed_sizes.p4",
@@ -44,10 +45,16 @@ FABRIC_BORDER_ROUTER_DEPS = SHARED_DEPS + [
     "fabric_border_router.p4",
 ]
 
+TOR_DEPS = SHARED_DEPS + [
+    "acl_egress.p4",
+    "tor.p4",
+]
+
 WBB_DEPS = [
     "acl_wbb_ingress.p4",
     "ids.h",
     "roles.h",
+    "versions.h",
     "bitwidths.p4",
     "minimum_guaranteed_sizes.p4",
     "//sai_p4/fixed",
@@ -57,6 +64,7 @@ INSTANTIATIONS = [
     # (<instantiation>, <dependencies>)
     ("fabric_border_router", FABRIC_BORDER_ROUTER_DEPS),
     ("middleblock", MIDDLEBLOCK_DEPS),
+    ("tor", TOR_DEPS),
     ("wbb", WBB_DEPS),
 ]
 
@@ -78,6 +86,11 @@ cc_library(
     deps = [
         "//sai_p4/fixed:p4_ids",
     ],
+)
+
+cc_library(
+    name = "p4_versions",
+    hdrs = ["versions.h"],
 )
 
 cc_library(
@@ -129,7 +142,9 @@ cc_test(
         ":sai_pd_cc_proto",
         ":sai_pd_util",
         "//gutil:testing",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_googlesource_code_re2//:re2",
     ],
 )
 
@@ -210,13 +225,13 @@ cc_library(
             ":clos_stage",
             ":instantiations",
             ":unioned_p4info_embed",
-            "@com_github_google_glog//:glog",
-            "@com_google_protobuf//:protobuf",
-            "@com_google_absl//absl/status",
-            "@com_google_absl//absl/strings",
-            "@com_github_p4lang_p4runtime//:p4info_cc_proto",
             "//p4_pdpi:ir_cc_proto",
             "//sai_p4/tools:p4info_tools",
+            "@com_github_google_glog//:glog",
+            "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+            "@com_google_absl//absl/status",
+            "@com_google_absl//absl/strings",
+            "@com_google_protobuf//:protobuf",
         ],
 )
 
@@ -246,6 +261,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -303,6 +319,7 @@ cc_test(
         ":clos_stage",
         ":instantiations",
         "//gutil:status_matchers",
+        "//gutil:testing",
         "@com_google_googletest//:gtest_main",
     ],
 )

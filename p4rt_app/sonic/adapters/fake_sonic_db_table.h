@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_ADAPTERS_FAKE_SONIC_DB_TABLE_H_
-#define GOOGLE_P4RT_APP_SONIC_ADAPTERS_FAKE_SONIC_DB_TABLE_H_
+#ifndef PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_SONIC_DB_TABLE_H_
+#define PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_SONIC_DB_TABLE_H_
 
 #include <queue>
 #include <string>
@@ -20,8 +20,10 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -41,8 +43,6 @@ using SonicDbEntryMap = std::unordered_map<std::string, std::string>;
 
 // Fakes how the OrchAgent updates AppDb tables. When an entry is inserted the
 // Orchagent will respond with a notification of success or failure.
-//
-// This class is NOT thread-safe.
 class FakeSonicDbTable {
  public:
   FakeSonicDbTable(const std::string &table_name = "SonicDb:TABLE")
@@ -54,19 +54,27 @@ class FakeSonicDbTable {
   FakeSonicDbTable(const std::string &table_name, FakeSonicDbTable *state_db)
       : debug_table_name_(table_name), state_db_(state_db) {}
 
-  void InsertTableEntry(const std::string &key, const SonicDbEntryList &values);
-  void DeleteTableEntry(const std::string &key);
+  void InsertTableEntry(const std::string &key, const SonicDbEntryList &values)
+      ABSL_LOCKS_EXCLUDED(entries_mutex_);
+  void DeleteTableEntry(const std::string &key)
+      ABSL_LOCKS_EXCLUDED(entries_mutex_);
 
   void SetResponseForKey(const std::string &key, const std::string &code,
                          const std::string &message);
 
-  void PushNotification(const std::string &key);
+  // Adds a success/fail notification to the response queue. Returns true if the
+  // fake acts like the OA succeeded, and false otherwise.
+  bool PushNotification(const std::string &key);
+  bool PushNotification(const std::string &key, const std::string &op,
+                        const SonicDbEntryMap &values);
   void GetNextNotification(std::string &op, std::string &data,
                            SonicDbEntryList &values);
 
-  absl::StatusOr<SonicDbEntryMap> ReadTableEntry(const std::string &key) const;
+  absl::StatusOr<SonicDbEntryMap> ReadTableEntry(const std::string &key) const
+      ABSL_LOCKS_EXCLUDED(entries_mutex_);
 
-  std::vector<std::string> GetAllKeys() const;
+  std::vector<std::string> GetAllKeys() const
+      ABSL_LOCKS_EXCLUDED(entries_mutex_);
 
   // Method should only be used for debug purposes.
   void DebugState() const;
@@ -81,11 +89,17 @@ class FakeSonicDbTable {
                                const SonicDbEntryMap &values);
   void DeleteStateDbTableEntry(const std::string &key);
 
+  bool UpdateAppStateDb(const std::string &key);
+
+  // Mutex to protect synchronization of entries_.
+  mutable absl::Mutex entries_mutex_;
+
   // Debug table name is used in log messages to help distinguish messages.
-  std::string debug_table_name_;
+  const std::string debug_table_name_;
 
   // Current list of DB entries stored in the table.
-  absl::flat_hash_map<std::string, SonicDbEntryMap> entries_;
+  absl::flat_hash_map<std::string, SonicDbEntryMap> entries_
+      ABSL_GUARDED_BY(entries_mutex_);
 
   // List of notifications the OrchAgent would have generated. One notification
   // is created per insert, and one is removed per notification check.
@@ -103,4 +117,4 @@ class FakeSonicDbTable {
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_FAKE_SONIC_DB_TABLE_H_
+#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_SONIC_DB_TABLE_H_

@@ -37,6 +37,10 @@
 #define ROUTE_METADATA_BITWIDTH 6
 #endif
 
+#ifndef ACL_METADATA_BITWIDTH
+#define ACL_METADATA_BITWIDTH 8
+#endif
+
 #ifndef TUNNEL_ID_BITWIDTH
 #define TUNNEL_ID_BITWIDTH 16
 #endif

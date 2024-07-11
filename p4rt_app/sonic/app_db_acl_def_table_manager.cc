@@ -16,12 +16,12 @@
 
 #include <iterator>
 #include <list>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
@@ -31,9 +31,10 @@
 #include "gutil/status.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "p4rt_app/utils/table_utility.h"
-#include "swss/json.h"
-#include "swss/json.hpp"
+#include <nlohmann/json.hpp>
+#include "swss/rediscommand.h"
 #include "swss/saiaclschema.h"
+#include "swss/table.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -66,7 +67,7 @@ std::string GetStageName(swss::acl::Stage stage) {
 
 bool IsValidColor(absl::string_view color) {
   return color == "SAI_PACKET_COLOR_GREEN" ||
-         color == "SAI_PACKET_COLOR_YELLOW" | color == "SAI_PACKET_COLOR_RED";
+         color == "SAI_PACKET_COLOR_YELLOW" || color == "SAI_PACKET_COLOR_RED";
 }
 
 // Generates the AppDB DEFINITION:ACL_* Entry key for an ACL table.
@@ -77,7 +78,7 @@ StatusOr<std::string> GenerateSonicDbKeyFromIrTable(
            << "Table [" << table.ShortDebugString() << "] is missing an alias.";
   }
   return absl::Substitute("$0:ACL_$1",
-                          table::TypeName(table::Type::kDefinition),
+                          table::TypeName(table::Type::kAclDefinition),
                           absl::AsciiStrToUpper(table.preamble().alias()));
 }
 
@@ -831,7 +832,19 @@ StatusOr<std::vector<swss::FieldValueTuple>> GenerateSonicDbValuesFromIrTable(
                                           ir_table.counter().unit())});
   }
 
-  // TODO: Priority
+  // Process optional priority setting if it exists. Skip if it doesn't.
+  auto priority = pdpi::GetAnnotationBody("sai_acl_priority",
+                                          ir_table.preamble().annotations());
+  if (priority.ok()) {
+    int priority_value;
+    if (!absl::SimpleAtoi(*priority, &priority_value)) {
+      return InvalidArgumentErrorBuilder()
+             << "Expected integer value in @sai_acl_priority() annotation but "
+             << "got '" << *priority << "'";
+    }
+    values.push_back({"priority", *priority});
+  }
+
   return values;
 }
 
@@ -844,17 +857,21 @@ Status VerifyAclTableDefinition(const IrTableDefinition& ir_table) {
 
 StatusOr<std::string> InsertAclTableDefinition(
     P4rtTable& p4rt_table, const IrTableDefinition& ir_table) {
-  ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
-  ASSIGN_OR_RETURN(std::vector<swss::FieldValueTuple> values,
+  swss::KeyOpFieldsValuesTuple kfv;
+  ASSIGN_OR_RETURN(kfvKey(kfv), GenerateSonicDbKeyFromIrTable(ir_table));
+  kfvOp(kfv) = "SET";
+  ASSIGN_OR_RETURN(kfvFieldsValues(kfv),
                    GenerateSonicDbValuesFromIrTable(ir_table));
-  p4rt_table.producer_state->set(key, values);
-  return key;
+  p4rt_table.notification_producer->send({kfv});
+  return kfvKey(kfv);
 }
 
 absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
                                       const IrTableDefinition& ir_table) {
-  ASSIGN_OR_RETURN(std::string key, GenerateSonicDbKeyFromIrTable(ir_table));
-  p4rt_table.producer_state->del(key);
+  swss::KeyOpFieldsValuesTuple kfv;
+  ASSIGN_OR_RETURN(kfvKey(kfv), GenerateSonicDbKeyFromIrTable(ir_table));
+  kfvOp(kfv) = "DEL";
+  p4rt_table.notification_producer->send({kfv});
   return absl::OkStatus();
 }
 

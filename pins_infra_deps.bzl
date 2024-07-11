@@ -20,20 +20,38 @@ def pins_infra_deps():
             strip_prefix = "buildtools-4.2.4",
             url = "https://github.com/bazelbuild/buildtools/archive/4.2.4.tar.gz",
         )
+    if "boringssl" not in native.existing_rules():
+        http_archive(
+            name = "boringssl",
+            sha256 = "9f441d72fccb9a3faf96470478c8ccfaaeb8db1cffd4d78b698f782124dad1b0",
+            strip_prefix = "boringssl-b8a2bffc598f230484ff48a247526a9820facfc2",
+            urls = [
+                "https://storage.googleapis.com/grpc-bazel-mirror/github.com/google/boringssl/archive/b8a2bffc598f230484ff48a247526a9820facfc2.tar.gz",
+                "https://github.com/google/boringssl/archive/b8a2bffc598f230484ff48a247526a9820facfc2.tar.gz",
+            ],
+        )
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
-            url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
-            strip_prefix = "grpc-1.46.0",
-            sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
+            # url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
+            # strip_prefix = "grpc-1.46.0",
+            # sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
+            url = "https://github.com/grpc/grpc/archive/v1.56.1.zip",
+            strip_prefix = "grpc-1.56.1",
+            sha256 = "04a52a313926f0f6ec2ed489ac7552aa5949693b071eaf45ae13b66e5910c32f",
+            patch_args = ["-p1"],
+            patches = [
+                "//:bazel/patches/grpc-001-fix_file_watcher_race_condition.patch",
+                "//:bazel/patches/grpc-002-change_authz_log_level.patch",
+            ],
         )
     if not native.existing_rule("com_google_absl"):
         http_archive(
             name = "com_google_absl",
-            url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20211102.0.tar.gz",
-            strip_prefix = "abseil-cpp-20211102.0",
-            sha256 = "dcf71b9cba8dc0ca9940c4b316a0c796be8fab42b070bb6b7cab62b48f0e66c4",
-        )
+            url = "https://github.com/abseil/abseil-cpp/archive/20230802.0.tar.gz",
+            strip_prefix = "abseil-cpp-20230802.0",
+            sha256 = "59d2976af9d6ecf001a81a35749a6e551a335b949d34918cfade07737b9d93c5",
+        )   
     if not native.existing_rule("com_google_googletest"):
         http_archive(
             name = "com_google_googletest",
@@ -41,12 +59,19 @@ def pins_infra_deps():
             strip_prefix = "googletest-release-1.11.0",
             sha256 = "b4870bf121ff7795ba20d20bcdd8627b8e088f2d1dab299a031c1034eddc93d5",
         )
+    if not native.existing_rule("com_google_benchmark"):
+        http_archive(
+            name = "com_google_benchmark",
+            urls = ["https://github.com/google/benchmark/archive/v1.5.4.tar.gz"],
+            strip_prefix = "benchmark-1.5.4",
+            sha256 = "e3adf8c98bb38a198822725c0fc6c0ae4711f16fbbf6aeb311d5ad11e5a081b5",
+        )
     if not native.existing_rule("com_google_protobuf"):
         http_archive(
             name = "com_google_protobuf",
-            url = "https://github.com/protocolbuffers/protobuf/releases/download/v3.20.1/protobuf-all-3.20.1.tar.gz",
-            strip_prefix = "protobuf-3.20.1",
-            sha256 = "3a400163728db996e8e8d21c7dfb3c239df54d0813270f086c4030addeae2fad",
+            url = "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v23.1.zip",
+            strip_prefix = "protobuf-23.1",
+            sha256 = "c0ea9f4d75b37ea8e9d78ce4c670d066bcb7cebdba190fa5fc8c57b1f00c0c2c",
         )
     if not native.existing_rule("com_googlesource_code_re2"):
         http_archive(
@@ -66,9 +91,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_google_glog"):
         http_archive(
             name = "com_github_google_glog",
-            url = "https://github.com/google/glog/archive/v0.4.0.tar.gz",
-            strip_prefix = "glog-0.4.0",
-            sha256 = "f28359aeba12f30d73d9e4711ef356dc842886968112162bc73002645139c39c",
+            url = "https://github.com/google/glog/archive/v0.6.0.tar.gz",
+            strip_prefix = "glog-0.6.0",
+            sha256 = "8a83bf982f37bb70825df71a9709fa90ea9f4447fb3c099e1d720a439d88bad6",
         )
 
     # Needed to make glog happy.
@@ -79,30 +104,53 @@ def pins_infra_deps():
             strip_prefix = "gflags-2.2.2",
             sha256 = "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf",
         )
+
+    if not native.existing_rule("com_github_gnmi"):
+        http_archive(
+            name = "com_github_gnmi",
+            # v0.10.0 release; commit-hash:5473f2ef722ee45c3f26eee3f4a44a7d827e3575.
+            url = "https://github.com/openconfig/gnmi/archive/refs/tags/v0.10.0.zip",
+            strip_prefix = "gnmi-0.10.0",
+            patch_args = ["-p1"],
+            patches = [
+                "@com_github_google_pins_infra//:bazel/patches/gnmi-001-fix_virtual_proto_import.patch",
+            ],
+            sha256 = "2231e1cc398a523fa840810fa6fdb8960639f7b91b57bb8f12ed8681e0142a67",
+        )
+
+    if not native.existing_rule("com_github_gnoi"):
+        http_archive(
+            name = "com_github_gnoi",
+            # Newest commit on main on 2021-11-08.
+            url = "https://github.com/openconfig/gnoi/archive/1ece8ed91a0d5d283219a99eb4dc6c7eadb8f287.zip",
+            strip_prefix = "gnoi-1ece8ed91a0d5d283219a99eb4dc6c7eadb8f287",
+            sha256 = "991ff13a0b28f2cdc2ccb123261e7554d9bcd95c00a127411939a3a8c8a9cc62",
+        )
+
     if not native.existing_rule("com_github_p4lang_p4c"):
         http_archive(
             name = "com_github_p4lang_p4c",
-            # Newest commit on main on 2021-12-07.
-            url = "https://github.com/p4lang/p4c/archive/a9aa5ff46affe8fd5dde78c2411d1bc58a715b33.zip",
-            strip_prefix = "p4c-a9aa5ff46affe8fd5dde78c2411d1bc58a715b33",
-            sha256 = "fa22c3d2b3105a39a73fc3938cbc6cd5d7895113a3e6ed6c5a48fbbd958a28af",
+            # Newest commit on main on 2022-11-23.
+            url = "https://github.com/p4lang/p4c/archive/bc1798bb8529c9f71f2794dbc690b29f040549c4.zip",
+            strip_prefix = "p4c-bc1798bb8529c9f71f2794dbc690b29f040549c4",
+            sha256 = "21fece70b3fc2d1430ccc3e023b038ce0ca74e1682e6249fb350809d1c61215f",            
         )
     if not native.existing_rule("com_github_p4lang_p4runtime"):
         # We frequently need bleeding-edge, unreleased version of P4Runtime, so we use a commit
         # rather than a release.
         http_archive(
             name = "com_github_p4lang_p4runtime",
-            # 13f0d0 is the newest commit on main as of 2022-08-02.
-            urls = ["https://github.com/p4lang/p4runtime/archive/13f0d02a521e38b4252f4fddfc98e2bfa1dbf7e6.zip"],
-            strip_prefix = "p4runtime-13f0d02a521e38b4252f4fddfc98e2bfa1dbf7e6/proto",
-            sha256 = "ad18b27341ea1a875919a63d37eaa347d3d85299a1f90c4bbc33789c1d0580b7",
+            # 90553b9 is the newest commit on main as of 2023-05-05.
+            urls = ["https://github.com/p4lang/p4runtime/archive/90553b90a12ead5c19700e7fef21164dea5b6d22.zip"],
+            strip_prefix = "p4runtime-90553b90a12ead5c19700e7fef21164dea5b6d22/proto",
+            sha256 = "21f060e8cb590174c9be0fbe22665cb9a896f5f0b9399e17794defc9bcda3adc",
         )
     if not native.existing_rule("com_github_p4lang_p4_constraints"):
         http_archive(
             name = "com_github_p4lang_p4_constraints",
-            urls = ["https://github.com/p4lang/p4-constraints/archive/5b3b4d7cecdaf30804a66e1bb6abb4f25ab2e423.zip"],
-            strip_prefix = "p4-constraints-5b3b4d7cecdaf30804a66e1bb6abb4f25ab2e423",
-            sha256 = "ae7853171b789680b6147c3966599859157b5f48adfaf5c0357d3295a804b2c3",
+            urls = ["https://github.com/p4lang/p4-constraints/archive/11a08877ae8e3cf60acfa90c0f020d65b5a91ed5.zip"],
+            strip_prefix = "p4-constraints-11a08877ae8e3cf60acfa90c0f020d65b5a91ed5",
+            sha256 = "e85039af2378264f5e980984ab95f28903baebb3f515f1097377e294e681b2b6",
         )
     if not native.existing_rule("com_github_nlohmann_json"):
         http_archive(
@@ -139,9 +187,12 @@ def pins_infra_deps():
     if not native.existing_rule("com_gnu_gmp"):
         http_archive(
             name = "com_gnu_gmp",
-            url = "https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz",
-            strip_prefix = "gmp-6.1.2",
-            sha256 = "87b565e89a9a684fe4ebeeddb8399dce2599f9c9049854ca8c0dfbdea0e21912",
+            urls = [
+                "https://gmplib.org/download/gmp/gmp-6.2.1.tar.xz",
+                "https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.xz",
+            ],
+            strip_prefix = "gmp-6.2.1",
+            sha256 = "fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2",
             build_file = "@//:bazel/BUILD.gmp.bazel",
         )
     if not native.existing_rule("com_github_z3prover_z3"):
@@ -172,9 +223,8 @@ def pins_infra_deps():
     if not native.existing_rule("sonic_swss_common"):
         http_archive(
             name = "sonic_swss_common",
-            url = "https://github.com/azure/sonic-swss-common/archive/5effea3f473414539f4c8a4f9d9a2a00a0b86a92.zip",
-            strip_prefix = "sonic-swss-common-5effea3f473414539f4c8a4f9d9a2a00a0b86a92",
-            sha256 = "3031cd900963268a0278145703bb6ef54dd796540c71a0d72d8f85e1958d8724",
+            url = "https://github.com/azure/sonic-swss-common/archive/e7917acd2d4a9c0121802437e3c899bd513ac888.zip",
+            strip_prefix = "sonic-swss-common-e7917acd2d4a9c0121802437e3c899bd513ac888",
         )
     if not native.existing_rule("rules_pkg"):
         http_archive(

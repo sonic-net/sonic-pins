@@ -13,22 +13,17 @@
 // limitations under the License.
 #include "p4rt_app/event_monitoring/app_state_db_port_table_event.h"
 
-#include <deque>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "swss/schema.h"
 
 namespace p4rt_app {
-
-AppStateDbPortTableEventHandler::AppStateDbPortTableEventHandler(
-    P4RuntimeImpl& p4runtime)
-    : p4runtime_(p4runtime) {
-  // Do nothing.
-}
 
 absl::Status AppStateDbPortTableEventHandler::HandleEvent(
     const std::string& operation, const std::string& key,

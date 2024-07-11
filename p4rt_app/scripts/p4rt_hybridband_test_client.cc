@@ -64,21 +64,23 @@ absl::StatusOr<p4::v1::Update> RouterInterfaceTableUpdate(
   RETURN_IF_ERROR(gutil::ReadProtoFromString(
       absl::Substitute(R"pb(
                          type: $0
-                         table_entry {
-                           table_name: "router_interface_table"
-                           matches {
-                             name: "router_interface_id"
-                             exact { str: "$1" }
-                           }
-                           action {
-                             name: "set_port_and_src_mac"
-                             params {
-                               name: "port"
-                               value { str: "$2" }
+                         entity {
+                           table_entry {
+                             table_name: "router_interface_table"
+                             matches {
+                               name: "router_interface_id"
+                               exact { str: "$1" }
                              }
-                             params {
-                               name: "src_mac"
-                               value { mac: "$3" }
+                             action {
+                               name: "set_port_and_src_mac"
+                               params {
+                                 name: "port"
+                                 value { str: "$2" }
+                               }
+                               params {
+                                 name: "src_mac"
+                                 value { mac: "$3" }
+                               }
                              }
                            }
                          }
@@ -131,7 +133,7 @@ absl::Status Main() {
     p4info = response.config().p4info();
   } else {
     p4info = sai::GetP4Info(sai::Instantiation::kMiddleblock);
-    RETURN_IF_ERROR(pdpi::SetForwardingPipelineConfig(
+    RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
         p4rt_session.get(),
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
         p4info));

@@ -28,83 +28,12 @@
 #include "absl/types/optional.h"
 #include "grpcpp/grpcpp.h"
 
-// RETURN_IF_ERROR evaluates an expression that returns a absl::Status. If the
-// result is not ok, returns a StatusBuilder for the result. Otherwise,
-// continues. Because the macro ends in an unterminated StatusBuilder, all
-// StatusBuilder extensions can be used.
-//
-// Example:
-//   absl::Status Foo() {...}
-//   absl::Status Bar() {
-//     RETURN_IF_ERROR(Foo()).LogError() << "Additional Info";
-//     return absl::OkStatus()
-//   }
-#define RETURN_IF_ERROR(expr)                     \
-  for (absl::Status status = expr; !status.ok();) \
-  return gutil::StatusBuilder(std::move(status))
-
-// These macros help create unique variable names for ASSIGN_OR_RETURN. Not for
-// public use.
-#define __ASSIGN_OR_RETURN_VAL_DIRECT(arg) __ASSIGN_OR_RETURN_RESULT_##arg
-#define __ASSIGN_OR_RETURN_VAL(arg) __ASSIGN_OR_RETURN_VAL_DIRECT(arg)
-
-// An implementation of ASSIGN_OR_RETURN that does not include a StatusBuilder.
-// Not for public use.
-#define __ASSIGN_OR_RETURN(dest, expr)                \
-  auto __ASSIGN_OR_RETURN_VAL(__LINE__) = expr;       \
-  if (!__ASSIGN_OR_RETURN_VAL(__LINE__).ok()) {       \
-    return __ASSIGN_OR_RETURN_VAL(__LINE__).status(); \
-  }                                                   \
-  dest = std::move(__ASSIGN_OR_RETURN_VAL(__LINE__)).value()
-
-// An implementation of ASSIGN_OR_RETURN that provides a StatusBuilder for extra
-// processing. Not for public use.
-#define __ASSIGN_OR_RETURN_STREAM(dest, expr, stream)     \
-  auto __ASSIGN_OR_RETURN_VAL(__LINE__) = expr;           \
-  if (!__ASSIGN_OR_RETURN_VAL(__LINE__).ok()) {           \
-    return ::gutil::status_internal::StatusBuilderHolder( \
-               __ASSIGN_OR_RETURN_VAL(__LINE__).status()) \
-        .builder##stream;                                 \
-  }                                                       \
-  dest = std::move(__ASSIGN_OR_RETURN_VAL(__LINE__)).value()
-
-// Macro to choose the correct implementation for ASSIGN_OR_RETURN based on
-// the number of inputs. Not for public use.
-#define __ASSIGN_OR_RETURN_PICK(dest, expr, stream, func, ...) func
-
-// ASSIGN_OR_RETURN evaluates an expression that returns a StatusOr. If the
-// result is ok, the value is saved to dest. Otherwise, the status is returned.
-//
-// Example:
-//   absl::StatusOr<int> Foo() {...}
-//   absl::Status Bar() {
-//     ASSIGN_OR_RETURN(int value, Foo());
-//     std::cout << "value: " << value;
-//     return absl::OkStatus();
-//   }
-//
-// ASSIGN_OR_RETURN optionally takes in a third parameter that takes in
-// absl::StatusBuilder commands. Usage should assume a StatusBuilder object is
-// available and referred to as '_'.
-//
-// Example:
-//   absl::StatusOr<int> Foo() {...}
-//   absl::Status Bar() {
-//     ASSIGN_OR_RETURN(int value, Foo(), _.LogError() << "Additional Info");
-//     std::cout << "value: " << value;
-//     return absl::OkStatus();
-//   }
-#define ASSIGN_OR_RETURN(...)                                     \
-  __ASSIGN_OR_RETURN_PICK(__VA_ARGS__, __ASSIGN_OR_RETURN_STREAM, \
-                          __ASSIGN_OR_RETURN)                     \
-  (__VA_ARGS__)
-
-// Returns an error if `cond` doesn't hold.
-#define RET_CHECK(cond) \
-  while (!(cond))       \
-  return gutil::InternalErrorBuilder() << "(" << #cond << ") failed"
-
 namespace gutil {
+
+// Converts `status` to a readable string. The current absl `ToString` method is
+// not stable, which causes issues while golden testing. This function is
+// stable.
+std::string StableStatusToString(const absl::Status& status);
 
 // Protobuf and some other Google projects use Status classes that are isomorph,
 // but not equal to absl::Status (outside of google3).
@@ -307,5 +236,81 @@ class StatusBuilderHolder {
 }  // namespace status_internal
 
 }  // namespace gutil
+
+// RETURN_IF_ERROR evaluates an expression that returns a absl::Status. If the
+// result is not ok, returns a StatusBuilder for the result. Otherwise,
+// continues. Because the macro ends in an unterminated StatusBuilder, all
+// StatusBuilder extensions can be used.
+//
+// Example:
+//   absl::Status Foo() {...}
+//   absl::Status Bar() {
+//     RETURN_IF_ERROR(Foo()).LogError() << "Additional Info";
+//     return absl::OkStatus()
+//   }
+#define RETURN_IF_ERROR(expr)                     \
+  for (absl::Status status = expr; !status.ok();) \
+  return gutil::StatusBuilder(std::move(status))
+
+// These macros help create unique variable names for ASSIGN_OR_RETURN. Not for
+// public use.
+#define __ASSIGN_OR_RETURN_VAL_DIRECT(arg) __ASSIGN_OR_RETURN_RESULT_##arg
+#define __ASSIGN_OR_RETURN_VAL(arg) __ASSIGN_OR_RETURN_VAL_DIRECT(arg)
+
+// An implementation of ASSIGN_OR_RETURN that does not include a StatusBuilder.
+// Not for public use.
+#define __ASSIGN_OR_RETURN(dest, expr)                \
+  auto __ASSIGN_OR_RETURN_VAL(__LINE__) = expr;       \
+  if (!__ASSIGN_OR_RETURN_VAL(__LINE__).ok()) {       \
+    return __ASSIGN_OR_RETURN_VAL(__LINE__).status(); \
+  }                                                   \
+  dest = std::move(__ASSIGN_OR_RETURN_VAL(__LINE__)).value()
+
+// An implementation of ASSIGN_OR_RETURN that provides a StatusBuilder for extra
+// processing. Not for public use.
+#define __ASSIGN_OR_RETURN_STREAM(dest, expr, stream)     \
+  auto __ASSIGN_OR_RETURN_VAL(__LINE__) = expr;           \
+  if (!__ASSIGN_OR_RETURN_VAL(__LINE__).ok()) {           \
+    return ::gutil::status_internal::StatusBuilderHolder( \
+               __ASSIGN_OR_RETURN_VAL(__LINE__).status()) \
+        .builder##stream;                                 \
+  }                                                       \
+  dest = std::move(__ASSIGN_OR_RETURN_VAL(__LINE__)).value()
+
+// Macro to choose the correct implementation for ASSIGN_OR_RETURN based on
+// the number of inputs. Not for public use.
+#define __ASSIGN_OR_RETURN_PICK(dest, expr, stream, func, ...) func
+
+// ASSIGN_OR_RETURN evaluates an expression that returns a StatusOr. If the
+// result is ok, the value is saved to dest. Otherwise, the status is returned.
+//
+// Example:
+//   absl::StatusOr<int> Foo() {...}
+//   absl::Status Bar() {
+//     ASSIGN_OR_RETURN(int value, Foo());
+//     std::cout << "value: " << value;
+//     return absl::OkStatus();
+//   }
+//
+// ASSIGN_OR_RETURN optionally takes in a third parameter that takes in
+// absl::StatusBuilder commands. Usage should assume a StatusBuilder object is
+// available and referred to as '_'.
+//
+// Example:
+//   absl::StatusOr<int> Foo() {...}
+//   absl::Status Bar() {
+//     ASSIGN_OR_RETURN(int value, Foo(), _.LogError() << "Additional Info");
+//     std::cout << "value: " << value;
+//     return absl::OkStatus();
+//   }
+#define ASSIGN_OR_RETURN(...)                                     \
+  __ASSIGN_OR_RETURN_PICK(__VA_ARGS__, __ASSIGN_OR_RETURN_STREAM, \
+                          __ASSIGN_OR_RETURN)                     \
+  (__VA_ARGS__)
+
+// Returns an error if `cond` doesn't hold.
+#define RET_CHECK(cond) \
+  while (!(cond))       \
+  return gutil::InternalErrorBuilder() << "(" << #cond << ") failed"
 
 #endif  // GUTIL_STATUS_H_

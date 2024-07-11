@@ -303,6 +303,26 @@ TEST(ArbitraryByteStringToIrValueTest, Ipv6FullBitwidthTest) {
       IsOkAndHolds(EqualsProto(absl::Substitute(R"pb(ipv6: "$0")pb", kIp))));
 }
 
+TEST(ArbitraryByteStringToIrValueTest, EmptyBytestringReturnsError) {
+  EXPECT_THAT(
+      ArbitraryByteStringToIrValue(Format::IPV6, /*bitwidth=*/kNumBitsInIpv6,
+                                   /*bytes=*/""),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(ArbitraryToNormalizedByteString, EmptyBytestringReturnsError) {
+  EXPECT_THAT(
+      ArbitraryToNormalizedByteString(/*bytes=*/"", /*expected_bitwidth=*/8),
+      StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(IrValueToNormalizedByteString, kStrWithEmptyStringReturnsError) {
+  IrValue empty_string;
+  empty_string.set_str("");
+  EXPECT_THAT(IrValueToNormalizedByteString(empty_string, /*bitwidth=*/8),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
 class Ipv6BitwidthTest : public testing::TestWithParam<int> {};
 
 TEST_P(Ipv6BitwidthTest, ArbitraryByteStringToIrValueReturnsIp) {
@@ -369,18 +389,6 @@ INSTANTIATE_TEST_SUITE_P(PerBitwidth, Ipv6BitwidthTest,
                          testing::Values(63, 64, 65, 128),
                          testing::PrintToStringParamName());
 
-TEST(AnnotationTests, IsElementUnusedTest) {
-  std::vector<std::string> annotations_with_unused = {"@irrelevant", "@unused",
-                                                      "@irrelevant2"};
-  EXPECT_TRUE(IsElementUnused(google::protobuf::RepeatedPtrField<std::string>(
-      annotations_with_unused.begin(), annotations_with_unused.end())));
-
-  std::vector<std::string> annotations_without_unused = {
-      "@irrelevant", "@deprecated", "@irrelevant2"};
-  EXPECT_FALSE(IsElementUnused(google::protobuf::RepeatedPtrField<std::string>(
-      annotations_without_unused.begin(), annotations_without_unused.end())));
-}
-
 TEST(AnnotationTests, IsElementDeprecatedTest) {
   std::vector<std::string> annotations_with_deprecated = {
       "@irrelevant", "@deprecated", "@irrelevant2"};
@@ -395,6 +403,171 @@ TEST(AnnotationTests, IsElementDeprecatedTest) {
       IsElementDeprecated(google::protobuf::RepeatedPtrField<std::string>(
           annotations_without_deprecated.begin(),
           annotations_without_deprecated.end())));
+}
+
+TEST(ShortDescriptiontest, TranslatesIrTableEntryWithActionInvocation) {
+  ASSERT_OK_AND_ASSIGN(auto entry,
+                       gutil::ParseTextProto<pdpi::IrTableEntry>(R"pb(
+                         table_name: "Table1"
+                         priority: 12
+                         matches {
+                           name: "match1"
+                           optional { value { hex_str: "0x1234" } }
+                         }
+                         matches {
+                           name: "match2"
+                           exact { str: "astring" }
+                         }
+                         matches {
+                           name: "match3"
+                           lpm {
+                             value { ipv6: "2002::" }
+                             prefix_length: 5
+                           }
+                         }
+                         matches {
+                           name: "match4"
+                           ternary {
+                             value { mac: "00:11:22:33:44:55" }
+                             mask { mac: "ff:ff:ff:ff:ff:ff" }
+                           }
+                         }
+                         matches {
+                           name: "match5"
+                           exact {}
+                         }
+                         action {
+                           name: "myaction"
+                           params {
+                             name: "param1"
+                             value { ipv4: "1.2.3.4" }
+                           }
+                           params {
+                             name: "param2"
+                             value {}
+                           }
+                         }
+                       )pb"));
+  EXPECT_EQ(ShortDescription(entry),
+            "Table1|12:matches(match1=0x1234,match2=astring,match3=2002::/"
+            "5,match4=00:11:22:33:44:55&ff:ff:ff:ff:ff:ff,match5=):myaction("
+            "param1=1.2.3.4,param2=)");
+}
+
+TEST(ShortDescriptiontest, TranslatesIrTableEntryWithActionSet) {
+  ASSERT_OK_AND_ASSIGN(auto entry,
+                       gutil::ParseTextProto<pdpi::IrTableEntry>(R"pb(
+                         table_name: "Table1"
+                         matches {
+                           name: "m"
+                           optional { value { str: "s" } }
+                         }
+                         action_set {
+                           actions {
+                             weight: 1
+                             watch_port: "wpa"
+                             action { name: "wpaction" }
+                           }
+                           actions {
+                             weight: 2
+                             action {
+                               name: "weightaction"
+                               params {
+                                 name: "param1"
+                                 value { str: "stuff" }
+                               }
+                             }
+                           }
+                         }
+                       )pb"));
+  EXPECT_EQ(ShortDescription(entry),
+            "Table1|matches(m=s):2[weightaction(param1=stuff)]wpa/1[wpaction]");
+}
+
+TEST(ShortDescriptiontest, TranslatesIrTableEntryWithConsistentOrdering) {
+  ASSERT_OK_AND_ASSIGN(
+      auto base_entry,
+      gutil::ParseTextProto<pdpi::IrTableEntry>(R"pb(table_name: "Table1"
+                                                     priority: 12)pb"));
+  ASSERT_OK_AND_ASSIGN(auto match1, gutil::ParseTextProto<pdpi::IrMatch>(R"pb(
+                         name: "match1"
+                         optional { value { hex_str: "0x1234" } }
+                       )pb"));
+  ASSERT_OK_AND_ASSIGN(auto match2, gutil::ParseTextProto<pdpi::IrMatch>(R"pb(
+                         name: "match2"
+                         optional { value { str: "astring" } }
+                       )pb"));
+  ASSERT_OK_AND_ASSIGN(auto match3, gutil::ParseTextProto<pdpi::IrMatch>(R"pb(
+                         name: "match3"
+                         lpm {
+                           value { ipv6: "2002::" }
+                           prefix_length: 5
+                         }
+                       )pb"));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto param1,
+      gutil::ParseTextProto<pdpi::IrActionInvocation::IrActionParam>(
+          R"pb(name: "param1"
+               value { str: "p1" })pb"));
+  ASSERT_OK_AND_ASSIGN(
+      auto param2,
+      gutil::ParseTextProto<pdpi::IrActionInvocation::IrActionParam>(
+          R"pb(name: "param2"
+               value { str: "p2" })pb"));
+  ASSERT_OK_AND_ASSIGN(
+      auto param3,
+      gutil::ParseTextProto<pdpi::IrActionInvocation::IrActionParam>(
+          R"pb(name: "param3"
+               value { str: "p3" })pb"));
+  ASSERT_OK_AND_ASSIGN(auto param_action,
+                       gutil::ParseTextProto<pdpi::IrActionSetInvocation>(
+                           R"pb(weight: 10
+                                watch_port: "wp_param"
+                                action { name: "param_action" })pb"));
+  ASSERT_OK_AND_ASSIGN(auto action1,
+                       gutil::ParseTextProto<pdpi::IrActionSetInvocation>(
+                           R"pb(weight: 1
+                                watch_port: "wpa"
+                                action { name: "action1" })pb"));
+  ASSERT_OK_AND_ASSIGN(auto action2,
+                       gutil::ParseTextProto<pdpi::IrActionSetInvocation>(
+                           R"pb(weight: 2
+                                watch_port: "wpb"
+                                action { name: "action2" })pb"));
+  ASSERT_OK_AND_ASSIGN(auto action3,
+                       gutil::ParseTextProto<pdpi::IrActionSetInvocation>(
+                           R"pb(weight: 3
+                                watch_port: "wpc"
+                                action { name: "action3" })pb"));
+
+  IrActionSetInvocation action123 = param_action;
+  *action123.mutable_action()->add_params() = param1;
+  *action123.mutable_action()->add_params() = param2;
+  *action123.mutable_action()->add_params() = param3;
+  IrTableEntry entry123 = base_entry;
+  *entry123.add_matches() = match1;
+  *entry123.add_matches() = match2;
+  *entry123.add_matches() = match3;
+  *entry123.mutable_action_set()->add_actions() = action1;
+  *entry123.mutable_action_set()->add_actions() = action2;
+  *entry123.mutable_action_set()->add_actions() = action3;
+  *entry123.mutable_action_set()->add_actions() = action123;
+
+  IrActionSetInvocation action312 = param_action;
+  *action312.mutable_action()->add_params() = param3;
+  *action312.mutable_action()->add_params() = param1;
+  *action312.mutable_action()->add_params() = param2;
+  IrTableEntry entry312 = base_entry;
+  *entry312.add_matches() = match3;
+  *entry312.add_matches() = match1;
+  *entry312.add_matches() = match2;
+  *entry312.mutable_action_set()->add_actions() = action3;
+  *entry312.mutable_action_set()->add_actions() = action1;
+  *entry312.mutable_action_set()->add_actions() = action2;
+  *entry312.mutable_action_set()->add_actions() = action312;
+
+  EXPECT_EQ(ShortDescription(entry123), ShortDescription(entry312));
 }
 
 }  // namespace

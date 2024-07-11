@@ -11,16 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_HASHING_H_
-#define GOOGLE_P4RT_APP_SONIC_HASHING_H_
+#ifndef PINS_P4RT_APP_SONIC_HASHING_H_
+#define PINS_P4RT_APP_SONIC_HASHING_H_
 
 #include <string>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "swss/table.h"
 
@@ -30,6 +32,13 @@ namespace sonic {
 struct EcmpHashEntry {
   std::string hash_key;
   std::vector<swss::FieldValueTuple> hash_value;
+  // String conversion for debug.
+  // E.g. compute_ecmp_hash_ipv4 { hash_field_list: ["src_ip","dst_ip"] }
+  static void AbslFormatter(std::string* out, const EcmpHashEntry& entry) {
+    absl::StrAppendFormat(
+        out, "%s { %s }", entry.hash_key,
+        absl::StrJoin(entry.hash_value, "; ", absl::PairFormatter(": ")));
+  }
 };
 
 // Returns true for Ipv4 hash key.
@@ -79,4 +88,4 @@ absl::Status ProgramSwitchTable(SwitchTable& switch_table,
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_HASHING_H_
+#endif  // PINS_P4RT_APP_SONIC_HASHING_H_

@@ -80,7 +80,8 @@ message TernaryTableEntry {
     Ternary ipv4 = 2; // ternary match / Format::IPV4
     Ternary ipv6 = 3; // ternary match / Format::IPV6 / 128 bits
     Ternary mac = 4; // ternary match / Format::MAC
-    Ternary unused_field = 5; // ternary match / Format::HEX_STRING / 1 bits
+    // CAUTION: This match field is not (yet) supported.
+    Ternary unsupported_field = 5; // ternary match / Format::HEX_STRING / 1 bits
     Ternary ipv6_upper_64_bits = 6; // ternary match / Format::IPV6 / upper 64 bits
     Ternary ipv6_upper_63_bits = 7; // ternary match / Format::IPV6 / upper 63 bits
   }
@@ -88,7 +89,8 @@ message TernaryTableEntry {
   message Action {
   oneof action {
     DoThing3Action do_thing_3 = 1;
-    UnusedAction unused_action = 2;
+    // CAUTION: This action is not (yet) supported.
+    UnsupportedAction unsupported_action = 2;
   }
   }
   Action action = 2;
@@ -187,43 +189,6 @@ message OptionalTableEntry {
   bytes controller_metadata = 8;
 }
 
-message ReferredTableEntry {
-  message Match {
-    string id = 1; // exact match / Format::STRING
-  }
-  Match match = 1;
-  message Action {
-    DoThing4Action do_thing_4 = 1;
-  }
-  Action action = 2;
-  bytes controller_metadata = 8;
-}
-
-message ReferringTableEntry {
-  message Match {
-    string val = 1; // exact match / Format::HEX_STRING / 10 bits
-  }
-  Match match = 1;
-  message Action {
-    ReferringAction referring_action = 1;
-  }
-  Action action = 2;
-  bytes controller_metadata = 8;
-}
-
-message Referring2TableEntry {
-  message Match {
-    // Refers to 'referred_table.id'.
-    string referring_id = 1; // exact match / Format::STRING
-  }
-  Match match = 1;
-  message Action {
-    DoThing4Action do_thing_4 = 1;
-  }
-  Action action = 2;
-  bytes controller_metadata = 8;
-}
-
 message NoActionTableEntry {
   message Match {
     string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
@@ -236,20 +201,8 @@ message NoActionTableEntry {
   bytes controller_metadata = 8;
 }
 
-message ReferringToReferring2TableEntry {
-  message Match {
-    // Refers to 'referring2_table.referring_id'.
-    string referring2_table_id = 1; // exact match / Format::STRING
-  }
-  Match match = 1;
-  message Action {
-    DoThing4Action do_thing_4 = 1;
-  }
-  Action action = 2;
-  bytes controller_metadata = 8;
-}
-
-message UnusedTableEntry {
+// CAUTION: This table is not (yet) supported.
+message UnsupportedTableEntry {
   message Match {
     string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
     string ipv4 = 2; // exact match / Format::IPV4
@@ -291,6 +244,219 @@ message ByteCountAndMeterTableEntry {
   bytes controller_metadata = 8;
 }
 
+message TwoMatchFieldsTableEntry {
+  message Match {
+    string id_1 = 1; // exact match / Format::STRING
+    string id_2 = 2; // exact match / Format::HEX_STRING / 10 bits
+  }
+  Match match = 1;
+  message Action {
+  oneof action {
+    DoThing1Action do_thing_1 = 2;
+    DoThing4Action do_thing_4 = 1;
+  }
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message GoldenTestFriendlyWcmpTableEntry {
+  message Match {
+    string key1 = 1; // exact match / Format::STRING
+    string key2 = 2; // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    GoldenTestFriendlyAction golden_test_friendly_action = 1;
+  }
+  message WcmpAction {
+    Action action = 1;
+    int32 weight = 2;
+    string watch_port = 3;  // Format::STRING
+  }
+  repeated WcmpAction wcmp_actions = 2;
+  bytes controller_metadata = 8;
+}
+
+message ReferringToReferringByMatchFieldTableEntry {
+  message Match {
+    // Refers to 'referring_by_match_field_table.referring_id_1'.
+    string referring_to_referring_id_1 = 1; // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+// Table entry restrictions:
+// ## Exact constraint with OR.
+//   normal == 5 || normal == 6;
+// ## LPM constraint.
+//   ipv4::prefix_length != 0;
+// ## Ternary constraint with exact set.
+//   field10bit == 0xff;
+// ## Large integer (most significant bit position > 64).
+//   ipv6 == 0xffffffffffffffffffffffff;
+// ## Ternary constraint with value.
+//   mac::mask != 0 -> mac::value == 10;
+// ## Implies constraint.
+//   val == 1 -> mac::mask != 0;
+// ## Metadata constraint.
+//   ::priority > 500;
+// ## P4runtime translated string constraint without reference.
+// ## TODO: This constraint should read
+// ## `nonreferring_str != ''`, but p4-constraints does not currently
+// ## support strings.
+//   nonreferring_str != 0;
+// ## P4runtime translated string constraint with reference.
+// ## TODO: This constraint should read
+// ## `referring_str != 'some_str'` (or equals), but p4-constraints does not
+// ## currently support strings. The current constraint is redundant.
+//   referring_str::mask != 0 -> referring_str != 0;
+message ConstrainedTableEntry {
+  message Match {
+    Optional val = 1; // optional match / Format::HEX_STRING / 1 bits
+    string normal = 2; // exact match / Format::HEX_STRING / 10 bits
+    Lpm ipv4 = 3; // lpm match / Format::IPV4
+    Ternary ipv6 = 4; // ternary match / Format::IPV6 / 128 bits
+    Ternary mac = 5; // ternary match / Format::MAC
+    Optional referring_str = 6; // optional match / Format::STRING
+    Optional nonreferring_str = 7; // optional match / Format::STRING
+    Ternary field10bit = 8; // ternary match / Format::HEX_STRING / 10 bits
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
+message RefersToMulticastByMatchFieldTableEntry {
+  message Match {
+    string group_id = 1; // exact match / Format::HEX_STRING / 10 bits
+  }
+  Match match = 1;
+  message Action {
+    RefersToMulticastAction refers_to_multicast_action = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message RefersToMulticastByActionTableEntry {
+  message Match {
+    string val = 1; // exact match / Format::HEX_STRING / 10 bits
+  }
+  Match match = 1;
+  message Action {
+    RefersToMulticastAction refers_to_multicast_action = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message ExactAndOptionalTableEntry {
+  message Match {
+    string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
+    string ipv4 = 2; // exact match / Format::IPV4
+    Optional str = 3; // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
+message OneMatchFieldTableEntry {
+  message Match {
+    string id = 1; // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message ReferringByActionTableEntry {
+  message Match {
+    string val = 1; // exact match / Format::HEX_STRING / 10 bits
+  }
+  Match match = 1;
+  message Action {
+  oneof action {
+    ReferringToTwoMatchFieldsAction referring_to_two_match_fields_action = 1;
+    ReferringToOneMatchFieldAction referring_to_one_match_field_action = 2;
+  }
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message ReferencedByMulticastReplicaTableEntry {
+  message Match {
+    string port_str = 1; // exact match / Format::STRING
+    string instance_str = 2; // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message ReferringByMatchFieldTableEntry {
+  message Match {
+    // Refers to 'two_match_fields_table.id_1'.
+    string referring_id_1 = 1; // exact match / Format::STRING
+    // Refers to 'two_match_fields_table.id_2'.
+    string referring_id_2 = 2; // exact match / Format::HEX_STRING / 10 bits
+  }
+  Match match = 1;
+  message Action {
+    DoThing4Action do_thing_4 = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+message GoldenTestFriendlyTableEntry {
+  message Match {
+    string key1 = 1; // exact match / Format::STRING
+    string key2 = 2; // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    GoldenTestFriendlyAction golden_test_friendly_action = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+
+// Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
+// of the v1model architecture and is not explicitly present in the P4 program.
+message MulticastGroupTableEntry {
+  message Match {
+    string multicast_group_id = 1;  // exact match / Format::HEX_STRING / 16 bits
+  }
+  Match match = 1;
+  message Action {
+    ReplicateAction replicate = 1;
+  }
+  Action action = 2;
+}
+
 
 // -- Actions ------------------------------------------------------------------
 
@@ -318,14 +484,8 @@ message CountAndMeterAction {
 message DoThing4Action {
 }
 
-message ReferringAction {
-  // Refers to 'referred_table.id'.
-  string referring_id_1 = 1; // Format::STRING
-  // Refers to 'referred_table.id'.
-  string referring_id_2 = 2; // Format::STRING
-}
-
-message UnusedAction {
+// CAUTION: This action is not (yet) supported.
+message UnsupportedAction {
 }
 
 message PacketCountAndMeterAction {
@@ -334,7 +494,43 @@ message PacketCountAndMeterAction {
 message ByteCountAndMeterAction {
 }
 
+message RefersToMulticastAction {
+  string multicast_group_id = 1; // Format::STRING
+}
+
 message NoAction {
+}
+
+message ReferringToTwoMatchFieldsAction {
+  // Refers to 'two_match_fields_table.id_1'.
+  string referring_id_1 = 1; // Format::STRING
+  // Refers to 'two_match_fields_table.id_2'.
+  string referring_id_2 = 2; // Format::HEX_STRING / 10 bits
+}
+
+message ReferringToOneMatchFieldAction {
+  // Refers to 'one_match_field_table.id'.
+  // Refers to 'two_match_fields_table.id_1'.
+  string referring_id_1 = 1; // Format::STRING
+}
+
+message GoldenTestFriendlyAction {
+  string arg1 = 1; // Format::STRING
+  string arg2 = 2; // Format::STRING
+}
+
+
+// This action is unique to `MulticastGroupTableEntry` and is not explicitly
+// present in the P4 program.
+message ReplicateAction {
+  // Corresponds to `Replica` in p4runtime.proto.
+  message Replica {
+    string port = 1;  // Format::STRING
+    string instance = 2;  // Format::HEX_STRING / 16 bits
+  }
+  // Each `Replica` must have a unique (port, instance)-pair within the scope of
+  // the `ReplicateAction` that contains it.
+  repeated Replica replicas = 1;
 }
 
 
@@ -351,14 +547,24 @@ message TableEntry {
     CountAndMeterTableEntry count_and_meter_table_entry = 7;
     Wcmp2TableEntry wcmp2_table_entry = 8;
     OptionalTableEntry optional_table_entry = 9;
-    ReferredTableEntry referred_table_entry = 10;
-    ReferringTableEntry referring_table_entry = 11;
-    Referring2TableEntry referring2_table_entry = 12;
     NoActionTableEntry no_action_table_entry = 13;
-    ReferringToReferring2TableEntry referring_to_referring2_table_entry = 14;
-    UnusedTableEntry unused_table_entry = 15;
+    // CAUTION: This table is not (yet) supported.
+    UnsupportedTableEntry unsupported_table_entry = 15;
     PacketCountAndMeterTableEntry packet_count_and_meter_table_entry = 19;
     ByteCountAndMeterTableEntry byte_count_and_meter_table_entry = 23;
+    TwoMatchFieldsTableEntry two_match_fields_table_entry = 1250980;
+    GoldenTestFriendlyWcmpTableEntry golden_test_friendly_wcmp_table_entry = 4050172;
+    ReferringToReferringByMatchFieldTableEntry referring_to_referring_by_match_field_table_entry = 7567824;
+    ConstrainedTableEntry constrained_table_entry = 8408021;
+    RefersToMulticastByMatchFieldTableEntry refers_to_multicast_by_match_field_table_entry = 8935806;
+    RefersToMulticastByActionTableEntry refers_to_multicast_by_action_table_entry = 11813012;
+    ExactAndOptionalTableEntry exact_and_optional_table_entry = 12300347;
+    OneMatchFieldTableEntry one_match_field_table_entry = 12699062;
+    ReferringByActionTableEntry referring_by_action_table_entry = 14558547;
+    ReferencedByMulticastReplicaTableEntry referenced_by_multicast_replica_table_entry = 15642665;
+    ReferringByMatchFieldTableEntry referring_by_match_field_table_entry = 16037969;
+    GoldenTestFriendlyTableEntry golden_test_friendly_table_entry = 16597171;
+    MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }
 

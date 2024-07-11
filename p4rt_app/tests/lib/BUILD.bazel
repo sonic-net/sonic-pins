@@ -51,6 +51,7 @@ cc_library(
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/strings",
@@ -64,11 +65,11 @@ cc_library(
     srcs = ["p4runtime_grpc_service.cc"],
     hdrs = ["p4runtime_grpc_service.h"],
     deps = [
-        "//gutil:status_matchers",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic:fake_packetio_interface",
         "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic/adapters:fake_consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:fake_notification_producer_adapter",
         "//p4rt_app/sonic/adapters:fake_producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/sonic/adapters:fake_table_adapter",
@@ -77,9 +78,7 @@ cc_library(
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/random:distributions",
-        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
-        "@sonic_swss_common//:libswsscommon",
     ],
 )
 

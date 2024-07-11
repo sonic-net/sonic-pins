@@ -36,23 +36,23 @@ TEST(TransformValuesOfTypeTest, RewriteMatchString) {
   p4::config::v1::P4NamedType target_type;
   target_type.set_name("string_id_t");
 
-  ASSERT_OK_AND_ASSIGN(
-      IrTableEntry original_entry,
-      PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referred_table_entry {
-                           match { id: "string" }
-                           action { do_thing_4 {} }
-                         }
-                       )pb")));
+  ASSERT_OK_AND_ASSIGN(IrTableEntry original_entry,
+                       PartialPdTableEntryToIrTableEntry(
+                           info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
+                             one_match_field_table_entry {
+                               match { id: "string" }
+                               action { do_thing_4 {} }
+                             }
+                           )pb")));
 
-  ASSERT_OK_AND_ASSIGN(
-      IrTableEntry goal_entry,
-      PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referred_table_entry {
-                           match { id: "another_string" }
-                           action { do_thing_4 {} }
-                         }
-                       )pb")));
+  ASSERT_OK_AND_ASSIGN(IrTableEntry goal_entry,
+                       PartialPdTableEntryToIrTableEntry(
+                           info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
+                             one_match_field_table_entry {
+                               match { id: "another_string" }
+                               action { do_thing_4 {} }
+                             }
+                           )pb")));
 
   ASSERT_OK(TransformValuesOfType(info, target_type, original_entry,
                                   /*transformer=*/AddAnotherToString));
@@ -66,33 +66,33 @@ TEST(TransformValuesOfTypeTest, RewriteActionStrings) {
   p4::config::v1::P4NamedType target_type;
   target_type.set_name("string_id_t");
 
-  ASSERT_OK_AND_ASSIGN(
-      IrTableEntry original_entry,
-      PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referring_table_entry {
-                           match { val: "0x001" }
-                           action {
-                             referring_action {
-                               referring_id_1: "string1",
-                               referring_id_2: "string2",
+  ASSERT_OK_AND_ASSIGN(IrTableEntry original_entry,
+                       PartialPdTableEntryToIrTableEntry(
+                           info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
+                             referring_by_action_table_entry {
+                               match { val: "0x001" }
+                               action {
+                                 referring_to_two_match_fields_action {
+                                   referring_id_1: "string1",
+                                   referring_id_2: "0x004",
+                                 }
+                               }
                              }
-                           }
-                         }
-                       )pb")));
+                           )pb")));
 
-  ASSERT_OK_AND_ASSIGN(
-      IrTableEntry goal_entry,
-      PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referring_table_entry {
-                           match { val: "0x001" }
-                           action {
-                             referring_action {
-                               referring_id_1: "another_string1",
-                               referring_id_2: "another_string2",
+  ASSERT_OK_AND_ASSIGN(IrTableEntry goal_entry,
+                       PartialPdTableEntryToIrTableEntry(
+                           info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
+                             referring_by_action_table_entry {
+                               match { val: "0x001" }
+                               action {
+                                 referring_to_two_match_fields_action {
+                                   referring_id_1: "another_string1",
+                                   referring_id_2: "0x004",
+                                 }
+                               }
                              }
-                           }
-                         }
-                       )pb")));
+                           )pb")));
 
   ASSERT_OK(TransformValuesOfType(info, target_type, original_entry,
                                   /*transformer=*/AddAnotherToString));
@@ -106,27 +106,27 @@ TEST(VisitValuesOfTypeTest, CollectStrings) {
   p4::config::v1::P4NamedType target_type;
   target_type.set_name("string_id_t");
 
-  ASSERT_OK_AND_ASSIGN(
-      IrTableEntry entry1,
-      PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referred_table_entry {
-                           match { id: "string1" }
-                           action { do_thing_4 {} }
-                         }
-                       )pb")));
-  ASSERT_OK_AND_ASSIGN(
-      IrTableEntry entry2,
-      PdTableEntryToIr(info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
-                         referring_table_entry {
-                           match { val: "0x001" }
-                           action {
-                             referring_action {
-                               referring_id_1: "string2",
-                               referring_id_2: "string3",
+  ASSERT_OK_AND_ASSIGN(IrTableEntry entry1,
+                       PartialPdTableEntryToIrTableEntry(
+                           info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
+                             one_match_field_table_entry {
+                               match { id: "string1" }
+                               action { do_thing_4 {} }
                              }
-                           }
-                         }
-                       )pb")));
+                           )pb")));
+  ASSERT_OK_AND_ASSIGN(IrTableEntry entry2,
+                       PartialPdTableEntryToIrTableEntry(
+                           info, gutil::ParseProtoOrDie<TableEntry>(R"pb(
+                             referring_by_action_table_entry {
+                               match { val: "0x001" }
+                               action {
+                                 referring_to_two_match_fields_action {
+                                   referring_id_1: "string2",
+                                   referring_id_2: "0x003",
+                                 }
+                               }
+                             }
+                           )pb")));
 
   std::vector<IrTableEntry> entries{entry1, entry2};
   absl::flat_hash_set<std::string> string_collection;
@@ -134,10 +134,13 @@ TEST(VisitValuesOfTypeTest, CollectStrings) {
   ASSERT_OK(VisitValuesOfType(info, target_type, entries,
                               /*visitor=*/[&](absl::string_view input) {
                                 string_collection.insert(std::string(input));
+                                return absl::OkStatus();
                               }));
 
-  EXPECT_THAT(string_collection,
-              UnorderedElementsAreArray({"string1", "string2", "string3"}));
+  EXPECT_THAT(string_collection, UnorderedElementsAreArray({
+                                     "string1",
+                                     "string2",
+                                 }));
 }
 
 }  // namespace

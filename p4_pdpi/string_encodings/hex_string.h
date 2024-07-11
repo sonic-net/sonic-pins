@@ -16,8 +16,8 @@
 // as "0xf0a1" to ease working with PD protos.
 // See the documentation of HEX_STRING in ir.proto for details of the encoding.
 
-#ifndef GOOGLE_P4_PDPI_HEX_H_
-#define GOOGLE_P4_PDPI_HEX_H_
+#ifndef PINS_P4_PDPI_HEX_H_
+#define PINS_P4_PDPI_HEX_H_
 
 #include <stddef.h>
 
@@ -147,9 +147,8 @@ absl::StatusOr<std::bitset<num_bits>> HexStringToBitset(
     if (num_hex_chars != expected_num_hex_chars) {
       return gutil::InvalidArgumentErrorBuilder()
              << "illegal conversion from hex string '" << hex_string << "' to "
-             << num_bits << " bits; expected between "
-             << (num_hex_chars * 4 - 3) << " and " << (num_hex_chars * 4)
-             << " bits";
+             << num_bits << " bits; expected " << expected_num_hex_chars
+             << " hex digits but got " << num_hex_chars;
     }
   }
   return HexStringToAnyLargeEnoughBitset<num_bits>(hex_string);
@@ -157,4 +156,4 @@ absl::StatusOr<std::bitset<num_bits>> HexStringToBitset(
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_HEX_H_
+#endif  // PINS_P4_PDPI_HEX_H_

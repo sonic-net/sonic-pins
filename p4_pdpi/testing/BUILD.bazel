@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("//gutil/embed_data:build_defs.bzl", "cc_embed_data")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -126,10 +126,25 @@ cc_library(
         "//gutil:testing",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:translation_options",
+        "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "mock_p4_runtime_server",
+    testonly = True,
+    hdrs = ["mock_p4_runtime_server.h"],
+    deps = [
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
     ],
 )
 
@@ -169,6 +184,34 @@ cmd_diff_test(
     ],
 )
 
+cc_test(
+    name = "sequencing_util_test_runner",
+    srcs = ["sequencing_util_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":main_p4_pd_cc_proto",
+        ":test_helper",
+        ":test_p4info_cc",
+        "//gutil:proto",
+        "//gutil:testing",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "//p4_pdpi:sequencing_util",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "sequencing_util_test",
+    actual_cmd = "$(execpath :sequencing_util_test_runner) ",
+    expected = "//p4_pdpi/testing/testdata:sequencing_util.expected",
+    tools = [":sequencing_util_test_runner"],
+)
+
 # go/golden-test-with-coverage
 cc_test(
     name = "info_test_runner",
@@ -187,6 +230,7 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -288,11 +332,12 @@ cc_test(
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
-        "@com_github_google_glog//:glog",
+        "//p4_pdpi:translation_options",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -332,10 +377,29 @@ cc_test(
         ":test_p4info_cc",
         "//gutil:proto",
         "//gutil:proto_matchers",
+        "//gutil:status",
         "//gutil:status_matchers",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
+        "//p4_pdpi:translation_options",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "mock_p4_runtime_server_test",
+    srcs = ["mock_p4_runtime_server_test.cc"],
+    deps = [
+        ":mock_p4_runtime_server",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
     ],
 )

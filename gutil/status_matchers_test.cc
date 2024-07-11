@@ -25,6 +25,8 @@
 namespace gutil {
 namespace {
 
+using ::testing::_;
+using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::Not;
 
@@ -99,6 +101,16 @@ TEST(AbslStatusOrMatcher, AssignOrReturnWorksWithMoveOnlyTypes) {
   ASSERT_OK_AND_ASSIGN(
       auto value_from_expression,
       absl::StatusOr<std::unique_ptr<int>>(absl::make_unique<int>(0)));
+}
+
+TEST(IsOkAndHoldsTest, Description) {
+  auto describe = [](const auto& matcher) {
+    return testing::DescribeMatcher<absl::StatusOr<int>>(matcher);
+  };
+  EXPECT_EQ(describe(IsOkAndHolds(_)),
+            "is OK and has a value that is anything");
+  EXPECT_EQ(describe(Not(IsOkAndHolds(Eq(4)))),
+            "is not OK or has a value that isn't equal to 4");
 }
 
 }  // namespace

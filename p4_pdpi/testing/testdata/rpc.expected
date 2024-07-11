@@ -50,18 +50,6 @@ entities {
 UNIMPLEMENTED: Only wildcard reads of all table entries are supported. Only 1 entity is supported. Found 2 entities in read request.
 
 =========================================================================
-ReadRequest test: valid
-=========================================================================
-
---- PI (Input):
-device_id: 10
-entities {
-  table_entry {
-  }
-}
-
-
-=========================================================================
 ReadRequest test: no meter, no counter
 =========================================================================
 
@@ -160,7 +148,9 @@ entities {
 }
 
 --- PI is invalid/unsupported:
-UNIMPLEMENTED: Only table entries are supported in ReadResponse.
+INVALID_ARGUMENT: Read response is invalid for the following reasons:
+  UNIMPLEMENTED: Entity is invalid: Entity 'action_profile_member' is not supported.
+  
 
 =========================================================================
 ReadResponse test: valid ternary table
@@ -186,32 +176,34 @@ table_entries {
 }
 
 --- IR:
-table_entries {
-  table_name: "ternary_table"
-  matches {
-    name: "normal"
-    ternary {
-      value {
-        hex_str: "0x052"
-      }
-      mask {
-        hex_str: "0x273"
-      }
-    }
-  }
-  priority: 32
-  action {
-    name: "do_thing_3"
-    params {
-      name: "arg1"
-      value {
-        hex_str: "0x01234567"
+entities {
+  table_entry {
+    table_name: "ternary_table"
+    matches {
+      name: "normal"
+      ternary {
+        value {
+          hex_str: "0x052"
+        }
+        mask {
+          hex_str: "0x273"
+        }
       }
     }
-    params {
-      name: "arg2"
-      value {
-        hex_str: "0x01234568"
+    priority: 32
+    action {
+      name: "do_thing_3"
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234568"
+        }
       }
     }
   }
@@ -242,6 +234,54 @@ entities {
       }
     }
     priority: 32
+  }
+}
+
+
+=========================================================================
+ReadResponse test: valid multicast group table
+=========================================================================
+
+--- PD (Input):
+table_entries {
+  multicast_group_table_entry {
+    match {
+      multicast_group_id: "0x0001"
+    }
+    action {
+      replicate {
+        replicas {
+          port: "1"
+          instance: "0x0001"
+        }
+      }
+    }
+  }
+}
+
+--- IR:
+entities {
+  packet_replication_engine_entry {
+    multicast_group_entry {
+      multicast_group_id: 1
+      replicas {
+        port: "1"
+        instance: 1
+      }
+    }
+  }
+}
+
+--- PI:
+entities {
+  packet_replication_engine_entry {
+    multicast_group_entry {
+      multicast_group_id: 1
+      replicas {
+        instance: 1
+        port: "1"
+      }
+    }
   }
 }
 
@@ -287,62 +327,66 @@ table_entries {
 }
 
 --- IR:
-table_entries {
-  table_name: "ternary_table"
-  matches {
-    name: "normal"
-    ternary {
-      value {
-        hex_str: "0x052"
-      }
-      mask {
-        hex_str: "0x273"
-      }
-    }
-  }
-  priority: 32
-  action {
-    name: "do_thing_3"
-    params {
-      name: "arg1"
-      value {
-        hex_str: "0x01234567"
+entities {
+  table_entry {
+    table_name: "ternary_table"
+    matches {
+      name: "normal"
+      ternary {
+        value {
+          hex_str: "0x052"
+        }
+        mask {
+          hex_str: "0x273"
+        }
       }
     }
-    params {
-      name: "arg2"
-      value {
-        hex_str: "0x01234568"
+    priority: 32
+    action {
+      name: "do_thing_3"
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234568"
+        }
       }
     }
   }
 }
-table_entries {
-  table_name: "ternary_table"
-  matches {
-    name: "normal"
-    ternary {
-      value {
-        hex_str: "0x052"
-      }
-      mask {
-        hex_str: "0x273"
-      }
-    }
-  }
-  priority: 32
-  action {
-    name: "do_thing_3"
-    params {
-      name: "arg1"
-      value {
-        hex_str: "0x01234567"
+entities {
+  table_entry {
+    table_name: "ternary_table"
+    matches {
+      name: "normal"
+      ternary {
+        value {
+          hex_str: "0x052"
+        }
+        mask {
+          hex_str: "0x273"
+        }
       }
     }
-    params {
-      name: "arg2"
-      value {
-        hex_str: "0x01234568"
+    priority: 32
+    action {
+      name: "do_thing_3"
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234568"
+        }
       }
     }
   }
@@ -410,9 +454,7 @@ Update test: empty
 --- PI (Input):
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: Update is invalid for the following reasons:
-  - Only table entries are supported in Update.
-  - Update type should be specified.
+INVALID_ARGUMENT: Update is invalid: Update type should be specified.
 
 =========================================================================
 Update test: missing type
@@ -439,7 +481,7 @@ entity {
 }
 
 --- PI is invalid/unsupported:
-INVALID_ARGUMENT: Update is invalid: Only table entries are supported in Update.
+UNIMPLEMENTED: Entity is invalid: Entity 'action_profile_member' is not supported.
 
 =========================================================================
 Update test: missing type
@@ -492,32 +534,34 @@ table_entry {
 
 --- IR:
 type: MODIFY
-table_entry {
-  table_name: "ternary_table"
-  matches {
-    name: "normal"
-    ternary {
-      value {
-        hex_str: "0x052"
-      }
-      mask {
-        hex_str: "0x273"
-      }
-    }
-  }
-  priority: 32
-  action {
-    name: "do_thing_3"
-    params {
-      name: "arg1"
-      value {
-        hex_str: "0x01234567"
+entity {
+  table_entry {
+    table_name: "ternary_table"
+    matches {
+      name: "normal"
+      ternary {
+        value {
+          hex_str: "0x052"
+        }
+        mask {
+          hex_str: "0x273"
+        }
       }
     }
-    params {
-      name: "arg2"
-      value {
-        hex_str: "0x01234568"
+    priority: 32
+    action {
+      name: "do_thing_3"
+      params {
+        name: "arg1"
+        value {
+          hex_str: "0x01234567"
+        }
+      }
+      params {
+        name: "arg2"
+        value {
+          hex_str: "0x01234568"
+        }
       }
     }
   }
@@ -549,6 +593,57 @@ entity {
       }
     }
     priority: 32
+  }
+}
+
+
+=========================================================================
+Update test: valid mulitcast group table
+=========================================================================
+
+--- PD (Input):
+type: INSERT
+table_entry {
+  multicast_group_table_entry {
+    match {
+      multicast_group_id: "0x0001"
+    }
+    action {
+      replicate {
+        replicas {
+          port: "1"
+          instance: "0x0001"
+        }
+      }
+    }
+  }
+}
+
+--- IR:
+type: INSERT
+entity {
+  packet_replication_engine_entry {
+    multicast_group_entry {
+      multicast_group_id: 1
+      replicas {
+        port: "1"
+        instance: 1
+      }
+    }
+  }
+}
+
+--- PI:
+type: INSERT
+entity {
+  packet_replication_engine_entry {
+    multicast_group_entry {
+      multicast_group_id: 1
+      replicas {
+        instance: 1
+        port: "1"
+      }
+    }
   }
 }
 
@@ -649,32 +744,34 @@ election_id {
 }
 updates {
   type: MODIFY
-  table_entry {
-    table_name: "ternary_table"
-    matches {
-      name: "normal"
-      ternary {
-        value {
-          hex_str: "0x052"
-        }
-        mask {
-          hex_str: "0x273"
-        }
-      }
-    }
-    priority: 32
-    action {
-      name: "do_thing_3"
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234567"
+  entity {
+    table_entry {
+      table_name: "ternary_table"
+      matches {
+        name: "normal"
+        ternary {
+          value {
+            hex_str: "0x052"
+          }
+          mask {
+            hex_str: "0x273"
+          }
         }
       }
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234568"
+      priority: 32
+      action {
+        name: "do_thing_3"
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
     }
@@ -713,6 +810,78 @@ updates {
         }
       }
       priority: 32
+    }
+  }
+}
+
+
+=========================================================================
+WriteRequest test: valid multicast group table update
+=========================================================================
+
+--- PD (Input):
+device_id: 113
+election_id {
+  high: 1231
+  low: 77989
+}
+updates {
+  type: INSERT
+  table_entry {
+    multicast_group_table_entry {
+      match {
+        multicast_group_id: "0x0001"
+      }
+      action {
+        replicate {
+          replicas {
+            port: "1"
+            instance: "0x0001"
+          }
+        }
+      }
+    }
+  }
+}
+
+--- IR:
+device_id: 113
+election_id {
+  high: 1231
+  low: 77989
+}
+updates {
+  type: INSERT
+  entity {
+    packet_replication_engine_entry {
+      multicast_group_entry {
+        multicast_group_id: 1
+        replicas {
+          port: "1"
+          instance: 1
+        }
+      }
+    }
+  }
+}
+
+--- PI:
+device_id: 113
+election_id {
+  high: 1231
+  low: 77989
+}
+updates {
+  type: INSERT
+  entity {
+    packet_replication_engine_entry {
+      multicast_group_entry {
+        multicast_group_id: 1
+        replicas {
+          instance: 1
+          port: "1"
+        }
+      }
     }
   }
 }
@@ -777,32 +946,34 @@ election_id {
 }
 updates {
   type: MODIFY
-  table_entry {
-    table_name: "ternary_table"
-    matches {
-      name: "normal"
-      ternary {
-        value {
-          hex_str: "0x052"
-        }
-        mask {
-          hex_str: "0x273"
-        }
-      }
-    }
-    priority: 32
-    action {
-      name: "do_thing_3"
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234567"
+  entity {
+    table_entry {
+      table_name: "ternary_table"
+      matches {
+        name: "normal"
+        ternary {
+          value {
+            hex_str: "0x052"
+          }
+          mask {
+            hex_str: "0x273"
+          }
         }
       }
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234568"
+      priority: 32
+      action {
+        name: "do_thing_3"
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
     }
@@ -810,32 +981,34 @@ updates {
 }
 updates {
   type: DELETE
-  table_entry {
-    table_name: "ternary_table"
-    matches {
-      name: "normal"
-      ternary {
-        value {
-          hex_str: "0x052"
-        }
-        mask {
-          hex_str: "0x273"
-        }
-      }
-    }
-    priority: 32
-    action {
-      name: "do_thing_3"
-      params {
-        name: "arg1"
-        value {
-          hex_str: "0x01234567"
+  entity {
+    table_entry {
+      table_name: "ternary_table"
+      matches {
+        name: "normal"
+        ternary {
+          value {
+            hex_str: "0x052"
+          }
+          mask {
+            hex_str: "0x273"
+          }
         }
       }
-      params {
-        name: "arg2"
-        value {
-          hex_str: "0x01234568"
+      priority: 32
+      action {
+        name: "do_thing_3"
+        params {
+          name: "arg1"
+          value {
+            hex_str: "0x01234567"
+          }
+        }
+        params {
+          name: "arg2"
+          value {
+            hex_str: "0x01234568"
+          }
         }
       }
     }
@@ -1537,6 +1710,10 @@ packet {
     metadata_id: 2
     value: "\001"
   }
+  metadata {
+    metadata_id: 3
+    value: "\000"
+  }
 }
 
 
@@ -1637,6 +1814,10 @@ packet {
     metadata_id: 2
     value: "eth-1/2/3"
   }
+  metadata {
+    metadata_id: 3
+    value: "\000"
+  }
 }
 
 
@@ -1697,8 +1878,10 @@ error {
         metadata_id: 2
         value: "\001"
       }
+      metadata {
+        metadata_id: 3
+        value: "\000"
+      }
     }
   }
 }
-
-

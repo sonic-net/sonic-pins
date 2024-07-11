@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -35,6 +38,7 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -75,6 +79,7 @@ cc_test(
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
@@ -100,6 +105,7 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
@@ -128,6 +134,7 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -150,20 +157,22 @@ cc_test(
         "//gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
-        "//p4rt_app/tests/lib:p4runtime_request_helpers",
+        "//sai_p4/instantiations/google:clos_stage",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_p4info_fetcher_cc",
         "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf_lite",
+        "@sonic_swss_common//:common",
     ],
 )
 
@@ -180,6 +189,7 @@ cc_test(
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/strings",
@@ -194,9 +204,7 @@ cc_test(
     srcs = ["packetio_test.cc"],
     tags = ["exclusive"],
     deps = [
-        "//gutil:proto",
         "//gutil:proto_matchers",
-        "//gutil:status",
         "//gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
@@ -204,11 +212,12 @@ cc_test(
         "//p4_pdpi/string_encodings:hex_string",
         "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic:fake_packetio_interface",
+        "//p4rt_app/sonic:packetio_interface",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
-        "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/cleanup",
@@ -222,26 +231,62 @@ cc_test(
 )
 
 cc_test(
+    name = "debug_data_dump_test",
+    srcs = ["debug_data_dump_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:io",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "port_name_and_id_test",
     srcs = ["port_name_and_id_test.cc"],
     tags = ["exclusive"],
     deps = [
+        "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "//sai_p4/instantiations/google:sai_p4info_cc",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "cpu_queue_name_and_id_test",
+    srcs = ["cpu_queue_name_and_id_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/event_monitoring:config_db_cpu_queue_table_event",
+        "//p4rt_app/sonic/adapters:fake_sonic_db_table",
+        "//p4rt_app/tests/lib:app_db_entry_builder",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_request_helpers",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:common",
     ],
 )
 
@@ -255,20 +300,19 @@ cc_test(
         "//gutil:status_matchers",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/p4runtime:p4runtime_impl",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/tests/lib:app_db_entry_builder",
         "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
         "//p4rt_app/tests/lib:p4runtime_grpc_service",
         "//p4rt_app/tests/lib:p4runtime_request_helpers",
         "//sai_p4/instantiations/google:instantiations",
-        "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -290,6 +334,7 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:p4_roles",
         "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -298,6 +343,45 @@ cc_test(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "state_verification_test",
+    srcs = ["state_verification_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/tests/lib:app_db_entry_builder",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_request_helpers",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "vrf_table_test",
+    srcs = ["vrf_table_test.cc"],
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/tests/lib:app_db_entry_builder",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//p4rt_app/tests/lib:p4runtime_grpc_service",
+        "//p4rt_app/tests/lib:p4runtime_request_helpers",
+        "//sai_p4/instantiations/google:instantiations",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -312,8 +396,72 @@ cc_test(
         "//p4rt_app/sonic:fake_packetio_interface",
         "//p4rt_app/sonic:redis_connections",
         "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "p4_constraints_test_runner",
+    srcs = ["p4_constraints_test_runner.cc"],
+    linkstatic = True,
+    tags = ["exclusive"],
+    deps = [
+        "//gutil:proto",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/p4runtime:p4runtime_impl",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "resource_limits_test",
+    srcs = ["resource_limits_test.cc"],
+    deps = [
+        "//gutil:collections",
+        "//gutil:status",
+        "//gutil:status_matchers",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4rt_app/tests/lib:p4runtime_component_test_fixture",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cmd_diff_test(
+    name = "p4_constraints_test",
+    actual_cmd =
+        " | ".join([
+            "$(execpath :p4_constraints_test_runner)",
+            # Strip unnecessary lines for golden testing.
+            "sed '1,/^###/d'",  # Strip everything up to a line beginning with '###'.
+            "sed '/^\\[/d'",  # Strip every line beginning with '['.
+        ]),
+    expected = "golden_outputs/p4_constraints_test.expected",
+    tools = [
+        ":p4_constraints_test_runner",
     ],
 )

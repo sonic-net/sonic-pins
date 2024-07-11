@@ -26,8 +26,8 @@
 // 2. P4Runtime Byte String: Omits leading zeros. This is the "canonical binary
 //    string representation" used by P4RT, see
 //    https://p4.org/p4-spec/p4runtime/main/P4Runtime-Spec.html#sec-bytestrings
-#ifndef GOOGLE_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
-#define GOOGLE_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
+#ifndef PINS_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
+#define PINS_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
 
 #include <algorithm>
 #include <bitset>
@@ -59,6 +59,11 @@ std::string BitsetToP4RuntimeByteString(std::bitset<num_bits> bits);
 
 // Converts byte string to P4Runtime byte string.
 std::string ByteStringToP4runtimeByteString(std::string bytes);
+
+// Returns the number of binary digits required to represent the unsigned
+// integer encoded by the given binary string (most significant bit first).
+// https://en.wikipedia.org/wiki/Bit-length
+int GetBitwidthOfByteString(absl::string_view byte_string);
 
 // == END OF PUBLIC INTERFACE ==================================================
 
@@ -135,4 +140,4 @@ std::string BitsetToP4RuntimeByteString(std::bitset<num_bits> bits) {
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_
+#endif  // PINS_P4_PDPI_STRING_ENCODINGS_BYTE_STRING_H_

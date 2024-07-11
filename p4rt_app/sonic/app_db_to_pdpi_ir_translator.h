@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_
-#define GOOGLE_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_
+#ifndef PINS_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_
+#define PINS_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_
 
 #include <string>
 #include <unordered_map>
@@ -46,7 +46,12 @@ absl::StatusOr<pdpi::IrTableEntry> AppDbKeyAndValuesToIrTableEntry(
     const pdpi::IrP4Info &ir_p4_info, absl::string_view app_db_key,
     const std::vector<std::pair<std::string, std::string>> &app_db_values);
 
+// Given a PDPI IrMulticastGroupEntry, generate the SONiC AppDb key for
+// packet replication in the P4RT table.
+std::string IrMulticastGroupEntryToAppDbKey(
+    const pdpi::IrMulticastGroupEntry &entry);
+
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_
+#endif  // PINS_P4RT_APP_SONIC_APP_DB_TO_PDPI_IR_TRANSLATOR_H_

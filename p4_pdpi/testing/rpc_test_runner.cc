@@ -71,16 +71,21 @@ static void RunPiReadResponseTest(const pdpi::IrP4Info& info,
                                   const p4::v1::ReadResponse& pi) {
   RunGenericPiTest<pdpi::IrReadResponse, p4::v1::ReadResponse>(
       info, absl::StrCat("ReadResponse test: ", test_name), pi,
-      pdpi::PiReadResponseToIr);
+      // We cannot pass `PiReadResponseToIr` directly, since it takes an
+      // optional third parameter, which `RunGenericPiTest` does not expect.
+      [](const pdpi::IrP4Info& info, const p4::v1::ReadResponse& pi) {
+        return pdpi::PiReadResponseToIr(info, pi);
+      });
 }
 
 static void RunPdReadResponseTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
                                   const pdpi::ReadResponse& pd,
-                                  const InputValidity validity) {
+                                  const InputValidity validity,
+                                  pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::ReadResponse, pdpi::IrReadResponse,
                    p4::v1::ReadResponse>(
-      info, absl::StrCat("ReadResponse test: ", test_name), pd,
+      info, absl::StrCat("ReadResponse test: ", test_name), pd, options,
       pdpi::PdReadResponseToIr, pdpi::IrReadResponseToPd,
       pdpi::IrReadResponseToPi, pdpi::PiReadResponseToIr,
       pdpi::PdReadResponseToPi, pdpi::PiReadResponseToPd, validity);
@@ -90,17 +95,23 @@ static void RunPiUpdateTest(const pdpi::IrP4Info& info,
                             const std::string& test_name,
                             const p4::v1::Update& pi) {
   RunGenericPiTest<pdpi::IrUpdate, p4::v1::Update>(
-      info, absl::StrCat("Update test: ", test_name), pi, pdpi::PiUpdateToIr);
+      info, absl::StrCat("Update test: ", test_name), pi,
+      // We cannot pass `PiUpdateToIr` directly, since it takes an optional
+      // third parameter, which `RunGenericPiTest` does not expect.
+      [](const pdpi::IrP4Info& info, const p4::v1::Update& pi) {
+        return pdpi::PiUpdateToIr(info, pi);
+      });
 }
 
 static void RunPdUpdateTest(const pdpi::IrP4Info& info,
                             const std::string& test_name,
                             const pdpi::Update& pd,
-                            const InputValidity validity) {
+                            const InputValidity validity,
+                            pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::Update, pdpi::IrUpdate, p4::v1::Update>(
-      info, absl::StrCat("Update test: ", test_name), pd, pdpi::PdUpdateToIr,
-      pdpi::IrUpdateToPd, pdpi::IrUpdateToPi, pdpi::PiUpdateToIr,
-      pdpi::PdUpdateToPi, pdpi::PiUpdateToPd, validity);
+      info, absl::StrCat("Update test: ", test_name), pd, options,
+      pdpi::PdUpdateToIr, pdpi::IrUpdateToPd, pdpi::IrUpdateToPi,
+      pdpi::PiUpdateToIr, pdpi::PdUpdateToPi, pdpi::PiUpdateToPd, validity);
 }
 
 static void RunPiWriteRequestTest(const pdpi::IrP4Info& info,
@@ -108,16 +119,21 @@ static void RunPiWriteRequestTest(const pdpi::IrP4Info& info,
                                   const p4::v1::WriteRequest& pi) {
   RunGenericPiTest<pdpi::IrWriteRequest, p4::v1::WriteRequest>(
       info, absl::StrCat("WriteRequest test: ", test_name), pi,
-      pdpi::PiWriteRequestToIr);
+      // We cannot pass `PiWriteRequestToIr` directly, since it takes an
+      // optional third parameter, which `RunGenericPiTest` does not expect.
+      [](const pdpi::IrP4Info& info, const p4::v1::WriteRequest& pi) {
+        return pdpi::PiWriteRequestToIr(info, pi);
+      });
 }
 
 static void RunPdWriteRequestTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
                                   const pdpi::WriteRequest& pd,
-                                  const InputValidity validity) {
+                                  const InputValidity validity,
+                                  pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::WriteRequest, pdpi::IrWriteRequest,
                    p4::v1::WriteRequest>(
-      info, absl::StrCat("WriteRequest test: ", test_name), pd,
+      info, absl::StrCat("WriteRequest test: ", test_name), pd, options,
       pdpi::PdWriteRequestToIr, pdpi::IrWriteRequestToPd,
       pdpi::IrWriteRequestToPi, pdpi::PiWriteRequestToIr,
       pdpi::PdWriteRequestToPi, pdpi::PiWriteRequestToPd, validity);
@@ -147,7 +163,7 @@ static void RunInvalidGrpcFailToTranslateToIrTest(
     std::cout << TestStatusToString(status_or_ir.status()) << std::endl
               << std::endl;
   } else {
-    Fail("Expected gRPC status to be invalid.");
+    Fail(test_name, "Expected gRPC status to be invalid.");
   }
 }
 
@@ -167,7 +183,7 @@ static void RunInvalidIrFailToTranslateToGrpcTest(
               << TestStatusToString(status_or_grpc.status()) << std::endl
               << std::endl;
   } else {
-    Fail("Expected IR to be invalid.");
+    Fail(test_name, "Expected IR to be invalid.");
   }
 }
 
@@ -200,9 +216,9 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   const auto& status_or_ir = pdpi::PdWriteRpcStatusToIr(pd);
   if (!status_or_ir.ok()) {
     if (validity == INPUT_IS_VALID) {
-      Fail(
-          "Translation from PD to IR failed even though input was marked "
-          "valid.");
+      Fail(test_name,
+           "Translation from PD to IR failed even though input was marked "
+           "valid.");
       std::cout << status_or_ir.status().message() << std::endl;
       return;
     } else {
@@ -221,9 +237,9 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   const auto& status_or_grpc_status = pdpi::IrWriteRpcStatusToGrpcStatus(ir);
   if (!status_or_grpc_status.ok()) {
     if (validity == INPUT_IS_VALID) {
-      Fail(
-          "Translation from IR to gRPC failed even though input was marked "
-          "valid.");
+      Fail(test_name,
+           "Translation from IR to gRPC failed even though input was marked "
+           "valid.");
       std::cout << status_or_grpc_status.status().message() << std::endl;
       return;
     } else {
@@ -236,9 +252,9 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
     }
   }
   if (validity == INPUT_IS_INVALID) {
-    Fail(
-        "PD was marked invalid but translation from PD to IR and IR to gRPC "
-        "both succeeded.");
+    Fail(test_name,
+         "PD was marked invalid but translation from PD to IR and IR to gRPC "
+         "both succeeded.");
     return;
   }
 
@@ -258,13 +274,14 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   const auto& status_or_ir2 = pdpi::GrpcStatusToIrWriteRpcStatus(
       grpc_write_status, number_of_update_status);
   if (!status_or_ir2.ok()) {
-    Fail("Translation from gRPC to IR failed");
+    Fail(test_name, "Translation from gRPC to IR failed");
     std::cout << status_or_ir2.status().message() << std::endl;
     return;
   }
   const auto& ir2 = status_or_ir2.value();
   if (!diff.Compare(ir, ir2)) {
-    Fail("Reverse translation from gRPC to IR resulted in a different IR.");
+    Fail(test_name,
+         "Reverse translation from gRPC to IR resulted in a different IR.");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "IR(after reverse translation):" << std::endl
               << PrintTextProto(ir2) << std::endl;
@@ -276,12 +293,13 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   const auto pd2_translation_status = pdpi::IrWriteRpcStatusToPd(ir, &pd2);
 
   if (!pd2_translation_status.ok()) {
-    Fail("Translation from IR2 to PD2 failed");
+    Fail(test_name, "Translation from IR2 to PD2 failed");
     std::cout << pd2_translation_status.message() << std::endl;
     return;
   }
   if (!diff.Compare(pd, pd2)) {
-    Fail("Reverse translation from IR2 to PD2 resulted in a different PD");
+    Fail(test_name,
+         "Reverse translation from IR2 to PD2 resulted in a different PD");
     std::cout << "Differences: " << explanation << std::endl;
     std::cout << "PD(after reverse translation):" << std::endl
               << PrintTextProto(pd2) << std::endl;
@@ -353,11 +371,6 @@ static void RunReadRequestTests(pdpi::IrP4Info info) {
                          entities { table_entry {} }
                          entities { table_entry {} }
                        )pb"));
-  RunPiReadRequestTest(info, "valid",
-                       gutil::ParseProtoOrDie<p4::v1::ReadRequest>(R"pb(
-                         device_id: 10
-                         entities { table_entry {} }
-                       )pb"));
 
   // There are no invalid IR read requests, so no RunIrReadRequestTest is
   // needed.
@@ -405,6 +418,17 @@ static void RunReadResponseTests(pdpi::IrP4Info info) {
             match { normal { value: "0x052" mask: "0x273" } }
             priority: 32
             action { do_thing_3 { arg1: "0x01234567" arg2: "0x01234568" } }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
+  RunPdReadResponseTest(
+      info, "valid multicast group table",
+      gutil::ParseProtoOrDie<pdpi::ReadResponse>(R"pb(
+        table_entries {
+          multicast_group_table_entry {
+            match { multicast_group_id: "0x0001" }
+            action { replicate { replicas { port: "1" instance: "0x0001" } } }
           }
         }
       )pb"),
@@ -472,6 +496,18 @@ static void RunUpdateTests(pdpi::IrP4Info info) {
         }
       )pb"),
       INPUT_IS_VALID);
+  RunPdUpdateTest(
+      info, "valid mulitcast group table",
+      gutil::ParseProtoOrDie<pdpi::Update>(R"pb(
+        type: INSERT
+        table_entry {
+          multicast_group_table_entry {
+            match { multicast_group_id: "0x0001" }
+            action { replicate { replicas { port: "1" instance: "0x0001" } } }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
 }
 
 static void RunWriteRequestTests(pdpi::IrP4Info info) {
@@ -514,6 +550,22 @@ static void RunWriteRequestTests(pdpi::IrP4Info info) {
               match { normal { value: "0x052" mask: "0x273" } }
               priority: 32
               action { do_thing_3 { arg1: "0x01234567" arg2: "0x01234568" } }
+            }
+          }
+        }
+      )pb"),
+      INPUT_IS_VALID);
+  RunPdWriteRequestTest(
+      info, "valid multicast group table update",
+      gutil::ParseProtoOrDie<pdpi::WriteRequest>(R"pb(
+        device_id: 113
+        election_id { high: 1231 low: 77989 }
+        updates {
+          type: INSERT
+          table_entry {
+            multicast_group_table_entry {
+              match { multicast_group_id: "0x0001" }
+              action { replicate { replicas { port: "1" instance: "0x0001" } } }
             }
           }
         }

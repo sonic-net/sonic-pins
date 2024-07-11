@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_SONIC_ADAPTERS_SYSTEM_CALL_ADAPTER_H_
-#define GOOGLE_P4RT_APP_SONIC_ADAPTERS_SYSTEM_CALL_ADAPTER_H_
+#ifndef PINS_P4RT_APP_SONIC_ADAPTERS_SYSTEM_CALL_ADAPTER_H_
+#define PINS_P4RT_APP_SONIC_ADAPTERS_SYSTEM_CALL_ADAPTER_H_
 
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -47,9 +47,12 @@ class SystemCallAdapter {
   virtual int close(int fd) const;
   virtual int getifaddrs(struct ifaddrs **ifap) const;
   virtual void freeifaddrs(struct ifaddrs *ifa) const;
+  // Make option_val int* to support mocking.
+  virtual int getsockopt(int socket, int level, int option_name,
+                         int *option_value, socklen_t *option_len) const;
 };
 
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_SYSTEM_CALL_ADAPTER_H_
+#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_SYSTEM_CALL_ADAPTER_H_

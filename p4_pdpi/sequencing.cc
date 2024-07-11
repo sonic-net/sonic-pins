@@ -15,23 +15,29 @@
 #include "p4_pdpi/sequencing.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <optional>
 #include <queue>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include "absl/container/btree_set.h"
+#include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
-#include "absl/types/optional.h"
+#include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
 #include "boost/graph/adjacency_list.hpp"
+#include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/sequencing_util.h"
 
 namespace pdpi {
-
 namespace {
 using ::p4::v1::Action_Param;
 using ::p4::v1::Update;
@@ -114,7 +120,7 @@ absl::Status RecordDependenciesForActionInvocation(
 }
 
 // Builds the dependency graph between updates. An edge from u to v indicates
-// that u must be sent in a batch before sending v.
+// that v depends on u.
 absl::StatusOr<Graph> BuildDependencyGraph(const IrP4Info& info,
                                            absl::Span<const Update> updates) {
   // Graph containing one node per update.
@@ -231,17 +237,29 @@ absl::StatusOr<Graph> BuildDependencyGraph(const IrP4Info& info,
   }
   return graph;
 }
-
 }  // namespace
 
 absl::StatusOr<std::vector<p4::v1::WriteRequest>>
 SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
-                                   absl::Span<const Update> updates) {
+                                   absl::Span<const Update> updates,
+                                   std::optional<int> max_batch_size) {
+  if (max_batch_size.has_value() && *max_batch_size <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Max batch size must be > 0. Max batch size: " << *max_batch_size;
+  }
+
   std::vector<WriteRequest> requests;
   ASSIGN_OR_RETURN(const auto batches, SequencePiUpdatesInPlace(info, updates));
   for (const std::vector<int>& batch : batches) {
     WriteRequest request;
-    for (int i : batch) *request.add_updates() = updates[i];
+    for (int index : batch) {
+      if (max_batch_size.has_value() &&
+          request.updates_size() >= *max_batch_size) {
+        requests.push_back(std::move(request));
+        request = WriteRequest();
+      }
+      *request.add_updates() = updates[index];
+    }
     requests.push_back(std::move(request));
   }
   return requests;
@@ -293,75 +311,115 @@ absl::StatusOr<std::vector<std::vector<int>>> SequencePiUpdatesInPlace(
 absl::Status SortTableEntries(const IrP4Info& info,
                               std::vector<p4::v1::TableEntry>& entries) {
   std::vector<Update> updates;
+  updates.reserve(entries.size());
   for (const auto& entry : entries) {
     Update update;
     update.set_type(Update::INSERT);
-    *update.mutable_entity()->mutable_table_entry() = entry;
+    *update.mutable_entity()->mutable_table_entry() = std::move(entry);
     updates.push_back(update);
   }
+  ASSIGN_OR_RETURN(std::vector<std::vector<int>> batches,
+                   SequencePiUpdatesInPlace(info, updates));
 
-  ASSIGN_OR_RETURN(std::vector<p4::v1::WriteRequest> requests,
-                   SequencePiUpdatesIntoWriteRequests(info, updates));
   entries.clear();
-  for (const auto& write_request : requests) {
-    for (const auto& update : write_request.updates()) {
-      entries.push_back(update.entity().table_entry());
+  for (const std::vector<int>& batch : batches) {
+    for (int update_index : batch) {
+      entries.push_back(
+          std::move(updates[update_index].entity().table_entry()));
     }
   }
+
   return absl::OkStatus();
 }
-// Uses BuildDependencyGraph to build a dependency graph to help identify
-// unreachable entries.
-absl::StatusOr<std::vector<p4::v1::TableEntry>> GetEntriesUnreachableFromRoots(
-    absl::Span<const p4::v1::TableEntry> entries,
-    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::TableEntry&)>
-        is_root_entry,
-    const IrP4Info& ir_p4info) {
-  // Constructs p4::v1::Updates with DELETE ops because DELETE makes a entry
-  // that depends on other entries a parent node in the dependency graph.
-  std::vector<p4::v1::Update> updates;
-  for (const auto& entry : entries) {
-    p4::v1::Update update;
-    update.set_type(p4::v1::Update::DELETE);
-    *update.mutable_entity()->mutable_table_entry() = entry;
-    updates.push_back(update);
-  }
-  ASSIGN_OR_RETURN(Graph graph, BuildDependencyGraph(ir_p4info, updates));
 
-  // Use a hash set to keep visited vertices. It is a safe choice and scales.
-  absl::flat_hash_set<Vertex> visited_vertices;
-  std::queue<Vertex> frontier;
-  for (Vertex vertex : graph.vertex_set()) {
-    ASSIGN_OR_RETURN(bool is_root, is_root_entry(entries[vertex]));
-    if (is_root) {
-      frontier.push(vertex);
-      // Compared to pushing a vertex to the visited set only after popping it
-      // off the frontier, this ensures that we don't push duplicate vertices
-      // onto the frontier.
-      visited_vertices.insert(vertex);
+absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
+    absl::Span<const p4::v1::Entity> entities,
+    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
+        is_root_entity,
+    const IrP4Info& ir_p4info) {
+  absl::flat_hash_map<ReferredTableEntry, std::vector<int>>
+      potentially_reachable_entries;
+  std::vector<int> unreachable_indices;
+  // `frontier_indices` stores indices for entries that could potentially refer
+  // to other entries, but whose references have not been examined yet.
+  std::queue<int> frontier_indices;
+  absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>
+      referred_relations = CreateReferenceRelations(ir_p4info);
+
+  for (int i = 0; i < entities.size(); i++) {
+    const p4::v1::Entity& entity = entities[i];
+    ASSIGN_OR_RETURN(bool is_root_entity, is_root_entity(entity));
+    if (is_root_entity) {
+      // TODO: b/296443880 - Remove once MRIF entry collection is supported.
+      if (entity.has_packet_replication_engine_entry()) {
+        continue;
+      }
+      frontier_indices.push(i);
+      continue;
+    }
+    if (!entity.has_table_entry()) {
+      // TODO: b/302346101 - Add support for collection of all entities.
+      return absl::UnimplementedError(
+          absl::StrCat("Only entities of type table_entry can be garbage "
+                       "collected. Entity: ",
+                       entity.DebugString()));
+    }
+    const p4::v1::TableEntry& table_entry = entity.table_entry();
+    // If the table that entries[i] belongs to is referred to, entries[i] is
+    // potentially reachable. Else, entries[i] is not reachable.
+    if (referred_relations.contains(ReferenceRelationKey{
+            .referred_table_id = table_entry.table_id()})) {
+      ASSIGN_OR_RETURN(ReferredTableEntry referrable_table_entry,
+                       CreateReferrableTableEntry(ir_p4info, referred_relations,
+                                                  table_entry));
+      potentially_reachable_entries[referrable_table_entry].push_back(i);
+    } else {
+      LOG(WARNING) << "Found non-root entry that could never be reachable. "
+                      "This probably indicates some mistake in is_root_entry "
+                      "or the ir_p4info. Found entry: "
+                   << table_entry.DebugString();
+      unreachable_indices.push_back(i);
     }
   }
 
-  while (!frontier.empty()) {
-    Vertex current_vertex = frontier.front();
-    frontier.pop();
-    for (const auto& edge : graph.out_edge_list(current_vertex)) {
-      Vertex neighbor = edge.get_target();
-      if (bool unvisited = visited_vertices.insert(neighbor).second;
-          unvisited) {
-        frontier.push(neighbor);
-        visited_vertices.insert(neighbor);
+  // Expand frontier of reachable entries.
+  // Pop an entry off the frontier and if that entry refers to some entries in
+  // potentially_reachable_entries, move them from
+  // `potentially_reachable_entries` to `frontier_indices`.
+  while (!frontier_indices.empty()) {
+    const ::p4::v1::TableEntry& frontier_entry =
+        entities[frontier_indices.front()].table_entry();
+    frontier_indices.pop();
+    ASSIGN_OR_RETURN(
+        std::vector<ReferredTableEntry> entries_referred_to_by_frontier_entry,
+        EntriesReferredToByTableEntry(ir_p4info, frontier_entry));
+    for (const ReferredTableEntry& referred_to_entry :
+         entries_referred_to_by_frontier_entry) {
+      if (auto it = potentially_reachable_entries.find(referred_to_entry);
+          it != potentially_reachable_entries.end()) {
+        absl::c_for_each(it->second, [&frontier_indices](int i) {
+          frontier_indices.push(i);
+        });
+        potentially_reachable_entries.erase(it);
       }
     }
   }
-
-  std::vector<p4::v1::TableEntry> unreachable_entries;
-  for (Vertex vertex : graph.vertex_set()) {
-    if (!visited_vertices.contains(vertex)) {
-      unreachable_entries.push_back(entries[vertex]);
-    }
+  // By the end of frontier expansion all remaining potentially reachable
+  // entries are not reachable.
+  for (const auto& [unused, indices] : potentially_reachable_entries) {
+    absl::c_for_each(indices, [&unreachable_indices](int i) {
+      unreachable_indices.push_back(i);
+    });
   }
-  return unreachable_entries;
+  std::vector<p4::v1::Entity> unreachable_entities;
+  unreachable_entities.reserve(unreachable_indices.size());
+
+  // Returns unreachable entities in the order of their indices.
+  std::sort(unreachable_indices.begin(), unreachable_indices.end());
+  for (int i = 0; i < unreachable_indices.size(); i++) {
+    unreachable_entities.push_back(entities[unreachable_indices[i]]);
+  }
+  return unreachable_entities;
 }
 
 }  // namespace pdpi

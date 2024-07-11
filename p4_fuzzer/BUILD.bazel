@@ -1,0 +1,296 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+
+package(
+    licenses = ["notice"],
+)
+
+proto_library(
+    name = "fuzzer_proto",
+    srcs = ["fuzzer.proto"],
+    deps = [
+        "//p4_pdpi:ir_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "fuzzer_cc_proto",
+    deps = [":fuzzer_proto"],
+)
+
+cc_library(
+    name = "switch_state",
+    srcs = ["switch_state.cc"],
+    hdrs = ["switch_state.h"],
+    deps = [ 
+        ":table_entry_key",
+        "//gutil:collections",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:optional",
+    ],  
+)
+
+cc_test(
+    name = "switch_state_test",
+    srcs = ["switch_state_test.cc"],
+    deps = [ 
+        ":switch_state",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "@com_github_google_glog//:glog",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "fuzzer_config",
+    srcs = [
+        "fuzzer_config.cc",
+    ],
+    hdrs = [
+        "fuzzer_config.h",
+    ],
+    deps = [
+        "//gutil:status",
+        "//lib/p4rt:p4rt_port",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_library(
+    name = "table_entry_key",
+    srcs = ["table_entry_key.cc"],
+    hdrs = ["table_entry_key.h"],
+    deps = [ 
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/hash",
+        "@com_google_protobuf//:protobuf",
+    ],  
+)
+
+cc_test(
+    name = "table_entry_key_test",
+    srcs = [
+        "table_entry_key.cc",
+        "table_entry_key_test.cc",
+    ],
+    deps = [
+        ":table_entry_key",
+        "@com_google_absl//absl/hash:hash_testing",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "mutation_and_fuzz_util",
+    srcs = [ 
+        "fuzz_util.cc",
+        "mutation.cc",
+    ],  
+    hdrs = [ 
+        "fuzz_util.h",
+        "mutation.h",
+    ],  
+    deps = [ 
+        ":annotation_util",
+        ":fuzzer_cc_proto",
+        ":switch_state",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/base:endian",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/strings",
+        # TODO: This target is not visible in google3.
+        # "//third_party/libprotobuf_mutator:libprotobuf_mutator_internals",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "//gutil:collections",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "//p4_pdpi/utils:ir",
+    ],  
+)
+
+cc_test(
+    name = "fuzz_util_test",
+    srcs = [
+        "fuzz_util_test.cc",
+    ],
+    data = ["acl_table_test.p4info.pb.txt"],
+    deps = [
+        ":fuzzer_cc_proto",
+        ":mutation_and_fuzz_util",
+        "//gutil:proto",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "annotation_util",
+    srcs = ["annotation_util.cc"],
+    hdrs = ["annotation_util.h"],
+    deps = [
+        ":fuzzer_cc_proto",
+        "//p4_pdpi:ir",
+        "//p4_pdpi/utils:ir",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+    ],
+)
+
+cc_library(
+    name = "oracle_util",
+    srcs = [ 
+        "oracle_util.cc",
+    ],  
+    hdrs = ["oracle_util.h"],
+    deps = [ 
+        ":fuzzer_cc_proto",
+        ":switch_state",
+        ":table_entry_key",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:span",
+    ],  
+)
+
+cc_test(
+    name = "fuzzer_showcase_test",
+    srcs = [
+        "fuzzer_showcase_test.cc",
+    ],
+    data = ["sai_main_info.pb.txt"],
+    deps = [
+        ":annotation_util",
+        ":fuzzer_cc_proto",
+        ":mutation_and_fuzz_util",
+        "//gutil:proto",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:pd",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "constraints_util",
+    srcs = ["constraints_util.cc"],
+    hdrs = ["constraints_util.h"],
+    deps = [
+        "//gutil:status",
+        "@com_github_google_glog//:glog",
+        "@com_github_ivmai_cudd//:cudd",
+        "@com_github_p4lang_p4_constraints//p4_constraints:ast_cc_proto",
+        "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
+        "@com_gnu_gmp//:gmp",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:variant",
+    ],
+)
+
+cc_library(
+    name = "p4_programs/sai-p4-google/ids",
+    hdrs = ["p4_programs/sai-p4-google/ids.h"],
+)
+
+cc_test(
+    name = "constraints_util_integration_test",
+    srcs = [
+        "constraints_util_integration_test.cc",
+    ],
+    data = [
+        "constraints_equals.p4info.pb.txt",
+        "constraints_not_equals.p4info.pb.txt",
+    ],
+    deps = [
+        ":constraints_util",
+        "//gutil:proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
+        "@com_github_p4lang_p4_constraints//p4_constraints/backend:interpreter",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+p4_library(
+    name = "single_table_single_entry",
+    src = "p4_programs/single_table_single_entry.p4",
+    p4info_out = "single_table_single_entry.p4info.pb.txt",
+)
+
+p4_library(
+    name = "constraints_equals",
+    src = "p4_programs/constraints_equals.p4",
+    p4info_out = "constraints_equals.p4info.pb.txt",
+)
+
+p4_library(
+    name = "constraints_not_equals",
+    src = "p4_programs/constraints_not_equals.p4",
+    p4info_out = "constraints_not_equals.p4info.pb.txt",
+)
+
+p4_library(
+    name = "acl_table_test",
+    src = "p4_programs/acl_table_test.p4",
+    p4info_out = "acl_table_test.p4info.pb.txt",
+    deps = [
+        "p4_programs/sai-p4-google/acl_actions.p4",
+        "p4_programs/sai-p4-google/acl_set_vrf.p4",
+        "p4_programs/sai-p4-google/headers.p4",
+        "p4_programs/sai-p4-google/ids.h",
+        "p4_programs/sai-p4-google/metadata.p4",
+        "p4_programs/sai-p4-google/resource_limits.p4",
+    ],
+)
+
+p4_library(
+    name = "sai_main",
+    src = "p4_programs/sai-p4-google/sai_main.p4",
+    p4info_out = "sai_main_info.pb.txt",
+    deps = glob(["p4_programs/sai-p4-google/*"]),
+)
+

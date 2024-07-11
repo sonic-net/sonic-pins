@@ -3,6 +3,7 @@
 
 #include <v1model.p4>
 #include "headers.p4"
+#include "ids.h"
 #include "metadata.p4"
 
 parser packet_parser(packet_in packet, out headers_t headers,
@@ -17,6 +18,10 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.l4_src_port = 0;
     local_metadata.l4_dst_port = 0;
     local_metadata.wcmp_selector_input = 0;
+    local_metadata.apply_tunnel_decap_at_end_of_pre_ingress = false;
+    local_metadata.apply_tunnel_encap_at_egress = false;
+    local_metadata.tunnel_encap_src_ipv6 = 0;
+    local_metadata.tunnel_encap_dst_ipv6 = 0;
     local_metadata.mirror_session_id_valid = false;
     local_metadata.color = MeterColor_t.GREEN;
     local_metadata.ingress_port = (port_id_t)standard_metadata.ingress_port;
@@ -39,6 +44,18 @@ parser packet_parser(packet_in packet, out headers_t headers,
   state parse_ipv4 {
     packet.extract(headers.ipv4);
     transition select(headers.ipv4.protocol) {
+      IP_PROTOCOL_IPV4: parse_ipv4_in_ip;
+      IP_PROTOCOL_IPV6: parse_ipv6_in_ip;
+      IP_PROTOCOL_ICMP: parse_icmp;
+      IP_PROTOCOL_TCP:  parse_tcp;
+      IP_PROTOCOL_UDP:  parse_udp;
+      _:                accept;
+    }
+  }
+
+  state parse_ipv4_in_ip {
+    packet.extract(headers.inner_ipv4);
+    transition select(headers.inner_ipv4.protocol) {
       IP_PROTOCOL_ICMP: parse_icmp;
       IP_PROTOCOL_TCP:  parse_tcp;
       IP_PROTOCOL_UDP:  parse_udp;
@@ -49,6 +66,18 @@ parser packet_parser(packet_in packet, out headers_t headers,
   state parse_ipv6 {
     packet.extract(headers.ipv6);
     transition select(headers.ipv6.next_header) {
+      IP_PROTOCOL_IPV4: parse_ipv4_in_ip;
+      IP_PROTOCOL_IPV6: parse_ipv6_in_ip;
+      IP_PROTOCOL_ICMPV6: parse_icmp;
+      IP_PROTOCOL_TCP:    parse_tcp;
+      IP_PROTOCOL_UDP:    parse_udp;
+      _:                  accept;
+    }
+  }
+
+  state parse_ipv6_in_ip {
+    packet.extract(headers.inner_ipv6);
+    transition select(headers.inner_ipv6.next_header) {
       IP_PROTOCOL_ICMPV6: parse_icmp;
       IP_PROTOCOL_TCP:    parse_tcp;
       IP_PROTOCOL_UDP:    parse_udp;
@@ -85,6 +114,14 @@ parser packet_parser(packet_in packet, out headers_t headers,
 
 control packet_deparser(packet_out packet, in headers_t headers) {
   apply {
+    // We always expect the packet_out_header to be invalid at the end of the
+    // pipeline, so this line has no effect on the output packet.
+    packet.emit(headers.packet_out_header);
+// TODO: Clean up once we have better solution to handle packet-in
+// across platforms.
+#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
+    packet.emit(headers.packet_in_header);
+#endif
     packet.emit(headers.erspan_ethernet);
     packet.emit(headers.erspan_ipv4);
     packet.emit(headers.erspan_gre);
@@ -93,6 +130,8 @@ control packet_deparser(packet_out packet, in headers_t headers) {
     packet.emit(headers.tunnel_encap_gre);
     packet.emit(headers.ipv4);
     packet.emit(headers.ipv6);
+    packet.emit(headers.inner_ipv4);
+    packet.emit(headers.inner_ipv6);
     packet.emit(headers.arp);
     packet.emit(headers.icmp);
     packet.emit(headers.tcp);

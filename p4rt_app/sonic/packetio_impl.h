@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4RT_APP_SONIC_PACKETIO_IMPL_H_
-#define GOOGLE_P4RT_APP_SONIC_PACKETIO_IMPL_H_
+#ifndef PINS_P4RT_APP_SONIC_PACKETIO_IMPL_H_
+#define PINS_P4RT_APP_SONIC_PACKETIO_IMPL_H_
 
 #include <memory>
 #include <string>
@@ -30,9 +30,6 @@
 
 namespace p4rt_app {
 namespace sonic {
-
-// Prefix for submit to ingress.
-inline constexpr absl::string_view kSubmitToIngress = "send_to_ingress";
 
 struct PacketIoOptions {
   packet_metadata::ReceiveCallbackFunction callback_function = nullptr;
@@ -98,4 +95,4 @@ class PacketIoImpl : public PacketIoInterface {
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_PACKETIO_IMPL_H_
+#endif  // PINS_P4RT_APP_SONIC_PACKETIO_IMPL_H_

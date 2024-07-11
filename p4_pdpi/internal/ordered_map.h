@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_P4_PDPI_INTERNAL_ORDERED_MAP_H_
-#define GOOGLE_P4_PDPI_INTERNAL_ORDERED_MAP_H_
+#ifndef PINS_P4_PDPI_INTERNAL_ORDERED_MAP_H_
+#define PINS_P4_PDPI_INTERNAL_ORDERED_MAP_H_
 
 #include "absl/container/btree_map.h"
 
@@ -27,4 +27,4 @@ absl::btree_map<typename M::key_type, const typename M::mapped_type&> Ordered(
       map.begin(), map.end());
 }
 
-#endif  // GOOGLE_P4_PDPI_INTERNAL_ORDERED_MAP_H_
+#endif  // PINS_P4_PDPI_INTERNAL_ORDERED_MAP_H_

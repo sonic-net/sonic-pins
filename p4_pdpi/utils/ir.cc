@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/btree_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -40,6 +41,7 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/strings/substitute.h"
 #include "google/protobuf/map.h"
 #include "google/rpc/code.pb.h"
 #include "gutil/proto.h"
@@ -62,6 +64,11 @@ using ::pdpi::IrValue;
 
 absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
     const std::string &bytes, int expected_bitwidth) {
+  // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
+  if (bytes.empty()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Bytestrings must have non-zero length.";
+  }
   std::string canonical_string = ArbitraryToCanonicalByteString(bytes);
   const int bitwidth = GetBitwidthOfByteString(canonical_string);
   if (bitwidth > expected_bitwidth) {
@@ -136,23 +143,6 @@ std::string ArbitraryToCanonicalByteString(std::string bytes) {
   return bytes;
 }
 
-int GetBitwidthOfByteString(const std::string &input_string) {
-  if (input_string.empty()) return 0;
-
-  // Use str.length() - 1. MSB will need to be handled separately since it
-  // can have leading zeros which should not be counted.
-  int length_in_bits = (input_string.length() - 1) * kNumBitsInByte;
-
-  uint8_t msb;
-  memcpy(&msb, &input_string[0], 1);
-  while (msb != 0) {
-    ++length_in_bits;
-    msb >>= 1;
-  }
-
-  return length_in_bits;
-}
-
 absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
                                  const int bitwidth, bool is_sdn_string) {
   Format format = Format::HEX_STRING;
@@ -195,6 +185,12 @@ absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
 absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
                                                      const int bitwidth,
                                                      const std::string &bytes) {
+  // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
+  if (bytes.empty()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Bytestrings must have non-zero length.";
+  }
+
   IrValue result;
   switch (format) {
     case Format::MAC: {
@@ -328,8 +324,15 @@ absl::StatusOr<std::string> IrValueToNormalizedByteString(
       ipv6 >>= kNumBitsInIpv6 - bitwidth;
       return ipv6.ToPaddedByteString();
     }
-    case IrValue::kStr:
+    case IrValue::kStr: {
+      // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
+      if (ir_value.str().empty()) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Bytestrings must have non-zero length.";
+      }
       return ir_value.str();
+      break;
+    }
     case IrValue::kHexStr: {
       const std::string &hex_str = ir_value.hex_str();
       const int expected_num_hex_chars =
@@ -391,6 +394,24 @@ absl::StatusOr<IrValue> FormattedStringToIrValue(const std::string &value,
              << "Unexpected format: " << Format_Name(format);
   }
   return result;
+}
+
+std::string IrValueString(const IrValue &value) {
+  switch (value.format_case()) {
+    case IrValue::FormatCase::kMac:
+      return value.mac();
+    case IrValue::FormatCase::kIpv4:
+      return value.ipv4();
+    case IrValue::FormatCase::kIpv6:
+      return value.ipv6();
+    case IrValue::FormatCase::kStr:
+      return value.str();
+    case IrValue::FormatCase::kHexStr:
+      return value.hex_str();
+    case IrValue::FormatCase::FORMAT_NOT_SET:
+      return "";
+  }
+  return "";
 }
 
 absl::StatusOr<std::string> IrValueToFormattedString(const IrValue &value,
@@ -549,18 +570,86 @@ std::string MetadataName(absl::string_view metadata_name) {
   return absl::StrCat("Metadata '", metadata_name, "'");
 }
 
-bool IsElementUnused(
-    const google::protobuf::RepeatedPtrField<std::string> &annotations) {
-  return absl::c_any_of(annotations, [](absl::string_view annotation) {
-    return annotation == "@unused";
-  });
-}
-
 bool IsElementDeprecated(
     const google::protobuf::RepeatedPtrField<std::string> &annotations) {
   return absl::c_any_of(annotations, [](absl::string_view annotation) {
     return absl::StartsWith(annotation, "@deprecated");
   });
+}
+
+namespace {
+// Compress and return a match field into a unique, descriptive short-form
+// string.
+std::string MatchFieldShortDescription(const IrMatch &match) {
+  switch (match.match_value_case()) {
+    case IrMatch::MatchValueCase::kExact:
+      return absl::Substitute("$0=$1", match.name(),
+                              IrValueString(match.exact()));
+    case IrMatch::MatchValueCase::kOptional:
+      return absl::Substitute("$0=$1", match.name(),
+                              IrValueString(match.optional().value()));
+    case IrMatch::MatchValueCase::kLpm:
+      return absl::Substitute("$0=$1/$2", match.name(),
+                              IrValueString(match.lpm().value()),
+                              match.lpm().prefix_length());
+    case IrMatch::MatchValueCase::kTernary:
+      return absl::Substitute("$0=$1&$2", match.name(),
+                              IrValueString(match.ternary().value()),
+                              IrValueString(match.ternary().mask()));
+    case IrMatch::MatchValueCase::MATCH_VALUE_NOT_SET:
+      return absl::Substitute("$0=", match.name());
+  }
+  return "";
+}
+
+// Compress and return an action invocation into a unique, descriptive
+// short-form string.
+std::string ActionInvocationShortDescription(const IrActionInvocation &action) {
+  if (action.params().empty()) return action.name();
+  absl::btree_set<std::string> action_params;
+  for (const IrActionInvocation::IrActionParam &param : action.params()) {
+    action_params.insert(
+        absl::Substitute("$0=$1", param.name(), IrValueString(param.value())));
+  }
+  return absl::Substitute("$0($1)", action.name(),
+                          absl::StrJoin(action_params, ","));
+}
+
+// Compress and return an action set into a unique, descriptive short-form
+// string.
+std::string ActionSetShortDescription(const IrActionSet &action_set) {
+  absl::btree_set<std::string> actions;
+  for (const IrActionSetInvocation &invocation : action_set.actions()) {
+    actions.insert(absl::Substitute(
+        "$0$1[$2]",
+        invocation.watch_port().empty()
+            ? ""
+            : absl::StrCat(invocation.watch_port(), "/"),
+        invocation.weight(),
+        ActionInvocationShortDescription(invocation.action())));
+  }
+  return absl::StrJoin(actions, "");
+}
+}  // namespace
+
+std::string ShortDescription(const IrTableEntry &entry) {
+  absl::btree_set<std::string> match_fields;
+  for (const IrMatch &match : entry.matches()) {
+    match_fields.insert(MatchFieldShortDescription(match));
+  }
+
+  std::string action;
+  if (entry.has_action()) {
+    action = ActionInvocationShortDescription(entry.action());
+  } else if (entry.has_action_set()) {
+    action = ActionSetShortDescription(entry.action_set());
+  }
+
+  std::string priority =
+      entry.priority() > 0 ? absl::StrCat(entry.priority(), ":") : "";
+
+  return absl::Substitute("$0|$1matches($2):$3", entry.table_name(), priority,
+                          absl::StrJoin(match_fields, ","), action);
 }
 
 }  // namespace pdpi

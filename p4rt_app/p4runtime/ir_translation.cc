@@ -13,20 +13,22 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/ir_translation.h"
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/strip.h"
+#include "absl/strings/numbers.h"
+#include "absl/strings/str_format.h"
 #include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4types.pb.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_pdpi/translation_options.h"
 #include "p4_pdpi/utils/annotation_parser.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 
 namespace p4rt_app {
 namespace {
@@ -35,36 +37,69 @@ bool IsPortType(const p4::config::v1::P4NamedType& type) {
   return type.name() == "port_id_t";
 }
 
+bool IsCpuQueue(const p4::config::v1::P4NamedType& type) {
+  return type.name() == "qos_queue_t";
+}
+
 absl::Status TranslatePortValue(
     TranslationDirection direction,
     const boost::bimap<std::string, std::string>& port_map,
     pdpi::IrValue& value) {
-  switch (value.format_case()) {
-    case pdpi::IrValue::kStr: {
-      ASSIGN_OR_RETURN(*value.mutable_str(),
-                       TranslatePort(direction, port_map, value.str()));
-      break;
-    }
-    default:
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Port value must use Format::STRING, but found "
-             << value.format_case() << " instead.";
+  if (value.format_case() != pdpi::IrValue::kStr) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Port value must use Format::STRING, but found "
+           << value.format_case() << " instead.";
   }
-
+  ASSIGN_OR_RETURN(*value.mutable_str(),
+                   TranslatePort(direction, port_map, value.str()));
   return absl::OkStatus();
+}
+
+// Optionally translates a CPU queue between CPU queue name and CPU Queue ID
+// syntax.
+absl::Status OptionallyTranslateCpuQueue(TranslationDirection direction,
+                                         const CpuQueueTranslator& translator,
+                                         pdpi::IrValue& value) {
+  if (value.format_case() != pdpi::IrValue::kStr) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "CPU Queue must use Format::STRING, but found "
+           << value.format_case() << " instead.";
+  }
+  switch (direction) {
+    case TranslationDirection::kForController: {
+      int queue_id;
+      if (!absl::SimpleHexAtoi(value.str(), &queue_id)) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Expected AppDB CPU Queue as hex string. Got '" << value.str()
+               << "'.";
+      }
+      auto queue_name = translator.IdToName(queue_id);
+      if (queue_name.ok()) value.set_str(*queue_name);
+      return absl::OkStatus();
+    }
+    case TranslationDirection::kForOrchAgent: {
+      auto queue_id = translator.NameToId(value.str());
+      if (queue_id.ok()) value.set_str(absl::StrFormat("%#x", *queue_id));
+      return absl::OkStatus();
+    }
+  }
+  // Should never be hit.
+  return gutil::InternalErrorBuilder()
+         << "Invalid TranslationDirection provided.";
 }
 
 absl::Status TranslateAction(const TranslateTableEntryOptions& options,
                              const pdpi::IrTableDefinition& table_def,
                              pdpi::IrActionInvocation& action) {
   // Find the action definition from the ir table definition.
-  absl::optional<pdpi::IrActionDefinition> action_def;
+  const pdpi::IrActionDefinition* action_def = nullptr;
   for (const auto& entry_action : table_def.entry_actions()) {
     if (entry_action.action().preamble().alias() == action.name()) {
-      action_def = entry_action.action();
+      action_def = &entry_action.action();
+      break;
     }
   }
-  if (!action_def.has_value()) {
+  if (action_def == nullptr) {
     return gutil::InternalErrorBuilder()
            << "Could not find action definition for " << action.name() << ".";
   }
@@ -84,6 +119,12 @@ absl::Status TranslateAction(const TranslateTableEntryOptions& options,
                                          *param.mutable_value()))
           << " Found in action parameter '" << param.name() << "' of action '"
           << action.name() << "'.";
+      continue;
+    }
+    if (IsCpuQueue(param_def->param().type_name())) {
+      RETURN_IF_ERROR(OptionallyTranslateCpuQueue(options.direction,
+                                                  options.cpu_queue_translator,
+                                                  *param.mutable_value()));
     }
   }
   return absl::OkStatus();
@@ -287,6 +328,50 @@ void Convert64BitIpv6AclMatchFieldsTo128Bit(
           (*mask_address << 64).ToString());
     }
   }
+}
+
+absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
+    const p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only) {
+  auto ir_table_entry =
+      pdpi::PiTableEntryToIr(ir_p4_info, pi_table_entry,
+                             pdpi::TranslationOptions{
+                                 .key_only = translate_key_only,
+                             });
+  if (!ir_table_entry.ok()) {
+    LOG(ERROR) << "PDPI could not translate PI table entry to IR: "
+               << pi_table_entry.ShortDebugString();
+    return gutil::StatusBuilder(ir_table_entry.status().code())
+           << "[P4RT/PDPI] " << ir_table_entry.status().message();
+  }
+
+  RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
+      *ir_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
+      cpu_queue_translator));
+  return *ir_table_entry;
+}
+
+absl::Status UpdateIrTableEntryForOrchAgent(
+    pdpi::IrTableEntry& ir_table_entry, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator) {
+  // TODO: Remove this when P4Info uses 64-bit IPv6 ACL matchess.
+  // We don't allow overwriting of the p4info, so static is ok here.
+  Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
+
+  RETURN_IF_ERROR(TranslateTableEntry(
+      TranslateTableEntryOptions{
+          .direction = TranslationDirection::kForOrchAgent,
+          .ir_p4_info = ir_p4_info,
+          .translate_port_ids = translate_port_ids,
+          .port_map = port_translation_map,
+          .cpu_queue_translator = cpu_queue_translator,
+      },
+      ir_table_entry));
+  return absl::OkStatus();
 }
 
 }  // namespace p4rt_app

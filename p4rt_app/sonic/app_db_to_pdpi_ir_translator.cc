@@ -31,7 +31,7 @@
 #include "p4_pdpi/utils/ir.h"
 #include "p4rt_app/utils/table_utility.h"
 #include "swss/json.h"
-#include "swss/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace p4rt_app {
 namespace sonic {
@@ -586,6 +586,11 @@ absl::StatusOr<pdpi::IrTableEntry> AppDbKeyAndValuesToIrTableEntry(
            << app_db_key;
   }
   return table_entry;
+}
+
+std::string IrMulticastGroupEntryToAppDbKey(
+    const pdpi::IrMulticastGroupEntry &entry) {
+  return absl::StrCat("0x", absl::Hex(entry.multicast_group_id()));
 }
 
 }  // namespace sonic

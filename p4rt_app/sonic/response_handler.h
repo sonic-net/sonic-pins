@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_SONIC_RESPONSE_HANDLER_H_
-#define GOOGLE_P4RT_APP_SONIC_RESPONSE_HANDLER_H_
+#ifndef PINS_P4RT_APP_SONIC_RESPONSE_HANDLER_H_
+#define PINS_P4RT_APP_SONIC_RESPONSE_HANDLER_H_
 
 #include <string>
 
@@ -24,15 +24,9 @@
 #include "p4_pdpi/utils/ir.h"
 #include "p4rt_app/sonic/adapters/consumer_notifier_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
-#include "p4rt_app/utils/event_execution_time_monitor.h"
 
 namespace p4rt_app {
 namespace sonic {
-
-enum class ResponseTimeMonitor {
-  kNone,
-  kP4rtTableWrite,
-};
 
 // Given a mapping of keys to IR statuses this function will wait for an
 // OrchAgent response for every key, and update that key's status in the
@@ -44,8 +38,7 @@ enum class ResponseTimeMonitor {
 absl::Status GetAndProcessResponseNotification(
     ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
     TableAdapter& state_db_table,
-    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map,
-    ResponseTimeMonitor event_monitor);
+    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map);
 
 // Given a single key this function will wait for a response from the OrchAgent.
 // If there is no response or that response doesn't match the given key this
@@ -53,10 +46,23 @@ absl::Status GetAndProcessResponseNotification(
 // OrchAgent's status.
 absl::StatusOr<pdpi::IrUpdateStatus> GetAndProcessResponseNotification(
     ConsumerNotifierAdapter& notification_interface, TableAdapter& app_db_table,
-    TableAdapter& state_db_table, const std::string& key,
-    ResponseTimeMonitor event_monitor);
+    TableAdapter& state_db_table, const std::string& key);
+
+// Given a mapping of keys to IR statuses this function will wait for an
+// OrchAgent respsponse for every key and update it's status. On a failed
+// OrchAgent response it will not try to revert any state.
+absl::Status GetAndProcessResponseNotificationWithoutRevertingState(
+    ConsumerNotifierAdapter& notification_interface,
+    absl::btree_map<std::string, pdpi::IrUpdateStatus*>& key_to_status_map);
+
+// Given a single key this function will wait for an OrchAgent respsponse, and
+// return it. On a failed OrchAgent response it will not try to revert any
+// state.
+absl::StatusOr<pdpi::IrUpdateStatus>
+GetAndProcessResponseNotificationWithoutRevertingState(
+    ConsumerNotifierAdapter& notification_interface, const std::string& key);
 
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_RESPONSE_HANDLER_H_
+#endif  // PINS_P4RT_APP_SONIC_RESPONSE_HANDLER_H_

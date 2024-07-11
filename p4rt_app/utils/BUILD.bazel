@@ -66,24 +66,15 @@ cc_library(
 )
 
 cc_library(
-    name = "event_execution_time_monitor",
-    srcs = ["event_execution_time_monitor.cc"],
-    hdrs = ["event_execution_time_monitor.h"],
-    deps = [
-        "@com_github_google_glog//:glog",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/time",
-    ],
+    name = "event_data_tracker",
+    hdrs = ["event_data_tracker.h"],
 )
 
 cc_test(
-    name = "event_execution_time_monitor_test",
-    srcs = ["event_execution_time_monitor_test.cc"],
+    name = "event_data_tracker_test",
+    srcs = ["event_data_tracker_test.cc"],
     deps = [
-        ":event_execution_time_monitor",
-        "//gutil:status_matchers",
-        "@com_google_absl//absl/status",
+        ":event_data_tracker",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],

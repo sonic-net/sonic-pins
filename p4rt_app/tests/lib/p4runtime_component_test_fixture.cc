@@ -27,14 +27,24 @@ namespace test_lib {
 P4RuntimeComponentTestFixture::P4RuntimeComponentTestFixture(
     sai::Instantiation sai_instantiation)
     : p4_info_(sai::GetP4Info(sai_instantiation)),
-      ir_p4_info_(sai::GetIrP4Info(sai_instantiation)) {
+      ir_p4_info_(sai::GetIrP4Info(sai_instantiation)),
+      p4rt_service_(P4RuntimeImplOptions{}) {
+  // do nothing.
+}
+
+P4RuntimeComponentTestFixture::P4RuntimeComponentTestFixture(
+    sai::Instantiation sai_instantiation, const P4RuntimeImplOptions& options)
+    : p4_info_(sai::GetP4Info(sai_instantiation)),
+      ir_p4_info_(sai::GetIrP4Info(sai_instantiation)),
+      p4rt_service_(options) {
   // do nothing.
 }
 
 P4RuntimeComponentTestFixture::P4RuntimeComponentTestFixture(
     p4::config::v1::P4Info p4info)
     : p4_info_(std::move(p4info)),
-      ir_p4_info_(*pdpi::CreateIrP4Info(p4_info_)) {
+      ir_p4_info_(*pdpi::CreateIrP4Info(p4_info_)),
+      p4rt_service_(P4RuntimeImplOptions{}) {
   // do nothing.
 }
 
@@ -51,7 +61,7 @@ void P4RuntimeComponentTestFixture::SetUp() {
   LOG(INFO) << "Opening P4RT connection to " << address << ".";
 
   // Push a P4Info file to enable the reading, and writing of entries.
-  ASSERT_OK(pdpi::SetForwardingPipelineConfig(
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4rt_session_.get(),
       p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
       p4_info_));

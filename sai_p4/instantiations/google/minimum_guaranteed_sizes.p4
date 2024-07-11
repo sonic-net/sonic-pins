@@ -18,6 +18,8 @@
 
 // -- Fixed Table sizes --------------------------------------------------------
 
+#define IPV6_TUNNEL_TERMINATION_TABLE_MINIMUM_GUARANTEED_SIZE 128
+
 #define NEXTHOP_TABLE_MINIMUM_GUARANTEED_SIZE 1024
 
 #define NEIGHBOR_TABLE_MINIMUM_GUARANTEED_SIZE 1024
@@ -39,22 +41,37 @@
 // The maximum number of wcmp groups.
 #define WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE 3968
 
-// The maximum sum of weights across all wcmp groups.
-#define WCMP_GROUP_SELECTOR_MAX_SUM_OF_WEIGHTS_ACROSS_ALL_GROUPS 65536
+
+// The size semantics for WCMP group selectors.
+#define WCMP_GROUP_SELECTOR_SIZE_SEMANTICS "SUM_OF_WEIGHTS"
+
+// The maximum sum of members across all wcmp groups.
+#define WCMP_GROUP_SELECTOR_SIZE 49152 // 48k
 
 // The maximum sum of weights for each wcmp group.
-#define WCMP_GROUP_SELECTOR_MAX_SUM_OF_WEIGHTS_PER_GROUP 256
+#define WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE 512
+
+// The max weight of an individual member when using the SUM_OF_MEMBERS size 
+// semantics.
+#define WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT 4096
 
 // -- ACL Table sizes ----------------------------------------------------------
 
-#define ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 128
+#define ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 256
 
 // Some switches allocate table sizes in powers of 2. Since GPINs (Orchagent)
 // allocates 1 extra table entry for the loopback IP, we pick the size as
 // 2^8 - 1 to avoid allocation of 2^9 entries on such switches.
-#define ACL_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 255
 
-#define ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 128
+#define ACL_DEFAULT_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 254
+
+
+#define ACL_TOR_PRE_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 127
+
+
+#define ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE 255
+
+#define ACL_EGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 127
 
 // 1 entry for LLDP, 1 entry for ND, and 6 entries for traceroute: TTL 0,1,2 for
 // IPv4 and IPv6

@@ -1,0 +1,75 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Thinkit is a set of interfaces to enable PINS testing to be infrastructure agnostic.
+
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+cc_library(
+    name = "thinkit",
+    deps = [
+        ":mirror_testbed",
+        ":switch",
+        ":test_environment",
+    ],
+)
+
+cc_library(
+    name = "switch",
+    hdrs = ["switch.h"],
+    deps = [
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "mirror_testbed",
+    hdrs = ["mirror_testbed.h"],
+    deps = [
+        ":switch",
+        ":test_environment",
+    ],
+)
+
+cc_library(
+    name = "test_environment",
+    hdrs = ["test_environment.h"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "ssh_client",
+    hdrs = ["ssh_client.h"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)

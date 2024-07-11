@@ -6,10 +6,12 @@
 #define ETHERTYPE_ARP   0x0806
 #define ETHERTYPE_LLDP  0x88cc
 
+#define IP_PROTOCOL_IPV4   0x04
 #define IP_PROTOCOL_TCP    0x06
 #define IP_PROTOCOL_UDP    0x11
 #define IP_PROTOCOL_ICMP   0x01
 #define IP_PROTOCOL_ICMPV6 0x3a
+#define IP_PROTOCOL_IPV6   0x29
 #define IP_PROTOCOLS_GRE   0x2f
 
 #define GRE_PROTOCOL_ERSPAN 0x88be
@@ -19,6 +21,16 @@
 typedef bit<48> ethernet_addr_t;
 typedef bit<32> ipv4_addr_t;
 typedef bit<128> ipv6_addr_t;
+typedef bit<12> vlan_id_t;
+typedef bit<16> ether_type_t;
+
+// "The VID value 0xFFF is reserved for implementation use; it must not be
+// configured or transmitted." (https://en.wikipedia.org/wiki/IEEE_802.1Q).
+const vlan_id_t INTERNAL_VLAN_ID = 0xfff;
+// "The reserved value 0x000 indicates that the frame does not carry a VLAN ID;
+// in this case, the 802.1Q tag specifies only a priority"
+// (https://en.wikipedia.org/wiki/IEEE_802.1Q).
+const vlan_id_t NO_VLAN_ID = 0x000;
 
 // -- Protocol headers ---------------------------------------------------------
 
@@ -27,7 +39,20 @@ typedef bit<128> ipv6_addr_t;
 header ethernet_t {
   ethernet_addr_t dst_addr;
   ethernet_addr_t src_addr;
-  bit<16> ether_type;
+  ether_type_t ether_type;
+}
+
+header vlan_t {
+  // Note: Tag Protocol Identifier (TPID) will be parsed as the ether_type of
+  // the ethernet header. It is technically a part of the vlan header but is
+  // modeled like this to facilitate parsing and deparsing.
+  bit<3> priority_code_point;      // PCP
+  bit<1> drop_eligible_indicator;  // DEI
+  vlan_id_t vlan_id;               // VID
+  // Note: The next ether_type will be parsed as part of the vlan
+  // header. It is technically a part of the ethernet header but is modeled like
+  // this to facilitate parsing and deparsing.
+  ether_type_t ether_type;
 }
 
 #define IPV4_HEADER_BYTES 20

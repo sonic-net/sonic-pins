@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4_PDPI_PACKETLIB_READABLE_BIT_STRING_H_
-#define GOOGLE_P4_PDPI_PACKETLIB_READABLE_BIT_STRING_H_
+#ifndef PINS_P4_PDPI_PACKETLIB_READABLE_BIT_STRING_H_
+#define PINS_P4_PDPI_PACKETLIB_READABLE_BIT_STRING_H_
 
 #include "absl/status/statusor.h"
 
@@ -31,12 +31,14 @@ namespace pdpi {
 //   version: 0x4
 //   ihl: 0x5
 //   dhcp: 0b011011)PB"
+//   # Payload
+//   payload: "This is an ASCII string."
 //
 // Supports comments (using #), annotations of what a group of bits represents
-// (string before the colon), hex strings, base-2 strings.
+// (string before the colon), hex strings, base-2 strings, and ASCII strings.
 absl::StatusOr<std::string> ReadableByteStringToByteString(
     absl::string_view readable_byte_string);
 
 }  // namespace pdpi
 
-#endif  // GOOGLE_P4_PDPI_PACKETLIB_READABLE_BIT_STRING_H_
+#endif  // PINS_P4_PDPI_PACKETLIB_READABLE_BIT_STRING_H_

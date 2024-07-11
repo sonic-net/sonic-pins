@@ -48,7 +48,7 @@ static const char kSwssInternal[] = "SWSS_RC_INTERNAL";
 
 std::vector<swss::FieldValueTuple> GetSwssOkResponse() {
   return std::vector<swss::FieldValueTuple>(
-      {swss::FieldValueTuple("err_str", "Ok")});
+      {swss::FieldValueTuple("err_str", "")});
 }
 
 std::vector<swss::FieldValueTuple> GetSwssError(const std::string& message) {
@@ -66,10 +66,10 @@ TEST(ResponseHandlerTest, SingleRequests) {
       .WillOnce(DoAll(SetArgReferee<0>(kSwssSuccess), SetArgReferee<1>("key0"),
                       SetArgReferee<2>(GetSwssOkResponse()), Return(true)));
 
-  EXPECT_THAT(GetAndProcessResponseNotification(
-                  mock_notifier, mock_app_db_client, mock_state_db_client,
-                  "key0", ResponseTimeMonitor::kNone),
-              IsOkAndHolds(EqualsProto(R"pb(code: OK)pb")));
+  EXPECT_THAT(
+      GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
+                                        mock_state_db_client, "key0"),
+      IsOkAndHolds(EqualsProto(R"pb(code: OK)pb")));
 }
 
 TEST(ResponseHandlerTest, MultipleRequests) {
@@ -91,9 +91,9 @@ TEST(ResponseHandlerTest, MultipleRequests) {
                       SetArgReferee<2>(GetSwssOkResponse()), Return(true)));
 
   // The response path will successfully handle the response.
-  EXPECT_OK(GetAndProcessResponseNotification(
-      mock_notifier, mock_app_db_client, mock_state_db_client,
-      key_to_status_map, ResponseTimeMonitor::kNone));
+  EXPECT_OK(GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
+                                              mock_state_db_client,
+                                              key_to_status_map));
   EXPECT_THAT(ir_write_response, EqualsProto(R"pb(
                 statuses { code: OK }
                 statuses { code: OK }
@@ -118,7 +118,7 @@ TEST(ResponseHandlerTest, MissingResponseValueFails) {
   // The response path will successfully handle the response.
   EXPECT_THAT(GetAndProcessResponseNotification(
                   mock_notifier, mock_app_db_client, mock_state_db_client,
-                  key_to_status_map, ResponseTimeMonitor::kNone),
+                  key_to_status_map),
               StatusIs(absl::StatusCode::kInternal));
 }
 
@@ -144,7 +144,7 @@ TEST(ResponseHandlerTest, ResponsePathReturnsDuplicateKeys) {
   // returned it is an internal failure.
   EXPECT_THAT(GetAndProcessResponseNotification(
                   mock_notifier, mock_app_db_client, mock_state_db_client,
-                  key_to_status_map, ResponseTimeMonitor::kNone),
+                  key_to_status_map),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("received a duplicate key")));
 }
@@ -171,7 +171,7 @@ TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithLowerValue) {
   // with the OrchAgent, and we should return an internal error.
   EXPECT_THAT(GetAndProcessResponseNotification(
                   mock_notifier, mock_app_db_client, mock_state_db_client,
-                  key_to_status_map, ResponseTimeMonitor::kNone),
+                  key_to_status_map),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Got unexpected responses")));
 }
@@ -198,7 +198,7 @@ TEST(ResponseHandlerTest, ResponsePathReturnsWrongKeyWithHigherValue) {
   // with the OrchAgent, and we should return an internal error.
   EXPECT_THAT(GetAndProcessResponseNotification(
                   mock_notifier, mock_app_db_client, mock_state_db_client,
-                  key_to_status_map, ResponseTimeMonitor::kNone),
+                  key_to_status_map),
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Got unexpected responses")));
 }
@@ -218,8 +218,8 @@ TEST(ResponseHandlerTest, ResponsePathFails) {
   EXPECT_CALL(mock_notifier, WaitForNotificationAndPop).WillOnce(Return(false));
   EXPECT_THAT(
       GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
-                                        mock_state_db_client, key_to_status_map,
-                                        ResponseTimeMonitor::kNone),
+                                        mock_state_db_client,
+                                        key_to_status_map),
       StatusIs(absl::StatusCode::kInternal, HasSubstr("timed out or failed")));
 }
 
@@ -240,8 +240,8 @@ TEST(ResponseHandlerTest, ResponsePathDoesNotSetErrorTuple) {
                       Return(true)));
   EXPECT_THAT(
       GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
-                                        mock_state_db_client, key_to_status_map,
-                                        ResponseTimeMonitor::kNone),
+                                        mock_state_db_client,
+                                        key_to_status_map),
       StatusIs(absl::StatusCode::kInternal, HasSubstr("should not be empty")));
 }
 
@@ -263,7 +263,7 @@ TEST(ResponseHandlerTest, ResponsePathSetsWrongErrorString) {
                       Return(true)));
   EXPECT_THAT(GetAndProcessResponseNotification(
                   mock_notifier, mock_app_db_client, mock_state_db_client,
-                  key_to_status_map, ResponseTimeMonitor::kNone),
+                  key_to_status_map),
               StatusIs(absl::StatusCode::kInternal));
 }
 
@@ -298,9 +298,9 @@ TEST(ResponseHandlerTest, CleanupAppDbWithAnUpdate) {
 
   // Nothing goes wrong with the response path itself so we expect it to return
   // okay.
-  EXPECT_OK(GetAndProcessResponseNotification(
-      mock_notifier, mock_app_db_client, mock_state_db_client,
-      key_to_status_map, ResponseTimeMonitor::kNone));
+  EXPECT_OK(GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
+                                              mock_state_db_client,
+                                              key_to_status_map));
 
   // However, we expect the status to reflect the error.
   EXPECT_THAT(ir_write_response, EqualsProto(R"pb(
@@ -336,9 +336,9 @@ TEST(ResponseHandlerTest, CleanupAppDbWithADelete) {
 
   // Nothing goes wrong with the response path itself so we expect it to return
   // okay.
-  EXPECT_OK(GetAndProcessResponseNotification(
-      mock_notifier, mock_app_db_client, mock_state_db_client,
-      key_to_status_map, ResponseTimeMonitor::kNone));
+  EXPECT_OK(GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
+                                              mock_state_db_client,
+                                              key_to_status_map));
 
   // However, we expect the status to reflect the error.
   EXPECT_THAT(ir_write_response, EqualsProto(R"pb(
@@ -374,9 +374,9 @@ TEST_P(ResponseHandlerErrorCodeTest, VerifySwssToGrpcMapping) {
       .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{}));
   EXPECT_CALL(mock_app_db_client, del("key0")).Times(1);
 
-  EXPECT_OK(GetAndProcessResponseNotification(
-      mock_notifier, mock_app_db_client, mock_state_db_client,
-      key_to_status_map, ResponseTimeMonitor::kNone));
+  EXPECT_OK(GetAndProcessResponseNotification(mock_notifier, mock_app_db_client,
+                                              mock_state_db_client,
+                                              key_to_status_map));
   EXPECT_EQ(ir_update_status.code(), GetParam().p4rt_error);
   EXPECT_EQ(ir_update_status.message(), "my_error");
 }
@@ -427,6 +427,10 @@ INSTANTIATE_TEST_SUITE_P(
         {
             .swss_error = "SWSS_RC_UNIMPLEMENTED",
             .p4rt_error = google::rpc::Code::UNIMPLEMENTED,
+        },
+        {
+            .swss_error = "SWSS_RC_NOT_EXECUTED",
+            .p4rt_error = google::rpc::Code::ABORTED,
         },
     }),
     [](const testing::TestParamInfo<ResponseHandlerErrorCodeTest::ParamType>&

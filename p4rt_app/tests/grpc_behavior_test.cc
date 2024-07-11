@@ -28,6 +28,9 @@
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
+//TODO(PINS): Add fake Component/System state Translator
+//#include "swss/fakes/fake_component_state_helper.h"
+//#include "swss/fakes/fake_system_state_helper.h"
 
 namespace p4rt_app {
 namespace {
@@ -39,12 +42,31 @@ constexpr char kServerAddr[] = "localhost:9999";
 P4RuntimeImpl DummyP4RuntimeImpl() {
   // Dummy RedisDB tables.
   sonic::P4rtTable dummy_p4rt_table;
+  sonic::VrfTable dummy_vrf_table;
+  sonic::HashTable dummy_hash_table;
+  sonic::SwitchTable dummy_switch_table;
+  sonic::PortTable dummy_port_table;
+  sonic::HostStatsTable dummy_host_stats_table;
 
   // Dummy PacketIO.
   auto packet_io = std::make_unique<sonic::FakePacketIoInterface>();
 
-  return P4RuntimeImpl(std::move(dummy_p4rt_table), std::move(packet_io),
-                       P4RuntimeImplOptions{});
+//TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
+  // Dummy state managment.
+  // swss::FakeComponentStateHelper component_state_helper;
+  // swss::FakeSystemStateHelper system_state_helper;
+
+  // Dummy netdev name translation.
+  // sonic::FakeIntfTranslator netdev_translator(/*enabled=*/false);
+
+  return P4RuntimeImpl(
+      std::move(dummy_p4rt_table), std::move(dummy_vrf_table),
+      std::move(dummy_hash_table), std::move(dummy_switch_table),
+      std::move(dummy_port_table), std::move(dummy_host_stats_table),
+      std::move(packet_io),
+      //TODO(PINS): To add component_state_helper, system_state_helper and netdev_translator.
+      //component_state_helper, system_state_helper, netdev_translator,
+      P4RuntimeImplOptions{});
 }
 
 TEST(GrpcBehaviorTest,

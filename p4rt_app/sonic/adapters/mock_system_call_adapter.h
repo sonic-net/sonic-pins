@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H
-#define GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H
+#ifndef PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H
+#define PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H
 
 #include <stddef.h>
 #include <unistd.h>
@@ -41,9 +41,11 @@ class MockSystemCallAdapter final : public SystemCallAdapter {
   MOCK_METHOD(int, close, (int), (const, override));
   MOCK_METHOD(int, getifaddrs, (struct ifaddrs**), (const, override));
   MOCK_METHOD(void, freeifaddrs, (struct ifaddrs*), (const, override));
+  MOCK_METHOD(int, getsockopt, (int, int, int, int*, socklen_t*),
+              (const, override));
 };
 
 }  // namespace sonic
 }  // namespace p4rt_app
 
-#endif  // GOOGLE_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H
+#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_MOCK_SYSTEM_CALL_ADAPTER_H

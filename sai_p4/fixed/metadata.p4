@@ -10,7 +10,16 @@
 // The field list numbers used in @field_list annotations to identify the fields
 // that need to be preserved during clone/recirculation/etc. operations.
 enum bit<8> PreservedFieldList {
-  CLONE_I2E = 8w1
+  CLONE_I2E_MIRRORING = 8w1,
+  // We implement packet-in in SAI P4 by using the replication engine to make a
+  // clone of the punted packet and then send the clone to the controller. But
+  // the standard metadata of the packet clone will be empty, that's a problem
+  // because the controller needs to know the ingress port and expected egress
+  // port of the punted packet. To solve this problem, we save the targeted
+  // egress port and ingress port of the punted packet in local metadata and use
+  // clone_preserving_field_list to preserve these local metadata fields when
+  // cloning the punted packet.
+  CLONE_I2E_PACKET_IN = 8w2
 };
 
 // -- Translated Types ---------------------------------------------------------
@@ -70,6 +79,7 @@ type bit<QOS_QUEUE_BITWIDTH> qos_queue_t;
 // -- Untranslated Types -------------------------------------------------------
 
 typedef bit<ROUTE_METADATA_BITWIDTH> route_metadata_t;
+typedef bit<ACL_METADATA_BITWIDTH> acl_metadata_t;
 
 // -- Meters -------------------------------------------------------------------
 
@@ -79,78 +89,7 @@ enum bit<2> MeterColor_t {
   RED = 2
 };
 
-// -- Per Packet State ---------------------------------------------------------
-
-struct headers_t {
-  // ERSPAN headers, not extracted during parsing.
-  ethernet_t erspan_ethernet;
-  ipv4_t erspan_ipv4;
-  gre_t erspan_gre;
-
-  ethernet_t ethernet;
-
-  // Not extracted during parsing.
-  ipv6_t tunnel_encap_ipv6;
-  gre_t tunnel_encap_gre;
-
-  ipv4_t ipv4;
-  ipv6_t ipv6;
-  icmp_t icmp;
-  tcp_t tcp;
-  udp_t udp;
-  arp_t arp;
-}
-
-// Header fields rewritten by the ingress pipeline. Rewrites are computed and
-// stored in this struct, but actual rewriting is dealyed until the egress
-// pipeline so that the original values aren't overridden and get be matched on.
-struct packet_rewrites_t {
-  ethernet_addr_t src_mac;
-  ethernet_addr_t dst_mac;
-}
-
-// Local metadata for each packet being processed.
-struct local_metadata_t {
-  bool admit_to_l3;
-  vrf_id_t vrf_id;
-  packet_rewrites_t packet_rewrites;
-  bit<16> l4_src_port;
-  bit<16> l4_dst_port;
-  bit<WCMP_SELECTOR_INPUT_BITWIDTH> wcmp_selector_input;
-  // GRE tunnel encap related fields.
-  bool apply_tunnel_encap_at_egress;
-  ipv6_addr_t tunnel_encap_src_ipv6;
-  ipv6_addr_t tunnel_encap_dst_ipv6;
-  // mirroring data, we can't group the into a struct, because BMv2 doesn't
-  // support passing structs in clone3.
-  bool mirror_session_id_valid;
-  mirror_session_id_t mirror_session_id_value;
-  @field_list(PreservedFieldList.CLONE_I2E)
-  ipv4_addr_t mirroring_src_ip;
-  @field_list(PreservedFieldList.CLONE_I2E)
-  ipv4_addr_t mirroring_dst_ip;
-  @field_list(PreservedFieldList.CLONE_I2E)
-  ethernet_addr_t mirroring_src_mac;
-  @field_list(PreservedFieldList.CLONE_I2E)
-  ethernet_addr_t mirroring_dst_mac;
-  @field_list(PreservedFieldList.CLONE_I2E)
-  bit<8> mirroring_ttl;
-  @field_list(PreservedFieldList.CLONE_I2E)
-  bit<8> mirroring_tos;
-  MeterColor_t color;
-  // We consistently use local_metadata.ingress_port instead of
-  // standard_metadata.ingress_port in the P4 tables to ensure that the P4Info
-  // has port_id_t as the type for all fields that match on ports. This allows
-  // tools to treat ports specially (e.g. a fuzzer).
-  port_id_t ingress_port;
-  // The following field corresponds to SAI_ROUTE_ENTRY_ATTR_META_DATA/
-  // SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META.
-  route_metadata_t route_metadata;
-}
-
 // -- Packet IO headers --------------------------------------------------------
-
-// TODO: extend the P4 program to actually define the semantics of these.
 
 @controller_header("packet_in")
 header packet_in_header_t {
@@ -160,6 +99,18 @@ header packet_in_header_t {
   // The initial intended egress port decided for the packet by the pipeline.
   @id(PACKET_IN_TARGET_EGRESS_PORT_ID)
   port_id_t target_egress_port;
+  // Padding field to align the header to 8-bit multiple, as required by BMv2.
+  // Carries no information.
+  //
+  // Contrary to the corresponding field in the `packet_out` header, we include
+  // this field only on BMv2, as clients will generally ignore this field anyhow
+  // and thus not observe this minor API deviation.
+  // TODO: Handle packet-in uniformly for all platforms.
+#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
+  @id(PACKET_IN_UNUSED_PAD_ID)
+  @padding
+  bit<6> unused_pad;
+#endif
 }
 
 @controller_header("packet_out")
@@ -168,13 +119,145 @@ header packet_out_header_t {
   // Meaningless when `submit_to_ingress == 1`.
   @id(PACKET_OUT_EGRESS_PORT_ID)
   port_id_t egress_port;
-  // Should the packet be submitted to the ingress pipeline instead of being
-  // sent directly?
+  // Indicates if the packet should go through the ingress pipeline like a
+  // dataplane packet, or be sent straight out of the given `egress_port`.
   @id(PACKET_OUT_SUBMIT_TO_INGRESS_ID)
   bit<1> submit_to_ingress;
-  // BMV2 backend requires headers to be multiple of 8-bits.
-  @id(3)
-  bit<7> unused_pad;
+  // Padding field to align the header to 8-bit multiple, as required by BMv2.
+  // Carries no information.
+  //
+  // Technically this makes sense only for BMv2, but we include it on all
+  // platforms so clients don't have to make a distinction in packet-out
+  // requests.
+  @id(PACKET_OUT_UNUSED_PAD_ID)
+  @padding
+  bit<6> unused_pad;
+}
+
+// -- Per Packet State ---------------------------------------------------------
+
+struct headers_t {
+// TODO: Clean up once we have better solution to handle packet-in
+// across platforms.
+#if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
+  // Never extracted during parsing, but serialized during deparsing for packets
+  // punted to the controller.
+  packet_in_header_t packet_in_header;
+#endif
+
+  // PacketOut header; extracted only for packets received from the controller.
+  packet_out_header_t packet_out_header;
+
+  // ERSPAN headers, not extracted during parsing.
+  ethernet_t erspan_ethernet;
+  ipv4_t erspan_ipv4;
+  gre_t erspan_gre;
+
+  ethernet_t ethernet;
+  vlan_t vlan;
+
+  // Not extracted during parsing.
+  ipv6_t tunnel_encap_ipv6;
+  gre_t tunnel_encap_gre;
+
+  ipv4_t ipv4;
+  ipv6_t ipv6;
+
+  // Inner IP-in-IP headers.
+  ipv4_t inner_ipv4;
+  ipv6_t inner_ipv6;
+
+  icmp_t icmp;
+  tcp_t tcp;
+  udp_t udp;
+  arp_t arp;
+}
+
+// Header fields rewritten by the ingress pipeline. Rewrites are computed and
+// stored in this struct, but actual rewriting is dealyed until the egress
+// pipeline so that the original values aren't overridden and can be matched on.
+struct packet_rewrites_t {
+  ethernet_addr_t src_mac;
+  ethernet_addr_t dst_mac;
+  vlan_id_t vlan_id;
+}
+
+// Local metadata for each packet being processed.
+struct local_metadata_t {
+  // The VLAN ID used for the packet throughout the pipeline. If the input
+  // packet has a VLAN tag, the VID from the outer VLAN tag is used
+  // (and the VLAN header gets invalidated at the beginning of the ingress
+  // pipeline). Otherwise, the ports' native VLAN ID (4095) is used.
+  // The pre-ingress stage can modify this value. The value is rewritten in
+  // router_interface table (unless VLAN rewrite is disabled). In that case,
+  // the actual rewrite takes place in the egress pipeline. This value is also
+  // used at the end of the egress pipeline to determine whether or not the
+  // packet should be VLAN tagged (if not dropped).
+  vlan_id_t vlan_id;
+  bool vlan_id_valid;  // True iff `vlan_id` is valid.
+  bool admit_to_l3;
+  vrf_id_t vrf_id;
+  packet_rewrites_t packet_rewrites;
+  bit<16> l4_src_port;
+  bit<16> l4_dst_port;
+  bit<WCMP_SELECTOR_INPUT_BITWIDTH> wcmp_selector_input;
+
+  // Tunnel related fields.
+  bool apply_tunnel_decap_at_end_of_pre_ingress;
+  bool apply_tunnel_encap_at_egress;
+  ipv6_addr_t tunnel_encap_src_ipv6;
+  ipv6_addr_t tunnel_encap_dst_ipv6;
+
+  // Mirroring related fields.
+  // We can't group them into a struct as BMv2 doesn't support passing structs
+  // into clone3.
+  bool mirror_session_id_valid;
+  mirror_session_id_t mirror_session_id_value;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  ipv4_addr_t mirroring_src_ip;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  ipv4_addr_t mirroring_dst_ip;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  ethernet_addr_t mirroring_src_mac;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  ethernet_addr_t mirroring_dst_mac;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  bit<8> mirroring_ttl;
+  @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
+  bit<8> mirroring_tos;
+
+  // Packet-in related fields, which we can't group into a struct, because BMv2
+  // doesn't support passing structs in clone3.
+
+  // The value to be copied into the `ingress_port` field of packet_in_header on
+  // punted packets.
+  @field_list(PreservedFieldList.CLONE_I2E_PACKET_IN)
+  bit<PORT_BITWIDTH> packet_in_ingress_port;
+  // The value to be copied into the `target_egress_port` field of
+  // packet_in_header on punted packets.
+  @field_list(PreservedFieldList.CLONE_I2E_PACKET_IN)
+  bit<PORT_BITWIDTH> packet_in_target_egress_port;
+
+  MeterColor_t color;
+  // We consistently use local_metadata.ingress_port instead of
+  // standard_metadata.ingress_port in the P4 tables to ensure that the P4Info
+  // has port_id_t as the type for all fields that match on ports. This allows
+  // tools to treat ports specially (e.g. a fuzzer).
+  port_id_t ingress_port;
+  // The following field corresponds to SAI_ROUTE_ENTRY_ATTR_META_DATA/
+  // SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META.
+  route_metadata_t route_metadata;
+  // ACL metadata can be set with SAI_ACL_ACTION_TYPE_SET_ACL_META_DATA, and
+  // read from SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META.
+  acl_metadata_t acl_metadata;
+  // When controller sends a packet-out packet, the packet will be submitted to
+  // the ingress pipleine by default. But sometimes we want to skip the ingress
+  // pipeline for packet-out, and we cannot skip using the 'exit' statement as
+  // it is not supported in p4-symbolic yet: b/184062335. So we use this field
+  // as a workaround.
+  // TODO: Clean up this workaround after 'exit' is supported in
+  // p4-symbolic.
+  bool bypass_ingress;
 }
 
 #endif  // SAI_METADATA_P4_

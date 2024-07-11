@@ -20,12 +20,12 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/meta/type_traits.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "absl/synchronization/mutex.h"
 #include "glog/logging.h"
 
 namespace p4rt_app {
@@ -35,6 +35,7 @@ void FakeSonicDbTable::InsertTableEntry(const std::string &key,
                                         const SonicDbEntryList &values) {
   VLOG(1) << absl::StreamFormat("'%s' insert table entry: %s",
                                 debug_table_name_, key);
+  absl::WriterMutexLock lock(&entries_mutex_);
   auto &entry = entries_[key];
   for (const auto &[field, data] : values) {
     entry.insert_or_assign(field, data);
@@ -44,6 +45,7 @@ void FakeSonicDbTable::InsertTableEntry(const std::string &key,
 void FakeSonicDbTable::DeleteTableEntry(const std::string &key) {
   VLOG(1) << absl::StreamFormat("'%s' delete table entry: %s",
                                 debug_table_name_, key);
+  absl::WriterMutexLock lock(&entries_mutex_);
   if (auto iter = entries_.find(key); iter != entries_.end()) {
     entries_.erase(iter);
   }
@@ -57,28 +59,45 @@ void FakeSonicDbTable::SetResponseForKey(const std::string &key,
   responses_[key] = ResponseInfo{.code = code, .message = message};
 }
 
-void FakeSonicDbTable::PushNotification(const std::string &key) {
+bool FakeSonicDbTable::PushNotification(const std::string &key) {
   VLOG(1) << absl::StreamFormat("'%s' push notification: %s", debug_table_name_,
                                 key);
   notifications_.push(key);
-
-  // If the user has overwritten the default response with a custom failure
-  // value then we do not update the StateDB.
-  auto response_iter = responses_.find(key);
-  if (response_iter != responses_.end() &&
-      response_iter->second.code != "SWSS_RC_SUCCESS") {
+  if (!UpdateAppStateDb(key)) {
     VLOG(2) << absl::StreamFormat("'%s' will not update StateDB entry for '%s'",
                                   debug_table_name_, key);
-    return;
+    return false;
   }
 
-  auto entry_iter = entries_.find(key);
   // If the key exists Insert into the StateDb, otherwise delete.
+  absl::WriterMutexLock lock(&entries_mutex_);
+  auto entry_iter = entries_.find(key);
   if (entry_iter != entries_.end()) {
     InsertStateDbTableEntry(key, entry_iter->second);
   } else {
     DeleteStateDbTableEntry(key);
   }
+  return true;
+}
+
+bool FakeSonicDbTable::PushNotification(const std::string &key,
+                                        const std::string &op,
+                                        const SonicDbEntryMap &values) {
+  VLOG(1) << absl::StreamFormat("'%s' push notification: %s, %s",
+                                debug_table_name_, op, key);
+  notifications_.push(key);
+  if (!UpdateAppStateDb(key)) {
+    VLOG(2) << absl::StreamFormat("'%s' will not update StateDB entry for '%s'",
+                                  debug_table_name_, key);
+    return false;
+  }
+
+  if (op == "SET") {
+    InsertStateDbTableEntry(key, values);
+  } else {
+    DeleteStateDbTableEntry(key);
+  }
+  return true;
 }
 
 void FakeSonicDbTable::GetNextNotification(std::string &op, std::string &data,
@@ -110,8 +129,11 @@ absl::StatusOr<SonicDbEntryMap> FakeSonicDbTable::ReadTableEntry(
     const std::string &key) const {
   VLOG(1) << absl::StreamFormat("'%s' read table entry: %s", debug_table_name_,
                                 key);
-  if (auto entry = entries_.find(key); entry != entries_.end()) {
-    return entry->second;
+  {
+    absl::ReaderMutexLock lock(&entries_mutex_);
+    if (auto entry = entries_.find(key); entry != entries_.end()) {
+      return entry->second;
+    }
   }
   return absl::Status(absl::StatusCode::kNotFound,
                       absl::StrCat("AppDb missing: ", key));
@@ -120,8 +142,11 @@ absl::StatusOr<SonicDbEntryMap> FakeSonicDbTable::ReadTableEntry(
 std::vector<std::string> FakeSonicDbTable::GetAllKeys() const {
   std::vector<std::string> result;
   VLOG(1) << absl::StreamFormat("'%s' get all keys.", debug_table_name_);
-  for (const auto &entry : entries_) {
-    result.push_back(entry.first);
+  {
+    absl::ReaderMutexLock lock(&entries_mutex_);
+    for (const auto &entry : entries_) {
+      result.push_back(entry.first);
+    }
   }
   VLOG(2) << absl::StreamFormat("'%s' found  keys: %s", debug_table_name_,
                                 absl::StrJoin(result, ", "));
@@ -129,6 +154,7 @@ std::vector<std::string> FakeSonicDbTable::GetAllKeys() const {
 }
 
 void FakeSonicDbTable::DebugState() const {
+  absl::ReaderMutexLock lock(&entries_mutex_);
   for (const auto &[key, values] : entries_) {
     LOG(INFO) << "AppDb entry: " << key;
     for (const auto &[field, data] : values) {
@@ -163,6 +189,14 @@ void FakeSonicDbTable::DeleteStateDbTableEntry(const std::string &key) {
   // reinsert.
   VLOG(2) << "Removing StateDB entry.";
   state_db_->DeleteTableEntry(key);
+}
+
+// Update the AppStateDb only if the user has not overriden the respose, or if
+// they explicitly set that response to succeed.
+bool FakeSonicDbTable::UpdateAppStateDb(const std::string &key) {
+  auto response_iter = responses_.find(key);
+  return response_iter == responses_.end() ||
+         response_iter->second.code == "SWSS_RC_SUCCESS";
 }
 
 }  // namespace sonic
