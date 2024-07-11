@@ -34,12 +34,10 @@ namespace pins_test {
 // entries.
 //
 // This class represents a P4Runtime port ID, abstracting away the encoding.
-
 // TODO: Agree on a single encoding so this class becomes obsolete.
 class P4rtPortId {
  public:
   // Constructors.
-
   // Expects a decimal string. Else returns InvalidArgumentError.
   static absl::StatusOr<P4rtPortId> MakeFromP4rtEncoding(
       absl::string_view p4rt_port_id);
