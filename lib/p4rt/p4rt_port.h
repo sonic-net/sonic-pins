@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #ifndef GOOGLE_LIB_P4RT_P4RT_PORT_H_
 #define GOOGLE_LIB_P4RT_P4RT_PORT_H_
 
@@ -32,10 +33,12 @@ namespace pins_test {
 // entries.
 //
 // This class represents a P4Runtime port ID, abstracting away the encoding.
+
 // TODO: Agree on a single encoding so this class becomes obsolete.
 class P4rtPortId {
  public:
   // Constructors.
+
   // Expects a decimal string. Else returns InvalidArgumentError.
   static absl::StatusOr<P4rtPortId> OfP4rtEncoding(
       absl::string_view p4rt_port_id);
