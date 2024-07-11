@@ -86,6 +86,78 @@ absl::StatusOr<QueueCounters> GetGnmiQueueCounters(
     return absl::InternalError(
         absl::StrCat("Unable to parse counter from ", drop_counter_response));
   }
+
+  const std::string openconfig_max_queue_len_count_state_path =
+      absl::Substitute("qos/interfaces/interface[interface-id=$0]"
+                       "/output/queues/queue[name=$1]/state/max-queue-len",
+                       port, queue);
+
+  ASSIGN_OR_RETURN(std::string max_queue_len_counter_response,
+                   GetGnmiStatePathInfo(
+                       &gnmi_stub, openconfig_max_queue_len_count_state_path,
+                       "openconfig-qos:max-queue-len"));
+
+  if (!absl::SimpleAtoi(StripQuotes(max_queue_len_counter_response),
+                        &counters.max_queue_len)) {
+    return absl::InternalError(absl::StrCat("Unable to parse counter from ",
+                                            max_queue_len_counter_response));
+  }
+
+  const std::string openconfig_periodic_queue_len_count_state_path =
+      absl::Substitute(
+          "qos/interfaces/interface[interface-id=$0]"
+          "/output/queues/queue[name=$1]/state/max-periodic-queue-len",
+          port, queue);
+
+  ASSIGN_OR_RETURN(
+      std::string periodic_queue_len_counter_response,
+      GetGnmiStatePathInfo(&gnmi_stub,
+                           openconfig_periodic_queue_len_count_state_path,
+                           "google-pins-qos:max-periodic-queue-len"));
+
+  if (!absl::SimpleAtoi(StripQuotes(periodic_queue_len_counter_response),
+                        &counters.max_periodic_queue_len)) {
+    return absl::InternalError(absl::StrCat(
+        "Unable to parse counter from ", periodic_queue_len_counter_response));
+  }
+
+  const std::string openconfig_pfc_deadlock_detected_count_state_path =
+      absl::Substitute("qos/interfaces/interface[interface-id=$0]"
+                       "/output/queues/queue[name=$1]/state/"
+                       "pfc-deadlock-detected",
+                       port, queue);
+
+  ASSIGN_OR_RETURN(
+      std::string pfc_deadlock_detected_counter_response,
+      GetGnmiStatePathInfo(&gnmi_stub,
+                           openconfig_pfc_deadlock_detected_count_state_path,
+                           "google-pins-qos:pfc-deadlock-detected"));
+  if (!absl::SimpleAtoi(StripQuotes(pfc_deadlock_detected_counter_response),
+                        &counters.pfc_deadlock_detected)) {
+    return absl::InternalError(
+        absl::StrCat("Unable to parse counter from ",
+                     pfc_deadlock_detected_counter_response));
+  }
+
+  const std::string openconfig_pfc_deadlock_restored_count_state_path =
+      absl::Substitute("qos/interfaces/interface[interface-id=$0]"
+                       "/output/queues/queue[name=$1]/state/"
+                       "pfc-deadlock-restored",
+                       port, queue);
+
+  ASSIGN_OR_RETURN(
+      std::string pfc_deadlock_restored_counter_response,
+      GetGnmiStatePathInfo(&gnmi_stub,
+                           openconfig_pfc_deadlock_restored_count_state_path,
+                           "google-pins-qos:pfc-deadlock-restored"));
+
+  if (!absl::SimpleAtoi(StripQuotes(pfc_deadlock_restored_counter_response),
+                        &counters.pfc_deadlock_restored)) {
+    return absl::InternalError(
+        absl::StrCat("Unable to parse counter from ",
+                     pfc_deadlock_restored_counter_response));
+  }
+
   return counters;
 }
 

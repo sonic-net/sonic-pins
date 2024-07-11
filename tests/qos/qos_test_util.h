@@ -60,6 +60,8 @@ struct QueueCounters {
   int64_t num_packets_dropped = 0;
   int64_t max_queue_len = 0;
   int64_t max_periodic_queue_len = 0;
+  int64_t pfc_deadlock_detected = 0;
+  int64_t pfc_deadlock_restored = 0;
 };
 
 // Operator to pretty print Queue Counters.
@@ -71,9 +73,12 @@ inline std::ostream &operator<<(std::ostream &os,
              ".num_packets_dropped = %d, "
              ".max_queue_len = %d, "
              ".max_periodic_queue_len = %d,"
+             ".pfc_deadlock_detected = %d,"
+             ".pfc_deadlock_restored = %d"
              "}",
              counters.num_packets_transmitted, counters.num_packets_dropped,
-             counters.max_queue_len, counters.max_periodic_queue_len);
+             counters.max_queue_len, counters.max_periodic_queue_len,
+             counters.pfc_deadlock_detected, counters.pfc_deadlock_restored);
 }
 
 QueueCounters operator-(const QueueCounters &x, const QueueCounters &y);
