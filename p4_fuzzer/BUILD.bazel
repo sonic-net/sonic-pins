@@ -59,6 +59,28 @@ cc_test(
 )
 
 cc_library(
+    name = "fuzzer_config",
+    srcs = [
+        "fuzzer_config.cc",
+    ],
+    hdrs = [
+        "fuzzer_config.h",
+    ],
+    deps = [
+        "//gutil:status",
+        "//lib/p4rt:p4rt_port",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_library(
     name = "table_entry_key",
     srcs = ["table_entry_key.cc"],
     hdrs = ["table_entry_key.h"],
