@@ -72,10 +72,10 @@ message SwitchInput {
   Packet packet = 2;
 }
 
-// A single packet test vector consists of a single packet input that can be
+// A packet test vector consists of a single packet input that can be
 // sent to a switch, along with the expected outputs from the switch in response
 // to that packet.
-message SinglePacketTestVector {
+message PacketTestVector {
   // The input packet to the switch (required).
   // NOTE: The payload of this packet must be tagged with a unique int64 id that
   // is used to detect the corresponding single packet test vector from switch
@@ -86,6 +86,30 @@ message SinglePacketTestVector {
   repeated SwitchOutput acceptable_outputs = 3;
 }
 
+// A packet test vector along with the actual SUT output generated in response
+// to the test vector's input. The actual output may be empty, if the switch
+// drops the input packet.
+message PacketTestRun {
+  PacketTestVector test_vector = 1;
+  SwitchOutput actual_output = 2;
+}
+
+// The result of validating a single packet test run.
+message PacketTestValidationResult {
+  message Failure {
+    // A detailed explanation of how the switch did not behave as expected.
+    string description = 1;
+  }
+  // If present, indicates that the switch did not behave as expected.
+  Failure failure = 1;
+}
+
+// A test run along with its validation result.
+message PacketTestOutcome {
+  PacketTestRun test_run = 1;
+  PacketTestValidationResult test_result = 2;
+}
+
 // Used to validate the SUT's packet forwarding behavior.
 // Contains table entries and a set of test packets (with expected outputs)
 // given those entries.
@@ -94,14 +118,6 @@ message ArribaTestVector {
   // TODO: Add expected P4Info/PipelineConfig.
   // Table entries to be installed on the SUT.
   pdpi.IrTableEntries ir_table_entries = 1;
-  // A map of id to SinglePacketTestVector with that id.
-  map<int64, SinglePacketTestVector> single_packet_test_vector_by_id = 2;
-}
-
-// A test IO captures an input sent to the switch and its resulting output.
-message TestIO {
-  // The input to the switch.
-  Packet input = 1;
-  // The output from the switch.
-  SwitchOutput output = 2;
+  // A map of id to PacketTestVector with that id.
+  map<int64, PacketTestVector> packet_test_vector_by_id = 2;
 }
