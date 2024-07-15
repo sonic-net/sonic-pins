@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dvaas/test_vector.h"
+#include "dvaas/test_run_validation.h"
 
 #include <optional>
 #include <ostream>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -31,7 +32,10 @@
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
+#include "dvaas/output_writer.h"
+#include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -43,6 +47,7 @@
 #include "re2/re2.h"
 
 namespace dvaas {
+
 namespace {
 
 using ::google::protobuf::util::MessageDifferencer;
@@ -324,42 +329,34 @@ absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet) {
       "Payload does not contain a packet id: ", packet.DebugString()));
 }
 
-absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
-    const pdpi::IrPacketIn& packet_in) {
-  for (const auto& metadata : packet_in.metadata()) {
-    if (metadata.name() == "ingress_port") return metadata.value().str();
-  }
-  return absl::InvalidArgumentError(
-      "IrPacketIn does not contain 'ingress_port' metadata.");
-}
-
-absl::optional<std::string> CheckForPacketTestVectorFailure(
-    const PacketTestVector& packet_test_vector,
-    const SwitchOutput& actual_output,
+PacketTestValidationResult ValidateTestRun(
+    const PacketTestRun& test_run,
     const absl::flat_hash_set<std::string>& ignored_packet_in_metadata,
     const std::vector<const google::protobuf::FieldDescriptor*>&
         ignored_fields) {
+  PacketTestValidationResult result;
+
   const absl::optional<std::string> diff =
-      CompareSwitchOutputs(packet_test_vector, actual_output,
+      CompareSwitchOutputs(test_run.test_vector(), test_run.actual_output(),
                            ignored_packet_in_metadata, ignored_fields);
-  if (!diff.has_value()) return absl::nullopt;
+  if (!diff.has_value()) return result;
 
   // To make the diff more digestible, we first give an abstract
   // characterization of the expected and actual outputs.
   absl::flat_hash_set<SwitchOutputCharacterization>
       acceptable_output_characterizations;
-for (auto& acceptable_output : packet_test_vector.acceptable_outputs()) {
+  for (auto& acceptable_output : test_run.test_vector().acceptable_outputs()) {
     acceptable_output_characterizations.insert(
         CharacterizeSwitchOutput(acceptable_output));
   }
   const SwitchOutputCharacterization actual_output_characterization =
-      CharacterizeSwitchOutput(actual_output);
+      CharacterizeSwitchOutput(test_run.actual_output());
   const bool actual_matches_expected =
       acceptable_output_characterizations.contains(
           actual_output_characterization);
 
   std::string expectation = DescribeExpectation(
-      packet_test_vector.input(), acceptable_output_characterizations);
+      test_run.test_vector().input(), acceptable_output_characterizations);
   if (!ignored_fields.empty()) {
     absl::StrAppend(
         &expectation, "\n          (ignoring the field(s) ",
@@ -370,36 +367,66 @@ for (auto& acceptable_output : packet_test_vector.acceptable_outputs()) {
                       }),
         ")");
   }
-  std::string actual = DescribeActual(packet_test_vector.input(),
+  std::string actual = DescribeActual(test_run.test_vector().input(),
                                       actual_output_characterization);
   if (actual_matches_expected) {
     absl::StrAppend(&actual, ", but with unexpected modifications");
   }
-  std::string failure = absl::Substitute(
+  std::string& failure = *result.mutable_failure()->mutable_description();
+  failure = absl::Substitute(
       "Expected: $0\n  Actual: $1\n$2\nDetails dumped below.\n\n", expectation,
       actual, *diff);
 
   // Dump input.
   absl::StrAppend(&failure, kInputBanner, "\n",
-                  PrintTextProto(packet_test_vector.input()));
+                  PrintTextProto(test_run.test_vector().input()));
 
   // Dump actual output, if any.
   if (!IsCharacterizedAsDrop(actual_output_characterization)) {
     absl::StrAppend(&failure, kActualBanner, "\n",
-                    PrintTextProto(actual_output));
+                    PrintTextProto(test_run.actual_output()));
   }
 
   // Dump expected output, if any.
   if (!IsCharacterizedAsDrop(acceptable_output_characterizations)) {
     absl::StrAppend(&failure, kExpectationBanner, "\n");
-    for (int i = 0; i < packet_test_vector.acceptable_outputs_size(); ++i) {
+    for (int i = 0; i < test_run.test_vector().acceptable_outputs_size(); ++i) {
       absl::StrAppendFormat(
           &failure, "-- Acceptable output: Alternative #%d --\n%s", (i + 1),
-          PrintTextProto(packet_test_vector.acceptable_outputs(i)));
+          PrintTextProto(test_run.test_vector().acceptable_outputs(i)));
     }
   }
 
-  return failure;
+  return result;
+}
+
+absl::Status ValidateTestRuns(
+    absl::Span<const PacketTestRun> test_runs,
+    std::vector<const google::protobuf::FieldDescriptor*> ignored_fields,
+    const absl::flat_hash_set<std::string>& ignored_metadata,
+    const OutputWriterFunctionType& write_failures) {
+  LOG(INFO) << "Validating test runs";
+
+  std::vector<std::string> failures;
+  for (const PacketTestRun& test_run : test_runs) {
+    PacketTestValidationResult result =
+        ValidateTestRun(test_run, ignored_metadata, ignored_fields);
+    if (result.has_failure()) {
+      failures.push_back(result.failure().description());
+    }
+  }
+
+  RETURN_IF_ERROR(write_failures(absl::StrJoin(failures, "\n\n")));
+
+  if (!failures.empty()) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << failures.size()
+           << " failures among test results. Showing only the first failure.\n"
+           << failures[0]
+           << "\nRefer to the test artifacts for the full list of failures.";
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace dvaas
