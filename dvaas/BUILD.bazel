@@ -76,6 +76,29 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "arriba_test_vector_validation",
+    testonly = True,
+    srcs = ["arriba_test_vector_validation.cc"],
+    hdrs = ["arriba_test_vector_validation.h"],
+    deps = [
+        ":packet_injection",
+        ":test_run_validation",
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil:status",
+        "//gutil:test_artifact_writer",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:p4_runtime_session_extras",
+        "//sai_p4/instantiations/google/test_tools:test_entries",
+        "//thinkit:mirror_testbed",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
 proto_library(
     name = "test_vector_proto",
     srcs = ["test_vector.proto"],
