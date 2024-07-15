@@ -401,14 +401,14 @@ PacketTestValidationResult ValidateTestRun(
 }
 
 absl::Status ValidateTestRuns(
-    absl::Span<const PacketTestRun> test_runs,
+    const PacketTestRuns& test_runs,
     std::vector<const google::protobuf::FieldDescriptor*> ignored_fields,
     const absl::flat_hash_set<std::string>& ignored_metadata,
     const OutputWriterFunctionType& write_failures) {
   LOG(INFO) << "Validating test runs";
 
   std::vector<std::string> failures;
-  for (const PacketTestRun& test_run : test_runs) {
+  for (const PacketTestRun& test_run : test_runs.test_runs()) {
     PacketTestValidationResult result =
         ValidateTestRun(test_run, ignored_metadata, ignored_fields);
     if (result.has_failure()) {

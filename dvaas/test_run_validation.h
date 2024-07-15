@@ -41,7 +41,7 @@ PacketTestValidationResult ValidateTestRun(
 // Like `ValidateTestRun`, but for a collection of `test_runs`. Also
 // writes the results to a test artifact using `write_failures`.
 absl::Status ValidateTestRuns(
-    absl::Span<const PacketTestRun> test_runs,
+    const PacketTestRuns& test_runs,
     std::vector<const google::protobuf::FieldDescriptor*> ignored_fields,
     const absl::flat_hash_set<std::string>& ignored_metadata,
     const OutputWriterFunctionType& write_failures);

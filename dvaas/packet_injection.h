@@ -15,11 +15,16 @@
 #ifndef PINS_DVAAS_PACKET_INJECTION_H_
 #define PINS_DVAAS_PACKET_INJECTION_H_
 
+#include <functional>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
 #include "dvaas/test_vector.h"
+#include "dvaas/test_vector.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 
@@ -61,12 +66,17 @@ inline bool DefaultIsExpectedUnsolicitedPacket(
   return false;
 }
 
+// Gets 'ingress_port' value from metadata in `packet_in`. Returns
+// InvalidArgumentError if 'ingress_port' metadata is missing.
+// TODO: Make this function private.
+absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
+    const pdpi::IrPacketIn& packet_in);
+
 // Determines the switch's behavior when receiving test packets by:
 // - Injecting those packets to the control switch egress to send to the SUT.
 // - Determining the set of packets that were forwarded (punted from control
 //   switch) and punted (punted from SUT) for each input packet.
-absl::StatusOr<std::vector<PacketTestVectorAndActualOutput>>
-SendTestPacketsAndCollectOutputs(
+absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const PacketTestVectorById& packet_test_vector_by_id,
     PacketStatistics& statistics,

@@ -94,6 +94,11 @@ message PacketTestRun {
   SwitchOutput actual_output = 2;
 }
 
+// A list of packet test runs.
+message PacketTestRuns {
+  repeated PacketTestRun test_runs = 1;
+}
+
 // The result of validating a single packet test run.
 message PacketTestValidationResult {
   message Failure {
@@ -108,6 +113,11 @@ message PacketTestValidationResult {
 message PacketTestOutcome {
   PacketTestRun test_run = 1;
   PacketTestValidationResult test_result = 2;
+}
+
+// A list of test outcomes.
+message PacketTestOutcomes {
+  repeated PacketTestOutcome outcomes = 1;
 }
 
 // Used to validate the SUT's packet forwarding behavior.
