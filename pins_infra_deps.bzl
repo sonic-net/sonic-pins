@@ -33,6 +33,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_grpc_grpc"):
         http_archive(
             name = "com_github_grpc_grpc",
+            # url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
+            # strip_prefix = "grpc-1.46.0",
+            # sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
             url = "https://github.com/grpc/grpc/archive/v1.56.1.zip",
             strip_prefix = "grpc-1.56.1",
             sha256 = "04a52a313926f0f6ec2ed489ac7552aa5949693b071eaf45ae13b66e5910c32f",
@@ -48,7 +51,7 @@ def pins_infra_deps():
             url = "https://github.com/abseil/abseil-cpp/archive/20230802.0.tar.gz",
             strip_prefix = "abseil-cpp-20230802.0",
             sha256 = "59d2976af9d6ecf001a81a35749a6e551a335b949d34918cfade07737b9d93c5",
-        )
+        )   
     if not native.existing_rule("com_google_googletest"):
         http_archive(
             name = "com_google_googletest",
@@ -153,9 +156,9 @@ def pins_infra_deps():
         http_archive(
             name = "com_github_nlohmann_json",
             # JSON for Modern C++
-            url = "https://github.com/nlohmann/json/archive/v3.7.3.zip",
-            strip_prefix = "json-3.7.3",
-            sha256 = "e109cd4a9d1d463a62f0a81d7c6719ecd780a52fb80a22b901ed5b6fe43fb45b",
+            url = "https://github.com/nlohmann/json/archive/v3.8.0.zip",
+            strip_prefix = "json-3.8.0",
+            sha256 = "83947cb78d50990b4b931b8dbc8632781bc601baa45b75ece0899c7b98d86c0b",
             build_file_content = """cc_library(name = "nlohmann_json",
                                                visibility = ["//visibility:public"],
                                                hdrs = glob([
