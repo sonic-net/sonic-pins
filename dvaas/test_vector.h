@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_INFRA_TESTS_FORWARDING_TEST_VECTOR_H_
-#define PINS_INFRA_TESTS_FORWARDING_TEST_VECTOR_H_
+#ifndef PINS_TESTS_FORWARDING_TEST_VECTOR_H_
+#define PINS_TESTS_FORWARDING_TEST_VECTOR_H_
 
 #include <ostream>
 #include <string>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
 #include "absl/types/optional.h"
@@ -32,22 +33,22 @@ namespace dvaas {
 // error if the payload has an unexpected format, e.g. for untagged packets.
 // TODO: Implement and use a unified (open-source) API for test
 // packet tag embedding and extraction.
-absl::StatusOr<int> ExtractTestTag(const packetlib::Packet& packet);
+absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet);
 
 // Needed to make gUnit produce human-readable output in open source.
 inline std::ostream& operator<<(std::ostream& os, const SwitchOutput& output) {
   return os << output.DebugString();
 }
 
-using SinglePacketTestVectorById = absl::btree_map<int, SinglePacketTestVector>;
+using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
 
-// Holds a SinglePacketTestVector along with the actual SUT output generated in
+// Holds a PacketTestVector along with the actual SUT output generated in
 // response to the test vector's input. The actual output may be empty, if the
 // switch drops the input packet. The test vector may be empty, if the switch
 // generates packets that do not correspond to an input, or if the output cannot
 // be mapped to a test input.
-struct SinglePacketTestVectorAndActualOutput {
-  SinglePacketTestVector single_packet_test_vector;
+struct PacketTestVectorAndActualOutput {
+  PacketTestVector packet_test_vector;
   SwitchOutput actual_output;
 };
 
@@ -56,12 +57,12 @@ struct SinglePacketTestVectorAndActualOutput {
 absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
     const pdpi::IrPacketIn& packet_in);
 
-// Checks if the `actual_output` conforms to the `single_packet_test_vector`
+// Checks if the `actual_output` conforms to the `packet_test_vector`
 // when ignoring the given `ignored_fields` and 'ignored_packet_in_metadata', if
 // any. All `ignored_fields` should belong to packetlib::Packet. Returns a
 // failure description in case of a mismatch, or `absl::nullopt` otherwise.
-absl::optional<std::string> CheckForSinglePacketTestVectorFailure(
-    const SinglePacketTestVector& single_packet_test_vector,
+absl::optional<std::string> CheckForPacketTestVectorFailure(
+    const PacketTestVector& packet_test_vector,
     const SwitchOutput& actual_output,
     const absl::flat_hash_set<std::string>& ignored_packet_in_metadata = {},
     const std::vector<const google::protobuf::FieldDescriptor*>&
@@ -69,4 +70,4 @@ absl::optional<std::string> CheckForSinglePacketTestVectorFailure(
 
 }  // namespace dvaas
 
-#endif  // PINS_INFRA_TESTS_FORWARDING_TEST_VECTOR_H_
+#endif  // PINS_TESTS_FORWARDING_TEST_VECTOR_H_
