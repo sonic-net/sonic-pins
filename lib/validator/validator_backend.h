@@ -19,11 +19,13 @@
 #include <string>
 #include <utility>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "glog/logging.h"
 
 namespace pins_test {
 
@@ -72,6 +74,9 @@ class ValidatorBackend {
   // The set of all devices supported by this backend. Devices not in this set
   // will be ignored by this backend.
   absl::flat_hash_set<std::string> devices_;
+
+  // The map of validation tag and callbacks.
+  absl::flat_hash_map<std::string, std::vector<Callback>> validation_map_;
 };
 
 }  // namespace pins_test
