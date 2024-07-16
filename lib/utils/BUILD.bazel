@@ -38,3 +38,13 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "json_utils_test",
+    srcs = ["json_utils_test.cc"],
+    deps = [
+        ":json_utils",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@com_jsoncpp//:json",
+    ],
+)
