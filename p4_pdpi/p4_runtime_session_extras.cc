@@ -11,11 +11,11 @@
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/pd.h"
-#include "p4_pdpi/table_entry_key.h"
 
 namespace pdpi {
 
