@@ -81,3 +81,25 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "pins_backend",
+    testonly = 1,
+    srcs = ["pins_backend.cc"],
+    hdrs = ["pins_backend.h"],
+    deps = [
+        ":validator",
+        ":validator_backend",
+        "//gutil:status",
+        "//lib/gnmi:gnmi_helper",
+        "//p4_pdpi:p4_runtime_session",
+        "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/functional:bind_front",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)

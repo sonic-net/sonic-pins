@@ -70,11 +70,11 @@ class ValidatorBackend {
   void AddCallbacksToValidation(absl::string_view validation,
                                 absl::Span<const Callback> callbacks);
 
- private:
   // The set of all devices supported by this backend. Devices not in this set
   // will be ignored by this backend.
   absl::flat_hash_set<std::string> devices_;
 
+ private:
   // The map of validation tag and callbacks.
   absl::flat_hash_map<std::string, std::vector<Callback>> validation_map_;
 };
