@@ -97,8 +97,16 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
 
 }  // namespace
 
-absl::StatusOr<std::vector<PacketTestVectorAndActualOutput>>
-SendTestPacketsAndCollectOutputs(
+absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
+    const pdpi::IrPacketIn& packet_in) {
+  for (const auto& metadata : packet_in.metadata()) {
+    if (metadata.name() == "ingress_port") return metadata.value().str();
+  }
+  return absl::InvalidArgumentError(
+      "IrPacketIn does not contain 'ingress_port' metadata.");
+}
+
+absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const PacketTestVectorById& packet_test_vector_by_id,
     PacketStatistics& statistics,
@@ -194,10 +202,13 @@ SendTestPacketsAndCollectOutputs(
     *punted_output.mutable_metadata() = ir_packet_in.metadata();
   }
 
-  // Create PacketTestVectorAndActualOutputs.
-  std::vector<PacketTestVectorAndActualOutput> result;
+  // Create PacketTestRuns.
+  PacketTestRuns result;
+  result.mutable_test_runs()->Reserve(packet_test_vector_by_id.size());
   for (const auto& [id, packet_test_vector] : packet_test_vector_by_id) {
-    result.push_back({packet_test_vector, switch_output_by_id[id]});
+    PacketTestRun& run = *result.add_test_runs();
+    *run.mutable_test_vector() = packet_test_vector;
+    *run.mutable_actual_output() = switch_output_by_id[id];
   }
 
   // TODO: Detect problematic packets and log or store them.
