@@ -22,7 +22,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "glog/logging.h"
 #include "lib/validator/validator_backend.h"
 
 namespace pins_test {

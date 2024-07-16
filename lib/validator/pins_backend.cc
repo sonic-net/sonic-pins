@@ -14,9 +14,18 @@
 
 #include "lib/validator/pins_backend.h"
 
+#include <iterator>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "grpcpp/impl/codegen/client_context.h"
@@ -25,9 +34,13 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_backend.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4/v1/p4runtime.grpc.pb.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
+
 PINSBackend::PINSBackend(std::vector<std::unique_ptr<thinkit::Switch>> switches)
     : ValidatorBackend({}), switches_map_() {
   devices_.reserve(switches.size());
@@ -41,9 +54,6 @@ PINSBackend::PINSBackend(std::vector<std::unique_ptr<thinkit::Switch>> switches)
 
 absl::Status PINSBackend::CanEstablishP4RuntimeSession(
     absl::string_view chassis, absl::Duration timeout) {
-  // TODO: Remove kDeviceId once device ID is set through gNMI in
-  // P4RT app.
-  static constexpr uint64_t kDeviceId = 183807201;
   auto sut = switches_map_.find(chassis);
   if (sut == switches_map_.end()) {
     return absl::InternalError(
@@ -51,7 +61,7 @@ absl::Status PINSBackend::CanEstablishP4RuntimeSession(
   }
   auto& [sut_name, sut_switch] = *sut;
   ASSIGN_OR_RETURN(auto p4runtime_stub, sut_switch->CreateP4RuntimeStub());
-  return pdpi::P4RuntimeSession::Create(std::move(p4runtime_stub), kDeviceId)
+  return pdpi::P4RuntimeSession::Create(std::move(p4runtime_stub), sut_switch->DeviceId())
       .status();
 
   return absl::OkStatus();
