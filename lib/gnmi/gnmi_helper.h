@@ -5,12 +5,14 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 
 namespace pins_test {
 
 inline constexpr char kOpenconfigStr[] = "openconfig";
+inline constexpr char kTarget[] = "target";
 
 enum class GnmiSetType : char { kUpdate, kReplace, kDelete };
 
@@ -31,6 +33,39 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
 // Parses Get Response to retrieve specific tag value.
 absl::StatusOr<std::string> ParseGnmiGetResponse(
     const gnmi::GetResponse& response, absl::string_view match_tag);
+
+absl::Status SetGnmiConfigPath(gnmi::gNMI::Stub* sut_gnmi_stub,
+                               absl::string_view config_path,
+                               GnmiSetType operation, absl::string_view value);
+
+absl::StatusOr<std::string> GetGnmiStatePathInfo(
+    gnmi::gNMI::Stub* sut_gnmi_stub, absl::string_view state_path,
+    absl::string_view resp_parse_str);
+
+template <class T>
+std::string ConstructGnmiConfigSetString(std::string field, T value) {
+  std::string result_str;
+  if (std::is_integral<T>::value) {
+    // result: "{\"field\":value}"
+    result_str = absl::StrCat("{\"", field, "\":", value, "}");
+  } else if (std::is_same<T, std::string>::value) {
+    // result: "{\"field\":\"value\"};
+    result_str = absl::StrCat("{\"", field, "\":\"", value, "\"}");
+  }
+
+  return result_str;
+}
+
+// Adding subtree to gNMI Subscription list.
+void AddSubtreeToGnmiSubscription(absl::string_view subtree_root,
+                                  gnmi::SubscriptionList& subscription_list,
+                                  gnmi::SubscriptionMode mode,
+                                  bool suppress_redundant,
+                                  absl::Duration interval);
+
+// Returns vector of elements in subscriber response.
+absl::StatusOr<std::vector<absl::string_view>>
+GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response);
 
 }  // namespace pins_test
 #endif  // GOOGLE_LIB_GNMI_GNMI_HELPER_H_
