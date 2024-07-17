@@ -19,13 +19,17 @@
 #include <string>
 #include <utility>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -38,12 +42,13 @@ namespace {
 
 using ::nlohmann::json;
 using ::testing::Eq;
+using ::testing::HasSubstr;
 
 }  // namespace
 
-constexpr char kOpenconfigStr[] = "openconfig";
 constexpr char kStateUp[] = "UP";
 constexpr char kInterfaces[] = "interfaces";
+constexpr char kMtuJsonVal[] = "{\"mtu\":2000}";
 
 void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut) {
   ASSERT_OK_AND_ASSIGN(std::string output,
@@ -61,45 +66,68 @@ void TestP4Session(thinkit::Switch& sut) {
       pdpi::P4RuntimeSession::Create(std::move(sut_p4runtime_stub), kDeviceId));
 }
 
-void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,
-                                                  std::string if_name) {
+void TestGnmiInterfaceConfigSetMtu(thinkit::Switch& sut,
+                                   absl::string_view if_name) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-  gnmi::GetRequest req;
-  req.set_type(gnmi::GetRequest_DataType_STATE);
-  req.mutable_prefix()->set_origin(kOpenconfigStr);
-  gnmi::Path* path = req.add_path();
-  path->add_elem()->set_name(kInterfaces);
-  auto elem = path->add_elem();
-  elem->set_name("interface");
-  (*elem->mutable_key())["name"] = if_name;
-  path->add_elem()->set_name("state");
-  path->add_elem()->set_name("oper-status");
+  std::string if_req =
+      absl::StrCat("interfaces/interface[name=", if_name, "]/config/mtu");
 
-  req.set_encoding(::gnmi::Encoding::JSON_IETF);
+  ASSERT_OK_AND_ASSIGN(
+      gnmi::SetRequest req,
+      BuildGnmiSetRequest(if_req, GnmiSetType::kUpdate, kMtuJsonVal));
+  LOG(INFO) << "Sending SET request: " << req.ShortDebugString();
+  gnmi::SetResponse resp;
+  grpc::ClientContext context;
+  ASSERT_OK(sut_gnmi_stub->Set(&context, req, &resp));
+  LOG(INFO) << "Received SET response: " << resp.ShortDebugString();
+
+  ASSERT_OK_AND_ASSIGN(gnmi::GetRequest get_req,
+                       BuildGnmiGetRequest(if_req, gnmi::GetRequest::CONFIG));
+  LOG(INFO) << "Sending GET request: " << get_req.ShortDebugString();
+  gnmi::GetResponse get_resp;
+  grpc::ClientContext get_context;
+  ASSERT_OK(sut_gnmi_stub->Get(&get_context, get_req, &get_resp));
+  LOG(INFO) << "Received GET response: " << resp.ShortDebugString();
+  ASSERT_OK_AND_ASSIGN(
+      std::string mtu_respose,
+      ParseGnmiGetResponse(get_resp, "openconfig-interfaces:mtu"));
+  LOG(INFO) << "mtu_respose: " << mtu_respose;
+  EXPECT_THAT(mtu_respose, HasSubstr("2000"));
+
+  ASSERT_OK_AND_ASSIGN(req, BuildGnmiSetRequest(if_req, GnmiSetType::kDelete));
+  LOG(INFO) << "Sending SET request: " << req.ShortDebugString();
+  grpc::ClientContext new_set_context;
+  ASSERT_OK(sut_gnmi_stub->Set(&new_set_context, req, &resp));
+  LOG(INFO) << "Received SET response: " << resp.ShortDebugString();
+}
+
+void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,
+                                                  absl::string_view if_name) {
+  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+  std::string if_req = absl::StrCat("interfaces/interface[name=", if_name,
+                                    "]/state/oper-status");
+  ASSERT_OK_AND_ASSIGN(gnmi::GetRequest req,
+                       BuildGnmiGetRequest(if_req, gnmi::GetRequest::STATE));
   LOG(INFO) << "Sending GET request: " << req.ShortDebugString();
 
   gnmi::GetResponse resp;
   grpc::ClientContext context;
   ASSERT_OK(sut_gnmi_stub->Get(&context, req, &resp));
   LOG(INFO) << "Received GET response: " << resp.ShortDebugString();
-  ASSERT_EQ(resp.notification_size(), 1);
-  ASSERT_EQ(resp.notification(0).update_size(), 1);
-  const std::string val_str =
-      resp.notification(0).update(0).val().json_ietf_val();
-  auto const resp_json = json::parse(val_str);
-  auto const oper_status = resp_json.find("openconfig-interfaces:oper-status");
-  ASSERT_NE(oper_status, resp_json.end());
-  EXPECT_THAT(oper_status->dump(), testing::HasSubstr(kStateUp));
+  ASSERT_OK_AND_ASSIGN(
+      std::string oper_response,
+      ParseGnmiGetResponse(resp, "openconfig-interfaces:oper-status"));
+  LOG(INFO) << "oper_respose: " << oper_response;
+  EXPECT_THAT(oper_response, HasSubstr(kStateUp));
 }
 
 void TestGnmiCheckInterfaceStateOperation(thinkit::Switch& sut) {
+  const absl::flat_hash_set<std::string> k1Ethernet10GBInterfaces = {
+      "\"Ethernet256\"", "\"Ethernet260\""};
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-  gnmi::GetRequest req;
-  req.mutable_prefix()->set_origin(kOpenconfigStr);
-  req.set_type(gnmi::GetRequest_DataType_STATE);
-  gnmi::Path* path = req.add_path();
-  path->add_elem()->set_name(kInterfaces);
-  req.set_encoding(::gnmi::Encoding::JSON_IETF);
+  ASSERT_OK_AND_ASSIGN(
+      gnmi::GetRequest req,
+      BuildGnmiGetRequest(kInterfaces, gnmi::GetRequest::STATE));
   LOG(INFO) << "Sending GET request: " << req.ShortDebugString();
 
   gnmi::GetResponse resp;
@@ -108,30 +136,37 @@ void TestGnmiCheckInterfaceStateOperation(thinkit::Switch& sut) {
   LOG(INFO) << "Received GET response: " << resp.ShortDebugString();
   ASSERT_EQ(resp.notification_size(), 1);
   ASSERT_EQ(resp.notification(0).update_size(), 1);
-  auto const resp_json =
+  const auto resp_json =
       json::parse(resp.notification(0).update(0).val().json_ietf_val());
-  auto const oc_intf_json = resp_json.find("openconfig-interfaces:interfaces");
+  const auto oc_intf_json = resp_json.find("openconfig-interfaces:interfaces");
   ASSERT_NE(oc_intf_json, resp_json.end());
-  auto const oc_intf_list_json = oc_intf_json->find("interface");
+  const auto oc_intf_list_json = oc_intf_json->find("interface");
   ASSERT_NE(oc_intf_list_json, oc_intf_json->end());
   for (auto const& element : oc_intf_list_json->items()) {
-    auto const element_state_json = element.value().find("state");
-    ASSERT_NE(element_state_json, element.value().end());
+    auto const element_name_json = element.value().find("name");
+    ASSERT_NE(element_name_json, element.value().end());
+    // TODO : Revert back to interface port-speed check.
+    // Arista chassis have 2 additional 10G SFP ports, skipping checks for these
+    // ports as they aren't connected.
+    if (!k1Ethernet10GBInterfaces.contains(element_name_json->dump())) {
+      const auto element_interface_state_json = element.value().find("state");
+      ASSERT_NE(element_interface_state_json, element.value().end())
+          << element.value().find("name")->dump();
 
-    auto const element_status_json = element_state_json->find("oper-status");
-    ASSERT_NE(element_status_json, element_state_json->end());
+      const auto element_status_json =
+          element_interface_state_json->find("oper-status");
+      ASSERT_NE(element_status_json, element_interface_state_json->end())
+          << element.value().find("name")->dump();
 
-    EXPECT_THAT(element_status_json->dump(), testing::HasSubstr(kStateUp));
+      EXPECT_THAT(element_status_json->dump(), HasSubstr(kStateUp))
+          << element_interface_state_json->find("name")->dump();
+    }
   }
 }
 void TestGnmiGetInterfaceOperation(thinkit::Switch& sut) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-  gnmi::GetRequest req;
-  req.mutable_prefix()->set_origin(kOpenconfigStr);
-  req.set_type(gnmi::GetRequest_DataType_ALL);
-  gnmi::Path* path = req.add_path();
-  path->add_elem()->set_name(kInterfaces);
-  req.set_encoding(::gnmi::Encoding::JSON_IETF);
+  ASSERT_OK_AND_ASSIGN(gnmi::GetRequest req,
+                       BuildGnmiGetRequest(kInterfaces, gnmi::GetRequest::ALL));
   LOG(INFO) << "Sending GET request: " << req.ShortDebugString();
   gnmi::GetResponse resp;
   grpc::ClientContext context;
@@ -141,10 +176,8 @@ void TestGnmiGetInterfaceOperation(thinkit::Switch& sut) {
 
 void TestGnmiGetAllOperation(thinkit::Switch& sut) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-  gnmi::GetRequest req;
-  req.mutable_prefix()->set_origin(kOpenconfigStr);
-  req.set_type(gnmi::GetRequest_DataType_ALL);
-  req.set_encoding(gnmi::Encoding::JSON_IETF);
+  ASSERT_OK_AND_ASSIGN(gnmi::GetRequest req,
+                       BuildGnmiGetRequest("", gnmi::GetRequest::ALL));
   LOG(INFO) << "Sending GET request: " << req.ShortDebugString();
   gnmi::GetResponse resp;
   grpc::ClientContext context;
