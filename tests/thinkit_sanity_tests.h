@@ -15,13 +15,16 @@
 #ifndef GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
 #define GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
 
-#include "thinkit/mirror_testbed.h"
+#include "thinkit/ssh_client.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
 
-// Tests that P4 Sessions can be established with both the SUT and the control
-// switch.
-void TestP4Sessions(thinkit::MirrorTestbed& testbed);
+// Tests that commands can be run on the switch through SSH.
+void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut);
+
+// Tests that P4 Sessions can be established with the switch.
+void TestP4Session(thinkit::Switch& sut);
 
 }  // namespace pins_test
 

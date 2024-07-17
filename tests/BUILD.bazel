@@ -27,7 +27,7 @@ cc_library(
         "//gutil:status",
         "//gutil:status_matchers",
         "//p4_pdpi:p4_runtime_session",
-        "//thinkit:mirror_testbed",
+        "//thinkit:ssh_client",
         "//thinkit:switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
@@ -40,6 +40,7 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
     ],
 )
