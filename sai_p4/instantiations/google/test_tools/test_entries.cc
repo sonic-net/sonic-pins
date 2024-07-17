@@ -28,6 +28,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/proto.h"
+#include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -165,35 +166,9 @@ absl::StatusOr<pdpi::IrTableEntry> MakeIrEntryPuntingAllPackets(
 
 // -- PdEntryBuilder -----------------------------------------------------------
 
-namespace {
-
-bool ProtoLessThan(const google::protobuf::Message& x,
-                   const google::protobuf::Message& y) {
-  return x.SerializeAsString() < y.SerializeAsString();
-}
-bool ProtoEqual(const google::protobuf::Message& x,
-                const google::protobuf::Message& y) {
-  return google::protobuf::util::MessageDifferencer::Equals(x, y);
-}
-
-// TODO: Use `google::protobuf::util::StableSortAndUnique` instead once that
-// is open source.
-template <class T>
-void StableSortAndUnique(
-    google::protobuf::RepeatedPtrField<T>& repeated_field) {
-  auto sorted = std::move(repeated_field);
-  absl::c_stable_sort(sorted, ProtoLessThan);
-  repeated_field.Clear();
-  absl::c_unique_copy(
-      sorted, google::protobuf::RepeatedPtrFieldBackInserter(&repeated_field),
-      ProtoEqual);
-}
-
-}  // namespace
-
 sai::TableEntries PdEntryBuilder::GetDedupedEntries() {
   sai::TableEntries result = entries_;
-  StableSortAndUnique(*result.mutable_entries());
+  gutil::InefficientProtoSortAndDedup(*result.mutable_entries());
   return result;
 }
 
