@@ -266,6 +266,7 @@ cc_library(
     srcs = ["test_artifact_writer.cc"],
     hdrs = ["test_artifact_writer.h"],
     deps = [
+        ":proto",
         ":status",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",

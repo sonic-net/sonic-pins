@@ -15,8 +15,15 @@
 #ifndef GOOGLE_LIB_VALIDATOR_PINS_BACKEND_H_
 #define GOOGLE_LIB_VALIDATOR_PINS_BACKEND_H_
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/bind_front.h"
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "lib/validator/validator.h"
 #include "lib/validator/validator_backend.h"
 #include "thinkit/switch.h"
