@@ -38,6 +38,8 @@ namespace pins_test {
 class P4rtPortId {
  public:
   // Constructors.
+  P4rtPortId() = default;
+
   // Expects a decimal string. Else returns InvalidArgumentError.
   static absl::StatusOr<P4rtPortId> MakeFromP4rtEncoding(
       absl::string_view p4rt_port_id);
