@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Library of common table entries in PI, IR, and PD encodings.
+// Library of common table entries in PI and IR.
 //
-// CAUTION: PD entries are not suitable for switch testing, as the PD
-// representation is not backward-compatible and thus will not work for release
-// testing. However, PD entries can be useful in unit testing, e.g. with BMv2.
+// These are suitable for use in switch testing and unit testing, e.g. with
+// BMv2.
 
 #ifndef GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 #define GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
@@ -24,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -46,38 +46,43 @@ enum class IpVersion {
   kIpv4And6,
 };
 
-// Provides methods to conveniently build a set of SAI PD table entries for
+// Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
-//
-// CAUTION: PD entries are not suitable for switch testing, as the PD
-// representation is not backward-compatible and thus will not work for release
-// testing. However, PD entries can be useful in unit testing, e.g. with BMv2.
 //
 // Example usage:
 // ```
-//   sai::TableEntries entries =
-//     PdEntryBuilder()
+//   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities ir_entities,
+//     EntryBuilder(ir_p4info)
 //       .AddEntriesForwardingIpPacketsToGivenPort("egress_port")
 //       .AddEntryPuntingAllPackets(PuntAction::kCopy)
-//       .GetDedupedEntries();
+//       .GetDedupedIrEntities());
 // ```
-class PdEntryBuilder {
+class EntryBuilder {
  public:
-  PdEntryBuilder() = default;
-  PdEntryBuilder(sai::TableEntries entries) : entries_(std::move(entries)) {}
-  sai::TableEntries GetDedupedEntries();
+  EntryBuilder() = default;
+  explicit EntryBuilder(sai::TableEntries entries)
+      : entries_(std::move(entries)) {}
 
-  PdEntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
-  PdEntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
+  // Logs the current PD entries in the EntryBuilder to LOG(INFO).
+  const EntryBuilder& LogPdEntries() const;
+  EntryBuilder& LogPdEntries();
+
+  absl::StatusOr<std::vector<p4::v1::Entity>> GetDedupedPiEntities(
+      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
+  absl::StatusOr<pdpi::IrEntities> GetDedupedIrEntities(
+      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
+
+  EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
+  EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port);
-  PdEntryBuilder& AddVrfEntry(absl::string_view vrf);
-  PdEntryBuilder& AddEntryAdmittingAllPacketsToL3();
-  PdEntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
+  EntryBuilder& AddVrfEntry(absl::string_view vrf);
+  EntryBuilder& AddEntryAdmittingAllPacketsToL3();
+  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
       absl::string_view egress_port, IpVersion ip_version,
       absl::string_view vrf);
-  PdEntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
+  EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
-  PdEntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
+  EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
       absl::string_view vrf);
 
  private:
@@ -86,20 +91,44 @@ class PdEntryBuilder {
 
 // Returns an ACL table entry that punts all packets to the controller using the
 // given punt `action`.
+ABSL_DEPRECATED(
+    "Use "
+    "EntryBuilder().AddEntryPuntingAllPackets(`action`)."
+    "GetDedupedPiEntities(`ir_p4info`) instead.")
 absl::StatusOr<p4::v1::TableEntry> MakePiEntryPuntingAllPackets(
     PuntAction action, const pdpi::IrP4Info& ir_p4info);
+ABSL_DEPRECATED(
+    "Use "
+    "EntryBuilder().AddEntryPuntingAllPackets(`action`)."
+    "GetDedupedIrEntities(`ir_p4info`) instead.")
 absl::StatusOr<pdpi::IrTableEntry> MakeIrEntryPuntingAllPackets(
     PuntAction action, const pdpi::IrP4Info& ir_p4info);
+ABSL_DEPRECATED(
+    "Use "
+    "EntryBuilder().AddEntryPuntingAllPackets(`action`)."
+    "GetDedupedPiEntities(`ir_p4info`) instead.")
 absl::StatusOr<sai::TableEntry> MakePdEntryPuntingAllPackets(PuntAction action);
 
 // Returns a set of table entries that cause all IP packets to be forwarded
 // out of the given `egress_port`.
+ABSL_DEPRECATED(
+    "Use "
+    "EntryBuilder().AddEntriesForwardingIpPacketsToGivenPort(`egress_port`)."
+    "GetDedupedPiEntities(`ir_p4info`) instead.")
 absl::StatusOr<std::vector<p4::v1::TableEntry>>
 MakePiEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
                                             const pdpi::IrP4Info& ir_p4info);
-absl::StatusOr<pdpi::IrTableEntries> 
+ABSL_DEPRECATED(
+    "Use "
+    "EntryBuilder().AddEntriesForwardingIpPacketsToGivenPort(`egress_port`)."
+    "GetDedupedIrEntities(`ir_p4info`) instead.")
+absl::StatusOr<pdpi::IrTableEntries>
 MakeIrEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
                                             const pdpi::IrP4Info& ir_p4info);
+ABSL_DEPRECATED(
+    "Use "
+    "EntryBuilder().AddEntriesForwardingIpPacketsToGivenPort(`egress_port`)."
+    "GetDedupedPiEntities(`ir_p4info`) instead.")
 absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
     absl::string_view egress_port);
 
