@@ -26,6 +26,18 @@ void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut);
 // Tests that P4 Sessions can be established with the switch.
 void TestP4Session(thinkit::Switch& sut);
 
+// Tests that gNMI get interface works fine with SUT.
+void TestGnmiGetInterfaceOperation(thinkit::Switch& sut);
+
+// Tests that gNMI get all works fine with SUT.
+void TestGnmiGetAllOperation(thinkit::Switch& sut);
+
+// Tests that SUT all ports state is UP.
+void TestGnmiCheckInterfaceStateOperation(thinkit::Switch& sut);
+
+// Tests that SUT specific port state is UP.
+void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,
+                                                  std::string if_name);
 }  // namespace pins_test
 
 #endif  // GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
