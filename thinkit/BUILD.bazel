@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,6 +46,28 @@ cc_library(
 )
 
 cc_library(
+    name = "mock_switch",
+    testonly = 1,
+    hdrs = ["mock_switch.h"],
+    deps = [
+        ":switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "mock_switch_test",
+    srcs = ["mock_switch_test.cc"],
+    deps = [
+        ":mock_switch",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "mirror_testbed",
     hdrs = ["mirror_testbed.h"],
     deps = [
@@ -55,11 +77,53 @@ cc_library(
 )
 
 cc_library(
+    name = "mock_mirror_testbed",
+    testonly = 1,
+    hdrs = ["mock_mirror_testbed.h"],
+    deps = [
+        ":mirror_testbed",
+        ":switch",
+        ":test_environment",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "mock_mirror_testbed_test",
+    srcs = ["mock_mirror_testbed_test.cc"],
+    deps = [
+        ":mock_mirror_testbed",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "test_environment",
     hdrs = ["test_environment.h"],
     deps = [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "mock_test_environment",
+    testonly = 1,
+    hdrs = ["mock_test_environment.h"],
+    deps = [
+        ":test_environment",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "mock_test_environment_test",
+    srcs = ["mock_test_environment_test.cc"],
+    deps = [
+        ":mock_test_environment",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
