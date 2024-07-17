@@ -32,6 +32,7 @@
 #include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -164,15 +165,39 @@ absl::StatusOr<pdpi::IrTableEntry> MakeIrEntryPuntingAllPackets(
   return pdpi::PartialPdTableEntryToIrTableEntry(ir_p4info, pd);
 }
 
-// -- PdEntryBuilder -----------------------------------------------------------
+// -- EntryBuilder --------------------------------------------------------
 
-sai::TableEntries PdEntryBuilder::GetDedupedEntries() {
-  sai::TableEntries result = entries_;
-  gutil::InefficientProtoSortAndDedup(*result.mutable_entries());
-  return result;
+const EntryBuilder& EntryBuilder::LogPdEntries() const {
+  LOG(INFO) << entries_.DebugString();
+  return *this;
 }
 
-PdEntryBuilder& PdEntryBuilder::AddVrfEntry(absl::string_view vrf) {
+EntryBuilder& EntryBuilder::LogPdEntries() {
+  LOG(INFO) << entries_.DebugString();
+  return *this;
+}
+
+absl::StatusOr<std::vector<p4::v1::Entity>> EntryBuilder::GetDedupedPiEntities(
+    const pdpi::IrP4Info& ir_p4info, bool allow_unsupported) const {
+  ASSIGN_OR_RETURN(pdpi::IrEntities ir_entities,
+                   GetDedupedIrEntities(ir_p4info, allow_unsupported));
+  return pdpi::IrEntitiesToPi(
+      ir_p4info, ir_entities,
+      pdpi::TranslationOptions{.allow_unsupported = allow_unsupported});
+}
+
+absl::StatusOr<pdpi::IrEntities> EntryBuilder::GetDedupedIrEntities(
+    const pdpi::IrP4Info& ir_p4info, bool allow_unsupported) const {
+  ASSIGN_OR_RETURN(
+      pdpi::IrEntities ir_entities,
+      pdpi::PdTableEntriesToIrEntities(
+          ir_p4info, entries_,
+          pdpi::TranslationOptions{.allow_unsupported = allow_unsupported}));
+  gutil::InefficientProtoSortAndDedup(*ir_entities.mutable_entities());
+  return ir_entities;
+}
+
+EntryBuilder& EntryBuilder::AddVrfEntry(absl::string_view vrf) {
   sai::TableEntry& entry = *entries_.add_entries();
   entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
     vrf_table_entry {
@@ -186,7 +211,7 @@ PdEntryBuilder& PdEntryBuilder::AddVrfEntry(absl::string_view vrf) {
   return *this;
 }
 
-PdEntryBuilder& PdEntryBuilder::AddEntryAdmittingAllPacketsToL3() {
+EntryBuilder& EntryBuilder::AddEntryAdmittingAllPacketsToL3() {
   *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
     l3_admit_table_entry {
       match {}  # Wildcard.
@@ -197,14 +222,14 @@ PdEntryBuilder& PdEntryBuilder::AddEntryAdmittingAllPacketsToL3() {
   return *this;
 }
 
-PdEntryBuilder& PdEntryBuilder::AddEntryPuntingAllPackets(PuntAction action) {
+EntryBuilder& EntryBuilder::AddEntryPuntingAllPackets(PuntAction action) {
   absl::StatusOr<sai::TableEntry> entry = MakePdEntryPuntingAllPackets(action);
   CHECK_OK(entry.status());  // Crash ok: test-only library.
   *entries_.add_entries() = std::move(*entry);
   return *this;
 }
 
-PdEntryBuilder& PdEntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
+EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
     absl::string_view egress_port, IpVersion ip_version,
     absl::string_view vrf) {
   const std::string kNexthopId =
@@ -293,7 +318,7 @@ PdEntryBuilder& PdEntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
   return *this;
 }
 
-PdEntryBuilder& PdEntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
+EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
     absl::string_view egress_port) {
   absl::StatusOr<sai::TableEntries> entries =
       MakePdEntriesForwardingIpPacketsToGivenPort(egress_port);
@@ -304,7 +329,7 @@ PdEntryBuilder& PdEntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
   return *this;
 }
 
-PdEntryBuilder& PdEntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
+EntryBuilder& EntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
     absl::string_view vrf, IpVersion ip_version) {
   sai::TableEntry& entry = *entries_.add_entries();
   entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
@@ -335,8 +360,7 @@ PdEntryBuilder& PdEntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
       << "invalid ip version: " << static_cast<int>(ip_version);
 }
 
-PdEntryBuilder&
-PdEntryBuilder::AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
+EntryBuilder& EntryBuilder::AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
     absl::string_view vrf) {
   sai::TableEntry& entry = *entries_.add_entries();
   entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
