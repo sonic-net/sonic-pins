@@ -161,3 +161,8 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "packet_generation_finalizer",
+    hdrs = ["packet_generation_finalizer.h"],
+)
