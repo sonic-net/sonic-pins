@@ -847,6 +847,8 @@ message AclIngressMirrorAndRedirectTableEntry {
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 3;
       // CAUTION: This action is not (yet) supported.
       RedirectToPortAction redirect_to_port = 5;
+      // CAUTION: This action is not (yet) supported.
+      AclMirrorAndRedirectToPortAction acl_mirror_and_redirect_to_port = 6;
     }
   }
   Action action = 2;
@@ -1118,6 +1120,13 @@ message SetForwardingQueuesAction {
 // CAUTION: This action is not (yet) supported.
 message RedirectToPortAction {
   string redirect_port = 1;  // Format::STRING
+}
+
+// CAUTION: This action is not (yet) supported.
+message AclMirrorAndRedirectToPortAction {
+  // Refers to 'mirror_session_table.mirror_session_id'.
+  string mirror_session_id = 1;  // Format::STRING
+  string redirect_port = 2;      // Format::STRING
 }
 
 message NoAction {}
