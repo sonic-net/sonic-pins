@@ -80,6 +80,17 @@ cc_library(
 )
 
 cc_library(
+    name = "mirror_testbed_fixture",
+    testonly = 1,
+    hdrs = ["mirror_testbed_fixture.h"],
+    deps = [
+        ":mirror_testbed",
+        "@com_google_absl//absl/memory",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
     name = "mock_mirror_testbed",
     testonly = 1,
     hdrs = ["mock_mirror_testbed.h"],
