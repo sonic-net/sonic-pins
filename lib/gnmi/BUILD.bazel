@@ -45,6 +45,20 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "gnmi_helper_test",
+    srcs = ["gnmi_helper_test.cc"],
+    deps = [
+        ":gnmi_helper",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 proto_library(
     name = "openconfig_proto",
     srcs = ["openconfig.proto"],
