@@ -22,6 +22,7 @@
 #include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "system/system.grpc.pb.h"
 
 namespace thinkit {
 
@@ -45,6 +46,10 @@ class Switch {
   // Creates and returns a stub to the gNMI service.
   virtual absl::StatusOr<std::unique_ptr<gnmi::gNMI::Stub>>
   CreateGnmiStub() = 0;
+
+   // Creates and returns a stub to the gNOI System service.
+  virtual absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>
+  CreateGnoiSystemStub() = 0;
 };
 
 }  // namespace thinkit
