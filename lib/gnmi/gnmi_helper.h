@@ -89,5 +89,7 @@ absl::Status PushGnmiConfig(
 
 absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub);
 
+// Returns gNMI Path for OC strings.
+gnmi::Path ConvertOCStringToPath(absl::string_view oc_path);
 }  // namespace pins_test
 #endif  // GOOGLE_LIB_GNMI_GNMI_HELPER_H_
