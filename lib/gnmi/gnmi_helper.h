@@ -87,5 +87,7 @@ absl::Status PushGnmiConfig(
     const std::string& gnmi_config,
     absl::uint128 election_id = pdpi::TimeBasedElectionId());
 
+absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub);
+
 }  // namespace pins_test
 #endif  // GOOGLE_LIB_GNMI_GNMI_HELPER_H_
