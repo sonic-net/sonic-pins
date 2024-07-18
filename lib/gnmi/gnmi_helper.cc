@@ -14,6 +14,7 @@
 
 #include "lib/gnmi/gnmi_helper.h"
 
+#include <cctype>
 #include <string>
 #include <utility>
 
@@ -39,13 +40,28 @@ namespace pins_test {
 namespace {
 
 using ::nlohmann::json;
-const LazyRE2 kSplitNameValueRE = {R"((\w+)\[(\w+)\=(\w+)\])"};
+// Splits string in format "component[name=integrated_circuit0]" to three
+// tokens.
+const LazyRE2 kSplitNameValueRE = {R"((\w+)\[(\w+)=([\S+]+)\])"};
+
+// Splits string to tokens seperated by a char '/' as long as '/' is not
+// included in [].
+const LazyRE2 kSplitBreakSquareBraceRE = {R"(([^\[\/]+(\[[^\]]+\])?)\/?)"};
+
 }  // namespace
 
+// This API generates gNMI path from OC path string.
+// Example1:
+// components/component[name=integrated_circuit0]/integrated-circuit/state.
+// Example2:
+// components/component[name=1/1]/integrated-circuit/state.
 gnmi::Path ConvertOCStringToPath(absl::string_view oc_path) {
+  absl::string_view element;
+  std::vector<absl::string_view> elements;
+  while (RE2::FindAndConsume(&oc_path, *kSplitBreakSquareBraceRE, &element)) {
+    elements.push_back(element);
+  }
   gnmi::Path path;
-  std::vector<absl::string_view> elements =
-      absl::StrSplit(oc_path, absl::ByChar('/'), absl::SkipEmpty());
   for (absl::string_view node : elements) {
     std::string key;
     std::string attribute;

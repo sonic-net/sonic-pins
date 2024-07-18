@@ -131,6 +131,31 @@ cc_test(
 )
 
 cc_library(
+    name = "bazel_test_environment",
+    testonly = True,
+    srcs = ["bazel_test_environment.cc"],
+    hdrs = ["bazel_test_environment.h"],
+    deps = [
+        ":test_environment",
+        "//gutil:status",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "bazel_test_environment_test",
+    srcs = ["bazel_test_environment_test.cc"],
+    deps = [
+        ":bazel_test_environment",
+        "//gutil:status_matchers",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "ssh_client",
     hdrs = ["ssh_client.h"],
     deps = [
