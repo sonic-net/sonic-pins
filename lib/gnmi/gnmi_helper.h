@@ -101,7 +101,15 @@ absl::Status PushGnmiConfig(
 absl::Status PushGnmiConfig(thinkit::Switch& chassis,
                             const std::string& gnmi_config);
 
-absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub);
+absl::Status CanGetAllInterfaceOverGnmi(
+    gnmi::gNMI::Stub& stub, absl::Duration timeout = absl::Seconds(60));
+
+absl::StatusOr<gnmi::GetResponse> GetAllInterfaceOverGnmi(
+    gnmi::gNMI::Stub& stub, absl::Duration timeout = absl::Seconds(60));
+
+// Checks if all interfaces are up.
+absl::Status CheckAllInterfaceUpOverGnmi(
+    gnmi::gNMI::Stub& stub, absl::Duration timeout = absl::Seconds(60));
 
 // Returns gNMI Path for OC strings.
 gnmi::Path ConvertOCStringToPath(absl::string_view oc_path);
