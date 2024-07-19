@@ -27,6 +27,11 @@ constexpr char kPortSpeed[] = "openconfig-if-ethernet:port-speed";
 constexpr char kPlatformJson[] = "platform.json";
 constexpr char kGB[] = "GB";
 
+#if 0
+constexpr char kPlatformJson[] =
+    "/lib/google/experimental/syncd/sonic/platform/GPINs/platform.json";
+#endif
+
 }  // namespace pins_test
 
 #endif  // GOOGLE_TESTS_THINKIT_UTIL_H_

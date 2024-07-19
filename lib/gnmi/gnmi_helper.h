@@ -16,8 +16,11 @@
 #define GOOGLE_LIB_GNMI_GNMI_HELPER_H_
 
 #include <cstddef>
+#include <string>
+#include <type_traits>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "p4_pdpi/p4_runtime_session.h"
