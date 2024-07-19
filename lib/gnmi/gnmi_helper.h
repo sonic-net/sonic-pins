@@ -23,6 +23,7 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
 
@@ -30,6 +31,13 @@ inline constexpr char kOpenconfigStr[] = "openconfig";
 inline constexpr char kTarget[] = "target";
 
 enum class GnmiSetType : char { kUpdate, kReplace, kDelete };
+
+enum class OperStatus {
+  kUnknown,
+  kUp,
+  kDown,
+  kTesting,
+};
 
 // Builds gNMI Set Request for a given OC path, set type and set value.
 // The path should be in the following format below.
@@ -83,13 +91,21 @@ absl::StatusOr<std::vector<absl::string_view>>
 GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response);
 
 absl::Status PushGnmiConfig(
-    gnmi::gNMI::Stub& stub, const std::string& chassis_name,
+    gnmi::gNMI::Stub& stub, absl::string_view chassis_name,
     const std::string& gnmi_config,
     absl::uint128 election_id = pdpi::TimeBasedElectionId());
+
+absl::Status PushGnmiConfig(thinkit::Switch& chassis,
+                            const std::string& gnmi_config);
 
 absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub);
 
 // Returns gNMI Path for OC strings.
 gnmi::Path ConvertOCStringToPath(absl::string_view oc_path);
+
+// Gets the operational status of an interface.
+absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
+    gnmi::gNMI::Stub& stub, absl::string_view if_name);
+
 }  // namespace pins_test
 #endif  // GOOGLE_LIB_GNMI_GNMI_HELPER_H_
