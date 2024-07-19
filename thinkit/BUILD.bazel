@@ -27,9 +27,23 @@ package(
 cc_library(
     name = "thinkit",
     deps = [
+        ":control_interface",
+        ":generic_testbed",
         ":mirror_testbed",
         ":switch",
         ":test_environment",
+    ],
+)
+
+cc_library(
+    name = "thinkit_mocks",
+    testonly = 1,
+    deps = [
+        ":mock_control_interface",
+        ":mock_generic_testbed",
+        ":mock_mirror_testbed",
+        ":mock_switch",
+        ":mock_test_environment",
     ],
 )
 
@@ -206,6 +220,55 @@ cc_test(
 )
 
 cc_library(
+    name = "generic_testbed",
+    hdrs = ["generic_testbed.h"],
+    deps = [
+        ":control_interface",
+        ":switch",
+        ":test_environment",
+        "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "generic_testbed_fixture",
+    testonly = 1,
+    hdrs = ["generic_testbed_fixture.h"],
+    deps = [
+        ":generic_testbed",
+        "@com_google_absl//absl/memory",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
+    name = "mock_generic_testbed",
+    testonly = 1,
+    hdrs = ["mock_generic_testbed.h"],
+    deps = [
+        ":control_interface",
+        ":generic_testbed",
+        ":switch",
+        ":test_environment",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "mock_generic_testbed_test",
+    srcs = ["mock_generic_testbed_test.cc"],
+    deps = [
+        ":mock_generic_testbed",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "control_interface",
     hdrs = ["control_interface.h"],
     deps = [
@@ -214,6 +277,28 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_library(
+    name = "mock_control_interface",
+    testonly = 1,
+    hdrs = ["mock_control_interface.h"],
+    deps = [
+        ":control_interface",
+        "@com_github_gnoi//diag:diag_cc_grpc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "mock_control_interface_test",
+    srcs = ["mock_control_interface_test.cc"],
+    deps = [
+        ":mock_control_interface",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
