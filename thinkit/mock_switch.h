@@ -19,6 +19,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "cert/cert.grpc.pb.h"
 #include "diag/diag.grpc.pb.h"
 #include "gmock/gmock.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
@@ -30,7 +31,7 @@ namespace thinkit {
 
 class MockSwitch : public Switch {
  public:
-  MOCK_METHOD(absl::string_view, ChassisName, (), (override));
+  MOCK_METHOD(const std::string&, ChassisName, (), (override));
   MOCK_METHOD(uint32_t, DeviceId, (), (override));
   MOCK_METHOD(absl::StatusOr<std::unique_ptr<p4::v1::P4Runtime::Stub>>,
               CreateP4RuntimeStub, (), (override));
@@ -41,6 +42,10 @@ class MockSwitch : public Switch {
               CreateGnoiSystemStub, (), (override));
   MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::Stub>>,
               CreateGnoiDiagStub, (), (override));
+  MOCK_METHOD(
+      absl::StatusOr<
+          std::unique_ptr<gnoi::certificate::CertificateManagement::Stub>>,
+      CreateGnoiCertificateStub, (), (override));
 };
 
 }  // namespace thinkit

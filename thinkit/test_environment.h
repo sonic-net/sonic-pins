@@ -16,7 +16,9 @@
 #define THINKIT_TEST_ENVIRONMENT_H_
 
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "google/protobuf/message.h"
 
 namespace thinkit {
 
@@ -30,11 +32,23 @@ class TestEnvironment {
   // existing files.
   virtual absl::Status StoreTestArtifact(absl::string_view filename,
                                          absl::string_view contents) = 0;
+  absl::Status StoreTestArtifact(absl::string_view filename,
+                                 const google::protobuf::Message& proto) {
+    return StoreTestArtifact(filename, proto.DebugString());
+  }
 
   // Appends contents to an existing test artifact with the specified filename.
   // Creates a new file if it doesn't exist.
   virtual absl::Status AppendToTestArtifact(absl::string_view filename,
                                             absl::string_view contents) = 0;
+  absl::Status AppendToTestArtifact(absl::string_view filename,
+                                    const google::protobuf::Message& proto) {
+    return AppendToTestArtifact(filename,
+                                absl::StrCat(proto.DebugString(), "\n"));
+  }
+
+  // Should known failures be masked, or should the test fail instead?
+  virtual bool MaskKnownFailures() = 0;
 };
 
 }  // namespace thinkit
