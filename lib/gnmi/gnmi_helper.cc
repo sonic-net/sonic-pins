@@ -22,6 +22,14 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
+
+#include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_replace.h"
+#include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
+
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
@@ -166,7 +174,7 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::Stub* sut_gnmi_stub,
 }
 
 absl::Status PushGnmiConfig(gnmi::gNMI::Stub& stub,
-                            const std::string& chassis_name,
+                            absl::string_view chassis_name,
                             const std::string& gnmi_config,
                             absl::uint128 election_id) {
   gnmi::SetRequest req;
@@ -189,6 +197,13 @@ absl::Status PushGnmiConfig(gnmi::gNMI::Stub& stub,
   if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
   LOG(INFO) << "Config push response: " << resp.ShortDebugString();
   return absl::OkStatus();
+}
+
+absl::Status PushGnmiConfig(thinkit::Switch& chassis,
+                            const std::string& gnmi_config) {
+  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> stub,
+                   chassis.CreateGnmiStub());
+  return pins_test::PushGnmiConfig(*stub, chassis.ChassisName(), gnmi_config);
 }
 
 absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub) {
@@ -301,6 +316,42 @@ GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response) {
     }
   }
   return elements;
+}
+
+absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
+    gnmi::gNMI::Stub& stub, absl::string_view if_name) {
+  std::string if_req = absl::StrCat("interfaces/interface[name=", if_name,
+                                    "]/state/oper-status");
+  ASSIGN_OR_RETURN(auto request,
+                   BuildGnmiGetRequest(if_req, gnmi::GetRequest::STATE));
+  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+
+  gnmi::GetResponse response;
+  grpc::ClientContext context;
+  grpc::Status status = stub.Get(&context, request, &response);
+  if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
+  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+
+  if (response.notification_size() != 1 ||
+      response.notification(0).update_size() != 1) {
+    return absl::InternalError(
+        absl::StrCat("Invalid response: ", response.DebugString()));
+  }
+  ASSIGN_OR_RETURN(
+      std::string oper_status,
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"));
+  LOG(INFO) << "Got the operational status: " << oper_status << ".";
+
+  if (absl::StrContains((oper_status), "UP")) {
+    return OperStatus::kUp;
+  }
+  if (absl::StrContains((oper_status), "DOWN")) {
+    return OperStatus::kDown;
+  }
+  if (absl::StrContains((oper_status), "TESTING")) {
+    return OperStatus::kTesting;
+  }
+  return OperStatus::kUnknown;
 }
 
 }  // namespace pins_test
