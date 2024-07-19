@@ -206,14 +206,33 @@ absl::Status PushGnmiConfig(thinkit::Switch& chassis,
   return pins_test::PushGnmiConfig(*stub, chassis.ChassisName(), gnmi_config);
 }
 
-absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub) {
+absl::Status CanGetAllInterfaceOverGnmi(gnmi::gNMI::Stub& stub,
+                                        absl::Duration timeout) {
+  return GetAllInterfaceOverGnmi(stub).status();
+}
+
+absl::StatusOr<gnmi::GetResponse> GetAllInterfaceOverGnmi(
+    gnmi::gNMI::Stub& stub, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto req, BuildGnmiGetRequest("", gnmi::GetRequest::ALL));
+  gnmi::GetResponse resp;
+  grpc::ClientContext context;
+  context.set_wait_for_ready(true);
+  context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
+  grpc::Status status = stub.Get(&context, req, &resp);
+  if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
+  LOG(INFO) << "Received GET response: " << resp.ShortDebugString();
+  return resp;
+}
+
+absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub,
+                                         absl::Duration timeout) {
   ASSIGN_OR_RETURN(auto req,
                    BuildGnmiGetRequest("interfaces", gnmi::GetRequest::STATE));
   gnmi::GetResponse resp;
   grpc::ClientContext context;
+  context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
   grpc::Status status = stub.Get(&context, req, &resp);
   if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
-
   if (resp.notification_size() < 1 || resp.notification(0).update_size() < 1) {
     return absl::InternalError(
         absl::StrCat("Invalid response: ", resp.DebugString()));

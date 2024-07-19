@@ -57,16 +57,15 @@ cc_library(
 
 cc_library(
     name = "common_backend",
+    testonly = 1,
     srcs = ["common_backend.cc"],
     hdrs = ["common_backend.h"],
     deps = [
         ":validator",
         ":validator_backend",
-        "//gutil:status",
+        ":validator_lib",
         "//thinkit:ssh_client",
         "@com_google_absl//absl/functional:bind_front",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -92,18 +91,34 @@ cc_library(
     deps = [
         ":validator",
         ":validator_backend",
+        ":validator_lib",
+        "//gutil:status",
+        "//thinkit:switch",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/functional:bind_front",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
+    name = "validator_lib",
+    testonly = 1,
+    srcs = ["validator_lib.cc"],
+    hdrs = ["validator_lib.h"],
+    deps = [
         "//gutil:status",
         "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:p4_runtime_session",
+        "//thinkit:ssh_client",
         "//thinkit:switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
         "@com_github_gnoi//system:system_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/functional:bind_front",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

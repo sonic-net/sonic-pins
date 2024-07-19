@@ -14,52 +14,20 @@
 
 #include "lib/validator/common_backend.h"
 
-#include "absl/status/status.h"
-#include "absl/strings/match.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/substitute.h"
-#include "gutil/status.h"
+#include "lib/validator/validator_lib.h"
 
 namespace pins_test {
 
 absl::Status CommonBackend::IsPingable(absl::string_view chassis,
                                        absl::Duration timeout) {
-  constexpr char kPingCommand[] = R"(fping -t $0 $1)";
-  FILE* in;
-  char buff[1024];
-  std::string pingCommand =
-      absl::Substitute(kPingCommand, absl::ToInt64Seconds(timeout), chassis);
-  if (!(in = popen(pingCommand.c_str(), "r"))) {
-    return absl::UnknownError(
-        absl::StrCat("Failed to run command: ", pingCommand));
-  }
-  std::string response;
-  while (fgets(buff, sizeof(buff), in) != nullptr) {
-    absl::StrAppend(&response, buff);
-  }
-  pclose(in);
-
-  if (!absl::StrContains(response, "alive")) {
-    return absl::UnavailableError(
-        absl::StrCat("Switch ", chassis,
-                     " is not reachable. Unexpected result: ", response));
-  }
-  return absl::OkStatus();
+  return pins_test::Pingable(chassis, timeout);
 }
 
 // The switch is SSHable if running the command "echo foo" returns "foo" in
 // stdout with no errors.
 absl::Status CommonBackend::IsSSHable(absl::string_view chassis,
                                       absl::Duration timeout) {
-  ASSIGN_OR_RETURN(std::string response,
-                   ssh_client_->RunCommand(chassis, "echo foo", timeout));
-
-  if (response != "foo\n") {
-    return absl::UnavailableError(absl::StrCat(
-        "Switch ", chassis, " is not SSHable. Unexpected result: ", response));
-  }
-
-  return absl::OkStatus();
+  return pins_test::SSHable(chassis, *ssh_client_, timeout);
 }
 
 }  // namespace pins_test

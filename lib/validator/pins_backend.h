@@ -44,42 +44,33 @@ class PINSBackend : public ValidatorBackend {
   PINSBackend(std::vector<std::unique_ptr<thinkit::Switch>> switches);
 
   // Checks if a P4Runtime session could be established.
-  absl::Status CanEstablishP4RuntimeSession(absl::string_view chassis,
-                                            absl::Duration timeout);
+  absl::Status P4rtAble(absl::string_view chassis, absl::Duration timeout);
 
   // Checks if a gNMI get all interface request can be sent and a response
   // received.
-  absl::Status CanGetAllInterfaceOverGnmi(absl::string_view chassis,
-                                          absl::Duration timeout);
+  absl::Status GnmiAble(absl::string_view chassis, absl::Duration timeout);
 
   // Checks if a gNOI system get time request can be sent and a response
   // received.
-  absl::Status CanGetTimeOverGnoiSystem(absl::string_view chassis,
-                                        absl::Duration timeout);
+  absl::Status GnoiAble(absl::string_view chassis, absl::Duration timeout);
 
   // Checks if "oper-status" of all interfaces are "UP".
-  absl::Status CheckAllInterfaceUpOverGnmi(absl::string_view chassis,
-                                           absl::Duration timeout);
+  absl::Status PortsUp(absl::string_view chassis, absl::Duration timeout);
 
  protected:
   void SetupValidations() override {
-    AddCallbacksToValidation(
-        kP4RuntimeUsable,
-        {absl::bind_front(&PINSBackend::CanEstablishP4RuntimeSession, this)});
-    AddCallbacksToValidation(
-        kGnmiUsable,
-        {absl::bind_front(&PINSBackend::CanGetAllInterfaceOverGnmi, this)});
-    AddCallbacksToValidation(
-        kGnoiSystemUsable,
-        {absl::bind_front(&PINSBackend::CanGetTimeOverGnoiSystem, this)});
-    AddCallbacksToValidation(
-        kPortsUp,
-        {absl::bind_front(&PINSBackend::CheckAllInterfaceUpOverGnmi, this)});
-    AddCallbacksToValidation(
-        Validator::kReady,
-        {absl::bind_front(&PINSBackend::CanEstablishP4RuntimeSession, this),
-         absl::bind_front(&PINSBackend::CanGetAllInterfaceOverGnmi, this),
-         absl::bind_front(&PINSBackend::CanGetTimeOverGnoiSystem, this)});
+    AddCallbacksToValidation(kP4RuntimeUsable,
+                             {absl::bind_front(&PINSBackend::P4rtAble, this)});
+    AddCallbacksToValidation(kGnmiUsable,
+                             {absl::bind_front(&PINSBackend::GnmiAble, this)});
+    AddCallbacksToValidation(kGnoiSystemUsable,
+                             {absl::bind_front(&PINSBackend::GnoiAble, this)});
+    AddCallbacksToValidation(kPortsUp,
+                             {absl::bind_front(&PINSBackend::PortsUp, this)});
+    AddCallbacksToValidation(Validator::kReady,
+                             {absl::bind_front(&PINSBackend::P4rtAble, this),
+                              absl::bind_front(&PINSBackend::GnmiAble, this),
+                              absl::bind_front(&PINSBackend::GnoiAble, this)});
   }
 
  private:
