@@ -33,6 +33,8 @@ cc_library(
         "//gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:p4_runtime_session",
+        "//lib/validator:validator_lib",
+        "//thinkit:mirror_testbed",
         "//thinkit:ssh_client",
         "//thinkit:switch",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",

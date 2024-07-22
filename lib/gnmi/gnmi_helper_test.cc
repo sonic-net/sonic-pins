@@ -359,5 +359,252 @@ TEST(StripQuotes, VariousInputs) {
   EXPECT_EQ(StripQuotes(R"("test"")"), R"(test")");
 }
 
+TEST(GetInterfaceOperStatusMap, GnmiGetRpcFails) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(
+      Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(GetInterfaceOperStatusMap, InvalidGnmiGetResponse) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(Return(grpc::Status::OK));
+  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+              StatusIs(absl::StatusCode::kInternal,
+                       testing::HasSubstr("Invalid response")));
+}
+
+TEST(GetInterfaceOperStatusMap, GnmiGetResponseWithoutOpenconfigInterface) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val { json_ietf_val: "{\"openconfig-system:alarms\":{}}" }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+              StatusIs(absl::StatusCode::kNotFound,
+                       testing::HasSubstr(
+                           "'openconfig-interfaces:interfaces' not found")));
+}
+
+TEST(GetInterfaceOperStatusMap, InterfaceNotFoundInGnmiGetResponse) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+              StatusIs(absl::StatusCode::kNotFound,
+                       testing::HasSubstr("'interface' not found")));
+}
+
+TEST(GetInterfaceOperStatusMap, InterfaceNameNotFound) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+              StatusIs(absl::StatusCode::kNotFound,
+                       testing::HasSubstr("'name' not found")));
+}
+
+TEST(GetInterfaceOperStatusMap, InterfaceStateNotFound) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\"}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+              StatusIs(absl::StatusCode::kNotFound,
+                       testing::HasSubstr("'state' not found")));
+}
+
+TEST(GetInterfaceOperStatusMap, OperStatusNotFoundInState) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"name\":\"Ethernet0\"}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+              StatusIs(absl::StatusCode::kNotFound,
+                       testing::HasSubstr("'oper-status' not found")));
+}
+
+TEST(GetInterfaceOperStatusMap, SuccessfullyReturnsInterfaceOperStatusMap) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Cpu0\"},{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"DOWN\"}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  auto statusor = GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60));
+  ASSERT_OK(statusor);
+  const absl::flat_hash_map<std::string, std::string> expected_map = {
+      {"Ethernet0", "DOWN"}};
+  EXPECT_THAT(*statusor,
+              ::testing::UnorderedPointwise(::testing::Eq(), expected_map));
+}
+
+TEST(CheckAllInterfaceOperState, FailsToGetInterfaceOperStatusMap) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(
+      Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(
+      CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"),
+      StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(CheckAllInterfaceOperState, InterfaceNotUp) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"DOWN\"}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(
+      CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"),
+      StatusIs(absl::StatusCode::kUnavailable,
+               testing::HasSubstr("Interfaces are not ready")));
+}
+
+TEST(CheckAllInterfaceOperState, InterfaceNotDown) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"TESTING\"}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(
+      CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"DOWN"),
+      StatusIs(absl::StatusCode::kUnavailable,
+               testing::HasSubstr("Interfaces are not ready")));
+}
+
+TEST(CheckAllInterfaceOperState, AllInterfacesUp) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet1\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  ASSERT_OK(
+      CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"));
+}
+
+TEST(GetUpInterfaces, FailsToGetInterfaceOperStatusMap) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(
+      Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(GetUpInterfacesOverGnmi(stub),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(GetUpInterfaces, SuccessfullyGetsUpInterface) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"bond0\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  auto statusor = GetUpInterfacesOverGnmi(stub);
+  ASSERT_OK(statusor);
+  EXPECT_THAT(*statusor,
+              testing::ContainerEq(std::vector<std::string>{"Ethernet0"}));
+}
+
 }  // namespace
 }  // namespace pins_test
