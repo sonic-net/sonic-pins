@@ -56,6 +56,17 @@ absl::Status GnoiAble(thinkit::Switch& thinkit_switch,
 absl::Status PortsUp(thinkit::Switch& thinkit_switch,
                      absl::Duration timeout = kDefaultTimeout);
 
+// Checks if the switch is ready by running the following validations:
+// Pingable, P4rtAble, GnmiAble, GnoiAble, PortsUp.
+absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
+                         absl::Duration timeout = kDefaultTimeout);
+
+// Checks if the switch is ready by running the following validations:
+// Pingable, SSHable, P4rtAble, GnmiAble, GnoiAble, PortsUp.
+absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
+                                thinkit::SSHClient& ssh_client,
+                                absl::Duration timeout = kDefaultTimeout);
+
 }  // namespace pins_test
 
 #endif  // GOOGLE_LIB_VALIDATOR_VALIDATOR_LIB_H_

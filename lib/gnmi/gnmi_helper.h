@@ -15,10 +15,12 @@
 #ifndef GOOGLE_LIB_GNMI_GNMI_HELPER_H_
 #define GOOGLE_LIB_GNMI_GNMI_HELPER_H_
 
-#include <cstddef>
 #include <string>
 #include <type_traits>
+#include <vector>
 
+#include "absl/numeric/int128.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -65,7 +67,7 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::Stub* sut_gnmi_stub,
                                GnmiSetType operation, absl::string_view value);
 
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
-    gnmi::gNMI::Stub* sut_gnmi_stub, absl::string_view state_path,
+    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view state_path,
     absl::string_view resp_parse_str);
 
 template <class T>
@@ -117,6 +119,18 @@ gnmi::Path ConvertOCStringToPath(absl::string_view oc_path);
 // Gets the operational status of an interface.
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     gnmi::gNMI::Stub& stub, absl::string_view if_name);
+
+// Parses the alarms JSON array returned from a gNMI Get request to
+// "openconfig-system:system/alarms/alarm". Returns the list of alarms.
+absl::StatusOr<std::vector<std::string>> ParseAlarms(
+    const std::string& alarms_json);
+
+// Gets alarms over gNMI.
+absl::StatusOr<std::vector<std::string>> GetAlarms(
+    gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Strips the beginning and ending double-quotes from the `string`.
+absl::string_view StripQuotes(absl::string_view string);
 
 }  // namespace pins_test
 #endif  // GOOGLE_LIB_GNMI_GNMI_HELPER_H_
