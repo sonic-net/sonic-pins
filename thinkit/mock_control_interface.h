@@ -24,6 +24,16 @@
 namespace thinkit {
 class MockControlInterface : public ControlInterface {
  public:
+  MOCK_METHOD(
+      absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>,
+      CollectPackets, (PacketCallback callback), (override));
+  MOCK_METHOD(absl::Status, SendPacket,
+              (absl::string_view interface, absl::string_view packet),
+              (override));
+  MOCK_METHOD(absl::Status, SendPackets,
+              (absl::string_view interface,
+               absl::Span<const std::string> packets),
+              (override));
   MOCK_METHOD(absl::Status, SetAdminLinkState,
               (absl::Span<const std::string> sut_ports, LinkState state),
               (override));

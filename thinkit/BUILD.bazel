@@ -163,7 +163,10 @@ cc_library(
     deps = [
         ":test_environment",
         "//gutil:status",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_googletest//:gtest",
@@ -277,6 +280,7 @@ cc_library(
     name = "control_interface",
     hdrs = ["control_interface.h"],
     deps = [
+        ":packet_generation_finalizer",
         "@com_github_gnoi//diag:diag_cc_grpc_proto",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/container:flat_hash_set",
