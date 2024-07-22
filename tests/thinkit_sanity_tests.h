@@ -16,6 +16,7 @@
 #define GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
 
 #include "absl/strings/string_view.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
@@ -34,7 +35,10 @@ void TestGnmiGetInterfaceOperation(thinkit::Switch& sut);
 void TestGnmiGetAllOperation(thinkit::Switch& sut);
 
 // Tests that SUT all ports state is UP.
-void TestGnmiCheckInterfaceStateOperation(thinkit::Switch& sut);
+void TestGnmiCheckInterfaceStateOperation(thinkit::MirrorTestbed& testbed);
+
+// Tests that no gNMI alarms are set.
+void TestGnmiCheckAlarms(thinkit::MirrorTestbed& testbed);
 
 // Tests that SUT specific port state is UP.
 void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,

@@ -56,6 +56,10 @@ absl::Status GnoiAble(thinkit::Switch& thinkit_switch,
 absl::Status PortsUp(thinkit::Switch& thinkit_switch,
                      absl::Duration timeout = kDefaultTimeout);
 
+// Checks to make sure no alarms are set.
+absl::Status NoAlarms(thinkit::Switch& thinkit_switch,
+                      absl::Duration timeout = kDefaultTimeout);
+
 // Checks if the switch is ready by running the following validations:
 // Pingable, P4rtAble, GnmiAble, GnoiAble, PortsUp.
 absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
