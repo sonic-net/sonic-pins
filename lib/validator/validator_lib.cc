@@ -32,7 +32,7 @@ using Stub = ::p4::v1::P4Runtime::Stub;
 }  // namespace
 
 absl::Status Pingable(absl::string_view chassis_name, absl::Duration timeout) {
-  constexpr char kPingCommand[] = R"(fping -t $0 $1)";
+  constexpr char kPingCommand[] = R"(fping -t $0 $1; fping6 -t $0 $1)";
   FILE* in;
   char buff[1024];
   std::string pingCommand = absl::Substitute(
@@ -116,6 +116,28 @@ absl::Status PortsUp(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
   ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
                    thinkit_switch.CreateGnmiStub());
   return pins_test::CheckAllInterfaceUpOverGnmi(*gnmi_stub, timeout);
+}
+
+absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
+                         absl::Duration timeout) {
+  RETURN_IF_ERROR(Pingable(thinkit_switch));
+  RETURN_IF_ERROR(P4rtAble(thinkit_switch));
+  RETURN_IF_ERROR(GnmiAble(thinkit_switch));
+  // TODO (b/176913347): Add validation once gNMI response flakiness is fixed.
+  // RETURN_IF_ERROR(PortsUp(thinkit_switch));
+  return GnoiAble(thinkit_switch);
+}
+
+absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
+                                thinkit::SSHClient& ssh_client,
+                                absl::Duration timeout) {
+  RETURN_IF_ERROR(Pingable(thinkit_switch));
+  RETURN_IF_ERROR(SSHable(thinkit_switch, ssh_client));
+  RETURN_IF_ERROR(P4rtAble(thinkit_switch));
+  RETURN_IF_ERROR(GnmiAble(thinkit_switch));
+  // TODO (b/176913347): Add validation once gNMI response flakiness is fixed.
+  // RETURN_IF_ERROR(PortsUp(thinkit_switch));
+  return GnoiAble(thinkit_switch);
 }
 
 }  // namespace pins_test

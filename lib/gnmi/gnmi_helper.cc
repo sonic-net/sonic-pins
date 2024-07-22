@@ -14,30 +14,29 @@
 
 #include "lib/gnmi/gnmi_helper.h"
 
-#include <cctype>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "absl/numeric/int128.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
-
 #include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
-#include "absl/strings/str_format.h"
-#include "absl/strings/str_replace.h"
-#include "absl/strings/numbers.h"
-#include "absl/strings/str_cat.h"
-
+#include "absl/strings/strip.h"
 #include "absl/time/time.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include "google/protobuf/map.h"
+#include "grpcpp/impl/codegen/client_context.h"
+#include "grpcpp/impl/codegen/string_ref.h"
 #include "gutil/status.h"
-#include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "re2/re2.h"
 #include "include/nlohmann/json.hpp"
@@ -149,7 +148,7 @@ absl::StatusOr<std::string> ParseGnmiGetResponse(
   const auto match_tag_json = resp_json.find(match_tag);
   if (match_tag_json == resp_json.end()) {
     return gutil::InternalErrorBuilder().LogError()
-           << match_tag << "not present in JSON response "
+           << match_tag << " not present in JSON response "
            << response.ShortDebugString();
   }
   return match_tag_json->dump();
@@ -253,24 +252,31 @@ absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub,
 
   std::vector<std::string> unavailable_interfaces;
   for (auto const& element : oc_intf_list_json->items()) {
-    auto const element_name_json = element.value().find("name");
+    const auto element_name_json = element.value().find("name");
     if (element_name_json == element.value().end()) {
       return absl::NotFoundError(
           absl::StrCat("'name' not found: ", element.value().dump()));
     }
-    auto const element_interface_state_json = element.value().find("state");
-    if (element_interface_state_json == element.value().end()) {
-      return absl::NotFoundError(absl::StrCat(
-          "'state' not found: ", element.value().find("name")->dump()));
+    std::string name = std::string(StripQuotes(element_name_json->dump()));
+
+    // TODO: Remove once CpuX contains the oper-state subtree.
+    if (absl::StartsWith(name, "Cpu")) {
+      LOG(INFO) << "Skipping " << name << ".";
+      continue;
     }
-    auto const element_status_json =
+
+    const auto element_interface_state_json = element.value().find("state");
+    if (element_interface_state_json == element.value().end()) {
+      return absl::NotFoundError(absl::StrCat("'state' not found: ", name));
+    }
+    const auto element_status_json =
         element_interface_state_json->find("oper-status");
     if (element_status_json == element_interface_state_json->end()) {
-      return absl::NotFoundError(absl::StrCat(
-          "'oper-status' not found: ", element.value().find("name")->dump()));
+      return absl::NotFoundError(
+          absl::StrCat("'oper-status' not found: ", name));
     }
-    if (element_status_json->dump().find("UP") == grpc::string_ref::npos) {
-      unavailable_interfaces.push_back(element.value().find("name")->dump());
+    if (!absl::StrContains(element_status_json->dump(), "UP")) {
+      unavailable_interfaces.push_back(name);
     }
   }
   if (!unavailable_interfaces.empty()) {
@@ -282,7 +288,7 @@ absl::Status CheckAllInterfaceUpOverGnmi(gnmi::gNMI::Stub& stub,
 }
 
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
-    gnmi::gNMI::Stub* sut_gnmi_stub, absl::string_view state_path,
+    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view state_path,
     absl::string_view resp_parse_str) {
   ASSIGN_OR_RETURN(gnmi::GetRequest request,
                    BuildGnmiGetRequest(state_path, gnmi::GetRequest::STATE));
@@ -371,6 +377,106 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     return OperStatus::kTesting;
   }
   return OperStatus::kUnknown;
+}
+
+absl::StatusOr<std::vector<std::string>> ParseAlarms(
+    const std::string& alarms_json) {
+  auto alarms_array = json::parse(alarms_json);
+  if (!alarms_array.is_array()) {
+    return absl::InvalidArgumentError(
+        "Input JSON should be an array of alarms.");
+  }
+
+  std::vector<std::string> alarm_messages;
+  for (const auto& alarm : alarms_array) {
+    auto state = alarm.find("state");
+    if (state == alarm.end()) {
+      return absl::InvalidArgumentError(
+          "Input JSON alarm does not have a state field.");
+    }
+
+    // The state of an alarm will look like:
+    // {
+    //   "id": ...
+    //   "resource": "linkqual:linkqual"
+    //   "severity": "openconfig-alarm-types:WARNING"
+    //   "text": "INACTIVE: Unknown"
+    //   "time-created": ...
+    //   "type-id": "Software Error"
+    // }
+    //
+    // We can build an error message to look like (missing fields will be
+    // omitted):
+    // [linkqual:linkqual WARNING] Software Error INACTIVE: Unknown
+    std::string message = "[";
+    auto resource = state->find("resource");
+    if (resource != state->end()) {
+      absl::StrAppend(&message, StripQuotes(resource->dump()), " ");
+    }
+    auto severity = state->find("severity");
+    if (severity != state->end()) {
+      // We only need the last part.
+      std::vector<std::string> parts =
+          absl::StrSplit(StripQuotes(severity->dump()), ':');
+      absl::StrAppend(&message, parts.back());
+    }
+    absl::StrAppend(&message, "] ");
+    auto type_id = state->find("type-id");
+    if (type_id != state->end()) {
+      absl::StrAppend(&message, StripQuotes(type_id->dump()), " ");
+    }
+    auto text = state->find("text");
+    if (text != state->end()) {
+      absl::StrAppend(&message, StripQuotes(text->dump()));
+    }
+    alarm_messages.push_back(std::move(message));
+  }
+  return alarm_messages;
+}
+
+absl::StatusOr<std::vector<std::string>> GetAlarms(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      gnmi::GetRequest request,
+      BuildGnmiGetRequest("system/alarms", gnmi::GetRequest::STATE));
+  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+  gnmi::GetResponse response;
+  grpc::ClientContext context;
+  grpc::Status status = gnmi_stub.Get(&context, request, &response);
+  if (!status.ok()) {
+    return gutil::GrpcStatusToAbslStatus(status);
+  }
+
+  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  if (response.notification_size() != 1) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Unexpected size in response (should be 1): "
+           << response.notification_size();
+  }
+  if (response.notification(0).update_size() != 1) {
+    return gutil::InternalErrorBuilder().LogError()
+           << "Unexpected update size in response (should be 1): "
+           << response.notification(0).update_size();
+  }
+
+  const auto response_json =
+      json::parse(response.notification(0).update(0).val().json_ietf_val());
+  const auto alarms_json = response_json.find("openconfig-system:alarms");
+  // If alarms returns an empty subtree, assume no alarms and return an empty
+  // list.
+  if (alarms_json == response_json.end()) {
+    return std::vector<std::string>();
+  }
+
+  const auto alarm_json = alarms_json->find("alarm");
+  if (alarm_json == alarms_json->end()) {
+    return std::vector<std::string>();
+  }
+  return ParseAlarms(alarm_json->dump());
+}
+
+absl::string_view StripQuotes(absl::string_view string) {
+  return absl::StripPrefix(absl::StripSuffix(string, "\""), "\"");
 }
 
 }  // namespace pins_test
