@@ -36,14 +36,14 @@ struct HttpResponse {
 enum class RequestType {
   kGet,
   kPost,
-  kPut,
+  kPatch,
   kDelete,
 };
 
 // InterfaceInfo represents the mode of an interface and the name of the peer
 // interface.
 struct InterfaceInfo {
-  third_party::pins_infra::thinkit::InterfaceMode interface_mode;
+  thinkit::InterfaceMode interface_mode;
   std::string peer_interface_name;  // Empty if not applicable.
 };
 
@@ -68,6 +68,7 @@ class GenericTestbed {
   GetSutInterfaceInfo() = 0;
 
   // Sends a REST request to the Ixia and returns the response.
+  // `url` can be either "https://...", "/api/...", or "/ixnetwork/...".
   virtual absl::StatusOr<HttpResponse> SendRestRequestToIxia(
       RequestType type, absl::string_view url, absl::string_view payload) = 0;
 };
