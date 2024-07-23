@@ -73,9 +73,8 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
     } else {
       const packetlib::Packet parsed_inner_packet =
           packetlib::ParsePacket(response.packet().payload());
-
       absl::StatusOr<int> test_packet_id =
-          ExtractTestPacketTag(parsed_inner_packet);
+          ExtractIdFromTaggedPacket(response.packet().payload());
       if (test_packet_id.ok()) {
         tagged_packet_ins.push_back({
             .tag = *test_packet_id,
