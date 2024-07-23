@@ -68,6 +68,19 @@ control acl_pre_ingress(in headers_t headers,
     acl_pre_ingress_metadata_counter.count();
   }
 
+  @id(ACL_PRE_INGRESS_SET_OUTER_VLAN_AND_ACL_METADATA_ACTION_ID)
+  @sai_action(SAI_PACKET_ACTION_FORWARD)
+  action set_outer_vlan_id_and_acl_metadata(
+      @id(1) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_OUTER_VLAN_ID)
+        vlan_id_t vlan_id,
+      @id(2) @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_SET_ACL_META_DATA)
+        acl_metadata_t acl_metadata) {
+    set_outer_vlan_id_action_applied = true;
+    set_outer_vlan_id_action_vlan_id = vlan_id;
+    local_metadata.acl_metadata = acl_metadata;
+    acl_pre_ingress_vlan_counter.count();
+  }
+
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_PRE_INGRESS_TABLE_ID)
   @sai_acl(PRE_INGRESS)
@@ -162,6 +175,7 @@ control acl_pre_ingress(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_outer_vlan_id;
+      @proto_id(2) set_outer_vlan_id_and_acl_metadata;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
