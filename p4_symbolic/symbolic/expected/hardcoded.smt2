@@ -83,9 +83,9 @@
  (let (($x38 (= standard_metadata.ingress_port (_ bv1 9))))
  (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x38)))
 (assert
- (let ((?x22 (concat (_ bv0 8) (_ bv0 1))))
- (let (($x8 (= standard_metadata.ingress_port ?x22)))
- (let ((?x21 (ite $x8 (concat (_ bv0 8) (_ bv1 1)) ?x22)))
+ (let ((?x10 (concat (_ bv0 8) (_ bv0 1))))
+ (let (($x22 (= standard_metadata.ingress_port ?x10)))
+ (let ((?x21 (ite $x22 (concat (_ bv0 8) (_ bv1 1)) ?x10)))
  (let (($x41 (or (or false (= ?x21 (_ bv0 9))) (= ?x21 (_ bv1 9)))))
  (let (($x30 (= ?x21 (_ bv511 9))))
  (or $x30 $x41)))))))
