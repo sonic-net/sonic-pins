@@ -11,38 +11,40 @@ inline CoverageGoals SaiDefaultCoverageGoals() {
       R"pb(
         coverage_goals {
           cartesian_product_coverage {
-            # TODO: Restore header coverage when performance is
-            # improved.
-            # header_coverage {
-            #  headers { patterns: [ "*" ] }
-            #  header_exclusions {
-            #    patterns: [
-            #      # Optimization: do not need to target ethernet individually.
-            #      All
-            #      # valid packets for SAI-P4 will have the ethernet header.
-            #      "ethernet"
-            #    ]
-            #    patterns: [
-            #      # PacketIO is currently handled differently in dataplane
-            #      tests.
-            #      "packet_in_header",
-            #      "packet_out_header"
-            #    ]
-            #    patterns: [
-            #      # The following are not satisfiable anyway (because the
-            #      # headers will never be valid in ingress).
-            #      "erspan_ipv4",
-            #      "erspan_gre",
-            #      "erspan_ethernet",
-            #      "tunnel_encap_ipv6",
-            #      "tunnel_encap_gre"
-            #    ]
-            #  }
-            #  headers_to_prevent_unless_explicitly_covered {
-            #    patterns: [ "vlan" ]
-            #  }
-            #  include_wildcard_header: true
-            # }
+            header_coverage {
+              headers { patterns: [ "*" ] }
+              header_exclusions {
+                patterns: [
+                  # Optimization: do not need to target ethernet individually.
+                  # All valid packets for SAI-P4 will have the ethernet header.
+                  "ethernet"
+                ]
+                patterns: [
+                  # PacketIO is currently handled differently in dataplane
+                  # tests.
+                  "packet_in_header",
+                  "packet_out_header"
+                ]
+                patterns: [
+                  # Optimization: The following are not satisfiable anyway
+                  # (because the headers will never be valid in ingress).
+                  "mirror_encap_ethernet",
+                  "mirror_encap_vlan",
+                  "mirror_encap_ipv6",
+                  "mirror_encap_udp",
+                  "mirror_encap_ipfix",
+                  "mirror_encap_psamp_extended",
+                  "ipfix",
+                  "psamp_extended",
+                  "tunnel_encap_ipv6",
+                  "tunnel_encap_gre"
+                ]
+              }
+              headers_to_prevent_unless_explicitly_covered {
+                patterns: [ "vlan" ]
+              }
+              include_wildcard_header: true
+            }
             packet_fate_coverage { fates: [ DROP, NOT_DROP ] }
             entry_coverage {
               tables { patterns: [ "*" ] }
@@ -55,14 +57,7 @@ inline CoverageGoals SaiDefaultCoverageGoals() {
                   "ingress.routing_resolution.nexthop_table",
                   "ingress.routing_resolution.router_interface_table",
                   "ingress.routing_resolution.wcmp_group_table",
-                  "ingress.routing_resolution.tunnel_table",
-                  # TODO: Remove the following when GPINS releases
-                  # no longer include the tables.
-                  "ingress.routing.neighbor_table",
-                  "ingress.routing.nexthop_table",
-                  "ingress.routing.router_interface_table",
-                  "ingress.routing.wcmp_group_table",
-                  "ingress.routing.tunnel_table"
+                  "ingress.routing_resolution.tunnel_table"
                 ]
               }
               cover_default_actions: true
