@@ -1,8 +1,8 @@
 ================================================================================
 Finding packet for table tbl_reflector54 and row -1
 ================================================================================
-ingress_port = #b000000000
-egress_port = #b000000000
+ingress_port = #b000000001
+egress_port = #b000000001
 trace:
 dropped = 0
 got cloned = 0
@@ -26,7 +26,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000000
+standard_metadata.ingress_port = #b000000001
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -51,7 +51,7 @@ standard_metadata.egress_spec = #b000000000
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000000
+standard_metadata.ingress_port = #b000000001
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
@@ -70,13 +70,13 @@ standard_metadata.checksum_error = #b0
 standard_metadata.deq_qdepth = #b0000000000000000000
 standard_metadata.deq_timedelta = #x00000000
 standard_metadata.egress_global_timestamp = #x000000000000
-standard_metadata.egress_port = #b000000000
+standard_metadata.egress_port = #b000000001
 standard_metadata.egress_rid = #x0000
-standard_metadata.egress_spec = #b000000000
+standard_metadata.egress_spec = #b000000001
 standard_metadata.enq_qdepth = #b0000000000000000000
 standard_metadata.enq_timestamp = #x00000000
 standard_metadata.ingress_global_timestamp = #x000000000000
-standard_metadata.ingress_port = #b000000000
+standard_metadata.ingress_port = #b000000001
 standard_metadata.instance_type = #x00000000
 standard_metadata.mcast_grp = #x0000
 standard_metadata.packet_length = #x00000000
