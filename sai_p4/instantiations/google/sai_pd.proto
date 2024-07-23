@@ -599,7 +599,10 @@ message AclPreIngressVlanTableEntry {
   }
   Match match = 1;
   message Action {
-    SetOuterVlanIdAction set_outer_vlan_id = 1;
+    oneof action {
+      SetOuterVlanIdAction set_outer_vlan_id = 1;
+      SetOuterVlanIdAndAclMetadataAction set_outer_vlan_id_and_acl_metadata = 2;
+    }
   }
   Action action = 2;
   int32 priority = 3;
@@ -1127,6 +1130,11 @@ message AclMirrorAndRedirectToPortAction {
   // Refers to 'mirror_session_table.mirror_session_id'.
   string mirror_session_id = 1;  // Format::STRING
   string redirect_port = 2;      // Format::STRING
+}
+
+message SetOuterVlanIdAndAclMetadataAction {
+  string vlan_id = 1;       // Format::HEX_STRING / 12 bits
+  string acl_metadata = 2;  // Format::HEX_STRING / 8 bits
 }
 
 message NoAction {}
