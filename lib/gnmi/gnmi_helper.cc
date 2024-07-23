@@ -205,13 +205,13 @@ absl::Status PushGnmiConfig(thinkit::Switch& chassis,
   return pins_test::PushGnmiConfig(*stub, chassis.ChassisName(), gnmi_config);
 }
 
-absl::Status CanGetAllInterfaceOverGnmi(gnmi::gNMI::Stub& stub,
+absl::Status CanGetAllInterfaceOverGnmi(gnmi::gNMI::StubInterface& stub,
                                         absl::Duration timeout) {
   return GetAllInterfaceOverGnmi(stub).status();
 }
 
 absl::StatusOr<gnmi::GetResponse> GetAllInterfaceOverGnmi(
-    gnmi::gNMI::Stub& stub, absl::Duration timeout) {
+    gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
   ASSIGN_OR_RETURN(auto req, BuildGnmiGetRequest("", gnmi::GetRequest::ALL));
   gnmi::GetResponse resp;
   grpc::ClientContext context;
@@ -285,12 +285,17 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
 
 absl::Status CheckAllInterfaceOperStateOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
-    absl::Duration timeout) {
+    bool skip_non_ethernet_interfaces, absl::Duration timeout) {
   ASSIGN_OR_RETURN(const auto interface_to_oper_status_map,
                    GetInterfaceToOperStatusMapOverGnmi(stub, timeout));
 
   std::vector<std::string> unavailable_interfaces;
   for (const auto& [interface, oper_status] : interface_to_oper_status_map) {
+    if (skip_non_ethernet_interfaces &&
+        !absl::StrContains(interface, "Ethernet")) {
+      LOG(INFO) << "Skipping check on interface: " << interface;
+      continue;
+    }
     if (oper_status != interface_oper_state) {
       unavailable_interfaces.push_back(interface);
     }
@@ -411,6 +416,61 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     return OperStatus::kTesting;
   }
   return OperStatus::kUnknown;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      pins_test::GetAllInterfaceOverGnmi(stub, absl::ZeroDuration()));
+  if (response.notification_size() < 1) {
+    return absl::InternalError(
+        absl::StrCat("Invalid response: ", response.DebugString()));
+  }
+
+  const auto response_json = nlohmann::json::parse(
+      response.notification(0).update(0).val().json_ietf_val());
+  const auto oc_intf_json =
+      response_json.find("openconfig-interfaces:interfaces");
+  if (oc_intf_json == response_json.end()) {
+    return absl::NotFoundError(
+        absl::StrCat("'openconfig-interfaces:interfaces' not found: ",
+                     response_json.dump()));
+  }
+  const auto oc_intf_list_json = oc_intf_json->find("interface");
+  if (oc_intf_list_json == oc_intf_json->end()) {
+    return absl::NotFoundError(
+        absl::StrCat("'interface' not found: ", oc_intf_json->dump()));
+  }
+
+  absl::flat_hash_map<std::string, std::string> interface_name_to_port_id;
+  for (auto const& element : oc_intf_list_json->items()) {
+    const auto element_name_json = element.value().find("name");
+    if (element_name_json == element.value().end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'name' not found: ", element.value().dump()));
+    }
+    std::string name = element_name_json->get<std::string>();
+
+    // TODO: Remove once CpuX contains the oper-state subtree.
+    if (absl::StartsWith(name, "Cpu")) {
+      LOG(INFO) << "Skipping " << name << ".";
+      continue;
+    }
+
+    const auto element_interface_state_json = element.value().find("state");
+    if (element_interface_state_json == element.value().end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'state' not found: ", element.value().dump()));
+    }
+    const auto element_id_json = element_interface_state_json->find("id");
+    if (element_id_json == element_interface_state_json->end()) {
+      return absl::NotFoundError(
+          absl::StrCat("'id' not found: ", element.value().dump()));
+    }
+    interface_name_to_port_id[name] = element_id_json->get<std::string>();
+  }
+  return interface_name_to_port_id;
 }
 
 absl::StatusOr<std::vector<std::string>> ParseAlarms(

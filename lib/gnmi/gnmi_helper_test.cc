@@ -39,10 +39,13 @@ using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::_;
 using ::testing::DoAll;
+using ::testing::Eq;
+using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::UnorderedElementsAre;
+using ::testing::UnorderedPointwise;
 
 static constexpr char kAlarmsJson[] = R"([
     {
@@ -370,9 +373,9 @@ TEST(GetInterfaceOperStatusMap, GnmiGetRpcFails) {
 TEST(GetInterfaceOperStatusMap, InvalidGnmiGetResponse) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub, Get).WillOnce(Return(grpc::Status::OK));
-  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
-              StatusIs(absl::StatusCode::kInternal,
-                       testing::HasSubstr("Invalid response")));
+  EXPECT_THAT(
+      GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+      StatusIs(absl::StatusCode::kInternal, HasSubstr("Invalid response")));
 }
 
 TEST(GetInterfaceOperStatusMap, GnmiGetResponseWithoutOpenconfigInterface) {
@@ -389,10 +392,10 @@ TEST(GetInterfaceOperStatusMap, GnmiGetResponseWithoutOpenconfigInterface) {
                })pb")),
       Return(grpc::Status::OK)));
 
-  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
-              StatusIs(absl::StatusCode::kNotFound,
-                       testing::HasSubstr(
-                           "'openconfig-interfaces:interfaces' not found")));
+  EXPECT_THAT(
+      GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("'openconfig-interfaces:interfaces' not found")));
 }
 
 TEST(GetInterfaceOperStatusMap, InterfaceNotFoundInGnmiGetResponse) {
@@ -413,7 +416,7 @@ TEST(GetInterfaceOperStatusMap, InterfaceNotFoundInGnmiGetResponse) {
 
   EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
               StatusIs(absl::StatusCode::kNotFound,
-                       testing::HasSubstr("'interface' not found")));
+                       HasSubstr("'interface' not found")));
 }
 
 TEST(GetInterfaceOperStatusMap, InterfaceNameNotFound) {
@@ -432,9 +435,9 @@ TEST(GetInterfaceOperStatusMap, InterfaceNameNotFound) {
                })pb")),
       Return(grpc::Status::OK)));
 
-  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
-              StatusIs(absl::StatusCode::kNotFound,
-                       testing::HasSubstr("'name' not found")));
+  EXPECT_THAT(
+      GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+      StatusIs(absl::StatusCode::kNotFound, HasSubstr("'name' not found")));
 }
 
 TEST(GetInterfaceOperStatusMap, InterfaceStateNotFound) {
@@ -453,9 +456,9 @@ TEST(GetInterfaceOperStatusMap, InterfaceStateNotFound) {
                })pb")),
       Return(grpc::Status::OK)));
 
-  EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
-              StatusIs(absl::StatusCode::kNotFound,
-                       testing::HasSubstr("'state' not found")));
+  EXPECT_THAT(
+      GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
+      StatusIs(absl::StatusCode::kNotFound, HasSubstr("'state' not found")));
 }
 
 TEST(GetInterfaceOperStatusMap, OperStatusNotFoundInState) {
@@ -476,7 +479,7 @@ TEST(GetInterfaceOperStatusMap, OperStatusNotFoundInState) {
 
   EXPECT_THAT(GetInterfaceToOperStatusMapOverGnmi(stub, absl::Seconds(60)),
               StatusIs(absl::StatusCode::kNotFound,
-                       testing::HasSubstr("'oper-status' not found")));
+                       HasSubstr("'oper-status' not found")));
 }
 
 TEST(GetInterfaceOperStatusMap, SuccessfullyReturnsInterfaceOperStatusMap) {
@@ -499,8 +502,143 @@ TEST(GetInterfaceOperStatusMap, SuccessfullyReturnsInterfaceOperStatusMap) {
   ASSERT_OK(statusor);
   const absl::flat_hash_map<std::string, std::string> expected_map = {
       {"Ethernet0", "DOWN"}};
-  EXPECT_THAT(*statusor,
-              ::testing::UnorderedPointwise(::testing::Eq(), expected_map));
+  EXPECT_THAT(*statusor, UnorderedPointwise(Eq(), expected_map));
+}
+
+TEST(GetInterfacePortIdMap, SuccessfullyReturnsInterfacePortIdMap) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"id\":\"1\"}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  auto interface_name_to_port_id = GetAllInterfaceNameToPortId(stub);
+  ASSERT_OK(interface_name_to_port_id);
+  const absl::flat_hash_map<std::string, std::string> expected_map = {
+      {"Ethernet0", "1"}};
+  EXPECT_THAT(*interface_name_to_port_id,
+              UnorderedPointwise(Eq(), expected_map));
+}
+
+TEST(GetInterfacePortIdMap, PortIdNotFoundInState) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Cpu0\"},{\"name\":\"Ethernet0\",\"state\":{\"name\":\"Ethernet0\"}}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(
+      GetAllInterfaceNameToPortId(stub),
+      StatusIs(absl::StatusCode::kNotFound, HasSubstr("'id' not found")));
+}
+
+TEST(GetInterfacePortIdMap, InterfaceStateNotFound) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\"}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(
+      GetAllInterfaceNameToPortId(stub),
+      StatusIs(absl::StatusCode::kNotFound, HasSubstr("'state' not found")));
+}
+
+TEST(GetInterfacePortIdMap, InterfaceNameNotFound) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{}]}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(
+      GetAllInterfaceNameToPortId(stub),
+      StatusIs(absl::StatusCode::kNotFound, HasSubstr("'name' not found")));
+}
+
+TEST(GetInterfacePortIdMap, InterfaceNotFoundInGnmiGetResponse) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{}}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetAllInterfaceNameToPortId(stub),
+              StatusIs(absl::StatusCode::kNotFound,
+                       HasSubstr("'interface' not found")));
+}
+
+TEST(GetInterfacePortIdMap, GnmiGetResponseWithoutOpenconfigInterface) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1620348032128305716
+                 prefix { origin: "openconfig" }
+                 update {
+                   path { elem { name: "interfaces" } }
+                   val { json_ietf_val: "{\"openconfig-system:alarms\":{}}" }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+
+  EXPECT_THAT(
+      GetAllInterfaceNameToPortId(stub),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("'openconfig-interfaces:interfaces' not found")));
+}
+
+TEST(GetInterfacePortIdMap, InvalidGnmiGetResponse) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(Return(grpc::Status::OK));
+  EXPECT_THAT(
+      GetAllInterfaceNameToPortId(stub),
+      StatusIs(absl::StatusCode::kInternal, HasSubstr("Invalid response")));
 }
 
 TEST(CheckAllInterfaceOperState, FailsToGetInterfaceOperStatusMap) {
@@ -531,7 +669,7 @@ TEST(CheckAllInterfaceOperState, InterfaceNotUp) {
   EXPECT_THAT(
       CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"),
       StatusIs(absl::StatusCode::kUnavailable,
-               testing::HasSubstr("Interfaces are not ready")));
+               HasSubstr("Interfaces are not ready")));
 }
 
 TEST(CheckAllInterfaceOperState, InterfaceNotDown) {
@@ -553,7 +691,7 @@ TEST(CheckAllInterfaceOperState, InterfaceNotDown) {
   EXPECT_THAT(
       CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"DOWN"),
       StatusIs(absl::StatusCode::kUnavailable,
-               testing::HasSubstr("Interfaces are not ready")));
+               HasSubstr("Interfaces are not ready")));
 }
 
 TEST(CheckAllInterfaceOperState, AllInterfacesUp) {
