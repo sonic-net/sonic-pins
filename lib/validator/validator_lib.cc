@@ -38,12 +38,6 @@
 
 namespace pins_test {
 
-namespace {
-
-using Stub = ::p4::v1::P4Runtime::Stub;
-
-}  // namespace
-
 absl::Status Pingable(absl::string_view chassis_name, absl::Duration timeout) {
   constexpr char kPingCommand[] = R"(fping -t $0 $1; fping6 -t $0 $1)";
   FILE* in;
@@ -95,25 +89,20 @@ absl::Status SSHable(thinkit::Switch& thinkit_switch,
 
 // Checks if a P4Runtime session could be established.
 absl::Status P4rtAble(thinkit::Switch& thinkit_switch) {
-  ASSIGN_OR_RETURN(std::unique_ptr<Stub> p4runtime_stub,
-                   thinkit_switch.CreateP4RuntimeStub());
-  return pdpi::P4RuntimeSession::Create(std::move(p4runtime_stub),
-                                        thinkit_switch.DeviceId())
-      .status();
+  return pdpi::P4RuntimeSession::Create(thinkit_switch).status();
 }
 
 // Checks if a gNMI get all interface request can be sent and a response
 // received.
 absl::Status GnmiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
-                   thinkit_switch.CreateGnmiStub());
+  ASSIGN_OR_RETURN(auto gnmi_stub, thinkit_switch.CreateGnmiStub());
   return pins_test::CanGetAllInterfaceOverGnmi(*gnmi_stub, timeout);
 }
 
 // Checks if a gNOI system get time request can be sent and a response
 // received.
 absl::Status GnoiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(std::unique_ptr<gnoi::system::System::Stub> gnoi_system_stub,
+  ASSIGN_OR_RETURN(auto gnoi_system_stub,
                    thinkit_switch.CreateGnoiSystemStub());
   gnoi::system::TimeRequest request;
   gnoi::system::TimeResponse response;
@@ -127,8 +116,7 @@ absl::Status GnoiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
 absl::Status PortsUp(thinkit::Switch& thinkit_switch,
                      absl::Span<const std::string> interfaces,
                      absl::Duration timeout) {
-  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
-                   thinkit_switch.CreateGnmiStub());
+  ASSIGN_OR_RETURN(auto gnmi_stub, thinkit_switch.CreateGnmiStub());
   if (interfaces.empty()) {
     return pins_test::CheckAllInterfaceOperStateOverGnmi(
         *gnmi_stub, /*interface_oper_state=*/"UP",
@@ -139,8 +127,7 @@ absl::Status PortsUp(thinkit::Switch& thinkit_switch,
 }
 
 absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
-                   thinkit_switch.CreateGnmiStub());
+  ASSIGN_OR_RETURN(auto gnmi_stub, thinkit_switch.CreateGnmiStub());
   ASSIGN_OR_RETURN(std::vector<std::string> alarms,
                    pins_test::GetAlarms(*gnmi_stub));
   if (alarms.empty()) {

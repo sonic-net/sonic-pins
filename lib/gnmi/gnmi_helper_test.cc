@@ -492,7 +492,7 @@ TEST(GetInterfaceOperStatusMap, SuccessfullyReturnsInterfaceOperStatusMap) {
                  update {
                    path { elem { name: "interfaces" } }
                    val {
-                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Cpu0\"},{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"DOWN\"}}]}}"
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"CPU\"},{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"DOWN\"}}]}}"
                    }
                  }
                })pb")),
@@ -539,7 +539,7 @@ TEST(GetInterfacePortIdMap, PortIdNotFoundInState) {
                  update {
                    path { elem { name: "interfaces" } }
                    val {
-                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Cpu0\"},{\"name\":\"Ethernet0\",\"state\":{\"name\":\"Ethernet0\"}}]}}"
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"CPU\"},{\"name\":\"Ethernet0\",\"state\":{\"name\":\"Ethernet0\"}}]}}"
                    }
                  }
                })pb")),
@@ -1010,5 +1010,122 @@ TEST(GetUpInterfaces, SuccessfullyGetsUpInterface) {
               testing::ContainerEq(std::vector<std::string>{"Ethernet0"}));
 }
 
+TEST(CheckParseGnmiGetResponse, FailDuetoResponseSize) {
+  gnmi::GetResponse response;
+  for (int i = 0; i < 2; i++) {
+    gnmi::Notification *notification = response.add_notification();
+    notification->set_timestamp(1620348032128305716);
+  }
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Unexpected size in response")));
+}
+
+TEST(CheckParseGnmiGetResponse, FailDuetoUpdateSize) {
+  gnmi::GetResponse response;
+  gnmi::Notification *notification = response.add_notification();
+
+  for (int i = 0; i < 2; i++) {
+    notification->add_update();
+  }
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Unexpected update size in response")));
+}
+
+TEST(CheckParseGnmiGetResponse, UnexpectedDataFormat) {
+  gnmi::GetResponse response;
+  constexpr char kOperstatus[] = "UP";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/state/oper-status");
+  update->mutable_val()->set_ascii_val(kOperstatus);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("Unexpected data type:")));
+}
+TEST(CheckParseGnmiGetResponse, FailDuetoMissingTag) {
+  gnmi::GetResponse response;
+  constexpr char kOperstatus[] =
+      R"({"openconfig-interfaces:status":"TESTING"})";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+  *update->mutable_path() =
+      ConvertOCStringToPath("interfaces/interface[name=Ethernet8]/state");
+  update->mutable_val()->set_json_ietf_val(kOperstatus);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr("not present in JSON response")));
+}
+TEST(CheckParseGnmiGetResponse, FailDuetoWrongResponse) {
+  gnmi::GetResponse response;
+  constexpr char kOperstatus[] =
+      R"({"openconfig-interfaces:oper-status":"TESTING"})";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/state/oper-status");
+  update->mutable_val()->set_json_ietf_val(kOperstatus);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      IsOkAndHolds(Not(HasSubstr("UP"))));
+}
+
+TEST(CheckParseGnmiGetResponse, JsonIetfResponseSuccess) {
+  gnmi::GetResponse response;
+  constexpr char kOperstatus[] =
+      R"({"openconfig-interfaces:oper-status":"UP"})";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/state/oper-status");
+  update->mutable_val()->set_json_ietf_val(kOperstatus);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      IsOkAndHolds(HasSubstr("UP")));
+}
+
+TEST(CheckParseGnmiGetResponse, JsonResponseSuccess) {
+  gnmi::GetResponse response;
+  constexpr char kOperstatus[] =
+      R"({"openconfig-interfaces:oper-status":"UP"})";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/state/oper-status");
+  update->mutable_val()->set_json_val(kOperstatus);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      IsOkAndHolds(HasSubstr("UP")));
+}
+
+TEST(CheckParseGnmiGetResponse, StringResponseSuccess) {
+  gnmi::GetResponse response;
+  constexpr char kOperstatus[] = "UP";
+  gnmi::Notification *notification = response.add_notification();
+  gnmi::Update *update = notification->add_update();
+
+  *update->mutable_path() = ConvertOCStringToPath(
+      "interfaces/interface[name=Ethernet8]/state/oper-status");
+  update->mutable_val()->set_string_val(kOperstatus);
+  LOG(INFO) << "response: " << response.DebugString();
+  EXPECT_THAT(
+      ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"),
+      IsOkAndHolds(HasSubstr("UP")));
+}
 }  // namespace
 }  // namespace pins_test
