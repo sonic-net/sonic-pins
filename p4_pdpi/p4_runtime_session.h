@@ -41,6 +41,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/fixed/roles.h"
+#include "thinkit/switch.h"
 
 namespace pdpi {
 
@@ -129,6 +130,10 @@ class P4RuntimeSession {
       const std::string& address,
       const std::shared_ptr<grpc::ChannelCredentials>& credentials,
       uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata = {},
+      bool error_if_not_primary = true);
+  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>> Create(
+      thinkit::Switch& thinkit_switch,
+      const P4RuntimeSessionOptionalArgs& metadata = {},
       bool error_if_not_primary = true);
 
   // Connects to the default session on the switch, which has no election_id
