@@ -74,3 +74,23 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
     ],
 )
+
+cc_library(
+    name = "ixia_helper",
+    testonly = 1,
+    srcs = ["ixia_helper.cc"],
+    hdrs = ["ixia_helper.h"],
+    deps = [
+        "//gutil:status",
+        "//gutil:testing",
+        "//lib/gnmi:gnmi_helper",
+        "//thinkit:generic_testbed",
+        "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
+    ],
+)
