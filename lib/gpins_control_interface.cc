@@ -191,8 +191,7 @@ GpinsControlInterface::GetBERTResult(
 
 absl::StatusOr<absl::flat_hash_set<std::string>>
 GpinsControlInterface::GetUpLinks(absl::Span<const std::string> interfaces) {
-  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
-                   sut_->CreateGnmiStub());
+  ASSIGN_OR_RETURN(auto gnmi_stub, sut_->CreateGnmiStub());
   gnmi::GetResponse response;
   absl::flat_hash_set<std::string> up_links;
   for (const std::string& interface : interfaces) {

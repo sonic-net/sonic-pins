@@ -64,7 +64,7 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
 absl::StatusOr<std::string> ParseGnmiGetResponse(
     const gnmi::GetResponse& response, absl::string_view match_tag);
 
-absl::Status SetGnmiConfigPath(gnmi::gNMI::Stub* sut_gnmi_stub,
+absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                                absl::string_view config_path,
                                GnmiSetType operation, absl::string_view value);
 
@@ -98,7 +98,7 @@ absl::StatusOr<std::vector<absl::string_view>>
 GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response);
 
 absl::Status PushGnmiConfig(
-    gnmi::gNMI::Stub& stub, absl::string_view chassis_name,
+    gnmi::gNMI::StubInterface& stub, const std::string& chassis_name,
     const std::string& gnmi_config,
     absl::uint128 election_id = pdpi::TimeBasedElectionId());
 

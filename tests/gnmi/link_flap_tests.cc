@@ -95,8 +95,7 @@ TEST_P(ExampleTestFixture, LinkFlapTest) {
       break;
     }
   }
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
-                       generic_testbed->Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, generic_testbed->Sut().CreateGnmiStub());
 
   // Flaps SUT port through gNMI (admin state) and checks that the control
   // switch detects it.
