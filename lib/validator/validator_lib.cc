@@ -1,3 +1,16 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "lib/validator/validator_lib.h"
 
 #include <memory>
@@ -12,7 +25,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "grpcpp/impl/codegen/client_context.h"
-#include "grpcpp/impl/codegen/status_code_enum.h"
+#include "grpcpp/support/status.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
@@ -149,6 +162,7 @@ absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
   RETURN_IF_ERROR(SSHable(thinkit_switch, ssh_client));
   RETURN_IF_ERROR(P4rtAble(thinkit_switch));
   RETURN_IF_ERROR(GnmiAble(thinkit_switch));
+  RETURN_IF_ERROR(PortsUp(thinkit_switch));
   RETURN_IF_ERROR(GnoiAble(thinkit_switch));
   return NoAlarms(thinkit_switch);
 }
