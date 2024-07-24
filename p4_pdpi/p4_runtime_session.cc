@@ -40,6 +40,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/sequencing.h"
+#include "thinkit/switch.h"
 
 namespace pdpi {
 
@@ -136,6 +137,14 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
     uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata,
     bool error_if_not_primary) {
   return Create(CreateP4RuntimeStub(address, credentials), device_id, metadata,
+                error_if_not_primary);
+}
+
+absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
+    thinkit::Switch& thinkit_switch,
+    const P4RuntimeSessionOptionalArgs& metadata, bool error_if_not_primary) {
+  ASSIGN_OR_RETURN(auto stub, thinkit_switch.CreateP4RuntimeStub());
+  return Create(std::move(stub), thinkit_switch.DeviceId(), metadata,
                 error_if_not_primary);
 }
 
