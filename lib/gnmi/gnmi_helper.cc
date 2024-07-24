@@ -366,7 +366,7 @@ absl::StatusOr<std::string> GetGnmiStatePathInfo(
     absl::string_view resp_parse_str) {
   ASSIGN_OR_RETURN(gnmi::GetRequest request,
                    BuildGnmiGetRequest(state_path, gnmi::GetRequest::STATE));
-  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+  // LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
   gnmi::GetResponse response;
   grpc::ClientContext context;
   auto status = sut_gnmi_stub->Get(&context, request, &response);
@@ -375,7 +375,7 @@ absl::StatusOr<std::string> GetGnmiStatePathInfo(
               << " , Error message: " << status.error_message();
     return gutil::InternalErrorBuilder();
   }
-  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  // LOG(INFO) << "Received GET response: " << response.ShortDebugString();
   ASSIGN_OR_RETURN(std::string state_path_response,
                    ParseGnmiGetResponse(response, resp_parse_str));
   return state_path_response;
