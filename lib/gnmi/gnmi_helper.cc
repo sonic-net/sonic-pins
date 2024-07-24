@@ -158,7 +158,7 @@ absl::StatusOr<std::string> ParseGnmiGetResponse(
   return match_tag_json->dump();
 }
 
-absl::Status SetGnmiConfigPath(gnmi::gNMI::Stub* sut_gnmi_stub,
+absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                                absl::string_view config_path,
                                GnmiSetType operation, absl::string_view value) {
   ASSIGN_OR_RETURN(gnmi::SetRequest request,
@@ -176,8 +176,8 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::Stub* sut_gnmi_stub,
   return absl::OkStatus();
 }
 
-absl::Status PushGnmiConfig(gnmi::gNMI::Stub& stub,
-                            absl::string_view chassis_name,
+absl::Status PushGnmiConfig(gnmi::gNMI::StubInterface& stub,
+                            const std::string& chassis_name,
                             const std::string& gnmi_config,
                             absl::uint128 election_id) {
   gnmi::SetRequest req;
@@ -203,8 +203,7 @@ absl::Status PushGnmiConfig(gnmi::gNMI::Stub& stub,
 
 absl::Status PushGnmiConfig(thinkit::Switch& chassis,
                             const std::string& gnmi_config) {
-  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> stub,
-                   chassis.CreateGnmiStub());
+  ASSIGN_OR_RETURN(auto stub, chassis.CreateGnmiStub());
   return pins_test::PushGnmiConfig(*stub, chassis.ChassisName(), gnmi_config);
 }
 
