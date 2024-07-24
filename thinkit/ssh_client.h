@@ -57,6 +57,11 @@ class SSHClient {
                                        const RemotePath& destination,
                                        absl::Duration timeout) = 0;
 
+  // Copies a local directory's files to a remote diretory.
+  virtual absl::Status PutDirectory(absl::string_view source,
+                                    const RemotePath& destination,
+                                    absl::Duration timeout) = 0;
+
   // Copies a remote file's contents to a local file, creating a new
   // file if needed and replacing any existing contents that was there.
   virtual absl::Status GetFile(const RemotePath& source,
