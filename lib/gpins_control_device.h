@@ -12,35 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_LIB_GPINS_CONTROL_INTERFACE_H_
-#define GOOGLE_LIB_GPINS_CONTROL_INTERFACE_H_
+#ifndef GOOGLE_LIB_GPINS_CONTROL_DEVICE_H_
+#define GOOGLE_LIB_GPINS_CONTROL_DEVICE_H_
 
 #include <memory>
-#include <vector>
+#include <string>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "diag/diag.pb.h"
+#include "glog/logging.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "system/system.grpc.pb.h"
-#include "thinkit/control_interface.h"
+#include "thinkit/control_device.h"
 #include "thinkit/packet_generation_finalizer.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {
 
-class GpinsControlInterface : public thinkit::ControlInterface {
+// A `GpinsControlDevice` represents a single GPINs switch used as a control
+// device for a ThinKit generic testbed.
+class GpinsControlDevice : public thinkit::ControlDevice {
  public:
-  static absl::StatusOr<GpinsControlInterface> CreateGpinsControlInterface(
+  static absl::StatusOr<GpinsControlDevice> CreateGpinsControlDevice(
       std::unique_ptr<thinkit::Switch> sut);
 
-  GpinsControlInterface(
+  GpinsControlDevice(
       std::unique_ptr<thinkit::Switch> sut,
       std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
       pdpi::IrP4Info ir_p4info,
@@ -84,4 +90,4 @@ class GpinsControlInterface : public thinkit::ControlInterface {
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_LIB_GPINS_CONTROL_INTERFACE_H_
+#endif  // GOOGLE_LIB_GPINS_CONTROL_DEVICE_H_

@@ -14,12 +14,12 @@
 #ifndef GOOGLE_LIB_P4RT_PACKET_LISTENER_H_
 #define GOOGLE_LIB_P4RT_PACKET_LISTENER_H_
 
-#include <memory>
 #include <string>
 #include <thread>  // NOLINT
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/strings/escaping.h"
+#include "absl/synchronization/mutex.h"
 #include "glog/logging.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -27,7 +27,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "thinkit/control_interface.h"
+#include "thinkit/control_device.h"
 #include "thinkit/packet_generation_finalizer.h"
 #include "thinkit/switch.h"
 
