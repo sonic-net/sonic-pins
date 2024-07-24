@@ -56,11 +56,10 @@ using ::std::abs;
 using ::testing::HasSubstr;
 
 constexpr int kEpochMarginalError = 2;
-constexpr absl::Duration kColdRebootDelayTime = absl::Seconds(1);
-constexpr absl::Duration kColdRebootTotalWaitTime = absl::Seconds(30);
 constexpr absl::Duration kColdRebootWaitForDownTime = absl::Seconds(30);
 // TODO: Reduce reboot up time.
 constexpr absl::Duration kColdRebootWaitForUpTime = absl::Minutes(6);
+constexpr absl::Duration kWaitForApplicationsReady = absl::Minutes(1);
 constexpr char kMtuJsonVal[] = "{\"mtu\":2000}";
 constexpr char kV3ReleaseConfigBlob[] = R"({
    "openconfig-platform:components" : {
@@ -329,8 +328,8 @@ void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,
 }
 
 //  Returns last boot time of SUT.
-absl::StatusOr<int> GetGnmiSystemBootTime(thinkit::Switch& sut,
-                                          gnmi::gNMI::Stub* sut_gnmi_stub) {
+absl::StatusOr<int> GetGnmiSystemBootTime(
+    thinkit::Switch& sut, gnmi::gNMI::StubInterface* sut_gnmi_stub) {
   ASSIGN_OR_RETURN(
       gnmi::GetRequest request,
       BuildGnmiGetRequest("system/state/boot-time", gnmi::GetRequest::STATE));
@@ -357,13 +356,12 @@ absl::StatusOr<int> GetGnmiSystemBootTime(thinkit::Switch& sut,
 
 void TestGnoiSystemColdReboot(thinkit::Switch& sut) {
   ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-  ASSERT_OK_AND_ASSIGN(auto first_boot_time,
+  ASSERT_OK_AND_ASSIGN(int first_boot_time,
                        GetGnmiSystemBootTime(sut, sut_gnmi_stub.get()));
 
   ASSERT_OK_AND_ASSIGN(auto sut_gnoi_system_stub, sut.CreateGnoiSystemStub());
   gnoi::system::RebootRequest request;
   request.set_method(gnoi::system::RebootMethod::COLD);
-  request.set_delay(absl::ToInt64Nanoseconds(kColdRebootDelayTime));
   request.set_message("Testing Purpose");
   gnoi::system::RebootResponse response;
   grpc::ClientContext context;
@@ -371,16 +369,40 @@ void TestGnoiSystemColdReboot(thinkit::Switch& sut) {
   ASSERT_OK(sut_gnoi_system_stub->Reboot(&context, request, &response));
   LOG(INFO) << "Received Reboot response: " << response.ShortDebugString();
 
-  const auto start_time = absl::Now();
-  int latest_boot_time = first_boot_time;
-
-  while (abs(latest_boot_time - first_boot_time) < kEpochMarginalError &&
-         absl::Now() < (start_time + kColdRebootTotalWaitTime)) {
-    absl::SleepFor(kColdRebootDelayTime);
-    ASSERT_OK_AND_ASSIGN(latest_boot_time,
-                         GetGnmiSystemBootTime(sut, sut_gnmi_stub.get()));
+  absl::Time start_time = absl::Now();
+  bool system_down = false;
+  
+  // Wait for system to become unreachable via ping - as that's the last thing
+  // that goes down.
+  while (absl::Now() < (start_time + kColdRebootWaitForDownTime)) {
+    if (Pingable(sut) != absl::OkStatus()) {
+      system_down = true;
+      break;
+    }
   }
+
+  // Return failure if system did not go down.
+  ASSERT_TRUE(system_down) << "System did not go down in "
+                           << kColdRebootWaitForDownTime;
+
+  // Wait for system to become reachable over gNOI.
+  start_time = absl::Now();
+  while (absl::Now() < (start_time + kColdRebootWaitForUpTime)) {
+    if (GnoiAble(sut) == absl::OkStatus()) {
+      system_down = false;
+      break;
+    }
+  }
+
+  // Return failure if system did not come up.
+  ASSERT_FALSE(system_down)
+      << "System did not come up in " << kColdRebootWaitForUpTime;
+
+  ASSERT_OK_AND_ASSIGN(int latest_boot_time,
+                       GetGnmiSystemBootTime(sut, sut_gnmi_stub.get()));
+
   EXPECT_GT(abs(latest_boot_time - first_boot_time), kEpochMarginalError);
+  EXPECT_OK(SwitchReady(sut));
 }
 
 }  // namespace pins_test
