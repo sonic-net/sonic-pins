@@ -19,6 +19,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -28,7 +30,9 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
 #include "google/protobuf/map.h"
 #include "grpcpp/impl/codegen/client_context.h"
@@ -182,13 +186,12 @@ absl::Status PushGnmiConfig(gnmi::gNMI::Stub& stub,
   gnmi::Update* replace = req.add_replace();
   replace->mutable_path();
   replace->mutable_val()->set_json_ietf_val(gnmi_config);
-  gnmi_ext::MasterArbitration* master_arbitration =
+  gnmi_ext::MasterArbitration* arbitration =
       req.add_extension()->mutable_master_arbitration();
-  master_arbitration->mutable_role()->set_id("dataplane test");
-  master_arbitration->mutable_election_id()->set_high(
+  arbitration->mutable_role()->set_id("dataplane test");
+  arbitration->mutable_election_id()->set_high(
       absl::Uint128High64(election_id));
-  master_arbitration->mutable_election_id()->set_low(
-      absl::Uint128Low64(election_id));
+  arbitration->mutable_election_id()->set_low(absl::Uint128Low64(election_id));
 
   gnmi::SetResponse resp;
   grpc::ClientContext context;
@@ -282,6 +285,40 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
   }
 
   return interface_to_oper_status_map;
+}
+
+absl::Status CheckInterfaceOperStateOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
+    absl::Span<const std::string> interfaces, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(const auto interface_to_oper_status_map,
+                   GetInterfaceToOperStatusMapOverGnmi(stub, timeout));
+
+  absl::flat_hash_set<std::string> matching_interfaces;
+  for (const auto& [interface, oper_status] : interface_to_oper_status_map) {
+    if (oper_status == interface_oper_state) {
+      matching_interfaces.insert(interface);
+    }
+  }
+
+  bool all_interfaces_found = true;
+  for (const std::string& interface : interfaces) {
+    if (!matching_interfaces.contains(interface)) {
+      LOG(INFO) << "Interface "
+                << interface << " not found in interfaces that are "
+                << interface_oper_state;
+      all_interfaces_found = false;
+    }
+  }
+
+  if (!all_interfaces_found) {
+    return absl::UnavailableError(
+        absl::StrCat("Some interfaces are not in the expected "
+                     "state.\nInterfaces provided: \n",
+                     absl::StrJoin(interfaces, "\n"),
+                     "\nInterfaces in the expected state: \n",
+                     absl::StrJoin(matching_interfaces, "\n")));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status CheckAllInterfaceOperStateOverGnmi(
@@ -387,7 +424,7 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
 }
 
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
-    gnmi::gNMI::Stub& stub, absl::string_view if_name) {
+    gnmi::gNMI::StubInterface& stub, absl::string_view if_name) {
   std::string if_req = absl::StrCat("interfaces/interface[name=", if_name,
                                     "]/state/oper-status");
   ASSIGN_OR_RETURN(auto request,
@@ -407,13 +444,13 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
       std::string oper_status,
       ParseGnmiGetResponse(response, "openconfig-interfaces:oper-status"));
 
-  if (absl::StrContains((oper_status), "UP")) {
+  if (absl::StrContains(oper_status, "UP")) {
     return OperStatus::kUp;
   }
-  if (absl::StrContains((oper_status), "DOWN")) {
+  if (absl::StrContains(oper_status, "DOWN")) {
     return OperStatus::kDown;
   }
-  if (absl::StrContains((oper_status), "TESTING")) {
+  if (absl::StrContains(oper_status, "TESTING")) {
     return OperStatus::kTesting;
   }
   return OperStatus::kUnknown;
@@ -466,11 +503,10 @@ GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
     }
 
     const auto element_id_json =
-        element_interface_state_json->find("openconfig-pins-interfaces:id");
+        element_interface_state_json->find("openconfig-p4rt:id");
     if (element_id_json == element_interface_state_json->end()) {
-      return absl::NotFoundError(
-          absl::StrCat("'openconfig-pins-interfaces:id' not found: ",
-                       element.value().dump()));
+      return absl::NotFoundError(absl::StrCat(
+          "'openconfig-p4rt:id' not found: ", element.value().dump()));
     }
     interface_name_to_port_id[name] = absl::StrCat(element_id_json->get<int>());
   }

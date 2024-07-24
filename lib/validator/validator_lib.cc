@@ -124,13 +124,18 @@ absl::Status GnoiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
       gnoi_system_stub->Time(&context, request, &response));
 }
 
-// Checks if "oper-status" of all interfaces are "UP".
-absl::Status PortsUp(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
+absl::Status PortsUp(thinkit::Switch& thinkit_switch,
+                     absl::Span<const std::string> interfaces,
+                     absl::Duration timeout) {
   ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::Stub> gnmi_stub,
                    thinkit_switch.CreateGnmiStub());
-  return pins_test::CheckAllInterfaceOperStateOverGnmi(
-      *gnmi_stub, /*interface_oper_state=*/"UP",
-      /*skip_non_ethernet_interfaces=*/false, timeout);
+  if (interfaces.empty()) {
+    return pins_test::CheckAllInterfaceOperStateOverGnmi(
+        *gnmi_stub, /*interface_oper_state=*/"UP",
+        /*skip_non_ethernet_interfaces=*/false, timeout);
+  }
+  return pins_test::CheckInterfaceOperStateOverGnmi(
+      *gnmi_stub, /*interface_oper_state=*/"UP", interfaces, timeout);
 }
 
 absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
@@ -146,23 +151,25 @@ absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
 }
 
 absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
+                         absl::Span<const std::string> interfaces,
                          absl::Duration timeout) {
   RETURN_IF_ERROR(Pingable(thinkit_switch));
   RETURN_IF_ERROR(P4rtAble(thinkit_switch));
   RETURN_IF_ERROR(GnmiAble(thinkit_switch));
-  RETURN_IF_ERROR(PortsUp(thinkit_switch));
+  RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces));
   RETURN_IF_ERROR(GnoiAble(thinkit_switch));
   return NoAlarms(thinkit_switch);
 }
 
 absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
                                 thinkit::SSHClient& ssh_client,
+                                absl::Span<const std::string> interfaces,
                                 absl::Duration timeout) {
   RETURN_IF_ERROR(Pingable(thinkit_switch));
   RETURN_IF_ERROR(SSHable(thinkit_switch, ssh_client));
   RETURN_IF_ERROR(P4rtAble(thinkit_switch));
   RETURN_IF_ERROR(GnmiAble(thinkit_switch));
-  RETURN_IF_ERROR(PortsUp(thinkit_switch));
+  RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces));
   RETURN_IF_ERROR(GnoiAble(thinkit_switch));
   return NoAlarms(thinkit_switch);
 }
