@@ -1,4 +1,4 @@
-// Copyright (c) 2020, Google Inc.
+// Copyright (c) 2024, Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "cert/cert.grpc.pb.h"
@@ -45,33 +46,54 @@ class Switch {
 
   // Creates and returns a stub to the P4Runtime service.
   virtual absl::StatusOr<std::unique_ptr<p4::v1::P4Runtime::Stub>>
-  CreateP4RuntimeStub() = 0;
+  CreateP4RuntimeStub() {
+    return absl::UnimplementedError(
+        absl::StrCat(__func__, " is not implemented."));
+  }
 
   // Creates and returns a stub to the gNMI service.
   virtual absl::StatusOr<std::unique_ptr<gnmi::gNMI::Stub>>
-  CreateGnmiStub() = 0;
+  CreateGnmiStub() {
+    return absl::UnimplementedError(
+        absl::StrCat(__func__, " is not implemented."));
+  }
 
   // Creates and returns a stub to the gNOI Factory Reset service.
   virtual absl::StatusOr<
       std::unique_ptr<gnoi::factory_reset::FactoryReset::Stub>>
-  CreateGnoiFactoryResetStub() = 0;
+  CreateGnoiFactoryResetStub() {
+    return absl::UnimplementedError(
+        absl::StrCat(__func__, " is not implemented."));
+  }
 
-   // Creates and returns a stub to the gNOI System service.
+  // Creates and returns a stub to the gNOI System service.
   virtual absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>
-  CreateGnoiSystemStub() = 0;
+  CreateGnoiSystemStub() {
+    return absl::UnimplementedError(
+        absl::StrCat(__func__, " is not implemented."));
+  }
 
   // Creates and returns a stub to the gNOI Diag service.
   virtual absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::Stub>>
-  CreateGnoiDiagStub() = 0;
+  CreateGnoiDiagStub() {
+    return absl::UnimplementedError(
+        absl::StrCat(__func__, " is not implemented."));
+  }
 
   // Creates and returns a stub to the gNOI Certificate service.
   virtual absl::StatusOr<
       std::unique_ptr<gnoi::certificate::CertificateManagement::Stub>>
-  CreateGnoiCertificateStub() = 0;
+  CreateGnoiCertificateStub() {
+    return absl::UnimplementedError(
+        absl::StrCat(__func__, " is not implemented."));
+  }
 
   // Creates and returns a stub to the gNOI OS service.
   virtual absl::StatusOr<std::unique_ptr<gnoi::os::OS::Stub>>
-  CreateGnoiOsStub() = 0;
+  CreateGnoiOsStub() {
+    return absl::UnimplementedError(
+        absl::StrCat(__func__, " is not implemented."));
+  }
 };
 
 }  // namespace thinkit
