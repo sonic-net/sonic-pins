@@ -22,12 +22,12 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace thinkit {
