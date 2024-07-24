@@ -15,10 +15,11 @@
 #ifndef THINKIT_MOCK_SWITCH_H_
 #define THINKIT_MOCK_SWITCH_H_
 
+#include <cstdint>
 #include <memory>
+#include <string>
 
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "cert/cert.grpc.pb.h"
 #include "diag/diag.grpc.pb.h"
 #include "factory_reset/factory_reset.grpc.pb.h"
