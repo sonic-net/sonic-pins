@@ -21,7 +21,9 @@
 #include "absl/strings/string_view.h"
 #include "cert/cert.grpc.pb.h"
 #include "diag/diag.grpc.pb.h"
+#include "factory_reset/factory_reset.grpc.pb.h"
 #include "gmock/gmock.h"
+#include "os/os.grpc.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "system/system.grpc.pb.h"
@@ -37,8 +39,11 @@ class MockSwitch : public Switch {
               CreateP4RuntimeStub, (), (override));
   MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnmi::gNMI::Stub>>, CreateGnmiStub,
               (), (override));
+  MOCK_METHOD(
+      absl::StatusOr<
+          std::unique_ptr<gnoi::factory_reset::FactoryReset::Stub>>,
+      CreateGnoiFactoryResetStub, (), (override));
   MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>,
-
               CreateGnoiSystemStub, (), (override));
   MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::Stub>>,
               CreateGnoiDiagStub, (), (override));
@@ -46,6 +51,8 @@ class MockSwitch : public Switch {
       absl::StatusOr<
           std::unique_ptr<gnoi::certificate::CertificateManagement::Stub>>,
       CreateGnoiCertificateStub, (), (override));
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::os::OS::Stub>>,
+              CreateGnoiOsStub, (), (override));
 };
 
 }  // namespace thinkit

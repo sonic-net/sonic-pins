@@ -37,6 +37,9 @@ class MockSSHClient : public SSHClient {
   MOCK_METHOD(absl::Status, PutFileContents,
               (absl::string_view, const RemotePath&, absl::Duration),
               (override));
+  MOCK_METHOD(absl::Status, PutDirectory,
+              (absl::string_view, const RemotePath&, absl::Duration),
+              (override));
   MOCK_METHOD(absl::Status, GetFile,
               (const RemotePath&, absl::string_view, absl::Duration),
               (override));
