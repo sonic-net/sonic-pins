@@ -22,7 +22,7 @@ package(
 cc_library(
     name = "thinkit",
     deps = [
-        ":control_interface",
+        ":control_device",
         ":generic_testbed",
         ":mirror_testbed",
         ":switch",
@@ -34,7 +34,7 @@ cc_library(
     name = "thinkit_mocks",
     testonly = 1,
     deps = [
-        ":mock_control_interface",
+        ":mock_control_device",
         ":mock_generic_testbed",
         ":mock_mirror_testbed",
         ":mock_switch",
@@ -56,7 +56,6 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -260,7 +259,7 @@ cc_library(
     name = "generic_testbed",
     hdrs = ["generic_testbed.h"],
     deps = [
-        ":control_interface",
+        ":control_device",
         ":switch",
         ":test_environment",
         "//thinkit/proto:generic_testbed_cc_proto",
@@ -289,7 +288,7 @@ cc_library(
     testonly = 1,
     hdrs = ["mock_generic_testbed.h"],
     deps = [
-        ":control_interface",
+        ":control_device",
         ":generic_testbed",
         ":switch",
         ":test_environment",
@@ -309,36 +308,44 @@ cc_test(
 )
 
 cc_library(
-    name = "control_interface",
-    hdrs = ["control_interface.h"],
+    name = "control_device",
+    hdrs = ["control_device.h"],
     deps = [
         ":packet_generation_finalizer",
         "@com_github_gnoi//diag:diag_cc_grpc_proto",
+        "@com_github_gnoi//diag:diag_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
 cc_library(
-    name = "mock_control_interface",
+    name = "mock_control_device",
     testonly = 1,
-    hdrs = ["mock_control_interface.h"],
+    hdrs = ["mock_control_device.h"],
     deps = [
-        ":control_interface",
+        ":control_device",
+        ":packet_generation_finalizer",
         "@com_github_gnoi//diag:diag_cc_grpc_proto",
+        "@com_github_gnoi//diag:diag_cc_proto",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
     ],
 )
 
 cc_test(
-    name = "mock_control_interface_test",
-    srcs = ["mock_control_interface_test.cc"],
+    name = "mock_control_device_test",
+    srcs = ["mock_control_device_test.cc"],
     deps = [
-        ":mock_control_interface",
+        ":mock_control_device",
         "@com_google_googletest//:gtest_main",
     ],
 )

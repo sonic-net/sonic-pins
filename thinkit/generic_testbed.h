@@ -21,7 +21,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "thinkit/control_interface.h"
+#include "thinkit/control_device.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
@@ -48,7 +48,7 @@ enum class RequestType {
 //   `peer_interface_name` will be populated with the name of the interface on
 //   the other end.
 // - In the case of CONTROL_INTERFACE, the `peer_interface_name` should be used
-//   in functions called on the `ControlInterface` returned by Interface().
+//   in functions called on the `ControlDevice` returned by ControlDevice().
 // - In the case of TRAFFIC_GENERATOR, the format of the `peer_interface_name`
 //   is "<hostname of generator>/<card number>/<port number>".
 struct InterfaceInfo {
@@ -69,10 +69,10 @@ class GenericTestbed {
   // Returns the PINS switch (aka system) under test.
   virtual Switch& Sut() = 0;
 
-  // Returns the control interface responsible for packet injection and various
+  // Returns the control device responsible for packet injection and various
   // management operations. This could be but isn't limited to being another
   // PINS switch, a non-PINS switch, or a host machine.
-  virtual ControlInterface& Interface() = 0;
+  virtual ControlDevice& Device() = 0;
 
   // Returns the test environment in which the test is run.
   virtual TestEnvironment& Environment() = 0;

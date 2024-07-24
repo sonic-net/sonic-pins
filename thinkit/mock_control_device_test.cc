@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "thinkit/mock_control_interface.h"
+#include "thinkit/mock_control_device.h"
 
 #include "gtest/gtest.h"
 
 namespace thinkit {
 namespace {
 
-TEST(MockControlInterface, TestBuild) { MockControlInterface mock; }
+TEST(MockControlDevice, TestBuild) { MockControlDevice mock; }
 
 }  // namespace
 }  // namespace thinkit
