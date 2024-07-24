@@ -22,6 +22,8 @@
 #include "absl/strings/string_view.h"
 #include "cert/cert.grpc.pb.h"
 #include "diag/diag.grpc.pb.h"
+#include "factory_reset/factory_reset.grpc.pb.h"
+#include "os/os.grpc.pb.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "system/system.grpc.pb.h"
@@ -49,6 +51,11 @@ class Switch {
   virtual absl::StatusOr<std::unique_ptr<gnmi::gNMI::Stub>>
   CreateGnmiStub() = 0;
 
+  // Creates and returns a stub to the gNOI Factory Reset service.
+  virtual absl::StatusOr<
+      std::unique_ptr<gnoi::factory_reset::FactoryReset::Stub>>
+  CreateGnoiFactoryResetStub() = 0;
+
    // Creates and returns a stub to the gNOI System service.
   virtual absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>
   CreateGnoiSystemStub() = 0;
@@ -61,6 +68,10 @@ class Switch {
   virtual absl::StatusOr<
       std::unique_ptr<gnoi::certificate::CertificateManagement::Stub>>
   CreateGnoiCertificateStub() = 0;
+
+  // Creates and returns a stub to the gNOI OS service.
+  virtual absl::StatusOr<std::unique_ptr<gnoi::os::OS::Stub>>
+  CreateGnoiOsStub() = 0;
 };
 
 }  // namespace thinkit
