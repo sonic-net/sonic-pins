@@ -22,6 +22,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/message.h"
+#include "thinkit/proto/metrics.pb.h"
 
 namespace thinkit {
 
@@ -60,6 +61,9 @@ class TestEnvironment {
 
   // Set the `test_case_ids` for use by tracking tools.
   virtual void SetTestCaseIDs(const std::vector<std::string>& test_case_ids) {}
+
+  // Record a group of metrics for use by tracking tools.
+  virtual void RecordMetrics(const MetricGroup& metric_group) {}
 };
 
 }  // namespace thinkit

@@ -24,7 +24,6 @@
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
@@ -46,6 +45,10 @@ class MirrorTestbedInterface {
 
   // TODO: Move to TestEnvironment.
   virtual absl::Status SaveSwitchLogs(absl::string_view save_prefix) = 0;
+
+  // Calling this function indicates that the test is expected to produce link
+  // flaps. Call this function before SetUp().
+  virtual void ExpectLinkFlaps() = 0;
 };
 
 // The Thinkit `MirrorTestbedFixtureParams` defines test parameters to
@@ -94,7 +97,17 @@ class MirrorTestbedFixture
   // A derived class that needs/wants to do its own setup can override this
   // method. However, it should take care to call this base setup first. That
   // will ensure the platform is ready, and in a healthy state.
-  void SetUp() override { mirror_testbed_interface_->SetUp(); }
+  void SetUp() override {
+    // Set up ir_p4_info.
+    auto ir_p4_info = pdpi::CreateIrP4Info(p4_info());
+    if (!ir_p4_info.ok()) {
+      ADD_FAILURE() << "Failed to create IrP4Info from test param P4Info: "
+                    << ir_p4_info.status();
+    }
+    ir_p4_info_ = std::move(*ir_p4_info);
+
+    mirror_testbed_interface_->SetUp();
+  }
 
   // A derived class that needs/wants to do its own teardown can override this
   // method. However, it should take care to call this base teardown last. Once
@@ -113,30 +126,19 @@ class MirrorTestbedFixture
     return mirror_testbed_interface_->SaveSwitchLogs(save_prefix);
   }
 
-  const std::string& GetGnmiConfig() const { return GetParam().gnmi_config; }
+  const std::string& gnmi_config() const { return GetParam().gnmi_config; }
 
-  const p4::config::v1::P4Info& GetP4Info() const { return GetParam().p4_info; }
+  const p4::config::v1::P4Info& p4_info() const { return GetParam().p4_info; }
 
-  const pdpi::IrP4Info& GetIrP4Info() const {
-    // WARNING: the pdpi::IrP4Info will only be created once, and therefore it
-    // will be created against the current P4Info in this test fixture. It is
-    // unlikely that the P4Info will change because we do not open up the
-    // P4Info to the derived test fixtures. However, we also do not
-    // guarantee that the P4Info cannot be changed.
-    static const pdpi::IrP4Info* const kIrP4Info = [] {
-      absl::StatusOr<pdpi::IrP4Info> ir_p4_info =
-          pdpi::CreateIrP4Info(GetParam().p4_info);
-      CHECK(ir_p4_info.ok())  // Crash OK: Tests would be hard to debug without.
-          << "Failed to translate the P4Info parameter into an IrP4Info.";
-      return new pdpi::IrP4Info(std::move(ir_p4_info.value()));
-    }();
-    return *kIrP4Info;
-  }
+  const pdpi::IrP4Info& ir_p4_info() const { return ir_p4_info_; }
 
  private:
   // Takes ownership of the MirrorTestbedInterface parameter.
   std::unique_ptr<MirrorTestbedInterface> mirror_testbed_interface_ =
       absl::WrapUnique<MirrorTestbedInterface>(GetParam().mirror_testbed);
+
+  // IrP4Info generated from GetParam().p4_info.
+  pdpi::IrP4Info ir_p4_info_;
 };
 
 }  // namespace thinkit

@@ -18,7 +18,10 @@
 
 namespace pins_test {
 
-class ExampleTestFixture : public thinkit::GenericTestbedFixture {};
+class ExampleTestFixture : public thinkit::GenericTestbedFixture<> {
+ protected:
+  ExampleTestFixture() { GetParam().testbed_interface->ExpectLinkFlaps(); }
+};
 
 }  // namespace pins_test
 
