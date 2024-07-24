@@ -13,13 +13,20 @@
 // limitations under the License.
 #include "tests/gnmi/link_flap_tests.h"
 
+#include <memory>
 #include <string>
+#include <type_traits>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -27,6 +34,8 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
@@ -103,23 +112,23 @@ TEST_P(ExampleTestFixture, LinkFlapTest) {
   // Sets admin-status Down through gNMI.
   LOG(INFO) << "Set sut " << sut_interface << " admin link state down.";
   EXPECT_OK(SetAdminStatus(gnmi_stub.get(), sut_interface, "DOWN"));
-  EXPECT_THAT(generic_testbed->Interface().GetUpLinks({peer_interface}),
+  EXPECT_THAT(generic_testbed->Device().GetUpLinks({peer_interface}),
               IsOkAndHolds(testing::IsEmpty()));
   // Sets admin-status Up through gNMI.
   EXPECT_OK(SetAdminStatus(gnmi_stub.get(), sut_interface, "UP"));
-  EXPECT_THAT(generic_testbed->Interface().GetUpLinks({peer_interface}),
+  EXPECT_THAT(generic_testbed->Device().GetUpLinks({peer_interface}),
               IsOkAndHolds(testing::Contains(sut_interface)));
 
   // Flaps control switch port and checks that SUT’s gNMI reflects that.
   LOG(INFO) << "Set control switch " << peer_interface
             << " admin link state down.";
-  EXPECT_OK(generic_testbed->Interface().SetAdminLinkState(
+  EXPECT_OK(generic_testbed->Device().SetAdminLinkState(
       {peer_interface}, thinkit::LinkState::kDown));
   absl::SleepFor(absl::Seconds(15));
   // Checks oper-status through gNMI.
   EXPECT_THAT(GetInterfaceOperStatusOverGnmi(*gnmi_stub, sut_interface),
               IsOkAndHolds(OperStatus::kDown));
-  EXPECT_OK(generic_testbed->Interface().SetAdminLinkState(
+  EXPECT_OK(generic_testbed->Device().SetAdminLinkState(
       {peer_interface}, thinkit::LinkState::kUp));
   absl::SleepFor(absl::Seconds(15));
   EXPECT_THAT(GetInterfaceOperStatusOverGnmi(*gnmi_stub, sut_interface),

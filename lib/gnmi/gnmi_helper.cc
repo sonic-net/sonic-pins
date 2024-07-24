@@ -315,23 +315,21 @@ absl::Status CheckInterfaceOperStateOverGnmi(
     }
   }
 
-  bool all_interfaces_found = true;
+  std::vector<std::string> unavailable_interfaces;
   for (const std::string& interface : interfaces) {
     if (!matching_interfaces.contains(interface)) {
       LOG(INFO) << "Interface "
                 << interface << " not found in interfaces that are "
                 << interface_oper_state;
-      all_interfaces_found = false;
+      unavailable_interfaces.push_back(interface);
     }
   }
 
-  if (!all_interfaces_found) {
-    return absl::UnavailableError(
-        absl::StrCat("Some interfaces are not in the expected "
-                     "state.\nInterfaces provided: \n",
-                     absl::StrJoin(interfaces, "\n"),
-                     "\nInterfaces in the expected state: \n",
-                     absl::StrJoin(matching_interfaces, "\n")));
+  if (!unavailable_interfaces.empty()) {
+    return absl::UnavailableError(absl::StrCat(
+        "Some interfaces are not in the expected state: \n",
+        absl::StrJoin(unavailable_interfaces, "\n"),
+        "\n\nInterfaces provided: \n", absl::StrJoin(interfaces, "\n")));
   }
   return absl::OkStatus();
 }
