@@ -28,6 +28,7 @@ cc_library(
         "//gutil:collections",
         "//gutil:proto",
         "//gutil:status",
+        "//p4_pdpi:built_ins",
         "//p4_pdpi:entity_keys",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
