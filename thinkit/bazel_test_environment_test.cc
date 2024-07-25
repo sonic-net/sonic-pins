@@ -106,7 +106,7 @@ TEST(BazelTestEnvironmentTest, SetTestCaseIdWorksForUnaryConstructor) {
 
 // -- Benchmarks ---------------------------------------------------------------
 //
-// Best run with 'blaze test --benchmarks=all'.
+// Best run with 'blaze test --test_arg=--benchmark_filter=all <target>'.
 //
 // Ideally, we would like to use 'benchy' for benchmarking purposes, but,
 // because we are benchmarking a testing environment, it relies on being set
