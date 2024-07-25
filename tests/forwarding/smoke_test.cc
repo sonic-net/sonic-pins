@@ -314,9 +314,9 @@ TEST_P(SmokeTestFixture, InsertTableEntryFailsWithNonUtf8Character) {
         }
       )pb");
 
-  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(
-		       ir_p4info, pd_entry));
+  ASSERT_OK_AND_ASSIGN(
+      const p4::v1::TableEntry pi_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
   EXPECT_THAT(pdpi::InstallPiTableEntry(sut_p4rt_session.get(), pi_entry),
               StatusIs(absl::StatusCode::kUnknown));
 }
