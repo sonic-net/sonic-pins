@@ -365,6 +365,7 @@ sonic::AppDbUpdates PiEntityUpdatesToIr(
   sonic::AppDbUpdates ir_updates;
   absl::flat_hash_map<std::string, int64_t> resources_in_batch;
 
+  response->mutable_statuses()->Reserve(request.updates().size());
   // Fail on first error.
   for (const p4::v1::Update& pi_update : request.updates()) {
     pdpi::IrUpdateStatus& entry_status = *response->add_statuses();
