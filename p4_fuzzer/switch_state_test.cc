@@ -108,7 +108,7 @@ TEST(SwitchStateTest, TableEmptyTrivial) {
   IrP4Info info;
   SwitchState state(info);
 
-  EXPECT_TRUE(state.AllTablesEmpty());
+  EXPECT_TRUE(state.AllP4TablesEmpty());
 }
 
 TEST(SwitchStateTest, TableEmptyFromP4Info) {
@@ -119,7 +119,7 @@ TEST(SwitchStateTest, TableEmptyFromP4Info) {
   IrP4Info ir_info = CreateIrP4Info(info).value();
 
   SwitchState state(ir_info);
-  EXPECT_TRUE(state.AllTablesEmpty());
+  EXPECT_TRUE(state.AllP4TablesEmpty());
 }
 
 TEST(SwitchStateTest, GetEntityReturnsNullOptWhenMulticastEntryNotPresent) {
@@ -183,7 +183,7 @@ TEST(SwitchStateTest, RuleInsert) {
 
   ASSERT_OK(state.ApplyUpdate(update));
 
-  EXPECT_FALSE(state.AllTablesEmpty());
+  EXPECT_FALSE(state.AllP4TablesEmpty());
   EXPECT_FALSE(state.IsTableEmpty(kBareTable1));
   EXPECT_TRUE(state.IsTableEmpty(kBareTable2));
 
@@ -196,7 +196,7 @@ TEST(SwitchStateTest, RuleInsert) {
   EXPECT_OK(state.CheckConsistency());
 
   state.ClearTableEntries();
-  EXPECT_TRUE(state.AllTablesEmpty());
+  EXPECT_TRUE(state.AllP4TablesEmpty());
 }
 
 TEST(SwitchStateTest, MulticastInsertWorks) {
@@ -230,7 +230,7 @@ TEST(SwitchStateTest, MulticastInsertWorks) {
   EXPECT_OK(state.CheckConsistency());
 
   state.ClearTableEntries();
-  EXPECT_TRUE(state.AllTablesEmpty());
+  EXPECT_TRUE(state.AllP4TablesEmpty());
 }
 
 TEST(SwitchStateTest, ClearTableEntriesPreservesP4Info) {
@@ -297,7 +297,7 @@ TEST(SwitchStateTest, RuleDelete) {
   update.set_type(Update::DELETE);
   ASSERT_OK(state.ApplyUpdate(update));
 
-  EXPECT_TRUE(state.AllTablesEmpty());
+  EXPECT_TRUE(state.AllP4TablesEmpty());
 
   EXPECT_EQ(state.GetNumTableEntries(kBareTable1), 0);
   EXPECT_EQ(state.GetTableEntries(kBareTable1).size(), 0);
@@ -365,10 +365,10 @@ TEST(SwitchStateTest, OnlyInsertAffectsMaxResourceStatisticsForDirectTables) {
   ASSERT_THAT(state.GetPeakResourceStatistics(kBareTable1),
               IsOkAndHolds(FieldsAre(
                   /*entries=*/0,
-                  /*total_weight=*/0,
                   /*total_members=*/0,
-                  /*max_group_weight=*/0,
-                  /*max_members_per_group=*/0)));
+                  /*max_members_per_group=*/0,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0)));
 
   // Insert entry and expect update to max resource statistics.
   Update update;
@@ -379,10 +379,10 @@ TEST(SwitchStateTest, OnlyInsertAffectsMaxResourceStatisticsForDirectTables) {
   EXPECT_THAT(state.GetPeakResourceStatistics(kBareTable1),
               IsOkAndHolds(FieldsAre(
                   /*entries=*/1,
-                  /*total_weight=*/0,
                   /*total_members=*/0,
-                  /*max_group_weight=*/0,
-                  /*max_members_per_group=*/0)));
+                  /*max_members_per_group=*/0,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0)));
   EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
   ASSERT_OK(state.CheckConsistency());
 
@@ -395,10 +395,10 @@ TEST(SwitchStateTest, OnlyInsertAffectsMaxResourceStatisticsForDirectTables) {
   EXPECT_THAT(state.GetPeakResourceStatistics(kBareTable1),
               IsOkAndHolds(FieldsAre(
                   /*entries=*/1,
-                  /*total_weight=*/0,
                   /*total_members=*/0,
-                  /*max_group_weight=*/0,
-                  /*max_members_per_group=*/0)));
+                  /*max_members_per_group=*/0,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0)));
   EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
   ASSERT_OK(state.CheckConsistency());
 
@@ -410,10 +410,10 @@ TEST(SwitchStateTest, OnlyInsertAffectsMaxResourceStatisticsForDirectTables) {
   EXPECT_THAT(state.GetPeakResourceStatistics(kBareTable1),
               IsOkAndHolds(FieldsAre(
                   /*entries=*/1,
-                  /*total_weight=*/0,
                   /*total_members=*/0,
-                  /*max_group_weight=*/0,
-                  /*max_members_per_group=*/0)));
+                  /*max_members_per_group=*/0,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0)));
   EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
   ASSERT_OK(state.CheckConsistency());
 }
@@ -426,10 +426,10 @@ TEST(SwitchStateTest,
   EXPECT_THAT(state.GetPeakResourceStatistics(kWcmpId),
               IsOkAndHolds(FieldsAre(
                   /*entries=*/0,
-                  /*total_weight=*/0,
                   /*total_members=*/0,
-                  /*max_group_weight=*/0,
-                  /*max_members_per_group=*/0)));
+                  /*max_members_per_group=*/0,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0)));
 
   // Insert entry and expect update to max resource statistics.
   pdpi::TableEntry wcmp_entry = gutil::ParseProtoOrDie<pdpi::TableEntry>(
@@ -450,10 +450,10 @@ TEST(SwitchStateTest,
   EXPECT_THAT(state.GetPeakResourceStatistics(kWcmpId),
               IsOkAndHolds(FieldsAre(
                   /*entries=*/1,
-                  /*total_weight=*/3,
                   /*total_members=*/2,
-                  /*max_group_weight=*/3,
-                  /*max_members_per_group=*/2)));
+                  /*max_members_per_group=*/2,
+                  /*total_weight=*/3,
+                  /*max_group_weight=*/3)));
   EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
   ASSERT_OK(state.CheckConsistency());
 
@@ -476,10 +476,10 @@ TEST(SwitchStateTest,
   EXPECT_THAT(state.GetPeakResourceStatistics(kWcmpId),
               IsOkAndHolds(FieldsAre(
                   /*entries=*/1,
-                  /*total_weight=*/6,
                   /*total_members=*/2,
-                  /*max_group_weight=*/6,
-                  /*max_members_per_group=*/2)));
+                  /*max_members_per_group=*/2,
+                  /*total_weight=*/6,
+                  /*max_group_weight=*/6)));
   EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
   ASSERT_OK(state.CheckConsistency());
 
@@ -488,10 +488,94 @@ TEST(SwitchStateTest,
   EXPECT_THAT(state.GetPeakResourceStatistics(kWcmpId),
               IsOkAndHolds(FieldsAre(
                   /*entries=*/1,
-                  /*total_weight=*/6,
                   /*total_members=*/2,
-                  /*max_group_weight=*/6,
-                  /*max_members_per_group=*/2)));
+                  /*max_members_per_group=*/2,
+                  /*total_weight=*/6,
+                  /*max_group_weight=*/6)));
+  EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
+  ASSERT_OK(state.CheckConsistency());
+}
+
+TEST(SwitchStateTest,
+     OnlyInsertAndModifyAffectMaxResourceStatisticsForMulticastGroupTable) {
+  const IrP4Info& info = pdpi::GetTestIrP4Info();
+  SwitchState state(info);
+  EXPECT_THAT(state.GetPeakMulticastResourceStatistics(),
+              FieldsAre(
+                  /*entries=*/0,
+                  /*total_members=*/0,
+                  /*max_members_per_group=*/0,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0));
+
+  // Insert entry and expect update to max resource statistics.
+  Update multicast_update = gutil::ParseProtoOrDie<Update>(
+      R"pb(
+        type: INSERT
+        entity {
+          packet_replication_engine_entry {
+            multicast_group_entry {
+              multicast_group_id: 1
+              replicas { instance: 1 port: "1" }
+            }
+          }
+        }
+      )pb");
+  ASSERT_OK(state.ApplyUpdate(multicast_update));
+  EXPECT_THAT(state.GetPeakMulticastResourceStatistics(),
+              FieldsAre(
+                  /*entries=*/1,
+                  /*total_members=*/1,
+                  /*max_members_per_group=*/1,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0));
+  EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
+  ASSERT_OK(state.CheckConsistency());
+
+  // Modify entry and expect update to max resource statistics.
+  multicast_update = gutil::ParseProtoOrDie<Update>(
+      R"pb(
+        type: MODIFY
+        entity {
+          packet_replication_engine_entry {
+            multicast_group_entry {
+              multicast_group_id: 1
+              replicas { instance: 1 port: "1" }
+              replicas { instance: 2 port: "2" }
+              replicas { instance: 3 port: "3" }
+            }
+          }
+        }
+      )pb");
+  ASSERT_OK(state.ApplyUpdate(multicast_update));
+  EXPECT_THAT(state.GetPeakMulticastResourceStatistics(),
+              FieldsAre(
+                  /*entries=*/1,
+                  /*total_members=*/3,
+                  /*max_members_per_group=*/3,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0));
+  EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
+  ASSERT_OK(state.CheckConsistency());
+
+  // Modify entry and expect no update to max resource statistics.
+  multicast_update = gutil::ParseProtoOrDie<Update>(
+      R"pb(
+        type: DELETE
+        entity {
+          packet_replication_engine_entry {
+            multicast_group_entry { multicast_group_id: 1 }
+          }
+        }
+      )pb");
+  ASSERT_OK(state.ApplyUpdate(multicast_update));
+  EXPECT_THAT(state.GetPeakMulticastResourceStatistics(),
+              FieldsAre(
+                  /*entries=*/1,
+                  /*total_members=*/3,
+                  /*max_members_per_group=*/3,
+                  /*total_weight=*/0,
+                  /*max_group_weight=*/0));
   EXPECT_EQ(state.GetMaxEntriesSeen(), 1);
   ASSERT_OK(state.CheckConsistency());
 }
@@ -499,7 +583,7 @@ TEST(SwitchStateTest,
 TEST(SwitchStateTest, SetEntitiesSetsEntities) {
   SwitchState state(GetIrP4Info());
 
-  EXPECT_TRUE(state.AllTablesEmpty());
+  EXPECT_TRUE(state.AllP4TablesEmpty());
 
   // Call SetTableEntries and ensure it indeed populates the correct tables.
   std::vector<p4::v1::Entity> entities;
@@ -546,7 +630,7 @@ TEST(SwitchStateTest, SetEntitiesSetsEntities) {
       << " with the following P4Info:\n " << state.GetIrP4Info().DebugString();
   EXPECT_EQ(state.GetNumTableEntries(kSpamTableId), 2);
   EXPECT_EQ(state.GetNumTableEntries(kEggTableId), 1);
-  EXPECT_EQ(state.GetNumTableEntries(), 3);
+  EXPECT_EQ(state.GetNumTableEntries(), 4);
 
   EXPECT_OK(state.CheckConsistency());
 
@@ -554,7 +638,7 @@ TEST(SwitchStateTest, SetEntitiesSetsEntities) {
   EXPECT_EQ(state.GetNumTableEntries(kSpamTableId), 0);
   EXPECT_EQ(state.GetNumTableEntries(kEggTableId), 0);
   EXPECT_EQ(state.GetNumTableEntries(), 0);
-  EXPECT_TRUE(state.AllTablesEmpty());
+  EXPECT_TRUE(state.AllP4TablesEmpty());
 
   EXPECT_OK(state.CheckConsistency());
 }
