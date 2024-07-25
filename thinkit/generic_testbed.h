@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_GENERIC_TESTBED_H_
-#define GOOGLE_THINKIT_GENERIC_TESTBED_H_
+#ifndef PINS_THINKIT_GENERIC_TESTBED_H_
+#define PINS_THINKIT_GENERIC_TESTBED_H_
 
 #include <string>
 #include <tuple>
@@ -106,4 +106,4 @@ class GenericTestbed {
 };
 
 }  // namespace thinkit
-#endif  // GOOGLE_THINKIT_GENERIC_TESTBED_H_
+#endif  // PINS_THINKIT_GENERIC_TESTBED_H_

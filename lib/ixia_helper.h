@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_IXIA_INTERFACE_H_
-#define GOOGLE_THINKIT_IXIA_INTERFACE_H_
+#ifndef PINS_THINKIT_IXIA_INTERFACE_H_
+#define PINS_THINKIT_IXIA_INTERFACE_H_
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -138,4 +138,4 @@ absl::Status SetDestIPv6(absl::string_view tref, absl::string_view dip,
 
 }  // namespace pins_test::ixia
 
-#endif  // GOOGLE_THINKIT_IXIA_INTERFACE_H_
+#endif  // PINS_THINKIT_IXIA_INTERFACE_H_

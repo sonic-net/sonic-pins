@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_MOCK_CONTROL_DEVICE_H_
-#define GOOGLE_THINKIT_MOCK_CONTROL_DEVICE_H_
+#ifndef PINS_THINKIT_MOCK_CONTROL_DEVICE_H_
+#define PINS_THINKIT_MOCK_CONTROL_DEVICE_H_
 
 #include <memory>
 #include <string>
@@ -61,4 +61,4 @@ class MockControlDevice : public ControlDevice {
 
 }  // namespace thinkit
 
-#endif  // GOOGLE_THINKIT_MOCK_CONTROL_DEVICE_H_
+#endif  // PINS_THINKIT_MOCK_CONTROL_DEVICE_H_
