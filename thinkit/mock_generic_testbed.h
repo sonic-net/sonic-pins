@@ -28,7 +28,8 @@ namespace thinkit {
 class MockGenericTestbed : public GenericTestbed {
  public:
   MOCK_METHOD(Switch&, Sut, (), (override));
-  MOCK_METHOD(ControlDevice&, Device, (), (override));
+  MOCK_METHOD(class ControlDevice&, ControlDevice, (), (override));
+  MOCK_METHOD(class ControlDevice&, ControlDevice, (int index), (override));
   MOCK_METHOD(TestEnvironment&, Environment, (), (override));
   MOCK_METHOD((absl::flat_hash_map<std::string, InterfaceInfo>),
               GetSutInterfaceInfo, (), (override));
