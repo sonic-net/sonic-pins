@@ -1044,12 +1044,16 @@ const std::vector<pdpi::IrMatchFieldDefinition> AllValidMatchFields(
   for (const auto& [_, match_field_info] :
        Ordered(table.match_fields_by_id())) {
     // Skip deprecated, unused, and disallowed fields.
-    const std::string fully_qualified_match_field = absl::StrCat(
-        table.preamble().name(), ".", match_field_info.match_field().name());
+    const absl::StatusOr<std::string> fully_qualified_match_field =
+        GetFullyQualifiedMatchFieldName(table, match_field_info);
+    CHECK(fully_qualified_match_field.ok())  // Crash OK
+        << "Failed to get fully qualified match field name for "
+        << match_field_info.DebugString();
+
     if (pdpi::IsElementDeprecated(
             match_field_info.match_field().annotations()) ||
         match_field_info.is_unsupported() ||
-        IsDisabledForFuzzing(config, fully_qualified_match_field))
+        IsDisabledForFuzzing(config, *fully_qualified_match_field))
       continue;
 
     match_fields.push_back(match_field_info);
@@ -1578,36 +1582,6 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
       gen, config, switch_state,
       gutil::FindOrDie(config.GetIrP4Info().tables_by_id(), table_id),
       additional_constraint);
-}
-
-std::vector<AnnotatedTableEntry> ValidForwardingEntries(
-    absl::BitGen* gen, const FuzzerConfig& config, const int num_entries) {
-  std::vector<AnnotatedTableEntry> entries;
-  SwitchState state(config.GetIrP4Info());
-
-  for (int i = 0; i < num_entries; ++i) {
-    absl::StatusOr<p4::v1::TableEntry> entry;
-
-    do {
-      entry = FuzzValidTableEntry(gen, config, state, FuzzTableId(gen, config));
-    } while (entry.ok() && state.GetTableEntry(*entry) != absl::nullopt);
-    if (!entry.ok()) {
-      // Failed to generate an entry, try again.
-      i -= 1;
-      continue;
-    }
-
-    p4::v1::Update update;
-    update.set_type(p4::v1::Update::INSERT);
-    *update.mutable_entity()->mutable_table_entry() = *entry;
-
-    CHECK(state.ApplyUpdate(update).ok());  // Crash okay
-
-    entries.push_back(GetAnnotatedTableEntry(config.GetIrP4Info(), *entry,
-                                             /*mutations = */ {}));
-  }
-
-  return entries;
 }
 
 AnnotatedWriteRequest FuzzWriteRequest(absl::BitGen* gen,
