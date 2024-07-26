@@ -14,106 +14,31 @@
 
 #include "thinkit/bazel_test_environment.h"
 
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
 #include <ios>
-#include <ostream>
-#include <string>
-#include <system_error>  // NOLINT
-#include <type_traits>
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
-#include "gtest/gtest.h"
-#include "gutil/status.h"
-#include "thinkit/test_environment.h"
+#include "gutil/test_artifact_writer.h"
 
 namespace thinkit {
 
-namespace {
-
-absl::StatusOr<std::string> ArtifactDirectory() {
-  // Pick appropriate artifact directory using Bazel environment variables, see
-  // https://docs.bazel.build/versions/main/test-encyclopedia.html#initial-conditions
-  char* base_dir = std::getenv("TEST_UNDECLARED_OUTPUTS_DIR");
-  if (base_dir == nullptr) {
-    base_dir = std::getenv("TEST_TMPDIR");
-  }
-  if (base_dir == nullptr) {
-    return gutil::InternalErrorBuilder()
-           << "Environment variables TEST_UNDECLARED_OUTPUTS_DIR and "
-              "TEST_TMPDIR undefined; is this a Bazel test run?";
-  }
-  std::string dir = base_dir;
-  if (auto* test_info = testing::UnitTest::GetInstance()->current_test_info();
-      test_info != nullptr) {
-    absl::StrAppend(&dir, "/", test_info->test_case_name(), "/",
-                    test_info->name());
-  }
-
-  // Ensure the directory exists.
-  std::error_code error;
-  std::filesystem::create_directories(dir, error);
-  if (error) {
-    return gutil::InternalErrorBuilder()
-           << "failed to create test artifact directory '" << dir
-           << "': " << error;
-  }
-  return dir;
-}
-absl::Status WriteToTestArtifact(
-    absl::string_view filename, absl::string_view contents,
-    std::ios_base::openmode mode,
-    absl::flat_hash_map<std::string, std::ofstream>& open_file_by_filepath) {
-  ASSIGN_OR_RETURN(std::string directory, ArtifactDirectory());
-  std::string filepath = absl::StrCat(directory, "/", filename);
-  // Note that pointer-stability of values is not a concern here because the
-  // reference is local and nothing is added to the map while the reference is
-  // live.
-  std::ofstream& file = open_file_by_filepath[filepath];
-  if (file.is_open() && mode == std::ios_base::trunc) {
-    // If we have an open file descriptor and we want to truncate the file, then
-    // we close it and reopen it in truncation mode.
-    file.close();
-  }
-  // If the file is not open, then we just want to open it in the given mode.
-  if (!file.is_open()) {
-    file.open(filepath, mode);
-    // If the file is still not open, we have a problem.
-    if (!file.is_open()) {
-      return gutil::InternalErrorBuilder()
-             << "unable to open test artifact file: '" << filepath << "'";
-    }
-  }
-  file << contents;
-
-  // We flush the contents to persist them, but leave the file open so that we
-  // can continue to append to it.
-  file.flush();
-  if (file.good()) return absl::OkStatus();
-  return gutil::InternalErrorBuilder()
-         << "failed to store test artifact: '" << filepath << "'";
-}
-
-}  // namespace
-
 absl::Status BazelTestEnvironment::StoreTestArtifact(
     absl::string_view filename, absl::string_view contents) {
-  absl::MutexLock lock(&this->write_mutex_);
-  return WriteToTestArtifact(filename, contents, std::ios_base::trunc,
-                             open_file_by_filepath_);
+  return artifact_writer_.StoreTestArtifact(filename, contents);
+}
+absl::Status BazelTestEnvironment::StoreTestArtifact(
+    absl::string_view filename, const google::protobuf::Message& proto) {
+  return artifact_writer_.StoreTestArtifact(filename, proto);
 }
 
 absl::Status BazelTestEnvironment::AppendToTestArtifact(
     absl::string_view filename, absl::string_view contents) {
-  absl::MutexLock lock(&this->write_mutex_);
-  return WriteToTestArtifact(filename, contents, std::ios_base::app,
-                             open_file_by_filepath_);
+  return artifact_writer_.AppendToTestArtifact(filename, contents);
+}
+absl::Status BazelTestEnvironment::AppendToTestArtifact(
+    absl::string_view filename, const google::protobuf::Message& proto) {
+  return artifact_writer_.AppendToTestArtifact(filename, proto);
 }
 
 }  // namespace thinkit
