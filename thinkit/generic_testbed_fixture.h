@@ -46,7 +46,7 @@ class GenericTestbedInterface {
   GetTestbedWithRequirements(const thinkit::TestRequirements& requirements) = 0;
 
   // Calling this function indicates that the test is expected to produce link
-  // flaps. Call this function before SetUp().
+  // flaps.
   virtual void ExpectLinkFlaps() = 0;
 };
 
