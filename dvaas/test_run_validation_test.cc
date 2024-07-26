@@ -249,5 +249,30 @@ TEST(TestRunValidationTest, IgnorePacketInsHasNoEffectWhenPacketInsMatch) {
       EqualsProto(R"pb()pb"));
 }
 
+TEST(TestRunValidationTest, PacketFieldReasonsInvalidIsIgnored) {
+  const PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packets {
+          port: "1"
+          parsed {
+            reasons_invalid: "invalid reason 1"
+            reasons_invalid: "invalid reason 2"
+          }
+        }
+      }
+    }
+    actual_output {
+      packets {
+        port: "1"
+        parsed {}
+      }
+    }
+  )pb");
+
+  // Validation must succeed.
+  ASSERT_THAT(ValidateTestRun(test_run), EqualsProto(R"pb()pb"));
+}
+
 }  // namespace
 }  // namespace dvaas

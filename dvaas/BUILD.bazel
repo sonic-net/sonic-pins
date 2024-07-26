@@ -62,6 +62,22 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "dataplane_validation_test",
+    srcs = ["dataplane_validation_test.cc"],
+    deps = [
+        ":dataplane_validation",
+        ":packet_trace_cc_proto",
+        "//gutil:status_matchers",
+        "//gutil:test_artifact_writer",
+        "//gutil:testing",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "validation_result",
     srcs = ["validation_result.cc"],
@@ -228,7 +244,6 @@ cc_library(
         "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:bit_widths",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
-        "//p4_pdpi/string_encodings:hex_string",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -376,7 +391,6 @@ cc_test(
         "//gutil:proto",
         "//gutil:status_matchers",
         "//gutil:testing",
-        "//p4_pdpi/packetlib",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
         "//p4_pdpi/testing:test_p4info_cc",
         "@com_google_absl//absl/status",

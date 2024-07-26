@@ -73,9 +73,10 @@ TEST(MakeTestPacketTag, YieldsTestPacketTagWithLongDescription) {
 
 TEST(MakeTestPacketTag, RoundTripsWithExtractTestPacketTag) {
   for (int test_packet_id : {0, 1, 2, 42, 1234}) {
-    ASSERT_THAT(ExtractIdFromTaggedPacket(MakeTestPacketTagFromUniqueId(
-                    test_packet_id, "some description")),
-                IsOkAndHolds(Eq(test_packet_id)));
+    packetlib::Packet packet;
+    packet.set_payload(
+        MakeTestPacketTagFromUniqueId(test_packet_id, "some description"));
+    EXPECT_THAT(ExtractTestPacketTag(packet), IsOkAndHolds(Eq(test_packet_id)));
   }
 }
 
@@ -83,9 +84,10 @@ TEST(MakeTestPacketTag,
      RoundTripsWithExtractTestPacketTagWithDifferentSizedDescriptions) {
   constexpr int kPacketTag = 10;
   for (int description_size : {0, 1, 2, 42, 1234}) {
-    EXPECT_THAT(ExtractIdFromTaggedPacket(MakeTestPacketTagFromUniqueId(
-                    kPacketTag, std::string(description_size, '!'))),
-                IsOkAndHolds(Eq(kPacketTag)));
+    packetlib::Packet packet;
+    packet.set_payload(MakeTestPacketTagFromUniqueId(
+        kPacketTag, std::string(description_size, '!')));
+    EXPECT_THAT(ExtractTestPacketTag(packet), IsOkAndHolds(Eq(kPacketTag)));
   }
 }
 
@@ -304,10 +306,7 @@ TEST(UpdateTestPacketTag, YieldsValidPacketTestVectorWithUpdatedTag) {
 
   // Check if all the tags were updated, including the hex and payload.
   ASSERT_OK(packetlib::ValidatePacket(test_vector.input().packet().parsed()));
-  ASSERT_OK_AND_ASSIGN(
-      std::string raw_input_packet,
-      packetlib::RawSerializePacket(test_vector.input().packet().parsed()));
-  ASSERT_THAT(ExtractIdFromTaggedPacket(raw_input_packet),
+  ASSERT_THAT(ExtractTestPacketTag(test_vector.input().packet().parsed()),
               IsOkAndHolds(Eq(kNewTag)));
   ASSERT_NE(test_vector.input().packet().hex(),
             updated_test_vector.input().packet().hex());
@@ -316,9 +315,7 @@ TEST(UpdateTestPacketTag, YieldsValidPacketTestVectorWithUpdatedTag) {
     for (int j = 0; j < acceptable_outputs.packets().size(); ++j) {
       const Packet& packet = acceptable_outputs.packets(j);
       ASSERT_OK(packetlib::ValidatePacket(packet.parsed()));
-      ASSERT_OK_AND_ASSIGN(std::string raw_output_packet,
-                           packetlib::RawSerializePacket(packet.parsed()));
-      ASSERT_THAT(ExtractIdFromTaggedPacket(raw_output_packet),
+      ASSERT_THAT(ExtractTestPacketTag(packet.parsed()),
                   IsOkAndHolds(Eq(kNewTag)));
       ASSERT_NE(packet.hex(),
                 updated_test_vector.acceptable_outputs(i).packets(j).hex());
@@ -326,9 +323,7 @@ TEST(UpdateTestPacketTag, YieldsValidPacketTestVectorWithUpdatedTag) {
     for (int j = 0; j < acceptable_outputs.packet_ins().size(); ++j) {
       const PacketIn& packet_in = acceptable_outputs.packet_ins(j);
       ASSERT_OK(packetlib::ValidatePacket(packet_in.parsed()));
-      ASSERT_OK_AND_ASSIGN(std::string raw_in_packet,
-                           packetlib::RawSerializePacket(packet_in.parsed()));
-      ASSERT_THAT(ExtractIdFromTaggedPacket(raw_in_packet),
+      ASSERT_THAT(ExtractTestPacketTag(packet_in.parsed()),
                   IsOkAndHolds(Eq(kNewTag)));
       ASSERT_NE(packet_in.hex(),
                 updated_test_vector.acceptable_outputs(i).packet_ins(j).hex());

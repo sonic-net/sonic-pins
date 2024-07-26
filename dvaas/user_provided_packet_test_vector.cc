@@ -19,22 +19,21 @@ namespace dvaas {
 
 namespace {
 
-absl::StatusOr<std::string> LegitimizeParsedPacketAndReturnRawBytes(
+absl::StatusOr<std::string> LegitimizeParsedPacketAndReturnAsHex(
     packetlib::Packet& packet) {
   RETURN_IF_ERROR(packetlib::UpdateMissingComputedFields(packet).status());
   RETURN_IF_ERROR(packetlib::ValidatePacket(packet));
-  return packetlib::RawSerializePacket(packet);
+  ASSIGN_OR_RETURN(std::string raw_packet,
+                   packetlib::RawSerializePacket(packet));
+  return absl::BytesToHexString(raw_packet);
 }
 
-// Checks that `packet` is well-formed and modifies it with omittable fields
-// filled in if that is the case. It returns the test tag id or returns an error
-// otherwise. Also, it generates an updated hex string representation of the
-// packet.
-absl::StatusOr<int> LegitimizePacketAndReturnId(Packet& packet) {
-  ASSIGN_OR_RETURN(std::string bytes, LegitimizeParsedPacketAndReturnRawBytes(
-                                          *packet.mutable_parsed()));
-  *packet.mutable_hex() = absl::BytesToHexString(bytes);
-  return ExtractIdFromTaggedPacket(bytes);
+// Checks that the given `input_packet` is well-formed, returning it with
+// omittable fields filled in if that is the case, or an error otherwise.
+absl::StatusOr<Packet> LegitimizePacket(Packet packet) {
+  ASSIGN_OR_RETURN(*packet.mutable_hex(), LegitimizeParsedPacketAndReturnAsHex(
+                                              *packet.mutable_parsed()));
+  return packet;
 }
 
 // Checks that the given `packet_in`'s metadata is well-formed and if so
@@ -53,17 +52,13 @@ absl::Status LegitimizePacketInMetadata(const PacketIn& packet_in,
   return pdpi::IrPacketInToPi(ir_info, ir_packet_in).status();
 }
 
-// Checks that the given `packet_in` is well-formed and modifies it with
-// omittable fields filled in. It returns the test tag id or returns an error
-// otherwise. Also, it generates an updated hex string representation of the
-// packet.
-absl::StatusOr<int> LegitimizePacketInAndReturnId(
-    PacketIn& packet_in, const pdpi::IrP4Info& ir_info) {
+absl::StatusOr<PacketIn> LegitimizePacketIn(PacketIn packet_in,
+                                            const pdpi::IrP4Info& ir_info) {
   RETURN_IF_ERROR(LegitimizePacketInMetadata(packet_in, ir_info));
-  ASSIGN_OR_RETURN(std::string bytes, LegitimizeParsedPacketAndReturnRawBytes(
-                                          *packet_in.mutable_parsed()));
-  *packet_in.mutable_hex() = absl::BytesToHexString(bytes);
-  return ExtractIdFromTaggedPacket(bytes);
+  ASSIGN_OR_RETURN(
+      *packet_in.mutable_hex(),
+      LegitimizeParsedPacketAndReturnAsHex(*packet_in.mutable_parsed()));
+  return packet_in;
 }
 
 // Checks that the given input `vector` is well-formed using
@@ -80,7 +75,9 @@ absl::Status LegitimizeTestVector(
 
   // Legitimize input packet.
   Packet& input_packet = *vector.mutable_input()->mutable_packet();
-  ASSIGN_OR_RETURN(int id, LegitimizePacketAndReturnId(input_packet),
+  ASSIGN_OR_RETURN(int tag, ExtractTestPacketTag(input_packet.parsed()),
+                   _.SetPrepend() << "invalid input packet: ");
+  ASSIGN_OR_RETURN(input_packet, LegitimizePacket(input_packet),
                    _.SetPrepend() << "invalid input packet: ");
 
   // Legitimize acceptable outputs.
@@ -92,39 +89,44 @@ absl::Status LegitimizeTestVector(
     for (int i = 0; i < output.packet_ins().size(); ++i) {
       PacketIn& output_packet_ins = *output.mutable_packet_ins(i);
       ASSIGN_OR_RETURN(
-          int output_id,
-          LegitimizePacketInAndReturnId(output_packet_ins, ir_info),
+          int output_tag, ExtractTestPacketTag(output_packet_ins.parsed()),
           _.SetPrepend() << "output packet in #" << (i + 1) << " invalid: ");
-      if (output_id != id) {
+      ASSIGN_OR_RETURN(
+          output_packet_ins, LegitimizePacketIn(output_packet_ins, ir_info),
+          _.SetPrepend() << "output packet in #" << (i + 1) << " invalid: ");
+      if (output_tag != tag) {
         return gutil::InvalidArgumentErrorBuilder()
-               << "mismatch of input packet in id vs output packet in id "
+               << "mismatch of input packet in tag vs output packet in tag "
                   "for output packet in #"
-               << (i + 1) << ": " << id << " vs " << output_id;
+               << (i + 1) << ": " << tag << " vs " << output_tag;
       }
     }
     // Legitimize forwarded output packets.
     for (int i = 0; i < output.packets().size(); ++i) {
       Packet& output_packet = *output.mutable_packets(i);
       ASSIGN_OR_RETURN(
-          int output_id, LegitimizePacketAndReturnId(output_packet),
+          int output_tag, ExtractTestPacketTag(output_packet.parsed()),
           _.SetPrepend() << "output packet #" << (i + 1) << " invalid: ");
-      if (output_id != id) {
+      ASSIGN_OR_RETURN(output_packet, LegitimizePacket(output_packet),
+                       _.SetPrepend()
+                           << "output packet #" << (i + 1) << " invalid: ");
+      if (output_tag != tag) {
         return gutil::InvalidArgumentErrorBuilder()
-               << "mismatch of input packet id vs output packet id for "
+               << "mismatch of input packet tag vs output packet tag for "
                   "output packet #"
-               << (i + 1) << ": " << id << " vs " << output_id;
+               << (i + 1) << ": " << tag << " vs " << output_tag;
       }
     }
   }
 
   // Add internalized vector to result.
   const auto& [it, inserted] =
-      legitimized_test_vectors_by_id.insert({id, vector});
+      legitimized_test_vectors_by_id.insert({tag, vector});
   if (!inserted) {
     return gutil::InvalidArgumentErrorBuilder()
            << "user-provided packet test vectors must be tagged with unique "
               "IDs in their payload, but found multiple test vectors with ID "
-           << id << ". Dumping offending test vectors:\n<"
+           << tag << ". Dumping offending test vectors:\n<"
            << gutil::PrintTextProto(it->second) << ">\n<"
            << gutil::PrintTextProto(vector) << ">\n";
   }
