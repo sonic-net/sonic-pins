@@ -21,6 +21,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "artifacts/otg.grpc.pb.h"
 #include "thinkit/control_device.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
@@ -49,14 +50,23 @@ enum class RequestType {
 //   the other end.
 // - In the case of CONTROL_INTERFACE, the `peer_interface_name` should be used
 //   in functions called on the `ControlDevice` returned by ControlDevice().
+// - In the case of multiple CONTROL_INTERFACE, the `peer_device_index` will be
+//   used to identify the connected control device. If `peer_device_index` is
+//   not provided, ControlDevice(0) will be returned by default.
 // - In the case of TRAFFIC_GENERATOR, the format of the `peer_interface_name`
 //   is "<hostname of generator>/<card number>/<port number>".
+// - `peer_traffic_location` is the location of the OTG traffic port that can be
+//   assigned to `otg.Port.location` field.
 struct InterfaceInfo {
   thinkit::InterfaceMode interface_mode;
-  std::string peer_interface_name;  // Empty if not applicable.
+  int peer_device_index;              // Ignore if not applicable.
+  std::string peer_interface_name;    // Empty if not applicable.
+  std::string peer_traffic_location;  // Empty if not applicable.
   bool operator==(const InterfaceInfo& other) const {
-    return std::tie(interface_mode, peer_interface_name) ==
-           std::tie(other.interface_mode, other.peer_interface_name);
+    return std::tie(interface_mode, peer_device_index, peer_interface_name,
+                    peer_traffic_location) ==
+           std::tie(other.interface_mode, other.peer_device_index,
+                    other.peer_interface_name, other.peer_traffic_location);
   }
 };
 
@@ -69,10 +79,13 @@ class GenericTestbed {
   // Returns the PINS switch (aka system) under test.
   virtual Switch& Sut() = 0;
 
-  // Returns the control device responsible for packet injection and various
-  // management operations. This could be but isn't limited to being another
-  // PINS switch, a non-PINS switch, or a host machine.
-  virtual ControlDevice& Device() = 0;
+  // Returns a default control device responsible for packet injection and
+  // various management operations. This could be but isn't limited to being
+  // another PINS switch, a non-PINS switch, or a host machine.
+  virtual class ControlDevice& ControlDevice() = 0;
+
+  // Returns a control device in the Generic Testbed at the specified index.
+  virtual class ControlDevice& ControlDevice(int index) = 0;
 
   // Returns the test environment in which the test is run.
   virtual TestEnvironment& Environment() = 0;
@@ -81,6 +94,10 @@ class GenericTestbed {
   // `InterfaceInfo`, which describes what it's connected to.
   virtual absl::flat_hash_map<std::string, InterfaceInfo>
   GetSutInterfaceInfo() = 0;
+
+  // Returns a client to interact with the Open Traffic Generator Service, if
+  // present, for the testbed.
+  virtual otg::Openapi::StubInterface* GetTrafficClient() { return nullptr; }
 
   // Sends a REST request to the Ixia and returns the response.
   // `url` can be either "https://...", "/api/...", or "/ixnetwork/...".
