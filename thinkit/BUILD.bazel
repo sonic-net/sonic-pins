@@ -188,14 +188,12 @@ cc_library(
     hdrs = ["bazel_test_environment.h"],
     deps = [
         ":test_environment",
-        "//gutil:status",
+        "//gutil:test_artifact_writer",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
-        "@com_google_googletest//:gtest",
     ],
 )
 
