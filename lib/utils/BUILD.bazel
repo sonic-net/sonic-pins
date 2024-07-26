@@ -43,3 +43,27 @@ cc_test(
         "@com_jsoncpp//:json",
     ],
 )
+
+cc_library(
+    name = "generic_testbed_utils",
+    srcs = ["generic_testbed_utils.cc"],
+    hdrs = ["generic_testbed_utils.h"],
+    deps = [
+        "//thinkit:generic_testbed",
+        "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_test(
+    name = "generic_testbed_utils_test",
+    srcs = ["generic_testbed_utils_test.cc"],
+    deps = [
+        ":generic_testbed_utils",
+        "//thinkit:generic_testbed",
+        "//thinkit/proto:generic_testbed_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
