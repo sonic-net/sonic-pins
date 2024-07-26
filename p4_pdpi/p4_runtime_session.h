@@ -116,6 +116,15 @@ struct P4RuntimeSessionOptionalArgs {
 // A P4Runtime session
 class P4RuntimeSession {
  public:
+  // Creates and sets up a standard P4RuntimeSession. If you don't have
+  // particular requirements, this is likely the function you want to use.
+  // Specifically, creates a session, clears all tables, and pushes the given
+  // P4Info via RECONCILE_AND_COMMIT.
+  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
+  CreateWithP4InfoAndClearTables(
+      thinkit::Switch& thinkit_switch, const p4::config::v1::P4Info& p4info,
+      const P4RuntimeSessionOptionalArgs& metadata = {});
+
   // Creates a session with the switch, which lasts until the session object is
   // destructed. Performs primary arbitration and, if `error_if_not_primary` is
   // set, as it is by default, then if the session is not the primary switch
