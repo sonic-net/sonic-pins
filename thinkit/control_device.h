@@ -67,6 +67,10 @@ class ControlDevice {
   virtual absl::Status SendPacket(absl::string_view interface,
                                   absl::string_view packet) = 0;
 
+  // Check whether the ControlDevice implementation supports SendPacket - not
+  // all control devices support it.
+  virtual bool SupportsSendPacket() const = 0;
+
   // Sends a list of `packet` raw byte string out of the control
   // device’s `interface`.
   virtual absl::Status SendPackets(absl::string_view interface,

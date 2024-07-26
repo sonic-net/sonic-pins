@@ -27,6 +27,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "gutil/test_artifact_writer.h"
 #include "thinkit/test_environment.h"
 
 namespace thinkit {
@@ -46,17 +47,14 @@ class BazelTestEnvironment : public TestEnvironment {
         set_test_case_ids_(std::move(set_test_case_ids)) {}
 
   absl::Status StoreTestArtifact(absl::string_view filename,
-                                 absl::string_view contents)
-      ABSL_LOCKS_EXCLUDED(write_mutex_) override;
-  using TestEnvironment::StoreTestArtifact;  // Inherit protobuf overload which
-                                             // calls string_view version.
+                                 absl::string_view contents) override;
+  absl::Status StoreTestArtifact(absl::string_view filename,
+                                 const google::protobuf::Message& proto);
 
   absl::Status AppendToTestArtifact(absl::string_view filename,
-                                    absl::string_view contents)
-      ABSL_LOCKS_EXCLUDED(write_mutex_) override;
-  using TestEnvironment::AppendToTestArtifact;  // Inherit protobuf overload
-                                                // which calls string_view
-                                                // version.
+                                    absl::string_view contents) override;
+  absl::Status AppendToTestArtifact(absl::string_view filename,
+                                    const google::protobuf::Message& proto);
 
   bool MaskKnownFailures() { return mask_known_failures_; };
 
@@ -67,12 +65,7 @@ class BazelTestEnvironment : public TestEnvironment {
  private:
   bool mask_known_failures_;
   std::function<void(const std::vector<std::string>&)> set_test_case_ids_;
-  // Open files are cached to avoid closing them after every append. On certain
-  // file systems (e.g. b/111316875) closing files is abnormally slow and this
-  // avoids it. However, this approach should also generally be faster.
-  absl::flat_hash_map<std::string, std::ofstream> open_file_by_filepath_;
-  // The mutex is used to ensure that writes to disk are sequential.
-  absl::Mutex write_mutex_;
+  gutil::BazelTestArtifactWriter artifact_writer_;
 };
 
 }  // namespace thinkit

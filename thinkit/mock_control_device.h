@@ -39,6 +39,7 @@ class MockControlDevice : public ControlDevice {
   MOCK_METHOD(absl::Status, SendPacket,
               (absl::string_view interface, absl::string_view packet),
               (override));
+  MOCK_METHOD(bool, SupportsSendPacket, (), (const, override));
   MOCK_METHOD(absl::Status, SendPackets,
               (absl::string_view interface,
                absl::Span<const std::string> packets),

@@ -36,23 +36,23 @@ class MockSwitch : public Switch {
  public:
   MOCK_METHOD(const std::string&, ChassisName, (), (override));
   MOCK_METHOD(uint32_t, DeviceId, (), (override));
-  MOCK_METHOD(absl::StatusOr<std::unique_ptr<p4::v1::P4Runtime::Stub>>,
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<p4::v1::P4Runtime::StubInterface>>,
               CreateP4RuntimeStub, (), (override));
-  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnmi::gNMI::Stub>>, CreateGnmiStub,
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnmi::gNMI::StubInterface>>, CreateGnmiStub,
               (), (override));
   MOCK_METHOD(
       absl::StatusOr<
-          std::unique_ptr<gnoi::factory_reset::FactoryReset::Stub>>,
+          std::unique_ptr<gnoi::factory_reset::FactoryReset::StubInterface>>,
       CreateGnoiFactoryResetStub, (), (override));
-  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>,
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::system::System::StubInterface>>,
               CreateGnoiSystemStub, (), (override));
-  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::Stub>>,
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::StubInterface>>,
               CreateGnoiDiagStub, (), (override));
   MOCK_METHOD(
       absl::StatusOr<
-          std::unique_ptr<gnoi::certificate::CertificateManagement::Stub>>,
+          std::unique_ptr<gnoi::certificate::CertificateManagement::StubInterface>>,
       CreateGnoiCertificateStub, (), (override));
-  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::os::OS::Stub>>,
+  MOCK_METHOD(absl::StatusOr<std::unique_ptr<gnoi::os::OS::StubInterface>>,
               CreateGnoiOsStub, (), (override));
 };
 
