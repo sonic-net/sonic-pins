@@ -350,6 +350,15 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "generic_testbed_test",
+    srcs = ["generic_testbed_test.cc"],
+    deps = [
+        ":generic_testbed",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "packet_generation_finalizer",
     hdrs = ["packet_generation_finalizer.h"],
