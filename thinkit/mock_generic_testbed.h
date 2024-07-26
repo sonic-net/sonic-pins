@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
-#define GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
+#ifndef PINS_THINKIT_MOCK_GENERIC_TESTBED_H_
+#define PINS_THINKIT_MOCK_GENERIC_TESTBED_H_
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -42,4 +42,4 @@ class MockGenericTestbed : public GenericTestbed {
 
 }  // namespace thinkit
 
-#endif  // GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
+#endif  // PINS_THINKIT_MOCK_GENERIC_TESTBED_H_

@@ -11,8 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_LIB_UTILS_JSON_UTILS_H_
-#define GOOGLE_LIB_UTILS_JSON_UTILS_H_
+
+#ifndef PINS_LIB_UTILS_JSON_UTILS_H_
+#define PINS_LIB_UTILS_JSON_UTILS_H_
 
 #include "absl/strings/string_view.h"
 #include "include/json/value.h"
@@ -61,4 +62,4 @@ bool JsonValueIsEqual(const Json::Value& value1, const Json::Value& value2);
 
 }  // namespace pins_test
 
-#endif  // PLATFORMS_NETWORKING_GPINS_CONFIG_UTILS_JSON_UTILS_H_
+#endif  // PINS_LIB_UTILS_JSON_UTILS_H_

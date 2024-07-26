@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_BAZEL_TEST_ENVIRONMENT_H_
-#define GOOGLE_THINKIT_BAZEL_TEST_ENVIRONMENT_H_
+#ifndef PINS_THINKIT_BAZEL_TEST_ENVIRONMENT_H_
+#define PINS_THINKIT_BAZEL_TEST_ENVIRONMENT_H_
 
 #include <fstream>
 #include <functional>
@@ -70,4 +70,4 @@ class BazelTestEnvironment : public TestEnvironment {
 
 }  // namespace thinkit
 
-#endif  // GOOGLE_THINKIT_BAZEL_TEST_ENVIRONMENT_H_
+#endif  // PINS_THINKIT_BAZEL_TEST_ENVIRONMENT_H_

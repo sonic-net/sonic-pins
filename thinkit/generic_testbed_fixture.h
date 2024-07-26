@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_GENERIC_TESTBED_TEST_FIXTURE_H_
-#define GOOGLE_THINKIT_GENERIC_TESTBED_TEST_FIXTURE_H_
+#ifndef PINS_THINKIT_GENERIC_TESTBED_TEST_FIXTURE_H_
+#define PINS_THINKIT_GENERIC_TESTBED_TEST_FIXTURE_H_
 
 #include <memory>
 #include <optional>
@@ -118,4 +118,4 @@ class GenericTestbedFixture : public testing::TestWithParam<Params> {
 
 }  // namespace thinkit
 
-#endif  // GOOGLE_THINKIT_GENERIC_TESTBED_TEST_FIXTURE_H_
+#endif  // PINS_THINKIT_GENERIC_TESTBED_TEST_FIXTURE_H_
