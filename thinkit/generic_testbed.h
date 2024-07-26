@@ -21,6 +21,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "artifacts/otg.grpc.pb.h"
 #include "thinkit/control_device.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
@@ -54,14 +55,18 @@ enum class RequestType {
 //   not provided, ControlDevice(0) will be returned by default.
 // - In the case of TRAFFIC_GENERATOR, the format of the `peer_interface_name`
 //   is "<hostname of generator>/<card number>/<port number>".
+// - `peer_traffic_location` is the location of the OTG traffic port that can be
+//   assigned to `otg.Port.location` field.
 struct InterfaceInfo {
   thinkit::InterfaceMode interface_mode;
-  int peer_device_index;            // Ignore if not applicable.
-  std::string peer_interface_name;  // Empty if not applicable.
+  int peer_device_index;              // Ignore if not applicable.
+  std::string peer_interface_name;    // Empty if not applicable.
+  std::string peer_traffic_location;  // Empty if not applicable.
   bool operator==(const InterfaceInfo& other) const {
-    return std::tie(interface_mode, peer_device_index, peer_interface_name) ==
+    return std::tie(interface_mode, peer_device_index, peer_interface_name,
+                    peer_traffic_location) ==
            std::tie(other.interface_mode, other.peer_device_index,
-                    other.peer_interface_name);
+                    other.peer_interface_name, other.peer_traffic_location);
   }
 };
 
@@ -89,6 +94,10 @@ class GenericTestbed {
   // `InterfaceInfo`, which describes what it's connected to.
   virtual absl::flat_hash_map<std::string, InterfaceInfo>
   GetSutInterfaceInfo() = 0;
+
+  // Returns a client to interact with the Open Traffic Generator Service, if
+  // present, for the testbed.
+  virtual otg::Openapi::StubInterface* GetTrafficClient() { return nullptr; }
 
   // Sends a REST request to the Ixia and returns the response.
   // `url` can be either "https://...", "/api/...", or "/ixnetwork/...".

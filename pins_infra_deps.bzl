@@ -102,6 +102,14 @@ def pins_infra_deps():
             strip_prefix = "glog-0.6.0",
             sha256 = "8a83bf982f37bb70825df71a9709fa90ea9f4447fb3c099e1d720a439d88bad6",
         )
+    if not native.existing_rule("com_github_otg_models"):
+        http_archive(
+            name = "com_github_otg_models",
+            url = "https://github.com/open-traffic-generator/models/archive/v0.11.8.zip",
+            strip_prefix = "models-0.11.8",
+            build_file = "@//:bazel/BUILD.otg-models.bazel",
+            sha256 = "caf3a9c9cdf8f9f4fb16da2cc9123823af6446f40dff71a1f2c1b35e76ae36f5",
+        )
 
     # Needed to make glog happy.
     if not native.existing_rule("com_github_gflags_gflags"):
