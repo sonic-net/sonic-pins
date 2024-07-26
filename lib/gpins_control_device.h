@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_LIB_GPINS_CONTROL_DEVICE_H_
-#define GOOGLE_LIB_GPINS_CONTROL_DEVICE_H_
+#ifndef PINS_LIB_GPINS_CONTROL_DEVICE_H_
+#define PINS_LIB_GPINS_CONTROL_DEVICE_H_
 
 #include <memory>
 #include <string>
@@ -58,6 +58,8 @@ class GpinsControlDevice : public thinkit::ControlDevice {
   absl::Status SendPacket(absl::string_view interface,
                           absl::string_view packet) override;
 
+  bool SupportsSendPacket() const override { return true; }
+
   absl::Status SendPackets(absl::string_view interface,
                            absl::Span<const std::string> packets) override;
 
@@ -90,4 +92,4 @@ class GpinsControlDevice : public thinkit::ControlDevice {
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_LIB_GPINS_CONTROL_DEVICE_H_
+#endif  // PINS_LIB_GPINS_CONTROL_DEVICE_H_

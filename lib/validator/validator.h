@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_LIB_VALIDATOR_VALIDATOR_H_
-#define GOOGLE_LIB_VALIDATOR_VALIDATOR_H_
+#ifndef PINS_LIB_VALIDATOR_VALIDATOR_H_
+#define PINS_LIB_VALIDATOR_VALIDATOR_H_
 
 #include <memory>
 #include <vector>
@@ -62,4 +62,4 @@ class Validator {
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_LIB_VALIDATOR_VALIDATOR_H_
+#endif  // PINS_LIB_VALIDATOR_VALIDATOR_H_

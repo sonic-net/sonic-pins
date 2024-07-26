@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
-#define GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
+#ifndef PINS_THINKIT_MOCK_GENERIC_TESTBED_H_
+#define PINS_THINKIT_MOCK_GENERIC_TESTBED_H_
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -28,10 +28,12 @@ namespace thinkit {
 class MockGenericTestbed : public GenericTestbed {
  public:
   MOCK_METHOD(Switch&, Sut, (), (override));
-  MOCK_METHOD(ControlDevice&, Device, (), (override));
+  MOCK_METHOD(class ControlDevice&, ControlDevice, (), (override));
+  MOCK_METHOD(class ControlDevice&, ControlDevice, (int index), (override));
   MOCK_METHOD(TestEnvironment&, Environment, (), (override));
   MOCK_METHOD((absl::flat_hash_map<std::string, InterfaceInfo>),
               GetSutInterfaceInfo, (), (override));
+  MOCK_METHOD(otg::Openapi::StubInterface*, GetTrafficClient, (), (override));
   MOCK_METHOD(absl::StatusOr<HttpResponse>, SendRestRequestToIxia,
               (RequestType type, absl::string_view url,
                absl::string_view payload),
@@ -40,4 +42,4 @@ class MockGenericTestbed : public GenericTestbed {
 
 }  // namespace thinkit
 
-#endif  // GOOGLE_THINKIT_MOCK_GENERIC_TESTBED_H_
+#endif  // PINS_THINKIT_MOCK_GENERIC_TESTBED_H_

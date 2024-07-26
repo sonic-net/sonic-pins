@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef GOOGLE_LIB_P4RT_P4RT_PORT_H_
-#define GOOGLE_LIB_P4RT_P4RT_PORT_H_
+#ifndef PINS_LIB_P4RT_P4RT_PORT_H_
+#define PINS_LIB_P4RT_P4RT_PORT_H_
 
 #include <cstdint>
 #include <string>
@@ -77,4 +77,4 @@ std::ostream& operator<<(std::ostream& os, const P4rtPortId& p4rt_port_id);
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_LIB_P4RT_P4RT_PORT_H_
+#endif  // PINS_LIB_P4RT_P4RT_PORT_H_

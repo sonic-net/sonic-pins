@@ -34,6 +34,7 @@
 #include "grpcpp/client_context.h"
 #include "grpcpp/impl/codegen/client_context.h"
 #include "gutil/status.h"
+#include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/packet_listener.h"
 #include "lib/validator/validator_lib.h"
@@ -102,10 +103,28 @@ GpinsControlDevice::GpinsControlDevice(
   }
 }
 
+absl::StatusOr<GpinsControlDevice> GpinsControlDevice::CreateGpinsControlDevice(
+    std::unique_ptr<thinkit::Switch> sut) {
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
+
+  // Adds PacketIO rule
+  ASSIGN_OR_RETURN(
+      auto control_p4_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(*sut, p4info));
+  ASSIGN_OR_RETURN(auto gnmi_stub, sut->CreateGnmiStub());
+  ASSIGN_OR_RETURN(auto interface_name_to_port_id,
+                   GetAllInterfaceNameToPortId(*gnmi_stub));
+  return GpinsControlDevice(std::move(sut), std::move(control_p4_session),
+                            std::move(ir_p4info),
+                            std::move(interface_name_to_port_id));
+}
+
 absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
 GpinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
   return absl::make_unique<PacketListener>(
-      control_p4_session_.get(), &ir_p4info_, &interface_name_to_port_id_,
+      control_p4_session_.get(), &ir_p4info_, &interface_port_id_to_name_,
       callback);
 }
 

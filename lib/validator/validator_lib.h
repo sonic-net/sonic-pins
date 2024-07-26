@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_LIB_VALIDATOR_VALIDATOR_LIB_H_
-#define GOOGLE_LIB_VALIDATOR_VALIDATOR_LIB_H_
+#ifndef PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_
+#define PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_
 
 #include "absl/status/status.h"
 #include "thinkit/ssh_client.h"
@@ -77,4 +77,4 @@ absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_LIB_VALIDATOR_VALIDATOR_LIB_H_
+#endif  // PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_LIB_GNMI_GNMI_HELPER_H_
-#define GOOGLE_LIB_GNMI_GNMI_HELPER_H_
+#ifndef PINS_LIB_GNMI_GNMI_HELPER_H_
+#define PINS_LIB_GNMI_GNMI_HELPER_H_
 
 #include <string>
 #include <type_traits>
@@ -159,4 +159,4 @@ absl::StatusOr<std::vector<std::string>> GetAlarms(
 absl::string_view StripQuotes(absl::string_view string);
 
 }  // namespace pins_test
-#endif  // GOOGLE_LIB_GNMI_GNMI_HELPER_H_
+#endif  // PINS_LIB_GNMI_GNMI_HELPER_H_

@@ -12,21 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_THINKIT_MIRROR_TESTBED_TEST_FIXTURE_H_
-#define GOOGLE_THINKIT_MIRROR_TESTBED_TEST_FIXTURE_H_
+#ifndef PINS_THINKIT_MIRROR_TESTBED_TEST_FIXTURE_H_
+#define PINS_THINKIT_MIRROR_TESTBED_TEST_FIXTURE_H_
 
 #include <memory>
-#include <optional>
+#include <string>
 
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace thinkit {
@@ -97,17 +93,7 @@ class MirrorTestbedFixture
   // A derived class that needs/wants to do its own setup can override this
   // method. However, it should take care to call this base setup first. That
   // will ensure the platform is ready, and in a healthy state.
-  void SetUp() override {
-    // Set up ir_p4_info.
-    auto ir_p4_info = pdpi::CreateIrP4Info(p4_info());
-    if (!ir_p4_info.ok()) {
-      ADD_FAILURE() << "Failed to create IrP4Info from test param P4Info: "
-                    << ir_p4_info.status();
-    }
-    ir_p4_info_ = std::move(*ir_p4_info);
-
-    mirror_testbed_interface_->SetUp();
-  }
+  void SetUp() override { mirror_testbed_interface_->SetUp(); }
 
   // A derived class that needs/wants to do its own teardown can override this
   // method. However, it should take care to call this base teardown last. Once
@@ -130,17 +116,12 @@ class MirrorTestbedFixture
 
   const p4::config::v1::P4Info& p4_info() const { return GetParam().p4_info; }
 
-  const pdpi::IrP4Info& ir_p4_info() const { return ir_p4_info_; }
-
  private:
   // Takes ownership of the MirrorTestbedInterface parameter.
   std::unique_ptr<MirrorTestbedInterface> mirror_testbed_interface_ =
       absl::WrapUnique<MirrorTestbedInterface>(GetParam().mirror_testbed);
-
-  // IrP4Info generated from GetParam().p4_info.
-  pdpi::IrP4Info ir_p4_info_;
 };
 
 }  // namespace thinkit
 
-#endif  // GOOGLE_THINKIT_MIRROR_TESTBED_TEST_FIXTURE_H_
+#endif  // PINS_THINKIT_MIRROR_TESTBED_TEST_FIXTURE_H_

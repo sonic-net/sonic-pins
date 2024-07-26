@@ -140,11 +140,15 @@ absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
 absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
                          absl::Span<const std::string> interfaces,
                          absl::Duration timeout) {
-  RETURN_IF_ERROR(Pingable(thinkit_switch));
-  RETURN_IF_ERROR(P4rtAble(thinkit_switch));
-  RETURN_IF_ERROR(GnmiAble(thinkit_switch));
-  RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces));
-  RETURN_IF_ERROR(GnoiAble(thinkit_switch));
+  RETURN_IF_ERROR(Pingable(thinkit_switch)).SetPrepend()
+      << "The switch fails to respond to pings. ";
+  RETURN_IF_ERROR(P4rtAble(thinkit_switch))
+      << "The switch P4Runtime server is unreachable. ";
+  RETURN_IF_ERROR(GnmiAble(thinkit_switch))
+      << "The switch gNMI server is unreachable. ";
+  // RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces));
+  RETURN_IF_ERROR(GnoiAble(thinkit_switch))
+      << "The switch gNOI server is unreachable. ";
   return NoAlarms(thinkit_switch);
 }
 

@@ -45,14 +45,14 @@ class Switch {
   virtual uint32_t DeviceId() = 0;
 
   // Creates and returns a stub to the P4Runtime service.
-  virtual absl::StatusOr<std::unique_ptr<p4::v1::P4Runtime::Stub>>
+  virtual absl::StatusOr<std::unique_ptr<p4::v1::P4Runtime::StubInterface>>
   CreateP4RuntimeStub() {
     return absl::UnimplementedError(
         absl::StrCat(__func__, " is not implemented."));
   }
 
   // Creates and returns a stub to the gNMI service.
-  virtual absl::StatusOr<std::unique_ptr<gnmi::gNMI::Stub>>
+  virtual absl::StatusOr<std::unique_ptr<gnmi::gNMI::StubInterface>>
   CreateGnmiStub() {
     return absl::UnimplementedError(
         absl::StrCat(__func__, " is not implemented."));
@@ -60,21 +60,21 @@ class Switch {
 
   // Creates and returns a stub to the gNOI Factory Reset service.
   virtual absl::StatusOr<
-      std::unique_ptr<gnoi::factory_reset::FactoryReset::Stub>>
+      std::unique_ptr<gnoi::factory_reset::FactoryReset::StubInterface>>
   CreateGnoiFactoryResetStub() {
     return absl::UnimplementedError(
         absl::StrCat(__func__, " is not implemented."));
   }
 
   // Creates and returns a stub to the gNOI System service.
-  virtual absl::StatusOr<std::unique_ptr<gnoi::system::System::Stub>>
+  virtual absl::StatusOr<std::unique_ptr<gnoi::system::System::StubInterface>>
   CreateGnoiSystemStub() {
     return absl::UnimplementedError(
         absl::StrCat(__func__, " is not implemented."));
   }
 
   // Creates and returns a stub to the gNOI Diag service.
-  virtual absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::Stub>>
+  virtual absl::StatusOr<std::unique_ptr<gnoi::diag::Diag::StubInterface>>
   CreateGnoiDiagStub() {
     return absl::UnimplementedError(
         absl::StrCat(__func__, " is not implemented."));
@@ -82,14 +82,14 @@ class Switch {
 
   // Creates and returns a stub to the gNOI Certificate service.
   virtual absl::StatusOr<
-      std::unique_ptr<gnoi::certificate::CertificateManagement::Stub>>
+      std::unique_ptr<gnoi::certificate::CertificateManagement::StubInterface>>
   CreateGnoiCertificateStub() {
     return absl::UnimplementedError(
         absl::StrCat(__func__, " is not implemented."));
   }
 
   // Creates and returns a stub to the gNOI OS service.
-  virtual absl::StatusOr<std::unique_ptr<gnoi::os::OS::Stub>>
+  virtual absl::StatusOr<std::unique_ptr<gnoi::os::OS::StubInterface>>
   CreateGnoiOsStub() {
     return absl::UnimplementedError(
         absl::StrCat(__func__, " is not implemented."));

@@ -15,6 +15,9 @@
 #ifndef THINKIT_MIRROR_TESTBED_H_
 #define THINKIT_MIRROR_TESTBED_H_
 
+#include <string>
+#include <vector>
+
 #include "thinkit/switch.h"
 #include "thinkit/test_environment.h"
 
@@ -32,6 +35,16 @@ class MirrorTestbed {
 
   // Returns the SUT (system under test) switch.
   virtual Switch& Sut() = 0;
+
+  // Returns the SUT (or Control Switch) interfaces that are connected to
+  // Control Switch (or SUT) and have the same name as the peer
+  // interface that they are connected to (e.g. Ethernet0).
+  //
+  // Note: The default implementation returns an empty list. Typically the list
+  // of interfaces returned from this method is used by libraries (eg.
+  // gnmi_helper) that consider an "empty list" as "all interfaces", so this is
+  // a decent default behaviour.
+  virtual std::vector<std::string> GetConnectedInterfaces() { return {}; };
 
   // Returns the test environment.
   virtual TestEnvironment& Environment() = 0;
