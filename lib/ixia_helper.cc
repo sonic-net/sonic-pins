@@ -106,6 +106,22 @@ absl::StatusOr<std::string> IxiaConnect(
 absl::StatusOr<std::string> IxiaVport(
     absl::string_view href, absl::string_view ixia_card,
     absl::string_view ixia_port, thinkit::GenericTestbed &generic_testbed) {
+  // Post to
+  // /ixnetwork/availableHardware/chassis/card/port/operations/clearownership
+  // with:
+  // [{"arg1":"/api/v1/sessions/1/ixnetwork/availableHardware/chassis/1/card/9/port/1"},]
+  // to clear ownership for card 9 port 1
+  std::string clear_path =
+      "/ixnetwork/availableHardware/chassis/card/port/operations/"
+      "clearownership";
+  std::string clear_json = absl::StrCat("{\"arg1\":[\"", href, "/card/",
+                                        ixia_card, "/port/", ixia_port, "\"]}");
+  LOG(INFO) << "path " << clear_path;
+  LOG(INFO) << "json " << clear_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse clear_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPost, clear_path, clear_json));
+
   // Post to ixnetwork/vport with:
   // [{"connectedTo":"/api/v1/sessions/1/ixnetwork/availableHardware/chassis/1/card/9/port/1"},]
   // to reserve card 9 port 1
