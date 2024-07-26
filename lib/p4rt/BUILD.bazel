@@ -56,3 +56,31 @@ cc_library(
         "@com_google_absl//absl/synchronization",
     ],
 )
+
+cc_library(
+    name = "p4rt_programming_context",
+    srcs = ["p4rt_programming_context.cc"],
+    hdrs = ["p4rt_programming_context.h"],
+    deps = [
+        "//p4_pdpi:p4_runtime_session",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/functional:bind_front",
+        "@com_google_absl//absl/status",
+    ],
+)
+
+cc_test(
+    name = "p4rt_programming_context_test",
+    srcs = ["p4rt_programming_context_test.cc"],
+    deps = [
+        ":p4rt_programming_context",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:p4_runtime_session",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
