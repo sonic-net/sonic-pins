@@ -15,6 +15,8 @@
 #ifndef PINS_THINKIT_IXIA_INTERFACE_H_
 #define PINS_THINKIT_IXIA_INTERFACE_H_
 
+#include <string>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "thinkit/generic_testbed.h"
