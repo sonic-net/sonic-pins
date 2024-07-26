@@ -82,6 +82,23 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "basic_switch_test",
+    srcs = ["basic_switch_test.cc"],
+    deps = [
+        ":basic_switch",
+        "//gutil:status_matchers",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_gnoi//cert:cert_cc_grpc_proto",
+        "@com_github_gnoi//diag:diag_cc_grpc_proto",
+        "@com_github_gnoi//factory_reset:factory_reset_cc_grpc_proto",
+        "@com_github_gnoi//os:os_cc_grpc_proto",
+        "@com_github_gnoi//system:system_cc_grpc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "ixia_helper",
     testonly = 1,
