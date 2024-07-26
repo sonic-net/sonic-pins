@@ -72,6 +72,16 @@ absl::StatusOr<std::string> IxiaVport(absl::string_view href,
 absl::StatusOr<std::string> IxiaSession(
     absl::string_view vref, thinkit::GenericTestbed &generic_testbed);
 
+// SetUpTrafficItem - Sets up a traffic item with source and destination.
+// Returns either an error or the
+// href string for the first traffic item, e.g. something like
+// "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1", which we'll refer
+// to as a tref is this namespace. Takes in the vref returned by Ixia ports
+// as parameters.
+absl::StatusOr<std::string> SetUpTrafficItem(
+    absl::string_view vref_src, absl::string_view vref_dst,
+    thinkit::GenericTestbed &generic_testbed);
+
 // StartTraffic - starts traffic running from the Ixia, as previously
 // configured before calling this function. user supplies the tref or
 // traffic reference returned by IxiaSession and the href returned by
@@ -123,7 +133,6 @@ absl::Status SetSrcMac(absl::string_view tref, absl::string_view smac,
 // or AppendIPv6 then an L2 packet will be sent.
 absl::Status AppendIPv4(absl::string_view tref,
                         thinkit::GenericTestbed &generic_testbed);
-
 // SetSrcIPv4 - set the source IPv4 address to use
 // Takes in the tref returned by IxiaSession
 absl::Status SetSrcIPv4(absl::string_view tref, absl::string_view sip,
@@ -149,6 +158,23 @@ absl::Status SetSrcIPv6(absl::string_view tref, absl::string_view sip,
 // Takes in the tref returned by IxiaSession
 absl::Status SetDestIPv6(absl::string_view tref, absl::string_view dip,
                          thinkit::GenericTestbed &generic_testbed);
+
+// SetPriority - Set up to priority field in IP header using dscp value
+// and ECN bits.
+// Takes in the tref returned by SetUpTrafficItem.
+absl::Status SetIpPriority(absl::string_view tref, int dscp, bool is_ipv4,
+                           int ecn_bits,
+                           thinkit::GenericTestbed &generic_testbed);
+
+// AppendTcp - Append TCP template to IP header.
+// Takes in the tref returned by SetUpTrafficItem.
+absl::Status AppendTcp(absl::string_view tref,
+                       thinkit::GenericTestbed &generic_testbed);
+
+// AppendUdp - Append UDP template to IP header.
+// Takes in the tref returned by SetUpTrafficItem.
+absl::Status AppendUdp(absl::string_view tref,
+                       thinkit::GenericTestbed &generic_testbed);
 
 }  // namespace pins_test::ixia
 
