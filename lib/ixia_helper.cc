@@ -14,6 +14,8 @@
 
 #include "lib/ixia_helper.h"
 
+#include <vector>
+
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
@@ -53,6 +55,24 @@ absl::StatusOr<std::string> ExtractHref(thinkit::HttpResponse &resp) {
   }
   if (href.empty()) return absl::InternalError("no href");
   return href;
+}
+
+// Extract ip, card and port from a fully qualified ixia interface name.
+absl::StatusOr<IxiaPortInfo> ExtractPortInfo(absl::string_view ixia_interface) {
+  std::vector<absl::string_view> interface_attributes =
+      absl::StrSplit(ixia_interface, '/');
+  if (interface_attributes.size() != 3) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Expected interface name with 3 parts separated by `/` but found "
+           << interface_attributes.size() << " parts for interface "
+           << ixia_interface;
+  }
+
+  return IxiaPortInfo{
+      .hostname = std::string(interface_attributes[0]),
+      .card = std::string(interface_attributes[1]),
+      .port = std::string(interface_attributes[2]),
+  };
 }
 
 // IxiaConnect - connect to the Ixia.  returns the href from the response
@@ -286,6 +306,18 @@ absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
                           thinkit::GenericTestbed &generic_testbed) {
   LOG(INFO) << "\n\n\n\n\n---------- Starting... ----------\n\n\n\n\n";
 
+  // Extract IxRef from href which is the substring ending at /ixnetwork
+  static constexpr absl::string_view kIxRefUrlComponent = "/ixnetwork";
+  auto ixpos = href.find(kIxRefUrlComponent);
+  if (ixpos == absl::string_view::npos) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Invalid href since 'ixnetwork' substring was not found which is "
+              "needed to extract the Ixia chassis URL portion from href "
+           << href;
+  }
+
+  absl::string_view ixref = href.substr(0, ixpos + kIxRefUrlComponent.size());
+
   // Start the process of getting the traffic flowing.
   // POST to /ixnetwork/traffic/trafficItem/operations/generate with
   // {"arg1":["/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1"]}
@@ -305,7 +337,7 @@ absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
   // POST to /ixnetwork/traffic/operations/apply with
   // {"arg1":"/api/v1/sessions/1/ixnetwork/traffic"}
   std::string apply_path = "/ixnetwork/traffic/operations/apply";
-  std::string apply_json = absl::StrCat("{\"arg1\":\"", href, "/traffic\"}");
+  std::string apply_json = absl::StrCat("{\"arg1\":\"", ixref, "/traffic\"}");
   LOG(INFO) << "path " << apply_path;
   LOG(INFO) << "json " << apply_json;
   ASSIGN_OR_RETURN(thinkit::HttpResponse apply_response,
