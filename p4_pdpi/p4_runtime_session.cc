@@ -385,6 +385,20 @@ void P4RuntimeSession::CollectStreamReadMessages() {
   set_is_stream_up(false);
 }
 
+absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
+P4RuntimeSession::CreateWithP4InfoAndClearTables(
+    thinkit::Switch& thinkit_switch, const p4::config::v1::P4Info& p4info,
+    const P4RuntimeSessionOptionalArgs& metadata) {
+  ASSIGN_OR_RETURN(std::unique_ptr<P4RuntimeSession> session,
+                   P4RuntimeSession::Create(thinkit_switch, metadata));
+  RETURN_IF_ERROR(ClearTableEntries(session.get()));
+  RETURN_IF_ERROR(SetMetadataAndSetForwardingPipelineConfig(
+      session.get(),
+      p4::v1::SetForwardingPipelineConfigRequest_Action_RECONCILE_AND_COMMIT,
+      p4info));
+  return session;
+}
+
 std::vector<Update> CreatePiUpdates(absl::Span<const TableEntry> pi_entries,
                                     Update_Type update_type) {
   std::vector<Update> pi_updates;

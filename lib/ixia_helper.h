@@ -21,9 +21,23 @@
 
 namespace pins_test::ixia {
 
+// An Ixia port is defined by IP address of chassis, card number and
+// port number.
+// This structure holds these attributes which define an Ixia port.
+struct IxiaPortInfo {
+  std::string hostname;
+  std::string card;
+  std::string port;
+};
+
 // ExtractHref - Extract the href path from the Ixia response provided as
 // input.  Returns either the href string or an error.
 absl::StatusOr<std::string> ExtractHref(thinkit::HttpResponse &resp);
+
+// Extract ip, card and port from a fully qualified ixia interface name
+// Ixia interface will look something like: "108.177.95.172/4/3" which is the
+// IP address of chassis appended with the card number and port.
+absl::StatusOr<IxiaPortInfo> ExtractPortInfo(absl::string_view ixia_interface);
 
 // WaitForComplete - Checks the http response provided and if 202 was returned,
 // then check for IN_PROGRESS and if so polls until complete.  it returns
