@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_LIB_GPINS_CONTROL_DEVICE_H_
-#define PINS_LIB_GPINS_CONTROL_DEVICE_H_
+#ifndef PINS_LIB_PINS_CONTROL_DEVICE_H_
+#define PINS_LIB_PINS_CONTROL_DEVICE_H_
 
 #include <memory>
 #include <string>
@@ -27,7 +27,6 @@
 #include "diag/diag.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "diag/diag.pb.h"
-#include "glog/logging.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -39,17 +38,17 @@
 
 namespace pins_test {
 
-// A `GpinsControlDevice` represents a single GPINs switch used as a control
+// A `PinsControlDevice` represents a single PINs switch used as a control
 // device for a ThinKit generic testbed.
-class GpinsControlDevice : public thinkit::ControlDevice {
+class PinsControlDevice : public thinkit::ControlDevice {
  public:
-  static absl::StatusOr<GpinsControlDevice> CreateGpinsControlDevice(
-      std::unique_ptr<thinkit::Switch> sut);
-
-  GpinsControlDevice(
+  static absl::StatusOr<PinsControlDevice> Create(
       std::unique_ptr<thinkit::Switch> sut,
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
-      pdpi::IrP4Info ir_p4info,
+      sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
+
+  PinsControlDevice(
+      std::unique_ptr<thinkit::Switch> sut, sai::Instantiation instantiation,
+      std::unique_ptr<pdpi::P4RuntimeSession> control_session,
       absl::flat_hash_map<std::string, std::string> interface_name_to_port_id);
 
   absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
@@ -84,12 +83,12 @@ class GpinsControlDevice : public thinkit::ControlDevice {
 
  private:
   std::unique_ptr<thinkit::Switch> sut_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
-  pdpi::IrP4Info ir_p4info_;
+  sai::Instantiation instantiation_;
+  std::unique_ptr<pdpi::P4RuntimeSession> control_session_;
   absl::flat_hash_map<std::string, std::string> interface_name_to_port_id_;
   absl::flat_hash_map<std::string, std::string> interface_port_id_to_name_;
 };
 
 }  // namespace pins_test
 
-#endif  // PINS_LIB_GPINS_CONTROL_DEVICE_H_
+#endif  // PINS_LIB_PINS_CONTROL_DEVICE_H_

@@ -106,6 +106,7 @@ cc_library(
     deps = [
         "//gutil:status",
         "//lib/gnmi:gnmi_helper",
+        "//lib/gnoi:gnoi_helper",
         "//p4_pdpi:p4_runtime_session",
         "//thinkit:ssh_client",
         "//thinkit:switch",
