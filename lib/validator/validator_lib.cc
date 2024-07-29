@@ -40,11 +40,12 @@
 namespace pins_test {
 
 absl::Status Pingable(absl::string_view chassis_name, absl::Duration timeout) {
-  constexpr char kPingCommand[] = R"(fping -t $0 $1; fping6 -t $0 $1)";
+  constexpr char kPingCommand[] =
+      R"(fping -r 1 -t $0 $1 2>/dev/null; fping6 -r 1 -t $0 $1 2>/dev/null)";
   FILE* in;
   char buff[1024];
   std::string pingCommand = absl::Substitute(
-      kPingCommand, absl::ToInt64Seconds(timeout), chassis_name);
+      kPingCommand, absl::ToInt64Milliseconds(timeout), chassis_name);
   if (!(in = popen(pingCommand.c_str(), "r"))) {
     return absl::UnknownError(
         absl::StrCat("Failed to run command: ", pingCommand));
