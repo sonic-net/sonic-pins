@@ -14,13 +14,19 @@
 
 #include "lib/utils/generic_testbed_utils.h"
 
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "gutil/status.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
 
@@ -96,6 +102,41 @@ std::vector<std::string> GetAllConnectedInterfaces(
     }
   }
   return interfaces;
+}
+
+absl::StatusOr<std::vector<std::string>> GetUpInterfaces(
+    decltype(GetAllConnectedInterfaces) get_interfaces,
+    thinkit::GenericTestbed& testbed) {
+  ASSIGN_OR_RETURN(auto gnmi_stub, testbed.Sut().CreateGnmiStub());
+
+  std::vector<std::string> up_interfaces;
+  for (std::string& interface : FromTestbed(get_interfaces, testbed)) {
+    ASSIGN_OR_RETURN(OperStatus oper_status,
+                     GetInterfaceOperStatusOverGnmi(*gnmi_stub, interface));
+    if (oper_status != OperStatus::kUp) {
+      continue;
+    }
+    up_interfaces.push_back(std::move(interface));
+  }
+  return up_interfaces;
+}
+
+absl::StatusOr<std::vector<InterfacePair>> GetUpInterfacePairs(
+    decltype(GetAllControlInterfaces) get_interfaces,
+    thinkit::GenericTestbed& testbed) {
+  ASSIGN_OR_RETURN(auto gnmi_stub, testbed.Sut().CreateGnmiStub());
+
+  std::vector<InterfacePair> up_interfaces;
+  for (InterfacePair& interface : FromTestbed(get_interfaces, testbed)) {
+    ASSIGN_OR_RETURN(
+        OperStatus oper_status,
+        GetInterfaceOperStatusOverGnmi(*gnmi_stub, interface.sut_interface));
+    if (oper_status != OperStatus::kUp) {
+      continue;
+    }
+    up_interfaces.push_back(std::move(interface));
+  }
+  return up_interfaces;
 }
 
 }  // namespace pins_test

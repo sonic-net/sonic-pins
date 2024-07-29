@@ -27,7 +27,6 @@
 #include "diag/diag.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "diag/diag.pb.h"
-#include "glog/logging.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -43,13 +42,13 @@ namespace pins_test {
 // device for a ThinKit generic testbed.
 class PinsControlDevice : public thinkit::ControlDevice {
  public:
-  static absl::StatusOr<PinsControlDevice> CreatePinsControlDevice(
-      std::unique_ptr<thinkit::Switch> sut);
+  static absl::StatusOr<PinsControlDevice> Create(
+      std::unique_ptr<thinkit::Switch> sut,
+      sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
 
   PinsControlDevice(
-      std::unique_ptr<thinkit::Switch> sut,
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session,
-      pdpi::IrP4Info ir_p4info,
+      std::unique_ptr<thinkit::Switch> sut, sai::Instantiation instantiation,
+      std::unique_ptr<pdpi::P4RuntimeSession> control_session,
       absl::flat_hash_map<std::string, std::string> interface_name_to_port_id);
 
   absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
@@ -84,8 +83,8 @@ class PinsControlDevice : public thinkit::ControlDevice {
 
  private:
   std::unique_ptr<thinkit::Switch> sut_;
-  std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
-  pdpi::IrP4Info ir_p4info_;
+  sai::Instantiation instantiation_;
+  std::unique_ptr<pdpi::P4RuntimeSession> control_session_;
   absl::flat_hash_map<std::string, std::string> interface_name_to_port_id_;
   absl::flat_hash_map<std::string, std::string> interface_port_id_to_name_;
 };

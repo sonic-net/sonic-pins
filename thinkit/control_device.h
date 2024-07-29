@@ -43,8 +43,8 @@ enum class RebootType {
 };
 
 // Callback when a packet is received, first parameter which is control
-// interface port it was received on and second parameter is the hexstring (with
-// 0x prefix) of the packet.
+// interface port it was received on and second parameter is the raw byte string
+// of the packet.
 using PacketCallback =
     std::function<void(absl::string_view, absl::string_view)>;
 

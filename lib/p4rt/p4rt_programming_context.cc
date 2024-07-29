@@ -15,6 +15,8 @@
 #include "lib/p4rt/p4rt_programming_context.h"
 
 #include <functional>
+#include <iterator>
+#include <type_traits>
 #include <vector>
 
 #include "absl/status/status.h"
