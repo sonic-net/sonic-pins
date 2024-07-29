@@ -63,6 +63,9 @@ PacketListener::PacketListener(
             LOG(WARNING) << port_id << " not found.";
             return;
           }
+          LOG_EVERY_N(INFO, 1000)
+              << "Packet received (Count: " << google::COUNTER << ").";
+
           callback(port_name->second, pd_response.packet().payload());
         }
       }),

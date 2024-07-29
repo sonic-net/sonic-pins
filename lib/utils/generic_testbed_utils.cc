@@ -31,53 +31,53 @@
 namespace pins_test {
 
 std::vector<std::string> GetSutInterfaces(
-    absl::Span<const InterfacePair> interface_pairs) {
+    absl::Span<const InterfaceLink> links) {
   std::vector<std::string> interfaces;
-  interfaces.reserve(interface_pairs.size());
-  for (const InterfacePair& pair : interface_pairs) {
-    interfaces.push_back(pair.sut_interface);
+  interfaces.reserve(links.size());
+  for (const InterfaceLink& link : links) {
+    interfaces.push_back(link.sut_interface);
   }
   return interfaces;
 }
 
 std::vector<std::string> GetPeerInterfaces(
-    absl::Span<const InterfacePair> interface_pairs) {
+    absl::Span<const InterfaceLink> links) {
   std::vector<std::string> interfaces;
-  interfaces.reserve(interface_pairs.size());
-  for (const InterfacePair& pair : interface_pairs) {
-    interfaces.push_back(pair.peer_interface);
+  interfaces.reserve(links.size());
+  for (const InterfaceLink& link : links) {
+    interfaces.push_back(link.peer_interface);
   }
   return interfaces;
 }
 
-std::vector<InterfacePair> GetAllControlInterfaces(
+std::vector<InterfaceLink> GetAllControlLinks(
     const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>&
         sut_interface_info) {
-  std::vector<InterfacePair> interfaces;
+  std::vector<InterfaceLink> links;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
     if (interface_info.interface_mode ==
         thinkit::InterfaceMode::CONTROL_INTERFACE) {
-      interfaces.push_back(
-          InterfacePair{.sut_interface = sut_interface,
+      links.push_back(
+          InterfaceLink{.sut_interface = sut_interface,
                         .peer_interface = interface_info.peer_interface_name});
     }
   }
-  return interfaces;
+  return links;
 }
 
-std::vector<InterfacePair> GetAllTrafficGeneratorInterfaces(
+std::vector<InterfaceLink> GetAllTrafficGeneratorLinks(
     const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>&
         sut_interface_info) {
-  std::vector<InterfacePair> interfaces;
+  std::vector<InterfaceLink> links;
   for (const auto& [sut_interface, interface_info] : sut_interface_info) {
     if (interface_info.interface_mode ==
         thinkit::InterfaceMode::TRAFFIC_GENERATOR) {
-      interfaces.push_back(
-          InterfacePair{.sut_interface = sut_interface,
+      links.push_back(
+          InterfaceLink{.sut_interface = sut_interface,
                         .peer_interface = interface_info.peer_interface_name});
     }
   }
-  return interfaces;
+  return links;
 }
 
 std::vector<std::string> GetAllLoopbackInterfaces(
@@ -121,22 +121,21 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfaces(
   return up_interfaces;
 }
 
-absl::StatusOr<std::vector<InterfacePair>> GetUpInterfacePairs(
-    decltype(GetAllControlInterfaces) get_interfaces,
-    thinkit::GenericTestbed& testbed) {
+absl::StatusOr<std::vector<InterfaceLink>> GetUpLinks(
+    decltype(GetAllControlLinks) get_links, thinkit::GenericTestbed& testbed) {
   ASSIGN_OR_RETURN(auto gnmi_stub, testbed.Sut().CreateGnmiStub());
 
-  std::vector<InterfacePair> up_interfaces;
-  for (InterfacePair& interface : FromTestbed(get_interfaces, testbed)) {
+  std::vector<InterfaceLink> up_links;
+  for (InterfaceLink& link : FromTestbed(get_links, testbed)) {
     ASSIGN_OR_RETURN(
         OperStatus oper_status,
-        GetInterfaceOperStatusOverGnmi(*gnmi_stub, interface.sut_interface));
+        GetInterfaceOperStatusOverGnmi(*gnmi_stub, link.sut_interface));
     if (oper_status != OperStatus::kUp) {
       continue;
     }
-    up_interfaces.push_back(std::move(interface));
+    up_links.push_back(std::move(link));
   }
-  return up_interfaces;
+  return up_links;
 }
 
 }  // namespace pins_test
