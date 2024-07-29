@@ -46,6 +46,7 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf_lite",
         "@com_googlesource_code_re2//:re2",
+        "@com_jsoncpp//:json",
     ],
 )
 
@@ -58,8 +59,10 @@ cc_test(
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//gutil:testing",
+        "//lib/utils:json_utils",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",

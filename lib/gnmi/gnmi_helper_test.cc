@@ -30,6 +30,8 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "include/nlohmann/json.hpp"
+#include "lib/utils/json_utils.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "proto/gnmi/gnmi_mock.grpc.pb.h"
@@ -558,6 +560,35 @@ TEST(GetInterfaceOperStatusMap, SuccessfullyReturnsInterfaceOperStatusMap) {
   const absl::flat_hash_map<std::string, std::string> expected_map = {
       {"Ethernet0", "DOWN"}};
   EXPECT_THAT(*statusor, UnorderedPointwise(Eq(), expected_map));
+}
+
+TEST(ConstructedOpenConfig, NoInterfacesIsEmptyConfig) {
+  ASSERT_EQ(OpenConfigWithInterfaces(GnmiFieldType::kConfig, /*interfaces=*/{}),
+            EmptyOpenConfig());
+}
+
+TEST(ConstructedOpenConfig, CreatesACorrectConfig) {
+  std::string reference_config_with_two_interfaces =
+      R"({"openconfig-interfaces:interfaces":{"interface":[
+      {
+            "name" : "Ethernet0",
+            "config" : {
+              "openconfig-p4rt:id" : 2
+            }
+          }, {
+            "name" : "Ethernet1",
+            "config" : {
+              "openconfig-p4rt:id" : 3
+            }
+          }
+          ]}}
+  )";
+
+  ASSERT_EQ(nlohmann::json::parse(OpenConfigWithInterfaces(
+                GnmiFieldType::kConfig,
+                /*interfaces=*/{{.port_name = "Ethernet0", .port_id = 2},
+                                {.port_name = "Ethernet1", .port_id = 3}})),
+            nlohmann::json::parse(reference_config_with_two_interfaces));
 }
 
 TEST(GetInterfacePortIdMap, SuccessfullyReturnsInterfacePortIdMap) {
@@ -1181,26 +1212,6 @@ TEST(CheckParseGnmiGetResponse, StringResponseSuccess) {
       IsOkAndHolds(HasSubstr("UP")));
 }
 
-// Generates an OpenConfig JSON string with the interface and p4rt port ID.
-std::string OpenConfigInterface(absl::string_view field_type,
-                                absl::string_view port_name,
-                                absl::string_view port_id) {
-  return absl::StrFormat(R"(
-    {
-      "openconfig-interfaces:interfaces":{
-        "interface" : [
-          {
-            "name" : "%s",
-            "%s" : {
-              "openconfig-p4rt:id" : %s
-            }
-          }
-        ]
-      }
-    })",
-                         port_name, field_type, port_id);
-}
-
 TEST(WaitForGnmiPortIdConvergenceTest, SwitchConvergesSuccessfully) {
   gnmi::MockgNMIStub mock_stub;
 
@@ -1209,14 +1220,16 @@ TEST(WaitForGnmiPortIdConvergenceTest, SwitchConvergesSuccessfully) {
   *response.add_notification()
        ->add_update()
        ->mutable_val()
-       ->mutable_json_ietf_val() =
-      OpenConfigInterface("state", "Ethernet0", "1");
+       ->mutable_json_ietf_val() = OpenConfigWithInterfaces(
+      GnmiFieldType::kState, {{.port_name = "Ethernet0", .port_id = 1}});
   EXPECT_CALL(mock_stub, Get)
       .WillOnce(DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
 
   // Push the config with Ethernet0 -> 1.
   EXPECT_OK(WaitForGnmiPortIdConvergence(
-      mock_stub, OpenConfigInterface("config", "Ethernet0", "1"),
+      mock_stub,
+      OpenConfigWithInterfaces(GnmiFieldType::kConfig,
+                               {{.port_name = "Ethernet0", .port_id = 1}}),
       absl::Seconds(1)));
 }
 
@@ -1228,18 +1241,21 @@ TEST(WaitForGnmiPortIdConvergenceTest, SwitchDoesNotCoverge) {
   *response.add_notification()
        ->add_update()
        ->mutable_val()
-       ->mutable_json_ietf_val() =
-      OpenConfigInterface("state", "Ethernet0", "2");
+       ->mutable_json_ietf_val() = OpenConfigWithInterfaces(
+      GnmiFieldType::kState, {{.port_name = "Ethernet0", .port_id = 2}});
   EXPECT_CALL(mock_stub, Get)
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
 
   // Since we push a config with Ethernet0 -> 1 the switch should never
   // converge, and it should timetout.
-  EXPECT_THAT(WaitForGnmiPortIdConvergence(
-                  mock_stub, OpenConfigInterface("config", "Ethernet0", "1"),
-                  absl::Seconds(1)),
-              StatusIs(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(
+      WaitForGnmiPortIdConvergence(
+          mock_stub,
+          OpenConfigWithInterfaces(GnmiFieldType::kConfig,
+                                   {{.port_name = "Ethernet0", .port_id = 1}}),
+          absl::Seconds(1)),
+      StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHavePortId) {
@@ -1267,10 +1283,13 @@ TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHavePortId) {
 
   // Since we push a config with Ethernet0 -> 1 the switch should never
   // converge, and it should timetout.
-  EXPECT_THAT(WaitForGnmiPortIdConvergence(
-                  mock_stub, OpenConfigInterface("config", "Ethernet0", "1"),
-                  absl::Seconds(1)),
-              StatusIs(absl::StatusCode::kFailedPrecondition));
+  EXPECT_THAT(
+      WaitForGnmiPortIdConvergence(
+          mock_stub,
+          OpenConfigWithInterfaces(GnmiFieldType::kConfig,
+                                   {{.port_name = "Ethernet0", .port_id = 1}}),
+          absl::Seconds(1)),
+      StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHaveAResponse) {
@@ -1284,10 +1303,13 @@ TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHaveAResponse) {
 
   // Since the switch doesn't actually provide a notification it's misbehaving,
   // and we should return an internal error.
-  EXPECT_THAT(WaitForGnmiPortIdConvergence(
-                  mock_stub, OpenConfigInterface("config", "Ethernet0", "1"),
-                  absl::Seconds(1)),
-              StatusIs(absl::StatusCode::kInternal));
+  EXPECT_THAT(
+      WaitForGnmiPortIdConvergence(
+          mock_stub,
+          OpenConfigWithInterfaces(GnmiFieldType::kConfig,
+                                   {{.port_name = "Ethernet0", .port_id = 1}}),
+          absl::Seconds(1)),
+      StatusIs(absl::StatusCode::kInternal));
 }
 
 }  // namespace

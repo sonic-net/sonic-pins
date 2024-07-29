@@ -129,20 +129,26 @@ PinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
   P4rtProgrammingContext context(control_session_.get());
   ASSIGN_OR_RETURN(
       p4::v1::WriteRequest punt_all_request,
-      pdpi::PdWriteRequestToPi(sai::GetIrP4Info(instantiation_),
-                               gutil::ParseProtoOrDie<sai::WriteRequest>(
-                                   R"pb(updates {
-                                          type: INSERT
-                                          table_entry {
-                                            acl_ingress_table_entry {
-                                              match {}  # Wildcard match.
-                                              action {
-                                                acl_trap { qos_queue: "0x1" }
-                                              }            # Action: punt.
-                                              priority: 1  # Highest priority.
-                                            }
-                                          }
-                                        })pb")));
+      pdpi::PdWriteRequestToPi(
+          sai::GetIrP4Info(instantiation_),
+          gutil::ParseProtoOrDie<sai::WriteRequest>(
+              R"pb(
+                updates {
+                  type: INSERT
+                  table_entry {
+                    acl_ingress_table_entry {
+                      match {}  # Wildcard match.
+                      action { acl_trap { qos_queue: "0x1" } }  # Action: punt.
+                      priority: 1  # Highest priority.
+                      # TODO: Remove once GPINs V13 is
+                      # deprecated; only needed for backwards compatibility.
+                      meter_config {
+                        bytes_per_second: 987654321  # ~ 1 GB
+                        burst_bytes: 987654321       # ~ 1 GB
+                      }
+                    }
+                  }
+                })pb")));
   RETURN_IF_ERROR(context.SendWriteRequest(punt_all_request));
   return absl::make_unique<PacketListener>(
       control_session_.get(), std::move(context),
