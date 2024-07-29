@@ -73,6 +73,7 @@ absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
 absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
                                 thinkit::SSHClient& ssh_client,
                                 absl::Span<const std::string> interfaces = {},
+                                bool check_interfaces_state = true,
                                 absl::Duration timeout = kDefaultTimeout);
 
 }  // namespace pins_test

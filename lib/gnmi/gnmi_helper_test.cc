@@ -17,6 +17,7 @@
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/escaping.h"
@@ -44,11 +45,13 @@ using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::_;
 using ::testing::DoAll;
+using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Return;
 using ::testing::SetArgPointee;
+using ::testing::StrEq;
 using ::testing::UnorderedElementsAre;
 using ::testing::UnorderedPointwise;
 
@@ -189,6 +192,23 @@ TEST(ParseAlarms, InvalidInput) {
   // ParseAlarms expects the alarms to have a state field.
   EXPECT_THAT(ParseAlarms(R"([{"id":"a"}])"),
               StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+// Constructs a standard gNMI response using the `oc_path` to construct a
+// path and the `gnmi_config` as the response value.
+gnmi::GetResponse ConstructResponse(absl::string_view oc_path,
+                                    absl::string_view gnmi_config) {
+  std::string response = absl::Substitute(
+      R"pb(notification {
+             timestamp: 1620348032128305716
+             prefix { origin: "openconfig" }
+             update {
+               path { $0 }
+               val { json_ietf_val: "$1" }
+             }
+           })pb",
+      ConvertOCStringToPath(oc_path).DebugString(), absl::CEscape(gnmi_config));
+  return gutil::ParseProtoOrDie<gnmi::GetResponse>(response);
 }
 
 TEST(GetAlarms, FailedRPCReturnsError) {
@@ -591,21 +611,15 @@ TEST(ConstructedOpenConfig, CreatesACorrectConfig) {
             nlohmann::json::parse(reference_config_with_two_interfaces));
 }
 
-TEST(GetInterfacePortIdMap, SuccessfullyReturnsInterfacePortIdMap) {
+TEST(GetInterfacePortIdMap, StubSuccessfullyReturnsInterfacePortIdMap) {
   gnmi::MockgNMIStub stub;
-  EXPECT_CALL(stub, Get).WillOnce(DoAll(
-      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
-          R"pb(notification {
-                 timestamp: 1620348032128305716
-                 prefix { origin: "openconfig" }
-                 update {
-                   path { elem { name: "interfaces" } }
-                   val {
-                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"openconfig-p4rt:id\":1}}]}}"
-                   }
-                 }
-               })pb")),
-      Return(grpc::Status::OK)));
+  EXPECT_CALL(stub, Get).WillOnce(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/OpenConfigWithInterfaces(
+                    GnmiFieldType::kState,
+                    {{.port_name = "Ethernet0", .port_id = 1}}))),
+            Return(grpc::Status::OK)));
 
   auto interface_name_to_port_id = GetAllInterfaceNameToPortId(stub);
   ASSERT_OK(interface_name_to_port_id);
@@ -613,6 +627,44 @@ TEST(GetInterfacePortIdMap, SuccessfullyReturnsInterfacePortIdMap) {
       {"Ethernet0", "1"}};
   EXPECT_THAT(*interface_name_to_port_id,
               UnorderedPointwise(Eq(), expected_map));
+}
+
+TEST(GetInterfacePortIdMap, ConfigSuccessfullyReturnsInterfacePortIdMap) {
+  auto interface_name_to_port_id =
+      GetAllInterfaceNameToPortId(/*gnmi_config=*/OpenConfigWithInterfaces(
+          GnmiFieldType::kConfig, {{.port_name = "Ethernet0", .port_id = 1}}));
+
+  ASSERT_OK(interface_name_to_port_id);
+  const absl::flat_hash_map<std::string, std::string> expected_map = {
+      {"Ethernet0", "1"}};
+  EXPECT_THAT(*interface_name_to_port_id,
+              UnorderedPointwise(Eq(), expected_map));
+}
+
+TEST(GetAllPortIds, StubSuccessfullyReturnsPortIds) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/OpenConfigWithInterfaces(
+                    GnmiFieldType::kState,
+                    {{.port_name = "Ethernet0", .port_id = 1}}))),
+            Return(grpc::Status::OK)));
+
+  ASSERT_OK_AND_ASSIGN(auto port_ids, GetAllPortIds(stub));
+  EXPECT_THAT(port_ids, ElementsAre("1"));
+}
+
+TEST(GetAllPortIds, ConfigSuccessfullyReturnsPortIds) {
+  ASSERT_OK_AND_ASSIGN(
+      auto port_ids,
+      GetAllPortIds(/*gnmi_config=*/OpenConfigWithInterfaces(
+          GnmiFieldType::kConfig, {
+                                      {.port_name = "Ethernet1", .port_id = 2},
+                                      {.port_name = "Ethernet0", .port_id = 1},
+                                  })));
+
+  EXPECT_THAT(port_ids, ElementsAre("1", "2"));
 }
 
 TEST(GetInterfacePortIdMap, PortIdNotFoundInState) {
@@ -1311,6 +1363,5 @@ TEST(WaitForGnmiPortIdConvergenceTest, ConfigDoesNotHaveAResponse) {
           absl::Seconds(1)),
       StatusIs(absl::StatusCode::kInternal));
 }
-
 }  // namespace
 }  // namespace pins_test
