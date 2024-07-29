@@ -105,6 +105,13 @@ absl::Status PushGnmiConfig(
 absl::Status PushGnmiConfig(thinkit::Switch& chassis,
                             const std::string& gnmi_config);
 
+absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
+                                          const std::string& gnmi_config,
+                                          const absl::Duration& timeout);
+absl::Status WaitForGnmiPortIdConvergence(thinkit::Switch& chassis,
+                                          const std::string& gnmi_config,
+                                          const absl::Duration& timeout);
+
 absl::Status CanGetAllInterfaceOverGnmi(
     gnmi::gNMI::StubInterface& stub,
     absl::Duration timeout = absl::Seconds(60));
