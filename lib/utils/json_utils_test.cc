@@ -358,9 +358,10 @@ TEST(JsonIsSubset, GpinsJsonIsSubsetTrue) {
   })JSON";
   Reader reader;
   Value source, target;
+  std::vector<std::string> error_messages;
   reader.parse(std::string(kJson1), source);
   reader.parse(std::string(kJson2), target);
-  EXPECT_TRUE(JsonIsSubset(source, target));
+  EXPECT_TRUE(JsonIsSubset(source, target, error_messages));
 }
 
 TEST(JsonIsSubset, GpinsJsonIsSubsetFalse) {
@@ -392,9 +393,10 @@ TEST(JsonIsSubset, GpinsJsonIsSubsetFalse) {
   })JSON";
   Reader reader;
   Value source, target;
+  std::vector<std::string> error_messages;
   reader.parse(std::string(kJson2), source);
   reader.parse(std::string(kJson1), target);
-  EXPECT_FALSE(JsonIsSubset(source, target));
+  EXPECT_FALSE(JsonIsSubset(source, target, error_messages));
 }
 
 TEST(JsonIsSubset, GpinsJsonIsSubsetDifferentTypes) {
@@ -419,9 +421,10 @@ TEST(JsonIsSubset, GpinsJsonIsSubsetDifferentTypes) {
   })JSON";
   Reader reader;
   Value source, target;
+  std::vector<std::string> error_messages;
   reader.parse(std::string(kJson1), source);
   reader.parse(std::string(kJson2), target);
-  EXPECT_FALSE(JsonIsSubset(source, target));
+  EXPECT_FALSE(JsonIsSubset(source, target, error_messages));
 }
 
 TEST(JsonIsSubset, GpinsJsonIsSubsetDifferentValues) {
@@ -453,9 +456,10 @@ TEST(JsonIsSubset, GpinsJsonIsSubsetDifferentValues) {
   })JSON";
   Reader reader;
   Value source, target;
+  std::vector<std::string> error_messages;
   reader.parse(std::string(kJson1), source);
   reader.parse(std::string(kJson2), target);
-  EXPECT_FALSE(JsonIsSubset(source, target));
+  EXPECT_FALSE(JsonIsSubset(source, target, error_messages));
 }
 
 TEST(JsonIsSubset, JsonValueComparisonPassedInDifferentOrder) {
@@ -508,9 +512,10 @@ constexpr char kReleaseInterfaceStateBlob[] = R"({
 TEST(JsonIsSubset, GpinsJsonIsSubsetInterfaceState) {
   Reader reader;
   Value source, target;
+  std::vector<std::string> error_messages;
   reader.parse(kReleaseInterfaceStateBlob, target);
   reader.parse(kReleaseInterfaceStateExpectedBlob, source);
-  EXPECT_TRUE(JsonIsSubset(source, target));
+  EXPECT_TRUE(JsonIsSubset(source, target, error_messages));
 }
 
 }  // namespace pins_test

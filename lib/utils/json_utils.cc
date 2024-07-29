@@ -11,9 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include "lib/utils/json_utils.h"
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/strings/substitute.h"
 #include "glog/logging.h"
 
 namespace pins_test {
@@ -122,7 +124,8 @@ void JsonReplaceKey(Value& source, const absl::string_view old_key,
   }
 }
 
-bool JsonIsSubset(const Value& source, const Value& target) {
+bool JsonIsSubset(const Value& source, const Value& target,
+                  std::vector<std::string>& error_messages) {
   if (source.type() != target.type()) {
     return false;
   }
@@ -133,9 +136,12 @@ bool JsonIsSubset(const Value& source, const Value& target) {
     case objectValue: {
       for (const auto& key : source.getMemberNames()) {
         if (!target.isMember(key)) {
+          std::string error_string = absl::Substitute(
+              "$0 is not member of target $1", key, target.toStyledString());
+          error_messages.push_back(error_string);
           return false;
         }
-        if (!JsonIsSubset(source[key], target[key])) {
+        if (!JsonIsSubset(source[key], target[key], error_messages)) {
           return false;
         }
       }
@@ -143,27 +149,41 @@ bool JsonIsSubset(const Value& source, const Value& target) {
     }
     case arrayValue: {
       if (source.size() > target.size()) {
+        std::string error_string = absl::Substitute(
+            "Source has more elements than target, "
+            "Source size: $0, Target size: $1, "
+            "Source: $2, Target: $3",
+            source.size(), target.size(), source.toStyledString(),
+            target.toStyledString());
+        error_messages.push_back(error_string);
         return false;
       }
       for (int i = 0; i < source.size(); ++i) {
         bool match_found = false;
         for (int j = 0; j < target.size(); ++j) {
-          if (JsonIsSubset(source[i], target[j])) {
+          if (JsonIsSubset(source[i], target[j], error_messages)) {
             match_found = true;
             break;
           }
         }
         if (match_found == false) {
+          std::string error_string = absl::Substitute(
+              "source[$0]: $1 is not a subset of target: $2", i,
+              source[i].toStyledString(), target.toStyledString());
+          error_messages.push_back(error_string);
           return false;
         }
       }
       return true;
     }
-
-    default:
+    default: {
+      std::string error_string =
+          absl::Substitute("source: $0 is not a subset of target: $1",
+                           source.toStyledString(), target.toStyledString());
+      error_messages.push_back(error_string);
       return false;
+    }
   }
-
   return false;
 }
 

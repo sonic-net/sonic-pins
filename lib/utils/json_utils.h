@@ -51,7 +51,8 @@ void JsonReplaceKey(Json::Value& source, absl::string_view old_key,
 //
 // If the source and target are of any scalar type, then check if they match.
 // This would correspond to the leaves.
-bool JsonIsSubset(const Json::Value& source, const Json::Value& target);
+bool JsonIsSubset(const Json::Value& source, const Json::Value& target,
+                  std::vector<std::string>& error_messages);
 
 // Compare the equilvalence of two JSON values, allowes for the array/object
 // field to be in the different order. For example:
