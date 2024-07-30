@@ -859,6 +859,153 @@ TEST(FlattenJson, TestMissingKeyLeafInner) {
               "container2[key_leaf2='value2']/inner_element/container3].")));
 }
 
+TEST(FlattenJson, TestLeafLists) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "value2",
+                "inner_element": {
+                  "container3": [
+                    0,
+                    1,
+                    2
+                  ],
+                  "container4": [
+                    0,
+                    -1,
+                    -2
+                  ],
+                  "container5": [
+                    true
+                  ],
+                  "container6": [
+                    "a",
+                    "b"
+                  ],
+                  "container7": [
+                    9.0,
+                    2.7
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  const auto path_map = StringMap({
+      {"/outer_element/container1", "key_leaf1"},
+      {"/outer_element/container1/middle_element/container2", "key_leaf2"},
+      {"/outer_element/container1/middle_element/container2/inner_element/"
+       "container3",
+       ""},
+      {"/outer_element/container1/middle_element/container2/inner_element/"
+       "container4",
+       ""},
+      {"/outer_element/container1/middle_element/container2/inner_element/"
+       "container5",
+       ""},
+      {"/outer_element/container1/middle_element/container2/inner_element/"
+       "container6",
+       ""},
+      {"/outer_element/container1/middle_element/container2/inner_element/"
+       "container7",
+       ""},
+  });
+  EXPECT_THAT(
+      FlattenJsonToMap(root, path_map),
+      gutil::IsOkAndHolds(StringMap{
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container7['2.7']",
+           "2.7"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container4['-2']",
+           "-2"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/"
+           "container5['true']",
+           "true"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container3['2']",
+           "2"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container7['9']",
+           "9"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container3['0']",
+           "0"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container6['b']",
+           "b"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container6['a']",
+           "a"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container3['1']",
+           "1"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container4['0']",
+           "0"},
+          {"/outer_element/container1[key_leaf1='value1']/key_leaf1", "value1"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/inner_element/container4['-1']",
+           "-1"},
+          {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+           "container2[key_leaf2='value2']/key_leaf2",
+           "value2"}}));
+}
+
+TEST(FlattenJson, TestLeafListsNonPrimitive) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "value2",
+                "inner_element": {
+                  "container3": [
+                    {
+                      "bad_key_leaf": "value3"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  const auto path_map = StringMap({
+      {"/outer_element/container1", "key_leaf1"},
+      {"/outer_element/container1/middle_element/container2", "key_leaf2"},
+      {"/outer_element/container1/middle_element/container2/inner_element/"
+       "container3",
+       ""},
+  });
+  EXPECT_THAT(
+      FlattenJsonToMap(root, path_map),
+      gutil::StatusIs(
+          absl::StatusCode::kInvalidArgument,
+          testing::HasSubstr(
+              "Invalid type 'object' for array element (leaf list) 0 under "
+              "path "
+              "[/outer_element/container1[key_leaf1='value1']/middle_element/"
+              "container2[key_leaf2='value2']/inner_element/container3]. "
+              "Expected: integer, unsigned, float, string, bool.")));
+}
+
 TEST(FlattenJson, TestInvalidKeyLeafTypeOuter) {
   constexpr char kExampleJson[] = R"({
     "outer_element" : {
