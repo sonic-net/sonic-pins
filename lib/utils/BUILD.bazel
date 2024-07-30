@@ -25,9 +25,14 @@ cc_library(
     hdrs = [
         "json_utils.h",
     ],
+    copts = ["-fexceptions"],
+    features = ["-use_header_modules"],  # Incompatible with -fexceptions.
     deps = [
         "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_jsoncpp//:json",
     ],
@@ -38,6 +43,8 @@ cc_test(
     srcs = ["json_utils_test.cc"],
     deps = [
         ":json_utils",
+        "//gutil:status_matchers",
+        "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
         "@com_jsoncpp//:json",

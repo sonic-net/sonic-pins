@@ -14,9 +14,76 @@
 
 #include "lib/utils/json_utils.h"
 
+#include <string>
+#include <vector>
+
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
+#include "include/nlohmann/json.hpp"
+
+namespace json_yang {
+
+absl::StatusOr<nlohmann::json> ParseJson(absl::string_view json_str) {
+  // Return a null json if the input is an empty string.
+  if (json_str.empty()) return nlohmann::json(nullptr);
+
+  try {
+    return nlohmann::json::parse(std::string(json_str), /*cb =*/nullptr,
+                                 /*allow_exceptions =*/true);
+  } catch (const nlohmann::json::parse_error& e) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("json parse error: ", e.what()));
+  }
+}
+
+std::string DumpJson(const nlohmann::json& value) {
+  // Return an empty string if the input value is null.
+  if (value.is_null()) return "";
+
+  return value.dump(
+      /*indent =*/2, /*indent_char =*/' ', /*ensure_ascii =*/false,
+      /*error_handler =*/nlohmann::json::error_handler_t::replace);
+}
+
+nlohmann::json ReplaceNamesinJsonObject(
+    const nlohmann::json& source,
+    const absl::flat_hash_map<std::string, std::string>&
+        old_name_to_new_name_map) {
+  switch (source.type()) {
+    case nlohmann::json::value_t::object: {
+      nlohmann::json target(nlohmann::json::value_t::object);
+      for (const auto& [name, value] : source.items()) {
+        // Replace the path element if necessary.
+        auto name_iter = old_name_to_new_name_map.find(name);
+        const std::string new_name = name_iter == old_name_to_new_name_map.end()
+                                         ? name
+                                         : name_iter->second;
+        // Traverse through all the members recursively.
+        target[new_name] =
+            ReplaceNamesinJsonObject(value, old_name_to_new_name_map);
+      }
+      return target;
+    }
+    case nlohmann::json::value_t::array: {
+      nlohmann::json target(nlohmann::json::value_t::array);
+      for (int i = 0; i < source.size(); ++i) {
+        // Traverse through all array elements recursively.
+        target.push_back(
+            ReplaceNamesinJsonObject(source[i], old_name_to_new_name_map));
+      }
+      return target;
+    }
+    default:
+      // Leaf value or null. Nothing to replace.
+      return source;
+  }
+}
+
+}  // namespace json_yang
 
 namespace pins_test {
 
