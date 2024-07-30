@@ -106,9 +106,13 @@ cc_library(
     srcs = ["ixia_helper.cc"],
     hdrs = ["ixia_helper.h"],
     deps = [
+        "//gutil:overload",
         "//gutil:status",
         "//gutil:testing",
         "//lib/gnmi:gnmi_helper",
+        "//p4_pdpi/netaddr:ipv4_address",
+        "//p4_pdpi/netaddr:ipv6_address",
+        "//p4_pdpi/netaddr:mac_address",
         "//thinkit:generic_testbed",
         "@com_github_google_glog//:glog",
         "@com_github_nlohmann_json//:nlohmann_json",

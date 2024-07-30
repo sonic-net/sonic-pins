@@ -16,6 +16,7 @@
 #define PINS_LIB_GNMI_GNMI_HELPER_H_
 
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -57,6 +58,18 @@ enum class GnmiFieldType {
 struct OpenConfigInterfaceDescription {
   std::string port_name;
   int port_id;
+};
+
+// `TransceiverPart` holds the `vendor` and `part_number` of the physical
+// transceiver.
+struct TransceiverPart {
+  std::string vendor;
+  std::string part_number;
+
+  bool operator==(const TransceiverPart& other) const {
+    return std::tie(vendor, part_number) ==
+           std::tie(other.vendor, other.part_number);
+  }
 };
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type);
@@ -216,5 +229,14 @@ absl::StatusOr<std::vector<std::string>> GetAlarms(
 
 // Strips the beginning and ending double-quotes from the `string`.
 absl::string_view StripQuotes(absl::string_view string);
+
+// Returns a map from interface names to their physical transceiver name.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Returns a map from physical transceiver names to their part information.
+absl::StatusOr<absl::flat_hash_map<std::string, TransceiverPart>>
+GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub);
+
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_
