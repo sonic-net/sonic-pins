@@ -173,8 +173,8 @@ absl::Status SetDestIPv6(absl::string_view tref, absl::string_view dip,
 // SetPriority - Set up to priority field in IP header using dscp value
 // and ECN bits.
 // Takes in the tref returned by SetUpTrafficItem.
-absl::Status SetIpPriority(absl::string_view tref, int dscp, bool is_ipv4,
-                           int ecn_bits,
+absl::Status SetIpPriority(absl::string_view tref, int dscp, int ecn_bits,
+                           bool is_ipv4,
                            thinkit::GenericTestbed &generic_testbed);
 
 // AppendTcp - Append TCP template to IP header.

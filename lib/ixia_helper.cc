@@ -745,8 +745,8 @@ absl::Status SetDestIPv6(absl::string_view tref, absl::string_view dip,
   return absl::OkStatus();
 }
 
-absl::Status SetIpPriority(absl::string_view tref, int dscp, bool is_ipv4,
-                           int ecn_bits,
+absl::Status SetIpPriority(absl::string_view tref, int dscp, int ecn_bits,
+                           bool is_ipv4,
                            thinkit::GenericTestbed &generic_testbed) {
   // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/stack/2/field/3
   // with {"singleValue":"10/00"} to enable or disable ECN.
@@ -764,9 +764,21 @@ absl::Status SetIpPriority(absl::string_view tref, int dscp, bool is_ipv4,
   std::string sip_path =
       is_ipv4 ? absl::StrCat(tref, "/configElement/1/stack/2/field/3")
               : absl::StrCat(tref, "/configElement/1/stack/2/field/2");
-  std::string sip_json =
-      absl::StrCat("{\"activeFieldChoice\":true,\"singleValue\":\"",
-                   absl::StrFormat("%X", (dscp << 2) | (ecn_bits)), "\"}");
+
+  // Ixia REST nuance:
+  // IPv4 header accepts TOS field in hex but IPv6 header accepts TOS field
+  // in decimal.
+  std::string sip_json;
+  if (is_ipv4) {
+    sip_json =
+        absl::StrCat("{\"activeFieldChoice\":true,\"singleValue\":\"",
+                     absl::StrFormat("%X", (dscp << 2) | (ecn_bits)), "\"}");
+  } else {
+    sip_json =
+        absl::StrCat("{\"activeFieldChoice\":true,\"singleValue\":\"",
+                     absl::StrFormat("%d", (dscp << 2) | (ecn_bits)), "\"}");
+  }
+
   LOG(INFO) << "path " << sip_path;
   LOG(INFO) << "json " << sip_json;
   ASSIGN_OR_RETURN(thinkit::HttpResponse sip_response,
