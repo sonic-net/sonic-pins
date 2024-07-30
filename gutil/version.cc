@@ -18,8 +18,10 @@
 #include <string>
 #include <tuple>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "re2/re2.h"
 
@@ -67,20 +69,19 @@ absl::StatusOr<Version> ParseVersion(absl::string_view version_string) {
   return version;
 }
 
-std::string VersionToString(const Version& v) {
-  // TODO: Use this simpler implementation once Abseil has been
-  // upgraded upstream.
-  // return absl::StrCat(v);
-  return absl::StrFormat("%d.%d.%d", v.major_version, v.minor_version,
-                         v.patch_version);
+Version ParseVersionOrDie(absl::string_view version_string) {
+  absl::StatusOr<Version> version = ParseVersion(version_string);
+  if (!version.ok()) {
+    LOG(FATAL) << version.status();  // Crash OK since that's the point of the
+                                     // function.
+  }
+  return std::move(*version);
 }
 
+std::string VersionToString(const Version& v) { return absl::StrCat(v); }
+
 std::ostream& operator<<(std::ostream& os, const Version& v) {
-  // TODO: Use this simpler implementation once Abseil has been
-  // upgraded upstream.
-  // return os << absl::StrCat(v);
-  return os << absl::StreamFormat("%d.%d.%d", v.major_version, v.minor_version,
-                                  v.patch_version);
+  return os << absl::StrCat(v);
 }
 
 }  // namespace gutil

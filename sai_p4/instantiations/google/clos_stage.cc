@@ -44,4 +44,23 @@ absl::Status AssertInstantiationAndClosStageAreCompatible(
   }
   return absl::OkStatus();
 }
+
+bool AbslParseFlag(absl::string_view stage_txt, ClosStage* stage,
+                   std::string* error) {
+  if (stage_txt == "Stage2") {
+    *stage = ClosStage::kStage2;
+    return true;
+  }
+  if (stage_txt == "Stage3") {
+    *stage = ClosStage::kStage3;
+    return true;
+  }
+  *error = absl::StrCat("Invalid CLOS stage: ", stage_txt);
+  return false;
+}
+
+std::string AbslUnparseFlag(ClosStage stage) {
+  return ClosStageToString(stage);
+}
+
 }  // namespace sai

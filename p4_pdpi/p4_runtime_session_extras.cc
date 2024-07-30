@@ -1,11 +1,17 @@
 #include "p4_pdpi/p4_runtime_session_extras.h"
 
+#include <vector>
+
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/span.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -18,12 +24,20 @@ absl::Status InstallPdTableEntries(
   // Convert entries to PI representation.
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
+  if (gutil::IsEmptyProto(config.config().p4info())) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "cannot install entries on switch since no P4Info has been "
+              "installed";
+  }
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
-  ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> pi_entries,
-                   PdTableEntriesToPi(info, pd_table_entries));
+  ASSIGN_OR_RETURN(
+      std::vector<p4::v1::Entity> pi_entities,
+      PdTableEntriesToPiEntities(info, pd_table_entries),
+      _.SetPrepend()
+          << "failed to translate PD entries to PI using switch P4Info: ");
 
-  // Install entries.
-  return InstallPiTableEntries(&p4rt, info, pi_entries);
+  // Install entities.
+  return InstallPiEntities(p4rt, pi_entities);
 }
 
 absl::Status InstallPdTableEntry(
@@ -31,12 +45,19 @@ absl::Status InstallPdTableEntry(
   // Convert entries to PI representation.
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&p4rt));
+  if (gutil::IsEmptyProto(config.config().p4info())) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "cannot install entries on switch since no P4Info has been "
+              "installed";
+  }
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
-  ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
-                   PdTableEntryToPi(info, pd_table_entry));
+  ASSIGN_OR_RETURN(
+      p4::v1::Entity pi_entity, PdTableEntryToPiEntity(info, pd_table_entry),
+      _.SetPrepend()
+          << "failed to translate PD entries to PI using switch P4Info: ");
 
   // Install entry.
-  return InstallPiTableEntry(&p4rt, pi_entry);
+  return InstallPiEntity(&p4rt, pi_entity);
 }
 
 absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
@@ -78,6 +99,14 @@ absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
 }
 
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
+                               absl::Span<const p4::v1::Entity> entities) {
+  for (const p4::v1::Entity& entity : entities) {
+    RETURN_IF_ERROR(InstallPiEntity(&p4rt, entity));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                absl::string_view entities) {
   ASSIGN_OR_RETURN(auto parsed_entities,
                    gutil::ParseTextProto<PiEntities>(entities));
@@ -92,7 +121,7 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
   // switch, we know that no two entries can have the same key.
   absl::c_sort(entries,
                [](const p4::v1::TableEntry& e1, const p4::v1::TableEntry& e2) {
-                 return gutil::TableEntryKey(e1) < gutil::TableEntryKey(e2);
+                 return TableEntryKey(e1) < TableEntryKey(e2);
                });
 
   return entries;

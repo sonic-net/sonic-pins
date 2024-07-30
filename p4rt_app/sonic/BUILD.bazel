@@ -65,7 +65,7 @@ cc_library(
         ":vrf_entry_translation",
         "//gutil:collections",
         "//gutil:status",
-        "//gutil:table_entry_key",
+        "//p4_pdpi:entity_keys",
         "//p4_pdpi:ir_cc_proto",
         "//p4rt_app/utils:status_utility",
         "//p4rt_app/utils:table_utility",
@@ -325,10 +325,15 @@ cc_library(
     srcs = ["state_verification.cc"],
     hdrs = ["state_verification.h"],
     deps = [
+        ":app_db_manager",
+        ":app_db_to_pdpi_ir_translator",
         "//gutil:status",
+        "//p4_pdpi:ir_cc_proto",
         "//p4rt_app/sonic/adapters:table_adapter",
         "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -386,6 +391,44 @@ cc_test(
         "@com_google_googleapis//google/rpc:code_cc_proto",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "packet_replication_entry_translation",
+    srcs = ["packet_replication_entry_translation.cc"],
+    hdrs = ["packet_replication_entry_translation.h"],
+    deps = [
+        ":app_db_to_pdpi_ir_translator",
+        ":redis_connections",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_test(
+    name = "packet_replication_entry_translation_test",
+    srcs = ["packet_replication_entry_translation_test.cc"],
+    deps = [
+        ":packet_replication_entry_translation",
+        ":redis_connections",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:mock_notification_producer_adapter",
+        "//p4rt_app/sonic/adapters:mock_table_adapter",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_googleapis//google/rpc:code_cc_proto",
+        "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 

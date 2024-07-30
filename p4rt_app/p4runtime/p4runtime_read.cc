@@ -22,9 +22,10 @@
 #include "boost/bimap.hpp"
 #include "glog/logging.h"
 #include "gutil/status.h"
-#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/ir_translation.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -48,12 +49,13 @@ absl::Status AppendAclCounterData(
     p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table) {
-  ASSIGN_OR_RETURN(
-      pdpi::IrTableEntry ir_table_entry,
-      TranslatePiTableEntryForOrchAgent(
-          pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
-          /*translate_key_only=*/false));
+  ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,
+                   TranslatePiTableEntryForOrchAgent(
+                       pi_table_entry, ir_p4_info, translate_port_ids,
+                       port_translation_map, cpu_queue_translator,
+                       /*translate_key_only=*/false));
 
   RETURN_IF_ERROR(sonic::AppendCounterDataForTableEntry(
       ir_table_entry, p4rt_table, ir_p4_info));
@@ -69,6 +71,7 @@ absl::Status AppendTableEntryReads(
     const std::string& role_name, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table) {
   // Fetch the table defintion since it will inform how we process the read
   // request.
@@ -100,9 +103,9 @@ absl::Status AppendTableEntryReads(
                    _ << "Could not determine table type for table '"
                      << table_def->second.preamble().name() << "'.");
   if (table_type == table::Type::kAcl) {
-    RETURN_IF_ERROR(AppendAclCounterData(*response_entry, ir_p4_info,
-                                         translate_port_ids,
-                                         port_translation_map, p4rt_table));
+    RETURN_IF_ERROR(AppendAclCounterData(
+        *response_entry, ir_p4_info, translate_port_ids, port_translation_map,
+        cpu_queue_translator, p4rt_table));
   }
 
   return absl::OkStatus();
@@ -112,11 +115,11 @@ absl::Status AppendTableEntryReads(
 
 absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
     const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
-    const absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>&
+    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
         table_entry_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
-    sonic::P4rtTable& p4rt_table) {
+    CpuQueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
   p4::v1::ReadResponse response;
   for (const auto& entity : request.entities()) {
     VLOG(1) << "Read request: " << entity.ShortDebugString();
@@ -126,7 +129,7 @@ absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
         for (const auto& [_, entry] : table_entry_cache) {
           RETURN_IF_ERROR(AppendTableEntryReads(
               response, entry, request.role(), ir_p4_info, translate_port_ids,
-              port_translation_map, p4rt_table));
+              port_translation_map, cpu_queue_translator, p4rt_table));
         }
         break;
       }

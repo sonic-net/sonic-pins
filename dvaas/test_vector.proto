@@ -1,0 +1,133 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package dvaas;
+
+import "p4_pdpi/ir.proto";
+import "p4_pdpi/packetlib/packetlib.proto";
+
+// Describes a packet from/to a given port.
+// This proto contains both a parsed and unparsed (raw) representation
+// of the packet. This makes it easier for humans to understand differences
+// between packets. Both the parsed and unparsed representation must represent
+// exactly the same packet.
+message Packet {
+  // required
+  string port = 1;
+  // required
+  packetlib.Packet parsed = 2;
+  // required
+  string hex = 4;
+}
+
+// Describes a packet that was received by the switch and punted via packetio.
+// This proto contains both a parsed and unparsed (raw) representation
+// of the packet. This makes it easier for humans to understand differences
+// between packets. Both the parsed and unparsed representation must represent
+// exactly the same packet.
+message PacketIn {
+  repeated pdpi.IrPacketMetadata metadata = 1;
+  packetlib.Packet parsed = 2;
+  string hex = 4;
+}
+
+// The output of a switch, in response to an input.
+message SwitchOutput {
+  // The packets sent by the switch.
+  repeated Packet packets = 1;
+  // The packets punted by the switch using packet io.
+  repeated PacketIn packet_ins = 2;
+}
+
+// The input to a switch.
+message SwitchInput {
+  enum Type {
+    // Same as DATAPLANE.
+    DEFAULT = 0;
+    // Send a packet to the switch on the dataplane.
+    DATAPLANE = 1;
+    // Inject a packet into the switch using packet IO.
+    // The packet will be sent out of the given port without any pre-processing.
+    PACKET_OUT = 2;
+    // Inject a packet into the switch using packet IO. The packet will be
+    // processed as if it had been received on the dataplane. The `packet.port`
+    // will be ignored.
+    SUBMIT_TO_INGRESS = 3;
+  }
+  Type type = 1;
+  // The packet that's being sent to the switch (required).
+  Packet packet = 2;
+}
+
+// A packet test vector consists of a single packet input that can be
+// sent to a switch, along with the expected outputs from the switch in response
+// to that packet.
+message PacketTestVector {
+  // The input packet to the switch (required).
+  // NOTE: The payload of this packet must be tagged with a unique int64 id that
+  // is used to detect the corresponding single packet test vector from switch
+  // output.
+  SwitchInput input = 2;
+  // The expected output from the switch. There may be multiple acceptable
+  // outputs, and only one of them needs to match.
+  repeated SwitchOutput acceptable_outputs = 3;
+}
+
+// A packet test vector along with the actual SUT output generated in response
+// to the test vector's input. The actual output may be empty, if the switch
+// drops the input packet.
+message PacketTestRun {
+  PacketTestVector test_vector = 1;
+  SwitchOutput actual_output = 2;
+}
+
+// A list of packet test runs.
+message PacketTestRuns {
+  repeated PacketTestRun test_runs = 1;
+}
+
+// The result of validating a single packet test run.
+message PacketTestValidationResult {
+  message Failure {
+    // A detailed explanation of how the switch did not behave as expected.
+    string description = 1;
+  }
+  // If present, indicates that the switch did not behave as expected.
+  Failure failure = 1;
+}
+
+// A test run along with its validation result.
+message PacketTestOutcome {
+  PacketTestRun test_run = 1;
+  PacketTestValidationResult test_result = 2;
+}
+
+// A list of test outcomes.
+message PacketTestOutcomes {
+  repeated PacketTestOutcome outcomes = 1;
+}
+
+// Used to validate the SUT's packet forwarding behavior.
+// Contains table entries and a set of test packets (with expected outputs)
+// given those entries.
+// Aka. DataplaneTestVector, DataplaneValidationTestVector.
+message ArribaTestVector {
+  // TODO: Add expected P4Info/PipelineConfig.
+  // Table entries to be installed on the SUT.
+  pdpi.IrTableEntries ir_table_entries = 1;
+  // A map of id to PacketTestVector with that id.
+  map<int64, PacketTestVector> packet_test_vector_by_id = 2;
+}

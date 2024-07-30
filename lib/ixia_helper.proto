@@ -1,0 +1,46 @@
+// This file contains proto definitions mirroring schemas used by the
+// Ixia REST API, allowing us to parse JSON values returned by Ixias
+// automatically using proto2's json_util.
+//
+// We only model the fields we're interested in, since we can ignore other
+// fields during parsing using json_util's `ignore_unknown_fields` option.
+//
+// This file also contains proto messages that do not mirror YANG models
+// directly, but are more convenient representations, e.g. for diffing.
+
+syntax = "proto3";
+
+package pins_test.ixia;
+
+import "google/protobuf/struct.proto";
+
+// -- Proto messages mirroring Ixia REST API schemas ---------------------------
+
+// Mirrors a statistics view object, as returned by path `statistics/view/n`
+// for some index n.
+message StatsViewObject {
+  int32 row_count = 1 [json_name = "rowCount"];
+  map<string, google.protobuf.ListValue> row_values = 2
+      [json_name = "rowValues"];
+  repeated string column_captions = 3 [json_name = "columnCaptions"];
+  bool is_ready = 4 [json_name = "isReady"];
+}
+
+// -- Proto messages for convenience -------------------------------------------
+
+// Parsed representation of a "Traffic Item Statistics" view.
+message TrafficStats {
+  map<string, TrafficItemStats> stats_by_traffic_item = 1;
+}
+
+// Parsed representation of a "Traffic Item Statistics" view.
+message TrafficItemStats {
+  string tx_port = 1;
+  string rx_port = 2;
+  string traffic_item_name = 3;
+  int64 num_tx_frames = 4;
+  int64 num_rx_frames = 5;
+  int64 rx_bytes = 6;
+  double first_time_stamp = 7;  // Seconds since arbitrary 0.
+  double last_time_stamp = 8;   // Seconds since arbitrary 0.
+}

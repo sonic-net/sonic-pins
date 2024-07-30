@@ -26,8 +26,8 @@
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
-#include "gutil/table_entry_key.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/app_db_manager.h"
@@ -254,7 +254,7 @@ absl::StatusOr<sonic::AppDbEntry> GetAppDbEntry(
   ASSIGN_OR_RETURN(app_db_entry.pi_table_entry,
                    pdpi::IrTableEntryToPi(ir_p4info, app_db_entry.entry));
   app_db_entry.table_entry_key =
-      gutil::TableEntryKey(app_db_entry.pi_table_entry);
+      pdpi::TableEntryKey(app_db_entry.pi_table_entry);
   app_db_entry.update_type = update_type;
   return app_db_entry;
 }
@@ -269,7 +269,7 @@ class GetTableResourceChangeTest : public ResourceUtilizationTest {
     }
   }
 
-  absl::flat_hash_map<gutil::TableEntryKey, p4::v1::TableEntry>
+  absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>
       table_entry_cache_;
   absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
       capacity_by_action_profile_name_;

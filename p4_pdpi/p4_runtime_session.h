@@ -41,6 +41,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/fixed/roles.h"
+#include "thinkit/switch.h"
 
 namespace pdpi {
 
@@ -115,6 +116,15 @@ struct P4RuntimeSessionOptionalArgs {
 // A P4Runtime session
 class P4RuntimeSession {
  public:
+  // Creates and sets up a standard P4RuntimeSession. If you don't have
+  // particular requirements, this is likely the function you want to use.
+  // Specifically, creates a session, clears all tables, and pushes the given
+  // P4Info via RECONCILE_AND_COMMIT.
+  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
+  CreateWithP4InfoAndClearTables(
+      thinkit::Switch& thinkit_switch, const p4::config::v1::P4Info& p4info,
+      const P4RuntimeSessionOptionalArgs& metadata = {});
+
   // Creates a session with the switch, which lasts until the session object is
   // destructed. Performs primary arbitration and, if `error_if_not_primary` is
   // set, as it is by default, then if the session is not the primary switch
@@ -129,6 +139,10 @@ class P4RuntimeSession {
       const std::string& address,
       const std::shared_ptr<grpc::ChannelCredentials>& credentials,
       uint32_t device_id, const P4RuntimeSessionOptionalArgs& metadata = {},
+      bool error_if_not_primary = true);
+  static absl::StatusOr<std::unique_ptr<P4RuntimeSession>> Create(
+      thinkit::Switch& thinkit_switch,
+      const P4RuntimeSessionOptionalArgs& metadata = {},
       bool error_if_not_primary = true);
 
   // Connects to the default session on the switch, which has no election_id
@@ -181,7 +195,13 @@ class P4RuntimeSession {
   p4::v1::Uint128 ElectionId() const { return election_id_; }
   // Returns the role of this session.
   std::string Role() const { return role_; }
-
+  // Thread-safe wrapper around the stream channel's `Read` method.
+  // It blocks until the stream message queue is non-empty, the
+  // stream channel is closed, or (if specified) the `timeout` is expired .
+  ABSL_MUST_USE_RESULT bool StreamChannelRead(
+      p4::v1::StreamMessageResponse& response,
+      std::optional<absl::Duration> timeout = std::nullopt)
+      ABSL_LOCKS_EXCLUDED(stream_read_lock_);
   // Thread-safe wrapper around the stream channel's `Write` method.
   ABSL_MUST_USE_RESULT bool StreamChannelWrite(
       const p4::v1::StreamMessageRequest& request)
@@ -309,6 +329,11 @@ std::vector<p4::v1::Update> CreatePiUpdates(
     absl::Span<const p4::v1::TableEntry> pi_entries,
     p4::v1::Update_Type update_type);
 
+// Creates PI updates from PI entities.
+std::vector<p4::v1::Update> CreatePiUpdates(
+    absl::Span<const p4::v1::Entity> pi_entities,
+    p4::v1::Update_Type update_type);
+
 // Sets the request's metadata (i.e. device id, role). And sends a PI
 // (program independent) read request.
 absl::StatusOr<p4::v1::ReadResponse> SetMetadataAndSendPiReadRequest(
@@ -356,6 +381,10 @@ absl::Status InstallPiTableEntries(
 // Installs the given PI (program independent) entity on the switch.
 absl::Status InstallPiEntity(P4RuntimeSession* session,
                              p4::v1::Entity pi_entity);
+
+// Installs the given PI (program independent) entity on the switch.
+absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
+                               absl::Span<const p4::v1::Entity> pi_entities);
 
 // Sends the given PI updates to the switch.
 absl::Status SendPiUpdates(P4RuntimeSession* session,

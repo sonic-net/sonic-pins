@@ -1,6 +1,3 @@
-load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 
 package(
@@ -55,6 +52,28 @@ cc_test(
         "//p4_pdpi:pd",
         "@com_github_google_glog//:glog",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "fuzzer_config",
+    srcs = [
+        "fuzzer_config.cc",
+    ],
+    hdrs = [
+        "fuzzer_config.h",
+    ],
+    deps = [
+        "//gutil:status",
+        "//lib/p4rt:p4rt_port",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 

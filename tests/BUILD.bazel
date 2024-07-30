@@ -1,0 +1,109 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# PINS test functions that can be run on any infrastructure that supports ThinKit.
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+cc_library(
+    name = "thinkit_sanity_tests",
+    testonly = 1,
+    srcs = [
+        "thinkit_sanity_tests.cc",
+    ],
+    hdrs = [
+        "thinkit_sanity_tests.h",
+        "thinkit_util.h",
+    ],
+    deps = [
+        "//gutil:status",
+        "//gutil:status_matchers",
+        "//lib/gnmi:gnmi_helper",
+        "//p4_pdpi:p4_runtime_session",
+        "//lib/validator:validator_lib",
+        "//thinkit:mirror_testbed",
+        "//thinkit:ssh_client",
+        "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_gnoi//system:system_cc_grpc_proto",
+        "@com_github_gnoi//system:system_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
+    name = "thinkit_gnmi_tests",
+    testonly = 1,
+    srcs = [
+        "thinkit_gnmi_interface_tests.cc",
+    ],
+    hdrs = [
+        "thinkit_gnmi_interface_tests.h",
+        "thinkit_util.h",
+    ],
+    deps = [
+        "//gutil:status_matchers",
+        "//lib/gnmi:gnmi_helper",
+        "//thinkit:ssh_client",
+        "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
+    name = "thinkit_gnmi_subscribe_tests",
+    testonly = 1,
+    srcs = [
+        "thinkit_gnmi_subscribe_tests.cc",
+    ],
+    hdrs = [
+        "thinkit_gnmi_subscribe_tests.h",
+        "thinkit_util.h",
+    ],
+    deps = [
+        "//gutil:status_matchers",
+        "//lib/gnmi:gnmi_helper",
+        "//p4_pdpi:p4_runtime_session",
+        "//thinkit:ssh_client",
+        "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_proto",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_grpc",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_googletest//:gtest",
+    ],
+)

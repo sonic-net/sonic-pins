@@ -40,6 +40,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/sequencing.h"
+#include "thinkit/switch.h"
 
 namespace pdpi {
 
@@ -139,6 +140,14 @@ absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
                 error_if_not_primary);
 }
 
+absl::StatusOr<std::unique_ptr<P4RuntimeSession>> P4RuntimeSession::Create(
+    thinkit::Switch& thinkit_switch,
+    const P4RuntimeSessionOptionalArgs& metadata, bool error_if_not_primary) {
+  ASSIGN_OR_RETURN(auto stub, thinkit_switch.CreateP4RuntimeStub());
+  return Create(std::move(stub), thinkit_switch.DeviceId(), metadata,
+                error_if_not_primary);
+}
+
 // Create the default session with the switch.
 std::unique_ptr<P4RuntimeSession> P4RuntimeSession::Default(
     std::unique_ptr<P4Runtime::StubInterface> stub, uint32_t device_id,
@@ -216,6 +225,26 @@ P4RuntimeSession::GetForwardingPipelineConfig(
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
       stub_->GetForwardingPipelineConfig(&context, request, &response)));
   return response;
+}
+
+bool P4RuntimeSession::StreamChannelRead(
+    p4::v1::StreamMessageResponse& response,
+    std::optional<absl::Duration> timeout) {
+  absl::MutexLock lock(&stream_read_lock_);
+  auto cond = [&]() ABSL_SHARED_LOCKS_REQUIRED(stream_read_lock_) {
+    return !stream_messages_.empty() || !is_stream_up_;
+  };
+  if (timeout.has_value()) {
+    stream_read_lock_.AwaitWithTimeout(absl::Condition(&cond), *timeout);
+  } else {
+    stream_read_lock_.Await(absl::Condition(&cond));
+  }
+  if (!stream_messages_.empty()) {
+    response = stream_messages_.front();
+    stream_messages_.pop();
+    return true;
+  }
+  return false;
 }
 
 bool P4RuntimeSession::StreamChannelWrite(
@@ -356,6 +385,20 @@ void P4RuntimeSession::CollectStreamReadMessages() {
   set_is_stream_up(false);
 }
 
+absl::StatusOr<std::unique_ptr<P4RuntimeSession>>
+P4RuntimeSession::CreateWithP4InfoAndClearTables(
+    thinkit::Switch& thinkit_switch, const p4::config::v1::P4Info& p4info,
+    const P4RuntimeSessionOptionalArgs& metadata) {
+  ASSIGN_OR_RETURN(std::unique_ptr<P4RuntimeSession> session,
+                   P4RuntimeSession::Create(thinkit_switch, metadata));
+  RETURN_IF_ERROR(ClearTableEntries(session.get()));
+  RETURN_IF_ERROR(SetMetadataAndSetForwardingPipelineConfig(
+      session.get(),
+      p4::v1::SetForwardingPipelineConfigRequest_Action_RECONCILE_AND_COMMIT,
+      p4info));
+  return session;
+}
+
 std::vector<Update> CreatePiUpdates(absl::Span<const TableEntry> pi_entries,
                                     Update_Type update_type) {
   std::vector<Update> pi_updates;
@@ -364,6 +407,19 @@ std::vector<Update> CreatePiUpdates(absl::Span<const TableEntry> pi_entries,
     Update update;
     update.set_type(update_type);
     *update.mutable_entity()->mutable_table_entry() = pi_entry;
+    pi_updates.push_back(std::move(update));
+  }
+  return pi_updates;
+}
+
+std::vector<Update> CreatePiUpdates(absl::Span<const Entity> pi_entities,
+                                    Update_Type update_type) {
+  std::vector<Update> pi_updates;
+  pi_updates.reserve(pi_entities.size());
+  for (const auto& pi_entity : pi_entities) {
+    Update update;
+    update.set_type(update_type);
+    *update.mutable_entity() = pi_entity;
     pi_updates.push_back(std::move(update));
   }
   return pi_updates;
@@ -539,6 +595,14 @@ absl::Status InstallPiTableEntries(P4RuntimeSession* session,
                                    const IrP4Info& info,
                                    absl::Span<const TableEntry> pi_entries) {
   std::vector<Update> pi_updates = CreatePiUpdates(pi_entries, Update::INSERT);
+  ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_write_requests,
+                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
+  return SetMetadataAndSendPiWriteRequests(session, sequenced_write_requests);
+}
+
+absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
+                               absl::Span<const Entity> pi_entities) {
+  std::vector<Update> pi_updates = CreatePiUpdates(pi_entities, Update::INSERT);
   ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_write_requests,
                    pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
   return SetMetadataAndSendPiWriteRequests(session, sequenced_write_requests);

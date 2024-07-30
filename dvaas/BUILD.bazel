@@ -1,0 +1,140 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+
+package(
+    default_testonly = True,
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+cc_library(
+    name = "output_writer",
+    hdrs = ["output_writer.h"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "packet_injection",
+    srcs = ["packet_injection.cc"],
+    hdrs = ["packet_injection.h"],
+    deps = [
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//tests/forwarding:util",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "test_run_validation",
+    srcs = ["test_run_validation.cc"],
+    hdrs = ["test_run_validation.h"],
+    deps = [
+        ":output_writer",
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil:proto",
+        "//gutil:status",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:span",
+        "@com_google_googletest//:gtest",
+        "@com_google_protobuf//:protobuf",
+        "@com_googlesource_code_re2//:re2",
+    ],
+)
+
+cc_library(
+    name = "arriba_test_vector_validation",
+    testonly = True,
+    srcs = ["arriba_test_vector_validation.cc"],
+    hdrs = ["arriba_test_vector_validation.h"],
+    deps = [
+        ":packet_injection",
+        ":test_run_validation",
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil:test_artifact_writer",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:p4_runtime_session_extras",
+        "//sai_p4/instantiations/google/test_tools:test_entries",
+        "//thinkit:mirror_testbed",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+proto_library(
+    name = "test_vector_proto",
+    srcs = ["test_vector.proto"],
+    deps = [
+        "//p4_pdpi:ir_proto",
+        "//p4_pdpi/packetlib:packetlib_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "test_vector_cc_proto",
+    deps = [":test_vector_proto"],
+)
+
+cc_library(
+    name = "test_vector",
+    testonly = True,
+    srcs = ["test_vector.cc"],
+    hdrs = ["test_vector.h"],
+    deps = [
+        ":test_vector_cc_proto",
+        "//gutil:proto",
+        "//gutil:status",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:span",
+        "@com_google_googletest//:gtest",
+        "@com_google_protobuf//:protobuf",
+        "@com_googlesource_code_re2//:re2",
+    ],
+)

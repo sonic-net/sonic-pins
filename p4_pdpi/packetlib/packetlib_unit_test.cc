@@ -18,8 +18,11 @@
 #include <iostream>
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
@@ -31,7 +34,9 @@ namespace packetlib {
 namespace {
 
 using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
 using ::testing::Eq;
+using ::testing::HasSubstr;
 
 const absl::string_view kEthernetSourceAddress = "8:0:20:86:35:4b";
 const absl::string_view kEthernetDestinationAddress = "0:e0:f7:26:3f:e9";
@@ -45,8 +50,7 @@ TEST(PacketLib, BitWidthTest) {
         "Input has been truncated because maximum allowable "
         "bitwidth for this field is %d but input has %d bits: %d",
         kIpVersionBitwidth, bit_shift + 1, input);
-    ASSERT_DEBUG_DEATH(IpVersion(input),
-                       testing::HasSubstr(expected_error_message));
+    ASSERT_DEBUG_DEATH(IpVersion(input), HasSubstr(expected_error_message));
   }
 }
 
@@ -76,6 +80,39 @@ TEST(PacketLib, UdpWithIpv4Header) {
   udp->set_destination_port(UdpPort(0x000a));
   udp->set_length(UdpLength(0x001a));
   ASSERT_OK(SerializePacket(packet));
+}
+
+TEST(PacketLib, UdpWithIpv4HeaderIpfixDestPort) {
+  Packet packet;
+
+  EthernetHeader* eth = packet.add_headers()->mutable_ethernet_header();
+  eth->set_ethertype(EtherType(ETHERTYPE_IP));
+  eth->set_ethernet_source(std::string(kEthernetSourceAddress));
+  eth->set_ethernet_destination(std::string(kEthernetDestinationAddress));
+
+  Ipv4Header* ipv4 = packet.add_headers()->mutable_ipv4_header();
+  ipv4->set_version(IpVersion(4));
+  ipv4->set_ihl(IpIhl(5));
+  ipv4->set_ipv4_source("192.168.0.31");
+  ipv4->set_ipv4_destination("192.168.0.30");
+  ipv4->set_ttl(IpTtl(0x10));
+  ipv4->set_dscp(IpDscp(3));
+  ipv4->set_protocol(IpProtocol(IPPROTO_UDP));
+  ipv4->set_ecn(IpEcn(2));
+  ipv4->set_identification(IpIdentification(0));
+  ipv4->set_flags(IpFlags(3));
+  ipv4->set_fragment_offset(IpFragmentOffset(1234));
+
+  // Test should fail if UDP destination port == IPFIX and
+  // IPFIX header is missing.
+  UdpHeader* udp = packet.add_headers()->mutable_udp_header();
+  udp->set_source_port(UdpPort(0x0014));
+  udp->set_destination_port(UdpPort(kIpfixUdpDestPort));
+  udp->set_length(UdpLength(0x001a));
+
+  ASSERT_THAT(SerializePacket(packet),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("expected IpfixHeader")));
 }
 
 TEST(PacketLib, UdpWithIpv6Header) {
@@ -182,7 +219,7 @@ TEST(PacketLib, ICMPWithIpv4Header) {
 }
 
 // TODO: Add unit test using example GRE header with checksum. This is not
-// done for now because it's difficult to find an exammple GRE header with
+// done for now because it's difficult to find an example GRE header with
 // checksum.
 
 TEST(PacketLib, GreHeaderIpv4EncapsulatedWithIpv4) {
@@ -464,6 +501,56 @@ TEST(PacketLib, PadPacketWithEthernetHeader) {
   ASSERT_THAT(PadPacket(current_size + 1, packet), IsOkAndHolds(Eq(true)));
   ASSERT_OK_AND_ASSIGN(int updated_size, PacketSizeInBytes(packet));
   EXPECT_EQ(current_size + 1, updated_size);
+}
+
+TEST(PacketLib, ExperimentalEncapsulatedPacket) {
+  // Packet structure is:
+  // Ethernet -> IP -> UDP -> IPFIX -> PSAMP ->
+  // Sampled packet (ETH -> IP -> TCP/UDP -> payload)
+  Packet packet;
+
+  EthernetHeader* eth = packet.add_headers()->mutable_ethernet_header();
+  eth->set_ethertype(EtherType(ETHERTYPE_IPV6));
+  eth->set_ethernet_source(std::string(kEthernetSourceAddress));
+  eth->set_ethernet_destination(std::string(kEthernetDestinationAddress));
+
+  Ipv6Header* ipv6 = packet.add_headers()->mutable_ipv6_header();
+  ipv6->set_ipv6_source("5:6:7:8::");
+  ipv6->set_ipv6_destination("2607:f8b0:c150:8114::");
+  ipv6->set_flow_label(IpFlowLabel(0x12345));
+  ipv6->set_next_header(IpNextHeader(17));
+  ipv6->set_hop_limit(IpHopLimit(32));
+  ipv6->set_dscp(IpDscp(3));
+  ipv6->set_ecn(IpEcn(0));
+
+  UdpHeader* udp = packet.add_headers()->mutable_udp_header();
+  udp->set_source_port(UdpPort(2222));
+  udp->set_destination_port(UdpPort(kIpfixUdpDestPort));
+  // Checksum is always zero for psamp packets
+  udp->set_checksum(UdpChecksum(0x0));
+
+  IpfixHeader* ipfix = packet.add_headers()->mutable_ipfix_header();
+  ipfix->set_version(IpfixVersion(0x0A));
+  // Packet came 10 seconds ago
+  ipfix->set_export_time(
+      IpfixExportTime(absl::ToUnixSeconds(absl::Now()) - 10));
+  ipfix->set_sequence_number(IpfixSequenceNumber(1));
+  ipfix->set_observation_domain_id(IpfixObservationDomainId(1));
+
+  PsampHeader* psamp = packet.add_headers()->mutable_psamp_header();
+  psamp->set_template_id(PsampTemplateId(0));
+  psamp->set_observation_time(
+      PsampObservationTime(absl::ToUnixNanos(absl::Now())));
+  psamp->set_flowset(PsampFlowset(0x1234));
+  psamp->set_next_hop_index(PsampNextHopIndex(0));
+  psamp->set_epoch(PsampEpoch(0xABCD));
+  psamp->set_ingress_port(PsampIngressPort(0x0d));
+  psamp->set_egress_port(PsampEgressPort(0x0f));
+  psamp->set_user_meta_field(PsampUserMetaField(0));
+  psamp->set_dlb_id(PsampDlbId(0));
+  packet.set_payload("000000000000000000");  // 18 octets
+
+  ASSERT_OK(SerializePacket(packet));
 }
 
 }  // namespace

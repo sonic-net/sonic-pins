@@ -34,6 +34,11 @@ message Packet {
   repeated string reasons_invalid = 4;
 }
 
+// Multiple packets.
+message Packets {
+  repeated Packet packets = 1;
+}
+
 // Describes a network packet header. This is not an exhaustive list of headers,
 // and not every header may support all fields available for that particular
 // header (e.g. optional fields may not be supported).
@@ -59,6 +64,8 @@ message Header {
     VlanHeader vlan_header = 8;
     GreHeader gre_header = 9;
     SaiP4BMv2PacketInHeader sai_p4_bmv2_packet_in_header = 10;
+    IpfixHeader ipfix_header = 11;
+    PsampHeader psamp_header = 12;
   }
 }
 
@@ -183,4 +190,41 @@ message SaiP4BMv2PacketInHeader {
   string target_egress_port = 2;  // 9 bits
   // Padding field to align the header to 8-bit multiple, as required by BMv2.
   string unused_pad = 3;  // 6 bits
+}
+
+// IP Flow Information eXport header (RFC 7011 through RFC 7015, RFC 5103).
+message IpfixHeader {
+  // Version of IPFIX to which this Message conforms.
+  string version = 1;  // 16 bits
+  // Total length of the IPFIX Message, octets
+  string length = 2;  // 16 bits (computed field)
+  // Time at which the IPFIX Message Header leaves the Exporter,
+  // seconds since the Unix epoch
+  string export_time = 3;  // 32 bits
+  // Incremental sequence counter modulo 2^32 of all IPFIX Data Records
+  // sent in the current stream from the current Observation Domain by
+  // the Exporting Process.
+  string sequence_number = 4;  // 32 bits
+  // An identifier of the Observation Domain that is locally
+  // unique to the Exporting Process.
+  string observation_domain_id = 5;  // 32 bits
+}
+
+// Packet Sampling protocol header (RFC 5476)
+message PsampHeader {
+  string template_id = 1;  // 16 bits
+  // PSAMP packet length.
+  string length = 2;  // 16 bits (computed field)
+  // Ingress timestamp in nanoseconds.
+  string observation_time = 3;  // 64 bits
+  string flowset = 4;           // 16 bits
+  string next_hop_index = 5;    // 16 bits
+  string epoch = 6;             // 16 bits
+  string ingress_port = 7;      // 16 bits
+  string egress_port = 8;       // 16 bits
+  string user_meta_field = 9;   // 16 bits
+  string dlb_id = 10;           // 8 bit
+  // Variable packet length identifier - 0xFF.
+  string variable_length = 11;        // 8 bits (computed field)
+  string packet_sampled_length = 12;  // 16 bits (computed field)
 }

@@ -20,8 +20,10 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 
 namespace p4rt_app {
 namespace sonic {
@@ -41,8 +43,6 @@ using SonicDbEntryMap = std::unordered_map<std::string, std::string>;
 
 // Fakes how the OrchAgent updates AppDb tables. When an entry is inserted the
 // Orchagent will respond with a notification of success or failure.
-//
-// This class is NOT thread-safe.
 class FakeSonicDbTable {
  public:
   FakeSonicDbTable(const std::string &table_name = "SonicDb:TABLE")
@@ -54,8 +54,10 @@ class FakeSonicDbTable {
   FakeSonicDbTable(const std::string &table_name, FakeSonicDbTable *state_db)
       : debug_table_name_(table_name), state_db_(state_db) {}
 
-  void InsertTableEntry(const std::string &key, const SonicDbEntryList &values);
-  void DeleteTableEntry(const std::string &key);
+  void InsertTableEntry(const std::string &key, const SonicDbEntryList &values)
+      ABSL_LOCKS_EXCLUDED(entries_mutex_);
+  void DeleteTableEntry(const std::string &key)
+      ABSL_LOCKS_EXCLUDED(entries_mutex_);
 
   void SetResponseForKey(const std::string &key, const std::string &code,
                          const std::string &message);
@@ -68,9 +70,11 @@ class FakeSonicDbTable {
   void GetNextNotification(std::string &op, std::string &data,
                            SonicDbEntryList &values);
 
-  absl::StatusOr<SonicDbEntryMap> ReadTableEntry(const std::string &key) const;
+  absl::StatusOr<SonicDbEntryMap> ReadTableEntry(const std::string &key) const
+      ABSL_LOCKS_EXCLUDED(entries_mutex_);
 
-  std::vector<std::string> GetAllKeys() const;
+  std::vector<std::string> GetAllKeys() const
+      ABSL_LOCKS_EXCLUDED(entries_mutex_);
 
   // Method should only be used for debug purposes.
   void DebugState() const;
@@ -87,11 +91,15 @@ class FakeSonicDbTable {
 
   bool UpdateAppStateDb(const std::string &key);
 
+  // Mutex to protect synchronization of entries_.
+  mutable absl::Mutex entries_mutex_;
+
   // Debug table name is used in log messages to help distinguish messages.
-  std::string debug_table_name_;
+  const std::string debug_table_name_;
 
   // Current list of DB entries stored in the table.
-  absl::flat_hash_map<std::string, SonicDbEntryMap> entries_;
+  absl::flat_hash_map<std::string, SonicDbEntryMap> entries_
+      ABSL_GUARDED_BY(entries_mutex_);
 
   // List of notifications the OrchAgent would have generated. One notification
   // is created per insert, and one is removed per notification check.

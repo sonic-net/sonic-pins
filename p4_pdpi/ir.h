@@ -23,10 +23,10 @@
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "grpcpp/grpcpp.h"
-#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/translation_options.h"
 
 namespace pdpi {
 
@@ -38,12 +38,23 @@ absl::StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info& p4_info);
 void RemoveUnsupportedEntities(IrP4Info& p4_info);
 
 // -- Conversions from PI to IR ------------------------------------------------
-absl::StatusOr<IrTableEntry> PiTableEntryToIr(const IrP4Info& info,
-                                              const p4::v1::TableEntry& pi,
-                                              bool key_only = false);
+absl::StatusOr<IrEntity> PiEntityToIr(
+    const IrP4Info& info, const p4::v1::Entity& pi,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+absl::StatusOr<IrEntities> PiEntitiesToIr(
+    const IrP4Info& info, absl::Span<const p4::v1::Entity> pi,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+
+absl::StatusOr<IrTableEntry> PiTableEntryToIr(
+    const IrP4Info& info, const p4::v1::TableEntry& pi,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 absl::StatusOr<IrTableEntries> PiTableEntriesToIr(
     const IrP4Info& info, absl::Span<const p4::v1::TableEntry> pi,
-    bool key_only = false);
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+
+absl::StatusOr<IrMulticastGroupEntry> PiMulticastGroupEntryToIr(
+    const IrP4Info& info, const p4::v1::MulticastGroupEntry& pi,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
 absl::StatusOr<IrPacketIn> PiPacketInToIr(const IrP4Info& info,
                                           const p4::v1::PacketIn& packet);
@@ -55,13 +66,16 @@ absl::StatusOr<IrReadRequest> PiReadRequestToIr(
     const IrP4Info& info, const p4::v1::ReadRequest& read_request);
 
 absl::StatusOr<IrReadResponse> PiReadResponseToIr(
-    const IrP4Info& info, const p4::v1::ReadResponse& read_response);
+    const IrP4Info& info, const p4::v1::ReadResponse& read_response,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
-absl::StatusOr<IrUpdate> PiUpdateToIr(const IrP4Info& info,
-                                      const p4::v1::Update& update);
+absl::StatusOr<IrUpdate> PiUpdateToIr(
+    const IrP4Info& info, const p4::v1::Update& update,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
 absl::StatusOr<IrWriteRequest> PiWriteRequestToIr(
-    const IrP4Info& info, const p4::v1::WriteRequest& write_request);
+    const IrP4Info& info, const p4::v1::WriteRequest& write_request,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
 absl::StatusOr<IrStreamMessageRequest> PiStreamMessageRequestToIr(
     const IrP4Info& info,
@@ -72,14 +86,26 @@ absl::StatusOr<IrStreamMessageResponse> PiStreamMessageResponseToIr(
     const p4::v1::StreamMessageResponse& stream_message_response);
 
 // -- Conversions from IR to PI ------------------------------------------------
-absl::StatusOr<p4::v1::TableEntry> IrTableEntryToPi(const IrP4Info& info,
-                                                    const IrTableEntry& ir,
-                                                    bool key_only = false);
+absl::StatusOr<p4::v1::Entity> IrEntityToPi(
+    const IrP4Info& info, const IrEntity& ir,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+absl::StatusOr<std::vector<p4::v1::Entity>> IrEntitiesToPi(
+    const IrP4Info& info, const IrEntities& ir,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+
+absl::StatusOr<p4::v1::TableEntry> IrTableEntryToPi(
+    const IrP4Info& info, const IrTableEntry& ir,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
-    const IrP4Info& info, const IrTableEntries& ir, bool key_only = false);
+    const IrP4Info& info, const IrTableEntries& ir,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 absl::StatusOr<std::vector<p4::v1::TableEntry>> IrTableEntriesToPi(
     const IrP4Info& info, absl::Span<const IrTableEntry> ir,
-    bool key_only = false);
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
+
+absl::StatusOr<p4::v1::MulticastGroupEntry> IrMulticastGroupEntryToPi(
+    const IrP4Info& info, const IrMulticastGroupEntry& ir,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
 absl::StatusOr<p4::v1::PacketIn> IrPacketInToPi(const IrP4Info& info,
                                                 const IrPacketIn& packet);
@@ -91,13 +117,16 @@ absl::StatusOr<p4::v1::ReadRequest> IrReadRequestToPi(
     const IrP4Info& info, const IrReadRequest& read_request);
 
 absl::StatusOr<p4::v1::ReadResponse> IrReadResponseToPi(
-    const IrP4Info& info, const IrReadResponse& read_response);
+    const IrP4Info& info, const IrReadResponse& read_response,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
-absl::StatusOr<p4::v1::Update> IrUpdateToPi(const IrP4Info& info,
-                                            const IrUpdate& update);
+absl::StatusOr<p4::v1::Update> IrUpdateToPi(
+    const IrP4Info& info, const IrUpdate& update,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
 absl::StatusOr<p4::v1::WriteRequest> IrWriteRequestToPi(
-    const IrP4Info& info, const IrWriteRequest& write_request);
+    const IrP4Info& info, const IrWriteRequest& write_request,
+    TranslationOptions options PDPI_TRANSLATION_OPTIONS_DEFAULT);
 
 absl::StatusOr<p4::v1::StreamMessageRequest> IrStreamMessageRequestToPi(
     const IrP4Info& info,

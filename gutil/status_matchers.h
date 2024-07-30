@@ -22,52 +22,30 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 
-namespace absl {
-
-// Overload the absl::StatusOr insertion operator to output its status. This
-// makes it so test matchers output the status instead of byte strings.
-//
-// NOTE: the insertion operator must be in the same namespace as the object for
-// the matching framework to work correctly.
-template <typename T>
-std::ostream& operator<<(std::ostream& out, const StatusOr<T>& status_or) {
-  return out << status_or.status();
-}
-
-}  // namespace absl
-
 namespace gutil {
 
-// Implements a status matcher interface to verify a status variable is okay.
-//
-// Sample usage:
-//   EXPECT_THAT(MyCall, IsOk());
-//   EXPECT_OK(MyCall());
-//
-// Sample output on failure:
-//   Value of: MyCall()
-//   Expected: is Ok.
-//     Actual: UNKNOWN: descriptive error (of type absl::lts_2020_02_25::Status)
-class StatusIsOkMatcher {
- public:
-  void DescribeTo(std::ostream* os) const { *os << "is OK"; }
-  void DescribeNegationTo(std::ostream* os) const { *os << "is not OK"; }
+namespace internal {
 
-  template <typename StatusType>
-  bool MatchAndExplain(const StatusType& actual,
-                       testing::MatchResultListener* /*listener*/) const {
-    return actual.ok();
-  }
-};
+template <class Status>
+const Status& GetStatus(const Status& status) {
+  return status;
+}
 
-// Status matcher that confirms the status is okay.
-inline testing::PolymorphicMatcher<StatusIsOkMatcher> IsOk() {
-  return testing::MakePolymorphicMatcher(StatusIsOkMatcher());
+template <class T>
+const absl::Status& GetStatus(const absl::StatusOr<T>& statusor) {
+  return statusor.status();
+}
+
+}  // namespace internal
+
+MATCHER(IsOk, negation ? "is not OK" : "is OK") {
+  return internal::GetStatus(arg).ok();
 }
 
 // Convenience macros for checking that a status return type is okay.
@@ -90,94 +68,77 @@ inline testing::PolymorphicMatcher<StatusIsOkMatcher> IsOk() {
   }                                                                     \
   lhs = std::move(__ASSIGN_OR_RETURN_VAL(__LINE__)).value();
 
-namespace internal {
-
-inline const absl::Status& GetStatus(const absl::Status& status) {
-  return status;
+MATCHER_P(StatusIs, status_code,
+          absl::StrCat(negation ? "is not " : "is ",
+                       absl::StatusCodeToString(status_code))) {
+  return internal::GetStatus(arg).code() == status_code;
 }
 
-template <typename T>
-const absl::Status& GetStatus(const absl::StatusOr<T>& status) {
-  return status.status();
+MATCHER_P2(StatusIs, status_code, message_matcher,
+           absl::StrFormat("is %s%s, %s has a status message that %s",
+                           negation ? "not " : "",
+                           absl::StatusCodeToString(status_code),
+                           negation ? "or" : "and",
+                           testing::DescribeMatcher<const std::string&>(
+                               message_matcher, negation))) {
+  const absl::Status& status = internal::GetStatus(arg);
+  return status.code() == status_code &&
+         testing::ExplainMatchResult(message_matcher, status.message(),
+                                     result_listener);
 }
 
-}  // namespace internal
-
-// Implements a status matcher interface to verify a status error code, and
-// error message if set, matches an expected value.
-//
-// Sample usage:
-//   EXPECT_THAT(MyCall(), StatusIs(absl::StatusCode::kNotFound,
-//                                  HasSubstr("message")));
-//
-// Sample output on failure:
-//   Value of: MyCall()
-//   Expected: NOT_FOUND and has substring "message"
-//     Actual: UNKNOWN: descriptive error (of type absl::lts_2020_02_25::Status)
-class StatusIsMatcher {
+template <class StatusOrT>
+class IsOkAndHoldsMatcherImpl : public testing::MatcherInterface<StatusOrT> {
  public:
-  StatusIsMatcher(const absl::StatusCode& status_code,
-                  const testing::Matcher<const std::string&>& message_matcher)
-      : status_code_(status_code), message_matcher_(message_matcher) {}
+  using T = typename std::remove_reference_t<StatusOrT>::value_type;
 
-  void DescribeTo(std::ostream* os) const {
-    *os << status_code_ << " status code where the message ";
-    message_matcher_.DescribeTo(os);
+  template <class InnerMatcher>
+  explicit IsOkAndHoldsMatcherImpl(InnerMatcher&& inner_matcher)
+      : inner_matcher_(testing::SafeMatcherCast<T>(
+            std::forward<InnerMatcher>(inner_matcher))) {}
+
+  bool MatchAndExplain(StatusOrT t,
+                       testing::MatchResultListener* listener) const override {
+    if (!t.ok()) {
+      *listener << "which has status " << t.status();
+      return false;
+    }
+    return inner_matcher_.MatchAndExplain(*t, listener);
   }
 
-  void DescribeNegationTo(std::ostream* os) const {
-    *os << "not (";
-    DescribeTo(os);
-    *os << ")";
+  void DescribeTo(std::ostream* os) const override {
+    *os << "is OK and has a value that ";
+    inner_matcher_.DescribeTo(os);
   }
-
-  template <typename StatusType>
-  bool MatchAndExplain(const StatusType& actual,
-                       testing::MatchResultListener* listener) const {
-    const absl::Status& actual_status = internal::GetStatus(actual);
-    return actual_status.code() == status_code_ &&
-           message_matcher_.MatchAndExplain(
-               std::string{actual_status.message()}, listener);
+  void DescribeNegationTo(std::ostream* os) const override {
+    *os << "is not OK or has a value that ";
+    inner_matcher_.DescribeNegationTo(os);
   }
 
  private:
-  const absl::StatusCode status_code_;
-  const testing::Matcher<const std::string&> message_matcher_;
+  testing::Matcher<T> inner_matcher_;
 };
 
-// Status matcher that checks the StatusCode for an expected value.
-inline testing::PolymorphicMatcher<StatusIsMatcher> StatusIs(
-    const absl::StatusCode& code) {
-  return testing::MakePolymorphicMatcher(StatusIsMatcher(code, testing::_));
-}
+template <class InnerMatcher>
+class IsOkAndHoldsMatcher {
+ public:
+  explicit IsOkAndHoldsMatcher(InnerMatcher&& inner_matcher)
+      : inner_matcher_(std::forward<InnerMatcher>(inner_matcher)) {}
 
-// Status matcher that checks the StatusCode and message for expected values.
-template <typename MessageMatcher>
-testing::PolymorphicMatcher<StatusIsMatcher> StatusIs(
-    const absl::StatusCode& code, const MessageMatcher& message) {
-  return testing::MakePolymorphicMatcher(
-      StatusIsMatcher(code, testing::MatcherCast<const std::string&>(message)));
-}
-
-// Implements a status_or matcher interface to verify a status_or value is
-// successfully set, and equal to an expected value.
-//
-// Sample usage:
-//   EXPECT_THAT(MyCall(), IsOkAndHolds(1));
-//
-// Sample output on failure:
-//   Value of: MyCall()
-//   Expected: is OK and holds 1
-//     Actual: OK (of type absl::StatusOr<int>)
-MATCHER_P(IsOkAndHolds, value, "") {
-  if (!arg.ok()) {
-    return false;
+  template <class StatusOrT>
+  operator testing::Matcher<StatusOrT>() const {  // NOLINT
+    return testing::Matcher<StatusOrT>(
+        new IsOkAndHoldsMatcherImpl<StatusOrT>(inner_matcher_));
   }
 
-  *result_listener << "with value: " << testing::PrintToString(*arg);
-  auto matcher = testing::MatcherCast<
-      typename std::remove_reference<decltype(arg)>::type::value_type>(value);
-  return ExplainMatchResult(matcher, arg.value(), result_listener);
+ private:
+  InnerMatcher inner_matcher_;
+};
+
+template <class InnerMatcher>
+IsOkAndHoldsMatcher<InnerMatcher> IsOkAndHolds(InnerMatcher&& inner_matcher) {
+  return IsOkAndHoldsMatcher<InnerMatcher>(
+      std::forward<InnerMatcher>(inner_matcher));
 }
 
 }  // namespace gutil

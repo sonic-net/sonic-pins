@@ -79,6 +79,7 @@ type bit<QOS_QUEUE_BITWIDTH> qos_queue_t;
 // -- Untranslated Types -------------------------------------------------------
 
 typedef bit<ROUTE_METADATA_BITWIDTH> route_metadata_t;
+typedef bit<ACL_METADATA_BITWIDTH> acl_metadata_t;
 
 // -- Meters -------------------------------------------------------------------
 
@@ -153,6 +154,7 @@ struct headers_t {
   gre_t erspan_gre;
 
   ethernet_t ethernet;
+  vlan_t vlan;
 
   // Not extracted during parsing.
   ipv6_t tunnel_encap_ipv6;
@@ -160,6 +162,11 @@ struct headers_t {
 
   ipv4_t ipv4;
   ipv6_t ipv6;
+
+  // Inner IP-in-IP headers.
+  ipv4_t inner_ipv4;
+  ipv6_t inner_ipv6;
+
   icmp_t icmp;
   tcp_t tcp;
   udp_t udp;
@@ -168,26 +175,42 @@ struct headers_t {
 
 // Header fields rewritten by the ingress pipeline. Rewrites are computed and
 // stored in this struct, but actual rewriting is dealyed until the egress
-// pipeline so that the original values aren't overridden and get be matched on.
+// pipeline so that the original values aren't overridden and can be matched on.
 struct packet_rewrites_t {
   ethernet_addr_t src_mac;
   ethernet_addr_t dst_mac;
+  vlan_id_t vlan_id;
 }
 
 // Local metadata for each packet being processed.
 struct local_metadata_t {
+  // The VLAN ID used for the packet throughout the pipeline. If the input
+  // packet has a VLAN tag, the VID from the outer VLAN tag is used
+  // (and the VLAN header gets invalidated at the beginning of the ingress
+  // pipeline). Otherwise, the ports' native VLAN ID (4095) is used.
+  // The pre-ingress stage can modify this value. The value is rewritten in
+  // router_interface table (unless VLAN rewrite is disabled). In that case,
+  // the actual rewrite takes place in the egress pipeline. This value is also
+  // used at the end of the egress pipeline to determine whether or not the
+  // packet should be VLAN tagged (if not dropped).
+  vlan_id_t vlan_id;
+  bool vlan_id_valid;  // True iff `vlan_id` is valid.
   bool admit_to_l3;
   vrf_id_t vrf_id;
   packet_rewrites_t packet_rewrites;
   bit<16> l4_src_port;
   bit<16> l4_dst_port;
   bit<WCMP_SELECTOR_INPUT_BITWIDTH> wcmp_selector_input;
-  // GRE tunnel encap related fields.
+
+  // Tunnel related fields.
+  bool apply_tunnel_decap_at_end_of_pre_ingress;
   bool apply_tunnel_encap_at_egress;
   ipv6_addr_t tunnel_encap_src_ipv6;
   ipv6_addr_t tunnel_encap_dst_ipv6;
-  // mirroring data, we can't group the into a struct, because BMv2 doesn't
-  // support passing structs in clone3.
+
+  // Mirroring related fields.
+  // We can't group them into a struct as BMv2 doesn't support passing structs
+  // into clone3.
   bool mirror_session_id_valid;
   mirror_session_id_t mirror_session_id_value;
   @field_list(PreservedFieldList.CLONE_I2E_MIRRORING)
@@ -224,6 +247,9 @@ struct local_metadata_t {
   // The following field corresponds to SAI_ROUTE_ENTRY_ATTR_META_DATA/
   // SAI_ACL_TABLE_ATTR_FIELD_ROUTE_DST_USER_META.
   route_metadata_t route_metadata;
+  // ACL metadata can be set with SAI_ACL_ACTION_TYPE_SET_ACL_META_DATA, and
+  // read from SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META.
+  acl_metadata_t acl_metadata;
   // When controller sends a packet-out packet, the packet will be submitted to
   // the ingress pipleine by default. But sometimes we want to skip the ingress
   // pipeline for packet-out, and we cannot skip using the 'exit' statement as

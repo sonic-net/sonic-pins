@@ -65,6 +65,15 @@ class IrActionDefinitionBuilder {
     return param(param_proto, format);
   }
 
+  IrActionDefinitionBuilder& unsupported() {
+    action_.set_is_unsupported(true);
+    return *this;
+  }
+  IrActionDefinitionBuilder& supported() {
+    action_.set_is_unsupported(false);
+    return *this;
+  }
+
  private:
   pdpi::IrActionDefinition action_;
 };
@@ -92,10 +101,12 @@ class IrTableDefinitionBuilder {
   }
 
   IrTableDefinitionBuilder& match_field(
-      p4::config::v1::MatchField match_field_proto, pdpi::Format format) {
+      p4::config::v1::MatchField match_field_proto, pdpi::Format format,
+      bool unsupported = false) {
     pdpi::IrMatchFieldDefinition match_field_def;
     *match_field_def.mutable_match_field() = std::move(match_field_proto);
     match_field_def.set_format(format);
+    match_field_def.set_is_unsupported(unsupported);
     (*table_.mutable_match_fields_by_id())[match_field_def.match_field().id()] =
         match_field_def;
     (*table_.mutable_match_fields_by_name())[match_field_def.match_field()
@@ -104,11 +115,12 @@ class IrTableDefinitionBuilder {
     return *this;
   }
   IrTableDefinitionBuilder& match_field(absl::string_view match_field_str,
-                                        pdpi::Format format) {
+                                        pdpi::Format format,
+                                        bool unsupported = false) {
     p4::config::v1::MatchField match_field_proto;
     google::protobuf::TextFormat::ParseFromString(std::string(match_field_str),
                                                   &match_field_proto);
-    return match_field(match_field_proto, format);
+    return match_field(match_field_proto, format, unsupported);
   }
 
   IrTableDefinitionBuilder& entry_action(
@@ -173,6 +185,14 @@ class IrTableDefinitionBuilder {
     table_.mutable_meter()->set_unit(unit);
     return *this;
   }
+  IrTableDefinitionBuilder& unsupported() {
+    table_.set_is_unsupported(true);
+    return *this;
+  }
+  IrTableDefinitionBuilder& supported() {
+    table_.set_is_unsupported(false);
+    return *this;
+  }
 
  private:
   pdpi::IrTableDefinition table_;
@@ -199,13 +219,28 @@ class IrP4InfoBuilder {
     return *this;
   }
 
+  IrP4InfoBuilder& action(pdpi::IrActionDefinition ir_action) {
+    if (ir_action.preamble().id() == 0) {
+      ir_action.mutable_preamble()->set_id(++action_id_);
+    }
+    (*p4info_.mutable_actions_by_id())[ir_action.preamble().id()] = ir_action;
+    (*p4info_.mutable_actions_by_name())[ir_action.preamble().alias()] =
+        std::move(ir_action);
+    return *this;
+  }
+
   IrP4InfoBuilder& table(const IrTableDefinitionBuilder& builder) {
     return table(builder());
+  }
+
+  IrP4InfoBuilder& action(const IrActionDefinitionBuilder& builder) {
+    return action(builder());
   }
 
  private:
   pdpi::IrP4Info p4info_;
   int table_id_ = 1;
+  int action_id_ = 1;
 };
 
 }  // namespace p4rt_app

@@ -46,9 +46,108 @@ enum Format {
 
 // Describes a match field that is being referred to from an action parameter or
 // another match field.
+// TODO: b/306016407 - Remove this message once all P4 infrastructure has been
+// moved to `IrTableReference`.
 message IrMatchFieldReference {
+  option deprecated = true;  // Use `IrTableReference` instead.
+
   string table = 1;
   string match_field = 2;
+  uint32 table_id = 3;
+  uint32 match_field_id = 4;
+}
+
+// Uniquely identifies a user-defined (not built-in) match field within the
+// context of a table.
+message IrMatchField {
+  string field_name = 1;
+  uint32 field_id = 2;
+}
+
+// Uniquely identifies a user-defined (not built-in) parameter of an action
+// within the context of a table.
+message IrActionField {
+  string action_name = 1;
+  uint32 action_id = 2;
+  string parameter_name = 3;
+  uint32 parameter_id = 4;
+}
+
+// Uniquely identifies a built-in (not user-defined) field within the
+// context of a table. Each field corresponds to a field in the P4Runtime proto
+// and has a unique string representation to be used within
+// `@refers_to`/`@referenced_by` annotations.
+enum IrBuiltInField {
+  BUILT_IN_FIELD_UNSPECIFIED = 0;
+  // Corresponds to p4::v1::MulticastGroupEntry::multicast_group_id.
+  // String representation in annotations: "multicast_group_id"
+  BUILT_IN_FIELD_MULTICAST_GROUP_ID = 1;
+  // Corresponds to p4::v1::Replica::port.
+  // String representation in annotations: "replica.port"
+  BUILT_IN_FIELD_REPLICA_PORT = 2;
+  // Corresponds to p4::v1::Replica::instance.
+  // String representation in annotations: "replica.instance"
+  BUILT_IN_FIELD_REPLICA_INSTANCE = 3;
+}
+
+// Uniquely identifies a field within the context of a table.
+message IrField {
+  oneof field {
+    IrMatchField match_field = 1;
+    IrActionField action_field = 2;
+    IrBuiltInField built_in_field = 3;
+  }
+}
+
+// Uniquely identifies a user-defined (not built-in) table in the scope of a P4
+// program.
+message IrP4Table {
+  string table_name = 1;
+  uint32 table_id = 2;
+}
+
+// Uniquely identifies a built-in (not user-defined) table in the scope of a P4
+// program. Each table corresponds to a field in the P4Runtime proto and has a
+// unique string representation to be used within `@refers_to`/`@referenced_by`
+// annotations.
+enum IrBuiltInTable {
+  BUILT_IN_TABLE_UNSPECIFIED = 0;
+  // Corresponds to p4::v1::MulticastGroupEntry
+  // String representation in annotations: "builtin::multicast_group_table"
+  BUILT_IN_TABLE_MULTICAST_GROUP_TABLE = 1;
+}
+
+// Uniquely identifies a table in the scope of a P4 program.
+message IrTable {
+  oneof table {
+    IrP4Table p4_table = 1;
+    IrBuiltInTable built_in_table = 2;
+  }
+}
+
+// Describles a reference from one table to another. References are
+// generated from @refers_to/@referenced_by annotations. There exists at most
+// one `IrTableReference` for a given ordered pair of tables.
+//
+// Semantics: For each entry in the `source_table`, there must exist an entry in
+// the `destination_table` such that for each field reference, if the `source`
+// field exists in the source entry, the `destination` field must exist with
+// the same value in the destination entry.
+message IrTableReference {
+  IrTable source_table = 1;
+  IrTable destination_table = 2;
+
+  // The set of ALL references from a field in the `source_table` to a field in
+  // the `destination_table`. Each reference is encoded In P4 via either:
+  //   (a) an `@refers_to(dst_table, dst_field)` annotation on a match or action
+  //       field of the source table,
+  //   (b) an `@referenced_by(src_table, src_field)` annotation on a match field
+  //       of the destination table.
+  repeated FieldReference field_references = 3;
+  message FieldReference {
+    IrField source = 1;
+    IrField destination = 2;
+  }
 }
 
 // Describes a match field.
@@ -59,7 +158,9 @@ message IrMatchFieldDefinition {
   // and annotations.
   Format format = 2;
   // Optional. The set of references.
-  repeated IrMatchFieldReference references = 3;
+  // TODO: b/306016407 - Remove this message once all P4 infrastructure has been
+  // moved to `IrTableReference`.
+  repeated IrMatchFieldReference references = 3 [deprecated = true];
   // True if match field has @unsupported annotation, otherwise false. Indicates
   // that the match field is not (yet) supported by the target.
   // See go/unblocking-sai-p4 for more details.
@@ -117,7 +218,11 @@ message IrTableDefinition {
   // the table is not (yet) supported by the target.
   // See go/unblocking-sai-p4 for more details.
   bool is_unsupported = 14;
-  // Next: 15
+  // `IrTableReference` where this table is the `source_table`.
+  repeated IrTableReference outgoing_references = 15;
+  // `IrTableReference` where this table is the `destination_table`.
+  repeated IrTableReference incoming_references = 16;
+  // Next: 17
 }
 
 // Describes a reference to an action (from a table).
@@ -140,7 +245,9 @@ message IrActionDefinition {
     // and annotations.
     Format format = 2;
     // Optional. The set of references.
-    repeated IrMatchFieldReference references = 3;
+    // TODO: b/306016407 - Remove this message once all P4 infrastructure has
+    // been moved to `IrTableReference`.
+    repeated IrMatchFieldReference references = 3 [deprecated = true];
   }
   // Required. From P4Info.
   p4.config.v1.Preamble preamble = 1;
@@ -173,32 +280,46 @@ message IrPacketIoMetadataDefinition {
   bool is_padding = 3;
 }
 
+// Describes a built-in table.
+message IrBuiltInTableDefinition {
+  IrBuiltInTable built_in_table = 1;
+  // `IrTableReference` where this table is the `source_table`.
+  repeated IrTableReference outgoing_references = 2;
+  // `IrTableReference` where this table is the `destination_table`.
+  repeated IrTableReference incoming_references = 3;
+}
+
 // Describes an entire P4 program.
 message IrP4Info {
   // Top-level package documentation describing the forwarding pipeline config.
   p4.config.v1.PkgInfo pkg_info = 1;
-  // Required. Maps table IDs to tables.
+  // Maps table IDs to tables.
   map<uint32, IrTableDefinition> tables_by_id = 2;
-  // Required. Maps table names to tables.
+  // Maps table names to tables.
   map<string, IrTableDefinition> tables_by_name = 3;
-  // Required. Maps action IDs to actions.
+  // Maps action IDs to actions.
   map<uint32, IrActionDefinition> actions_by_id = 4;
-  // Required. Maps action names to actions.
+  // Maps action names to actions.
   map<string, IrActionDefinition> actions_by_name = 5;
-  // Required. Maps action profile IDs to action profiles.
+  // Maps action profile IDs to action profiles.
   map<uint32, IrActionProfileDefinition> action_profiles_by_id = 11;
-  // Required. Maps action profile names to action profiles.
+  // Maps action profile names to action profiles.
   map<string, IrActionProfileDefinition> action_profiles_by_name = 12;
-  // Required. Maps packet-in metadata IDs to metadata.
+  // Maps packet-in metadata IDs to metadata.
   map<uint32, IrPacketIoMetadataDefinition> packet_in_metadata_by_id = 6;
-  // Required. Maps packet-in metadata names to metadata.
+  // Maps packet-in metadata names to metadata.
   map<string, IrPacketIoMetadataDefinition> packet_in_metadata_by_name = 7;
-  // Required. Maps packet-out metadata IDs to metadata.
+  // Maps packet-out metadata IDs to metadata.
   map<uint32, IrPacketIoMetadataDefinition> packet_out_metadata_by_id = 8;
-  // Required. Maps packet-out metadata names to metadata.
+  // Maps packet-out metadata names to metadata.
   map<string, IrPacketIoMetadataDefinition> packet_out_metadata_by_name = 9;
   // All match field references.
-  repeated IrMatchFieldReference references = 10;
+  // TODO: b/306016407 - Remove this message once all P4 infrastructure has been
+  // moved to `IrTableReference`.
+  repeated IrMatchFieldReference references = 10 [deprecated = true];
+  // Maps built-in table name to definitions. Refer to `IrBuiltInTable` for
+  // valid built-in table names.
+  map<string, IrBuiltInTableDefinition> built_in_tables = 13;
 }
 
 // -- Table entries ------------------------------------------------------------
@@ -303,6 +424,26 @@ message IrTableEntries {
   repeated IrTableEntry entries = 1;
 }
 
+//-- Packet Replication Engine -------------------------------------------------
+
+// Describes a PacketReplicationEngine (PRE) entry. Currently, the only
+// supported PRE entry is multicast group entry.
+message IrPacketReplicationEngineEntry {
+  oneof type {
+    IrMulticastGroupEntry multicast_group_entry = 1;
+  }
+}
+
+message IrReplica {
+  string port = 1;
+  uint32 instance = 2;
+}
+
+message IrMulticastGroupEntry {
+  uint32 multicast_group_id = 1;
+  repeated IrReplica replicas = 2;
+}
+
 // -- Packet IO ----------------------------------------------------------------
 
 // Describes a packet in.
@@ -324,12 +465,25 @@ message IrPacketMetadata {
 
 // -- RPC messages -------------------------------------------------------------
 
+// Describes an entity within an Update.
+message IrEntity {
+  oneof entity {
+    IrTableEntry table_entry = 1;
+    IrPacketReplicationEngineEntry packet_replication_engine_entry = 2;
+  }
+}
+
+// Describes a list of entities.
+message IrEntities {
+  repeated IrEntity entities = 1;
+}
+
 // Describes an update in a Write RPC request.
 message IrUpdate {
   // Required.
   p4.v1.Update.Type type = 1;
   // Required.
-  IrTableEntry table_entry = 2;
+  IrEntity entity = 2;
 }
 
 // Describes a Write RPC request.
@@ -377,7 +531,7 @@ message IrReadRequest {
 // A read request response.
 message IrReadResponse {
   // The table entries read by the switch.
-  repeated IrTableEntry table_entries = 1;
+  repeated IrEntity entities = 1;
 }
 
 // A stream message request

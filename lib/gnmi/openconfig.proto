@@ -1,0 +1,223 @@
+// This file contains proto definitions mirroring OpenConfig YANG models,
+// allowing us to parse JSON values following these YANG models automatically
+// using proto2's json_util.
+//
+// We only model the fields we're interested in, since we can ignore other
+// fields during parsing using json_util's `ignore_unknown_fields` option.
+//
+// This file also contains proto messages that do not mirror YANG models
+// directly, but are more convenient representations, e.g. for diffing.
+
+syntax = "proto3";
+
+package pins_test.openconfig;
+
+// -- Proto messages mirroring YANG models -------------------------------------
+
+// Mirrors the root of the config tree.
+message Config {
+  Interfaces interfaces = 1 [json_name = "openconfig-interfaces:interfaces"];
+  Qos qos = 3 [json_name = "openconfig-qos:qos"];
+}
+
+// Mirrors `container interfaces` in `openconfig-interfaces.yang`.
+message Interfaces {
+  repeated Interface interfaces = 1 [json_name = "interface"];
+
+  // Mirrors `interfaces/interface` in `openconfig-interfaces.yang`.
+  message Interface {
+    string name = 1;
+    Config config = 2;
+    Config state = 4;
+    Subinterfaces subinterfaces = 3;
+    Ethernet ethernet = 5 [json_name = "openconfig-if-ethernet:ethernet"];
+
+    message Config {
+      optional string name = 1;
+      optional string type = 2;
+      optional bool enabled = 3;
+      optional uint32 p4rt_id = 4 [json_name = "openconfig-p4rt:id"];
+      optional string ecmp_hash_algorithm = 5
+          [json_name = "google-pins-interfaces:ecmp-hash-algorithm"];
+      optional uint32 ecmp_hash_offset = 6
+          [json_name = "google-pins-interfaces:ecmp-hash-offset"];
+      optional bool cpu = 7;
+      optional bool management = 8;
+      // State subtree only
+      optional string oper_status = 9 [json_name = "oper-status"];
+    }
+  }
+}
+
+// Mirrors `container subinterfaces` in `openconfig-interfaces.yang`.
+message Subinterfaces {
+  repeated Subinterface subinterfaces = 1 [json_name = "subinterface"];
+
+  // Mirrors `subinterfaces/subinterface` in `openconfig-interfaces.yang`.
+  message Subinterface {
+    Ip ipv4 = 1 [json_name = "openconfig-if-ip:ipv4"];
+    Ip ipv6 = 2 [json_name = "openconfig-if-ip:ipv6"];
+
+    message Ip {
+      Addresses addresses = 1;
+    }
+  }
+}
+
+// Mirrors `container ethernet` in `openconfig-interfaces.yang`.
+message Ethernet {
+  message Config {
+    optional string aggregate_id = 1
+        [json_name = "openconfig-if-aggregate:aggregate-id"];
+  }
+
+  Config config = 1;
+  Config state = 2;
+}
+
+// Mirror `container addresses` in `openconfig-if-ip.yang`
+message Addresses {
+  repeated Address addresses = 1 [json_name = "address"];
+
+  message Address {
+    string ip = 1;
+  }
+}
+
+// Mirrors `container queues` in `openconfig-qos-elements.yang`.
+message Queues {
+  repeated Queue queues = 1 [json_name = "queue"];
+
+  // Mirrors `queues/queue` in `openconfig-qos-elements.yang`.
+  message Queue {
+    string name = 1;
+    State state = 2;
+
+    // Mirrors `queues/queue/state` in `openconfig-qos-elements.yang`.
+    message State {
+      string dropped_pkts = 1 [json_name = "dropped-pkts"];
+      string transmit_pkts = 2 [json_name = "transmit-pkts"];
+    }
+  }
+}
+
+// Mirrors `openconfig-qos:qos`.
+// All leaves are `optional`, since JSON differentiates between absence vs
+// precense with default value.
+message Qos {
+  SchedulerPolicies scheduler_policies = 5 [json_name = "scheduler-policies"];
+
+  message SchedulerPolicies {
+    repeated SchedulerPolicy scheduler_policy = 1
+        [json_name = "scheduler-policy"];
+  }
+  message SchedulerPolicy {
+    optional string name = 1;  // List key.
+    Schedulers schedulers = 2;
+  }
+  message Schedulers {
+    repeated Scheduler scheduler = 1;
+  }
+  message Scheduler {
+    optional uint32 sequence = 1;  // List key.
+    Config config = 2;
+    Config state = 3;
+    Inputs inputs = 4;
+    TwoRateThreeColor two_rate_three_color = 5
+        [json_name = "two-rate-three-color"];
+
+    message Config {
+      optional string priority = 1;
+      optional uint32 sequence = 2;
+      optional string type = 3;
+    }
+    message Inputs {
+      repeated Input input = 1;
+    }
+    message Input {
+      optional string id = 1;  // List key.
+      Config config = 2;
+      Config state = 3;
+
+      message Config {
+        optional string id = 1;
+        optional string input_type = 2 [json_name = "input-type"];
+        optional string queue = 3;
+        optional string weight = 4;  // uint64
+      }
+    }
+    message TwoRateThreeColor {
+      Config config = 1;
+      Config state = 2;
+
+      message Config {
+        optional string cir = 1;  // uint64
+        optional string pir = 2;  // uint64
+        optional uint32 bc = 3;   // uint32
+        optional uint32 be = 4;   // uint32
+      }
+    }
+  }
+  BufferAllocationProfiles buffer_allocation_profiles = 6
+      [json_name = "buffer-allocation-profiles"];
+
+  message BufferAllocationProfiles {
+    repeated BufferAllocationProfile buffer_allocation_profile = 1
+        [json_name = "buffer-allocation-profile"];
+  }
+  message BufferAllocationProfile {
+    optional string name = 1;  // List key.
+    Queues queues = 2;
+    Config config = 3;
+    message Config {
+      optional string name = 1;
+    }
+  }
+  message Queues {
+    repeated Queue queue = 1;
+  }
+  message Queue {
+    optional string name = 1;  // List key.
+    Config config = 2;
+    Config state = 3;
+
+    message Config {
+      optional string name = 1;
+      optional string dedicated_buffer = 2 [json_name = "dedicated-buffer"];
+      optional bool use_shared_buffer = 3 [json_name = "use-shared-buffer"];
+      optional string shared_buffer_limit_type = 4
+          [json_name = "shared-buffer-limit-type"];
+      optional uint32 static_shared_buffer_limit = 5
+          [json_name = "static-shared-buffer-limit"];
+      optional int32 dynamic_limit_scaling_factor = 6
+          [json_name = "dynamic-limit-scaling-factor"];
+    }
+  }
+
+  Interfaces interfaces = 7;
+  message Interfaces {
+    repeated Interface interface = 1;
+  }
+  message Interface {
+    optional string interface_id = 1 [json_name = "interface-id"];
+    optional Config config = 2;
+    message Config {
+      optional string interface_id = 1 [json_name = "interface-id"];
+    }
+    optional Output output = 3 [json_name = "output"];
+    message Output {
+      optional Config config = 1 [json_name = "config"];
+      message Config {
+        optional string buffer_allocation_profile = 1
+            [json_name = "buffer-allocation-profile"];
+      }
+    }
+  }
+}
+
+// -- Proto messages defined for convenience -----------------------------------
+
+// Equivalent to `Queues`, but results in more readable diffs.
+message QueuesByName {
+  map<string, Queues.Queue.State> queues = 1;
+}
