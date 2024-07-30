@@ -217,6 +217,33 @@ absl::StatusOr<StringMap> FlattenJsonToMap(
   return flattened_json;
 }
 
+absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
+                                  const nlohmann::json& target,
+                                  const StringMap& yang_path_key_name_map,
+                                  std::vector<std::string>& differences) {
+  ASSIGN_OR_RETURN(auto flat_source,
+                   FlattenJsonToMap(source, yang_path_key_name_map));
+  ASSIGN_OR_RETURN(auto flat_target,
+                   FlattenJsonToMap(target, yang_path_key_name_map));
+
+  // Iterate over all the paths in source and compare to the paths in target.
+  bool is_subset = true;
+  for (const auto& [source_path, source_value] : flat_source) {
+    auto target_iter = flat_target.find(source_path);
+    if (target_iter == flat_target.end()) {
+      differences.push_back(absl::StrCat("Missing: [", source_path,
+                                         "] with value '", source_value, "'."));
+      is_subset = false;
+    } else if (source_value != target_iter->second) {
+      differences.push_back(absl::StrCat("Mismatch: [", source_path, "]: '",
+                                         source_value, "' != '",
+                                         target_iter->second, "'"));
+      is_subset = false;
+    }
+  }
+  return is_subset;
+}
+
 }  // namespace json_yang
 
 namespace pins_test {

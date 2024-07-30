@@ -113,6 +113,19 @@ absl::StatusOr<absl::flat_hash_map<std::string, std::string>> FlattenJsonToMap(
     const absl::flat_hash_map<std::string, std::string>&
         yang_path_key_name_map);
 
+// Returns true if all yang leaf nodes in 'source' are present in 'target' with
+// the same values or false otherwise.
+// - Returns an error if the source/target cannot be parsed into JSON values.
+// - Populates the yang paths missing or have mismatched values wtih 'target' in
+//   'differences'.
+// - Object/Array members can be in any order.
+// - Flattens the JSON values using the map of yang list paths to the name of
+//   the leaf that's defined as the key.
+absl::StatusOr<bool> IsJsonSubset(
+    const nlohmann::json& source, const nlohmann::json& target,
+    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    std::vector<std::string>& differences);
+
 }  // namespace json_yang
 
 #endif  // PLATFORMS_NETWORKING_PINS_CONFIG_UTILS_JSON_UTILS_H_
