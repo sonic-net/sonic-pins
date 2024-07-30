@@ -15,8 +15,14 @@
 #ifndef PINS_LIB_UTILS_JSON_UTILS_H_
 #define PINS_LIB_UTILS_JSON_UTILS_H_
 
+#include <string>
+#include <vector>
+
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "include/json/value.h"
+#include "include/nlohmann/json.hpp"
 
 namespace pins_test {
 
@@ -63,4 +69,63 @@ bool JsonValueIsEqual(const Json::Value& value1, const Json::Value& value2);
 
 }  // namespace pins_test
 
-#endif  // PINS_LIB_UTILS_JSON_UTILS_H_
+namespace json_yang {
+// Helper functions to manipulate JSON that encode data modeled with YANG.
+// See http://datatracker.ietf.org/doc/html/rfc7159 for JSON.
+// See http://datatracker.ietf.org/doc/html/rfc7950 for YANG modeling language.
+// See http://datatracker.ietf.org/doc/html/rfc7951 for JSON encoding of YANG.
+
+// Returns a JSON value from the input JSON string that contains data modeled
+// with YANG.
+// - Returns a null JSON value if the input is an empty string.
+// - Returns an invalid argument error if the input could not be parsed.
+absl::StatusOr<nlohmann::json> ParseJson(absl::string_view json_str);
+
+// Returns a pretty-printed JSON string from the JSON value.
+// - Returns an empty string if the JSON value is null.
+// - Replaces invalid UTF-8 sequences with U+FFFD.
+std::string DumpJson(const nlohmann::json& value);
+
+// Returns a JSON value by recursively replacing the names of name/value pairs
+// in JSON objects using the mapping specified in the old to new names map.
+//   - If source already contains the new name then it may be overwritten.
+//   - The output is undefined if the map of name replacements maps several old
+//     names to the same new name.
+nlohmann::json ReplaceNamesinJsonObject(
+    const nlohmann::json& source,
+    const absl::flat_hash_map<std::string, std::string>&
+        old_name_to_new_name_map);
+
+// Returns a map of flattened paths to leaves in the JSON encoded YANG modeled
+// data to string values from the input JSON value using the map of yang paths
+// (representing array-link containers) to the leaf that is defined as the key
+// for the elements in the array in the yang model.
+//
+// A list data node in YANG is represented as an array in JSON. The YANG model
+// is required to define one or more leaf data nodes as keys that uniquely
+// identify the elements in the list. (see rfc7950#section-7.8.2).
+//
+//  - yang_path_key_name_map contains a map of yang list paths to the name of
+//    the leaf that's defined as the key for that list (currently only supports
+//    one key).
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>> FlattenJsonToMap(
+    const nlohmann::json& root,
+    const absl::flat_hash_map<std::string, std::string>&
+        yang_path_key_name_map);
+
+// Returns true if all yang leaf nodes in 'source' are present in 'target' with
+// the same values or false otherwise.
+// - Returns an error if the source/target cannot be parsed into JSON values.
+// - Populates the yang paths missing or have mismatched values wtih 'target' in
+//   'differences'.
+// - Object/Array members can be in any order.
+// - Flattens the JSON values using the map of yang list paths to the name of
+//   the leaf that's defined as the key.
+absl::StatusOr<bool> IsJsonSubset(
+    const nlohmann::json& source, const nlohmann::json& target,
+    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    std::vector<std::string>& differences);
+
+}  // namespace json_yang
+
+#endif  // PLATFORMS_NETWORKING_PINS_CONFIG_UTILS_JSON_UTILS_H_
