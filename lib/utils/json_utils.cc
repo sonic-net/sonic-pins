@@ -19,13 +19,139 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
+#include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
 
 namespace json_yang {
+
+namespace {
+
+using StringMap = absl::flat_hash_map<std::string, std::string>;
+
+// Helper function to return the simple JSON value (number, boolean, string).
+// - returns an empty string if not a simple JSON value (object, array, null).
+std::string GetSimpleJsonValue(const nlohmann::json& source) {
+  switch (source.type()) {
+    case nlohmann::json::value_t::number_integer:
+      return absl::StrCat(source.get<int>());
+    case nlohmann::json::value_t::number_unsigned:
+      return absl::StrCat(source.get<uint>());
+    case nlohmann::json::value_t::number_float:
+      return absl::StrCat(source.get<float>());
+    case nlohmann::json::value_t::string:
+      return source.get<std::string>();
+    case nlohmann::json::value_t::boolean:
+      return source.get<bool>() ? "true" : "false";
+    default:
+      return "";
+  }
+}
+
+// Helper function to perform flattening recursively.
+//
+// A list data node in YANG is represented as an array in JSON. The YANG model
+// is required to define one or more leaf data nodes as keys that uniquely
+// identify the elements in the list. (see rfc7950#section-7.8.2).
+//
+//  - path contains the currently traversed JSON value and includes the
+//    key/value pairs for array elements. This is used in the output map.
+//    e. g. /outer_element/array_container/array_element[key='value']/leaf
+//  - path_without_keys contains the currently traversed JSON value without
+//    key/value pairs for array elements. This is used to look up key leaves.
+//    e. g. /outer_element/array_container/array_element/leaf
+//  - yang_path_key_name_map contains a map of yang list paths to the name of
+//    the leaf that's defined as the key for that list (currently only supports
+//    one key).
+absl::Status FlattenJson(const absl::string_view path,
+                         const absl::string_view path_without_keys,
+                         const nlohmann::json& source,
+                         const StringMap& yang_path_key_name_map,
+                         StringMap& flattened_map) {
+  switch (source.type()) {
+    case nlohmann::json::value_t::object: {
+      // Traverse recursively through all the members of the object type after
+      // adding the path element to the path.
+      for (const auto& [name, value] : source.items()) {
+        const std::string member_path = absl::StrCat(path, "/", name);
+        const std::string member_path_without_keys =
+            absl::StrCat(path_without_keys, "/", name);
+        RETURN_IF_ERROR(FlattenJson(member_path, member_path_without_keys,
+                                    value, yang_path_key_name_map,
+                                    flattened_map));
+      }
+      break;
+    }
+    case nlohmann::json::value_t::array: {
+      // Find the name of the leaf that is considered the key for the elements
+      // in the array.
+      auto key_name_iter = yang_path_key_name_map.find(path_without_keys);
+      if (key_name_iter == yang_path_key_name_map.end()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("No key found for path [", path_without_keys,
+                         "] while parsing path [", path, "]."));
+      }
+      const std::string& key_name = key_name_iter->second;
+
+      // Find the value of the key leaf for each element in the array to
+      // construct the path element.
+      for (int i = 0; i < source.size(); ++i) {
+        if (!source[i].contains(key_name)) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "No key leaf '", key_name, "' found for array element ", i,
+              " under path: [", path, "]."));
+        }
+        std::string key_value;
+        switch (source[i][key_name].type()) {
+          case nlohmann::json::value_t::number_integer:
+          case nlohmann::json::value_t::number_unsigned:
+          case nlohmann::json::value_t::number_float:
+          case nlohmann::json::value_t::string:
+          case nlohmann::json::value_t::boolean:
+            key_value = GetSimpleJsonValue(source[i][key_name]);
+            break;
+          default:
+            // This is an error case. The key leaf must be a simple value.
+            return absl::InvalidArgumentError(absl::StrCat(
+                "Invalid type '", source[i][key_name].type_name(),
+                "' for key leaf '", key_name, "' for array element ", i,
+                " under path [", path,
+                "]. Expected: integer, unsigned, float, string, bool."));
+            break;
+        }
+        const std::string member_path =
+            absl::StrCat(path, "[", key_name, "='", key_value, "']");
+        // Traverse each array element recursively after adding the path element
+        // to the path.
+        RETURN_IF_ERROR(FlattenJson(member_path, path_without_keys, source[i],
+                                    yang_path_key_name_map, flattened_map));
+      }
+      break;
+    }
+    case nlohmann::json::value_t::number_integer:
+    case nlohmann::json::value_t::number_unsigned:
+    case nlohmann::json::value_t::number_float:
+    case nlohmann::json::value_t::string:
+    case nlohmann::json::value_t::boolean:
+      flattened_map[path] = GetSimpleJsonValue(source);
+      break;
+    case nlohmann::json::value_t::null:
+      // No yang path.
+      break;
+    default:
+      return absl::InvalidArgumentError(
+          absl::StrCat("Invalid json type '", source.type_name(),
+                       "' for path: [", path, "]."));
+  }
+  return absl::OkStatus();
+}
+
+}  // namespace
 
 absl::StatusOr<nlohmann::json> ParseJson(absl::string_view json_str) {
   // Return a null json if the input is an empty string.
@@ -81,6 +207,14 @@ nlohmann::json ReplaceNamesinJsonObject(
       // Leaf value or null. Nothing to replace.
       return source;
   }
+}
+
+absl::StatusOr<StringMap> FlattenJsonToMap(
+    const nlohmann::json& root, const StringMap& yang_path_key_name_map) {
+  StringMap flattened_json;
+  RETURN_IF_ERROR(
+      FlattenJson("", "", root, yang_path_key_name_map, flattened_json));
+  return flattened_json;
 }
 
 }  // namespace json_yang
