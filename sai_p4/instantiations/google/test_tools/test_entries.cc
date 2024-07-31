@@ -855,4 +855,33 @@ EntryBuilder& EntryBuilder::AddMarkToMirrorAclEntry(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddVlanEntry(absl::string_view vlan_id_hexstr) {
+  sai::TableEntry pd_entry;
+  sai::VlanTableEntry& vlan_entry = *pd_entry.mutable_vlan_table_entry();
+  vlan_entry.mutable_match()->set_vlan_id(vlan_id_hexstr);
+  vlan_entry.mutable_action()->mutable_no_action();
+  *entries_.add_entries() = std::move(pd_entry);
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddVlanMembershipEntry(
+    absl::string_view vlan_id_hexstr, absl::string_view port,
+    VlanTaggingMode tagging_mode) {
+  sai::TableEntry pd_entry;
+  sai::VlanMembershipTableEntry& vlan_membership_entry =
+      *pd_entry.mutable_vlan_membership_table_entry();
+  vlan_membership_entry.mutable_match()->set_vlan_id(vlan_id_hexstr);
+  vlan_membership_entry.mutable_match()->set_port(port);
+  switch (tagging_mode) {
+    case VlanTaggingMode::kTagged:
+      vlan_membership_entry.mutable_action()->mutable_make_tagged_member();
+      break;
+    case VlanTaggingMode::kUntagged:
+      vlan_membership_entry.mutable_action()->mutable_make_untagged_member();
+      break;
+  }
+  *entries_.add_entries() = std::move(pd_entry);
+  return *this;
+}
+
 }  // namespace sai

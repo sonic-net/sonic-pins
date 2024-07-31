@@ -159,6 +159,12 @@ struct MirrorAndRedirectMatchFields {
   std::optional<sai::P4RuntimeTernary<netaddr::Ipv6Address>> dst_ipv6;
 };
 
+// Tagging mode for VLAN membership entries.
+enum class VlanTaggingMode {
+  kTagged,
+  kUntagged,
+};
+
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
 //
@@ -339,7 +345,11 @@ public:
   EntryBuilder& AddIpv6TunnelTerminationEntry(
       const Ipv6TunnelTerminationParams& params);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
-  EntryBuilder &AddMarkToMirrorAclEntry(const MarkToMirrorParams &params);
+  EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
+  EntryBuilder& AddVlanEntry(absl::string_view vlan_id_hexstr);
+  EntryBuilder& AddVlanMembershipEntry(absl::string_view vlan_id_hexstr,
+                                       absl::string_view port,
+                                       VlanTaggingMode tagging_mode);
 
 private:
   sai::TableEntries entries_;
