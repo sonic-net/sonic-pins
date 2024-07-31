@@ -313,6 +313,54 @@ absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
   return is_subset;
 }
 
+absl::StatusOr<bool> AreJsonEqual(
+    const nlohmann::json& lhs, const nlohmann::json& rhs,
+    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    std::vector<std::string>& differences) {
+  // Create a flattened map of the lhs.
+  ASSIGN_OR_RETURN(const StringMap& flat_lhs,
+                   FlattenJsonToMap(lhs, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
+
+  // Create a flattened map of the rhs.
+  ASSIGN_OR_RETURN(const StringMap& flat_rhs,
+                   FlattenJsonToMap(rhs, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
+
+  // Create a union of the paths from both lhs and rhs.
+  absl::flat_hash_set<std::string> all_paths;
+  for (const auto& [path, _] : flat_lhs) all_paths.insert(path);
+  for (const auto& [path, _] : flat_rhs) all_paths.insert(path);
+
+  // Iterate over all the paths and compare to the paths in lhs and rhs.
+  bool are_equal = true;
+  for (const auto& path : all_paths) {
+    auto lhs_iter = flat_lhs.find(path);
+    auto rhs_iter = flat_rhs.find(path);
+
+    if (lhs_iter != flat_lhs.end() && rhs_iter != flat_rhs.end()) {
+      // The path exists in both. Compare the values.
+      if (lhs_iter->second != rhs_iter->second) {
+        differences.push_back(absl::StrCat("Mismatch: [", path, "]: '",
+                                           lhs_iter->second, "' != '",
+                                           rhs_iter->second, "'"));
+        are_equal = false;
+      }
+    } else if (rhs_iter == flat_rhs.end()) {
+      // Exists in lhs but not rhs.
+      differences.push_back(absl::StrCat(
+          "Missing rhs: [", path, "] with value '", lhs_iter->second, "'."));
+      are_equal = false;
+    } else {
+      // Exists in rhs but not lhs.
+      differences.push_back(absl::StrCat(
+          "Missing lhs: [", path, "] with value '", rhs_iter->second, "'."));
+      are_equal = false;
+    }
+  }
+  return are_equal;
+}
+
 }  // namespace json_yang
 
 namespace pins_test {
