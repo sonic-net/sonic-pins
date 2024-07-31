@@ -757,5 +757,65 @@ TEST(EntryBuilder, AddIngressAclEntryRedirectingToMulticastGroupAddsEntry) {
       )pb"))));
 }
 
+TEST(EntryBuilder, AddVlanEntryAddsCorrectEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder().AddVlanEntry("0x00a").LogPdEntries().GetDedupedIrEntities(
+          kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), ElementsAre((EqualsProto(R"pb(
+                table_entry {
+                  table_name: "vlan_table"
+                  matches {
+                    name: "vlan_id"
+                    exact { hex_str: "0x00a" }
+                  }
+                  action { name: "no_action" }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddVlanMembershipEntryAddsCorrectEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddVlanMembershipEntry(/*vlan_id_hexstr=*/"0x00a", /*port=*/"1",
+                                  VlanTaggingMode::kTagged)
+          .AddVlanMembershipEntry(/*vlan_id_hexstr=*/"0x00b", /*port=*/"2",
+                                  VlanTaggingMode::kUntagged)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(),
+              UnorderedElementsAre(EqualsProto(R"pb(
+                                     table_entry {
+                                       table_name: "vlan_membership_table"
+                                       matches {
+                                         name: "vlan_id"
+                                         exact { hex_str: "0x00a" }
+                                       }
+                                       matches {
+                                         name: "port"
+                                         exact { str: "1" }
+                                       }
+                                       action { name: "make_tagged_member" }
+                                     }
+                                   )pb"),
+                                   EqualsProto(R"pb(
+                                     table_entry {
+                                       table_name: "vlan_membership_table"
+                                       matches {
+                                         name: "vlan_id"
+                                         exact { hex_str: "0x00b" }
+                                       }
+                                       matches {
+                                         name: "port"
+                                         exact { str: "2" }
+                                       }
+                                       action { name: "make_untagged_member" }
+                                     }
+                                   )pb")));
+}
+
 }  // namespace
 }  // namespace sai
