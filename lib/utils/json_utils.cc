@@ -72,6 +72,7 @@ absl::Status FlattenJson(const absl::string_view path,
                          const absl::string_view path_without_keys,
                          const nlohmann::json& source,
                          const StringMap& yang_path_key_name_map,
+                         bool ignore_unknown_key_paths,
                          StringMap& flattened_map) {
   switch (source.type()) {
     case nlohmann::json::value_t::object: {
@@ -83,7 +84,7 @@ absl::Status FlattenJson(const absl::string_view path,
             absl::StrCat(path_without_keys, "/", name);
         RETURN_IF_ERROR(FlattenJson(member_path, member_path_without_keys,
                                     value, yang_path_key_name_map,
-                                    flattened_map));
+                                    ignore_unknown_key_paths, flattened_map));
       }
       break;
     }
@@ -92,6 +93,11 @@ absl::Status FlattenJson(const absl::string_view path,
       // in the array.
       auto key_name_iter = yang_path_key_name_map.find(path_without_keys);
       if (key_name_iter == yang_path_key_name_map.end()) {
+        if (ignore_unknown_key_paths) {
+          // Ignore this array. The array elements will not be in the flattened
+          // map.
+          return absl::OkStatus();
+        }
         return absl::InvalidArgumentError(
             absl::StrCat("No key found for path [", path_without_keys,
                          "] while parsing path [", path, "]."));
@@ -153,7 +159,8 @@ absl::Status FlattenJson(const absl::string_view path,
         // Traverse each array element recursively after adding the path element
         // to the path.
         RETURN_IF_ERROR(FlattenJson(member_path, path_without_keys, source[i],
-                                    yang_path_key_name_map, flattened_map));
+                                    yang_path_key_name_map,
+                                    ignore_unknown_key_paths, flattened_map));
       }
       break;
     }
@@ -181,13 +188,16 @@ absl::StatusOr<nlohmann::json> ParseJson(absl::string_view json_str) {
   // Return a null json if the input is an empty string.
   if (json_str.empty()) return nlohmann::json(nullptr);
 
-  try {
-    return nlohmann::json::parse(std::string(json_str), /*cb =*/nullptr,
-                                 /*allow_exceptions =*/true);
-  } catch (const nlohmann::json::parse_error& e) {
+  // TODO: Enable exception after we find out why test crashes instead of
+  // catching the error.
+  nlohmann::json json =
+      nlohmann::json::parse(std::string(json_str), /*cb =*/nullptr,
+                            /*allow_exceptions =*/false);
+  if (json.is_discarded()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("json parse error: ", e.what()));
+        absl::StrCat("json parse error. Json value is:\n", json_str));
   }
+  return json;
 }
 
 std::string DumpJson(const nlohmann::json& value) {
@@ -200,9 +210,7 @@ std::string DumpJson(const nlohmann::json& value) {
 }
 
 nlohmann::json ReplaceNamesinJsonObject(
-    const nlohmann::json& source,
-    const absl::flat_hash_map<std::string, std::string>&
-        old_name_to_new_name_map) {
+    const nlohmann::json& source, const StringMap& old_name_to_new_name_map) {
   switch (source.type()) {
     case nlohmann::json::value_t::object: {
       nlohmann::json target(nlohmann::json::value_t::object);
@@ -233,11 +241,46 @@ nlohmann::json ReplaceNamesinJsonObject(
   }
 }
 
+void ReplaceNamesinJsonObject(const StringMap& old_name_to_new_name_map,
+                              nlohmann::json& root) {
+  switch (root.type()) {
+    case nlohmann::json::value_t::object: {
+      for (const auto& [old_name, new_name] : old_name_to_new_name_map) {
+        if (!root.contains(old_name)) continue;
+
+        // Create an empty JSON with the new name (erases any existing value).
+        root[new_name] = nlohmann::json(nlohmann::json::value_t::null);
+        // Swap with JSON values between the old and new names.
+        root[old_name].swap(root[new_name]);
+        // Erase the old name.
+        root.erase(old_name);
+      }
+      for (auto& [_, value] : root.items()) {
+        // Traverse through all the members recursively.
+        ReplaceNamesinJsonObject(old_name_to_new_name_map, value);
+      }
+      break;
+    }
+    case nlohmann::json::value_t::array: {
+      nlohmann::json target(nlohmann::json::value_t::array);
+      for (int i = 0; i < root.size(); ++i) {
+        // Traverse through all array elements recursively.
+        ReplaceNamesinJsonObject(old_name_to_new_name_map, root[i]);
+      }
+      break;
+    }
+    default:
+      // Primitive value or null. Nothing to replace.
+      break;
+  }
+}
+
 absl::StatusOr<StringMap> FlattenJsonToMap(
-    const nlohmann::json& root, const StringMap& yang_path_key_name_map) {
+    const nlohmann::json& root, const StringMap& yang_path_key_name_map,
+    bool ignore_unknown_key_paths) {
   StringMap flattened_json;
-  RETURN_IF_ERROR(
-      FlattenJson("", "", root, yang_path_key_name_map, flattened_json));
+  RETURN_IF_ERROR(FlattenJson("", "", root, yang_path_key_name_map,
+                              ignore_unknown_key_paths, flattened_json));
   return flattened_json;
 }
 
@@ -246,9 +289,11 @@ absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
                                   const StringMap& yang_path_key_name_map,
                                   std::vector<std::string>& differences) {
   ASSIGN_OR_RETURN(auto flat_source,
-                   FlattenJsonToMap(source, yang_path_key_name_map));
+                   FlattenJsonToMap(source, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
   ASSIGN_OR_RETURN(auto flat_target,
-                   FlattenJsonToMap(target, yang_path_key_name_map));
+                   FlattenJsonToMap(target, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
 
   // Iterate over all the paths in source and compare to the paths in target.
   bool is_subset = true;
@@ -266,6 +311,54 @@ absl::StatusOr<bool> IsJsonSubset(const nlohmann::json& source,
     }
   }
   return is_subset;
+}
+
+absl::StatusOr<bool> AreJsonEqual(
+    const nlohmann::json& lhs, const nlohmann::json& rhs,
+    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    std::vector<std::string>& differences) {
+  // Create a flattened map of the lhs.
+  ASSIGN_OR_RETURN(const StringMap& flat_lhs,
+                   FlattenJsonToMap(lhs, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
+
+  // Create a flattened map of the rhs.
+  ASSIGN_OR_RETURN(const StringMap& flat_rhs,
+                   FlattenJsonToMap(rhs, yang_path_key_name_map,
+                                    /*ignore_unknown_key_paths=*/false));
+
+  // Create a union of the paths from both lhs and rhs.
+  absl::flat_hash_set<std::string> all_paths;
+  for (const auto& [path, _] : flat_lhs) all_paths.insert(path);
+  for (const auto& [path, _] : flat_rhs) all_paths.insert(path);
+
+  // Iterate over all the paths and compare to the paths in lhs and rhs.
+  bool are_equal = true;
+  for (const auto& path : all_paths) {
+    auto lhs_iter = flat_lhs.find(path);
+    auto rhs_iter = flat_rhs.find(path);
+
+    if (lhs_iter != flat_lhs.end() && rhs_iter != flat_rhs.end()) {
+      // The path exists in both. Compare the values.
+      if (lhs_iter->second != rhs_iter->second) {
+        differences.push_back(absl::StrCat("Mismatch: [", path, "]: '",
+                                           lhs_iter->second, "' != '",
+                                           rhs_iter->second, "'"));
+        are_equal = false;
+      }
+    } else if (rhs_iter == flat_rhs.end()) {
+      // Exists in lhs but not rhs.
+      differences.push_back(absl::StrCat(
+          "Missing rhs: [", path, "] with value '", lhs_iter->second, "'."));
+      are_equal = false;
+    } else {
+      // Exists in rhs but not lhs.
+      differences.push_back(absl::StrCat(
+          "Missing lhs: [", path, "] with value '", rhs_iter->second, "'."));
+      are_equal = false;
+    }
+  }
+  return are_equal;
 }
 
 }  // namespace json_yang

@@ -596,7 +596,7 @@ TEST(ReplaceNamesinJsonObject, TestReplacementEmptyJson) {
   EXPECT_EQ(ReplaceNamesinJsonObject(example_json, StringMap{}), example_json);
 }
 
-TEST(ReplaceJsonPathElements, TestReplacementEmptyNamesMap) {
+TEST(ReplaceNamesinJsonObject, TestReplacementEmptyNamesMap) {
   constexpr char kExampleJson[] = R"({
     "outer_element" : {
       "container1" : [
@@ -725,6 +725,144 @@ TEST(ReplaceNamesinJsonObject, TestReplacementNamesReplaced) {
             expected_json);
 }
 
+TEST(ReplaceNamesinJsonObject, TestInPlaceReplacementEmptyJson) {
+  ASSERT_OK_AND_ASSIGN(nlohmann::json empty_json, ParseJson(""));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json expected_json, ParseJson(""));
+  ReplaceNamesinJsonObject(StringMap{}, empty_json);
+  EXPECT_EQ(empty_json, expected_json);
+}
+
+TEST(ReplaceNamesinJsonObject, TestInPlaceReplacementEmptyNamesMap) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "leaf": "value1",
+          "key_leaf": "key_value1",
+          "element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "leaf": "value2"
+              }
+            ],
+            "element": {
+              "leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  ASSERT_OK_AND_ASSIGN(auto example_json, ParseJson(kExampleJson));
+  ASSERT_OK_AND_ASSIGN(auto expected_json, ParseJson(kExampleJson));
+  ReplaceNamesinJsonObject(StringMap{}, example_json);
+  EXPECT_EQ(example_json, expected_json);
+}
+
+TEST(ReplaceNamesinJsonObject, TestInPlaceReplacementNamesReplaced) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "leaf": "value1",
+          "key_leaf": "key_value1",
+          "element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "leaf": "value2"
+              }
+            ],
+            "element": {
+              "leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  constexpr char kExpectedJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "new_leaf": "value1",
+          "key_leaf": "key_value1",
+          "new_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value3",
+                "new_leaf": "value2"
+              }
+            ],
+            "new_element": {
+              "new_leaf": "value3"
+            }
+          }
+        },
+        {
+          "key_leaf": "key_value2",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "key_value4",
+                "new_element": {
+                  "inner_element": {
+                    "leaf3": "value6",
+                    "new_leaf": "value5"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+
+  ASSERT_OK_AND_ASSIGN(auto example_json, ParseJson(kExampleJson));
+  ASSERT_OK_AND_ASSIGN(auto expected_json, ParseJson(kExpectedJson));
+  ReplaceNamesinJsonObject(StringMap{{"element", "new_element"},
+                                     {"leaf", "new_leaf"},
+                                     {"no_such_element", "such_element"}},
+                           example_json);
+  EXPECT_EQ(example_json, expected_json);
+}
+
 // Map of yang list paths to names of key leaves used for testing.
 static const auto* const kPathKeyNameMap = new StringMap({
     {"/outer_element/container1", "key_leaf1"},
@@ -736,7 +874,8 @@ static const auto* const kPathKeyNameMap = new StringMap({
 
 TEST(FlattenJson, TestInvalidJsonType) {
   nlohmann::json root(nlohmann::json::value_t::discarded);
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
               gutil::StatusIs(absl::StatusCode::kInvalidArgument,
                               testing::HasSubstr("Invalid json type")));
 }
@@ -753,12 +892,33 @@ TEST(FlattenJson, TestUnknownKeyOuter) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr("No key found for path "
                              "[/outer_element/unknown_container] while parsing "
                              "path [/outer_element/unknown_container].")));
+}
+
+TEST(FlattenJson, TestUnknownKeyOuterIgnoreUnknownKeyPaths) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "unknown_container" : [
+        {
+          "leaf": "value"
+        }
+      ],
+      "other_leaf": "other_value"
+    }
+  })";
+  const auto kExpectedMap = StringMap{
+      {"/outer_element/other_leaf", "other_value"},
+  };
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/true),
+              gutil::IsOkAndHolds(kExpectedMap));
 }
 
 TEST(FlattenJson, TestUnknownKeyInner) {
@@ -786,7 +946,8 @@ TEST(FlattenJson, TestUnknownKeyInner) {
     }
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
               gutil::StatusIs(
                   absl::StatusCode::kInvalidArgument,
                   testing::HasSubstr(
@@ -796,6 +957,46 @@ TEST(FlattenJson, TestUnknownKeyInner) {
                       "[/outer_element/container1[key_leaf1='value1']/"
                       "middle_element/container2[key_leaf2='value2']/"
                       "inner_element/unknown_container].")));
+}
+
+TEST(FlattenJson, TestUnknownKeyInnerIgnoreUnknownKeyPaths) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "value2",
+                "inner_element": {
+                  "unknown_container": [
+                    {
+                      "leaf": "value"
+                    }
+                  ],
+                  "inner_leaf": "inner_value"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  const auto kExpectedMap = StringMap{
+      {"/outer_element/container1[key_leaf1='value1']/key_leaf1", "value1"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/key_leaf2",
+       "value2"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/inner_leaf",
+       "inner_value"},
+  };
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/true),
+              gutil::IsOkAndHolds(kExpectedMap));
 }
 
 TEST(FlattenJson, TestMissingKeyLeafOuter) {
@@ -816,7 +1017,8 @@ TEST(FlattenJson, TestMissingKeyLeafOuter) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -850,7 +1052,8 @@ TEST(FlattenJson, TestMissingKeyLeafInner) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -920,7 +1123,7 @@ TEST(FlattenJson, TestLeafLists) {
        ""},
   });
   EXPECT_THAT(
-      FlattenJsonToMap(root, path_map),
+      FlattenJsonToMap(root, path_map, /*ignore_unknown_key_paths=*/false),
       gutil::IsOkAndHolds(StringMap{
           {"/outer_element/container1[key_leaf1='value1']/middle_element/"
            "container2[key_leaf2='value2']/inner_element/container7['2.7']",
@@ -995,7 +1198,7 @@ TEST(FlattenJson, TestLeafListsNonPrimitive) {
        ""},
   });
   EXPECT_THAT(
-      FlattenJsonToMap(root, path_map),
+      FlattenJsonToMap(root, path_map, /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -1026,7 +1229,8 @@ TEST(FlattenJson, TestInvalidKeyLeafTypeOuter) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr("Invalid type 'object' for key leaf 'key_leaf1' "
@@ -1065,7 +1269,8 @@ TEST(FlattenJson, TestInvalidKeyLeafTypeInner) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -1077,7 +1282,8 @@ TEST(FlattenJson, TestInvalidKeyLeafTypeInner) {
 
 TEST(FlattenJson, TestEmptySuccess) {
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(""));
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
               gutil::IsOkAndHolds(StringMap{}));
 }
 
@@ -1192,7 +1398,8 @@ TEST(FlattenJson, TestSuccess) {
        "outer_leaf",
        "outer_value"},
   };
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
               gutil::IsOkAndHolds(kExpectedMap));
 }
 
@@ -1724,6 +1931,689 @@ TEST(IsJsonSubset, TestNotSubsetMissing) {
                   "middle_element/container2[key_leaf2='container2_value1']/"
                   "inner_element/container3[key_leaf3='container3_value1']/"
                   "leaf2] with value 'value2'")));
+}
+
+TEST(AreJsonEqual, TestBadLhsArgument) {
+  constexpr char kGoodJson[] = R"({
+    "outer_element": {
+      "leaf" : "value"
+    }
+  })";
+  nlohmann::json lhs(nlohmann::json::value_t::discarded);
+  ASSERT_OK_AND_ASSIGN(nlohmann::json rhs, ParseJson(kGoodJson));
+
+  std::vector<std::string> differences;
+  EXPECT_THAT(AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(AreJsonEqual, TestBadRhsArgument) {
+  constexpr char kGoodJson[] = R"({
+    "outer_element": {
+      "leaf" : "value"
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json lhs, ParseJson(kGoodJson));
+  nlohmann::json rhs(nlohmann::json::value_t::discarded);
+
+  std::vector<std::string> differences;
+  EXPECT_THAT(AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(AreJsonEqual, TestBothEmpty) {
+  ASSERT_OK_AND_ASSIGN(nlohmann::json lhs, ParseJson(""));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json rhs, ParseJson(""));
+
+  std::vector<std::string> differences;
+  ASSERT_OK_AND_ASSIGN(bool is_equal,
+                       AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences));
+  EXPECT_TRUE(is_equal && differences.empty());
+}
+
+TEST(AreJsonEqual, TestLhsEmpty) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element": {
+      "leaf" : "value"
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json lhs, ParseJson(""));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json rhs, ParseJson(kExampleJson));
+
+  std::vector<std::string> differences;
+  ASSERT_OK_AND_ASSIGN(bool is_equal,
+                       AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences));
+  EXPECT_FALSE(is_equal);
+  EXPECT_THAT(differences,
+              ElementsAre(testing::HasSubstr(
+                  "Missing lhs: [/outer_element/leaf] with value 'value'")));
+}
+
+TEST(AreJsonEqual, TestRhsEmpty) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element": {
+      "leaf" : "value"
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json lhs, ParseJson(kExampleJson));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json rhs, ParseJson(""));
+
+  std::vector<std::string> differences;
+  ASSERT_OK_AND_ASSIGN(bool is_equal,
+                       AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences));
+  EXPECT_FALSE(is_equal);
+  EXPECT_THAT(differences,
+              ElementsAre(testing::HasSubstr(
+                  "Missing rhs: [/outer_element/leaf] with value 'value'")));
+}
+
+TEST(AreJsonEqual, TestAreEqual) {
+  constexpr char kLhsJson[] = R"({
+    "outer_element": {
+      "container1" : [
+        {
+          "key_leaf1" : "container1_value1",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value1",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value2"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value3",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1" : "container1_value2",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value5",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value6"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value7",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value8"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  constexpr char kRhsJson[] = R"({
+    "outer_element": {
+      "container1" : [
+        {
+          "key_leaf1" : "container1_value2",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value7",
+                  "container3" : [
+                    {
+                      "leaf2" : "value8",
+                      "key_leaf3" : "container3_value1"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value5",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value6"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1" : "container1_value1",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value1",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value2"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value3",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json lhs, ParseJson(kLhsJson));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json rhs, ParseJson(kRhsJson));
+
+  std::vector<std::string> differences;
+  ASSERT_OK_AND_ASSIGN(bool is_equal,
+                       AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences));
+  EXPECT_TRUE(is_equal && differences.empty());
+}
+
+TEST(AreJsonEqual, TestNotEqualMismatch) {
+  constexpr char kLhsJson[] = R"({
+    "outer_element": {
+      "container1" : [
+        {
+          "key_leaf1" : "container1_value1",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value1",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value3",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1" : "container1_value2",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value5",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value6"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value7",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value8"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  constexpr char kRhsJson[] = R"({
+    "outer_element": {
+      "container1" : [
+        {
+          "key_leaf1" : "container1_value2",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value7",
+                  "container3" : [
+                    {
+                      "leaf2" : "another_value8",
+                      "key_leaf3" : "container3_value1"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value5",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "another_value6"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1" : "container1_value1",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value1",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value3",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json lhs, ParseJson(kLhsJson));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json rhs, ParseJson(kRhsJson));
+
+  std::vector<std::string> differences;
+  ASSERT_OK_AND_ASSIGN(bool is_equal,
+                       AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences));
+  EXPECT_FALSE(is_equal);
+  EXPECT_THAT(
+      differences,
+      testing::UnorderedElementsAre(
+          testing::HasSubstr(
+              "Mismatch: "
+              "[/outer_element/container1[key_leaf1='container1_value2']/"
+              "middle_element/container2[key_leaf2='container2_value1']/"
+              "inner_element/container3[key_leaf3='container3_value1']/leaf2]: "
+              "'value6' != 'another_value6'"),
+          testing::HasSubstr(
+              "Mismatch: "
+              "[/outer_element/container1[key_leaf1='container1_value2']/"
+              "middle_element/container2[key_leaf2='container2_value2']/"
+              "inner_element/container3[key_leaf3='container3_value1']/leaf2]: "
+              "'value8' != 'another_value8'")));
+}
+
+TEST(AreJsonEqual, TestNotEqualMissingLhs) {
+  constexpr char kLhsJson[] = R"({
+    "outer_element": {
+      "container1" : [
+        {
+          "key_leaf1" : "container1_value1",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value1",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value3",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1" : "container1_value2",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value5",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value6"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value7",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value8"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  constexpr char kRhsJson[] = R"({
+    "outer_element": {
+      "container1" : [
+        {
+          "key_leaf1" : "container1_value2",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value7",
+                  "container3" : [
+                    {
+                      "leaf2" : "value8",
+                      "key_leaf3" : "container3_value1"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value5",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value6"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1" : "container1_value1",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value1",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "rhs_leaf2" : "rhs_value2"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value3",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json lhs, ParseJson(kLhsJson));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json rhs, ParseJson(kRhsJson));
+
+  std::vector<std::string> differences;
+  ASSERT_OK_AND_ASSIGN(bool is_equal,
+                       AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences));
+  EXPECT_FALSE(is_equal);
+  EXPECT_THAT(differences,
+              testing::UnorderedElementsAre(testing::HasSubstr(
+                  "Missing lhs: "
+                  "[/outer_element/container1[key_leaf1='container1_value1']/"
+                  "middle_element/container2[key_leaf2='container2_value1']/"
+                  "inner_element/container3[key_leaf3='container3_value1']/"
+                  "rhs_leaf2] with value 'rhs_value2'")));
+}
+
+TEST(AreJsonEqual, TestNotEqualMissingRhs) {
+  constexpr char kLhsJson[] = R"({
+    "outer_element": {
+      "container1" : [
+        {
+          "key_leaf1" : "container1_value1",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value1",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "lhs_leaf2" : "lhs_value2"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value3",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1" : "container1_value2",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value5",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value6"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value7",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value8"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  constexpr char kRhsJson[] = R"({
+    "outer_element": {
+      "container1" : [
+        {
+          "key_leaf1" : "container1_value2",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value7",
+                  "container3" : [
+                    {
+                      "leaf2" : "value8",
+                      "key_leaf3" : "container3_value1"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value5",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value6"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key_leaf1" : "container1_value1",
+          "middle_element" : {
+            "container2" : [
+              {
+                "key_leaf2" : "container2_value1",
+                "inner_element" : {
+                  "leaf1" : "value1",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1"
+                    }
+                  ]
+                }
+              },
+              {
+                "key_leaf2" : "container2_value2",
+                "inner_element" : {
+                  "leaf1" : "value3",
+                  "container3" : [
+                    {
+                      "key_leaf3" : "container3_value1",
+                      "leaf2" : "value4"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  ASSERT_OK_AND_ASSIGN(nlohmann::json lhs, ParseJson(kLhsJson));
+  ASSERT_OK_AND_ASSIGN(nlohmann::json rhs, ParseJson(kRhsJson));
+
+  std::vector<std::string> differences;
+  ASSERT_OK_AND_ASSIGN(bool is_equal,
+                       AreJsonEqual(lhs, rhs, *kPathKeyNameMap, differences));
+  EXPECT_FALSE(is_equal);
+  EXPECT_THAT(differences,
+              testing::UnorderedElementsAre(testing::HasSubstr(
+                  "Missing rhs: "
+                  "[/outer_element/container1[key_leaf1='container1_value1']/"
+                  "middle_element/container2[key_leaf2='container2_value1']/"
+                  "inner_element/container3[key_leaf3='container3_value1']/"
+                  "lhs_leaf2] with value 'lhs_value2'.")));
 }
 
 }  // namespace

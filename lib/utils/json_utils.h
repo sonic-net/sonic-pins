@@ -89,12 +89,23 @@ std::string DumpJson(const nlohmann::json& value);
 // Returns a JSON value by recursively replacing the names of name/value pairs
 // in JSON objects using the mapping specified in the old to new names map.
 //   - If source already contains the new name then it may be overwritten.
-//   - The output is undefined if the map of name replacements maps several old
-//     names to the same new name.
+//   - The behavior is undefined if the map of name replacements maps several
+//     old names to the same new name.
 nlohmann::json ReplaceNamesinJsonObject(
     const nlohmann::json& source,
     const absl::flat_hash_map<std::string, std::string>&
         old_name_to_new_name_map);
+
+// Modifies the JSON value in place by recursively replacing the names of
+// name/value pairs in JSON objects using the mapping specified in the old to
+// new names map.
+//   - If root already contains the new name then it may be overwritten.
+//   - The behavior is undefined if the map of name replacements maps several
+//     old names to the same new name.
+void ReplaceNamesinJsonObject(
+    const absl::flat_hash_map<std::string, std::string>&
+        old_name_to_new_name_map,
+    nlohmann::json& root);
 
 // Returns a map of flattened paths to leaves in the JSON encoded YANG modeled
 // data to string values from the input JSON value using the map of yang paths
@@ -108,10 +119,12 @@ nlohmann::json ReplaceNamesinJsonObject(
 //  - yang_path_key_name_map contains a map of yang list paths to the name of
 //    the leaf that's defined as the key for that list (currently only supports
 //    one key).
+//  - If ignore_unknown_key_paths is true and the key is not found in the map,
+//    then the entire array will not be included in the output.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>> FlattenJsonToMap(
     const nlohmann::json& root,
-    const absl::flat_hash_map<std::string, std::string>&
-        yang_path_key_name_map);
+    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    bool ignore_unknown_key_paths);
 
 // Returns true if all yang leaf nodes in 'source' are present in 'target' with
 // the same values or false otherwise.
@@ -123,6 +136,15 @@ absl::StatusOr<absl::flat_hash_map<std::string, std::string>> FlattenJsonToMap(
 //   the leaf that's defined as the key.
 absl::StatusOr<bool> IsJsonSubset(
     const nlohmann::json& source, const nlohmann::json& target,
+    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    std::vector<std::string>& differences);
+
+// Returns true only if lhs and rhs have the same sets of paths with the same
+// values and false with the differences populated if not. Object/Array members
+// can be in any order. Uses the yang key leaf map to identify array
+// elements.
+absl::StatusOr<bool> AreJsonEqual(
+    const nlohmann::json& lhs, const nlohmann::json& rhs,
     const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
     std::vector<std::string>& differences);
 
