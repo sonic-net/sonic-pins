@@ -188,13 +188,16 @@ absl::StatusOr<nlohmann::json> ParseJson(absl::string_view json_str) {
   // Return a null json if the input is an empty string.
   if (json_str.empty()) return nlohmann::json(nullptr);
 
-  try {
-    return nlohmann::json::parse(std::string(json_str), /*cb =*/nullptr,
-                                 /*allow_exceptions =*/true);
-  } catch (const nlohmann::json::parse_error& e) {
+  // TODO: Enable exception after we find out why test crashes instead of
+  // catching the error.
+  nlohmann::json json =
+      nlohmann::json::parse(std::string(json_str), /*cb =*/nullptr,
+                            /*allow_exceptions =*/false);
+  if (json.is_discarded()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("json parse error: ", e.what()));
+        absl::StrCat("json parse error. Json value is:\n", json_str));
   }
+  return json;
 }
 
 std::string DumpJson(const nlohmann::json& value) {
@@ -207,9 +210,7 @@ std::string DumpJson(const nlohmann::json& value) {
 }
 
 nlohmann::json ReplaceNamesinJsonObject(
-    const nlohmann::json& source,
-    const absl::flat_hash_map<std::string, std::string>&
-        old_name_to_new_name_map) {
+    const nlohmann::json& source, const StringMap& old_name_to_new_name_map) {
   switch (source.type()) {
     case nlohmann::json::value_t::object: {
       nlohmann::json target(nlohmann::json::value_t::object);
@@ -237,6 +238,40 @@ nlohmann::json ReplaceNamesinJsonObject(
     default:
       // Leaf value or null. Nothing to replace.
       return source;
+  }
+}
+
+void ReplaceNamesinJsonObject(const StringMap& old_name_to_new_name_map,
+                              nlohmann::json& root) {
+  switch (root.type()) {
+    case nlohmann::json::value_t::object: {
+      for (const auto& [old_name, new_name] : old_name_to_new_name_map) {
+        if (!root.contains(old_name)) continue;
+
+        // Create an empty JSON with the new name (erases any existing value).
+        root[new_name] = nlohmann::json(nlohmann::json::value_t::null);
+        // Swap with JSON values between the old and new names.
+        root[old_name].swap(root[new_name]);
+        // Erase the old name.
+        root.erase(old_name);
+      }
+      for (auto& [_, value] : root.items()) {
+        // Traverse through all the members recursively.
+        ReplaceNamesinJsonObject(old_name_to_new_name_map, value);
+      }
+      break;
+    }
+    case nlohmann::json::value_t::array: {
+      nlohmann::json target(nlohmann::json::value_t::array);
+      for (int i = 0; i < root.size(); ++i) {
+        // Traverse through all array elements recursively.
+        ReplaceNamesinJsonObject(old_name_to_new_name_map, root[i]);
+      }
+      break;
+    }
+    default:
+      // Primitive value or null. Nothing to replace.
+      break;
   }
 }
 

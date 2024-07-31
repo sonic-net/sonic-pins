@@ -89,12 +89,23 @@ std::string DumpJson(const nlohmann::json& value);
 // Returns a JSON value by recursively replacing the names of name/value pairs
 // in JSON objects using the mapping specified in the old to new names map.
 //   - If source already contains the new name then it may be overwritten.
-//   - The output is undefined if the map of name replacements maps several old
-//     names to the same new name.
+//   - The behavior is undefined if the map of name replacements maps several
+//     old names to the same new name.
 nlohmann::json ReplaceNamesinJsonObject(
     const nlohmann::json& source,
     const absl::flat_hash_map<std::string, std::string>&
         old_name_to_new_name_map);
+
+// Modifies the JSON value in place by recursively replacing the names of
+// name/value pairs in JSON objects using the mapping specified in the old to
+// new names map.
+//   - If root already contains the new name then it may be overwritten.
+//   - The behavior is undefined if the map of name replacements maps several
+//     old names to the same new name.
+void ReplaceNamesinJsonObject(
+    const absl::flat_hash_map<std::string, std::string>&
+        old_name_to_new_name_map,
+    nlohmann::json& root);
 
 // Returns a map of flattened paths to leaves in the JSON encoded YANG modeled
 // data to string values from the input JSON value using the map of yang paths
