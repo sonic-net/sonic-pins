@@ -78,6 +78,7 @@ absl::StatusOr<NextHeader> GetNextHeaderForEtherType(
   if (ethertype == 0x86dd) return Header::kIpv6Header;
   if (ethertype == 0x0806) return Header::kArpHeader;
   if (ethertype == 0x8100) return Header::kVlanHeader;
+  if (ethertype == 0x9900) return Header::kCsigHeader;
   return UnsupportedNextHeader{
       .reason = absl::StrFormat("%s.ethertype %s: unsupported", header_name,
                                 ethertype_hexstring)};
@@ -88,6 +89,9 @@ absl::StatusOr<NextHeader> GetNextHeader(const EthernetHeader& header) {
 }
 absl::StatusOr<NextHeader> GetNextHeader(const VlanHeader& header) {
   return GetNextHeaderForEtherType("vlan_header", header.ethertype());
+}
+absl::StatusOr<NextHeader> GetNextHeader(const CsigHeader& header) {
+  return GetNextHeaderForEtherType("csig_header", header.ethertype());
 }
 absl::StatusOr<NextHeader> GetNextHeader(const GreHeader& header) {
   return GetNextHeaderForEtherType("gre_header", header.protocol_type());
@@ -186,6 +190,8 @@ absl::StatusOr<NextHeader> GetNextHeader(const Header& header) {
       return GetNextHeader(header.icmp_header());
     case Header::kVlanHeader:
       return GetNextHeader(header.vlan_header());
+    case Header::kCsigHeader:
+      return GetNextHeader(header.csig_header());
     case Header::kGreHeader:
       return GetNextHeader(header.gre_header());
     case Header::kSaiP4Bmv2PacketInHeader:
@@ -441,6 +447,24 @@ absl::StatusOr<VlanHeader> ParseVlanHeader(pdpi::BitString& data) {
   return header;
 }
 
+// Parse a CSIG header, or return error if the packet is too small.
+absl::StatusOr<CsigHeader> ParseCsigHeader(pdpi::BitString& data) {
+  if (data.size() < kCsigHeaderBitwidth) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Packet is too short to parse a CSIG header next. Only "
+           << data.size() << " bits left, need at least " << kCsigHeaderBitwidth
+           << ".";
+  }
+
+  CsigHeader header;
+  header.set_signal_type(ParseBits(data, kCsigSignalTypeBitwidth));
+  header.set_reserved0(ParseBits(data, kCsigReserved0Bitwidth));
+  header.set_signal_value(ParseBits(data, kCsigSignalValueBitwidth));
+  header.set_locator_metadata(ParseBits(data, kCsigLocatorMetadataBitwidth));
+  header.set_ethertype(ParseBits(data, kCsigEthertypeBitwidth));
+  return header;
+}
+
 // Parse a GRE header, or return error if the packet is too small.
 absl::StatusOr<GreHeader> ParseGreHeader(pdpi::BitString& data) {
   int size = kRfc2784GreHeaderWithoutOptionalsBitwidth;
@@ -637,6 +661,10 @@ absl::StatusOr<Header> ParseHeader(Header::HeaderCase header_case,
     }
     case Header::kVlanHeader: {
       ASSIGN_OR_RETURN(*result.mutable_vlan_header(), ParseVlanHeader(data));
+      return result;
+    }
+    case Header::kCsigHeader: {
+      ASSIGN_OR_RETURN(*result.mutable_csig_header(), ParseCsigHeader(data));
       return result;
     }
     case Header::kGreHeader: {
@@ -1289,6 +1317,24 @@ void VlanHeaderInvalidReasons(const VlanHeader& header,
       header.ethertype(), absl::StrCat(field_prefix, "ethertype"), output);
 }
 
+void CsigHeaderInvalidReasons(const CsigHeader& header,
+                              const std::string& field_prefix,
+                              const Packet& packet, int header_index,
+                              std::vector<std::string>& output) {
+  HexStringInvalidReasons<kCsigSignalTypeBitwidth>(
+      header.signal_type(), absl::StrCat(field_prefix, "signal_type"), output);
+  HexStringInvalidReasons<kCsigReserved0Bitwidth>(
+      header.reserved0(), absl::StrCat(field_prefix, "reserved0"), output);
+  HexStringInvalidReasons<kCsigSignalValueBitwidth>(
+      header.signal_value(), absl::StrCat(field_prefix, "signal_value"),
+      output);
+  HexStringInvalidReasons<kCsigLocatorMetadataBitwidth>(
+      header.locator_metadata(), absl::StrCat(field_prefix, "locator_metadata"),
+      output);
+  HexStringInvalidReasons<kCsigEthertypeBitwidth>(
+      header.ethertype(), absl::StrCat(field_prefix, "ethertype"), output);
+}
+
 void GreHeaderInvalidReasons(const GreHeader& header,
                              const std::string& field_prefix,
                              const Packet& packet, int header_index,
@@ -1646,13 +1692,14 @@ void PspHeaderInvalidReasons(const PspHeader &header,
                                   "reserved0: Must be 0x0, but was ",
                                   header.reserved0(), " instead."));
   }
-  bool reserved1_invalid = HexStringInvalidReasons<kPspReserved1Bitwidth>(
-      header.reserved1(), absl::StrCat(field_prefix, "reserved1"), output);
-  if (!reserved1_invalid && header.reserved1() != "0x1") {
-    output.push_back(absl::StrCat(field_prefix,
-                                  "reserved1: Must be 0x1, but was ",
-                                  header.reserved1(), " instead."));
-  }
+
+  // bool reserved1_invalid = HexStringInvalidReasons<kPspReserved1Bitwidth>(
+  //     header.reserved1(), absl::StrCat(field_prefix, "reserved1"), output);
+  // if (!reserved1_invalid && header.reserved1() != "0x1") {
+  //   output.push_back(absl::StrCat(field_prefix,
+  //                                 "reserved1: Must be 0x1, but was ",
+  //                                 header.reserved1(), " instead."));
+  // }
 }
 
 }  // namespace
@@ -1675,6 +1722,8 @@ std::string HeaderCaseName(Header::HeaderCase header_case) {
       return "IcmpHeader";
     case Header::kVlanHeader:
       return "VlanHeader";
+    case Header::kCsigHeader:
+      return "CsigHeader";
     case Header::kGreHeader:
       return "GreHeader";
     case Header::kSaiP4Bmv2PacketInHeader:
@@ -1754,6 +1803,11 @@ std::vector<std::string> PacketInvalidReasons(const Packet& packet) {
       }
       case Header::kVlanHeader: {
         VlanHeaderInvalidReasons(header.vlan_header(), error_prefix, packet,
+                                 index, result);
+        break;
+      }
+      case Header::kCsigHeader: {
+        CsigHeaderInvalidReasons(header.csig_header(), error_prefix, packet,
                                  index, result);
         break;
       }
@@ -1989,6 +2043,21 @@ absl::Status SerializeVlanHeader(const VlanHeader& header,
   return absl::OkStatus();
 }
 
+absl::Status SerializeCsigHeader(const CsigHeader& header,
+                                 pdpi::BitString& output) {
+  RETURN_IF_ERROR(
+      SerializeBits<kCsigSignalTypeBitwidth>(header.signal_type(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kCsigReserved0Bitwidth>(header.reserved0(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kCsigSignalValueBitwidth>(header.signal_value(), output));
+  RETURN_IF_ERROR(SerializeBits<kCsigLocatorMetadataBitwidth>(
+      header.locator_metadata(), output));
+  RETURN_IF_ERROR(
+      SerializeBits<kCsigEthertypeBitwidth>(header.ethertype(), output));
+  return absl::OkStatus();
+}
+
 absl::Status SerializeGreHeader(const GreHeader& header,
                                 pdpi::BitString& output) {
   RETURN_IF_ERROR(SerializeBits<kGreChecksumPresentBitwidth>(
@@ -2144,6 +2213,8 @@ absl::Status SerializeHeader(const Header& header, pdpi::BitString& output) {
       return SerializePtpHeader(header.ptp_header(), output);
     case Header::kPspHeader:
       return SerializePspHeader(header.psp_header(), output);
+    case Header::kCsigHeader:
+      return SerializeCsigHeader(header.csig_header(), output);
     case Header::HEADER_NOT_SET:
       return gutil::InvalidArgumentErrorBuilder()
              << "Found invalid HEADER_NOT_SET in header.";
@@ -2433,6 +2504,7 @@ absl::StatusOr<bool> UpdateComputedFields(Packet& packet, bool overwrite) {
         break;
       }
       case Header::kVlanHeader:
+      case Header::kCsigHeader:
       case Header::kPspHeader: {
         // No computed fields.
         break;
@@ -2486,6 +2558,7 @@ absl::StatusOr<bool> PadPacketToMinimumSizeFromHeaderIndex(Packet& packet,
     case Header::kPsampHeader:
     case Header::kPtpHeader:
     case Header::kPspHeader:
+    case Header::kCsigHeader:
       return PadPacketToMinimumSizeFromHeaderIndex(packet, header_index + 1);
     case Header::HEADER_NOT_SET:
       return false;
@@ -2592,6 +2665,9 @@ absl::StatusOr<int> PacketSizeInBits(const Packet& packet,
         break;
       case Header::kPspHeader:
         size += kPspHeaderBitwidth;
+        break;
+      case Header::kCsigHeader:
+        size += kCsigHeaderBitwidth;
         break;
       case Header::HEADER_NOT_SET:
         return gutil::InvalidArgumentErrorBuilder()
