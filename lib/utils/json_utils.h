@@ -108,10 +108,12 @@ nlohmann::json ReplaceNamesinJsonObject(
 //  - yang_path_key_name_map contains a map of yang list paths to the name of
 //    the leaf that's defined as the key for that list (currently only supports
 //    one key).
+//  - If ignore_unknown_key_paths is true and the key is not found in the map,
+//    then the entire array will not be included in the output.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>> FlattenJsonToMap(
     const nlohmann::json& root,
-    const absl::flat_hash_map<std::string, std::string>&
-        yang_path_key_name_map);
+    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    bool ignore_unknown_key_paths);
 
 // Returns true if all yang leaf nodes in 'source' are present in 'target' with
 // the same values or false otherwise.

@@ -736,7 +736,8 @@ static const auto* const kPathKeyNameMap = new StringMap({
 
 TEST(FlattenJson, TestInvalidJsonType) {
   nlohmann::json root(nlohmann::json::value_t::discarded);
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
               gutil::StatusIs(absl::StatusCode::kInvalidArgument,
                               testing::HasSubstr("Invalid json type")));
 }
@@ -753,12 +754,33 @@ TEST(FlattenJson, TestUnknownKeyOuter) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr("No key found for path "
                              "[/outer_element/unknown_container] while parsing "
                              "path [/outer_element/unknown_container].")));
+}
+
+TEST(FlattenJson, TestUnknownKeyOuterIgnoreUnknownKeyPaths) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "unknown_container" : [
+        {
+          "leaf": "value"
+        }
+      ],
+      "other_leaf": "other_value"
+    }
+  })";
+  const auto kExpectedMap = StringMap{
+      {"/outer_element/other_leaf", "other_value"},
+  };
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/true),
+              gutil::IsOkAndHolds(kExpectedMap));
 }
 
 TEST(FlattenJson, TestUnknownKeyInner) {
@@ -786,7 +808,8 @@ TEST(FlattenJson, TestUnknownKeyInner) {
     }
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
               gutil::StatusIs(
                   absl::StatusCode::kInvalidArgument,
                   testing::HasSubstr(
@@ -796,6 +819,46 @@ TEST(FlattenJson, TestUnknownKeyInner) {
                       "[/outer_element/container1[key_leaf1='value1']/"
                       "middle_element/container2[key_leaf2='value2']/"
                       "inner_element/unknown_container].")));
+}
+
+TEST(FlattenJson, TestUnknownKeyInnerIgnoreUnknownKeyPaths) {
+  constexpr char kExampleJson[] = R"({
+    "outer_element" : {
+      "container1" : [
+        {
+          "key_leaf1": "value1",
+          "middle_element": {
+            "container2": [
+              {
+                "key_leaf2": "value2",
+                "inner_element": {
+                  "unknown_container": [
+                    {
+                      "leaf": "value"
+                    }
+                  ],
+                  "inner_leaf": "inner_value"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  })";
+  const auto kExpectedMap = StringMap{
+      {"/outer_element/container1[key_leaf1='value1']/key_leaf1", "value1"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/key_leaf2",
+       "value2"},
+      {"/outer_element/container1[key_leaf1='value1']/middle_element/"
+       "container2[key_leaf2='value2']/inner_element/inner_leaf",
+       "inner_value"},
+  };
+  ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/true),
+              gutil::IsOkAndHolds(kExpectedMap));
 }
 
 TEST(FlattenJson, TestMissingKeyLeafOuter) {
@@ -816,7 +879,8 @@ TEST(FlattenJson, TestMissingKeyLeafOuter) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -850,7 +914,8 @@ TEST(FlattenJson, TestMissingKeyLeafInner) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -920,7 +985,7 @@ TEST(FlattenJson, TestLeafLists) {
        ""},
   });
   EXPECT_THAT(
-      FlattenJsonToMap(root, path_map),
+      FlattenJsonToMap(root, path_map, /*ignore_unknown_key_paths=*/false),
       gutil::IsOkAndHolds(StringMap{
           {"/outer_element/container1[key_leaf1='value1']/middle_element/"
            "container2[key_leaf2='value2']/inner_element/container7['2.7']",
@@ -995,7 +1060,7 @@ TEST(FlattenJson, TestLeafListsNonPrimitive) {
        ""},
   });
   EXPECT_THAT(
-      FlattenJsonToMap(root, path_map),
+      FlattenJsonToMap(root, path_map, /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -1026,7 +1091,8 @@ TEST(FlattenJson, TestInvalidKeyLeafTypeOuter) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr("Invalid type 'object' for key leaf 'key_leaf1' "
@@ -1065,7 +1131,8 @@ TEST(FlattenJson, TestInvalidKeyLeafTypeInner) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap),
+      FlattenJsonToMap(root, *kPathKeyNameMap,
+                       /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
           testing::HasSubstr(
@@ -1077,7 +1144,8 @@ TEST(FlattenJson, TestInvalidKeyLeafTypeInner) {
 
 TEST(FlattenJson, TestEmptySuccess) {
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(""));
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
               gutil::IsOkAndHolds(StringMap{}));
 }
 
@@ -1192,7 +1260,8 @@ TEST(FlattenJson, TestSuccess) {
        "outer_leaf",
        "outer_value"},
   };
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap),
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+                               /*ignore_unknown_key_paths=*/false),
               gutil::IsOkAndHolds(kExpectedMap));
 }
 
