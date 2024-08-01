@@ -342,6 +342,9 @@ public:
   EntryBuilder& AddIngressAclEntryRedirectingToPort(
       absl::string_view port,
       const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
+  EntryBuilder& AddIngressAclEntryMirroringAndRedirectingToPort(
+      absl::string_view port, absl::string_view mirror_session_id,
+      const MirrorAndRedirectMatchFields& match_fields = {}, int priority = 1);
   EntryBuilder& AddIpv6TunnelTerminationEntry(
       const Ipv6TunnelTerminationParams& params);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
