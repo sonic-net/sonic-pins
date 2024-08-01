@@ -478,12 +478,14 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
                    json_yang::ParseJson(titem_response.response));
   RET_CHECK(response.is_array()) << titem_response;
   for (const Json &traffic_item : response) {
+    RET_CHECK(traffic_item.contains("errors")) << titem_response;
     RET_CHECK(traffic_item.contains("warnings")) << titem_response;
-    if (traffic_item.at("warnings").empty()) continue;
-    return gutil::UnknownErrorBuilder()
-           << "Found traffic items with warnings, which may result in "
-              "unexpected behavior. Dump of traffic items:\n"
-           << json_yang::DumpJson(response);
+    if (!traffic_item.at("errors").empty() &&
+        !traffic_item.at("warnings").empty()) {
+      LOG(WARNING) << "Found traffic items with warnings, which may result in "
+                      "unexpected behavior. Dump of traffic items:\n"
+                   << json_yang::DumpJson(response);
+    }
   }
 
   return absl::OkStatus();
@@ -972,6 +974,62 @@ absl::Status AppendUdp(absl::string_view tref,
   return ixia::WaitForComplete(append_response, generic_testbed);
 }
 
+absl::Status AppendProtocolAtStack(absl::string_view tref,
+                                   absl::string_view protocol,
+                                   absl::string_view stack,
+                                   thinkit::GenericTestbed &generic_testbed) {
+  // GET to /ixnetwork/traffic/protocolTemplate to find the correct protocol
+  // template to use.
+  constexpr absl::string_view kProtoPath =
+      "/ixnetwork/traffic/protocolTemplate?links=true&skip=0&take=end";
+  ASSIGN_OR_RETURN(thinkit::HttpResponse proto_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kGet, kProtoPath, ""));
+  LOG(INFO) << "Returns " << proto_response.response_code;
+  if (proto_response.response_code != 200)
+    return absl::InternalError(absl::StrFormat("unexpected response: %u",
+                                               proto_response.response_code));
+
+  std::size_t ixname = proto_response.response.find(
+      absl::Substitute("\"displayName\":\"$0\"", protocol));
+  if (ixname == std::string::npos)
+    return absl::InternalError(
+        absl::StrCat("no template found for ", protocol));
+  std::size_t ixhref = proto_response.response.find("\"href\":", ixname);
+  if (ixhref == std::string::npos)
+    return absl::InternalError(
+        absl::StrCat("no template found for ", protocol));
+  std::size_t ixqt = proto_response.response.find('"', ixhref + 8);
+  if (ixqt == std::string::npos)
+    return absl::InternalError(
+        absl::StrCat("no template found for ", protocol));
+  std::string tcpref =
+      proto_response.response.substr(ixhref + 8, ixqt - ixhref - 8);
+  std::size_t ixfield = tcpref.find("/field");
+  if (ixfield != std::string::npos) {
+    tcpref = tcpref.substr(0, ixfield);
+  }
+
+  // POST to
+  // /ixnetwork/traffic/trafficItem/configElement/stack/operations/appendprotocol
+  // {"arg1":"/api/v1/sessions/1/ixnetwork/traffic/trafficItem/1/configElement/1/stack/<stack>","arg2":"/api/v1/sessions/1/ixnetwork/traffic/protocolTemplate/<template>"}
+  constexpr absl::string_view kAppendPath =
+      "/ixnetwork/traffic/trafficItem/configElement/stack/operations/"
+      "appendprotocol";
+
+  std::string append_json =
+      absl::StrCat("{\"arg1\":\"", tref, "/configElement/1/stack/", stack,
+                   "\",\"arg2\":\"", tcpref, "\"}");
+  LOG(INFO) << "json " << append_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse append_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPost, kAppendPath, append_json));
+  LOG(INFO) << "Received code: " << append_response.response_code;
+  LOG(INFO) << "Received response: "
+            << FormatJsonBestEffort(append_response.response);
+  return ixia::WaitForComplete(append_response, generic_testbed);
+}
+
 absl::StatusOr<std::string> GetRawStatsView(
     absl::string_view href, int stats_view_index,
     thinkit::GenericTestbed &generic_testbed) {
@@ -1041,9 +1099,13 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
     }
     const google::protobuf::ListValue &values = row.values(0).list_value();
     if (values.values_size() != stats_proto.column_captions_size()) {
+      if (stats_proto.column_captions_size() == 0 ||
+          values.values_size() == 0) {
+        return gutil::UnavailableErrorBuilder() << "stats not ready yet";
+      }
       return gutil::InvalidArgumentErrorBuilder()
              << "found " << stats_proto.column_captions_size()
-             << " columns, but only " << values.values_size()
+             << " column captions, but " << values.values_size()
              << " values in row '" << row_name << "'";
     }
 
@@ -1052,8 +1114,8 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
     for (int i = 0; i < values.values_size(); ++i) {
       const google::protobuf::Value &value = values.values(i);
       if (value.kind_case() != google::protobuf::Value::kStringValue) {
-        gutil::InvalidArgumentErrorBuilder()
-            << "expected string value, but found: " << value.DebugString();
+        return gutil::InvalidArgumentErrorBuilder()
+               << "expected string value, but found: " << value.DebugString();
       }
       value_by_caption[stats_proto.column_captions(i)] =
           values.values(i).string_value();
@@ -1090,6 +1152,10 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
     {
       ASSIGN_OR_RETURN(std::string raw, gutil::FindOrStatus(value_by_caption,
                                                             "First TimeStamp"));
+      if (raw.empty()) {
+        return gutil::UnavailableErrorBuilder()
+               << "'First TimeStamp' not available yet";
+      }
       ASSIGN_OR_RETURN(auto value,
                        ParseTimeStampAsSeconds(raw, "First TimeStamp"));
       parsed_row.set_first_time_stamp(value);
@@ -1106,13 +1172,13 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
   return result;
 }
 
-absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
-    absl::string_view href, absl::string_view traffic_item_name,
-    thinkit::GenericTestbed &generic_testbed) {
+absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
+    absl::string_view href, thinkit::GenericTestbed &generic_testbed) {
   // TODO: Look up dynamically instead of hard-coding.
   static constexpr int kTrafficItemStatsIndex = 9;
   // It takes some time for stats to become "ready", so we have to poll.
-  constexpr absl::Duration kPollDuration = absl::Seconds(15);
+  // TODO: Do not hardcode this.
+  constexpr absl::Duration kPollDuration = absl::Seconds(45);
   const absl::Time kTimeout = absl::Now() + kPollDuration;
   while (absl::Now() < kTimeout) {
     ASSIGN_OR_RETURN(
@@ -1120,19 +1186,28 @@ absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
         GetRawStatsView(href, kTrafficItemStatsIndex, generic_testbed));
     absl::StatusOr<TrafficStats> stats = ParseTrafficItemStats(raw_stats);
     if (absl::IsUnavailable(stats.status())) {
+      absl::SleepFor(absl::Seconds(1));
       continue;  // Stats not ready yet, try again.
     } else {
       RETURN_IF_ERROR(stats.status()).SetAppend()
           << "\nwhile trying to parse the following stats:\n"
           << FormatJsonBestEffort(raw_stats);
     }
-    LOG(INFO) << "parsed traffic stats:\n" << stats->DebugString();
-    return gutil::FindOrStatus(stats->stats_by_traffic_item(),
-                               std::string(traffic_item_name));
+    return stats;
   }
 
   return gutil::UnavailableErrorBuilder()
          << "stats unavailable after " << kPollDuration << " of polling";
+}
+
+absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
+    absl::string_view href, absl::string_view traffic_item_name,
+    thinkit::GenericTestbed &generic_testbed) {
+  ASSIGN_OR_RETURN(TrafficStats stats,
+                   GetAllTrafficItemStats(href, generic_testbed));
+  LOG(INFO) << "parsed traffic stats:\n" << stats.DebugString();
+  return gutil::FindOrStatus(stats.stats_by_traffic_item(),
+                             std::string(traffic_item_name));
 }
 
 absl::Status SetIpTrafficParameters(absl::string_view tref,

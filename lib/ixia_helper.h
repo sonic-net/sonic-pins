@@ -207,6 +207,16 @@ absl::Status AppendTcp(absl::string_view tref,
 absl::Status AppendUdp(absl::string_view tref,
                        thinkit::GenericTestbed &generic_testbed);
 
+// AppendProtocolAtStack - Appends the provided protocol template to the
+// existing stack of headers as specified. Takes in the tref returned by
+// SetUpTrafficItem. NOTE: The protocol needs to be the exact string in the
+// `displayName` for the specific template to be added. Some examples: ARP ->
+// "Ethernet ARP", IPv4 -> "IPv4"
+absl::Status AppendProtocolAtStack(absl::string_view tref,
+                                   absl::string_view protocol,
+                                   absl::string_view stack,
+                                   thinkit::GenericTestbed &generic_testbed);
+
 // -- High-level API for setting traffic item parameters -----------------------
 
 // The priority fields of an IP packet. Aka "type of service" for IPv4 and
@@ -281,6 +291,12 @@ absl::StatusOr<std::string> GetRawStatsView(
 absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
     absl::string_view href, absl::string_view traffic_item_name,
     thinkit::GenericTestbed &generic_testbed);
+
+// Returns statistics for all traffic items, keyed by traffic item name.
+// Takes in the href returned by IxiaConnect, and the `traffic_item_name` set
+// by `SetUpTrafficItem`.
+absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
+    absl::string_view href, thinkit::GenericTestbed &generic_testbed);
 
 // Computes average rate (bytes/s) at which traffic was received back by Ixia.
 inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
