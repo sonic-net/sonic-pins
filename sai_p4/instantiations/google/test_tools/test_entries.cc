@@ -794,6 +794,22 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToPort(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddIngressAclEntryMirroringAndRedirectingToPort(
+    absl::string_view port, absl::string_view mirror_session_id,
+    const MirrorAndRedirectMatchFields& match_fields, int priority) {
+  EntryBuilder::AddIngressAclEntryRedirectingToPort(port, match_fields,
+                                                    priority);
+  sai::AclIngressMirrorAndRedirectTableEntry& entry =
+      *entries_.mutable_entries()
+           ->rbegin()
+           ->mutable_acl_ingress_mirror_and_redirect_table_entry();
+  sai::AclMirrorAndRedirectToPortAction& action =
+      *entry.mutable_action()->mutable_acl_mirror_and_redirect_to_port();
+  action.set_redirect_port(port);
+  action.set_mirror_session_id(mirror_session_id);
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddMirrorSessionTableEntry(
     const MirrorSessionParams& params) {
   sai::TableEntry pd_entry;
