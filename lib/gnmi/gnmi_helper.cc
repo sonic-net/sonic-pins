@@ -110,34 +110,6 @@ GetPortNameToIdMapFromJsonString(absl::string_view json_string,
   return interface_name_to_port_id;
 }
 
-std::string ForceP4rtDeviceId(const std::string& gnmi_config,
-                              const std::string& device_id) {
-  LOG(INFO) << "Forcing P4RT Device ID to be '" << device_id << "'.";
-
-  // Parse the current gnmi config into a JSON object.
-  nlohmann::basic_json<> json;
-  if (!gnmi_config.empty()) json = json::parse(gnmi_config);
-
-  // Verify the OpenConfig components list exists.
-  auto oc_component_list = json.find("openconfig-platform:components");
-  if (oc_component_list == json.end()) return json.dump();
-
-  // And that it has a list of components.
-  auto component_list = oc_component_list->find("component");
-  if (component_list == oc_component_list->end()) return json.dump();
-
-  // The Device ID should always be written to integrated_circuit0. If this
-  // component doesn't exist then we will not update the device ID.
-  for (nlohmann::basic_json<>& component : *component_list) {
-    if (component["name"] == "integrated_circuit0") {
-      component["integrated-circuit"]["config"]["openconfig-p4rt:node-id"] =
-          device_id;
-    }
-  }
-
-  return json.dump();
-}
-
 absl::StatusOr<json> GetField(const json& object,
                               absl::string_view field_name) {
   auto field = object.find(field_name);
@@ -355,7 +327,8 @@ absl::Status PushGnmiConfig(thinkit::Switch& chassis,
   ASSIGN_OR_RETURN(auto stub, chassis.CreateGnmiStub());
   return pins_test::PushGnmiConfig(
       *stub, chassis.ChassisName(),
-      ForceP4rtDeviceId(gnmi_config, absl::StrCat(chassis.DeviceId())));
+      UpdateDeviceIdInJsonConfig(gnmi_config,
+                                 absl::StrCat(chassis.DeviceId())));
 }
 
 absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
@@ -899,6 +872,39 @@ absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
       &gnmi_stub, node_id_path, GnmiSetType::kUpdate,
       absl::Substitute("{\"integrated-circuit:node-id\":\"$0\"}", device_id)));
   return absl::OkStatus();
+}
+
+std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
+                                       const std::string& device_id) {
+  LOG(INFO) << "Forcing P4RT device ID to be '" << device_id << "'.";
+
+  nlohmann::basic_json<> json =
+      gnmi_config.empty() ? json::object() : json::parse(gnmi_config);
+  auto oc_component =
+      json.emplace("openconfig-platform:components", json::object()).first;
+  auto component_list =
+      oc_component->emplace("component", nlohmann::json::array()).first;
+
+  // The Device ID should always be written to integrated_circuit0. If this
+  // component exist then we update that field.
+  bool found_integrated_circuit = false;
+  for (nlohmann::basic_json<>& component : *component_list) {
+    if (component["name"] == "integrated_circuit0") {
+      found_integrated_circuit = true;
+      component["integrated-circuit"]["config"]["openconfig-p4rt:node-id"] =
+          device_id;
+    }
+  }
+
+  // If the integrated_circuit0 object does not exist then we will create it.
+  if (!found_integrated_circuit) {
+    nlohmann::basic_json<> component = json::object();
+    component["name"] = "integrated_circuit0";
+    component["integrated-circuit"]["config"]["openconfig-p4rt:node-id"] =
+        device_id;
+    component_list->insert(component_list->end(), component);
+  }
+  return json.dump();
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>

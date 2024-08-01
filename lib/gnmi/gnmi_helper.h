@@ -248,6 +248,11 @@ GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub);
 absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
                          uint32_t device_id);
 
+// Takes a gNMI config in JSON format and updates the P4RT Device ID. Adding it
+// when it doesn't exist, or updating the value if it does.
+std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
+                                       const std::string& device_id);
+
 // Returns a map from physical transceiver names to ethernet PMD type.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetTransceiverToEthernetPmdMap(gnmi::gNMI::StubInterface& gnmi_stub);

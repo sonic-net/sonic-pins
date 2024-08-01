@@ -37,6 +37,8 @@
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnoi/gnoi_helper.h"
+#include "p4/v1/p4runtime.grpc.pb.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "system/system.grpc.pb.h"
@@ -96,15 +98,34 @@ absl::Status SSHable(thinkit::Switch& thinkit_switch,
   return SSHable(thinkit_switch.ChassisName(), ssh_client, timeout);
 }
 
-// Checks if a P4Runtime session could be established.
-absl::Status P4rtAble(thinkit::Switch& thinkit_switch) {
-  // Uses a metadata with minimum election id to connect as backup and not
-  // change election id necessary to connect as primary in the future.
-  return pdpi::P4RuntimeSession::Create(
-             thinkit_switch,
-             pdpi::P4RuntimeSessionOptionalArgs{.election_id = 0},
-             /*error_if_not_primary=*/false)
-      .status();
+// Sending an arbitration request to verify the connection is tempting, but
+// difficult. P4RT requires a device ID to be configured over gNMI before an
+// arbitration request would work. We can't guarantee that without modifying the
+// switches state (i.e. pushing it ourselves), or becoming dependent on other
+// connections.
+//
+// Therefore, to determine if the P4RT connection is up we simply send a write
+// request. If the response fails because the service is UNAVAILABLE we assume
+// p4rt is down. If the response fails because of FAILED_PRECONDITION or
+// PERMISSION_DENIED we are connecting the P4RT service and it is correctly
+// rejecting the write.
+absl::Status P4rtAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto p4rt_stub, thinkit_switch.CreateP4RuntimeStub());
+  p4::v1::WriteRequest request;
+  p4::v1::WriteResponse response;
+
+  grpc::ClientContext context;
+  context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
+  context.set_wait_for_ready(true);
+  grpc::Status status = p4rt_stub->Write(&context, request, &response);
+
+  // Because we don't have an active stream acting as the controller
+  if (status.error_code() == grpc::StatusCode::UNAVAILABLE) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << thinkit_switch.ChassisName()
+           << " could not verify a P4RT connection: " << status.error_message();
+  }
+  return absl::OkStatus();
 }
 
 // Checks if a gNMI get all interface request can be sent and a response

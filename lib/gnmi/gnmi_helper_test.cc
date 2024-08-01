@@ -105,6 +105,12 @@ static constexpr char kAlarmsJson[] = R"([
     }
   ])";
 
+// Used by UpdateDeviceId tests as a canonical config with device ID 123456.
+// Notice that there are no spaces. This is because the json.dump() call does
+// not include any.
+static constexpr char kDeviceIdIs123456[] =
+    R"({"openconfig-platform:components":{"component":[{"integrated-circuit":{"config":{"openconfig-p4rt:node-id":"123456"}},"name":"integrated_circuit0"}]}})";
+
 TEST(ConvertOCStringToPath, RegressionTest20220401) {
   EXPECT_THAT(ConvertOCStringToPath(
                   "openconfig-qos:qos/scheduler-policies/"
@@ -1483,6 +1489,34 @@ TEST(TransceiverPartInformation, EmptyTransceiver) {
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
   EXPECT_THAT(GetTransceiverPartInformation(mock_stub),
               IsOkAndHolds(IsEmpty()));
+}
+
+TEST(UpdateDeviceId, WhenValueAlreadyExists) {
+  std::string gnmi_config = R"({
+    "openconfig-platform:components" : {
+       "component" : [
+          {
+             "integrated-circuit" : {
+                "config" : {
+                   "openconfig-p4rt:node-id" : "3232235555"
+                }
+             },
+             "name" : "integrated_circuit0"
+          }
+       ]
+    }})";
+  EXPECT_THAT(UpdateDeviceIdInJsonConfig(gnmi_config, "123456"),
+              StrEq(kDeviceIdIs123456));
+}
+
+TEST(UpdateDeviceId, WithEmptyConfig) {
+  // Test with null config.
+  EXPECT_THAT(UpdateDeviceIdInJsonConfig("", "123456"),
+              StrEq(kDeviceIdIs123456));
+
+  // And with empty json object.
+  EXPECT_THAT(UpdateDeviceIdInJsonConfig("{}", "123456"),
+              StrEq(kDeviceIdIs123456));
 }
 
 TEST(TransceiverEthernetPmdType, WorksProperly) {

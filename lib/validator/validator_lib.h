@@ -51,7 +51,9 @@ absl::Status SSHable(thinkit::Switch& thinkit_switch,
                      absl::Duration timeout = kDefaultTimeout);
 
 // Checks if a P4Runtime session could be established.
-absl::Status P4rtAble(thinkit::Switch& thinkit_switch);
+// Will wait up to <timeout> for the RPC to return. Performs one request.
+absl::Status P4rtAble(thinkit::Switch& thinkit_switch,
+                      absl::Duration timeout = kDefaultTimeout);
 
 // Checks if a gNMI get all interface request can be sent and a response
 // received.
