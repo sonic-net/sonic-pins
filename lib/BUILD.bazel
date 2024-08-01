@@ -132,6 +132,17 @@ cc_library(
     ],
 )
 
+cc_test(
+    name = "ixia_helper_test",
+    srcs = ["ixia_helper_test.cc"],
+    deps = [
+        ":ixia_helper",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 proto_library(
     name = "ixia_helper_proto",
     srcs = ["ixia_helper.proto"],
