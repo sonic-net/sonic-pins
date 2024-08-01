@@ -99,15 +99,20 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
 
 // Parses Get Response to retrieve specific tag value.
 absl::StatusOr<std::string> ParseGnmiGetResponse(
-    const gnmi::GetResponse& response, absl::string_view match_tag);
+    const gnmi::GetResponse& response, absl::string_view match_tag = {});
 
-absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* sut_gnmi_stub,
+absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                absl::string_view config_path,
                                GnmiSetType operation, absl::string_view value);
 
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
-    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view state_path,
-    absl::string_view resp_parse_str);
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
+    absl::string_view resp_parse_str = {});
+
+absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
+                                         absl::string_view path,
+                                         gnmi::GetRequest::DataType req_type,
+                                         absl::string_view resp_parse_str = {});
 
 template <class T>
 std::string ConstructGnmiConfigSetString(std::string field, T value) {
@@ -229,6 +234,9 @@ absl::StatusOr<std::vector<std::string>> GetAlarms(
 
 // Strips the beginning and ending double-quotes from the `string`.
 absl::string_view StripQuotes(absl::string_view string);
+
+// Strips the beginning and ending brackets ('[', ']') from the `string`.
+absl::string_view StripBrackets(absl::string_view string);
 
 // Returns a map from interface names to their physical transceiver name.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>

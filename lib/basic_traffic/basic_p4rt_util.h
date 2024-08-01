@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_LIB_BASIC_TRAFFIC_BASIC_P4RT_UTIL_H_
-#define GOOGLE_LIB_BASIC_TRAFFIC_BASIC_P4RT_UTIL_H_
+#ifndef PINS_LIB_BASIC_TRAFFIC_BASIC_P4RT_UTIL_H_
+#define PINS_LIB_BASIC_TRAFFIC_BASIC_P4RT_UTIL_H_
 
 #include <functional>
 #include <string>
@@ -101,6 +101,23 @@ inline absl::Status ProgramIPv4Route(
                           instantiation);
 }
 
+// Programs L3 admit table entry allowing packets to be routed. Takes in a
+// function that programs a `WriteRequest`.
+absl::Status ProgramL3AdmitTableEntry(
+    const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
+    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
+
+// Programs L3 admit table entry allowing packets to be routed. Takes in a
+// `P4RuntimeSession`.
+inline absl::Status ProgramL3AdmitTableEntry(
+    pdpi::P4RuntimeSession* session,
+    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock,
+    const WriteRequestHandler& write_request =
+        pdpi::SetMetadataAndSendPiWriteRequest) {
+  return ProgramL3AdmitTableEntry(absl::bind_front(write_request, session),
+                                  instantiation);
+}
+
 }  // namespace pins_test::basic_traffic
 
-#endif  // GOOGLE_LIB_BASIC_TRAFFIC_BASIC_P4RT_UTIL_H_
+#endif  // PINS_LIB_BASIC_TRAFFIC_BASIC_P4RT_UTIL_H_
