@@ -102,6 +102,29 @@ static constexpr char kAlarmsJson[] = R"([
     }
   ])";
 
+TEST(ConvertOCStringToPath, RegressionTest20220401) {
+  EXPECT_THAT(ConvertOCStringToPath(
+                  "openconfig-qos:qos/scheduler-policies/"
+                  "scheduler-policy[name=\"foo\"]/schedulers/"
+                  "scheduler[sequence=12]/two-rate-three-color/config/pir"),
+              EqualsProto(R"pb(
+                elem { name: "openconfig-qos:qos" }
+                elem { name: "scheduler-policies" }
+                elem {
+                  name: "scheduler-policy"
+                  key { key: "name" value: "\"foo\"" }
+                }
+                elem { name: "schedulers" }
+                elem {
+                  name: "scheduler"
+                  key { key: "sequence" value: "12" }
+                }
+                elem { name: "two-rate-three-color" }
+                elem { name: "config" }
+                elem { name: "pir" }
+              )pb"));
+}
+
 TEST(OCStringToPath, OCStringToPathTestCase1) {
   EXPECT_THAT(
       ConvertOCStringToPath("interfaces/interface[name=ethernet0]/config/mtu"),
