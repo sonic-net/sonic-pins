@@ -4,36 +4,42 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include "lib/validator/validator_lib.h"
 
-#include <memory>
+#include <stdio.h>
 
-#include "absl/memory/memory.h"
+#include <functional>
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <vector>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
 #include "grpcpp/impl/codegen/client_context.h"
-#include "grpcpp/support/status.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnoi/gnoi_helper.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
-#include "proto/gnmi/gnmi.pb.h"
+#include "system/system.grpc.pb.h"
 #include "system/system.pb.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
@@ -124,15 +130,12 @@ absl::Status GnoiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
 
 absl::Status PortsUp(thinkit::Switch& thinkit_switch,
                      absl::Span<const std::string> interfaces,
-                     absl::Duration timeout) {
+                     bool with_healthz, absl::Duration timeout) {
   ASSIGN_OR_RETURN(auto gnmi_stub, thinkit_switch.CreateGnmiStub());
-  if (interfaces.empty()) {
-    return pins_test::CheckAllInterfaceOperStateOverGnmi(
-        *gnmi_stub, /*interface_oper_state=*/"UP",
-        /*skip_non_ethernet_interfaces=*/false, timeout);
-  }
+  LOG(INFO) << "Running PortsUp on " << thinkit_switch.ChassisName() << ".";
   return pins_test::CheckInterfaceOperStateOverGnmi(
-      *gnmi_stub, /*interface_oper_state=*/"UP", interfaces, timeout);
+      *gnmi_stub, /*interface_oper_state=*/"UP", interfaces,
+      /*skip_non_ethernet_interfaces=*/false, timeout);
 }
 
 absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
@@ -149,32 +152,41 @@ absl::Status NoAlarms(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
 absl::Status SwitchReady(thinkit::Switch& thinkit_switch,
                          absl::Span<const std::string> interfaces,
                          absl::Duration timeout) {
-  RETURN_IF_ERROR(Pingable(thinkit_switch)).SetPrepend()
+  RETURN_IF_ERROR(Pingable(thinkit_switch, timeout)).SetPrepend()
       << "The switch fails to respond to pings. ";
   RETURN_IF_ERROR(P4rtAble(thinkit_switch))
       << "The switch P4Runtime server is unreachable. ";
-  RETURN_IF_ERROR(GnmiAble(thinkit_switch))
+  RETURN_IF_ERROR(GnmiAble(thinkit_switch, timeout))
       << "The switch gNMI server is unreachable. ";
   // RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces));
-  RETURN_IF_ERROR(GnoiAble(thinkit_switch))
+  RETURN_IF_ERROR(GnoiAble(thinkit_switch, timeout))
       << "The switch gNOI server is unreachable. ";
-  return NoAlarms(thinkit_switch);
+  return NoAlarms(thinkit_switch, timeout);
 }
 
 absl::Status SwitchReadyWithSsh(thinkit::Switch& thinkit_switch,
                                 thinkit::SSHClient& ssh_client,
                                 absl::Span<const std::string> interfaces,
-                                bool check_interfaces_state,
+                                bool check_interfaces_state, bool with_healthz,
                                 absl::Duration timeout) {
-  RETURN_IF_ERROR(Pingable(thinkit_switch));
-  RETURN_IF_ERROR(SSHable(thinkit_switch, ssh_client));
+  RETURN_IF_ERROR(Pingable(thinkit_switch, timeout));
+  RETURN_IF_ERROR(SSHable(thinkit_switch, ssh_client, timeout));
   RETURN_IF_ERROR(P4rtAble(thinkit_switch));
-  RETURN_IF_ERROR(GnmiAble(thinkit_switch));
+  RETURN_IF_ERROR(GnmiAble(thinkit_switch, timeout));
   if (check_interfaces_state) {
-    RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces));
+    RETURN_IF_ERROR(PortsUp(thinkit_switch, interfaces, with_healthz, timeout));
   }
-  RETURN_IF_ERROR(GnoiAble(thinkit_switch));
-  return NoAlarms(thinkit_switch);
+  RETURN_IF_ERROR(GnoiAble(thinkit_switch, timeout));
+  return NoAlarms(thinkit_switch, timeout);
+}
+
+absl::Status OnFailure(absl::Status status,
+                       const std::function<void()>& on_failure) {
+  if (!status.ok()) {
+    LOG(INFO) << status << " is not ok, running callback.";
+    on_failure();
+  }
+  return status;
 }
 
 }  // namespace pins_test
