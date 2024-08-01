@@ -15,6 +15,7 @@
 #ifndef PINS_LIB_GNMI_GNMI_HELPER_H_
 #define PINS_LIB_GNMI_GNMI_HELPER_H_
 
+#include <cstdint>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -99,15 +100,20 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
 
 // Parses Get Response to retrieve specific tag value.
 absl::StatusOr<std::string> ParseGnmiGetResponse(
-    const gnmi::GetResponse& response, absl::string_view match_tag);
+    const gnmi::GetResponse& response, absl::string_view match_tag = {});
 
-absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* sut_gnmi_stub,
+absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                absl::string_view config_path,
                                GnmiSetType operation, absl::string_view value);
 
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
-    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view state_path,
-    absl::string_view resp_parse_str);
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
+    absl::string_view resp_parse_str = {});
+
+absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
+                                         absl::string_view path,
+                                         gnmi::GetRequest::DataType req_type,
+                                         absl::string_view resp_parse_str = {});
 
 template <class T>
 std::string ConstructGnmiConfigSetString(std::string field, T value) {
@@ -167,15 +173,11 @@ absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
                                     absl::Duration timeout);
 
-// Checks if given interfaces' oper-status is up/down.
+// Checks if given interfaces' oper-status is up/down. Passing in nothing for
+// `interfaces` will check for all interfaces.
 absl::Status CheckInterfaceOperStateOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
-    absl::Span<const std::string> interfaces,
-    absl::Duration timeout = absl::Seconds(60));
-
-// Checks if all interfaces oper-status is up/down.
-absl::Status CheckAllInterfaceOperStateOverGnmi(
-    gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
+    absl::Span<const std::string> interfaces = {},
     bool skip_non_ethernet_interfaces = false,
     absl::Duration timeout = absl::Seconds(60));
 
@@ -230,6 +232,9 @@ absl::StatusOr<std::vector<std::string>> GetAlarms(
 // Strips the beginning and ending double-quotes from the `string`.
 absl::string_view StripQuotes(absl::string_view string);
 
+// Strips the beginning and ending brackets ('[', ']') from the `string`.
+absl::string_view StripBrackets(absl::string_view string);
+
 // Returns a map from interface names to their physical transceiver name.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub);
@@ -237,6 +242,27 @@ GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub);
 // Returns a map from physical transceiver names to their part information.
 absl::StatusOr<absl::flat_hash_map<std::string, TransceiverPart>>
 GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Sets the device ID which is needed by P4RT App to establish a connection to
+// the switch.
+absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
+                         uint32_t device_id);
+
+// Takes a gNMI config in JSON format and updates the P4RT Device ID. Adding it
+// when it doesn't exist, or updating the value if it does.
+std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
+                                       const std::string& device_id);
+
+// Returns a map from physical transceiver names to ethernet PMD type.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetTransceiverToEthernetPmdMap(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Returns a map from interfaces names to the speed of each lane in the port,
+// as an integer in Kbps.
+// Example: for a 4-lane 200G interface, this mapping would give a lane speed of
+// 50'000'000 (50G).
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub);
 
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_

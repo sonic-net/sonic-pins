@@ -133,7 +133,14 @@ void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut) {
   EXPECT_OK(SSHable(sut, ssh_client));
 }
 
-void TestP4Session(thinkit::Switch& sut) { EXPECT_OK(P4rtAble(sut)); }
+void TestP4Session(thinkit::Switch& sut) {
+  // Before a connection to P4RT can be established we need to configure the
+  // device ID.
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
+  ASSERT_OK(pins_test::SetDeviceId(*gnmi_stub, sut.DeviceId()));
+
+  EXPECT_OK(P4rtAble(sut));
+}
 
 void TestGnmiGetInterfaceOperation(thinkit::Switch& sut) {
   EXPECT_OK(GnmiAble(sut));

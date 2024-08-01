@@ -32,3 +32,22 @@ cc_library(
         "@com_google_absl//absl/strings",
     ],
 )
+
+cc_library(
+    name = "switch_test_setup_helpers",
+    testonly = True,
+    srcs = ["switch_test_setup_helpers.cc"],
+    hdrs = ["switch_test_setup_helpers.h"],
+    deps = [
+        "//lib/gnmi:gnmi_helper",
+        "//p4_pdpi:p4_runtime_session",
+        "//thinkit:switch",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:optional",
+    ],
+)
