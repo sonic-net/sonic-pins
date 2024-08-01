@@ -23,6 +23,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
@@ -52,12 +53,15 @@ using StringMap = absl::flat_hash_map<std::string, std::string>;
 //  - yang_path_key_name_map contains a map of yang list paths to the name of
 //    the leaf that's defined as the key for that list (multiple keys are
 //    supported).
+//  - unknown_key_paths: If the key for a list is absent in
+//  'yang_path_key_name_map', then such paths are recorded in
+//  'unknown_key_paths'
 absl::Status FlattenJson(const absl::string_view path,
                          const absl::string_view path_without_keys,
                          const nlohmann::json& source,
                          const StringSetMap& yang_path_key_name_map,
-                         bool ignore_unknown_key_paths,
-                         StringMap& flattened_map) {
+                         StringMap& flattened_map,
+                         absl::btree_set<std::string>& unknown_key_paths) {
   switch (source.type()) {
     case nlohmann::json::value_t::object: {
       // Traverse recursively through all the members of the object type after
@@ -68,7 +72,7 @@ absl::Status FlattenJson(const absl::string_view path,
             absl::StrCat(path_without_keys, "/", name);
         RETURN_IF_ERROR(FlattenJson(member_path, member_path_without_keys,
                                     value, yang_path_key_name_map,
-                                    ignore_unknown_key_paths, flattened_map));
+                                    flattened_map, unknown_key_paths));
       }
       break;
     }
@@ -77,14 +81,8 @@ absl::Status FlattenJson(const absl::string_view path,
       // in the array.
       auto key_name_iter = yang_path_key_name_map.find(path_without_keys);
       if (key_name_iter == yang_path_key_name_map.end()) {
-        if (ignore_unknown_key_paths) {
-          // Ignore this array. The array elements will not be in the flattened
-          // map.
-          return absl::OkStatus();
-        }
-        return absl::InvalidArgumentError(
-            absl::StrCat("No key found for path [", path_without_keys,
-                         "] while parsing path [", path, "]."));
+        unknown_key_paths.insert(std::string(path_without_keys));
+        return absl::OkStatus();
       }
       const absl::btree_set<std::string>& key_names = key_name_iter->second;
 
@@ -141,8 +139,8 @@ absl::Status FlattenJson(const absl::string_view path,
         // Traverse each array element recursively after adding the path element
         // to the path.
         RETURN_IF_ERROR(FlattenJson(member_path, path_without_keys, source[i],
-                                    yang_path_key_name_map,
-                                    ignore_unknown_key_paths, flattened_map));
+                                    yang_path_key_name_map, flattened_map,
+                                    unknown_key_paths));
       }
       break;
     }
@@ -267,8 +265,14 @@ absl::StatusOr<StringMap> FlattenJsonToMap(
     const nlohmann::json& root, const StringSetMap& yang_path_key_name_map,
     bool ignore_unknown_key_paths) {
   StringMap flattened_json;
+  absl::btree_set<std::string> unknown_key_paths;
   RETURN_IF_ERROR(FlattenJson("", "", root, yang_path_key_name_map,
-                              ignore_unknown_key_paths, flattened_json));
+                              flattened_json, unknown_key_paths));
+  if (!unknown_key_paths.empty() && !ignore_unknown_key_paths) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("No key found in the map for the paths: \n",
+                     absl::StrJoin(unknown_key_paths, "\n")));
+  }
   return flattened_json;
 }
 
