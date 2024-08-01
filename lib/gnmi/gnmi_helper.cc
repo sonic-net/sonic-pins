@@ -14,6 +14,7 @@
 
 #include "lib/gnmi/gnmi_helper.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -27,6 +28,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
@@ -37,17 +39,15 @@
 #include "absl/types/span.h"
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "glog/logging.h"
+#include "google/protobuf/any.pb.h"
 #include "google/protobuf/map.h"
 #include "grpcpp/impl/codegen/client_context.h"
-#include "grpcpp/impl/codegen/string_ref.h"
 #include "gutil/status.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
+#include "include/nlohmann/json.hpp"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "re2/re2.h"
-#include "include/nlohmann/json.hpp"
-#include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
 namespace pins_test {
@@ -488,19 +488,30 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
 
 absl::Status CheckInterfaceOperStateOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
-    absl::Span<const std::string> interfaces, absl::Duration timeout) {
+    absl::Span<const std::string> interfaces, bool skip_non_ethernet_interfaces,
+    absl::Duration timeout) {
   ASSIGN_OR_RETURN(const auto interface_to_oper_status_map,
                    GetInterfaceToOperStatusMapOverGnmi(stub, timeout));
 
+  std::vector<std::string> all_interfaces;
   absl::flat_hash_set<std::string> matching_interfaces;
   for (const auto& [interface, oper_status] : interface_to_oper_status_map) {
+    all_interfaces.push_back(interface);
     if (oper_status == interface_oper_state) {
       matching_interfaces.insert(interface);
     }
   }
+  if (interfaces.empty()) {
+    interfaces = all_interfaces;
+  }
 
   std::vector<std::string> unavailable_interfaces;
   for (const std::string& interface : interfaces) {
+    if (skip_non_ethernet_interfaces &&
+        !absl::StrContains(interface, "Ethernet")) {
+      LOG(INFO) << "Skipping check on interface: " << interface;
+      continue;
+    }
     if (!matching_interfaces.contains(interface)) {
       LOG(INFO) << "Interface "
                 << interface << " not found in interfaces that are "
@@ -514,34 +525,6 @@ absl::Status CheckInterfaceOperStateOverGnmi(
         "Some interfaces are not in the expected state ", interface_oper_state,
         ": \n", absl::StrJoin(unavailable_interfaces, "\n"),
         "\n\nInterfaces provided: \n", absl::StrJoin(interfaces, "\n")));
-  }
-  return absl::OkStatus();
-}
-
-absl::Status CheckAllInterfaceOperStateOverGnmi(
-    gnmi::gNMI::StubInterface& stub, absl::string_view interface_oper_state,
-    bool skip_non_ethernet_interfaces, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(const auto interface_to_oper_status_map,
-                   GetInterfaceToOperStatusMapOverGnmi(stub, timeout));
-
-  std::vector<std::string> unavailable_interfaces;
-  for (const auto& [interface, oper_status] : interface_to_oper_status_map) {
-    if (skip_non_ethernet_interfaces &&
-        !absl::StrContains(interface, "Ethernet")) {
-      LOG(INFO) << "Skipping check on interface: " << interface;
-      continue;
-    }
-    if (oper_status != interface_oper_state) {
-      LOG(INFO) << "Interface "
-                << interface << " not found in interfaces that are "
-                << interface_oper_state;
-      unavailable_interfaces.push_back(interface);
-    }
-  }
-  if (!unavailable_interfaces.empty()) {
-    return absl::UnavailableError(
-        absl::StrCat("Interfaces are not ready. ",
-                     absl::StrJoin(unavailable_interfaces, "\n")));
   }
   return absl::OkStatus();
 }
@@ -916,6 +899,100 @@ absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
       &gnmi_stub, node_id_path, GnmiSetType::kUpdate,
       absl::Substitute("{\"integrated-circuit:node-id\":\"$0\"}", device_id)));
   return absl::OkStatus();
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetTransceiverToEthernetPmdMap(gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(std::string response, pins_test::GetGnmiStatePathInfo(
+                                             &gnmi_stub, "components",
+                                             "openconfig-platform:components"));
+  json response_json = json::parse(response);
+  ASSIGN_OR_RETURN(json components, GetField(response_json, "component"));
+
+  absl::flat_hash_map<std::string, std::string> pmd_types;
+  for (const auto& component : components.items()) {
+    ASSIGN_OR_RETURN(json name, GetField(component.value(), "name"));
+    if (!absl::StartsWith(name.get<std::string>(), "Ethernet")) {
+      continue;
+    }
+
+    ASSIGN_OR_RETURN(json state, GetField(component.value(), "state"));
+    ASSIGN_OR_RETURN(json empty, GetField(state, "empty"));
+    if (empty.get<bool>()) {
+      continue;
+    }
+
+    ASSIGN_OR_RETURN(json transceiver,
+                     GetField(component.value(),
+                              "openconfig-platform-transceiver:transceiver"));
+    ASSIGN_OR_RETURN(json xcvr_state, GetField(transceiver, "state"));
+    ASSIGN_OR_RETURN(json ethernet_pmd, GetField(xcvr_state, "ethernet-pmd"));
+    pmd_types[name.get<std::string>()] = ethernet_pmd.get<std::string>();
+  }
+  return pmd_types;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, int>>
+GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub) {
+  // Map of Openconfig SPEED enum strings to integer speed in Kbps (this ensures
+  // all speeds are divisible by 8).
+  const absl::flat_hash_map<std::string, int> kOcSpeedToInt = {
+      {"openconfig-if-ethernet:SPEED_10MB", 10'000},
+      {"openconfig-if-ethernet:SPEED_100MB", 100'000},
+      {"openconfig-if-ethernet:SPEED_1GB", 1'000'000},
+      {"openconfig-if-ethernet:SPEED_2500MB", 2'500'000},
+      {"openconfig-if-ethernet:SPEED_5GB", 5'000'000},
+      {"openconfig-if-ethernet:SPEED_10GB", 10'000'000},
+      {"openconfig-if-ethernet:SPEED_25GB", 25'000'000},
+      {"openconfig-if-ethernet:SPEED_40GB", 40'000'000},
+      {"openconfig-if-ethernet:SPEED_50GB", 50'000'000},
+      {"openconfig-if-ethernet:SPEED_100GB", 100'000'000},
+      {"openconfig-if-ethernet:SPEED_200GB", 200'000'000},
+      {"openconfig-if-ethernet:SPEED_400GB", 400'000'000},
+      {"openconfig-if-ethernet:SPEED_600GB", 600'000'000},
+      {"openconfig-if-ethernet:SPEED_800GB", 800'000'000},
+  };
+  ASSIGN_OR_RETURN(
+      std::string response,
+      pins_test::GetGnmiStatePathInfo(&gnmi_stub, "interfaces",
+                                      "openconfig-interfaces:interfaces"));
+  json response_json = json::parse(response);
+  ASSIGN_OR_RETURN(json interfaces, GetField(response_json, "interface"));
+
+  absl::flat_hash_map<std::string, int> interface_to_lane_speed;
+  for (const auto& interface : interfaces.items()) {
+    ASSIGN_OR_RETURN(json name, GetField(interface.value(), "name"));
+    if (!absl::StartsWith(name.get<std::string>(), "Ethernet")) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(
+        json ethernet,
+        GetField(interface.value(), "openconfig-if-ethernet:ethernet"));
+
+    ASSIGN_OR_RETURN(json ethernet_state, GetField(ethernet, "state"));
+    ASSIGN_OR_RETURN(json oc_port_speed,
+                     GetField(ethernet_state, "port-speed"));
+    ASSIGN_OR_RETURN(json state, GetField(interface.value(), "state"));
+    ASSIGN_OR_RETURN(
+        json physical_channel,
+        GetField(state, "openconfig-platform-transceiver:physical-channel"));
+    int lanes = physical_channel.size();
+    if (lanes == 0) {
+      LOG(WARNING) << "Interface " << name.get<std::string>()
+                   << " has physical-channel size of 0, skipping.";
+      continue;
+    }
+    auto total_speed_it = kOcSpeedToInt.find(oc_port_speed.get<std::string>());
+    if (total_speed_it == kOcSpeedToInt.end()) {
+      LOG(WARNING) << "Interface " << name.get<std::string>()
+                   << " has unknown speed: "
+                   << oc_port_speed.get<std::string>();
+      continue;
+    }
+    int total_speed = total_speed_it->second;
+    interface_to_lane_speed[name.get<std::string>()] = total_speed / lanes;
+  }
+  return interface_to_lane_speed;
 }
 
 }  // namespace pins_test

@@ -17,24 +17,27 @@
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
+#include "github.com/openconfig/gnoi/types/types.pb.h"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
+#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "include/nlohmann/json.hpp"
-#include "lib/utils/json_utils.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "proto/gnmi/gnmi_mock.grpc.pb.h"
 
@@ -974,7 +977,7 @@ TEST(CheckAllInterfaceOperState, FailsToGetInterfaceOperStatusMap) {
   EXPECT_CALL(stub, Get).WillOnce(
       Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
   EXPECT_THAT(
-      CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"),
+      CheckInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"),
       StatusIs(absl::StatusCode::kDeadlineExceeded));
 }
 
@@ -995,9 +998,9 @@ TEST(CheckAllInterfaceOperState, InterfaceNotUp) {
       Return(grpc::Status::OK)));
 
   EXPECT_THAT(
-      CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"),
+      CheckInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"),
       StatusIs(absl::StatusCode::kUnavailable,
-               HasSubstr("Interfaces are not ready")));
+               HasSubstr("Some interfaces are not in the expected state UP")));
 }
 
 TEST(CheckAllInterfaceOperState, InterfaceNotDown) {
@@ -1017,9 +1020,10 @@ TEST(CheckAllInterfaceOperState, InterfaceNotDown) {
       Return(grpc::Status::OK)));
 
   EXPECT_THAT(
-      CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"DOWN"),
-      StatusIs(absl::StatusCode::kUnavailable,
-               HasSubstr("Interfaces are not ready")));
+      CheckInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"DOWN"),
+      StatusIs(
+          absl::StatusCode::kUnavailable,
+          HasSubstr("Some interfaces are not in the expected state DOWN")));
 }
 
 TEST(CheckAllInterfaceOperState, AllInterfacesUp) {
@@ -1039,7 +1043,7 @@ TEST(CheckAllInterfaceOperState, AllInterfacesUp) {
       Return(grpc::Status::OK)));
 
   ASSERT_OK(
-      CheckAllInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"));
+      CheckInterfaceOperStateOverGnmi(stub, /*interface_oper_state=*/"UP"));
 }
 
 TEST(CheckInterfaceOperState, FailsToGetInterfaceOperStatusMap) {
@@ -1479,6 +1483,100 @@ TEST(TransceiverPartInformation, EmptyTransceiver) {
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
   EXPECT_THAT(GetTransceiverPartInformation(mock_stub),
               IsOkAndHolds(IsEmpty()));
+}
+
+TEST(TransceiverEthernetPmdType, WorksProperly) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-platform:components": {
+        "component": [
+          {
+            "name": "1/1"
+          },
+          {
+            "name": "Ethernet1",
+            "state": {
+              "empty": false
+            },
+            "openconfig-platform-transceiver:transceiver": {
+              "state": {
+                "ethernet-pmd": "openconfig-transport-types:ETH_10GBASE_LR"
+              }
+            }
+          }
+        ]
+      }
+    })";
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+  absl::flat_hash_map<std::string, std::string> expected_map{
+      {"Ethernet1", "openconfig-transport-types:ETH_10GBASE_LR"}};
+  EXPECT_THAT(GetTransceiverToEthernetPmdMap(mock_stub),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
+}
+
+TEST(InterfaceToSpeed, WorksProperly) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-interfaces:interfaces": {
+        "interface": [
+          {
+            "name": "CPU"
+          },
+          {
+            "name": "Ethernet1/1/1",
+            "state": {
+              "openconfig-platform-transceiver:physical-channel": [0,1,2,3]
+            },
+            "openconfig-if-ethernet:ethernet": {
+              "state": {
+                "port-speed": "openconfig-if-ethernet:SPEED_10GB"
+              }
+            }
+          },
+          {
+            "name": "Ethernet1/2/1",
+            "state": {
+              "openconfig-platform-transceiver:physical-channel": []
+            },
+            "openconfig-if-ethernet:ethernet": {
+              "state": {
+                "port-speed": "openconfig-if-ethernet:SPEED_10GB"
+              }
+            }
+          },
+          {
+            "name": "Ethernet1/3/1",
+            "state": {
+              "openconfig-platform-transceiver:physical-channel": [7]
+            },
+            "openconfig-if-ethernet:ethernet": {
+              "state": {
+                "port-speed": "openconfig-if-ethernet:SPEED_100GB"
+              }
+            }
+          }
+        ]
+      }
+    })";
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+  absl::flat_hash_map<std::string, int> expected_map{
+      {"Ethernet1/1/1", 10'000'000 / 4}, {"Ethernet1/3/1", 100'000'000}};
+  EXPECT_THAT(GetInterfaceToLaneSpeedMap(mock_stub),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
 }  // namespace
