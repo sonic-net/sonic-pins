@@ -25,7 +25,6 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/time.h"
-#include "gutil/status.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "lib/validator/validator_lib.h"
 #include "thinkit/switch.h"
@@ -84,7 +83,7 @@ absl::Status PINSBackend::PortsUp(absl::string_view chassis,
         absl::StrCat("ValidatorBackend passed invalid chassis: ", chassis));
   }
   auto& [sut_name, sut_switch] = *sut;
-  return pins_test::PortsUp(*sut_switch, {}, timeout);
+  return pins_test::PortsUp(*sut_switch, {}, /*with_healthz=*/true, timeout);
 }
 
 }  // namespace pins_test
