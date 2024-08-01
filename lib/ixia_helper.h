@@ -15,11 +15,13 @@
 #ifndef PINS_THINKIT_IXIA_INTERFACE_H_
 #define PINS_THINKIT_IXIA_INTERFACE_H_
 
+#include <cstdint>
 #include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "lib/ixia_helper.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
@@ -63,7 +65,7 @@ absl::StatusOr<std::string> IxiaConnect(
 
 // IxiaVport - Connect to an Ixia Card/Port.  Returns either an error or the
 // href string from the response. The card and port are supplied as e.g.
-// "4" and "2". Takes in the href returned by IxiaConnect as a parameter.  The
+// "4" and "2". Takes in the href returned by IxiaConnect as a parameter. The
 // return value is referred to as a vref in this namespace.
 absl::StatusOr<std::string> IxiaVport(absl::string_view href,
                                       absl::string_view ixia_card,
@@ -82,7 +84,8 @@ absl::StatusOr<std::string> IxiaVport(
 absl::StatusOr<std::string> IxiaSession(
     absl::string_view vref, thinkit::GenericTestbed &generic_testbed);
 
-// SetUpTrafficItem - Sets up a traffic item with source and destination.
+// SetUpTrafficItem - Sets up a traffic item with source and destination,
+// and optionally with a `traffic_name` useful for querying stats.
 // Returns either an error or the
 // href string for the first traffic item, e.g. something like
 // "/api/v1/sessions/101/ixnetwork/traffic/trafficItem/1", which we'll refer
@@ -91,6 +94,15 @@ absl::StatusOr<std::string> IxiaSession(
 absl::StatusOr<std::string> SetUpTrafficItem(
     absl::string_view vref_src, absl::string_view vref_dst,
     thinkit::GenericTestbed &generic_testbed);
+absl::StatusOr<std::string> SetUpTrafficItem(
+    absl::string_view vref_src, absl::string_view vref_dst,
+    absl::string_view traffic_name, thinkit::GenericTestbed &generic_testbed);
+
+// Deletes traffic item. Takes in the tref returned by IxiaSession.
+// Deleting a traffic item manually is not strictly required, but is useful
+// when setting up a lot of items in a loop to not overwhelm the Ixia.
+absl::Status DeleteTrafficItem(absl::string_view tref,
+                               thinkit::GenericTestbed &testbed);
 
 // StartTraffic - starts traffic running from the Ixia, as previously
 // configured before calling this function. user supplies the tref or
@@ -105,7 +117,7 @@ absl::Status StartTraffic(absl::Span<const std::string> trefs,
                           thinkit::GenericTestbed &generic_testbed);
 
 // StopTraffic - stops traffic running from the Ixia. StartTraffic is
-// presumed to have been run first.  Takes in the tref returned by IxiaSession
+// presumed to have been run first. Takes in the tref returned by IxiaSession
 // as a parameter.
 absl::Status StopTraffic(absl::string_view tref,
                          thinkit::GenericTestbed &generic_testbed);
@@ -120,7 +132,7 @@ absl::Status SetFrameRate(absl::string_view tref, uint32_t fps,
                           thinkit::GenericTestbed &generic_testbed);
 
 // SetLineRate - sets the line rate as 1-100 percent of max line rate
-// This is an alternative to SetFrameRate.  Takes in the tref returned
+// This is an alternative to SetFrameRate. Takes in the tref returned
 // by IxiaSession
 absl::Status SetLineRate(absl::string_view tref, uint32_t percent,
                          thinkit::GenericTestbed &generic_testbed);
@@ -253,6 +265,33 @@ struct TrafficParameters {
 absl::Status SetTrafficParameters(absl::string_view tref,
                                   const TrafficParameters &params,
                                   thinkit::GenericTestbed &testbed);
+
+// -- Statistics ---------------------------------------------------------------
+
+// Low-level function for obtaining unparsed statistics view by index.
+// Queries `statistics/view/<index>`.
+// Takes in the href returned by IxiaConnect.
+absl::StatusOr<std::string> GetRawStatsView(
+    absl::string_view href, int stats_view_index,
+    thinkit::GenericTestbed &generic_testbed);
+
+// Returns statistics for the traffic item of the given name.
+// Takes in the href returned by IxiaConnect, and the `traffic_item_name` set
+// by `SetUpTrafficItem`.
+absl::StatusOr<TrafficItemStats> GetTrafficItemStats(
+    absl::string_view href, absl::string_view traffic_item_name,
+    thinkit::GenericTestbed &generic_testbed);
+
+// Computes average rate (bytes/s) at which traffic was received back by Ixia.
+inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
+  return stats.rx_bytes() /
+         (stats.last_time_stamp() - stats.first_time_stamp());
+}
+
+// Takes unparsed traffic item statistics, as returned by `GetRawStatsView`, and
+// returns parsed representation, keyed by traffic item name.
+// Return Unavailable error if the stats are not ready yet.
+absl::StatusOr<TrafficStats> ParseTrafficItemStats(absl::string_view raw_stats);
 
 }  // namespace pins_test::ixia
 
