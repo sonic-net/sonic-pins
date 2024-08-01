@@ -83,6 +83,9 @@ absl::Status InstallIrTableEntries(P4RuntimeSession &p4rt,
 absl::Status InstallIrEntities(P4RuntimeSession &p4rt,
                                const IrEntities &ir_entities);
 
+// Like `InstallIrEntities`, but for a single entity.
+absl::Status InstallIrEntity(P4RuntimeSession& p4rt, const IrEntity& ir_entity);
+
 // Like `InstallIrTableEntries`, but for a single entry.
 absl::Status InstallIrTableEntry(P4RuntimeSession &p4rt,
                                  const IrTableEntry &ir_table_entry);
@@ -162,6 +165,13 @@ absl::Status DeleteIrEntity(P4RuntimeSession &p4rt, const IrEntity &Ir_entity);
 // Deletes the given `pi_entity` from the switch.
 absl::Status DeletePiEntity(P4RuntimeSession &p4rt,
                             const p4::v1::Entity &pi_entity);
+
+// Deletes the given `ir_entity` from the switch.
+absl::Status DeleteIrEntity(P4RuntimeSession& p4rt, const IrEntity& ir_entity);
+
+// Deletes the given `pi_entity` from the switch.
+absl::Status DeletePiEntity(P4RuntimeSession& p4rt,
+                            const p4::v1::Entity& pi_entity);
 
 // == END OF PUBLIC INTERFACE ==================================================
 
