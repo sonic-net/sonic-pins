@@ -528,6 +528,8 @@ namespace json_yang {
 
 namespace {
 
+using StringSetMap =
+    absl::flat_hash_map<std::string, absl::btree_set<std::string>>;
 using StringMap = absl::flat_hash_map<std::string, std::string>;
 
 using ::gutil::IsOkAndHolds;
@@ -893,12 +895,20 @@ TEST(ReplaceNamesinJsonObject, TestInPlaceReplacementNamesReplaced) {
 }
 
 // Map of yang list paths to names of key leaves used for testing.
-static const auto* const kPathKeyNameMap = new StringMap({
-    {"/outer_element/container1", "key_leaf1"},
-    {"/outer_element/container1/middle_element/container2", "key_leaf2"},
+static const auto* const kPathKeyNameMap = new StringSetMap({
+    {"/outer_element/container1", {"key_leaf1"}},
+    {"/outer_element/container1/middle_element/container2", {"key_leaf2"}},
     {"/outer_element/container1/middle_element/container2/inner_element/"
      "container3",
-     "key_leaf3"},
+     {"key_leaf3"}},
+});
+
+static const auto* const kPathKeyNameMapWithMultipleKeys = new StringSetMap({
+    {"/outer_element/container1", {"key_leaf1"}},
+    {"/outer_element/container1/middle_element/container2", {"key_leaf2"}},
+    {"/outer_element/container1/middle_element/container2/inner_element/"
+     "container3",
+     {"key_leaf3", "key_leaf4"}},
 });
 
 TEST(FlattenJson, TestInvalidJsonType) {
@@ -1132,24 +1142,24 @@ TEST(FlattenJson, TestLeafLists) {
     }
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
-  const auto path_map = StringMap({
-      {"/outer_element/container1", "key_leaf1"},
-      {"/outer_element/container1/middle_element/container2", "key_leaf2"},
+  const auto path_map = StringSetMap({
+      {"/outer_element/container1", {"key_leaf1"}},
+      {"/outer_element/container1/middle_element/container2", {"key_leaf2"}},
       {"/outer_element/container1/middle_element/container2/inner_element/"
        "container3",
-       ""},
+       {}},
       {"/outer_element/container1/middle_element/container2/inner_element/"
        "container4",
-       ""},
+       {}},
       {"/outer_element/container1/middle_element/container2/inner_element/"
        "container5",
-       ""},
+       {}},
       {"/outer_element/container1/middle_element/container2/inner_element/"
        "container6",
-       ""},
+       {}},
       {"/outer_element/container1/middle_element/container2/inner_element/"
        "container7",
-       ""},
+       {}},
   });
   EXPECT_THAT(
       FlattenJsonToMap(root, path_map, /*ignore_unknown_key_paths=*/false),
@@ -1219,12 +1229,12 @@ TEST(FlattenJson, TestLeafListsNonPrimitive) {
     }
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
-  const auto path_map = StringMap({
-      {"/outer_element/container1", "key_leaf1"},
-      {"/outer_element/container1/middle_element/container2", "key_leaf2"},
+  const auto path_map = StringSetMap({
+      {"/outer_element/container1", {"key_leaf1"}},
+      {"/outer_element/container1/middle_element/container2", {"key_leaf2"}},
       {"/outer_element/container1/middle_element/container2/inner_element/"
        "container3",
-       ""},
+       {}},
   });
   EXPECT_THAT(
       FlattenJsonToMap(root, path_map, /*ignore_unknown_key_paths=*/false),
@@ -1280,7 +1290,8 @@ TEST(FlattenJson, TestInvalidKeyLeafTypeInner) {
                 "inner_element": {
                   "container3": [
                     {
-                      "key_leaf3": "value3"
+                      "key_leaf3": "value3",
+                      "key_leaf4" : "value4"
                     },
                     {
                       "key_leaf3": {
@@ -1298,7 +1309,7 @@ TEST(FlattenJson, TestInvalidKeyLeafTypeInner) {
   })";
   ASSERT_OK_AND_ASSIGN(nlohmann::json root, ParseJson(kExampleJson));
   EXPECT_THAT(
-      FlattenJsonToMap(root, *kPathKeyNameMap,
+      FlattenJsonToMap(root, *kPathKeyNameMapWithMultipleKeys,
                        /*ignore_unknown_key_paths=*/false),
       gutil::StatusIs(
           absl::StatusCode::kInvalidArgument,
@@ -1339,19 +1350,24 @@ TEST(FlattenJson, TestSuccess) {
                       "key_leaf3": "inner_value1",
                       "inner_object1": {
                         "leaf1": "value1"
-                      }
+                      },
+                      "key_leaf4": "inner_value2"
                     },
                     {
-                      "key_leaf3": -12
+                      "key_leaf3": -12,
+                      "key_leaf4": -13
                     },
                     {
-                      "key_leaf3": 87
+                      "key_leaf3": 87,
+                      "key_leaf4": 88
                     },
                     {
-                      "key_leaf3": 3.67
+                      "key_leaf3": 3.67,
+                      "key_leaf4": 4.5
                     },
                     {
-                      "key_leaf3": true
+                      "key_leaf3": true,
+                      "key_leaf4": false
                     }
                   ]
                 }
@@ -1390,30 +1406,52 @@ TEST(FlattenJson, TestSuccess) {
 
       {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
        "container2[key_leaf2='middle_value1']/inner_element/"
-       "container3[key_leaf3='inner_value1']/key_leaf3",
+       "container3[key_leaf3='inner_value1'][key_leaf4='inner_value2']/"
+       "key_leaf3",
        "inner_value1"},
       {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
        "container2[key_leaf2='middle_value1']/inner_element/"
-       "container3[key_leaf3='inner_value1']/inner_object1/leaf1",
+       "container3[key_leaf3='inner_value1'][key_leaf4='inner_value2']/"
+       "key_leaf4",
+       "inner_value2"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='inner_value1'][key_leaf4='inner_value2']/"
+       "inner_object1/leaf1",
        "value1"},
 
       {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
        "container2[key_leaf2='middle_value1']/inner_element/"
-       "container3[key_leaf3='-12']/key_leaf3",
+       "container3[key_leaf3='-12'][key_leaf4='-13']/key_leaf3",
        "-12"},
       {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
        "container2[key_leaf2='middle_value1']/inner_element/"
-       "container3[key_leaf3='87']/key_leaf3",
+       "container3[key_leaf3='-12'][key_leaf4='-13']/key_leaf4",
+       "-13"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='87'][key_leaf4='88']/key_leaf3",
        "87"},
       {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
        "container2[key_leaf2='middle_value1']/inner_element/"
-       "container3[key_leaf3='3.67']/key_leaf3",
+       "container3[key_leaf3='87'][key_leaf4='88']/key_leaf4",
+       "88"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='3.67'][key_leaf4='4.5']/key_leaf3",
        "3.67"},
       {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
        "container2[key_leaf2='middle_value1']/inner_element/"
-       "container3[key_leaf3='true']/key_leaf3",
+       "container3[key_leaf3='3.67'][key_leaf4='4.5']/key_leaf4",
+       "4.5"},
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='true'][key_leaf4='false']/key_leaf3",
        "true"},
-
+      {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
+       "container2[key_leaf2='middle_value1']/inner_element/"
+       "container3[key_leaf3='true'][key_leaf4='false']/key_leaf4",
+       "false"},
       {"/outer_element/container1[key_leaf1='outer_value1']/middle_element/"
        "container2[key_leaf2='middle_value2']/key_leaf2",
        "middle_value2"},
@@ -1427,7 +1465,7 @@ TEST(FlattenJson, TestSuccess) {
        "outer_leaf",
        "outer_value"},
   };
-  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMap,
+  EXPECT_THAT(FlattenJsonToMap(root, *kPathKeyNameMapWithMultipleKeys,
                                /*ignore_unknown_key_paths=*/false),
               gutil::IsOkAndHolds(kExpectedMap));
 }

@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -121,13 +122,14 @@ void ReplaceNamesinJsonObject(
 // identify the elements in the list. (see rfc7950#section-7.8.2).
 //
 //  - yang_path_key_name_map contains a map of yang list paths to the name of
-//    the leaf that's defined as the key for that list (currently only supports
-//    one key).
+//    the leaf that's defined as the key for that list. There can exist multiple
+//    keys.
 //  - If ignore_unknown_key_paths is true and the key is not found in the map,
 //    then the entire array will not be included in the output.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>> FlattenJsonToMap(
     const nlohmann::json& root,
-    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    const absl::flat_hash_map<std::string, absl::btree_set<std::string>>&
+        yang_path_key_name_map,
     bool ignore_unknown_key_paths);
 
 // Returns true if all yang leaf nodes in 'source' are present in 'target' with
@@ -140,7 +142,8 @@ absl::StatusOr<absl::flat_hash_map<std::string, std::string>> FlattenJsonToMap(
 //   the leaf that's defined as the key.
 absl::StatusOr<bool> IsJsonSubset(
     const nlohmann::json& source, const nlohmann::json& target,
-    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    const absl::flat_hash_map<std::string, absl::btree_set<std::string>>&
+        yang_path_key_name_map,
     std::vector<std::string>& differences);
 
 // Returns true only if lhs and rhs have the same sets of paths with the same
@@ -149,7 +152,8 @@ absl::StatusOr<bool> IsJsonSubset(
 // elements.
 absl::StatusOr<bool> AreJsonEqual(
     const nlohmann::json& lhs, const nlohmann::json& rhs,
-    const absl::flat_hash_map<std::string, std::string>& yang_path_key_name_map,
+    const absl::flat_hash_map<std::string, absl::btree_set<std::string>>&
+        yang_path_key_name_map,
     std::vector<std::string>& differences);
 
 // Helper function to return the simple JSON value (number, boolean, string).
