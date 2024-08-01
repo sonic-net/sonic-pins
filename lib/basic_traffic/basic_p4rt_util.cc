@@ -181,4 +181,36 @@ absl::Status ProgramIPv4Route(
   return absl::OkStatus();
 }
 
+absl::Status ProgramL3AdmitTableEntry(
+    const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
+    sai::Instantiation instantiation) {
+  sai::TableEntry l3_admit_table_entry;
+  ASSIGN_OR_RETURN(
+      auto l3_admit_request,
+      gutil::ParseTextProto<sai::WriteRequest>(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                l3_admit_table_entry {
+                  match {
+                    dst_mac {
+                      value: "00:00:00:00:00:00"
+                      mask: "FF:FF:FF:FF:FF:FF"
+                    }
+                  }
+                  action { admit_to_l3 {} }
+                  priority: 1
+                  controller_metadata: "Experimental_type: VARIOUS_L3ADMIT_PUNTFLOW"
+                }
+              }
+            }
+          )pb"));
+
+  RETURN_IF_ERROR(
+      WritePdWriteRequest(write_request, instantiation, l3_admit_request))
+      << "Error writing l3 admit table entry request.";
+  return absl::OkStatus();
+}
+
 }  // namespace pins_test::basic_traffic
