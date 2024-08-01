@@ -270,6 +270,7 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
 
 absl::StatusOr<std::string> ParseJsonResponse(absl::string_view val,
                                               absl::string_view match_tag) {
+  if (match_tag.empty()) return std::string(val);
   const auto resp_json = json::parse(val);
   const auto match_tag_json = resp_json.find(match_tag);
   if (match_tag_json == resp_json.end()) {
@@ -306,7 +307,7 @@ absl::StatusOr<std::string> ParseGnmiGetResponse(
   }
 }
 
-absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* sut_gnmi_stub,
+absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                absl::string_view config_path,
                                GnmiSetType operation, absl::string_view value) {
   ASSIGN_OR_RETURN(gnmi::SetRequest request,
@@ -314,7 +315,7 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* sut_gnmi_stub,
   LOG(INFO) << "Sending SET request: " << request.ShortDebugString();
   gnmi::SetResponse response;
   grpc::ClientContext context;
-  auto status = sut_gnmi_stub->Set(&context, request, &response);
+  auto status = gnmi_stub->Set(&context, request, &response);
   if (!status.ok()) {
     return gutil::UnknownErrorBuilder().LogError()
            << "SET request failed! Error code: " << status.error_code()
@@ -545,24 +546,37 @@ absl::Status CheckAllInterfaceOperStateOverGnmi(
   return absl::OkStatus();
 }
 
-absl::StatusOr<std::string> GetGnmiStatePathInfo(
-    gnmi::gNMI::StubInterface* sut_gnmi_stub, absl::string_view state_path,
-    absl::string_view resp_parse_str) {
-  ASSIGN_OR_RETURN(gnmi::GetRequest request,
-                   BuildGnmiGetRequest(state_path, gnmi::GetRequest::STATE));
-  // LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
+    gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request) {
+  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
   gnmi::GetResponse response;
   grpc::ClientContext context;
-  auto status = sut_gnmi_stub->Get(&context, request, &response);
+  auto status = gnmi_stub->Get(&context, request, &response);
   if (!status.ok()) {
     return gutil::UnknownErrorBuilder().LogError()
            << "GET request failed! Error code: " << status.error_code()
            << " , Error message: " << status.error_message();
   }
-  // LOG(INFO) << "Received GET response: " << response.ShortDebugString();
-  ASSIGN_OR_RETURN(std::string state_path_response,
-                   ParseGnmiGetResponse(response, resp_parse_str));
-  return state_path_response;
+  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  return response;
+}
+
+absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
+                                         absl::string_view path,
+                                         gnmi::GetRequest::DataType req_type,
+                                         absl::string_view resp_parse_str) {
+  ASSIGN_OR_RETURN(gnmi::GetRequest request,
+                   BuildGnmiGetRequest(path, req_type));
+  ASSIGN_OR_RETURN(gnmi::GetResponse response,
+                   SendGnmiGetRequest(gnmi_stub, request));
+  return ParseGnmiGetResponse(response, resp_parse_str);
+}
+
+absl::StatusOr<std::string> GetGnmiStatePathInfo(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
+    absl::string_view resp_parse_str) {
+  return ReadGnmiPath(gnmi_stub, state_path, gnmi::GetRequest::STATE,
+                      resp_parse_str);
 }
 
 void AddSubtreeToGnmiSubscription(absl::string_view subtree_root,
@@ -831,6 +845,10 @@ absl::StatusOr<gnmi::GetResponse> GetSystemMemory(
 
 absl::string_view StripQuotes(absl::string_view string) {
   return absl::StripPrefix(absl::StripSuffix(string, "\""), "\"");
+}
+
+absl::string_view StripBrackets(absl::string_view string) {
+  return absl::StripPrefix(absl::StripSuffix(string, "]"), "[");
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>

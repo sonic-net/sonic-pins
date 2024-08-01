@@ -29,7 +29,6 @@
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "thinkit/generic_testbed.h"
-#include "thinkit/switch.h"
 
 namespace pins_test::basic_traffic {
 

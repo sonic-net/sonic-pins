@@ -205,7 +205,7 @@ absl::Status ProgramRoutes(
     RETURN_IF_ERROR(
         ProgramIPv4Route(write_request, egress_port_id, instantiation));
   }
-  return absl::OkStatus();
+  return ProgramL3AdmitTableEntry(write_request);
 }
 
 std::vector<InterfacePair> OneToOne(
