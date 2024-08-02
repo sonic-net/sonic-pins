@@ -25,6 +25,8 @@ cc_library(
     srcs = ["gnmi_helper.cc"],
     hdrs = ["gnmi_helper.h"],
     deps = [
+        ":openconfig_cc_proto",
+        "//gutil:proto",
         "//gutil:status",
         "//p4_pdpi:p4_runtime_session",
         "//thinkit:switch",

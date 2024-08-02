@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -42,8 +43,10 @@
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/map.h"
 #include "grpcpp/impl/codegen/client_context.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
+#include "lib/gnmi/openconfig.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
@@ -503,10 +506,14 @@ absl::Status CheckInterfaceOperStateOverGnmi(
 }
 
 absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
-    gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request) {
+    gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request,
+    std::optional<absl::Duration> timeout) {
   LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
   gnmi::GetResponse response;
   grpc::ClientContext context;
+  if (timeout.has_value()) {
+    context.set_deadline(absl::ToChronoTime(absl::Now() + *timeout));
+  }
   auto status = gnmi_stub->Get(&context, request, &response);
   if (!status.ok()) {
     return gutil::UnknownErrorBuilder().LogError()
@@ -523,8 +530,9 @@ absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                          absl::string_view resp_parse_str) {
   ASSIGN_OR_RETURN(gnmi::GetRequest request,
                    BuildGnmiGetRequest(path, req_type));
-  ASSIGN_OR_RETURN(gnmi::GetResponse response,
-                   SendGnmiGetRequest(gnmi_stub, request));
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(gnmi_stub, request, /*timeout=*/std::nullopt));
   return ParseGnmiGetResponse(response, resp_parse_str);
 }
 
@@ -623,6 +631,32 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     return OperStatus::kTesting;
   }
   return OperStatus::kUnknown;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllEnabledInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub,
+                                   absl::Duration timeout) {
+  // Gets the config path for all interfaces.
+  ASSIGN_OR_RETURN(auto request,
+                   BuildGnmiGetRequest("interfaces", gnmi::GetRequest::CONFIG));
+  ASSIGN_OR_RETURN(gnmi::GetResponse response,
+                   SendGnmiGetRequest(&stub, request, timeout));
+
+  ASSIGN_OR_RETURN(openconfig::Config proto,
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       response.notification(0).update(0).val().json_ietf_val(),
+                       /*ignore_unknown_fields=*/true));
+
+  absl::flat_hash_map<std::string, std::string> port_id_by_interface;
+  for (const openconfig::Interfaces::Interface& interface :
+       proto.interfaces().interfaces()) {
+    // Only return enabled ports.
+    if (interface.config().enabled()) {
+      port_id_by_interface[interface.name()] =
+          absl::StrCat(interface.config().p4rt_id());
+    }
+  }
+  return port_id_by_interface;
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>

@@ -204,6 +204,12 @@ GetAllInterfaceNameToPortId(absl::string_view gnmi_config);
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub);
 
+// Reads the gNMI config from the switch and returns a map of all enabled
+// interfaces to their p4rt port id.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllEnabledInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub,
+                                   absl::Duration timeout = absl::Seconds(60));
+
 // Returns the ordered set of all port ids mapped by the given gNMI config.
 absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(
     absl::string_view gnmi_config);

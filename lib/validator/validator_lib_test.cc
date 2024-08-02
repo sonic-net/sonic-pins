@@ -91,7 +91,6 @@ TEST(WaitForConditionTest, PassesTimeoutToCondition) {
   std::vector<absl::Duration> timeouts;
   auto record_timeout = [&timeouts](absl::Duration timeout) {
     timeouts.push_back(timeout);
-    absl::SleepFor(absl::Milliseconds(1));
     return absl::InternalError("Failed");
   };
   EXPECT_FALSE(WaitForCondition(record_timeout, absl::Milliseconds(10)).ok());
@@ -105,8 +104,23 @@ TEST(WaitForConditionTest, NotWorks) {
     ++call_count;
     return call_count < 5 ? absl::OkStatus() : absl::InternalError("Failed");
   };
-  EXPECT_OK(WaitForNot(succeed, absl::Milliseconds(1), ""));
+  EXPECT_OK(WaitForNot(succeed, absl::Milliseconds(50), ""));
   EXPECT_EQ(call_count, 5);
+}
+
+TEST(WaitForConditionTest, ReturnsMoreUsefulMessageAfterTimeout) {
+  int call_count = 0;
+  auto timeout_after_one_call = [&call_count](absl::Duration timeout) {
+    if (call_count > 0) {
+      absl::SleepFor(timeout);
+      return absl::DeadlineExceededError("Useless Message");
+    }
+    ++call_count;
+    return absl::InvalidArgumentError("A Useful Message");
+  };
+  EXPECT_THAT(WaitForCondition(timeout_after_one_call, absl::Milliseconds(10)),
+              gutil::StatusIs(absl::StatusCode::kDeadlineExceeded,
+                              testing::HasSubstr("A Useful Message")));
 }
 
 TEST(OnFailureTest, DoesntRunOnSuccess) {
