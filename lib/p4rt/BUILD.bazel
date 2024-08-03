@@ -18,20 +18,6 @@ package(
 )
 
 cc_library(
-    name = "p4rt_port",
-    srcs = ["p4rt_port.cc"],
-    hdrs = ["p4rt_port.h"],
-    deps = [
-        "//p4_pdpi/string_encodings:decimal_string",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/types:span",
-    ],
-)
-
-cc_library(
     name = "packet_listener",
     testonly = 1,
     srcs = ["packet_listener.cc"],
@@ -81,6 +67,30 @@ cc_test(
         "//p4_pdpi:p4_runtime_session",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "p4rt_port",
+    srcs = ["p4rt_port.cc"],
+    hdrs = ["p4rt_port.h"],
+    deps = [
+        "//p4_pdpi/string_encodings:decimal_string",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_test(
+    name = "p4rt_port_test",
+    srcs = ["p4rt_port_test.cc"],
+    deps = [
+        ":p4rt_port",
+        "//gutil:status_matchers",
         "@com_google_googletest//:gtest_main",
     ],
 )
