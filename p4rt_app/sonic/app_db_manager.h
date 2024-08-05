@@ -41,6 +41,8 @@ namespace sonic {
 enum class AppDbTableType {
   P4RT,
   VRF_TABLE,
+  VLAN_TABLE,
+  VLAN_MEMBER_TABLE,
 };
 
 // An update to send to AppDB. This update is already formatted for AppDB.
@@ -79,7 +81,8 @@ PublishExtTablesDefinitionToAppDb(const nlohmann::json &tables_json,
 // Returns an error if there was a problem communicating the request.
 // Returns false if any request failed.
 absl::StatusOr<bool> PerformAppDbUpdates(
-    P4rtTable& p4rt_table, VrfTable& vrf_table,
+    P4rtTable& p4rt_table, VrfTable& vrf_table, VlanTable& vlan_table,
+    VlanMemberTable& vlan_member_table,
     const std::vector<std::pair<AppDbUpdate, pdpi::IrUpdateStatus*>>&
         updates_and_results);
 
