@@ -270,5 +270,25 @@ GetTransceiverToEthernetPmdMap(gnmi::gNMI::StubInterface& gnmi_stub);
 absl::StatusOr<absl::flat_hash_map<std::string, int>>
 GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub);
 
+// Check if switch port link is up.
+absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
+                                 gnmi::gNMI::StubInterface& gnmi_stub);
+// Set port speed using gNMI.
+absl::Status SetPortSpeedInBitsPerSecond(const std::string& port_speed,
+                                         const std::string& interface_name,
+                                         gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Get configured port speed.
+absl::StatusOr<int64_t> GetPortSpeedInBitsPerSecond(
+    const std::string& interface_name, gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Set port MTU using gNMI.
+absl::Status SetPortMtu(int port_mtu, const std::string& interface_name,
+                        gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Set a port in loopback mode.
+absl::Status SetPortLoopbackMode(bool port_loopback,
+                                 absl::string_view interface_name,
+                                 gnmi::gNMI::StubInterface& gnmi_stub);
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_

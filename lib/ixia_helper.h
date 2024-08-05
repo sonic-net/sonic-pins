@@ -38,6 +38,16 @@ struct IxiaPortInfo {
   std::string port;
 };
 
+// Structure represents a link between SUT and Ixia.
+// This is represented by Ixia interface name and the SUT's gNMI interface
+// name.
+struct IxiaLink {
+  std::string ixia_interface;
+  std::string sut_interface;
+  // Speed of the SUT interface in bits/second.
+  int64_t sut_interface_bits_per_second = 0;
+};
+
 // ExtractHref - Extract the href path from the Ixia response provided as
 // input.  Returns either the href string or an error.
 absl::StatusOr<std::string> ExtractHref(thinkit::HttpResponse &resp);
@@ -309,6 +319,21 @@ inline double BytesPerSecondReceived(const TrafficItemStats &stats) {
 // Return Unavailable error if the stats are not ready yet.
 absl::StatusOr<TrafficStats> ParseTrafficItemStats(absl::string_view raw_stats);
 
+// Go over the connections and return vector of connections
+// whose links are up.
+absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
+    thinkit::GenericTestbed &generic_testbed,
+    gnmi::gNMI::StubInterface &gnmi_stub);
+
+// Returns Ixia link information for requested `port` on switch connected to
+// Ixia. Returns failure status if Ixia link information is not found.
+absl::StatusOr<IxiaLink> GetIxiaLink(thinkit::GenericTestbed &generic_testbed,
+                                     gnmi::gNMI::StubInterface &gnmi_stub,
+                                     const std::string &switch_port);
+
+// Connects to Ixia on the given testbed and returns a string handle identifying
+// the connection (aka "topology ref").
+absl::StatusOr<std::string> ConnectToIxia(thinkit::GenericTestbed &testbed);
 }  // namespace pins_test::ixia
 
 #endif  // PINS_THINKIT_IXIA_INTERFACE_H_
