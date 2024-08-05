@@ -823,9 +823,9 @@ absl::Status P4RuntimeImpl::RemoveAclTableFromAppDb(
       update_results.push_back(
           std::make_pair(std::move(entity_update.app_db_update), &*status++));
     }
-    ASSIGN_OR_RETURN(
-        bool success,
-        sonic::PerformAppDbUpdates(p4rt_table_, vrf_table_, update_results));
+    ASSIGN_OR_RETURN(bool success, sonic::PerformAppDbUpdates(
+                                       p4rt_table_, vrf_table_, vlan_table_,
+                                       vlan_member_table_, update_results));
     if (!success) {
       for (int i = 0; i < entities.size(); ++i) {
         if (update_statuses[i].code() != google::rpc::Code::OK) {
@@ -864,7 +864,8 @@ absl::Status P4RuntimeImpl::UpdateAppDbEntities(
         std::make_pair(std::move(entity_update.app_db_update), &*status++));
   }
   ASSIGN_OR_RETURN(bool success, sonic::PerformAppDbUpdates(
-                                     p4rt_table_, vrf_table_, update_results));
+                                     p4rt_table_, vrf_table_, vlan_table_,
+                                     vlan_member_table_, update_results));
   if (!success) {
     for (int i = 0; i < update_results.size(); ++i) {
       if (update_results.at(i).second->code() != google::rpc::Code::OK) {
@@ -1115,8 +1116,9 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
     for (const auto& update : app_db_updates) {
       updates_and_results.push_back({update.app_db_update, update.status});
     }
-    auto app_db_write_status = sonic::PerformAppDbUpdates(
-        p4rt_table_, vrf_table_, updates_and_results);
+    auto app_db_write_status =
+        sonic::PerformAppDbUpdates(p4rt_table_, vrf_table_, vlan_table_,
+                                   vlan_member_table_, updates_and_results);
     if (!app_db_write_status.ok()) {
       return EnterCriticalState(
           absl::StrCat("Unexpected error calling UpdateAppDb: ",
