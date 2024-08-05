@@ -15,19 +15,21 @@
 #ifndef PINS_LIB_BASIC_TRAFFIC_BASIC_TRAFFIC_H_
 #define PINS_LIB_BASIC_TRAFFIC_BASIC_TRAFFIC_H_
 
+#include <functional>
 #include <string>
 #include <tuple>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "lib/basic_traffic/basic_p4rt_util.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "sai_p4/instantiations/google/instantiations.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test::basic_traffic {
@@ -69,9 +71,6 @@ struct SendTrafficOptions {
   // The approximate `packets_per_second` rate to send traffic at.
   int packets_per_second = 10;
 
-  // The instantiation to be used to get a `P4Info`.
-  sai::Instantiation instantiation = sai::Instantiation::kMiddleblock;
-
   // The function that handles a P4RT write request.
   WriteRequestHandler write_request = pdpi::SetMetadataAndSendPiWriteRequest;
 };
@@ -79,7 +78,7 @@ struct SendTrafficOptions {
 // Programs the routes to forward traffic through all the interface pairs.
 absl::Status ProgramRoutes(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    sai::Instantiation instantiation,
+    const pdpi::IrP4Info& ir_p4info,
     const absl::flat_hash_map<std::string, std::string>& port_id_from_interface,
     absl::Span<const InterfacePair> pairs);
 
@@ -106,7 +105,7 @@ std::vector<InterfacePair> AllToAll(absl::Span<const std::string> interfaces);
 // every interface pair continuously for a given `duration`.
 absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
     thinkit::GenericTestbed& testbed, pdpi::P4RuntimeSession* session,
-    absl::Span<const InterfacePair> pairs,
+    const pdpi::IrP4Info& ir_p4info, absl::Span<const InterfacePair> pairs,
     absl::Span<const packetlib::Packet> packets, absl::Duration duration,
     SendTrafficOptions options = SendTrafficOptions());
 

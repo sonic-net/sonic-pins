@@ -22,11 +22,9 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "sai_p4/instantiations/google/instantiations.h"
-#include "thinkit/generic_testbed.h"
-#include "thinkit/switch.h"
 
 namespace pins_test::basic_traffic {
 
@@ -50,35 +48,32 @@ inline std::string PortIdToMac(int port_id) {
 // a function that programs a `WriteRequest`.
 absl::Status ProgramTrafficVrf(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
+    const pdpi::IrP4Info& ir_p4info);
 
 // Programs a VRF that matches on all packets ingressing into the SUT. Takes in
 // a `P4RuntimeSession`.
 inline absl::Status ProgramTrafficVrf(
-    pdpi::P4RuntimeSession* session,
-    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock,
+    pdpi::P4RuntimeSession* session, const pdpi::IrP4Info& ir_p4info,
     const WriteRequestHandler& write_request =
         pdpi::SetMetadataAndSendPiWriteRequest) {
-  return ProgramTrafficVrf(absl::bind_front(write_request, session),
-                           instantiation);
+  return ProgramTrafficVrf(absl::bind_front(write_request, session), ir_p4info);
 }
 
 // Programs a router interface for the specified `port_id`. Uses `PortIdToMac`
 // as the MAC address. Takes in a function that programs a `WriteRequest`.
 absl::Status ProgramRouterInterface(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    int port_id,
-    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
+    int port_id, const pdpi::IrP4Info& ir_p4info);
 
 // Programs a router interface for the specified `port_id`. Uses `PortIdToMac`
 // as the MAC address. Takes in a `P4RuntimeSession`.
 inline absl::Status ProgramRouterInterface(
     pdpi::P4RuntimeSession* session, int port_id,
-    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock,
+    const pdpi::IrP4Info& ir_p4info,
     const WriteRequestHandler& write_request =
         pdpi::SetMetadataAndSendPiWriteRequest) {
   return ProgramRouterInterface(absl::bind_front(write_request, session),
-                                port_id, instantiation);
+                                port_id, ir_p4info);
 }
 
 // Programs an IPv4 route that forwards a destination IP to the specified
@@ -86,36 +81,34 @@ inline absl::Status ProgramRouterInterface(
 // in a function that programs a `WriteRequest`.
 absl::Status ProgramIPv4Route(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    int port_id,
-    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
+    int port_id, const pdpi::IrP4Info& ir_p4info);
 
 // Programs an IPv4 route that forwards a destination IP to the specified
 // `port_id`. Uses `PortIdToIP` for the destination IP to match against. Takes
 // in a `P4RuntimeSession`.
 inline absl::Status ProgramIPv4Route(
     pdpi::P4RuntimeSession* session, int port_id,
-    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock,
+    const pdpi::IrP4Info& ir_p4info,
     const WriteRequestHandler& write_request =
         pdpi::SetMetadataAndSendPiWriteRequest) {
   return ProgramIPv4Route(absl::bind_front(write_request, session), port_id,
-                          instantiation);
+                          ir_p4info);
 }
 
-// Programs L3 admit table entry allowing packets to be routed. Takes in a
-// function that programs a `WriteRequest`.
+// Programs L3 admit table entry allowing all unicast packets to be routed.
+// Takes in a function that programs a `WriteRequest`.
 absl::Status ProgramL3AdmitTableEntry(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
+    const pdpi::IrP4Info& ir_p4info);
 
-// Programs L3 admit table entry allowing packets to be routed. Takes in a
-// `P4RuntimeSession`.
+// Programs L3 admit table entry allowing all unicast packets to be routed.
+// Takes in a `P4RuntimeSession`.
 inline absl::Status ProgramL3AdmitTableEntry(
-    pdpi::P4RuntimeSession* session,
-    sai::Instantiation instantiation = sai::Instantiation::kMiddleblock,
+    pdpi::P4RuntimeSession* session, const pdpi::IrP4Info& ir_p4info,
     const WriteRequestHandler& write_request =
         pdpi::SetMetadataAndSendPiWriteRequest) {
   return ProgramL3AdmitTableEntry(absl::bind_front(write_request, session),
-                                  instantiation);
+                                  ir_p4info);
 }
 
 }  // namespace pins_test::basic_traffic
