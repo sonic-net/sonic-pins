@@ -47,7 +47,6 @@ cc_library(
 
 cc_library(
     name = "basic_traffic",
-    testonly = True,
     srcs = ["basic_traffic.cc"],
     hdrs = ["basic_traffic.h"],
     deps = [
