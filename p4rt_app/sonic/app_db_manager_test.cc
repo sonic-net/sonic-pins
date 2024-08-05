@@ -40,6 +40,7 @@
 #include "p4rt_app/sonic/adapters/mock_zmq_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/packet_replication_entry_translation.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "p4rt_app/sonic/vlan_entry_translation.h"
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -92,6 +93,10 @@ class AppDbP4TableEntryTest : public ::testing::Test {
     auto p4rt_app_db = std::make_unique<StrictMock<MockTableAdapter>>();
     auto p4rt_counter_db = std::make_unique<MockTableAdapter>();
     auto vrf_producer_state = std::make_unique<MockProducerStateTableAdapter>();
+    auto vlan_producer_state =
+        std::make_unique<MockProducerStateTableAdapter>();
+    auto vlan_member_producer_state =
+        std::make_unique<MockProducerStateTableAdapter>();
 
     // Save a pointer so we can test against the mocks.
     mock_p4rt_producer_ = p4rt_producer.get();
@@ -105,6 +110,8 @@ class AppDbP4TableEntryTest : public ::testing::Test {
     };
 
     mock_vrf_producer_ = vrf_producer_state.get();
+    mock_vlan_producer_ = vlan_producer_state.get();
+    mock_vlan_member_producer_ = vlan_member_producer_state.get();
 
     mock_vrf_table_ = VrfTable{
         .producer_state = std::move(vrf_producer_state),
@@ -113,6 +120,20 @@ class AppDbP4TableEntryTest : public ::testing::Test {
         .app_db = std::make_unique<MockTableAdapter>(),
         .app_state_db = std::make_unique<MockTableAdapter>(),
     };
+
+    mock_vlan_table_ =
+        VlanTable{.producer_state = std::move(vlan_producer_state),
+                  .notification_consumer =
+                      std::make_unique<MockConsumerNotifierAdapter>(),
+                  .app_db = std::make_unique<MockTableAdapter>(),
+                  .app_state_db = std::make_unique<MockTableAdapter>()};
+
+    mock_vlan_member_table_ =
+        VlanMemberTable{.producer_state = std::move(vlan_member_producer_state),
+                        .notification_consumer =
+                            std::make_unique<MockConsumerNotifierAdapter>(),
+                        .app_db = std::make_unique<MockTableAdapter>(),
+                        .app_state_db = std::make_unique<MockTableAdapter>()};
   }
 
   // Mock AppDb tables.
@@ -121,7 +142,11 @@ class AppDbP4TableEntryTest : public ::testing::Test {
   MockTableAdapter* mock_p4rt_counter_db_;
   P4rtTable mock_p4rt_table_;
   MockProducerStateTableAdapter* mock_vrf_producer_;
+  MockProducerStateTableAdapter* mock_vlan_producer_;
+  MockProducerStateTableAdapter* mock_vlan_member_producer_;
   VrfTable mock_vrf_table_;
+  VlanTable mock_vlan_table_;
+  VlanMemberTable mock_vlan_member_table_;
 };
 
 TEST_F(AppDbP4TableEntryTest, InsertTableEntry) {
@@ -177,6 +202,7 @@ TEST_F(AppDbP4TableEntryTest, InsertTableEntry) {
 
   pdpi::IrUpdateStatus status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{update, &status}}));
   EXPECT_THAT(status, EqualsProto("code: OK"));
 }
@@ -233,6 +259,7 @@ TEST_F(AppDbP4TableEntryTest, ModifyTableEntry) {
 
   pdpi::IrUpdateStatus status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{update, &status}}));
   EXPECT_THAT(status, EqualsProto("code: OK"));
 }
@@ -287,6 +314,7 @@ TEST_F(AppDbP4TableEntryTest, DeleteTableEntry) {
 
   pdpi::IrUpdateStatus status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{update, &status}}));
   EXPECT_THAT(status, EqualsProto("code: OK"));
 }
@@ -558,12 +586,38 @@ class AppDbManagerTest : public AppDbP4TableEntryTest {
         .app_state_db = std::make_unique<sonic::FakeTableAdapter>(
             &fake_vrf_state_table_, "VRF"),
     };
+
+    mock_vlan_table_ = {
+        .producer_state =
+            std::make_unique<FakeProducerStateTableAdapter>(&fake_vlan_table_),
+        .notification_consumer =
+            std::make_unique<FakeConsumerNotifierAdapter>(&fake_vlan_table_),
+        .app_db = std::make_unique<FakeTableAdapter>(&fake_vlan_table_,
+                                                     "VLAN_TABLE_P4"),
+        .app_state_db = std::make_unique<sonic::FakeTableAdapter>(
+            &fake_vlan_state_table_, "VLAN_TABLE_P4"),
+    };
+
+    mock_vlan_member_table_ = {
+        .producer_state = std::make_unique<FakeProducerStateTableAdapter>(
+            &fake_vlan_member_table_),
+        .notification_consumer = std::make_unique<FakeConsumerNotifierAdapter>(
+            &fake_vlan_member_table_),
+        .app_db = std::make_unique<FakeTableAdapter>(&fake_vlan_member_table_,
+                                                     "VLAN_MEMBER_TABLE_P4"),
+        .app_state_db = std::make_unique<sonic::FakeTableAdapter>(
+            &fake_vlan_member_state_table_, "VLAN_MEMBER_TABLE_P4"),
+    };
   }
 
  protected:
   FakeSonicDbTable fake_p4rt_table_;
   FakeSonicDbTable fake_vrf_table_;
   FakeSonicDbTable fake_vrf_state_table_;
+  FakeSonicDbTable fake_vlan_table_;
+  FakeSonicDbTable fake_vlan_state_table_;
+  FakeSonicDbTable fake_vlan_member_table_;
+  FakeSonicDbTable fake_vlan_member_state_table_;
 };
 
 TEST_F(AppDbManagerTest, InsertVrfTableEntry) {
@@ -584,6 +638,7 @@ TEST_F(AppDbManagerTest, InsertVrfTableEntry) {
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   pdpi::IrUpdateStatus status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{update, &status}}));
   EXPECT_THAT(status, EqualsProto("code: OK"));
   EXPECT_THAT(GetAllAppDbVrfTableEntries(mock_vrf_table_),
@@ -612,6 +667,7 @@ TEST_F(AppDbManagerTest, DeleteVrfTableEntry) {
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   pdpi::IrUpdateStatus insert_status, delete_status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {
                                     {insert_update, &insert_status},
                                     {delete_update, &delete_status},
@@ -640,6 +696,91 @@ TEST_F(AppDbManagerTest, ModifyVrfTableEntry) {
       StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
+TEST_F(AppDbManagerTest, InsertVlanTableEntry) {
+  pdpi::IrEntity entity;
+  ASSERT_TRUE(TextFormat::ParseFromString(R"pb(table_entry {
+                                                 table_name: "vlan_table"
+                                                 matches {
+                                                   name: "vlan_id"
+                                                   exact { hex_str: "0x0ff" }
+                                                 }
+                                                 action { name: "no_action" }
+                                               })pb",
+                                          &entity));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto update,
+      CreateAppDbUpdate(p4::v1::Update::INSERT, entity,
+                        sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  pdpi::IrUpdateStatus status;
+  ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
+                                {{update, &status}}));
+  EXPECT_THAT(status, EqualsProto("code: OK"));
+  EXPECT_THAT(GetAllAppDbVlanTableEntries(mock_vlan_table_),
+              IsOkAndHolds(ElementsAre(EqualsProto(entity.table_entry()))));
+}
+
+TEST_F(AppDbManagerTest, InsertVlanMemberTableEntryTagged) {
+  pdpi::IrEntity entity;
+  ASSERT_TRUE(
+      TextFormat::ParseFromString(R"pb(table_entry {
+                                         table_name: "vlan_membership_table"
+                                         matches {
+                                           name: "vlan_id"
+                                           exact { hex_str: "0x0ff" }
+                                         }
+                                         matches {
+                                           name: "port"
+                                           exact { str: "Ethernet1" }
+                                         }
+                                         action { name: "make_tagged_member" }
+                                       })pb",
+                                  &entity));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto update,
+      CreateAppDbUpdate(p4::v1::Update::INSERT, entity,
+                        sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  pdpi::IrUpdateStatus status;
+  ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
+                                {{update, &status}}));
+  EXPECT_THAT(status, EqualsProto("code: OK"));
+  EXPECT_THAT(GetAllAppDbVlanMemberTableEntries(mock_vlan_member_table_),
+              IsOkAndHolds(ElementsAre(EqualsProto(entity.table_entry()))));
+}
+
+TEST_F(AppDbManagerTest, InsertVlanMemberTableEntryUntagged) {
+  pdpi::IrEntity entity;
+  ASSERT_TRUE(
+      TextFormat::ParseFromString(R"pb(table_entry {
+                                         table_name: "vlan_membership_table"
+                                         matches {
+                                           name: "vlan_id"
+                                           exact { hex_str: "0x0ff" }
+                                         }
+                                         matches {
+                                           name: "port"
+                                           exact { str: "Ethernet1" }
+                                         }
+                                         action { name: "make_untagged_member" }
+                                       })pb",
+                                  &entity));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto update,
+      CreateAppDbUpdate(p4::v1::Update::INSERT, entity,
+                        sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
+  pdpi::IrUpdateStatus status;
+  ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
+                                {{update, &status}}));
+  EXPECT_THAT(status, EqualsProto("code: OK"));
+  EXPECT_THAT(GetAllAppDbVlanMemberTableEntries(mock_vlan_member_table_),
+              IsOkAndHolds(ElementsAre(EqualsProto(entity.table_entry()))));
+}
+
 TEST_F(AppDbManagerTest, InsertPacketReplicationEngineEntry) {
   pdpi::IrEntity entity;
   ASSERT_TRUE(
@@ -657,6 +798,7 @@ TEST_F(AppDbManagerTest, InsertPacketReplicationEngineEntry) {
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   pdpi::IrUpdateStatus status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{update, &status}}));
   EXPECT_THAT(status, EqualsProto("code: OK"));
   EXPECT_THAT(GetAllAppDbPacketReplicationTableEntries(mock_p4rt_table_),
@@ -682,6 +824,7 @@ TEST_F(AppDbManagerTest, InsertPacketReplicationEngineEntryWithMetadata) {
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   pdpi::IrUpdateStatus status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{update, &status}}));
   EXPECT_THAT(status, EqualsProto("code: OK"));
   EXPECT_THAT(GetAllAppDbPacketReplicationTableEntries(mock_p4rt_table_),
@@ -706,6 +849,7 @@ TEST_F(AppDbManagerTest, DeletePacketReplicationEngineEntry) {
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   pdpi::IrUpdateStatus insert_status, delete_status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{insert_update, &insert_status}}));
   EXPECT_THAT(insert_status, EqualsProto("code: OK"));
 
@@ -714,6 +858,7 @@ TEST_F(AppDbManagerTest, DeletePacketReplicationEngineEntry) {
       CreateAppDbUpdate(p4::v1::Update::DELETE, entity,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{delete_update, &delete_status}}));
   EXPECT_THAT(delete_status, EqualsProto("code: OK"));
   EXPECT_THAT(GetAllAppDbPacketReplicationTableEntries(mock_p4rt_table_),
@@ -738,6 +883,7 @@ TEST_F(AppDbManagerTest, ModifyPacketReplicationEngineEntry) {
 
   pdpi::IrUpdateStatus insert_status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{insert_update, &insert_status}}));
   EXPECT_THAT(insert_status, EqualsProto("code: OK"));
 
@@ -758,6 +904,7 @@ TEST_F(AppDbManagerTest, ModifyPacketReplicationEngineEntry) {
 
   pdpi::IrUpdateStatus modify_status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{modify_update, &modify_status}}));
   EXPECT_THAT(modify_status, EqualsProto("code: OK"));
 
@@ -796,6 +943,7 @@ TEST_F(AppDbManagerTest, InsertP4rtTableEntry) {
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   pdpi::IrUpdateStatus status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{update, &status}}));
   EXPECT_THAT(status, EqualsProto("code: OK"));
   auto keys = GetAllP4TableEntryKeys(mock_p4rt_table_);
@@ -836,6 +984,7 @@ TEST_F(AppDbManagerTest, DeleteP4rtTableEntry) {
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   pdpi::IrUpdateStatus insert_status, delete_status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{insert_update, &insert_status}}));
   EXPECT_THAT(insert_status, EqualsProto("code: OK"));
 
@@ -844,6 +993,7 @@ TEST_F(AppDbManagerTest, DeleteP4rtTableEntry) {
       CreateAppDbUpdate(p4::v1::Update::DELETE, entity,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{delete_update, &delete_status}}));
   EXPECT_THAT(delete_status, EqualsProto("code: OK"));
 
@@ -880,6 +1030,7 @@ TEST_F(AppDbManagerTest, ModifyP4rtTableEntry) {
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   pdpi::IrUpdateStatus insert_status;
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{insert_update, &insert_status}}));
   EXPECT_THAT(insert_status, EqualsProto("code: OK"));
 
@@ -895,6 +1046,7 @@ TEST_F(AppDbManagerTest, ModifyP4rtTableEntry) {
       CreateAppDbUpdate(p4::v1::Update::MODIFY, modified_entity,
                         sai::GetIrP4Info(sai::Instantiation::kMiddleblock)));
   ASSERT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
                                 {{modify_update, &modify_status}}));
   EXPECT_THAT(modify_status, EqualsProto("code: OK"));
 
@@ -942,7 +1094,9 @@ TEST_F(AppDbManagerTest, PerformAppDbUpdatesFailsOnFirstP4rtTableError) {
   };
   fake_p4rt_table_.SetResponseForKey("P4RT_TABLE|Key3", "SWSS_RC_NOT_FOUND",
                                      "Test error");
-  EXPECT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_, updates));
+  EXPECT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
+                                updates));
 
   EXPECT_THAT(
       results,
@@ -954,6 +1108,60 @@ TEST_F(AppDbManagerTest, PerformAppDbUpdatesFailsOnFirstP4rtTableError) {
                   HasErrorCode(kRpcNotFound),  // P4RT_TABLE|Key3 (Failure)
                   HasErrorCode(kRpcAborted), HasErrorCode(kRpcAborted),
                   HasErrorCode(kRpcAborted), HasErrorCode(kRpcAborted)));
+}
+
+TEST_F(AppDbManagerTest, PerformAppDbUpdatesFailsOnFirstP4rtTableErrorForVlan) {
+  std::vector<pdpi::IrUpdateStatus> results(10);
+  std::vector<std::pair<AppDbUpdate, pdpi::IrUpdateStatus*>> updates = {
+      {{.table = AppDbTableType::VLAN_TABLE,
+        .update = {"VLAN_TABLE_P4|KEY0", SET_COMMAND, {{}}}},
+       &results[0]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key0", SET_COMMAND, {{}}}},
+       &results[1]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key1", SET_COMMAND, {{}}}},
+       &results[2]},
+      {{.table = AppDbTableType::VLAN_TABLE,
+        .update = {"VLAN_TABLE_P4|KEY1", SET_COMMAND, {{}}}},
+       &results[3]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key2", SET_COMMAND, {{}}}},
+       &results[4]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key3", DEL_COMMAND, {{}}}},  // Fail here
+       &results[5]},
+      {{.table = AppDbTableType::VLAN_TABLE,
+        .update = {"VLAN_TABLE_P4|KEY2", SET_COMMAND, {{}}}},
+       &results[6]},
+      {{.table = AppDbTableType::VLAN_TABLE,
+        .update = {"VLAN_TABLE_P4|KEY3", SET_COMMAND, {{}}}},
+       &results[7]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key4", SET_COMMAND, {{}}}},
+       &results[8]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key5", SET_COMMAND, {{}}}},
+       &results[9]},
+  };
+  fake_p4rt_table_.SetResponseForKey("P4RT_TABLE|Key3", "SWSS_RC_NOT_FOUND",
+                                     "Test error");
+  EXPECT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
+                                updates));
+
+  EXPECT_THAT(
+      results,
+      ElementsAre(HasErrorCode(kRpcOk),        // VLAN_TABLE_P4|KEY0
+                  HasErrorCode(kRpcOk),        // P4RT_TABLE|Key0
+                  HasErrorCode(kRpcOk),        // P4RT_TABLE|Key1
+                  HasErrorCode(kRpcOk),        // VLAN_TABLE_P4|KEY1
+                  HasErrorCode(kRpcOk),        // P4RT_TABLE|KEY2
+                  HasErrorCode(kRpcNotFound),  // P4RT_TABLE|Key3 (Failure)
+                  HasErrorCode(kRpcAborted),   // VLAN_TABLE_P4|KEY2
+                  HasErrorCode(kRpcAborted),   // P4RT_TABLE|KEY4
+                  HasErrorCode(kRpcAborted),   // P4RT_TABLE|KEY5
+                  HasErrorCode(kRpcAborted)));
 }
 
 TEST_F(AppDbManagerTest, PerformAppDbUpdatesFailsOnFirstVrfTableError) {
@@ -993,7 +1201,9 @@ TEST_F(AppDbManagerTest, PerformAppDbUpdatesFailsOnFirstVrfTableError) {
   fake_vrf_table_.SetResponseForKey("VRF_TABLE|KEY2", "SWSS_RC_INTERNAL",
                                     "Test error");
 
-  EXPECT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_, updates));
+  EXPECT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
+                                updates));
 
   EXPECT_THAT(
       results,
@@ -1006,6 +1216,61 @@ TEST_F(AppDbManagerTest, PerformAppDbUpdatesFailsOnFirstVrfTableError) {
                   HasErrorCode(kRpcInternal),  // VRF_TABLE|KEY2 (Failure)
                   HasErrorCode(kRpcAborted), HasErrorCode(kRpcAborted),
                   HasErrorCode(kRpcAborted)));
+}
+
+TEST_F(AppDbManagerTest, PerformAppDbUpdatesFailsOnFirstVlanMemberTableError) {
+  std::vector<pdpi::IrUpdateStatus> results(10);
+  std::vector<std::pair<AppDbUpdate, pdpi::IrUpdateStatus*>> updates = {
+      {{.table = AppDbTableType::VLAN_MEMBER_TABLE,
+        .update = {"VLAN_MEMBER_TABLE_P4|KEY0", SET_COMMAND, {{}}}},
+       &results[0]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key0", SET_COMMAND, {{}}}},
+       &results[1]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key1", SET_COMMAND, {{}}}},
+       &results[2]},
+      {{.table = AppDbTableType::VLAN_MEMBER_TABLE,
+        .update = {"VLAN_MEMBER_TABLE_P4|KEY1", SET_COMMAND, {{}}}},
+       &results[3]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key2", SET_COMMAND, {{}}}},
+       &results[4]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key3", SET_COMMAND, {{}}}},
+       &results[5]},
+      {{.table = AppDbTableType::VLAN_MEMBER_TABLE,  // Fail here
+        .update = {"VLAN_MEMBER_TABLE_P4|KEY2", SET_COMMAND, {{}}}},
+       &results[6]},
+      {{.table = AppDbTableType::VLAN_MEMBER_TABLE,
+        .update = {"VLAN_MEMBER_TABLE_P4|KEY3", SET_COMMAND, {{}}}},
+       &results[7]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key4", SET_COMMAND, {{}}}},
+       &results[8]},
+      {{.table = AppDbTableType::P4RT,
+        .update = {"P4RT_TABLE|Key5", SET_COMMAND, {{}}}},
+       &results[9]},
+  };
+  fake_vlan_member_table_.SetResponseForKey("VLAN_MEMBER_TABLE_P4|KEY2",
+                                            "SWSS_RC_INTERNAL", "Test error");
+
+  EXPECT_OK(PerformAppDbUpdates(mock_p4rt_table_, mock_vrf_table_,
+                                mock_vlan_table_, mock_vlan_member_table_,
+                                updates));
+
+  EXPECT_THAT(
+      results,
+      ElementsAre(HasErrorCode(kRpcOk),         // VLAN_MEMBER_TABLE_P4|KEY0
+                  HasErrorCode(kRpcOk),         // P4RT_TABLE|Key0
+                  HasErrorCode(kRpcOk),         // P4RT_TABLE|Key1
+                  HasErrorCode(kRpcOk),         // VLAN_MEMBER_TABLE_P4|KEY1
+                  HasErrorCode(kRpcOk),         // P4RT_TABLE|KEY2
+                  HasErrorCode(kRpcOk),         // P4RT_TABLE|Key3
+                  HasErrorCode(kRpcInternal),   // VLAN_MEMBER_TABLE_P4|KEY2
+                  HasErrorCode(kRpcAborted),    // VLAN_MEMBER_TABLE_P4|KEY3
+                  HasErrorCode(kRpcAborted),    // P4RT_TABLE|KEY4
+                  HasErrorCode(kRpcAborted)));  // P4RT_TABLE|KEY5
 }
 
 TEST(AppDbUpdateTest, EqualsSelf) {

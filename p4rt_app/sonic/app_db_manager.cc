@@ -41,6 +41,7 @@
 #include "p4rt_app/sonic/packet_replication_entry_translation.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
+#include "p4rt_app/sonic/vlan_entry_translation.h"
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
@@ -362,9 +363,15 @@ bool operator==(const AppDbUpdate& lhs, const AppDbUpdate& rhs) {
 }
 
 AppDbTableType GetAppDbTableType(const pdpi::IrEntity& ir_entity) {
-  return ir_entity.table_entry().table_name() == "vrf_table"
-             ? sonic::AppDbTableType::VRF_TABLE
-             : sonic::AppDbTableType::P4RT;
+  if (ir_entity.table_entry().table_name() == "vrf_table") {
+    return sonic::AppDbTableType::VRF_TABLE;
+  } else if (ir_entity.table_entry().table_name() == "vlan_table") {
+    return sonic::AppDbTableType::VLAN_TABLE;
+  } else if (ir_entity.table_entry().table_name() == "vlan_membership_table") {
+    return sonic::AppDbTableType::VLAN_MEMBER_TABLE;
+  } else {
+    return sonic::AppDbTableType::P4RT;
+  }
 }
 
 absl::StatusOr<AppDbUpdate> CreateAppDbUpdate(p4::v1::Update::Type update_type,
@@ -377,7 +384,17 @@ absl::StatusOr<AppDbUpdate> CreateAppDbUpdate(p4::v1::Update::Type update_type,
       ASSIGN_OR_RETURN(update.update,
                        CreateAppDbVrfUpdate(update_type, entity.table_entry()));
       return update;
-    }
+    } break;
+    case AppDbTableType::VLAN_TABLE: {
+      ASSIGN_OR_RETURN(update.update, CreateAppDbVlanUpdate(
+                                          update_type, entity.table_entry()));
+      return update;
+    } break;
+    case AppDbTableType::VLAN_MEMBER_TABLE: {
+      ASSIGN_OR_RETURN(update.update, CreateAppDbVlanMemberUpdate(
+                                          update_type, entity.table_entry()));
+      return update;
+    } break;
     case AppDbTableType::P4RT: {
       switch (entity.entity_case()) {
         case pdpi::IrEntity::kTableEntry: {
@@ -405,7 +422,8 @@ absl::StatusOr<AppDbUpdate> CreateAppDbUpdate(p4::v1::Update::Type update_type,
 }
 
 absl::StatusOr<bool> PerformAppDbUpdates(
-    P4rtTable& p4rt_table, VrfTable& vrf_table,
+    P4rtTable& p4rt_table, VrfTable& vrf_table, VlanTable& vlan_table,
+    VlanMemberTable& vlan_member_table,
     const std::vector<std::pair<AppDbUpdate, pdpi::IrUpdateStatus*>>&
         updates_and_results) {
   std::vector<swss::KeyOpFieldsValuesTuple> p4rt_updates;
@@ -417,32 +435,47 @@ absl::StatusOr<bool> PerformAppDbUpdates(
       *result = GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
       continue;
     }
-    switch (update.table) {
-      case AppDbTableType::VRF_TABLE: {
-        // Flush any P4 updates before attempting the VRF update.
-        // This maintains fail-on-first-error behavior where we shouldn't
-        // attempt the VRF update if any of the queued P4 updates fails.
-        ASSIGN_OR_RETURN(
-            bool p4_success,
-            PerformAppDbP4rtUpdates(p4rt_table, p4rt_updates, p4rt_results));
-        p4rt_updates.clear();
-        p4rt_results.clear();
-        if (p4_success) {
+
+    if (update.table == AppDbTableType::P4RT) {
+      p4rt_updates.push_back(update.update);
+      p4rt_results[kfvKey(update.update)] = result;
+    } else {
+      // Flush any P4 updates before attempting the non-P4RT update.
+      // This maintains fail-on-first-error behavior where we shouldn't
+      // attempt the VRF update if any of the queued P4 updates fails.
+      ASSIGN_OR_RETURN(
+          bool p4_success,
+          PerformAppDbP4rtUpdates(p4rt_table, p4rt_updates, p4rt_results));
+      p4rt_updates.clear();
+      p4rt_results.clear();
+      if (!p4_success) {
+        *result =
+            GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+        failed = true;
+        continue;
+      }
+
+      switch (update.table) {
+        case AppDbTableType::VLAN_TABLE: {
+          ASSIGN_OR_RETURN(*result,
+                           PerformAppDbVlanUpdate(vlan_table, update.update));
+          break;
+        }
+        case AppDbTableType::VLAN_MEMBER_TABLE: {
+          ASSIGN_OR_RETURN(*result, PerformAppDbVlanMemberUpdate(
+                                        vlan_member_table, update.update));
+          break;
+        }
+        case AppDbTableType::VRF_TABLE: {
           ASSIGN_OR_RETURN(*result,
                            PerformAppDbVrfUpdate(vrf_table, update.update));
-        } else {
-          *result =
-              GetIrUpdateStatus(absl::StatusCode::kAborted, "Not attempted");
+          break;
         }
-        // Fail on the first error.
-        failed = result->code() != google::rpc::Code::OK;
-      } break;
-      case AppDbTableType::P4RT: {
-        p4rt_updates.push_back(update.update);
-        p4rt_results[kfvKey(update.update)] = result;
-      } break;
-      default:
-        break;
+        default: {
+          break;
+        }
+      }
+      failed = result->code() != google::rpc::Code::OK;
     }
   }
 
