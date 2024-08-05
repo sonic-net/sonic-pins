@@ -1065,6 +1065,9 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
   if (absl::StrContains(oper_status, "TESTING")) {
     return OperStatus::kTesting;
   }
+  if (absl::StrContains(oper_status, "NOT_PRESENT")) {
+    return OperStatus::kNotPresent;
+  }
   return OperStatus::kUnknown;
 }
 
