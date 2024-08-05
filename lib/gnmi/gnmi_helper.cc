@@ -123,6 +123,23 @@ absl::StatusOr<json> GetField(const json& object,
   return absl::StatusOr<json>(*std::move(field));
 }
 
+absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
+    gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request,
+    std::optional<absl::Duration> timeout) {
+  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+  gnmi::GetResponse response;
+  grpc::ClientContext context;
+  if (timeout.has_value()) {
+    context.set_deadline(absl::ToChronoTime(absl::Now() + *timeout));
+  }
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+                      gnmi_stub->Get(&context, request, &response)))
+          .SetPrepend()
+      << "GET request failed with error: ";
+  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  return response;
+}
+
 }  // namespace
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type) {
@@ -392,14 +409,7 @@ absl::StatusOr<gnmi::GetResponse> GetAllInterfaceOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
   ASSIGN_OR_RETURN(auto req,
                    BuildGnmiGetRequest("interfaces", gnmi::GetRequest::STATE));
-  gnmi::GetResponse resp;
-  grpc::ClientContext context;
-  context.set_wait_for_ready(true);
-  context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
-  grpc::Status status = stub.Get(&context, req, &resp);
-  if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
-  LOG(INFO) << "Received GET response: " << resp.ShortDebugString();
-  return resp;
+  return SendGnmiGetRequest(&stub, req, timeout);
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
@@ -407,11 +417,8 @@ GetInterfaceToOperStatusMapOverGnmi(gnmi::gNMI::StubInterface& stub,
                                     absl::Duration timeout) {
   ASSIGN_OR_RETURN(auto req,
                    BuildGnmiGetRequest("interfaces", gnmi::GetRequest::STATE));
-  gnmi::GetResponse resp;
-  grpc::ClientContext context;
-  context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
-  grpc::Status status = stub.Get(&context, req, &resp);
-  if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
+  ASSIGN_OR_RETURN(gnmi::GetResponse resp,
+                   SendGnmiGetRequest(&stub, req, timeout));
   if (resp.notification_size() < 1 || resp.notification(0).update_size() < 1) {
     return absl::InternalError(
         absl::StrCat("Invalid response: ", resp.DebugString()));
@@ -505,25 +512,6 @@ absl::Status CheckInterfaceOperStateOverGnmi(
   return absl::OkStatus();
 }
 
-absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
-    gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request,
-    std::optional<absl::Duration> timeout) {
-  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
-  gnmi::GetResponse response;
-  grpc::ClientContext context;
-  if (timeout.has_value()) {
-    context.set_deadline(absl::ToChronoTime(absl::Now() + *timeout));
-  }
-  auto status = gnmi_stub->Get(&context, request, &response);
-  if (!status.ok()) {
-    return gutil::UnknownErrorBuilder().LogError()
-           << "GET request failed! Error code: " << status.error_code()
-           << " , Error message: " << status.error_message();
-  }
-  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
-  return response;
-}
-
 absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                          absl::string_view path,
                                          gnmi::GetRequest::DataType req_type,
@@ -606,11 +594,9 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
                                     "]/state/oper-status");
   ASSIGN_OR_RETURN(auto request,
                    BuildGnmiGetRequest(if_req, gnmi::GetRequest::STATE));
-
-  gnmi::GetResponse response;
-  grpc::ClientContext context;
-  grpc::Status status = stub.Get(&context, request, &response);
-  if (!status.ok()) return gutil::GrpcStatusToAbslStatus(status);
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(&stub, request, /*timeout=*/std::nullopt));
 
   if (response.notification_size() != 1 ||
       response.notification(0).update_size() != 1) {
@@ -762,16 +748,10 @@ absl::StatusOr<std::vector<std::string>> GetAlarms(
       gnmi::GetRequest request,
       BuildGnmiGetRequest("system/alarms", gnmi::GetRequest::STATE));
   LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
-  gnmi::GetResponse response;
-  grpc::ClientContext context;
-  absl::Status status = gutil::GrpcStatusToAbslStatus(
-      gnmi_stub.Get(&context, request, &response));
-  if (!status.ok()) {
-    LOG(WARNING) << "GET request failed with: " << status;
-    return status;
-  }
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(&gnmi_stub, request, /*timeout=*/std::nullopt));
 
-  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
   if (response.notification_size() != 1) {
     return gutil::InternalErrorBuilder().LogError()
            << "Unexpected size in response (should be 1): "
@@ -805,15 +785,7 @@ absl::StatusOr<gnmi::GetResponse> GetAllSystemProcesses(
       gnmi::GetRequest request,
       BuildGnmiGetRequest("system/processes", gnmi::GetRequest::STATE));
   LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
-  gnmi::GetResponse response;
-  grpc::ClientContext context;
-  grpc::Status status = gnmi_stub.Get(&context, request, &response);
-  if (!status.ok()) {
-    return gutil::GrpcStatusToAbslStatus(status);
-  }
-
-  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
-  return response;
+  return SendGnmiGetRequest(&gnmi_stub, request, /*timeout=*/std::nullopt);
 }
 
 absl::StatusOr<gnmi::GetResponse> GetSystemMemory(
@@ -822,15 +794,7 @@ absl::StatusOr<gnmi::GetResponse> GetSystemMemory(
       gnmi::GetRequest request,
       BuildGnmiGetRequest("system/memory", gnmi::GetRequest::STATE));
   LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
-  gnmi::GetResponse response;
-  grpc::ClientContext context;
-  grpc::Status status = gnmi_stub.Get(&context, request, &response);
-  if (!status.ok()) {
-    return gutil::GrpcStatusToAbslStatus(status);
-  }
-
-  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
-  return response;
+  return SendGnmiGetRequest(&gnmi_stub, request, /*timeout=*/std::nullopt);
 }
 
 absl::string_view StripQuotes(absl::string_view string) {
@@ -897,14 +861,31 @@ GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub) {
   return part_information;
 }
 
+// We cannot "replace" the node-id value directly because if the
+// "integrated_circuit0" component doesn't exist the gNMI set path will reject
+// the request. Instead we "update" just the node-id, but include the entire
+// "integrated_circuit0" component as part of the value. This way if it doesn't
+// exist gNMI will create a new component and set the node-id. If it does exist
+// gNMI will simply update the value in the existing component.
 absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
                          uint32_t device_id) {
-  constexpr char node_id_path[] =
-      "components/component[name=integrated_circuit0]/integrated-circuit/"
-      "config/node-id";
-  RETURN_IF_ERROR(SetGnmiConfigPath(
-      &gnmi_stub, node_id_path, GnmiSetType::kUpdate,
-      absl::Substitute("{\"integrated-circuit:node-id\":\"$0\"}", device_id)));
+  std::string config_value = absl::Substitute(
+      R"json({
+        "component" : [
+          {
+            "integrated-circuit" : {
+              "config" : {
+                "openconfig-p4rt:node-id" : "$0"
+              }
+            },
+            "name" : "integrated_circuit0"
+          }
+        ]
+      })json",
+      device_id);
+  RETURN_IF_ERROR(SetGnmiConfigPath(&gnmi_stub,
+                                    /*config_path=*/"components/component",
+                                    GnmiSetType::kUpdate, config_value));
   return absl::OkStatus();
 }
 
