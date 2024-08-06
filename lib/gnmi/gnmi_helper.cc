@@ -665,6 +665,50 @@ GetAllEnabledInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub,
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllUpInterfacePortIdsByName(gnmi::gNMI::StubInterface& stub,
+                               absl::Duration timeout) {
+  ASSIGN_OR_RETURN(std::vector<std::string> up_interfaces,
+                   GetUpInterfacesOverGnmi(stub, timeout));
+  ASSIGN_OR_RETURN(auto port_id_by_name, GetAllInterfaceNameToPortId(stub));
+
+  absl::flat_hash_map<std::string, std::string> result;
+  for (const auto& interface : up_interfaces) {
+    if (auto it = port_id_by_name.find(interface);
+        it != port_id_by_name.end()) {
+      result[it->first] = it->second;
+      VLOG(1) << "Found: " << it->first << " which is UP and has port ID "
+              << it->second << ".";
+    }
+  }
+  return result;
+}
+
+absl::StatusOr<std::string> GetAnyUpInterfacePortId(
+    gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto ids,
+                   GetNUpInterfacePortIds(stub, /*num_interfaces=*/1, timeout));
+  return ids[0];
+}
+
+absl::StatusOr<std::vector<std::string>> GetNUpInterfacePortIds(
+    gnmi::gNMI::StubInterface& stub, int num_interfaces,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto ids_by_name,
+                   GetAllUpInterfacePortIdsByName(stub, timeout));
+  std::vector<std::string> result;
+  for (const auto& [name, id] : ids_by_name) {
+    LOG(INFO) << "Selecting interface " << name << " with ID " << id << ".";
+    result.push_back(id);
+    if (result.size() == num_interfaces) {
+      return result;
+    }
+  }
+  return absl::FailedPreconditionError(
+      absl::StrCat("Could not find ", num_interfaces,
+                   " interfaces that are UP with a port ID."));
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllInterfaceNameToPortId(absl::string_view gnmi_config) {
   return GetPortNameToIdMapFromJsonString(gnmi_config, /*field_type=*/"config");
 }
