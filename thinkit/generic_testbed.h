@@ -20,6 +20,7 @@
 #include <tuple>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "artifacts/otg.grpc.pb.h"
@@ -51,7 +52,7 @@ enum class RequestType {
 
 // InterfaceInfo represents the mode of an interface and the name of the peer
 // interface.
-// - When `interface_mode` is CONTROL_INTERFACE or TRAFFIC_GENERATOR,
+// - When `interface_modes` are CONTROL_INTERFACE and/or TRAFFIC_GENERATOR,
 //   `peer_interface_name` will be populated with the name of the interface on
 //   the other end.
 // - In the case of CONTROL_INTERFACE, the `peer_interface_name` should be used
@@ -64,14 +65,14 @@ enum class RequestType {
 // - `peer_traffic_location` is the location of the OTG traffic port that can be
 //   assigned to `otg.Port.location` field.
 struct InterfaceInfo {
-  thinkit::InterfaceMode interface_mode;
+  absl::flat_hash_set<thinkit::InterfaceMode> interface_modes;
   int peer_device_index;              // Ignore if not applicable.
   std::string peer_interface_name;    // Empty if not applicable.
   std::string peer_traffic_location;  // Empty if not applicable.
   bool operator==(const InterfaceInfo& other) const {
-    return std::tie(interface_mode, peer_device_index, peer_interface_name,
+    return std::tie(interface_modes, peer_device_index, peer_interface_name,
                     peer_traffic_location) ==
-           std::tie(other.interface_mode, other.peer_device_index,
+           std::tie(other.interface_modes, other.peer_device_index,
                     other.peer_interface_name, other.peer_traffic_location);
   }
 };

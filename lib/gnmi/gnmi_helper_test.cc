@@ -1799,6 +1799,42 @@ TEST(TransceiverEthernetPmdType, WorksProperly) {
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
+TEST(TransceiverFormFactor, WorksProperly) {
+  gnmi::GetResponse response;
+  *response.add_notification()
+       ->add_update()
+       ->mutable_val()
+       ->mutable_json_ietf_val() = R"(
+    {
+      "openconfig-platform:components": {
+        "component": [
+          {
+            "name": "1/1"
+          },
+          {
+            "name": "Ethernet1",
+            "state": {
+              "empty": false
+            },
+            "openconfig-platform-transceiver:transceiver": {
+              "state": {
+                "form-factor": "openconfig-transport-types:OSFP"
+              }
+            }
+          }
+        ]
+      }
+    })";
+  gnmi::MockgNMIStub mock_stub;
+  EXPECT_CALL(mock_stub, Get)
+      .WillRepeatedly(
+          DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
+  absl::flat_hash_map<std::string, std::string> expected_map{
+      {"Ethernet1", "openconfig-transport-types:OSFP"}};
+  EXPECT_THAT(GetTransceiverToFormFactorMap(mock_stub),
+              IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
+}
+
 TEST(InterfaceToSpeed, WorksProperly) {
   gnmi::GetResponse response;
   *response.add_notification()

@@ -16,11 +16,16 @@
 #define PINS_THINKIT_IXIA_INTERFACE_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <variant>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "lib/ixia_helper.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
@@ -47,6 +52,12 @@ struct IxiaLink {
   // Speed of the SUT interface in bits/second.
   int64_t sut_interface_bits_per_second = 0;
 };
+
+// Finds the ID of the JSON object in the array based on matching a given
+// `field` to a desired `value`.
+absl::StatusOr<int> FindIdByField(const thinkit::HttpResponse &response,
+                                  absl::string_view field,
+                                  absl::string_view desired_value);
 
 // ExtractHref - Extract the href path from the Ixia response provided as
 // input.  Returns either the href string or an error.
@@ -206,6 +217,11 @@ absl::Status SetDestIPv6(absl::string_view tref, absl::string_view dip,
 absl::Status SetIpPriority(absl::string_view tref, int dscp, int ecn_bits,
                            bool is_ipv4,
                            thinkit::GenericTestbed &generic_testbed);
+
+// SetIpTTL - Sets the TTL field in IP header.
+// Takes in the tref returned by SetUpTrafficItem.
+absl::Status SetIpTTL(absl::string_view tref, int ttl, bool is_ipv4,
+                      thinkit::GenericTestbed &generic_testbed);
 
 // AppendTcp - Append TCP template to IP header.
 // Takes in the tref returned by SetUpTrafficItem.
