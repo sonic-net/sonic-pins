@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -43,6 +44,7 @@
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/map.h"
 #include "grpcpp/impl/codegen/client_context.h"
+#include "gutil/collections.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
@@ -61,6 +63,17 @@ using ::nlohmann::json;
 // Splits string to tokens seperated by a char '/' as long as '/' is not
 // included in [].
 const LazyRE2 kSplitBreakSquareBraceRE = {R"(([^\[\/]+(\[[^\]]+\])?)\/?)"};
+
+const absl::flat_hash_map<BreakoutSpeed, absl::string_view>&
+BreakoutSpeedToOpenconfig() {
+  static const auto* const kMap =
+      new absl::flat_hash_map<BreakoutSpeed, absl::string_view>({
+          {BreakoutSpeed::k100GB, "openconfig-if-ethernet:SPEED_100GB"},
+          {BreakoutSpeed::k200GB, "openconfig-if-ethernet:SPEED_200GB"},
+          {BreakoutSpeed::k400GB, "openconfig-if-ethernet:SPEED_400GB"},
+      });
+  return *kMap;
+}
 
 // Given a JSON string for OpenConfig interfaces. This function will parse
 // through the JSON and identify any ports with an 'openconfig-p4rt:id' value
@@ -121,6 +134,86 @@ absl::StatusOr<json> GetField(const json& object,
         absl::StrCat(field_name, " not found in ", object.dump(), "."));
   }
   return absl::StatusOr<json>(*std::move(field));
+}
+
+absl::StatusOr<json> AccessJsonValue(const json& json_value,
+                                     absl::Span<const absl::string_view> path) {
+  json json_result = json_value;
+  for (const auto& current_path : path) {
+    ASSIGN_OR_RETURN(json_result, GetField(json_result, current_path));
+  }
+  return json_result;
+}
+
+absl::StatusOr<json> GetBreakoutConfigWithIndex(const json& json_array,
+                                                uint32_t index) {
+  RET_CHECK(json_array.is_array())
+      << "The breakout group should be a valid Json array";
+  for (const auto& group_config : json_array) {
+    ASSIGN_OR_RETURN(const auto& current_index,
+                     AccessJsonValue(group_config, {"index"}));
+    if (index == current_index) {
+      return AccessJsonValue(group_config, {"config"});
+    }
+  }
+  return absl::NotFoundError(
+      absl::StrCat("Couldn't find the breakout group with index: ", index));
+}
+
+absl::Status IsBreakoutModeMatch(const BreakoutMode& breakout,
+                                 const json& json_array) {
+  // convert the json array of groupts to a vector of breakout speed.
+  std::vector<std::string> json_breakout;
+  for (int index = 0; index < json_array.size(); ++index) {
+    ASSIGN_OR_RETURN(const auto& breakout_config,
+                     GetBreakoutConfigWithIndex(json_array, index));
+    ASSIGN_OR_RETURN(const auto& breakout_num,
+                     AccessJsonValue(breakout_config, {"num-breakouts"}));
+    ASSIGN_OR_RETURN(const auto& json_port_speed,
+                     AccessJsonValue(breakout_config, {"breakout-speed"}));
+    json_breakout.insert(json_breakout.end(), breakout_num, json_port_speed);
+  }
+
+  if (json_breakout.size() != breakout.size()) {
+    return absl::NotFoundError("Breakout channel count mismatch");
+  }
+
+  for (int index = 0; index < breakout.size(); ++index) {
+    ASSIGN_OR_RETURN(
+        auto port_speed_str,
+        gutil::FindOrStatus(BreakoutSpeedToOpenconfig(), breakout[index]));
+    if (json_breakout[index] != port_speed_str) {
+      return absl::NotFoundError("Breakout channel speed mismatch");
+    }
+  }
+  return absl::OkStatus();
+}
+
+absl::StatusOr<int> FindBreakoutModeFromComponentJsonArray(
+    const BreakoutMode& breakout, const json& json_array,
+    const absl::flat_hash_set<int>& ignore_ports) {
+  RET_CHECK(json_array.is_array())
+      << "The component should be a valid Json array";
+  for (const auto& component : json_array) {
+    auto port_id = AccessJsonValue(
+        component, {"port", "config", "openconfig-pins-platform-port:port-id"});
+    if (ignore_ports.contains(*port_id)) {
+      LOG(INFO) << "skiped the ingore port: " << *port_id;
+      continue;
+    }
+    auto breakout_group = AccessJsonValue(
+        component,
+        {"port", "openconfig-platform-port:breakout-mode", "groups", "group"});
+
+    if (!port_id.ok() || !breakout_group.ok()) continue;
+
+    if (IsBreakoutModeMatch(breakout, *breakout_group).ok()) {
+      return *port_id;
+    } else {
+      LOG(INFO) << *port_id << " doesn't match the given breakout mode";
+    }
+  }
+  return absl::NotFoundError("Couldn't find the breakout mode");
 }
 
 absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
@@ -531,6 +624,25 @@ absl::StatusOr<std::string> GetGnmiStatePathInfo(
                       resp_parse_str);
 }
 
+absl::StatusOr<ResultWithTimestamp> GetGnmiStatePathAndTimestamp(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view path,
+    absl::string_view resp_parse_str) {
+  ASSIGN_OR_RETURN(gnmi::GetRequest request,
+                   BuildGnmiGetRequest(path, gnmi::GetRequest::STATE));
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(gnmi_stub, request, /*timeout=*/std::nullopt));
+  ASSIGN_OR_RETURN(std::string result,
+                   ParseGnmiGetResponse(response, resp_parse_str));
+
+  if (response.notification().empty()) {
+    return absl::InternalError("Invalid response");
+  }
+
+  return ResultWithTimestamp{.response = std::string(StripQuotes(result)),
+                             .timestamp = response.notification(0).timestamp()};
+}
+
 void AddSubtreeToGnmiSubscription(absl::string_view subtree_root,
                                   gnmi::SubscriptionList& subscription_list,
                                   gnmi::SubscriptionMode mode,
@@ -643,6 +755,50 @@ GetAllEnabledInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub,
     }
   }
   return port_id_by_interface;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllUpInterfacePortIdsByName(gnmi::gNMI::StubInterface& stub,
+                               absl::Duration timeout) {
+  ASSIGN_OR_RETURN(std::vector<std::string> up_interfaces,
+                   GetUpInterfacesOverGnmi(stub, timeout));
+  ASSIGN_OR_RETURN(auto port_id_by_name, GetAllInterfaceNameToPortId(stub));
+
+  absl::flat_hash_map<std::string, std::string> result;
+  for (const auto& interface : up_interfaces) {
+    if (auto it = port_id_by_name.find(interface);
+        it != port_id_by_name.end()) {
+      result[it->first] = it->second;
+      VLOG(1) << "Found: " << it->first << " which is UP and has port ID "
+              << it->second << ".";
+    }
+  }
+  return result;
+}
+
+absl::StatusOr<std::string> GetAnyUpInterfacePortId(
+    gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto ids,
+                   GetNUpInterfacePortIds(stub, /*num_interfaces=*/1, timeout));
+  return ids[0];
+}
+
+absl::StatusOr<std::vector<std::string>> GetNUpInterfacePortIds(
+    gnmi::gNMI::StubInterface& stub, int num_interfaces,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto ids_by_name,
+                   GetAllUpInterfacePortIdsByName(stub, timeout));
+  std::vector<std::string> result;
+  for (const auto& [name, id] : ids_by_name) {
+    LOG(INFO) << "Selecting interface " << name << " with ID " << id << ".";
+    result.push_back(id);
+    if (result.size() == num_interfaces) {
+      return result;
+    }
+  }
+  return absl::FailedPreconditionError(
+      absl::StrCat("Could not find ", num_interfaces,
+                   " interfaces that are UP with a port ID."));
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
@@ -854,9 +1010,12 @@ GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub) {
     ASSIGN_OR_RETURN(json vendor,
                      GetField(state, "openconfig-platform-ext:vendor-name"));
     ASSIGN_OR_RETURN(json part_number, GetField(state, "part-no"));
-    part_information[name.get<std::string>()] =
-        TransceiverPart{.vendor = vendor.get<std::string>(),
-                        .part_number = part_number.get<std::string>()};
+    ASSIGN_OR_RETURN(json rev, GetField(state, "firmware-version"));
+    part_information[name.get<std::string>()] = TransceiverPart{
+        .vendor = vendor.get<std::string>(),
+        .part_number = part_number.get<std::string>(),
+        .rev = rev.get<std::string>(),
+    };
   }
   return part_information;
 }
@@ -887,6 +1046,46 @@ absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
                                     /*config_path=*/"components/component",
                                     GnmiSetType::kUpdate, config_value));
   return absl::OkStatus();
+}
+
+std::string ToString(BreakoutSpeed breakout_speed) {
+  switch (breakout_speed) {
+    case BreakoutSpeed::k100GB:
+      return "100GB";
+    case BreakoutSpeed::k200GB:
+      return "200GB";
+    case BreakoutSpeed::k400GB:
+      return "400GB";
+    default:
+      return absl::StrCat("Unknown breakout speed: ",
+                          static_cast<int>(breakout_speed));
+  }
+}
+
+struct BreakoutSpeedFormatter {
+  void operator()(std::string* out, BreakoutSpeed breakout_speed) const {
+    out->append(ToString(breakout_speed));
+  }
+};
+
+std::ostream& operator<<(std::ostream& os, const BreakoutMode& breakout) {
+  os << absl::StrCat(
+      "{", absl::StrJoin(breakout, ", ", BreakoutSpeedFormatter()), "}");
+  return os;
+}
+
+absl::StatusOr<int> FindPortWithBreakoutMode(
+    absl::string_view json_config, const BreakoutMode& breakout,
+    const absl::flat_hash_set<int>& ignore_ports) {
+  //  Parse the open config as JSON value.
+  auto config_json = json::parse(json_config);
+  ASSIGN_OR_RETURN(
+      const auto& component_array,
+      AccessJsonValue(config_json,
+                      {"openconfig-platform:components", "component"}));
+  LOG(INFO) << "Will search breakout mode to match: " << breakout;
+  return FindBreakoutModeFromComponentJsonArray(breakout, component_array,
+                                                ignore_ports);
 }
 
 std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
@@ -985,7 +1184,8 @@ GetTransceiverToFormFactorMap(gnmi::gNMI::StubInterface& gnmi_stub) {
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, int>>
-GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub) {
+GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub,
+                           absl::flat_hash_set<std::string>& interface_names) {
   // Map of Openconfig SPEED enum strings to integer speed in Kbps (this ensures
   // all speeds are divisible by 8).
   const absl::flat_hash_map<std::string, int> kOcSpeedToInt = {
@@ -1014,7 +1214,7 @@ GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub) {
   absl::flat_hash_map<std::string, int> interface_to_lane_speed;
   for (const auto& interface : interfaces.items()) {
     ASSIGN_OR_RETURN(json name, GetField(interface.value(), "name"));
-    if (!absl::StartsWith(name.get<std::string>(), "Ethernet")) {
+    if (!interface_names.contains(name.get<std::string>())) {
       continue;
     }
     ASSIGN_OR_RETURN(

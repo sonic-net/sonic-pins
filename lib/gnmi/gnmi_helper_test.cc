@@ -22,6 +22,7 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
@@ -48,11 +49,13 @@ using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::_;
+using ::testing::ContainerEq;
 using ::testing::DoAll;
 using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
+using ::testing::IsSubsetOf;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::StrEq;
@@ -110,6 +113,137 @@ static constexpr char kAlarmsJson[] = R"([
 // not include any.
 static constexpr char kDeviceIdIs123456[] =
     R"({"openconfig-platform:components":{"component":[{"integrated-circuit":{"config":{"openconfig-p4rt:node-id":"123456"}},"name":"integrated_circuit0"}]}})";
+
+static constexpr char kBreakoutSample[] = R"(
+    {
+      "openconfig-platform:components": {
+        "component":[
+          {
+            "config" : {
+               "name" : "1/1"
+            },
+            "name" : "1/1",
+            "port" : {
+               "config" : {
+                  "openconfig-pins-platform-port:port-id" : 1
+               },
+               "openconfig-platform-port:breakout-mode" : {
+                  "groups" : {
+                     "group" : [
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_400GB",
+                              "index" : 0,
+                              "num-breakouts" : 2,
+                              "num-physical-channels" : 4
+                           },
+                           "index" : 0
+                        }
+                     ]
+                  }
+               }
+            }
+         },
+         {
+            "config" : {
+               "name" : "1/2"
+            },
+            "name" : "1/2",
+            "port" : {
+               "config" : {
+                  "openconfig-pins-platform-port:port-id" : 2
+               },
+               "openconfig-platform-port:breakout-mode" : {
+                  "groups" : {
+                     "group" : [
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_400GB",
+                              "index" : 0,
+                              "num-breakouts" : 1,
+                              "num-physical-channels" : 4
+                           },
+                           "index" : 0
+                        },
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_200GB",
+                              "index" : 1,
+                              "num-breakouts" : 2,
+                              "num-physical-channels" : 2
+                           },
+                           "index" : 1
+                        }
+                     ]
+                  }
+               }
+            }
+         },
+         {
+            "config" : {
+               "name" : "1/10"
+            },
+            "name" : "1/10",
+            "port" : {
+               "config" : {
+                  "openconfig-pins-platform-port:port-id" : 10
+               },
+               "openconfig-platform-port:breakout-mode" : {
+                  "groups" : {
+                     "group" : [
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_200GB",
+                              "index" : 0,
+                              "num-breakouts" : 2,
+                              "num-physical-channels" : 2
+                           },
+                           "index" : 0
+                        },
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_400GB",
+                              "index" : 1,
+                              "num-breakouts" : 1,
+                              "num-physical-channels" : 4
+                           },
+                           "index" : 1
+                        }
+                     ]
+                  }
+               }
+            }
+         },
+         {
+            "config" : {
+               "name" : "1/14"
+            },
+            "name" : "1/14",
+            "port" : {
+               "config" : {
+                  "openconfig-pins-platform-port:port-id" : 14
+               },
+               "openconfig-platform-port:breakout-mode" : {
+                  "groups" : {
+                     "group" : [
+                        {
+                           "config" : {
+                              "breakout-speed" : "openconfig-if-ethernet:SPEED_200GB",
+                              "index" : 0,
+                              "num-breakouts" : 4,
+                              "num-physical-channels" : 2
+                           },
+                           "index" : 0
+                        }
+                     ]
+                  }
+               }
+            }
+         }
+        ]
+      }
+    }
+  )";
 
 TEST(ConvertOCStringToPath, RegressionTest20220401) {
   EXPECT_THAT(ConvertOCStringToPath(
@@ -685,6 +819,205 @@ TEST(GetInterfacePortIdMap, ReturnsOnlyEnabledInterfaces) {
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
+TEST(GetInterfacePortIdMap, ReturnsOnlyUpInterfacesWithIDs) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":2}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":4}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetAllUpInterfacePortIdsByName(stub),
+              IsOkAndHolds(UnorderedPointwise(
+                  Eq(), absl::flat_hash_map<std::string, std::string>{
+                            {"Ethernet1/1/1", "2"},
+                            {"Ethernet1/4/1", "4"},
+                        })));
+}
+
+TEST(GetUpInterfacePortIDs, CanGetNUpInterfaces) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":2}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":4}
+        },
+        {
+          "name":"Ethernet1/5/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":5}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  // There are 3 valid ports, but we only choose 2. So we expect the result to
+  // be a subset of the valid ports.
+  EXPECT_THAT(GetNUpInterfacePortIds(stub, 2),
+              IsOkAndHolds(IsSubsetOf({"2", "4", "5"})));
+}
+
+TEST(GetUpInterfacePortIDs, GetNFailsWhenNotEnoughInterfacesAreUpWithAPortId) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":2}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":4}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetNUpInterfacePortIds(stub, 3),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(GetUpInterfacePortIDs, CanGetAnyInterfaceThatIsUpWithAPortId) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":2}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":4}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  // There are 2 valid ports, but only one will be chosen. So we wrap the result
+  // in a vector which we expect to be a subset of the valid ports.
+  ASSERT_OK_AND_ASSIGN(std::string id, GetAnyUpInterfacePortId(stub));
+  EXPECT_THAT(std::vector<std::string>{id}, IsSubsetOf({"2", "4"}));
+}
+
+TEST(GetUpInterfacePortIDs, GetAnyFailsWhenNoInterfacesAreUpOrHaveAPortId) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetAnyUpInterfacePortId(stub),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
 TEST(GetInterfacePortIdMap, StubSuccessfullyReturnsInterfacePortIdMap) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub, Get).WillOnce(
@@ -1217,8 +1550,7 @@ TEST(GetUpInterfaces, SuccessfullyGetsUpInterface) {
 
   auto statusor = GetUpInterfacesOverGnmi(stub);
   ASSERT_OK(statusor);
-  EXPECT_THAT(*statusor,
-              testing::ContainerEq(std::vector<std::string>{"Ethernet0"}));
+  EXPECT_THAT(*statusor, ContainerEq(std::vector<std::string>{"Ethernet0"}));
 }
 
 TEST(CheckParseGnmiGetResponse, FailDuetoResponseSize) {
@@ -1487,7 +1819,8 @@ TEST(TransceiverPartInformation, WorksProperly) {
             "state": {
               "empty": false,
               "openconfig-platform-ext:vendor-name": "Vendor",
-              "part-no": "123"
+              "part-no": "123",
+              "firmware-version": "ab"
             }
           }
         ]
@@ -1498,7 +1831,8 @@ TEST(TransceiverPartInformation, WorksProperly) {
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
   absl::flat_hash_map<std::string, TransceiverPart> expected_map{
-      {"Ethernet1", TransceiverPart{.vendor = "Vendor", .part_number = "123"}}};
+      {"Ethernet1",
+       TransceiverPart{.vendor = "Vendor", .part_number = "123", .rev = "ab"}}};
   EXPECT_THAT(GetTransceiverPartInformation(mock_stub),
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
@@ -1676,6 +2010,16 @@ TEST(InterfaceToSpeed, WorksProperly) {
                 "port-speed": "openconfig-if-ethernet:SPEED_100GB"
               }
             }
+          },
+          {
+            "name": "Ethernet1/33/1",
+            "state": {
+            },
+            "openconfig-if-ethernet:ethernet": {
+              "state": {
+                "port-speed": "openconfig-if-ethernet:SPEED_10GB"
+              }
+            }
           }
         ]
       }
@@ -1686,9 +2030,127 @@ TEST(InterfaceToSpeed, WorksProperly) {
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
   absl::flat_hash_map<std::string, int> expected_map{
       {"Ethernet1/1/1", 10'000'000 / 4}, {"Ethernet1/3/1", 100'000'000}};
-  EXPECT_THAT(GetInterfaceToLaneSpeedMap(mock_stub),
+  absl::flat_hash_set<std::string> interface_names{"Ethernet1/1/1",
+                                                   "Ethernet1/3/1"};
+  EXPECT_THAT(GetInterfaceToLaneSpeedMap(mock_stub, interface_names),
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
+TEST(GetGnmiStatePathAndTimestamp, VerifyValue) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1656026017779182564
+                 prefix { origin: "openconfig" }
+                 update {
+                   path {
+                     elem { name: "interfaces" }
+                     elem {
+                       name: "interface"
+                       key { key: "name" value: "Ethernet1/4/1" }
+                     }
+                     elem { name: "state" }
+                     elem { name: "counters" }
+                     elem { name: "in-pkts" }
+                   }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:in-pkts\":\"723563785\"}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(
+      auto result,
+      GetGnmiStatePathAndTimestamp(
+          &stub, "interfaces/interface[name=\"Ethernet1/4/1\"]/state/counters",
+          "openconfig-interfaces:in-pkts"));
+  EXPECT_EQ(result.timestamp, 1656026017779182564);
+  EXPECT_EQ(result.response, "723563785");
+}
+
+TEST(GetGnmiStatePathAndTimestamp, MissingAttribute) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1656026017779182564
+                 prefix { origin: "openconfig" }
+                 update {
+                   path {
+                     elem { name: "interfaces" }
+                     elem {
+                       name: "interface"
+                       key { key: "name" value: "Ethernet1/4/1" }
+                     }
+                     elem { name: "state" }
+                     elem { name: "counters" }
+                     elem { name: "out-pkts" }
+                   }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:out-pkts\":\"723563785\"}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetGnmiStatePathAndTimestamp(
+          &stub, "interfaces/interface[name=\"Ethernet1/4/1\"]/state/counters",
+          "openconfig-interfaces:in-pkts"),
+      StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(GetGnmiStatePathAndTimestamp, EmptyNotification) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(
+          gutil::ParseProtoOrDie<gnmi::GetResponse>(R"pb(notification {})pb")),
+      Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetGnmiStatePathAndTimestamp(
+          &stub, "interfaces/interface[name=\"Ethernet1/4/1\"]/state/counters",
+          "openconfig-interfaces:in-pkts"),
+      StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(BreakoutModeMatchTest, LocalFileTestDataTest) {
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample, {BreakoutSpeed::k400GB}),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("Couldn't find the breakout mode")));
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k400GB, BreakoutSpeed::k400GB}),
+      IsOkAndHolds(1));
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k400GB, BreakoutSpeed::k400GB},
+                               /*ignore_ports=*/{1}),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("Couldn't find the breakout mode")));
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k200GB, BreakoutSpeed::k200GB,
+                                BreakoutSpeed::k200GB, BreakoutSpeed::k200GB}),
+      IsOkAndHolds(14));
+
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k400GB, BreakoutSpeed::k200GB}),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("Couldn't find the breakout mode")));
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k400GB, BreakoutSpeed::k200GB,
+                                BreakoutSpeed::k200GB}),
+      IsOkAndHolds(2));
+
+  EXPECT_THAT(
+      FindPortWithBreakoutMode(kBreakoutSample,
+                               {BreakoutSpeed::k200GB, BreakoutSpeed::k200GB,
+                                BreakoutSpeed::k400GB}),
+      IsOkAndHolds(10));
+}
+  
 }  // namespace
 }  // namespace pins_test

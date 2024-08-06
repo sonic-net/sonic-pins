@@ -116,14 +116,14 @@ absl::Status ProgramIPv4Route(
                 neighbor_table_entry {
                   match {
                     router_interface_id: "traffic-router-interface-$0"
-                    neighbor_id: "$1"
+                    neighbor_id: "fe80::21a:11ff:fe17:0080"
                   }
                   action { set_dst_mac { dst_mac: "00:1A:11:17:00:80" } }
                 }
               }
             }
           )pb",
-          port_id, PortIdToIP(port_id))));
+          port_id)));
   RETURN_IF_ERROR(
       WritePdWriteRequest(write_request, ir_p4info, neighbor_request))
       << "Error writing neighbor entry request.";
@@ -140,14 +140,14 @@ absl::Status ProgramIPv4Route(
                   action {
                     set_ip_nexthop {
                       router_interface_id: "traffic-router-interface-$0"
-                      neighbor_id: "$1"
+                      neighbor_id: "fe80::21a:11ff:fe17:0080"
                     }
                   }
                 }
               }
             }
           )pb",
-          port_id, PortIdToIP(port_id))));
+          port_id)));
   RETURN_IF_ERROR(
       WritePdWriteRequest(write_request, ir_p4info, nexthop_request))
       << "Error writing nexthop entry request.";

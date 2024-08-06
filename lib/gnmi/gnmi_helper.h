@@ -23,6 +23,7 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -40,6 +41,15 @@ namespace pins_test {
 
 inline constexpr char kOpenconfigStr[] = "openconfig";
 inline constexpr char kTarget[] = "target";
+
+// Breakout mode is represented as vector of breakout speed.
+enum class BreakoutSpeed {
+  k100GB,
+  k200GB,
+  k400GB,
+};
+using BreakoutMode = std::vector<BreakoutSpeed>;
+std::ostream& operator<<(std::ostream& os, const BreakoutMode& breakout);
 
 enum class GnmiSetType : char { kUpdate, kReplace, kDelete };
 
@@ -66,6 +76,7 @@ struct OpenConfigInterfaceDescription {
 struct TransceiverPart {
   std::string vendor;
   std::string part_number;
+  std::string rev;
 
   bool operator==(const TransceiverPart& other) const {
     return std::tie(vendor, part_number) ==
@@ -109,6 +120,15 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
     absl::string_view resp_parse_str = {});
+
+struct ResultWithTimestamp {
+  std::string response;
+  int64_t timestamp;
+};
+
+absl::StatusOr<ResultWithTimestamp> GetGnmiStatePathAndTimestamp(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view path,
+    absl::string_view resp_parse_str);
 
 absl::StatusOr<std::string> ReadGnmiPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                          absl::string_view path,
@@ -210,6 +230,26 @@ absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllEnabledInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub,
                                    absl::Duration timeout = absl::Seconds(60));
 
+// Checks the switch's gNMI state for any ports that are UP, and returns a map
+// of the port IDs by the port names. If a port is not UP or does not have an ID
+// it will not be returned.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllUpInterfacePortIdsByName(gnmi::gNMI::StubInterface& stub,
+                               absl::Duration timeout = absl::Seconds(60));
+
+// Checks the switch's gNMI state for any port that is UP with a Port ID. If no
+// port is UP with a Port ID then an error is returned.
+absl::StatusOr<std::string> GetAnyUpInterfacePortId(
+    gnmi::gNMI::StubInterface& stub,
+    absl::Duration timeout = absl::Seconds(60));
+
+// Checks the switch's gNMI state for N ports that are both UP and have a Port
+// ID. If the switch does not have enough ports meeting this condition then an
+// error is returned.
+absl::StatusOr<std::vector<std::string>> GetNUpInterfacePortIds(
+    gnmi::gNMI::StubInterface& stub, int num_interfaces,
+    absl::Duration timeout = absl::Seconds(60));
+
 // Returns the ordered set of all port ids mapped by the given gNMI config.
 absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(
     absl::string_view gnmi_config);
@@ -263,6 +303,13 @@ absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
 std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
                                        const std::string& device_id);
 
+// Return the port id whose breakout mode matches the given input.
+// Input: the configuration's open config as string format.
+// Ignore ports is optional that is set as empty as default.
+absl::StatusOr<int> FindPortWithBreakoutMode(
+    absl::string_view json_config, const BreakoutMode& breakout,
+    const absl::flat_hash_set<int>& ignore_ports = {});
+
 // Returns a map from physical transceiver names to ethernet PMD type.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetTransceiverToEthernetPmdMap(gnmi::gNMI::StubInterface& gnmi_stub);
@@ -272,7 +319,8 @@ GetTransceiverToEthernetPmdMap(gnmi::gNMI::StubInterface& gnmi_stub);
 // Example: for a 4-lane 200G interface, this mapping would give a lane speed of
 // 50'000'000 (50G).
 absl::StatusOr<absl::flat_hash_map<std::string, int>>
-GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub);
+GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub,
+                           absl::flat_hash_set<std::string>& interface_names);
 
 // Check if switch port link is up.
 absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
