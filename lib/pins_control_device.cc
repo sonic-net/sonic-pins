@@ -15,6 +15,7 @@
 #include "lib/pins_control_device.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -55,6 +56,7 @@
 #include "system/system.grpc.pb.h"
 #include "system/system.pb.h"
 #include "tests/forwarding/util.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/control_device.h"
 #include "thinkit/packet_generation_finalizer.h"
 #include "thinkit/switch.h"
@@ -91,11 +93,11 @@ absl::StatusOr<gnmi::SetRequest> BuildGnmiSetLinkStateRequest(
 }  // namespace
 
 PinsControlDevice::PinsControlDevice(
-    std::unique_ptr<thinkit::Switch> sut, sai::Instantiation instantiation,
+    std::unique_ptr<thinkit::Switch> sut, pdpi::IrP4Info ir_p4_info,
     std::unique_ptr<pdpi::P4RuntimeSession> control_session,
     absl::flat_hash_map<std::string, std::string> interface_name_to_port_id)
     : sut_(std::move(sut)),
-      instantiation_(instantiation),
+      ir_p4_info_(std::move(ir_p4_info)),
       control_session_(std::move(control_session)),
       interface_name_to_port_id_(std::move(interface_name_to_port_id)) {
   for (const auto& [name, port_id] : interface_name_to_port_id_) {
@@ -104,14 +106,15 @@ PinsControlDevice::PinsControlDevice(
 }
 
 absl::StatusOr<PinsControlDevice> PinsControlDevice::Create(
-    std::unique_ptr<thinkit::Switch> sut, sai::Instantiation instantiation) {
+    std::unique_ptr<thinkit::Switch> sut, p4::config::v1::P4Info p4_info) {
   ASSIGN_OR_RETURN(auto gnmi_stub, sut->CreateGnmiStub());
   ASSIGN_OR_RETURN(auto interface_name_to_port_id,
                    GetAllInterfaceNameToPortId(*gnmi_stub));
+  ASSIGN_OR_RETURN(auto ir_p4_info, pdpi::CreateIrP4Info(p4_info));
   ASSIGN_OR_RETURN(auto control_session,
-                   pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                       *sut, sai::GetP4Info(instantiation)));
-  return PinsControlDevice(std::move(sut), instantiation,
+                   pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+                       *sut, /*gnmi_config=*/std::nullopt, std::move(p4_info)));
+  return PinsControlDevice(std::move(sut), std::move(ir_p4_info),
                            std::move(control_session),
                            std::move(interface_name_to_port_id));
 }
@@ -130,7 +133,7 @@ PinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
   ASSIGN_OR_RETURN(
       p4::v1::WriteRequest punt_all_request,
       pdpi::PdWriteRequestToPi(
-          sai::GetIrP4Info(instantiation_),
+          ir_p4_info_,
           gutil::ParseProtoOrDie<sai::WriteRequest>(
               R"pb(
                 updates {
@@ -138,14 +141,8 @@ PinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
                   table_entry {
                     acl_ingress_table_entry {
                       match {}  # Wildcard match.
-                      action { acl_trap { qos_queue: "0x1" } }  # Action: punt.
+                      action { acl_trap { qos_queue: "0x7" } }  # Action: punt.
                       priority: 1  # Highest priority.
-                      # TODO: Remove once GPINs V13 is
-                      # deprecated; only needed for backwards compatibility.
-                      meter_config {
-                        bytes_per_second: 987654321  # ~ 1 GB
-                        burst_bytes: 987654321       # ~ 1 GB
-                      }
                     }
                   }
                 })pb")));
@@ -173,8 +170,8 @@ absl::Status PinsControlDevice::SendPacket(absl::string_view interface,
         "P4RuntimeSession.");
   }
   return gpins::InjectEgressPacket(
-      interface_name_to_port_id_[interface], std::string(packet),
-      sai::GetIrP4Info(instantiation_), control_session_.get());
+      interface_name_to_port_id_[interface], std::string(packet), ir_p4_info_,
+      control_session_.get(), /*packet_delay=*/std::nullopt);
 }
 
 absl::Status PinsControlDevice::SendPackets(
