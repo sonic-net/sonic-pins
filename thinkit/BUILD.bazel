@@ -259,6 +259,7 @@ cc_library(
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_otg_models//:otg_grpc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
     ],

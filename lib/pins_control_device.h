@@ -83,6 +83,10 @@ class PinsControlDevice : public thinkit::ControlDevice {
 
   absl::Status CheckUp() override;
 
+  absl::StatusOr<std::vector<std::string>>
+  FilterCollateralDownOnAdminDownInterfaces(
+      absl::Span<const std::string> interfaces) override;
+
  private:
   std::unique_ptr<thinkit::Switch> sut_;
   pdpi::IrP4Info ir_p4_info_;

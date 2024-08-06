@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -283,5 +284,11 @@ absl::StatusOr<absl::flat_hash_set<std::string>> PinsControlDevice::GetUpLinks(
 }
 
 absl::Status PinsControlDevice::CheckUp() { return SwitchReady(*sut_); }
+
+absl::StatusOr<std::vector<std::string>>
+PinsControlDevice::FilterCollateralDownOnAdminDownInterfaces(
+    absl::Span<const std::string> interfaces) {
+  return std::vector<std::string>(interfaces.begin(), interfaces.end());
+}
 
 }  // namespace pins_test
