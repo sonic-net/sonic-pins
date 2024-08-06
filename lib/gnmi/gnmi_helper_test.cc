@@ -49,11 +49,13 @@ using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::_;
+using ::testing::ContainerEq;
 using ::testing::DoAll;
 using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
+using ::testing::IsSubsetOf;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::StrEq;
@@ -686,6 +688,205 @@ TEST(GetInterfacePortIdMap, ReturnsOnlyEnabledInterfaces) {
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
+TEST(GetInterfacePortIdMap, ReturnsOnlyUpInterfacesWithIDs) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":2}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":4}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetAllUpInterfacePortIdsByName(stub),
+              IsOkAndHolds(UnorderedPointwise(
+                  Eq(), absl::flat_hash_map<std::string, std::string>{
+                            {"Ethernet1/1/1", "2"},
+                            {"Ethernet1/4/1", "4"},
+                        })));
+}
+
+TEST(GetUpInterfacePortIDs, CanGetNUpInterfaces) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":2}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":4}
+        },
+        {
+          "name":"Ethernet1/5/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":5}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  // There are 3 valid ports, but we only choose 2. So we expect the result to
+  // be a subset of the valid ports.
+  EXPECT_THAT(GetNUpInterfacePortIds(stub, 2),
+              IsOkAndHolds(IsSubsetOf({"2", "4", "5"})));
+}
+
+TEST(GetUpInterfacePortIDs, GetNFailsWhenNotEnoughInterfacesAreUpWithAPortId) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":2}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":4}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetNUpInterfacePortIds(stub, 3),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(GetUpInterfacePortIDs, CanGetAnyInterfaceThatIsUpWithAPortId) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":2}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":4}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  // There are 2 valid ports, but only one will be chosen. So we wrap the result
+  // in a vector which we expect to be a subset of the valid ports.
+  ASSERT_OK_AND_ASSIGN(std::string id, GetAnyUpInterfacePortId(stub));
+  EXPECT_THAT(std::vector<std::string>{id}, IsSubsetOf({"2", "4"}));
+}
+
+TEST(GetUpInterfacePortIDs, GetAnyFailsWhenNoInterfacesAreUpOrHaveAPortId) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":{"oper-status":"UP"}
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":{"oper-status":"DOWN","openconfig-p4rt:id":3}
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(2).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetAnyUpInterfacePortId(stub),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
 TEST(GetInterfacePortIdMap, StubSuccessfullyReturnsInterfacePortIdMap) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub, Get).WillOnce(
@@ -1218,8 +1419,7 @@ TEST(GetUpInterfaces, SuccessfullyGetsUpInterface) {
 
   auto statusor = GetUpInterfacesOverGnmi(stub);
   ASSERT_OK(statusor);
-  EXPECT_THAT(*statusor,
-              testing::ContainerEq(std::vector<std::string>{"Ethernet0"}));
+  EXPECT_THAT(*statusor, ContainerEq(std::vector<std::string>{"Ethernet0"}));
 }
 
 TEST(CheckParseGnmiGetResponse, FailDuetoResponseSize) {

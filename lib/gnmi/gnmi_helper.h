@@ -221,6 +221,26 @@ absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllEnabledInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub,
                                    absl::Duration timeout = absl::Seconds(60));
 
+// Checks the switch's gNMI state for any ports that are UP, and returns a map
+// of the port IDs by the port names. If a port is not UP or does not have an ID
+// it will not be returned.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllUpInterfacePortIdsByName(gnmi::gNMI::StubInterface& stub,
+                               absl::Duration timeout = absl::Seconds(60));
+
+// Checks the switch's gNMI state for any port that is UP with a Port ID. If no
+// port is UP with a Port ID then an error is returned.
+absl::StatusOr<std::string> GetAnyUpInterfacePortId(
+    gnmi::gNMI::StubInterface& stub,
+    absl::Duration timeout = absl::Seconds(60));
+
+// Checks the switch's gNMI state for N ports that are both UP and have a Port
+// ID. If the switch does not have enough ports meeting this condition then an
+// error is returned.
+absl::StatusOr<std::vector<std::string>> GetNUpInterfacePortIds(
+    gnmi::gNMI::StubInterface& stub, int num_interfaces,
+    absl::Duration timeout = absl::Seconds(60));
+
 // Returns the ordered set of all port ids mapped by the given gNMI config.
 absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(
     absl::string_view gnmi_config);
