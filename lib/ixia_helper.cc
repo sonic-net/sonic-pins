@@ -14,33 +14,33 @@
 
 #include "lib/ixia_helper.h"
 
-#include <cmath>
 #include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/escaping.h"
-#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
+#include "absl/types/span.h"
 #include "google/protobuf/struct.pb.h"
-#include "google/protobuf/util/json_util.h"
 #include "gutil/collections.h"
 #include "gutil/overload.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
-#include "gutil/testing.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/ixia_helper.pb.h"
@@ -51,6 +51,32 @@ namespace pins_test::ixia {
 
 using Json = nlohmann::json;
 using ::json_yang::FormatJsonBestEffort;
+
+absl::StatusOr<int> FindIdByField(const thinkit::HttpResponse &response,
+                                  absl::string_view field,
+                                  absl::string_view desired_value) {
+  ASSIGN_OR_RETURN(Json array, json_yang::ParseJson(response.response));
+  if (!array.is_array()) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Response is not an array:\n", json_yang::DumpJson(array)));
+  }
+  std::string field_to_find(field);
+  for (const auto &[_, element] : array.items()) {
+    if (json_yang::GetSimpleJsonValueAsString(element[field_to_find]) !=
+        desired_value) {
+      continue;
+    }
+    Json id = element["id"];
+    if (!id.is_number_integer()) {
+      return absl::InternalError(
+          absl::StrCat("'id' is not an integer: ", id.dump()));
+    }
+    return id.get<int>();
+  }
+  return absl::NotFoundError(
+      absl::StrCat("Response does not contain the desired element (", field,
+                   ": ", desired_value, "):\n", json_yang::DumpJson(array)));
+}
 
 // ExtractHref - Extract the href path from the Ixia response.
 // An example response:
@@ -873,6 +899,34 @@ absl::Status SetIpPriority(absl::string_view tref, int dscp, int ecn_bits,
   return absl::OkStatus();
 }
 
+absl::Status SetIpTTL(absl::string_view tref, int ttl, bool is_ipv4,
+                      thinkit::GenericTestbed &generic_testbed) {
+  if (ttl < 0 || ttl > 64) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Invalid ttl: %d, valid range 0 - 64", ttl));
+  }
+
+  std::string sip_path =
+      is_ipv4 ? absl::StrCat(tref, "/configElement/1/stack/2/field/24")
+              : absl::StrCat(tref, "/configElement/1/stack/2/field/6");
+
+  std::string sip_json;
+
+  sip_json = absl::StrCat("{\"activeFieldChoice\":true,\"singleValue\":\"",
+                          absl::StrFormat("%d", ttl), "\"}");
+
+  LOG(INFO) << "path " << sip_path;
+  LOG(INFO) << "json " << sip_json;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse sip_response,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kPatch, sip_path, sip_json));
+  LOG(INFO) << "Returns " << sip_response.response_code;
+  if (sip_response.response_code != 200)
+    return absl::InternalError(
+        absl::StrFormat("unexpected response: %u", sip_response.response_code));
+  return absl::OkStatus();
+}
+
 absl::Status AppendTcp(absl::string_view tref,
                        thinkit::GenericTestbed &generic_testbed) {
   // GET to /ixnetwork/traffic/protocolTemplate to find the correct protocol
@@ -1174,8 +1228,12 @@ absl::StatusOr<TrafficStats> ParseTrafficItemStats(
 
 absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
     absl::string_view href, thinkit::GenericTestbed &generic_testbed) {
-  // TODO: Look up dynamically instead of hard-coding.
-  static constexpr int kTrafficItemStatsIndex = 9;
+  ASSIGN_OR_RETURN(thinkit::HttpResponse views,
+                   generic_testbed.SendRestRequestToIxia(
+                       thinkit::RequestType::kGet, "/ixnetwork/statistics/view",
+                       /*payload=*/""));
+  ASSIGN_OR_RETURN(int traffic_item_stats_index,
+                   FindIdByField(views, "caption", "Flow Statistics"));
   // It takes some time for stats to become "ready", so we have to poll.
   // TODO: Do not hardcode this.
   constexpr absl::Duration kPollDuration = absl::Seconds(45);
@@ -1183,7 +1241,7 @@ absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
   while (absl::Now() < kTimeout) {
     ASSIGN_OR_RETURN(
         std::string raw_stats,
-        GetRawStatsView(href, kTrafficItemStatsIndex, generic_testbed));
+        GetRawStatsView(href, traffic_item_stats_index, generic_testbed));
     absl::StatusOr<TrafficStats> stats = ParseTrafficItemStats(raw_stats);
     if (absl::IsUnavailable(stats.status())) {
       absl::SleepFor(absl::Seconds(1));

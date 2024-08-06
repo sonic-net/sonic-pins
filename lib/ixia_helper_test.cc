@@ -4,11 +4,61 @@
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
+#include "thinkit/generic_testbed.h"
 
 namespace pins_test::ixia {
 
 using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
+using ::gutil::StatusIs;
+
+TEST(FindIdByField, FindsId) {
+  static constexpr absl::string_view kArray =
+      R"json([
+      {"id":1, "name":"Port"},
+      {"id":2, "name":"Traffic"}
+      ])json";
+  EXPECT_THAT(
+      FindIdByField(thinkit::HttpResponse{.response = std::string(kArray)},
+                    "name", "Traffic"),
+      IsOkAndHolds(2));
+}
+
+TEST(FindIdByField, FindsIdForNonstringValue) {
+  static constexpr absl::string_view kArray =
+      R"json([
+      {"id":1, "counter":12},
+      {"id":2, "counter":15}
+      ])json";
+  EXPECT_THAT(
+      FindIdByField(thinkit::HttpResponse{.response = std::string(kArray)},
+                    "counter", "12"),
+      IsOkAndHolds(1));
+}
+
+TEST(FindIdByField, DoesntFindId) {
+  static constexpr absl::string_view kArray =
+      R"json([
+      {"id":1, "name":"Port"},
+      {"id":2, "name":"Traffic"}
+      ])json";
+  EXPECT_THAT(
+      FindIdByField(thinkit::HttpResponse{.response = std::string(kArray)},
+                    "name", "Flow"),
+      StatusIs(absl::StatusCode::kNotFound));
+}
+
+TEST(FindIdByField, DoesntFindIdNonexistentField) {
+  static constexpr absl::string_view kArray =
+      R"json([
+      {"id":1, "name":"Port"},
+      {"id":2, "name":"Traffic"}
+      ])json";
+  EXPECT_THAT(
+      FindIdByField(thinkit::HttpResponse{.response = std::string(kArray)},
+                    "value", "Flow"),
+      StatusIs(absl::StatusCode::kNotFound));
+}
 
 TEST(ParseTrafficItemStats, ParsesExampleCorrectly) {
   static constexpr absl::string_view kExample = R"json({
