@@ -102,7 +102,7 @@ TEST_P(ExampleTestFixture, LinkFlapTest) {
   std::string sut_interface;
   std::string peer_interface;
   for (const auto& [interface, info] : interface_info) {
-    if (info.interface_mode == thinkit::CONTROL_INTERFACE) {
+    if (info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) {
       sut_interface = interface;
       peer_interface = info.peer_interface_name;
       break;
