@@ -19,7 +19,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -33,14 +32,13 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
-#include "grpcpp/impl/codegen/client_context.h"
+#include "grpcpp/client_context.h"
+#include "grpcpp/support/status.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnoi/gnoi_helper.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
-#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "system/system.grpc.pb.h"
 #include "system/system.pb.h"
 #include "thinkit/ssh_client.h"
@@ -48,29 +46,94 @@
 
 namespace pins_test {
 
-absl::Status Pingable(absl::string_view chassis_name, absl::Duration timeout) {
-  constexpr char kPingCommand[] =
-      R"(fping -r 1 -t $0 $1 2>/dev/null; fping6 -r 1 -t $0 $1 2>/dev/null)";
+constexpr char kPingCount[] = "4";
+constexpr char kV4PingCommand[] = R"(fping -c $1 $0 2>&1 >/dev/null)";
+constexpr char kV6PingCommand[] = R"(fping6 -c $1 $0 2>&1 >/dev/null)";
+constexpr char kAddressNotFound[] = "address not found";
+constexpr char kNoPacketDroppedResponse[] = "/0%";
+constexpr char kAllPacketsDroppedResponse[] = "/100%";
+
+enum class PingResponseState {
+  kPingable,
+  kUnpingable,
+  kUnstable,
+  kAddressNotFound
+};
+
+absl::StatusOr<std::string> internal::RunPingCommand(
+    const std::string& ping_command) {
   FILE* in;
   char buff[1024];
-  std::string pingCommand = absl::Substitute(
-      kPingCommand, absl::ToInt64Milliseconds(timeout), chassis_name);
-  if (!(in = popen(pingCommand.c_str(), "r"))) {
+  if (!(in = popen(ping_command.c_str(), "r"))) {
     return absl::UnknownError(
-        absl::StrCat("Failed to run command: ", pingCommand));
+        absl::StrCat("Failed to run command: ", ping_command));
   }
   std::string response;
   while (fgets(buff, sizeof(buff), in) != nullptr) {
     absl::StrAppend(&response, buff);
   }
   pclose(in);
+  return response;
+}
 
-  if (!absl::StrContains(response, "alive")) {
-    return absl::UnavailableError(
-        absl::StrCat("Switch ", chassis_name,
-                     " is not reachable. Unexpected result: ", response));
+PingResponseState GetPingResponseStable(const std::string& response) {
+  if (absl::StrContains(response, kAddressNotFound)) {
+    return PingResponseState::kAddressNotFound;
   }
-  return absl::OkStatus();
+  if (absl::StrContains(response, kNoPacketDroppedResponse)) {
+    return PingResponseState::kPingable;
+  }
+  if (absl::StrContains(response, kAllPacketsDroppedResponse)) {
+    return PingResponseState::kUnpingable;
+  }
+  return PingResponseState::kUnstable;
+}
+
+absl::Status Pingable(
+    absl::string_view chassis_name, absl::Duration timeout,
+    std::function<absl::StatusOr<std::string>(const std::string&)>
+        run_ping_command) {
+  absl::Time end_time = absl::Now() + timeout;
+  std::string v4_response;
+  std::string v6_response;
+
+  while (absl::Now() < end_time) {
+    ASSIGN_OR_RETURN(v4_response,
+                     run_ping_command(absl::Substitute(
+                         kV4PingCommand, chassis_name, kPingCount)));
+    ASSIGN_OR_RETURN(v6_response,
+                     run_ping_command(absl::Substitute(
+                         kV6PingCommand, chassis_name, kPingCount)));
+    PingResponseState v4_response_state = GetPingResponseStable(v4_response);
+    PingResponseState v6_response_state = GetPingResponseStable(v6_response);
+
+    // If both v4 and v6 address not found, return not found error.
+    if (v4_response_state == PingResponseState::kAddressNotFound &&
+        v6_response_state == PingResponseState::kAddressNotFound) {
+      return absl::NotFoundError(
+          absl::Substitute("$0 address not found.", chassis_name));
+    }
+
+    // If either v4 or v6 is pingable, switch is pingable.
+    if (v6_response_state == PingResponseState::kPingable ||
+        v4_response_state == PingResponseState::kPingable) {
+      LOG(INFO) << chassis_name << " is Pingable.\nv4:" << v4_response
+                << "v6:" << v6_response;
+      return absl::OkStatus();
+    }
+
+    // If either v4 or v6 are unstable, continue to retry.
+    if (v4_response_state == PingResponseState::kUnstable ||
+        v6_response_state == PingResponseState::kUnstable) {
+      continue;
+    }
+    return absl::UnavailableError(
+        absl::Substitute("$0 is not Pingable.\nv4:$1\nv6:$2", chassis_name,
+                         v4_response, v6_response));
+  }
+  return absl::DeadlineExceededError(
+      absl::Substitute("$0 Pingable state is not stable.\nv4:$1 v6:$2",
+                       chassis_name, v4_response, v6_response));
 }
 
 absl::Status Pingable(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
@@ -156,6 +219,16 @@ absl::Status PortsUp(thinkit::Switch& thinkit_switch,
   LOG(INFO) << "Running PortsUp on " << thinkit_switch.ChassisName() << ".";
   return pins_test::CheckInterfaceOperStateOverGnmi(
       *gnmi_stub, /*interface_oper_state=*/"UP", interfaces,
+      /*skip_non_ethernet_interfaces=*/false, timeout);
+}
+
+absl::Status PortsDown(thinkit::Switch& thinkit_switch,
+                       absl::Span<const std::string> interfaces,
+                       bool with_healthz, absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto gnmi_stub, thinkit_switch.CreateGnmiStub());
+  LOG(INFO) << "Running PortsDown on " << thinkit_switch.ChassisName() << ".";
+  return pins_test::CheckInterfaceOperStateOverGnmi(
+      *gnmi_stub, /*interface_oper_state=*/"DOWN", interfaces,
       /*skip_non_ethernet_interfaces=*/false, timeout);
 }
 

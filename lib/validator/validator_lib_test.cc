@@ -14,7 +14,10 @@
 
 #include "lib/validator/validator_lib.h"
 
+#include <functional>
+
 #include "absl/status/status.h"
+#include "absl/strings/match.h"
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -24,7 +27,208 @@ namespace pins_test {
 namespace {
 
 using ::gutil::StatusIs;
+using ::testing::HasSubstr;
 using ::testing::MockFunction;
+
+constexpr char kSwitch[] = "switch";
+constexpr absl::Duration kDefaultTimeout = absl::Seconds(5);
+
+TEST(PingableTest, SwitchPingable) {
+  EXPECT_OK(Pingable(kSwitch, kDefaultTimeout, /*run_ping_command=*/
+                     [](const std::string& ping_command)
+                         -> absl::StatusOr<std::string> { return "4/4/0%"; }));
+}
+
+TEST(PingableTest, SwitchUnpingable) {
+  EXPECT_THAT(
+      Pingable(kSwitch, kDefaultTimeout, /*run_ping_command=*/
+               [](const std::string& ping_command)
+                   -> absl::StatusOr<std::string> { return "4/0/100%"; }),
+      StatusIs(absl::StatusCode::kUnavailable,
+               HasSubstr("switch is not Pingable.")));
+}
+
+TEST(PingableTest, SwitchUnstable) {
+  EXPECT_THAT(
+      Pingable(kSwitch, kDefaultTimeout, /*run_ping_command=*/
+               [](const std::string& ping_command)
+                   -> absl::StatusOr<std::string> { return "4/2/50%"; }),
+      StatusIs(absl::StatusCode::kDeadlineExceeded,
+               HasSubstr("switch Pingable state is not stable.")));
+}
+
+TEST(PingableTest, SwitchAddressNotFound) {
+  EXPECT_THAT(
+      Pingable(
+          kSwitch, kDefaultTimeout, /*run_ping_command=*/
+          [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+            return "address not found";
+          }),
+      StatusIs(absl::StatusCode::kNotFound,
+               HasSubstr("switch address not found.")));
+}
+
+TEST(PingableTest, SwitchV4PingableV6Unpingable) {
+  EXPECT_OK(Pingable(
+      kSwitch, kDefaultTimeout, /*run_ping_command=*/
+      [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+        if (absl::StrContains(ping_command, "fping6")) {
+          return "4/0/100%";
+        } else {
+          return "4/4/0%";
+        }
+      }));
+}
+
+TEST(PingableTest, SwitchV4PingableV6AddressNotFound) {
+  EXPECT_OK(Pingable(
+      kSwitch, kDefaultTimeout, /*run_ping_command=*/
+      [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+        if (absl::StrContains(ping_command, "fping6")) {
+          return "address not found";
+        } else {
+          return "4/4/0%";
+        }
+      }));
+}
+
+TEST(PingableTest, SwitchV4PingableV6Unstable) {
+  EXPECT_OK(Pingable(
+      kSwitch, kDefaultTimeout, /*run_ping_command=*/
+      [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+        if (absl::StrContains(ping_command, "fping6")) {
+          return "4/2/50%";
+        } else {
+          return "4/4/0%";
+        }
+      }));
+}
+
+TEST(PingableTest, SwitchV4UnpingableV6AddressNotFound) {
+  EXPECT_THAT(
+      Pingable(
+          kSwitch, kDefaultTimeout, /*run_ping_command=*/
+          [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+            if (absl::StrContains(ping_command, "fping6")) {
+              return "address not found";
+            } else {
+              return "4/0/100%";
+            }
+          }),
+      StatusIs(absl::StatusCode::kUnavailable,
+               HasSubstr("switch is not Pingable.")));
+}
+
+TEST(PingableTest, SwitchV4UnpingableV6Unstable) {
+  EXPECT_THAT(
+      Pingable(
+          kSwitch, kDefaultTimeout, /*run_ping_command=*/
+          [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+            if (absl::StrContains(ping_command, "fping6")) {
+              return "4/2/50%";
+            } else {
+              return "4/0/100%";
+            }
+          }),
+      StatusIs(absl::StatusCode::kDeadlineExceeded,
+               HasSubstr("switch Pingable state is not stable.")));
+}
+
+TEST(PingableTest, SwitchV4UnstableV6AddressNotFound) {
+  EXPECT_THAT(
+      Pingable(
+          kSwitch, kDefaultTimeout, /*run_ping_command=*/
+          [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+            if (absl::StrContains(ping_command, "fping6")) {
+              return "address not found";
+            } else {
+              return "4/2/50%";
+            }
+          }),
+      StatusIs(absl::StatusCode::kDeadlineExceeded,
+               HasSubstr("switch Pingable state is not stable.")));
+}
+
+TEST(PingableTest, SwitchV4UnpingableV6Pingable) {
+  EXPECT_OK(Pingable(
+      kSwitch, kDefaultTimeout, /*run_ping_command=*/
+      [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+        if (absl::StrContains(ping_command, "fping6")) {
+          return "4/4/0%";
+        } else {
+          return "4/0/100%";
+        }
+      }));
+}
+
+TEST(PingableTest, SwitchV4AddressNotFoundV6Pingable) {
+  EXPECT_OK(Pingable(
+      kSwitch, kDefaultTimeout, /*run_ping_command=*/
+      [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+        if (absl::StrContains(ping_command, "fping6")) {
+          return "4/4/0%";
+        } else {
+          return "address not found";
+        }
+      }));
+}
+
+TEST(PingableTest, SwitchV4UnstableV6Pingable) {
+  EXPECT_OK(Pingable(
+      kSwitch, kDefaultTimeout, /*run_ping_command=*/
+      [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+        if (absl::StrContains(ping_command, "fping6")) {
+          return "4/4/0%";
+        } else {
+          return "4/2/50%";
+        }
+      }));
+}
+
+TEST(PingableTest, SwitchV4AddressNotFoundV6Unpingable) {
+  EXPECT_THAT(
+      Pingable(
+          kSwitch, kDefaultTimeout, /*run_ping_command=*/
+          [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+            if (absl::StrContains(ping_command, "fping6")) {
+              return "4/0/100%";
+            } else {
+              return "address not found";
+            }
+          }),
+      StatusIs(absl::StatusCode::kUnavailable,
+               HasSubstr("switch is not Pingable.")));
+}
+
+TEST(PingableTest, SwitchV4UnstableV6Unpingable) {
+  EXPECT_THAT(
+      Pingable(
+          kSwitch, kDefaultTimeout, /*run_ping_command=*/
+          [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+            if (absl::StrContains(ping_command, "fping6")) {
+              return "4/0/100%";
+            } else {
+              return "4/2/50%";
+            }
+          }),
+      StatusIs(absl::StatusCode::kDeadlineExceeded,
+               HasSubstr("switch Pingable state is not stable.")));
+}
+
+TEST(PingableTest, SwitchV4AddressNotFoundV6Unstable) {
+  EXPECT_THAT(
+      Pingable(
+          kSwitch, kDefaultTimeout, /*run_ping_command=*/
+          [](const std::string& ping_command) -> absl::StatusOr<std::string> {
+            if (absl::StrContains(ping_command, "fping6")) {
+              return "4/2/50%";
+            } else {
+              return "address not found";
+            }
+          }),
+      StatusIs(absl::StatusCode::kDeadlineExceeded,
+               HasSubstr("switch Pingable state is not stable.")));
+}
 
 TEST(WaitForConditionTest, SucceedsInOneTry) {
   int call_count = 0;

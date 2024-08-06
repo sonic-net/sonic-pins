@@ -15,12 +15,14 @@
 #ifndef PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_
 #define PINS_LIB_VALIDATOR_VALIDATOR_LIB_H_
 
+#include <cstdint>
 #include <functional>
 #include <list>
 #include <string>
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
@@ -31,19 +33,24 @@
 #include "thinkit/switch.h"
 
 namespace pins_test {
+namespace internal {
+absl::StatusOr<std::string> RunPingCommand(const std::string& ping_command);
+}  // namespace internal
 
 constexpr absl::Duration kDefaultTimeout = absl::Seconds(60);
 
 // Checks if the switch can be pinged.
-// Will wait up to <timeout> for the switch to respond to the ping.
-absl::Status Pingable(absl::string_view chassis_name,
-                      absl::Duration timeout = kDefaultTimeout);
+// Will wait up to `timeout` for the switch to respond to the ping.
+absl::Status Pingable(
+    absl::string_view chassis_name, absl::Duration timeout = kDefaultTimeout,
+    std::function<absl::StatusOr<std::string>(const std::string&)>
+        run_ping_command = internal::RunPingCommand);
 
 absl::Status Pingable(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if ssh access to the switch is working.
-// Will wait up to <timeout> for the switch to respond to SSH.
+// Will wait up to `timeout` for the switch to respond to SSH.
 absl::Status SSHable(absl::string_view chassis_name,
                      thinkit::SSHClient& ssh_client,
                      absl::Duration timeout = kDefaultTimeout);
@@ -53,29 +60,37 @@ absl::Status SSHable(thinkit::Switch& thinkit_switch,
                      absl::Duration timeout = kDefaultTimeout);
 
 // Checks if a P4Runtime session could be established.
-// Will wait up to <timeout> for the RPC to return. Performs one request.
+// Will wait up to `timeout` for the RPC to return. Performs one request.
 absl::Status P4rtAble(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if a gNMI get all interface request can be sent and a response
 // received.
-// Will wait up to <timeout> for the RPC to return. Peforms one request.
+// Will wait up to `timeout` for the RPC to return. Peforms one request.
 absl::Status GnmiAble(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
 // Checks if a gNOI system get time request can be sent and a response
 // received.
-// Will wait up to <timeout> for the RPC to return. Peforms one request.
+// Will wait up to `timeout` for the RPC to return. Peforms one request.
 absl::Status GnoiAble(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
-// Checks if "oper-status" of all interfaces are "UP". If the interfaces is
+// Checks if "oper-status" of all interfaces are "UP". If the interfaces are
 // provided, checks only those interfaces.
-// Will wait up to <timeout> for the RPC to return. Peforms one request.
+// Will wait up to `timeout` for the RPC to return. Performs one request.
 absl::Status PortsUp(thinkit::Switch& thinkit_switch,
                      absl::Span<const std::string> interfaces = {},
                      bool with_healthz = true,
                      absl::Duration timeout = kDefaultTimeout);
+
+// Checks if "oper-status" of all interfaces are "DOWN". If the interfaces are
+// provided, checks only those interfaces.
+// Will wait up to `timeout` for the RPC to return. Performs one request.
+absl::Status PortsDown(thinkit::Switch& thinkit_switch,
+                       absl::Span<const std::string> interfaces = {},
+                       bool with_healthz = true,
+                       absl::Duration timeout = kDefaultTimeout);
 
 inline absl::Status AllPortsUp(thinkit::Switch& thinkit_switch,
                                bool with_healthz = true,
@@ -85,7 +100,7 @@ inline absl::Status AllPortsUp(thinkit::Switch& thinkit_switch,
 }
 
 // Checks to make sure no alarms are set.
-// Will wait up to <timeout> for the RPC to return. Peforms one request.
+// Will wait up to `timeout` for the RPC to return. Peforms one request.
 absl::Status NoAlarms(thinkit::Switch& thinkit_switch,
                       absl::Duration timeout = kDefaultTimeout);
 
