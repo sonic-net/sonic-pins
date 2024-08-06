@@ -22,6 +22,7 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
@@ -1487,7 +1488,8 @@ TEST(TransceiverPartInformation, WorksProperly) {
             "state": {
               "empty": false,
               "openconfig-platform-ext:vendor-name": "Vendor",
-              "part-no": "123"
+              "part-no": "123",
+              "firmware-version": "ab"
             }
           }
         ]
@@ -1498,7 +1500,8 @@ TEST(TransceiverPartInformation, WorksProperly) {
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
   absl::flat_hash_map<std::string, TransceiverPart> expected_map{
-      {"Ethernet1", TransceiverPart{.vendor = "Vendor", .part_number = "123"}}};
+      {"Ethernet1",
+       TransceiverPart{.vendor = "Vendor", .part_number = "123", .rev = "ab"}}};
   EXPECT_THAT(GetTransceiverPartInformation(mock_stub),
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
@@ -1676,6 +1679,16 @@ TEST(InterfaceToSpeed, WorksProperly) {
                 "port-speed": "openconfig-if-ethernet:SPEED_100GB"
               }
             }
+          },
+          {
+            "name": "Ethernet1/33/1",
+            "state": {
+            },
+            "openconfig-if-ethernet:ethernet": {
+              "state": {
+                "port-speed": "openconfig-if-ethernet:SPEED_10GB"
+              }
+            }
           }
         ]
       }
@@ -1686,7 +1699,9 @@ TEST(InterfaceToSpeed, WorksProperly) {
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
   absl::flat_hash_map<std::string, int> expected_map{
       {"Ethernet1/1/1", 10'000'000 / 4}, {"Ethernet1/3/1", 100'000'000}};
-  EXPECT_THAT(GetInterfaceToLaneSpeedMap(mock_stub),
+  absl::flat_hash_set<std::string> interface_names{"Ethernet1/1/1",
+                                                   "Ethernet1/3/1"};
+  EXPECT_THAT(GetInterfaceToLaneSpeedMap(mock_stub, interface_names),
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 

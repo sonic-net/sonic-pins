@@ -23,6 +23,7 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -66,6 +67,7 @@ struct OpenConfigInterfaceDescription {
 struct TransceiverPart {
   std::string vendor;
   std::string part_number;
+  std::string rev;
 
   bool operator==(const TransceiverPart& other) const {
     return std::tie(vendor, part_number) ==
@@ -281,7 +283,8 @@ GetTransceiverToEthernetPmdMap(gnmi::gNMI::StubInterface& gnmi_stub);
 // Example: for a 4-lane 200G interface, this mapping would give a lane speed of
 // 50'000'000 (50G).
 absl::StatusOr<absl::flat_hash_map<std::string, int>>
-GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub);
+GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub,
+                           absl::flat_hash_set<std::string>& interface_names);
 
 // Check if switch port link is up.
 absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
