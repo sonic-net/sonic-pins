@@ -531,6 +531,25 @@ absl::StatusOr<std::string> GetGnmiStatePathInfo(
                       resp_parse_str);
 }
 
+absl::StatusOr<ResultWithTimestamp> GetGnmiStatePathAndTimestamp(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view path,
+    absl::string_view resp_parse_str) {
+  ASSIGN_OR_RETURN(gnmi::GetRequest request,
+                   BuildGnmiGetRequest(path, gnmi::GetRequest::STATE));
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(gnmi_stub, request, /*timeout=*/std::nullopt));
+  ASSIGN_OR_RETURN(std::string result,
+                   ParseGnmiGetResponse(response, resp_parse_str));
+
+  if (response.notification().empty()) {
+    return absl::InternalError("Invalid response");
+  }
+
+  return ResultWithTimestamp{.response = std::string(StripQuotes(result)),
+                             .timestamp = response.notification(0).timestamp()};
+}
+
 void AddSubtreeToGnmiSubscription(absl::string_view subtree_root,
                                   gnmi::SubscriptionList& subscription_list,
                                   gnmi::SubscriptionMode mode,
