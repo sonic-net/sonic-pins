@@ -27,6 +27,7 @@
 #include "diag/diag.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "diag/diag.pb.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -44,10 +45,11 @@ class PinsControlDevice : public thinkit::ControlDevice {
  public:
   static absl::StatusOr<PinsControlDevice> Create(
       std::unique_ptr<thinkit::Switch> sut,
-      sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
+      p4::config::v1::P4Info p4_info =
+          sai::GetP4Info(sai::Instantiation::kMiddleblock));
 
   PinsControlDevice(
-      std::unique_ptr<thinkit::Switch> sut, sai::Instantiation instantiation,
+      std::unique_ptr<thinkit::Switch> sut, pdpi::IrP4Info ir_p4_info,
       std::unique_ptr<pdpi::P4RuntimeSession> control_session,
       absl::flat_hash_map<std::string, std::string> interface_name_to_port_id);
 
@@ -87,7 +89,7 @@ class PinsControlDevice : public thinkit::ControlDevice {
 
  private:
   std::unique_ptr<thinkit::Switch> sut_;
-  sai::Instantiation instantiation_;
+  pdpi::IrP4Info ir_p4_info_;
   std::unique_ptr<pdpi::P4RuntimeSession> control_session_;
   absl::flat_hash_map<std::string, std::string> interface_name_to_port_id_;
   absl::flat_hash_map<std::string, std::string> interface_port_id_to_name_;

@@ -40,6 +40,7 @@ cc_library(
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//tests/forwarding:util",
+        "//tests/lib:switch_test_setup_helpers",
         "//thinkit:control_device",
         "//thinkit:packet_generation_finalizer",
         "//thinkit:switch",
