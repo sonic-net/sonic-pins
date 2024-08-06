@@ -260,6 +260,10 @@ GetInterfaceToTransceiverMap(gnmi::gNMI::StubInterface& gnmi_stub);
 absl::StatusOr<absl::flat_hash_map<std::string, TransceiverPart>>
 GetTransceiverPartInformation(gnmi::gNMI::StubInterface& gnmi_stub);
 
+// Returns a map from physical transceiver names to their form factor.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetTransceiverToFormFactorMap(gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Sets the device ID which is needed by P4RT App to establish a connection to
 // the switch.
 absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,

@@ -975,6 +975,37 @@ GetTransceiverToEthernetPmdMap(gnmi::gNMI::StubInterface& gnmi_stub) {
   return pmd_types;
 }
 
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetTransceiverToFormFactorMap(gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(std::string response, pins_test::GetGnmiStatePathInfo(
+                                             &gnmi_stub, "components",
+                                             "openconfig-platform:components"));
+  json response_json = json::parse(response);
+  ASSIGN_OR_RETURN(json components, GetField(response_json, "component"));
+
+  absl::flat_hash_map<std::string, std::string> form_factor_types;
+  for (const auto& component : components.items()) {
+    ASSIGN_OR_RETURN(json name, GetField(component.value(), "name"));
+    if (!absl::StartsWith(name.get<std::string>(), "Ethernet")) {
+      continue;
+    }
+
+    ASSIGN_OR_RETURN(json state, GetField(component.value(), "state"));
+    ASSIGN_OR_RETURN(json empty, GetField(state, "empty"));
+    if (empty.get<bool>()) {
+      continue;
+    }
+
+    ASSIGN_OR_RETURN(json transceiver,
+                     GetField(component.value(),
+                              "openconfig-platform-transceiver:transceiver"));
+    ASSIGN_OR_RETURN(json xcvr_state, GetField(transceiver, "state"));
+    ASSIGN_OR_RETURN(json form_factor, GetField(xcvr_state, "form-factor"));
+    form_factor_types[name.get<std::string>()] = form_factor.get<std::string>();
+  }
+  return form_factor_types;
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, int>>
 GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub,
                            absl::flat_hash_set<std::string>& interface_names) {
