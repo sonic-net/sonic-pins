@@ -1690,5 +1690,81 @@ TEST(InterfaceToSpeed, WorksProperly) {
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }
 
+TEST(GetGnmiStatePathAndTimestamp, VerifyValue) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1656026017779182564
+                 prefix { origin: "openconfig" }
+                 update {
+                   path {
+                     elem { name: "interfaces" }
+                     elem {
+                       name: "interface"
+                       key { key: "name" value: "Ethernet1/4/1" }
+                     }
+                     elem { name: "state" }
+                     elem { name: "counters" }
+                     elem { name: "in-pkts" }
+                   }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:in-pkts\":\"723563785\"}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(
+      auto result,
+      GetGnmiStatePathAndTimestamp(
+          &stub, "interfaces/interface[name=\"Ethernet1/4/1\"]/state/counters",
+          "openconfig-interfaces:in-pkts"));
+  EXPECT_EQ(result.timestamp, 1656026017779182564);
+  EXPECT_EQ(result.response, "723563785");
+}
+
+TEST(GetGnmiStatePathAndTimestamp, MissingAttribute) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+          R"pb(notification {
+                 timestamp: 1656026017779182564
+                 prefix { origin: "openconfig" }
+                 update {
+                   path {
+                     elem { name: "interfaces" }
+                     elem {
+                       name: "interface"
+                       key { key: "name" value: "Ethernet1/4/1" }
+                     }
+                     elem { name: "state" }
+                     elem { name: "counters" }
+                     elem { name: "out-pkts" }
+                   }
+                   val {
+                     json_ietf_val: "{\"openconfig-interfaces:out-pkts\":\"723563785\"}"
+                   }
+                 }
+               })pb")),
+      Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetGnmiStatePathAndTimestamp(
+          &stub, "interfaces/interface[name=\"Ethernet1/4/1\"]/state/counters",
+          "openconfig-interfaces:in-pkts"),
+      StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(GetGnmiStatePathAndTimestamp, EmptyNotification) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillOnce(DoAll(
+      SetArgPointee<2>(
+          gutil::ParseProtoOrDie<gnmi::GetResponse>(R"pb(notification {})pb")),
+      Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      GetGnmiStatePathAndTimestamp(
+          &stub, "interfaces/interface[name=\"Ethernet1/4/1\"]/state/counters",
+          "openconfig-interfaces:in-pkts"),
+      StatusIs(absl::StatusCode::kInternal));
+}
 }  // namespace
 }  // namespace pins_test
