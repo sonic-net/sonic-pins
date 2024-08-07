@@ -14,16 +14,16 @@
 #include "p4_fuzzer/fuzz_util.h"
 
 #include <cstdint>
-#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/random/seed_sequences.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
 #include "glog/logging.h"
@@ -38,9 +38,11 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
+#include "p4_fuzzer/switch_state.h"
 #include "p4_fuzzer/test_utils.h"
 #include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/testing/test_p4info.h"
 
 namespace p4_fuzzer {
 namespace {
@@ -48,6 +50,59 @@ namespace {
 using ::gutil::EqualsProto;
 using ::testing::AnyOfArray;
 using ::testing::Not;
+
+// Allows generation of entries to any table that would otherwise be impossible
+// due to a lack of referenceable entries.
+absl::Status ExpandStateWithOneFuzzedEntryPerTable(const FuzzerConfig& config,
+                                                   SwitchState& switch_state) {
+  // Create a vector of all tables by dependency order.
+  pdpi::IrP4Info ir_p4_info = config.GetIrP4Info();
+  std::vector<std::pair<std::string, int>> table_names_and_ranks;
+  for (const auto& [table_name, dependency_rank] :
+       ir_p4_info.dependency_rank_by_table_name()) {
+    table_names_and_ranks.push_back({table_name, dependency_rank});
+  }
+  absl::c_stable_sort(table_names_and_ranks, [](const auto& a, const auto& b) {
+    return a.second > b.second;
+  });
+
+  absl::BitGen gen;
+  for (const auto& [table_name, unused] : table_names_and_ranks) {
+    p4::v1::Update update;
+    update.set_type(p4::v1::Update::INSERT);
+
+    if (table_name == pdpi::GetMulticastGroupTableName()) {
+      // Generate a multicast group entry.
+      ASSIGN_OR_RETURN(
+          *update.mutable_entity()
+               ->mutable_packet_replication_engine_entry()
+               ->mutable_multicast_group_entry(),
+          FuzzValidMulticastGroupEntry(&gen, config, switch_state));
+    } else if (pdpi::IsBuiltInTable(table_name)) {
+      // Fuzzer doesn't support any other built-in tables.
+      continue;
+    } else {
+      // Generate a generic table entry, skipping any disabled or invalid
+      // tables.
+      if (!absl::c_any_of(
+              AllValidTablesForP4RtRole(config),
+              [&table_name](const pdpi::IrTableDefinition& table_info) {
+                return table_info.preamble().alias() == table_name;
+              }))
+        continue;
+
+      ASSIGN_OR_RETURN(
+          pdpi::IrTableDefinition table_info,
+          gutil::FindOrStatus(ir_p4_info.tables_by_name(), table_name));
+      ASSIGN_OR_RETURN(
+          *update.mutable_entity()->mutable_table_entry(),
+          FuzzValidTableEntry(&gen, config, switch_state, table_info));
+    }
+    RETURN_IF_ERROR(switch_state.ApplyUpdate(update));
+  }
+
+  return absl::OkStatus();
+}
 
 TEST(FuzzUtilTest, SetUnusedBitsToZeroInThreeBytes) {
   std::string data("\xff\xff\xff", 3);
@@ -634,6 +689,188 @@ TEST(FuzzUtilTest, FuzzActionRespectsDisallowList) {
                          FuzzAction(&fuzzer_state.gen, fuzzer_state.config,
                                     fuzzer_state.switch_state, id_test_table));
     EXPECT_NE(action.action().action_id(), do_thing_action.preamble().id());
+  }
+}
+
+TEST(FuzzUtilTest, NonMutatedTableEntryFuzzingUsesModifyFuzzedEntityKnobs) {
+  // Create a SwitchState containing an entry for every table in the P4Info.
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  SwitchState& switch_state = fuzzer_state.switch_state;
+  const absl::flat_hash_set<std::string> kDisabledFullyQualifiedNames = {
+      // TODO: Constrained table has some constraints that are not
+      // yet supported by the fuzzer.
+      "ingress.constrained_table",
+  };
+
+  fuzzer_state.config.SetDisabledFullyQualifiedNames(
+      kDisabledFullyQualifiedNames);
+  ASSERT_OK(
+      ExpandStateWithOneFuzzedEntryPerTable(fuzzer_state.config, switch_state));
+
+  // Create a configuration that modifies all table entries fuzzed into the
+  // expected table entry.
+  p4::v1::TableEntry expected_table_entry;
+  // Needs to be a real table ID due to built-in checks deeper in the Fuzzer.
+  expected_table_entry.set_table_id(
+      FuzzTableId(&fuzzer_state.gen, fuzzer_state.config));
+
+  ASSERT_OK_AND_ASSIGN(
+      FuzzerConfig config,
+      FuzzerConfig::Create(
+          pdpi::GetTestP4Info(),
+          ConfigParams{
+              // This is the role used for tables in the test P4Info.
+              .role = "",
+              // Mutation applies after the ModifyFuzzedEntity knobs, which
+              // means that we need to disable it to get predictable results.
+              .mutate_update_probability = 0.0,
+              .disabled_fully_qualified_names = kDisabledFullyQualifiedNames,
+              .ModifyFuzzedTableEntry =
+                  [&](const pdpi::IrP4Info&, const SwitchState&,
+                      p4::v1::TableEntry& table_entry) {
+                    table_entry = expected_table_entry;
+                    return absl::OkStatus();
+                  },
+          }));
+
+  absl::BitGen gen;
+
+  // Test FuzzValidTableEntry using an ID.
+  for (int i = 0; i < 100; i++) {
+    ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry entry,
+                         FuzzValidTableEntry(&gen, config, switch_state,
+                                             FuzzTableId(&gen, config)));
+    EXPECT_THAT(entry, EqualsProto(expected_table_entry));
+  }
+
+  // Test FuzzValidTableEntry using a table definition.
+  for (int i = 0; i < 100; i++) {
+    ASSERT_OK_AND_ASSIGN(
+        pdpi::IrTableDefinition table_definition,
+        gutil::FindOrStatus(config.GetIrP4Info().tables_by_id(),
+                            FuzzTableId(&gen, config)));
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::TableEntry entry,
+        FuzzValidTableEntry(&gen, config, switch_state, table_definition));
+    EXPECT_THAT(entry, EqualsProto(expected_table_entry));
+  }
+}
+
+TEST(FuzzUtilTest, NonMutatedMulticastFuzzingUsesModifyFuzzedEntityKnobs) {
+  // Create a SwitchState containing an entry for every table in the P4Info.
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  SwitchState& switch_state = fuzzer_state.switch_state;
+  const absl::flat_hash_set<std::string> kDisabledFullyQualifiedNames = {
+      // TODO: Constrained table has some constraints that are not
+      // yet supported by the fuzzer.
+      "ingress.constrained_table",
+  };
+
+  fuzzer_state.config.SetDisabledFullyQualifiedNames(
+      kDisabledFullyQualifiedNames);
+  ASSERT_OK(
+      ExpandStateWithOneFuzzedEntryPerTable(fuzzer_state.config, switch_state));
+
+  // Create a configuration that modifies all  multicast group entries fuzzed
+  // into the expected multicast group entry.
+  p4::v1::MulticastGroupEntry expected_multicast_group_entry;
+  expected_multicast_group_entry.set_multicast_group_id(123456789);
+
+  ASSERT_OK_AND_ASSIGN(
+      FuzzerConfig config,
+      FuzzerConfig::Create(
+          pdpi::GetTestP4Info(),
+          ConfigParams{
+              // This is the role used for tables in the test P4Info.
+              .role = "",
+              // Mutation applies after the ModifyFuzzedEntity knobs, which
+              // means that we need to disable it to get predictable results.
+              .mutate_update_probability = 0.0,
+              .disabled_fully_qualified_names = kDisabledFullyQualifiedNames,
+              .ModifyFuzzedMulticastGroupEntry =
+                  [&](const pdpi::IrP4Info&, const SwitchState&,
+                      p4::v1::MulticastGroupEntry& multicast_group_entry) {
+                    multicast_group_entry = expected_multicast_group_entry;
+                    return absl::OkStatus();
+                  },
+          }));
+
+  absl::BitGen gen;
+
+  // Test FuzzValidMulticastGroupEntry.
+  for (int i = 0; i < 100; i++) {
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::MulticastGroupEntry entry,
+        FuzzValidMulticastGroupEntry(&gen, config, switch_state));
+    EXPECT_THAT(entry, EqualsProto(expected_multicast_group_entry));
+  }
+}
+
+TEST(FuzzUtilTest, NonMutatedWriteRequestFuzzingUsesModifyFuzzedEntityKnobs) {
+  // Start from a baseline fuzzer_state.
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+
+  // Create a configuration that modifies all entities fuzzed into the expected
+  // table entry or multicast group entry.
+  p4::v1::MulticastGroupEntry expected_multicast_group_entry;
+  expected_multicast_group_entry.set_multicast_group_id(123456789);
+  p4::v1::TableEntry expected_table_entry;
+  // Needs to be a real table ID due to built-in checks deeper in the Fuzzer.
+  expected_table_entry.set_table_id(
+      FuzzTableId(&fuzzer_state.gen, fuzzer_state.config));
+
+  ASSERT_OK_AND_ASSIGN(
+      fuzzer_state.config,
+      FuzzerConfig::Create(
+          pdpi::GetTestP4Info(),
+          ConfigParams{
+              // This is the role used for tables in the test P4Info.
+              .role = "",
+              // Mutation applies after the ModifyFuzzedEntity knobs, which
+              // means that we need to disable it to get predictable results.
+              .mutate_update_probability = 0.0,
+              .fuzz_multicast_group_entry_probability = 0.5,
+              .disabled_fully_qualified_names =
+                  {
+                      // TODO: Constrained table has some
+                      // constraints that are not
+                      // yet supported by the fuzzer.
+                      "ingress.constrained_table",
+                  },
+              .ModifyFuzzedTableEntry =
+                  [&](const pdpi::IrP4Info&, const SwitchState&,
+                      p4::v1::TableEntry& table_entry) {
+                    table_entry = expected_table_entry;
+                    return absl::OkStatus();
+                  },
+              .ModifyFuzzedMulticastGroupEntry =
+                  [&](const pdpi::IrP4Info&, const SwitchState&,
+                      p4::v1::MulticastGroupEntry& multicast_group_entry) {
+                    multicast_group_entry = expected_multicast_group_entry;
+                    return absl::OkStatus();
+                  },
+          }));
+
+  // Test FuzzWriteRequest, which can only generate inserts since there are no
+  // entities in the SwitchState.
+  for (int i = 0; i < 100; i++) {
+    // Since the Fuzzer currently rejects updates with duplicate keys, these
+    // write requests will have at most 2 updates if the knobs are working
+    // correctly (one MulticastGroupEntry and one TableEntry).
+    AnnotatedWriteRequest write_request =
+        FuzzWriteRequest(&fuzzer_state.gen, fuzzer_state.config,
+                         fuzzer_state.switch_state, /*max_batch_size=*/2);
+
+    for (auto& update : write_request.updates()) {
+      const p4::v1::Entity& entity = update.pi().entity();
+      if (entity.has_table_entry()) {
+        EXPECT_THAT(entity.table_entry(), EqualsProto(expected_table_entry));
+      } else if (entity.has_packet_replication_engine_entry()) {
+        EXPECT_THAT(
+            entity.packet_replication_engine_entry().multicast_group_entry(),
+            EqualsProto(expected_multicast_group_entry));
+      }
+    }
   }
 }
 
