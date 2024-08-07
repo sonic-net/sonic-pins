@@ -79,6 +79,7 @@
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
 #include "p4rt_app/sonic/state_verification.h"
+#include "p4rt_app/sonic/vlan_entry_translation.h"
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
@@ -555,7 +556,8 @@ RebuildEntityEntryCache(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const QueueTranslator& cpu_queue_translator,
     const QueueTranslator& front_panel_queue_translator,
-    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
+    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table,
+    sonic::VlanTable& vlan_table, sonic::VlanMemberTable& vlan_member_table) {
   absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> cache;
   // Get all P4RT keys associated with IrTableEntry objects from the AppDb.
   for (const auto& app_db_key : sonic::GetAllP4TableEntryKeys(p4rt_table)) {
@@ -597,6 +599,56 @@ RebuildEntityEntryCache(
              << "[P4RT/PDPI] " << vrf_entry.status().message();
     }
     *cache[pdpi::EntityKey(*vrf_entry)].mutable_table_entry() = *vrf_entry;
+  }
+
+  // Get all VLAN_TABLE_P4 entries from the AppDb.
+  ASSIGN_OR_RETURN(std::vector<pdpi::IrTableEntry> vlan_entries,
+                   sonic::GetAllAppDbVlanTableEntries(vlan_table));
+  for (auto& ir_table_entry : vlan_entries) {
+    RETURN_IF_ERROR(TranslateTableEntry(
+        TranslateTableEntryOptions{
+            .direction = TranslationDirection::kForController,
+            .ir_p4_info = p4_info,
+            .translate_port_ids = translate_port_ids,
+            .port_map = port_translation_map,
+            .cpu_queue_translator = cpu_queue_translator,
+            .front_panel_queue_translator = front_panel_queue_translator,
+        },
+        ir_table_entry))
+        << " Entry: " << google::protobuf::ShortFormat(ir_table_entry);
+    auto vlan_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
+    if (!vlan_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
+                 << ir_table_entry.ShortDebugString();
+      return gutil::StatusBuilder(vlan_entry.status().code())
+             << "[P4RT/PDPI] " << vlan_entry.status().message();
+    }
+    *cache[pdpi::EntityKey(*vlan_entry)].mutable_table_entry() = *vlan_entry;
+  }
+
+  // Get all VLAN_MEMBER_TABLE entries from the AppDb.
+  ASSIGN_OR_RETURN(std::vector<pdpi::IrTableEntry> vlan_member_entries,
+                   sonic::GetAllAppDbVlanMemberTableEntries(vlan_member_table));
+  for (auto& ir_table_entry : vlan_member_entries) {
+    RETURN_IF_ERROR(TranslateTableEntry(
+        TranslateTableEntryOptions{
+            .direction = TranslationDirection::kForController,
+            .ir_p4_info = p4_info,
+            .translate_port_ids = translate_port_ids,
+            .port_map = port_translation_map,
+            .cpu_queue_translator = cpu_queue_translator,
+            .front_panel_queue_translator = front_panel_queue_translator,
+        },
+        ir_table_entry));
+    auto vlan_member_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
+    if (!vlan_member_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
+                 << ir_table_entry.ShortDebugString();
+      return gutil::StatusBuilder(vlan_member_entry.status().code())
+             << "[P4RT/PDPI] " << vlan_member_entry.status().message();
+    }
+    *cache[pdpi::EntityKey(*vlan_member_entry)].mutable_table_entry() =
+        *vlan_member_entry;
   }
 
   // Get all packet replication entries from the AppDb.
@@ -1709,6 +1761,24 @@ absl::Status P4RuntimeImpl::VerifyState() {
                     vrf_table_failures.end());
   }
 
+  // Verify the VLAN_TABLE_P4 entries.
+  std::vector<std::string> vlan_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*vlan_table_.app_state_db,
+                                             *vlan_table_.app_db);
+  if (!vlan_table_failures.empty()) {
+    failures.insert(failures.end(), vlan_table_failures.begin(),
+                    vlan_table_failures.end());
+  }
+
+  // Verify the VLAN_MEMBER_TABLE_P4 entries.
+  std::vector<std::string> vlan_member_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*vlan_member_table_.app_state_db,
+                                             *vlan_member_table_.app_db);
+  if (!vlan_member_table_failures.empty()) {
+    failures.insert(failures.end(), vlan_member_table_failures.begin(),
+                    vlan_member_table_failures.end());
+  }
+
   // Verify the HASH_TABLE entries.
   std::vector<std::string> hash_table_failures =
       sonic::VerifyAppStateDbAndAppDbEntries(*hash_table_.app_state_db,
@@ -1817,8 +1887,8 @@ grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
   // Rebuild the table_entry cache.
   auto entity_cache = RebuildEntityEntryCache(
       *ir_p4info_, translate_port_ids_, port_translation_map_,
-      *cpu_queue_translator_, *front_panel_queue_translator_, 
-      p4rt_table_, vrf_table_);
+      *cpu_queue_translator_, *front_panel_queue_translator_, p4rt_table_,
+      vrf_table_, vlan_table_, vlan_member_table_);
   if (!entity_cache.ok()) {
     LOG(ERROR) << "Failed to build the table cache during COMMIT: "
                << entity_cache.status();
@@ -2154,6 +2224,112 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
 
   // Spawn the receiver thread.
   return packetio_impl_->StartReceive(SendPacketInToController, use_genetlink);
+}
+
+absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
+    const std::vector<std::pair<std::string, std::string>>& port_ids,
+    const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
+    const std::vector<std::pair<std::string, std::string>>&
+        front_panel_queue_ids,
+    const std::optional<uint64_t>& device_id,
+    const std::vector<std::string>& ports) {
+  /**
+   * controller_manager_, packetio_impl_, component_state_, system_state_,
+   * netdev_translator_, forwarding_config_full_path_ are restored in
+   * P4RuntimeImpl contructor.
+   */
+  {
+    absl::MutexLock l(&server_state_lock_);
+
+    // Skip P4Info reconciliation if it wasn't present before warm reboot.
+    const std::vector<std::pair<std::string, std::string>> db_attributes =
+        host_stats_table_.state_db->get("CONFIG");
+    if (db_attributes.empty()) {
+      LOG(WARNING) << "No P4Info present before warm reboot"
+                   << ", skipping P4Info reconciliation";
+      return absl::OkStatus();
+    }
+
+    // LINT.IfChange(reconciliation_precondition)
+    // TODO: Check if component_state_, system_state_, netdev_translator_
+    // are initialized. Check if controller_manager_ and packetio_impl_ are
+    // initialized.
+    if (controller_manager_ == nullptr || packetio_impl_ == nullptr) {
+      return absl::FailedPreconditionError(
+          "SdnControllerManager and PacketIoInterface are not initialized.");
+    }
+    // LINT.ThenChange()
+    /**
+     * Load from p4info from forwarding_config_full_path_
+     * */
+    if (!forwarding_config_full_path_.has_value()) {
+      return absl::FailedPreconditionError(
+          "p4info file path is not set during warm reboot reconciliation");
+    }
+
+    p4::v1::SetForwardingPipelineConfigRequest saved_config;
+    RETURN_IF_ERROR(gutil::ReadProtoFromFile(*forwarding_config_full_path_,
+                                             saved_config.mutable_config()))
+        .LogError();
+
+    /**
+     * Restore forwarding_pipeline_config_, p4_constraint_info_, ir_p4info_ and
+     * capacity_by_action_profile_name_ by ReconcileAndCommitPipelineConfig()
+     * */
+    auto reconcile_status =
+        ReconcileAndCommitPipelineConfig(saved_config,
+                                         /*commit_to_hardware=*/false);
+    if (!reconcile_status.ok()) {
+      LOG(ERROR) << "Failed to rebuild pipeline config and software cache: "
+                 << reconcile_status.error_message();
+      return absl::InternalError(reconcile_status.error_message());
+    }
+  }
+
+  /**
+   * Restore port_translation_map_ , cpu_queue_translator_,
+   * front_panel_queue_translator_,
+   * controller_manager_->device_id_ and packetio_impl_->port_to_socket_from
+   * CONFIG DB by calling AddPortTranslation(), AssignQueueTranslator(),
+   * UpdateDeviceId() and AddPacketIoPort().
+   */
+  for (const auto& [key, port_id] : port_ids) {
+    RETURN_IF_ERROR(AddPortTranslation(key, port_id, /*update_dbs=*/false))
+        .LogError();
+  }
+  if (!cpu_queue_ids.empty()) {
+    ASSIGN_OR_RETURN(auto translator, QueueTranslator::Create(cpu_queue_ids));
+    AssignQueueTranslator(QueueType::kCpu, std::move(translator));
+  }
+  if (!front_panel_queue_ids.empty()) {
+    ASSIGN_OR_RETURN(auto translator,
+                     QueueTranslator::Create(front_panel_queue_ids));
+    AssignQueueTranslator(QueueType::kFrontPanel, std::move(translator));
+  }
+
+  // Ignore if no valid device ID found in configDB.
+  if (device_id.has_value()) {
+    RETURN_IF_ERROR(UpdateDeviceId(device_id.value())).LogError();
+  }
+
+  for (const auto& port : ports) {
+    RETURN_IF_ERROR(AddPacketIoPort(port)).LogError();
+  }
+
+  /**
+   *  Restore the entity_cache_ cache by RebuildEntityEntryCache()
+   * */
+  {
+    absl::MutexLock l(&server_state_lock_);
+    ASSIGN_OR_RETURN(
+        entity_cache_,
+        RebuildEntityEntryCache(*ir_p4info_, translate_port_ids_,
+                                port_translation_map_, *cpu_queue_translator_,
+                                *front_panel_queue_translator_, p4rt_table_,
+                                vrf_table_, vlan_table_, vlan_member_table_));
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace p4rt_app

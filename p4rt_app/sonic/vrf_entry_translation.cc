@@ -92,6 +92,9 @@ absl::StatusOr<swss::KeyOpFieldsValuesTuple> CreateAppDbVrfUpdate(
 
 absl::StatusOr<pdpi::IrUpdateStatus> PerformAppDbVrfUpdate(
     const VrfTable& vrf_table, const swss::KeyOpFieldsValuesTuple& update) {
+  // Drain the notification consumer of any pending notifications.
+  vrf_table.notification_consumer->DrainNotifications();
+
   if (kfvOp(update) == SET_COMMAND) {
     vrf_table.producer_state->set(kfvKey(update), kfvFieldsValues(update));
   } else if (kfvOp(update) == DEL_COMMAND) {
