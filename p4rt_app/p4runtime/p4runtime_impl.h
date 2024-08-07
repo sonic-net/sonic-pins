@@ -225,6 +225,17 @@ public:
   grpc::Status GrabLockAndEnterCriticalState(absl::string_view message)
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  // Rebuild software state after WarmBoot with APP DB
+  // entries and cached p4info file.
+  absl::Status RebuildSwStateAfterWarmboot(
+      const std::vector<std::pair<std::string, std::string>>& port_ids,
+      const std::vector<std::pair<std::string, std::string>>& cpu_queue_ids,
+      const std::vector<std::pair<std::string, std::string>>&
+          front_panel_queue_ids,
+      const std::optional<uint64_t>& device_id,
+      const std::vector<std::string>& ports)
+      ABSL_LOCKS_EXCLUDED(server_state_lock_);
+
 protected:
   // Simple constructor that should only be used for testing purposes.
   P4RuntimeImpl(bool translate_port_ids)
