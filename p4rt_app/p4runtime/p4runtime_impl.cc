@@ -82,6 +82,7 @@
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
 #include "p4rt_app/sonic/state_verification.h"
+#include "p4rt_app/sonic/vlan_entry_translation.h"
 #include "p4rt_app/sonic/vrf_entry_translation.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
@@ -554,7 +555,8 @@ RebuildEntityEntryCache(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const QueueTranslator& cpu_queue_translator,
     const QueueTranslator& front_panel_queue_translator,
-    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table) {
+    sonic::P4rtTable& p4rt_table, sonic::VrfTable& vrf_table,
+    sonic::VlanTable& vlan_table, sonic::VlanMemberTable& vlan_member_table) {
   absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> cache;
   // Get all P4RT keys associated with IrTableEntry objects from the AppDb.
   for (const auto& app_db_key : sonic::GetAllP4TableEntryKeys(p4rt_table)) {
@@ -596,6 +598,56 @@ RebuildEntityEntryCache(
              << "[P4RT/PDPI] " << vrf_entry.status().message();
     }
     *cache[pdpi::EntityKey(*vrf_entry)].mutable_table_entry() = *vrf_entry;
+  }
+
+  // Get all VLAN_TABLE_P4 entries from the AppDb.
+  ASSIGN_OR_RETURN(std::vector<pdpi::IrTableEntry> vlan_entries,
+                   sonic::GetAllAppDbVlanTableEntries(vlan_table));
+  for (auto& ir_table_entry : vlan_entries) {
+    RETURN_IF_ERROR(TranslateTableEntry(
+        TranslateTableEntryOptions{
+            .direction = TranslationDirection::kForController,
+            .ir_p4_info = p4_info,
+            .translate_port_ids = translate_port_ids,
+            .port_map = port_translation_map,
+            .cpu_queue_translator = cpu_queue_translator,
+            .front_panel_queue_translator = front_panel_queue_translator,
+        },
+        ir_table_entry))
+        << " Entry: " << google::protobuf::ShortFormat(ir_table_entry);
+    auto vlan_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
+    if (!vlan_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
+                 << ir_table_entry.ShortDebugString();
+      return gutil::StatusBuilder(vlan_entry.status().code())
+             << "[P4RT/PDPI] " << vlan_entry.status().message();
+    }
+    *cache[pdpi::EntityKey(*vlan_entry)].mutable_table_entry() = *vlan_entry;
+  }
+
+  // Get all VLAN_MEMBER_TABLE entries from the AppDb.
+  ASSIGN_OR_RETURN(std::vector<pdpi::IrTableEntry> vlan_member_entries,
+                   sonic::GetAllAppDbVlanMemberTableEntries(vlan_member_table));
+  for (auto& ir_table_entry : vlan_member_entries) {
+    RETURN_IF_ERROR(TranslateTableEntry(
+        TranslateTableEntryOptions{
+            .direction = TranslationDirection::kForController,
+            .ir_p4_info = p4_info,
+            .translate_port_ids = translate_port_ids,
+            .port_map = port_translation_map,
+            .cpu_queue_translator = cpu_queue_translator,
+            .front_panel_queue_translator = front_panel_queue_translator,
+        },
+        ir_table_entry));
+    auto vlan_member_entry = pdpi::IrTableEntryToPi(p4_info, ir_table_entry);
+    if (!vlan_member_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR table entry to PI: "
+                 << ir_table_entry.ShortDebugString();
+      return gutil::StatusBuilder(vlan_member_entry.status().code())
+             << "[P4RT/PDPI] " << vlan_member_entry.status().message();
+    }
+    *cache[pdpi::EntityKey(*vlan_member_entry)].mutable_table_entry() =
+        *vlan_member_entry;
   }
 
   // Get all packet replication entries from the AppDb.
@@ -1747,6 +1799,24 @@ absl::Status P4RuntimeImpl::VerifyState() {
                     vrf_table_failures.end());
   }
 
+  // Verify the VLAN_TABLE_P4 entries.
+  std::vector<std::string> vlan_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*vlan_table_.app_state_db,
+                                             *vlan_table_.app_db);
+  if (!vlan_table_failures.empty()) {
+    failures.insert(failures.end(), vlan_table_failures.begin(),
+                    vlan_table_failures.end());
+  }
+
+  // Verify the VLAN_MEMBER_TABLE_P4 entries.
+  std::vector<std::string> vlan_member_table_failures =
+      sonic::VerifyAppStateDbAndAppDbEntries(*vlan_member_table_.app_state_db,
+                                             *vlan_member_table_.app_db);
+  if (!vlan_member_table_failures.empty()) {
+    failures.insert(failures.end(), vlan_member_table_failures.begin(),
+                    vlan_member_table_failures.end());
+  }
+
   // Verify the HASH_TABLE entries.
   std::vector<std::string> hash_table_failures =
       sonic::VerifyAppStateDbAndAppDbEntries(*hash_table_.app_state_db,
@@ -1856,7 +1926,8 @@ grpc::Status P4RuntimeImpl::VerifyAndCommitPipelineConfig(
   auto entity_cache = RebuildEntityEntryCache(
       *ir_p4info_, translate_port_ids_, port_translation_map_,
       *cpu_queue_translator_, *front_panel_queue_translator_, 
-      p4rt_table_, vrf_table_);
+      p4rt_table_, vrf_table_,
+      vlan_table_, vlan_member_table_);
   if (!entity_cache.ok()) {
     LOG(ERROR) << "Failed to build the table cache during COMMIT: "
                << entity_cache.status();
@@ -2287,7 +2358,7 @@ absl::Status P4RuntimeImpl::RebuildSwStateAfterWarmboot(
         RebuildEntityEntryCache(*ir_p4info_, translate_port_ids_,
                                 port_translation_map_, *cpu_queue_translator_,
                                 *front_panel_queue_translator_, p4rt_table_,
-                                vrf_table_));
+                                vrf_table_, vlan_table_, vlan_member_table_));
   }
 
   return absl::OkStatus();
