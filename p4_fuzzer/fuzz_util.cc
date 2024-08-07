@@ -1536,30 +1536,21 @@ absl::StatusOr<p4::v1::MulticastGroupEntry> FuzzValidMulticastGroupEntry(
   // Fills in replicas randomly.
   RETURN_IF_ERROR(FuzzNonKeyFields(gen, config, switch_state, &entry));
 
+  RETURN_IF_ERROR(config.GetModifyFuzzedMulticastGroupEntry()(
+      config.GetIrP4Info(), switch_state, entry));
+
   return entry;
 };
 
+namespace {
 // TODO: Optional fields with @refers_to will not be properly
 // fuzzed if they refer to fields that currently have no existing entry.
 // Fuzzing fails for this, but it should simply omit the optional. Thankfully,
 // this situation is not currently in use.
-absl::StatusOr<TableEntry> FuzzValidTableEntry(
+absl::StatusOr<TableEntry> FuzzValidUnconstrainedTableEntry(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
-    const pdpi::IrTableDefinition& ir_table_info,
-    std::optional<absl::string_view> additional_constraint) {
-  // If the table uses p4-constraints, then we call out to a different
-  // generation function that uses an SMT solver.
-  if (UsesP4Constraints(ir_table_info, config) &&
-      !config.GetIgnoreConstraintsOnTables().contains(
-          ir_table_info.preamble().name())) {
-    ASSIGN_OR_RETURN(auto entry, FuzzValidConstrainedTableEntry(
-                                     config, switch_state, ir_table_info, *gen,
-                                     additional_constraint));
-    RETURN_IF_ERROR(ReferenceOverride(gen, config, switch_state, entry));
-    return entry;
-  }
-
+    const pdpi::IrTableDefinition& ir_table_info) {
   TableEntry table_entry;
   table_entry.set_table_id(ir_table_info.preamble().id());
 
@@ -1609,8 +1600,35 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
   // TODO: Fuzz default actions.
   // TODO: Fuzz meters and counters.
 
-  RETURN_IF_ERROR(ReferenceOverride(gen, config, switch_state, table_entry));
+  return table_entry;
+}
+}  // namespace
 
+absl::StatusOr<TableEntry> FuzzValidTableEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    const pdpi::IrTableDefinition& ir_table_info,
+    std::optional<absl::string_view> additional_constraint) {
+  TableEntry table_entry;
+
+  // If the user requests specific constraints on the entry or if the table uses
+  // p4-constraints, then we call out to a different generation function that
+  // uses an SMT solver.
+  if (additional_constraint.has_value() ||
+      (UsesP4Constraints(ir_table_info, config) &&
+       !config.GetIgnoreConstraintsOnTables().contains(
+           ir_table_info.preamble().name()))) {
+    ASSIGN_OR_RETURN(table_entry, FuzzValidConstrainedTableEntry(
+                                      config, switch_state, ir_table_info, *gen,
+                                      additional_constraint));
+  } else {
+    ASSIGN_OR_RETURN(table_entry,
+                     FuzzValidUnconstrainedTableEntry(gen, config, switch_state,
+                                                      ir_table_info));
+  }
+  RETURN_IF_ERROR(ReferenceOverride(gen, config, switch_state, table_entry));
+  RETURN_IF_ERROR(config.GetModifyFuzzedTableEntry()(
+      config.GetIrP4Info(), switch_state, table_entry));
   return table_entry;
 }
 
