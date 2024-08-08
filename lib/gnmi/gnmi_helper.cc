@@ -19,13 +19,13 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/base/log_severity.h"
-#include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -925,6 +925,18 @@ absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
   return config.interfaces();
 }
 
+absl::StatusOr<std::string> GetGnmiConfig(
+    gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      gnmi::GetRequest request,
+      pins_test::BuildGnmiGetRequest(/*oc_path=*/"", gnmi::GetRequest::CONFIG));
+  gnmi::GetResponse response;
+  grpc::ClientContext context;
+  RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
+      gnmi_stub.Get(&context, request, &response)));
+  return json_yang::FormatJsonBestEffort(response.DebugString());
+}
+
 absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(
     gnmi::gNMI::StubInterface& stub, gnmi::GetRequest::DataType type,
     std::function<bool(const openconfig::Interfaces::Interface&)> predicate,
@@ -1602,6 +1614,36 @@ absl::Status SetPortSpeedInBitsPerSecond(const std::string& port_speed,
   return absl::OkStatus();
 }
 
+absl::Status SetPortSpeedInBitsPerSecond(PortSpeed port_speed,
+                                         const std::string& interface_name,
+                                         gnmi::gNMI::StubInterface& gnmi_stub) {
+  // Map keyed on openconfig speed string to value in bits per second.
+  // http://ops.openconfig.net/branches/models/master/docs/openconfig-interfaces.html#mod-openconfig-if-ethernet
+  const auto kPortSpeedTable =
+      absl::flat_hash_map<uint64_t, absl::string_view>({
+          {100000000000, "openconfig-if-ethernet:SPEED_100GB"},
+          {200000000000, "openconfig-if-ethernet:SPEED_200GB"},
+          {400000000000, "openconfig-if-ethernet:SPEED_400GB"},
+      });
+
+  auto oc_speed = kPortSpeedTable.find(static_cast<int64_t>(port_speed));
+  if (oc_speed == kPortSpeedTable.end()) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Port speed ", port_speed, " not found"));
+  }
+
+  std::string ops_val = absl::StrCat(
+      "{\"openconfig-if-ethernet:port-speed\": \"", oc_speed->second, "\"}");
+
+  std::string ops_config_path =
+      absl::StrCat("interfaces/interface[name=", interface_name,
+                   "]/ethernet/config/port-speed");
+  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(&gnmi_stub, ops_config_path,
+                                               GnmiSetType::kUpdate, ops_val));
+
+  return absl::OkStatus();
+}
+
 absl::StatusOr<int64_t> GetPortSpeedInBitsPerSecond(
     const std::string& interface_name, gnmi::gNMI::StubInterface& gnmi_stub) {
   // Map keyed on openconfig speed string to value in bits per second.
@@ -1651,65 +1693,6 @@ absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
       GetGnmiStatePathInfo(&gnmi_stub, oper_status_state_path, parse_str));
 
   return ops_response == "\"UP\"";
-}
-
-absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
-    absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
-    const absl::flat_hash_map<std::string, int>& collector_address_to_port,
-    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
-    const int sampling_rate, const int sampling_header_size) {
-  ASSIGN_OR_RETURN(auto gnmi_config_json, json_yang::ParseJson(gnmi_config));
-  if (gnmi_config_json.find("openconfig-sampling:sampling") !=
-      gnmi_config_json.end()) {
-    return std::string(gnmi_config);
-  }
-  if (agent_addr_ipv6.empty()) {
-    return absl::FailedPreconditionError(
-        "loopback_address parameter cannot be empty.");
-  }
-  if (sflow_enabled_interfaces.empty()) {
-    return absl::FailedPreconditionError(
-        "sflow_enabled_interfaces parameter cannot be empty.");
-  }
-  gnmi_config_json["openconfig-sampling:sampling"]
-                  ["openconfig-sampling-sflow:sflow"]["config"]["enabled"] =
-                      true;
-  gnmi_config_json["openconfig-sampling:sampling"]
-                  ["openconfig-sampling-sflow:sflow"]["config"]["sample-size"] =
-                      sampling_header_size;
-  gnmi_config_json["openconfig-sampling:sampling"]
-                  ["openconfig-sampling-sflow:sflow"]["config"]
-                  ["polling-interval"] = 0;
-  gnmi_config_json["openconfig-sampling:sampling"]
-                  ["openconfig-sampling-sflow:sflow"]["config"]
-                  ["agent-id-ipv6"] = agent_addr_ipv6;
-  absl::btree_map<std::string, int> sorted_collector_addresses(
-      collector_address_to_port.begin(), collector_address_to_port.end());
-  for (const auto& [address, port] : sorted_collector_addresses) {
-    nlohmann::basic_json<> sflow_collector_config;
-    sflow_collector_config["address"] = address;
-    sflow_collector_config["port"] = port;
-    sflow_collector_config["config"]["address"] = address;
-    sflow_collector_config["config"]["port"] = port;
-    gnmi_config_json["openconfig-sampling:sampling"]
-                    ["openconfig-sampling-sflow:sflow"]["collectors"]
-                    ["collector"]
-                        .push_back(sflow_collector_config);
-  }
-  absl::btree_set<std::string> sorted_interface_names(
-      sflow_enabled_interfaces.begin(), sflow_enabled_interfaces.end());
-  for (const auto& interface_name : sorted_interface_names) {
-    nlohmann::basic_json<> sflow_interface_config;
-    sflow_interface_config["name"] = interface_name;
-    sflow_interface_config["config"]["name"] = interface_name;
-    sflow_interface_config["config"]["enabled"] = true;
-    sflow_interface_config["config"]["ingress-sampling-rate"] = sampling_rate;
-    gnmi_config_json["openconfig-sampling:sampling"]
-                    ["openconfig-sampling-sflow:sflow"]["interfaces"]
-                    ["interface"]
-                        .push_back(sflow_interface_config);
-  }
-  return gnmi_config_json.dump();
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
