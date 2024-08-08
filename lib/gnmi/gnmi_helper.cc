@@ -391,6 +391,46 @@ absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
   return counters;
 }
 
+// Parses `val` into a JSON value, extracting `match_tag` if non-empty.
+absl::StatusOr<nlohmann::json> ParseJsonResponseAsJson(
+    absl::string_view val, absl::string_view match_tag) {
+  ASSIGN_OR_RETURN(const nlohmann::json resp_json, json_yang::ParseJson(val));
+  if (match_tag.empty()) return absl::StatusOr<nlohmann::json>(resp_json);
+  const auto match_tag_json = resp_json.find(match_tag);
+  if (match_tag_json == resp_json.end()) {
+    return gutil::InternalErrorBuilder().LogError()
+           << match_tag << " not present in JSON response " << val;
+  }
+  return absl::StatusOr<nlohmann::json>(*match_tag_json);
+}
+
+// Parses a JSON value from the update in `notification`, extracting `match_tag`
+// (if one is given).
+// WARNING: Returns InternalError if notification does not have exactly 1
+// update.
+absl::StatusOr<nlohmann::json> ParseGnmiNotificationAsJson(
+    const gnmi::Notification& notification, absl::string_view match_tag) {
+  if (notification.update_size() != 1)
+    return gutil::InternalErrorBuilder().LogError()
+           << "Unexpected update size in response (should be 1): "
+           << notification.update_size();
+  switch (notification.update(0).val().value_case()) {
+    case gnmi::TypedValue::kStringVal:
+      // A string value is also a JSON string value.
+      return notification.update(0).val().string_val();
+    case gnmi::TypedValue::kJsonVal:
+      return ParseJsonResponseAsJson(notification.update(0).val().json_val(),
+                                     match_tag);
+    case gnmi::TypedValue::kJsonIetfVal:
+      return ParseJsonResponseAsJson(
+          notification.update(0).val().json_ietf_val(), match_tag);
+    default:
+      return gutil::InternalErrorBuilder().LogError()
+             << "Unexpected data type: "
+             << notification.update(0).val().value_case();
+  }
+}
+
 }  // namespace
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type) {
@@ -522,43 +562,31 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
   return req;
 }
 
-absl::StatusOr<std::string> ParseJsonResponse(absl::string_view val,
-                                              absl::string_view match_tag) {
-  if (match_tag.empty()) return std::string(val);
-  ASSIGN_OR_RETURN(const auto resp_json, json_yang::ParseJson(val));
-  const auto match_tag_json = resp_json.find(match_tag);
-  if (match_tag_json == resp_json.end()) {
-    return gutil::InternalErrorBuilder().LogError()
-           << match_tag << " not present in JSON response " << val;
-  }
-  return match_tag_json->dump();
-}
-
 absl::StatusOr<std::string> ParseGnmiGetResponse(
-    const gnmi::GetResponse& response, absl::string_view match_tag) {
-  if (response.notification_size() != 1)
-    return gutil::InternalErrorBuilder().LogError()
-           << "Unexpected size in response (should be 1): "
-           << response.notification_size();
-
-  if (response.notification(0).update_size() != 1)
-    return gutil::InternalErrorBuilder().LogError()
-           << "Unexpected update size in response (should be 1): "
-           << response.notification(0).update_size();
-  switch (response.notification(0).update(0).val().value_case()) {
-    case gnmi::TypedValue::kStringVal:
-      return response.notification(0).update(0).val().string_val();
-    case gnmi::TypedValue::kJsonVal:
-      return ParseJsonResponse(
-          response.notification(0).update(0).val().json_val(), match_tag);
-    case gnmi::TypedValue::kJsonIetfVal:
-      return ParseJsonResponse(
-          response.notification(0).update(0).val().json_ietf_val(), match_tag);
-    default:
-      return gutil::InternalErrorBuilder().LogError()
-             << "Unexpected data type: "
-             << response.notification(0).update(0).val().value_case();
+    const gnmi::GetResponse& response, absl::string_view match_tag,
+    int indent) {
+  nlohmann::json json_config = json::object();
+  if (response.notification_size() == 1) {
+    ASSIGN_OR_RETURN(json_config, ParseGnmiNotificationAsJson(
+                                      response.notification(0), match_tag));
+    return json_config.dump(indent);
   }
+  // Get the JSON objects from each notification and merge together into a
+  // single, larger object.
+  for (const gnmi::Notification& notification : response.notification()) {
+    ASSIGN_OR_RETURN(const nlohmann::json partial_config,
+                     ParseGnmiNotificationAsJson(notification, match_tag));
+    if (partial_config.is_null()) continue;
+    for (auto& [key, value] : partial_config.items()) {
+      if (json_config.contains(key)) {
+        return gutil::InternalErrorBuilder()
+               << "Got key '" << key
+               << "' twice in a single GetResponse: " << response.DebugString();
+      }
+      json_config[key] = value;
+    }
+  }
+  return json_config.dump(indent);
 }
 
 absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
@@ -934,7 +962,8 @@ absl::StatusOr<std::string> GetGnmiConfig(
   grpc::ClientContext context;
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
       gnmi_stub.Get(&context, request, &response)));
-  return json_yang::FormatJsonBestEffort(response.DebugString());
+  // Pretty print the full gNMI config using 2 spaces as a tab.
+  return ParseGnmiGetResponse(response, /*match_tag=*/{}, /*indent=*/2);
 }
 
 absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(

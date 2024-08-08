@@ -145,9 +145,16 @@ absl::StatusOr<gnmi::SetRequest> BuildGnmiSetRequest(
 absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
     absl::string_view oc_path, gnmi::GetRequest::DataType req_type);
 
-// Parses Get Response to retrieve specific tag value.
+// Parses `response` to retrieve specific tag value, if `match_tag` is given, or
+// the full response otherwise.
+// Uses non-negative `indent` values to pretty-print the GetResponse with
+// `indent` spaces of indentation. `-1` renders a single line of illegible, but
+// correct, JSON.
+// WARNING: Returns InternalError if each notification in the GetResponse does
+// not have exactly 1 update.
 absl::StatusOr<std::string> ParseGnmiGetResponse(
-    const gnmi::GetResponse& response, absl::string_view match_tag = {});
+    const gnmi::GetResponse& response, absl::string_view match_tag = {},
+    int indent = -1);
 
 absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                absl::string_view config_path,
