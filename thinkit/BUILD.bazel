@@ -207,8 +207,6 @@ cc_test(
         "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
-        # This dependency is not technically needed inside Google3,
-        # but is a hack to keep the Copybara rules simple.
         "@com_google_benchmark//:benchmark",
         "//gutil:status_matchers",
         "//gutil:testing",

@@ -30,8 +30,7 @@
 #    non-trival cost to maintaining dependencies over time.
 #
 # 3. Can the dependency be built with Bazel instead?
-#   - For many libraries, there are existing Bazel BUILD files. Try a quick
-#     Google search.
+#   - For many libraries, there are existing Bazel BUILD files.
 #   - If there is no existing BUILD file, can you write your own BUILD file?
 #     See the bazel/ folder for examples. Ideally, we strive to upstream such
 #     BUILD files so everyone can benefit and share the maintenance burden.

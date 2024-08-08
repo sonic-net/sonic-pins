@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_LIB_UTILS_GENERIC_TESTBED_UTILS_H_
-#define GOOGLE_LIB_UTILS_GENERIC_TESTBED_UTILS_H_
+#ifndef PINS_LIB_UTILS_GENERIC_TESTBED_UTILS_H_
+#define PINS_LIB_UTILS_GENERIC_TESTBED_UTILS_H_
 
 #include <cstdint>
 #include <string>
@@ -97,4 +97,4 @@ absl::StatusOr<otg::Layer1::Speed::Enum> GetLayer1SpeedFromBitsPerSecond(
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_LIB_UTILS_GENERIC_TESTBED_UTILS_H_
+#endif  // PINS_LIB_UTILS_GENERIC_TESTBED_UTILS_H_

@@ -878,13 +878,13 @@ TEST(IsSupportedBySchemaTest, AcceptsSmallerMatchFieldBitwidth) {
   EXPECT_OK(IsSupportedBySchema(ir_p4info, schema));
 }
 
-class GoogleInstantiationTest
+class ExpInstantiationTest
     : public ::testing::TestWithParam<sai::Instantiation> {};
 
 // Tests that P4RT app is always "ahead of" our SAI P4 programs, so we don't
 // accidentally expose features in the program that are not yet supported by
 // P4RT app/GPINS.
-TEST_P(GoogleInstantiationTest, SchemaSupportsInstantiation) {
+TEST_P(ExpInstantiationTest, SchemaSupportsInstantiation) {
   sai::Instantiation instantiation = GetParam();
   pdpi::IrP4Info p4info = sai::GetIrP4Info(instantiation);
   ASSERT_OK_AND_ASSIGN(P4InfoVerificationSchema schema, SupportedSchema());
@@ -894,7 +894,7 @@ TEST_P(GoogleInstantiationTest, SchemaSupportsInstantiation) {
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    IsSupportedBySchemaTest, GoogleInstantiationTest,
+    IsSupportedBySchemaTest, ExpInstantiationTest,
     ValuesIn(sai::AllInstantiations()),
     [](const testing::TestParamInfo<sai::Instantiation>& info) {
       return sai::InstantiationToString(info.param);

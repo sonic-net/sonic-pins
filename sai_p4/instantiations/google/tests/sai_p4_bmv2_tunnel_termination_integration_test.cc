@@ -50,7 +50,7 @@ namespace {
 
 using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
-using ::orion::p4::test::Bmv2;
+using ::Experimental::p4::test::Bmv2;
 
 using ::packetlib::HasHeaderCase;
 using ::pdpi::HasPacketIn;

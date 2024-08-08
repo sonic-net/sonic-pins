@@ -10,7 +10,7 @@
 
 namespace sai {
 
-using ::orion::p4::test::Bmv2;
+using ::Experimental::p4::test::Bmv2;
 using ::p4::v1::ForwardingPipelineConfig;
 
 absl::StatusOr<Bmv2> SetUpBmv2ForSaiP4(

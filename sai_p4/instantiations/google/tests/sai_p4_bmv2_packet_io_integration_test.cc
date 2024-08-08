@@ -42,7 +42,7 @@
 namespace pins {
 namespace {
 
-using ::orion::p4::test::Bmv2;
+using ::Experimental::p4::test::Bmv2;
 using ::p4::v1::ForwardingPipelineConfig;
 using ::p4::v1::PacketMetadata;
 using ::p4::v1::SetForwardingPipelineConfigRequest;

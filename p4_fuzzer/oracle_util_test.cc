@@ -10,7 +10,7 @@
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "net/google::protobuf/contrib/parse_proto/parse_text_proto.h"
-#include "platforms/networking/orion/core/sfe/sfe.pb.h"
+#include "platforms/networking/Experimental/core/sfe/sfe.pb.h"
 #include "util/task/canonical_errors.h"
 
 namespace switchstack {
@@ -20,9 +20,9 @@ namespace {
 
 using ::absl::StatusCode;
 using ::google::protobuf::contrib::parse_proto::ParseTextProtoOrDie;
-using ::orion::core::sfe::P4Entity;
-using ::orion::core::sfe::P4Update;
-using ::orion::p4::test::PdToPiUpdate;
+using ::Experimental::core::sfe::P4Entity;
+using ::Experimental::core::sfe::P4Update;
+using ::Experimental::p4::test::PdToPiUpdate;
 using ::p4::v1::Update;
 using ::p4::v1::WriteRequest;
 using ::testing::Not;
@@ -150,7 +150,7 @@ SwitchState EmptyState() { return {}; }
 // Add a flow to a state.
 void AddFlow(const P4Entity& flow, SwitchState* state) {
   P4Update update;
-  update.set_type(orion::core::sfe::P4Update::INSERT);
+  update.set_type(Experimental::core::sfe::P4Update::INSERT);
   *update.mutable_entity() = flow;
   CHECK_OK(state->ApplyUpdate(PdToPiUpdate(update).value()));
 }
@@ -211,14 +211,14 @@ util::Status Check(const std::vector<PdUpdateStatus>& updates,
 
 PdUpdateStatus MakeInsert(const P4Entity& entity, StatusCode status) {
   P4Update update;
-  update.set_type(orion::core::sfe::P4Update::INSERT);
+  update.set_type(Experimental::core::sfe::P4Update::INSERT);
   *update.mutable_entity() = entity;
   return {update, status};
 }
 
 PdUpdateStatus MakeDelete(const P4Entity& entity, StatusCode status) {
   P4Update update;
-  update.set_type(orion::core::sfe::P4Update::DELETE);
+  update.set_type(Experimental::core::sfe::P4Update::DELETE);
   *update.mutable_entity() = entity;
   return {update, status};
 }

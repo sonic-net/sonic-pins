@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
-#define GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
+#ifndef PINS_TESTS_THINKIT_SANITY_TESTS_H_
+#define PINS_TESTS_THINKIT_SANITY_TESTS_H_
 
 #include "absl/strings/string_view.h"
 #include "thinkit/mirror_testbed.h"
@@ -57,4 +57,4 @@ void TestGnmiConfigBlobSet(thinkit::Switch& sut);
 void TestGnoiSystemColdReboot(thinkit::Switch& sut);
 }  // namespace pins_test
 
-#endif  // GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
+#endif  // PINS_TESTS_THINKIT_SANITY_TESTS_H_

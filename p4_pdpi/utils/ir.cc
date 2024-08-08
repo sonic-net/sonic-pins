@@ -64,7 +64,6 @@ using ::pdpi::IrValue;
 
 absl::StatusOr<std::string> ArbitraryToNormalizedByteString(
     const std::string &bytes, int expected_bitwidth) {
-  // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
   if (bytes.empty()) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Bytestrings must have non-zero length.";
@@ -185,7 +184,6 @@ absl::StatusOr<Format> GetFormat(const std::vector<std::string> &annotations,
 absl::StatusOr<IrValue> ArbitraryByteStringToIrValue(Format format,
                                                      const int bitwidth,
                                                      const std::string &bytes) {
-  // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
   if (bytes.empty()) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Bytestrings must have non-zero length.";
@@ -325,7 +323,6 @@ absl::StatusOr<std::string> IrValueToNormalizedByteString(
       return ipv6.ToPaddedByteString();
     }
     case IrValue::kStr: {
-      // https://screenshot.googleplex.com/AGyHaea3Zkzpjcm
       if (ir_value.str().empty()) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Bytestrings must have non-zero length.";
@@ -491,7 +488,7 @@ absl::StatusOr<std::string> PrefixLenToMask(int prefix_len, int bitwidth) {
   return result;
 }
 
-absl::Status IsGoogleRpcCode(int rpc_code) {
+absl::Status IsExpRpcCode(int rpc_code) {
   if (rpc_code < 0 || rpc_code > 15) {
     return gutil::InvalidArgumentErrorBuilder()
            << "Invalid status code: " << rpc_code << ".";

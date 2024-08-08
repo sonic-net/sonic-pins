@@ -2722,7 +2722,7 @@ absl::StatusOr<IrWriteRpcStatus> GrpcStatusToIrWriteRpcStatus(
   } else if (!grpc_status.ok() && grpc_status.error_details().empty()) {
     // Rpc-wide error
     RETURN_IF_ERROR(
-        IsGoogleRpcCode(static_cast<int>(grpc_status.error_code())));
+        IsExpRpcCode(static_cast<int>(grpc_status.error_code())));
     RETURN_IF_ERROR(ValidateGenericUpdateStatus(
         static_cast<google::rpc::Code>(grpc_status.error_code()),
         grpc_status.error_message()));
@@ -2761,7 +2761,7 @@ absl::StatusOr<IrWriteRpcStatus> GrpcStatusToIrWriteRpcStatus(
                << "Can not parse google::rpc::Status contained in grpc_status: "
                << PrintTextProto(inner_rpc_status_detail);
       }
-      RETURN_IF_ERROR(IsGoogleRpcCode(p4_error.canonical_code()));
+      RETURN_IF_ERROR(IsExpRpcCode(p4_error.canonical_code()));
       RETURN_IF_ERROR(ValidateGenericUpdateStatus(
           static_cast<google::rpc::Code>(p4_error.canonical_code()),
           p4_error.message()));
@@ -2795,7 +2795,7 @@ static absl::StatusOr<grpc::Status> IrWriteResponseToGrpcStatus(
   for (const IrUpdateStatus &ir_update_status : ir_write_response.statuses()) {
     RETURN_IF_ERROR(ValidateGenericUpdateStatus(ir_update_status.code(),
                                                 ir_update_status.message()));
-    RETURN_IF_ERROR(IsGoogleRpcCode(ir_update_status.code()));
+    RETURN_IF_ERROR(IsExpRpcCode(ir_update_status.code()));
     p4_error.set_canonical_code(static_cast<int>(ir_update_status.code()));
     p4_error.set_message(ir_update_status.message());
     inner_rpc_status.add_details()->PackFrom(p4_error);
@@ -2828,7 +2828,7 @@ absl::StatusOr<grpc::Status> IrWriteRpcStatusToGrpcStatus(
       }
     }
     case IrWriteRpcStatus::kRpcWideError: {
-      RETURN_IF_ERROR(IsGoogleRpcCode(ir_write_status.rpc_wide_error().code()));
+      RETURN_IF_ERROR(IsExpRpcCode(ir_write_status.rpc_wide_error().code()));
       if (ir_write_status.rpc_wide_error().code() ==
           static_cast<int>(google::rpc::Code::OK)) {
         return gutil::InvalidArgumentErrorBuilder()

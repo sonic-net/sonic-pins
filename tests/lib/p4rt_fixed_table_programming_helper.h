@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_
-#define GOOGLE_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_
+#ifndef PINS_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_
+#define PINS_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_
 #include <optional>
 #include <utility>
 #include <vector>
@@ -96,4 +96,4 @@ absl::StatusOr<p4::v1::Update> WcmpGroupTableUpdate(
 
 }  // namespace gpins
 
-#endif  // GOOGLE_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_
+#endif  // PINS_TESTS_LIB_P4RT_FIXED_TABLE_PROGRAMMING_HELPER_H_
