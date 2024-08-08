@@ -35,6 +35,7 @@
 #include "absl/types/span.h"
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "lib/gnmi/openconfig.pb.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
@@ -287,10 +288,16 @@ absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(
     std::function<bool(const openconfig::Interfaces::Interface&)> predicate,
     absl::Duration timeout = absl::Seconds(60));
 
-// Returns a sorted vector of P4RT port IDs mapped to enabled interfaces in the
+// Returns a sorted vector of P4RT port IDs mapped to matching interfaces in the
 // switch's gNMI state.
-absl::StatusOr<std::vector<int>> GetEnabledP4rtPortIds(
-    gnmi::gNMI::StubInterface& stub);
+absl::StatusOr<std::vector<P4rtPortId>> GetMatchingP4rtPortIds(
+    gnmi::gNMI::StubInterface& stub,
+    std::function<bool(const openconfig::Interfaces::Interface&)> predicate);
+
+// Returns true if the interface is an enabled, Ethernet interface. For use with
+// the GetMatching* functions above.
+bool IsEnabledEthernetInterface(
+    const openconfig::Interfaces::Interface& interface);
 
 // Reads the gNMI config from the switch and returns a map of all enabled
 // interfaces to their p4rt port id.
