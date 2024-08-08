@@ -28,6 +28,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
+#include "diag/diag.grpc.pb.h"
 #include "diag/diag.pb.h"
 #include "thinkit/packet_generation_finalizer.h"
 
@@ -110,6 +111,10 @@ class ControlDevice {
   // it can perform its operations. This can be used to check when the control
   // device is ready after a reboot.
   virtual absl::Status CheckUp() = 0;
+
+  // Checks if the given control device ports are up.
+  virtual absl::Status ValidatePortsUp(
+      absl::Span<const std::string> interfaces) = 0;
 
   // Return the subset of the given interfaces that, when admin-disabled, do not
   // cause link flaps on the other interfaces on the same physical port.

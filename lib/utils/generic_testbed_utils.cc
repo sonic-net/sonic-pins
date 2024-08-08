@@ -27,6 +27,7 @@
 #include "artifacts/otg.pb.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/validator/validator_lib.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/proto/generic_testbed.pb.h"
 #include "thinkit/switch.h"
@@ -144,6 +145,18 @@ absl::StatusOr<std::vector<InterfaceLink>> GetUpLinks(
     up_links.push_back(std::move(link));
   }
   return up_links;
+}
+
+absl::Status ValidateTestbedPortsUp(thinkit::GenericTestbed& testbed) {
+  auto sut_status =
+      PortsUp(testbed.Sut(), FromTestbed(GetAllConnectedInterfaces, testbed));
+  auto control_interfaces =
+      GetPeerInterfaces(FromTestbed(GetAllControlLinks, testbed));
+  absl::Status control_status =
+      testbed.ControlDevice().ValidatePortsUp(control_interfaces);
+
+  RETURN_IF_ERROR(sut_status);
+  return control_status;
 }
 
 absl::StatusOr<Layer1::Speed::Enum> GetLayer1SpeedFromBitsPerSecond(
