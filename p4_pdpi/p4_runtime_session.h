@@ -36,7 +36,12 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
+#include "grpc/grpc.h"
+#include "grpcpp/client_context.h"
 #include "grpcpp/security/credentials.h"
+#include "grpcpp/support/channel_arguments.h"
+#include "grpcpp/support/status.h"
+#include "grpcpp/support/sync_stream.h"
 #include "gutil/version.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -68,15 +73,24 @@ inline absl::uint128 TimeBasedElectionId() {
   return absl::MakeUint128(msec / 1000, msec % 1000);
 }
 
-// Returns the gRPC ChannelArguments for P4Runtime by setting
-// `GRPC_ARG_KEEPALIVE_TIME_MS` (to avoid connection problems) and
-// `GRPC_ARG_MAX_METADATA_SIZE` (P4RT returns batch element status in the
-// grpc::Status, which can require a large metadata size).
+// Returns the gRPC ChannelArguments for P4Runtime by setting the following:
+// - `GRPC_ARG_MAX_METADATA_SIZE` to P4GRPCMaxMetadataSize because P4RT returns
+//    batch element status in the grpc::Status, which can require a large
+//    metadata size.
+// - `GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA` to 0 (infinite) to allow KeepAlive
+//    ping without traffic in the transport.
+// - `GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS` to 1 (true) to allow keepalive on
+//    grpc::Channel without ongoing RPCs.
+// - `GRPC_ARG_KEEPALIVE_TIMEOUT_MS` to 20s.
+// - `GRPC_ARG_KEEPALIVE_TIME_MS` to 20s/ping.
 inline grpc::ChannelArguments GrpcChannelArgumentsForP4rt() {
   grpc::ChannelArguments args;
   args.SetInt(GRPC_ARG_MAX_METADATA_SIZE, P4GRPCMaxMetadataSize());
-  args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 300000 /*5 minutes*/);
-
+  // Allows grpc::channel to send keepalive ping without on-going traffic.
+  args.SetInt(GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA, 0);
+  args.SetInt(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 20'000 /*20 seconds*/);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 20'000 /* 20 seconds*/);
   return args;
 }
 
