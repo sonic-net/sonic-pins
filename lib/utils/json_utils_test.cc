@@ -246,7 +246,7 @@ TEST(JsonReplaceKey, TestJsonReplaceKeyWithSameKey) {
   constexpr absl::string_view kOpenConfig = R"JSON({
    "system" : {
       "config" : {
-        "hostname": "ju1u1t1.mtv16.net.google.com"
+        "hostname": "abc.xyz.com"
       },
       "ntp" : {
         "config" : {

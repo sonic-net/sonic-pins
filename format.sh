@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Formats source files according to Google's style guide. Requires clang-format.
-
 # Only files with these extensions will be formatted by clang-format.
 CLANG_FORMAT_EXTENSIONS="cc|h|proto"
 

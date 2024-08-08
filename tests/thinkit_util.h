@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_TESTS_THINKIT_UTIL_H_
-#define GOOGLE_TESTS_THINKIT_UTIL_H_
+#ifndef PINS_TESTS_THINKIT_UTIL_H_
+#define PINS_TESTS_THINKIT_UTIL_H_
 
 namespace pins_test {
 
@@ -34,4 +34,4 @@ constexpr char kPlatformJson[] =
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_TESTS_THINKIT_UTIL_H_
+#endif  // PINS_TESTS_THINKIT_UTIL_H_
