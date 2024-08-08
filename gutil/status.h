@@ -35,8 +35,8 @@ namespace gutil {
 // stable.
 std::string StableStatusToString(const absl::Status& status);
 
-// Protobuf and some other Google projects use Status classes that are isomorph,
-// but not equal to absl::Status (outside of google3).
+// Protobuf and some other projects use Status classes that are isomorph,
+// but not equal to absl::Status.
 // This auxiliary function converts such Status classes to absl::Status.
 template <typename T>
 absl::Status ToAbslStatus(T status) {

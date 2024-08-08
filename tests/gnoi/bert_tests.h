@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_TESTS_GNOI_BERT_TESTS_H_
-#define GOOGLE_TESTS_GNOI_BERT_TESTS_H_
+#ifndef PINS_TESTS_GNOI_BERT_TESTS_H_
+#define PINS_TESTS_GNOI_BERT_TESTS_H_
 
 #include "thinkit/mirror_testbed_fixture.h"
 
@@ -23,4 +23,4 @@ class BertTest : public thinkit::MirrorTestbedFixture {};
 
 }  // namespace bert
 
-#endif  // GOOGLE_TESTS_GNOI_BERT_TESTS_H_
+#endif  // PINS_TESTS_GNOI_BERT_TESTS_H_

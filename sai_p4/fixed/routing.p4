@@ -223,8 +223,7 @@ control routing(in headers_t headers,
     size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
-  // Action that does nothing. Like `NoAction` in `core.p4`, but following
-  // Google's naming conventions.
+  // Action that does nothing. Like `NoAction` in `core.p4`.
   // TODO: Add support for CamlCase actions to the PD generator,
   // so we can use `NoAction` throughout.
   action no_action() {}

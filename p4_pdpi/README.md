@@ -14,4 +14,3 @@ automatically convert between them.
 
 This is a work in progress.
 
-This is not an officially supported Google product.
