@@ -52,6 +52,7 @@
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "lib/gnmi/openconfig.pb.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "lib/utils/json_utils.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -981,20 +982,28 @@ absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(
   return matching_interfaces;
 }
 
-absl::StatusOr<std::vector<int>> GetEnabledP4rtPortIds(
-    gnmi::gNMI::StubInterface& stub) {
+absl::StatusOr<std::vector<P4rtPortId>> GetMatchingP4rtPortIds(
+    gnmi::gNMI::StubInterface& stub,
+    std::function<bool(const openconfig::Interfaces::Interface&)> predicate) {
   ASSIGN_OR_RETURN(
       const pins_test::openconfig::Interfaces interfaces,
-      pins_test::GetInterfacesAsProto(stub, gnmi::GetRequest::STATE));
+      GetMatchingInterfacesAsProto(stub, gnmi::GetRequest::STATE, predicate));
 
-  std::vector<int> ports;
+  std::vector<P4rtPortId> ports;
   for (const auto& interface : interfaces.interfaces()) {
-    if (interface.state().enabled() && interface.state().has_p4rt_id()) {
-      ports.push_back(interface.state().p4rt_id());
+    if (interface.state().has_p4rt_id()) {
+      ports.push_back(
+          P4rtPortId::MakeFromOpenConfigEncoding(interface.state().p4rt_id()));
     }
   }
   absl::c_sort(ports);
   return ports;
+}
+
+bool IsEnabledEthernetInterface(
+    const openconfig::Interfaces::Interface& interface) {
+  return (interface.state().enabled() || interface.config().enabled()) &&
+         absl::StartsWith(interface.name(), "Ethernet");
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
