@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -49,6 +50,7 @@
 #include "gutil/status.h"
 #include "include/nlohmann/json.hpp"
 #include "lib/gnmi/openconfig.pb.h"
+#include "lib/utils/json_utils.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
@@ -62,7 +64,7 @@ using ::nlohmann::json;
 
 // Splits string to tokens seperated by a char '/' as long as '/' is not
 // included in [].
-const LazyRE2 kSplitBreakSquareBraceRE = {R"(([^\[\/]+(\[[^\]]+\])?)\/?)"};
+const LazyRE2 kSplitBreakSquareBraceRE = {R"(([^\[\/]+(\[[^\]]+\])*)\/?)"};
 
 const absl::flat_hash_map<BreakoutSpeed, absl::string_view>&
 BreakoutSpeedToOpenconfig() {
@@ -270,6 +272,8 @@ std::string EmptyOpenConfig() {
 // components/component[name=integrated_circuit0]/integrated-circuit/state.
 // Example2:
 // components/component[name=1/1]/integrated-circuit/state.
+// Example3:
+// sampling/sflow/collectors/collector[address=127.0.0.1][port=6343]/state/address
 gnmi::Path ConvertOCStringToPath(absl::string_view oc_path) {
   absl::string_view element;
   std::vector<absl::string_view> elements;
@@ -278,18 +282,27 @@ gnmi::Path ConvertOCStringToPath(absl::string_view oc_path) {
   }
   gnmi::Path path;
   for (absl::string_view node : elements) {
-    // Splits string in format "component[name=integrated_circuit0]" to three
-    // tokens.
-    static constexpr LazyRE2 kSplitNameValueRE = {R"((.+)\[(.+)=(.+)\])"};
+    // Splits string in format "component[name=integrated_circuit0]" to two
+    // tokens, i.e., "component" and "[name=integrated_circuit0]".
+    static constexpr LazyRE2 kSplitNameValueRE = {
+        R"(([^\[]+)(\[(.+)=(.+)\]+))"};
     std::string key;
-    std::string attribute;
-    std::string value;
+    absl::string_view attr_to_value;
     // "key/[attribute=value]" requests are in the format
     // Ex:interface[name=Ethernet0].
-    if (RE2::FullMatch(node, *kSplitNameValueRE, &key, &attribute, &value)) {
+    if (RE2::FullMatch(node, *kSplitNameValueRE, &key, &attr_to_value)) {
       auto* elem = path.add_elem();
       elem->set_name(key);
-      (*elem->mutable_key())[attribute] = value;
+      std::string attribute;
+      std::string value;
+      static constexpr LazyRE2 kSplitAttributeValueRE = {
+          R"(\[([^=]+)=([^\]]+)\])"};
+      // Keep parsing more <attributer, value> in this string. e.g,
+      // [address=127.0.0.1][port=6343] ==> {{address, 127.0.0.1}, {port, 6343}}
+      while (RE2::Consume(&attr_to_value, *kSplitAttributeValueRE, &attribute,
+                          &value)) {
+        (*elem->mutable_key())[attribute] = value;
+      }
     } else {
       path.add_elem()->set_name(std::string(node));
     }
@@ -1311,6 +1324,65 @@ absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
       GetGnmiStatePathInfo(&gnmi_stub, oper_status_state_path, parse_str));
 
   return ops_response == "\"UP\"";
+}
+
+absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
+    absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
+    const absl::flat_hash_map<std::string, int>& collector_address_to_port,
+    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
+    const int sampling_rate, const int sampling_header_size) {
+  ASSIGN_OR_RETURN(auto gnmi_config_json, json_yang::ParseJson(gnmi_config));
+  if (gnmi_config_json.find("openconfig-sampling:sampling") !=
+      gnmi_config_json.end()) {
+    return std::string(gnmi_config);
+  }
+  if (agent_addr_ipv6.empty()) {
+    return absl::FailedPreconditionError(
+        "loopback_address parameter cannot be empty.");
+  }
+  if (sflow_enabled_interfaces.empty()) {
+    return absl::FailedPreconditionError(
+        "sflow_enabled_interfaces parameter cannot be empty.");
+  }
+  gnmi_config_json["openconfig-sampling:sampling"]
+                  ["openconfig-sampling-sflow:sflow"]["config"]["enabled"] =
+                      true;
+  gnmi_config_json["openconfig-sampling:sampling"]
+                  ["openconfig-sampling-sflow:sflow"]["config"]["sample-size"] =
+                      sampling_header_size;
+  gnmi_config_json["openconfig-sampling:sampling"]
+                  ["openconfig-sampling-sflow:sflow"]["config"]
+                  ["polling-interval"] = 0;
+  gnmi_config_json["openconfig-sampling:sampling"]
+                  ["openconfig-sampling-sflow:sflow"]["config"]
+                  ["agent-id-ipv6"] = agent_addr_ipv6;
+  absl::btree_map<std::string, int> sorted_collector_addresses(
+      collector_address_to_port.begin(), collector_address_to_port.end());
+  for (const auto& [address, port] : sorted_collector_addresses) {
+    nlohmann::basic_json<> sflow_collector_config;
+    sflow_collector_config["address"] = address;
+    sflow_collector_config["port"] = port;
+    sflow_collector_config["config"]["address"] = address;
+    sflow_collector_config["config"]["port"] = port;
+    gnmi_config_json["openconfig-sampling:sampling"]
+                    ["openconfig-sampling-sflow:sflow"]["collectors"]
+                    ["collector"]
+                        .push_back(sflow_collector_config);
+  }
+  absl::btree_set<std::string> sorted_interface_names(
+      sflow_enabled_interfaces.begin(), sflow_enabled_interfaces.end());
+  for (const auto& interface_name : sorted_interface_names) {
+    nlohmann::basic_json<> sflow_interface_config;
+    sflow_interface_config["name"] = interface_name;
+    sflow_interface_config["config"]["name"] = interface_name;
+    sflow_interface_config["config"]["enabled"] = true;
+    sflow_interface_config["config"]["ingress-sampling-rate"] = sampling_rate;
+    gnmi_config_json["openconfig-sampling:sampling"]
+                    ["openconfig-sampling-sflow:sflow"]["interfaces"]
+                    ["interface"]
+                        .push_back(sflow_interface_config);
+  }
+  return gnmi_config_json.dump();
 }
 
 }  // namespace pins_test
