@@ -16,6 +16,7 @@
 #define PINS_LIB_PINS_CONTROL_DEVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "absl/container/flat_hash_map.h"
@@ -23,6 +24,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -56,8 +58,8 @@ class PinsControlDevice : public thinkit::ControlDevice {
   absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
   CollectPackets(thinkit::PacketCallback callback) override;
 
-  absl::Status SendPacket(absl::string_view interface,
-                          absl::string_view packet) override;
+  absl::Status SendPacket(absl::string_view interface, absl::string_view packet,
+                          std::optional<absl::Duration> packet_delay) override;
 
   bool SupportsSendPacket() const override { return true; }
 

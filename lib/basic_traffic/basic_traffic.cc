@@ -307,7 +307,7 @@ absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
     while (absl::Now() - traffic_start_time < duration) {
       for (const auto& [key, packet] : packets_to_send) {
         RETURN_IF_ERROR(testbed.ControlDevice().SendPacket(
-            packet.control_interface, packet.serialized_packet));
+            packet.control_interface, packet.serialized_packet, std::nullopt));
         sent_packets[key]++;
         absl::SleepFor(absl::Seconds(1) / options.packets_per_second);
       }

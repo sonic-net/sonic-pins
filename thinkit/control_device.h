@@ -17,6 +17,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
 #include "diag/diag.pb.h"
@@ -63,10 +65,16 @@ class ControlDevice {
   virtual absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
   CollectPackets(PacketCallback callback) = 0;
 
+  absl::Status SendPacket(absl::string_view interface,
+                          absl::string_view packet) {
+    return SendPacket(interface, packet, std::nullopt);
+  }
+
   // Sends a `packet` raw byte string out of the control device’s
-  // `interface`.
-  virtual absl::Status SendPacket(absl::string_view interface,
-                                  absl::string_view packet) = 0;
+  // `interface`. Rate limits packet is packet_delay is specified.
+  virtual absl::Status SendPacket(
+      absl::string_view interface, absl::string_view packet,
+      std::optional<absl::Duration> packet_delay) = 0;
 
   // Check whether the ControlDevice implementation supports SendPacket - not
   // all control devices support it.

@@ -38,7 +38,8 @@ class MockControlDevice : public ControlDevice {
       absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>,
       CollectPackets, (PacketCallback callback), (override));
   MOCK_METHOD(absl::Status, SendPacket,
-              (absl::string_view interface, absl::string_view packet),
+              (absl::string_view interface, absl::string_view packet,
+               std::optional<absl::Duration> packet_delay),
               (override));
   MOCK_METHOD(bool, SupportsSendPacket, (), (const, override));
   MOCK_METHOD(absl::Status, SendPackets,
