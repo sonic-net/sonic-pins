@@ -51,6 +51,7 @@ using ::gutil::IsOk;
 using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 using ::testing::_;
+using ::testing::AllOf;
 using ::testing::ContainerEq;
 using ::testing::DoAll;
 using ::testing::ElementsAre;
@@ -1890,6 +1891,8 @@ TEST(TransceiverPartInformation, WorksProperly) {
               "empty": false,
               "openconfig-platform-ext:vendor-name": "Vendor",
               "part-no": "123",
+              "mfg-name": "manufactuer",
+              "serial-no": "serial",
               "firmware-version": "ab"
             }
           }
@@ -1901,8 +1904,11 @@ TEST(TransceiverPartInformation, WorksProperly) {
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(response), Return(grpc::Status::OK)));
   absl::flat_hash_map<std::string, TransceiverPart> expected_map{
-      {"Ethernet1",
-       TransceiverPart{.vendor = "Vendor", .part_number = "123", .rev = "ab"}}};
+      {"Ethernet1", TransceiverPart{.vendor = "Vendor",
+                                    .part_number = "123",
+                                    .manufacturer_name = "manufactuer",
+                                    .serial_number = "serial",
+                                    .rev = "ab"}}};
   EXPECT_THAT(GetTransceiverPartInformation(mock_stub),
               IsOkAndHolds(UnorderedPointwise(Eq(), expected_map)));
 }

@@ -77,11 +77,15 @@ struct OpenConfigInterfaceDescription {
 struct TransceiverPart {
   std::string vendor;
   std::string part_number;
+  std::string manufacturer_name;
+  std::string serial_number;
   std::string rev;
 
   bool operator==(const TransceiverPart& other) const {
-    return std::tie(vendor, part_number) ==
-           std::tie(other.vendor, other.part_number);
+    return std::tie(vendor, part_number, manufacturer_name, serial_number,
+                    rev) == std::tie(other.vendor, other.part_number,
+                                     other.manufacturer_name,
+                                     other.serial_number, other.rev);
   }
 };
 
@@ -276,8 +280,9 @@ absl::Status MapP4rtIdsToMatchingInterfaces(
     absl::Duration timeout = absl::Seconds(60));
 
 // Uses `gnmi_stub` to set the P4RT IDs of `interfaces`, deleting any of those
-// P4RT IDs previously mapped on the switch a P4RT ID can't be mapped to
-// multiple interfaces.
+// P4RT IDs previously mapped on the switch since a P4RT ID can't be mapped to
+// multiple interfaces. Any existing interface that already maps its desired
+// P4RT ID is untouched.
 absl::Status SetInterfaceP4rtIds(gnmi::gNMI::StubInterface& gnmi_stub,
                                  const openconfig::Interfaces& interfaces);
 
