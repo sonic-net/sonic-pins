@@ -163,22 +163,23 @@ PinsControlDevice::CollectPackets(thinkit::PacketCallback callback) {
       });
 }
 
-absl::Status PinsControlDevice::SendPacket(absl::string_view interface,
-                                           absl::string_view packet) {
+absl::Status PinsControlDevice::SendPacket(
+    absl::string_view interface, absl::string_view packet,
+    std::optional<absl::Duration> packet_delay) {
   if (control_session_ == nullptr) {
     return absl::InternalError(
         "No P4RuntimeSession exists; Likely failed to establish another "
         "P4RuntimeSession.");
   }
-  return gpins::InjectEgressPacket(
-      interface_name_to_port_id_[interface], std::string(packet), ir_p4_info_,
-      control_session_.get(), /*packet_delay=*/std::nullopt);
+  return gpins::InjectEgressPacket(interface_name_to_port_id_[interface],
+                                   std::string(packet), ir_p4_info_,
+                                   control_session_.get(), packet_delay);
 }
 
 absl::Status PinsControlDevice::SendPackets(
     absl::string_view interface, absl::Span<const std::string> packets) {
   for (absl::string_view packet : packets) {
-    RETURN_IF_ERROR(SendPacket(interface, packet));
+    RETURN_IF_ERROR(SendPacket(interface, packet, std::nullopt));
   }
   return absl::OkStatus();
 }
