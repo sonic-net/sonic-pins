@@ -2547,6 +2547,7 @@ TEST(GetAllInterfaceCounters, Works) {
   EXPECT_EQ(counters.out_ipv6_pkts, 1016);
   EXPECT_EQ(counters.in_ipv6_discarded_pkts, 1013);
   EXPECT_EQ(counters.out_ipv6_discarded_pkts, 1015);
+  EXPECT_EQ(counters.timestamp_ns, 1620348032128305716);
 }
 
 }  // namespace
