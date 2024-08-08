@@ -16,6 +16,8 @@
 #define PINS_LIB_GNMI_GNMI_HELPER_H_
 
 #include <cstdint>
+#include <functional>
+#include <ostream>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -87,6 +89,33 @@ struct TransceiverPart {
                                      other.manufacturer_name,
                                      other.serial_number, other.rev);
   }
+};
+
+// Interface counters exposed by gNMI.
+struct Counters {
+  uint64_t in_pkts;
+  uint64_t out_pkts;
+  uint64_t in_octets;
+  uint64_t out_octets;
+  uint64_t in_unicast_pkts;
+  uint64_t out_unicast_pkts;
+  uint64_t in_multicast_pkts;
+  uint64_t out_multicast_pkts;
+  uint64_t in_broadcast_pkts;
+  uint64_t out_broadcast_pkts;
+  uint64_t in_errors;
+  uint64_t out_errors;
+  uint64_t in_discards;
+  uint64_t out_discards;
+  uint64_t in_buffer_discards;
+  uint64_t in_maxsize_exceeded;
+  uint64_t in_fcs_errors;
+  uint64_t in_ipv4_pkts;
+  uint64_t out_ipv4_pkts;
+  uint64_t in_ipv6_pkts;
+  uint64_t out_ipv6_pkts;
+  uint64_t in_ipv6_discarded_pkts;
+  uint64_t out_ipv6_discarded_pkts;
 };
 
 std::string GnmiFieldTypeToString(GnmiFieldType field_type);
@@ -185,6 +214,11 @@ absl::Status WaitForGnmiPortIdConvergence(thinkit::Switch& chassis,
                                           const std::string& gnmi_config,
                                           const absl::Duration& timeout);
 
+// Waits until the interface <-> P4RT port id mappings in the config path of the
+// switch are reflected in the state path.
+absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
+                                          const absl::Duration& timeout);
+
 absl::Status CanGetAllInterfaceOverGnmi(
     gnmi::gNMI::StubInterface& stub,
     absl::Duration timeout = absl::Seconds(60));
@@ -240,6 +274,11 @@ absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(
     gnmi::gNMI::StubInterface& stub, gnmi::GetRequest::DataType type,
     std::function<bool(const openconfig::Interfaces::Interface&)> predicate,
     absl::Duration timeout = absl::Seconds(60));
+
+// Returns a sorted vector of P4RT port IDs mapped to enabled interfaces in the
+// switch's gNMI state.
+absl::StatusOr<std::vector<int>> GetEnabledP4rtPortIds(
+    gnmi::gNMI::StubInterface& stub);
 
 // Reads the gNMI config from the switch and returns a map of all enabled
 // interfaces to their p4rt port id.
@@ -389,5 +428,10 @@ absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
     const absl::flat_hash_map<std::string, int>& collector_address_to_port,
     const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
     const int sampling_rate, const int sampling_header_size);
+
+// Gets counters for all interfaces.
+absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
+GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
+
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_

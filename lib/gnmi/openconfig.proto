@@ -28,6 +28,7 @@ message Interfaces {
   message Interface {
     string name = 1;
     Config config = 2;
+    Config state = 4;
     Subinterfaces subinterfaces = 3;
 
     message Config {
