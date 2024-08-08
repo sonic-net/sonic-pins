@@ -60,6 +60,7 @@ cc_test(
     srcs = ["gnmi_helper_test.cc"],
     deps = [
         ":gnmi_helper",
+        ":openconfig_cc_proto",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//gutil:testing",

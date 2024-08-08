@@ -15,6 +15,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -233,6 +234,37 @@ absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
       << "GET request failed with error: ";
   LOG(INFO) << "Received GET response: " << response.ShortDebugString();
   return response;
+}
+
+// Deletes a single interface's P4RT id.
+absl::Status DeleteInterfaceP4rtId(
+    gnmi::gNMI::StubInterface& gnmi_stub,
+    const openconfig::Interfaces::Interface& interface) {
+  std::string ops_config_path =
+      absl::StrCat("interfaces/interface[name=", interface.name(),
+                   "]/config/openconfig-p4rt:id");
+  // Value is irrelevant for deletes.
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, ops_config_path,
+                                      GnmiSetType::kDelete, /*value=*/"");
+}
+
+// Modifies a single interface's P4RT id.
+absl::Status ModifyInterfaceP4rtId(
+    gnmi::gNMI::StubInterface& gnmi_stub,
+    const openconfig::Interfaces::Interface& interface) {
+  std::string ops_config_path =
+      absl::StrCat("interfaces/interface[name=", interface.name(),
+                   "]/config/openconfig-p4rt:id");
+  std::string ops_val = absl::StrCat(
+      "{\"openconfig-p4rt:id\":", interface.config().p4rt_id(), "}");
+
+  // Due to limitations of the P4RT server, we first delete the path, in case it
+  // exists, then set it.
+  // Value is irrelevant for deletes.
+  RETURN_IF_ERROR(pins_test::SetGnmiConfigPath(
+      &gnmi_stub, ops_config_path, GnmiSetType::kDelete, /*value=*/""));
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, ops_config_path,
+                                      GnmiSetType::kUpdate, ops_val);
 }
 
 }  // namespace
@@ -744,23 +776,46 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
   return OperStatus::kUnknown;
 }
 
+absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
+    gnmi::gNMI::StubInterface& stub, gnmi::GetRequest::DataType type,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(auto request, BuildGnmiGetRequest("interfaces", type));
+  ASSIGN_OR_RETURN(gnmi::GetResponse response,
+                   SendGnmiGetRequest(&stub, request, timeout));
+
+  ASSIGN_OR_RETURN(openconfig::Config config,
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       response.notification(0).update(0).val().json_ietf_val(),
+                       /*ignore_unknown_fields=*/true));
+  return config.interfaces();
+}
+
+absl::StatusOr<openconfig::Interfaces> GetMatchingInterfacesAsProto(
+    gnmi::gNMI::StubInterface& stub, gnmi::GetRequest::DataType type,
+    std::function<bool(const openconfig::Interfaces::Interface&)> predicate,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(const openconfig::Interfaces interfaces,
+                   GetInterfacesAsProto(stub, type, timeout));
+
+  openconfig::Interfaces matching_interfaces;
+  absl::c_copy_if(
+      interfaces.interfaces(),
+      RepeatedFieldBackInserter(matching_interfaces.mutable_interfaces()),
+      predicate);
+  return matching_interfaces;
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
 GetAllEnabledInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub,
                                    absl::Duration timeout) {
   // Gets the config path for all interfaces.
-  ASSIGN_OR_RETURN(auto request,
-                   BuildGnmiGetRequest("interfaces", gnmi::GetRequest::CONFIG));
-  ASSIGN_OR_RETURN(gnmi::GetResponse response,
-                   SendGnmiGetRequest(&stub, request, timeout));
-
-  ASSIGN_OR_RETURN(openconfig::Config proto,
-                   gutil::ParseJsonAsProto<openconfig::Config>(
-                       response.notification(0).update(0).val().json_ietf_val(),
-                       /*ignore_unknown_fields=*/true));
+  ASSIGN_OR_RETURN(
+      openconfig::Interfaces interfaces,
+      GetInterfacesAsProto(stub, gnmi::GetRequest::CONFIG, timeout));
 
   absl::flat_hash_map<std::string, std::string> port_id_by_interface;
   for (const openconfig::Interfaces::Interface& interface :
-       proto.interfaces().interfaces()) {
+       interfaces.interfaces()) {
     // Only return enabled ports.
     if (interface.config().enabled()) {
       port_id_by_interface[interface.name()] =
@@ -830,6 +885,93 @@ GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
   return GetPortNameToIdMapFromJsonString(
       response.notification(0).update(0).val().json_ietf_val(),
       /*field_type=*/"state");
+}
+
+absl::Status MapP4rtIdsToMatchingInterfaces(
+    gnmi::gNMI::StubInterface& gnmi_stub,
+    const absl::btree_set<int>& desired_p4rt_ids,
+    std::function<bool(const openconfig::Interfaces::Interface&)> predicate,
+    absl::Duration timeout) {
+  // Gets the config path for all interfaces matching the predicate.
+  ASSIGN_OR_RETURN(
+      const openconfig::Interfaces existing_interfaces,
+      GetMatchingInterfacesAsProto(gnmi_stub, gnmi::GetRequest::CONFIG,
+                                   predicate, timeout));
+
+  // If there are more desired P4RT IDs than matching interfaces, then we return
+  // an error.
+  if (desired_p4rt_ids.size() > existing_interfaces.interfaces_size()) {
+    return absl::InvalidArgumentError(absl::Substitute(
+        "requested '$0' P4RT IDs, but only '$1' interfaces matching the given "
+        "predicate are configured on switch",
+        desired_p4rt_ids.size(), existing_interfaces.interfaces_size()));
+  }
+
+  // Collect the interfaces that do not already map a desired P4RT ID as well as
+  // those ids that have not yet been mapped.
+  std::vector<openconfig::Interfaces::Interface> changeable_interfaces;
+  absl::btree_set<int> remaining_desired_p4rt_ids(desired_p4rt_ids);
+  for (const auto& interface : existing_interfaces.interfaces()) {
+    if (interface.config().has_p4rt_id() &&
+        desired_p4rt_ids.contains(interface.config().p4rt_id())) {
+      remaining_desired_p4rt_ids.erase(interface.config().p4rt_id());
+    } else {
+      changeable_interfaces.push_back(interface);
+    }
+  }
+
+  // Map each remaining desired P4RT ID to an interface that doesn't map one.
+  openconfig::Interfaces interfaces_to_change;
+  for (int desired_id : remaining_desired_p4rt_ids) {
+    if (changeable_interfaces.empty()) {
+      return absl::InternalError(
+          "no changeable interfaces remain even though we already ensured "
+          "that there were enough to cover the desired number of P4RT ids");
+    }
+
+    changeable_interfaces.back().mutable_config()->set_p4rt_id(desired_id);
+    *interfaces_to_change.add_interfaces() =
+        std::move(changeable_interfaces.back());
+    changeable_interfaces.pop_back();
+  }
+
+  // Modify the collected interfaces.
+  return SetInterfaceP4rtIds(gnmi_stub, interfaces_to_change);
+}
+
+// Sets the P4RT IDs of `interfaces` by:
+// 1. Deleting them from any existing interfaces on the switch (since a P4RT ID
+//    can only be mapped to a single interface).
+// 2. Setting the P4RT ID of every given interface that has one.
+absl::Status SetInterfaceP4rtIds(gnmi::gNMI::StubInterface& gnmi_stub,
+                                 const openconfig::Interfaces& interfaces) {
+  // Get the set of P4RT IDs to map.
+  absl::btree_set<int> desired_p4rt_ids;
+  for (const auto& interface : interfaces.interfaces()) {
+    if (interface.config().has_p4rt_id()) {
+      desired_p4rt_ids.insert(interface.config().p4rt_id());
+    }
+  }
+
+  // Delete `desired_p4rt_ids` from existing interfaces.
+  ASSIGN_OR_RETURN(const openconfig::Interfaces& existing_interfaces,
+                   GetInterfacesAsProto(gnmi_stub, gnmi::GetRequest::CONFIG));
+  for (const auto& interface : existing_interfaces.interfaces()) {
+    if (desired_p4rt_ids.contains(interface.config().p4rt_id())) {
+      RETURN_IF_ERROR(DeleteInterfaceP4rtId(gnmi_stub, interface))
+          << "failed to delete interface " << interface.name() << "'s P4RT id.";
+    }
+  }
+
+  // Then, set the P4RT IDs for all given `interfaces`.
+  for (const auto& interface : interfaces.interfaces()) {
+    if (interface.config().has_p4rt_id()) {
+      RETURN_IF_ERROR(ModifyInterfaceP4rtId(gnmi_stub, interface))
+          << "failed to delete, then set interface " << interface.name()
+          << " to " << interface.config().p4rt_id() << ".";
+    }
+  }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<absl::btree_set<std::string>> GetAllPortIds(
