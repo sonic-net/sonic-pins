@@ -116,6 +116,7 @@ struct Counters {
   uint64_t out_ipv6_pkts = 0;
   uint64_t in_ipv6_discarded_pkts = 0;
   uint64_t out_ipv6_discarded_pkts = 0;
+  std::optional<uint64_t> carrier_transitions;
   uint64_t timestamp_ns = 0;
 };
 
@@ -322,7 +323,8 @@ absl::Status MapP4rtIdsToMatchingInterfaces(
 // Uses `gnmi_stub` to set the P4RT IDs of `interfaces`, deleting any of those
 // P4RT IDs previously mapped on the switch since a P4RT ID can't be mapped to
 // multiple interfaces. Any existing interface that already maps its desired
-// P4RT ID is untouched.
+// P4RT ID is untouched. Each interface (as identified by name) in `interfaces`
+// must already be present on the switch.
 absl::Status SetInterfaceP4rtIds(gnmi::gNMI::StubInterface& gnmi_stub,
                                  const openconfig::Interfaces& interfaces);
 
