@@ -272,15 +272,21 @@ absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
         "Packets must all include an IPv4 header.");
   }
 
-  // Program the necessary table entries to forward traffic between the
-  // interface pair.
   ASSIGN_OR_RETURN(auto gnmi_stub, testbed.Sut().CreateGnmiStub());
   ASSIGN_OR_RETURN(auto port_id_from_sut_interface,
                    GetAllInterfaceNameToPortId(*gnmi_stub));
   P4rtProgrammingContext p4rt_context(session,
                                       std::move(options.write_request));
-  RETURN_IF_ERROR(ProgramRoutes(p4rt_context.GetWriteRequestFunction(),
-                                ir_p4info, port_id_from_sut_interface, pairs));
+
+  if (options.program_routes) {
+    // Program the necessary table entries to forward traffic between the
+    // interface pair.
+    RETURN_IF_ERROR(ProgramRoutes(p4rt_context.GetWriteRequestFunction(),
+                                  ir_p4info, port_id_from_sut_interface,
+                                  pairs));
+  } else {
+    LOG(INFO) << "Skipped route programming";
+  }
 
   // Precompute packets to send.
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo>

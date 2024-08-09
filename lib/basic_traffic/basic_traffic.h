@@ -73,6 +73,9 @@ struct SendTrafficOptions {
 
   // The function that handles a P4RT write request.
   WriteRequestHandler write_request = pdpi::SetMetadataAndSendPiWriteRequest;
+
+  // Flag to program routes on SUT to forward traffic.
+  bool program_routes = true;
 };
 
 // Programs the routes to forward traffic through all the interface pairs.
