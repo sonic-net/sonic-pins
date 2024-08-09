@@ -311,8 +311,8 @@ public:
   // given entities (e.g. VLAN membership) and gNMI configuration (e.g. port
   // loopback mode).
   virtual absl::StatusOr<pdpi::IrEntities> CreateV1ModelAuxiliaryEntities(
-      const pdpi::IrEntities& ir_entities,
-      gnmi::gNMI::StubInterface& gnmi_stub) const = 0;
+      const pdpi::IrEntities &ir_entities, const pdpi::IrP4Info &ir_p4info,
+      gnmi::gNMI::StubInterface &gnmi_stub) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };

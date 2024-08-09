@@ -277,18 +277,36 @@ absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
   pdpi::P4RuntimeSession& control_p4rt =
       *testbed_configurator_->ControlSwitchApi().p4rt;
   RETURN_IF_ERROR(pdpi::ClearEntities(control_p4rt));
-  ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
+  ASSIGN_OR_RETURN(const pdpi::IrP4Info control_switch_ir_p4info,
                    pdpi::GetIrP4Info(control_p4rt));
-  ASSIGN_OR_RETURN(const pdpi::IrEntities punt_entries,
-                   backend_->GetEntitiesToPuntAllPackets(ir_p4info));
+  ASSIGN_OR_RETURN(
+      const pdpi::IrEntities punt_entries,
+      backend_->GetEntitiesToPuntAllPackets(control_switch_ir_p4info));
   RETURN_IF_ERROR(pdpi::InstallIrEntities(control_p4rt, punt_entries));
+
+  // Stores P4Specification, P4Info, and entities from SUT to maintain
+  // consistency between when expectations are generated and when packet traces
+  // are created.
+  SwitchApi& sut = testbed_configurator_->SutApi();
+  ASSIGN_OR_RETURN(sut_p4_spec_, InferP4Specification(params_.validation_params,
+                                                      *backend_, sut));
+  ASSIGN_OR_RETURN(sut_ir_p4info_, pdpi::GetIrP4Info(*sut.p4rt));
+
+  // Read P4Info and entities from SUT, sorted for determinism.
+  ASSIGN_OR_RETURN(sut_augmented_entities_,
+                   pdpi::ReadIrEntitiesSorted(*sut.p4rt));
+
+  // Retrieve auxiliary entries for v1model targets.
+  ASSIGN_OR_RETURN(pdpi::IrEntities sut_v1model_auxiliary_table_entries,
+                   backend_->CreateV1ModelAuxiliaryEntities(
+                       sut_augmented_entities_, sut_ir_p4info_, *sut.gnmi));
+  sut_augmented_entities_.MergeFrom(sut_v1model_auxiliary_table_entries);
 
   // Generate test vectors.
   gutil::BazelTestArtifactWriter writer;
   ASSIGN_OR_RETURN(
       generate_test_vectors_result_,
-      GenerateTestVectors(params.validation_params,
-                          testbed_configurator_->SutApi(), *backend_, writer));
+      GenerateTestVectors(params.validation_params, sut, *backend_, writer));
 
   SetState(kInitialized);
 
@@ -622,15 +640,16 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
                      pdpi::ReadIrEntitiesSorted(*control_switch.p4rt));
 
     // Retrieve auxiliary entries for v1model targets.
-    ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
-                     backend_->CreateV1ModelAuxiliaryEntities(
-                         v1model_augmented_entities, *control_switch.gnmi));
+    ASSIGN_OR_RETURN(
+        pdpi::IrEntities v1model_auxiliary_table_entries,
+        backend_->CreateV1ModelAuxiliaryEntities(
+            v1model_augmented_entities, ir_p4info, *control_switch.gnmi));
     v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
     ASSIGN_OR_RETURN(auto packet_traces,
-                     backend_->GetPacketTraces(p4_spec.bmv2_config, ir_p4info,
-                                               v1model_augmented_entities,
-                                               failed_switch_inputs));
+                     backend_->GetPacketTraces(
+                         sut_p4_spec_.bmv2_config, sut_ir_p4info_,
+                         sut_augmented_entities_, failed_switch_inputs));
 
     for (dvaas::PacketTestOutcome& test_outcome :
          *new_test_outcomes.mutable_outcomes()) {
