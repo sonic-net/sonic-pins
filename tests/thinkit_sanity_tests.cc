@@ -138,7 +138,8 @@ void TestP4Session(thinkit::Switch& sut) {
   // device ID.
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
   ASSERT_OK(pins_test::SetDeviceId(*gnmi_stub, sut.DeviceId()));
-
+  ASSERT_OK_AND_ASSIGN(auto device_id, pins_test::GetDeviceId(*gnmi_stub));
+  EXPECT_EQ(device_id, sut.DeviceId());
   EXPECT_OK(P4rtAble(sut));
 }
 
