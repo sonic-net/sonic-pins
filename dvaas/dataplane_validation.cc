@@ -14,6 +14,7 @@
 
 #include "dvaas/dataplane_validation.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -29,6 +30,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/packet_trace.pb.h"
@@ -54,6 +56,7 @@
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
+#include "sai_p4/instantiations/google/versions.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 
@@ -390,10 +393,65 @@ absl::Status PostProcessTestVectorFailure(
   return absl::OkStatus();
 }
 
+absl::Status IncreasePerEntryRateLimitsToAvoidBogusDrops(
+    const std::vector<p4::v1::Entity>& original_entities, SwitchApi& sut) {
+  ASSIGN_OR_RETURN(gutil::Version switch_p4_version,
+                   pdpi::GetPkgInfoVersion(sut.p4rt.get()));
+  ASSIGN_OR_RETURN(
+      gutil::Version minimum_version,
+      gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_METER_CONFIG_USES_INT64));
+
+  if (switch_p4_version >= minimum_version) {
+    // Loop through the entities and modify those with MeterConfigs such that
+    // the MeterConfig has 1000Gbps as the rate limit and 128Mb as the burst
+    // limit.
+    constexpr int64_t kHighRateLimit = 125000000000;
+    constexpr int64_t kHighBurstLimit = 16000000;
+    std::vector<p4::v1::Update> pi_updates;
+
+    for (const auto& entity : original_entities) {
+      if (entity.has_table_entry() && entity.table_entry().has_meter_config()) {
+        p4::v1::Update update;
+        update.set_type(p4::v1::Update::MODIFY);
+        *update.mutable_entity() = entity;
+        update.mutable_entity()
+            ->mutable_table_entry()
+            ->mutable_meter_config()
+            ->set_cir(kHighRateLimit);
+        update.mutable_entity()
+            ->mutable_table_entry()
+            ->mutable_meter_config()
+            ->set_pir(kHighRateLimit);
+        update.mutable_entity()
+            ->mutable_table_entry()
+            ->mutable_meter_config()
+            ->set_cburst(kHighBurstLimit);
+        update.mutable_entity()
+            ->mutable_table_entry()
+            ->mutable_meter_config()
+            ->set_pburst(kHighBurstLimit);
+        pi_updates.push_back(std::move(update));
+      }
+    }
+    // Send MODIFY updates to the switch.
+    return pdpi::SendPiUpdates(sut.p4rt.get(), pi_updates);
+  }
+  return absl::OkStatus();
+}
+
 absl::StatusOr<ValidationResult>
 DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
     SwitchApi& sut, SwitchApi& control_switch,
     const DataplaneValidationParams& params) {
+  // Read all entities.
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> original_entities,
+                   pdpi::ReadPiEntitiesSorted(*sut.p4rt));
+
+  // TODO: Remove when backwards compatibility is no longer
+  // required.
+  RETURN_IF_ERROR(
+      IncreasePerEntryRateLimitsToAvoidBogusDrops(original_entities, sut));
+
   // Set up custom writer that prefixes artifact names and adds headers.
   DvaasTestArtifactWriter dvaas_test_artifact_writer(artifact_writer_, params);
 
@@ -566,6 +624,11 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
         gutil::PrintTextProto(entities)));
   }
 
+  // After the validation, reinstall the original entities with the original
+  // meter configs.
+  RETURN_IF_ERROR(pdpi::ClearEntities(*sut.p4rt));
+  RETURN_IF_ERROR(pdpi::InstallPiEntities(*sut.p4rt, original_entities));
+
   return validation_result;
 }
 
@@ -575,6 +638,7 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
   SwitchApi sut, control_switch;
   ASSIGN_OR_RETURN(sut.p4rt, pdpi::P4RuntimeSession::Create(testbed.Sut()));
   ASSIGN_OR_RETURN(sut.gnmi, testbed.Sut().CreateGnmiStub());
+
   ASSIGN_OR_RETURN(control_switch.p4rt,
                    pdpi::P4RuntimeSession::Create(testbed.ControlSwitch()));
   ASSIGN_OR_RETURN(control_switch.gnmi,

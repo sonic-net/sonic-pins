@@ -3,7 +3,7 @@
 
 pkg_info {
   name: "tor.p4"
-  version: "2.4.0"
+  version: "2.5.0"
   arch: "v1model"
   organization: "Google"
   platform_properties {
