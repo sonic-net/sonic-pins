@@ -52,6 +52,7 @@ enum class BreakoutSpeed {
   k200GB,
   k400GB,
 };
+std::string BreakoutSpeedToString(BreakoutSpeed speed);
 using BreakoutMode = std::vector<BreakoutSpeed>;
 std::ostream& operator<<(std::ostream& os, const BreakoutMode& breakout);
 
@@ -393,6 +394,9 @@ GetTransceiverToFormFactorMap(gnmi::gNMI::StubInterface& gnmi_stub);
 absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
                          uint32_t device_id);
 
+// Gets the device ID from Switch state Database.
+absl::StatusOr<uint64_t> GetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Takes a gNMI config in JSON format and updates the P4RT Device ID. Adding it
 // when it doesn't exist, or updating the value if it does.
 std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
@@ -404,6 +408,10 @@ std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
 absl::StatusOr<int> FindPortWithBreakoutMode(
     absl::string_view json_config, const BreakoutMode& breakout,
     const absl::flat_hash_set<int>& ignore_ports = {});
+
+// Return the interfaces under the input port.
+absl::StatusOr<std::vector<std::string>> GetInterfacesOnPort(
+    absl::string_view json_config, int port_number);
 
 // Returns a map from physical transceiver names to ethernet PMD type.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
@@ -455,6 +463,13 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
 // Gets counters for all interfaces.
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Removes specified characters from Json object string.
+void StripSymbolFromString(std::string& str, char symbol);
+
+// Returns the 'value' section of a packed json with format:
+//   {"field":"value"}
+absl::StatusOr<std::string> ParseJsonValue(absl::string_view json);
 
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_
