@@ -21,11 +21,13 @@
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/functional/any_invocable.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -162,9 +164,27 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                absl::string_view config_path,
                                GnmiSetType operation, absl::string_view value);
 
+// Send and update operation for a gNMI config leaf.
+// The config path should not contain the /openconfig/ prefix.
+// Example:
+//   UpdateGnmiConfigLeaf(gnmi_stub, "system/config/boot-time", "12345678")
+absl::Status UpdateGnmiConfigLeaf(gnmi::gNMI::StubInterface* gnmi_stub,
+                                  absl::string_view config_path,
+                                  absl::string_view value);
+
+// Send and update operation for a gNMI config leaf and wait for the state value
+// to update.
+absl::Status UpdateAndVerifyGnmiConfigLeaf(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view config_path,
+    absl::string_view value, absl::Duration timeout = absl::Minutes(2));
+
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
     absl::string_view resp_parse_str = {});
+
+// Return the string value of a gNMI state leaf.
+absl::StatusOr<std::string> GetGnmiStateLeafValue(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path);
 
 struct ResultWithTimestamp {
   std::string response;
@@ -266,13 +286,32 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::string_view if_name);
 
-// Returns the interface name to port id map from a gNMI config.
-absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-GetAllInterfaceNameToPortId(absl::string_view gnmi_config);
+// GetAllInterfaceNameToPortId are helper methods that fetch the P4Runtime port
+// name to ID mapping of a switch. The `field_type` argument can be used to
+// fetch this mapping based on either the switch configuration or its state.
+//
+// A filter can be used to erase unintersing port name to ID mappings for a
+// given test. By default we restrict only the CPU port which behaves
+// differently than the front-panel ports most tests are interested in.
+using PortIdByNameIterType = std::pair<std::string, std::string>;
 
-// Reads the gNMI state and returns the interface name to port id map.
+inline bool GetAllPorts(const PortIdByNameIterType&) {
+  return false;  // do not filiter anything.
+}
+inline bool IgnoreCpuPortName(const PortIdByNameIterType& iter) {
+  return iter.first == "CPU";
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub);
+GetAllInterfaceNameToPortId(
+    absl::string_view gnmi_config, absl::string_view field_type = "config",
+    absl::AnyInvocable<bool(const PortIdByNameIterType&)> filter =
+        IgnoreCpuPortName);
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllInterfaceNameToPortId(
+    gnmi::gNMI::StubInterface& stub, absl::string_view field_type = "state",
+    absl::AnyInvocable<bool(const PortIdByNameIterType&)> filter =
+        IgnoreCpuPortName);
 
 // Gets interfaces from the switch and returns them as a proto.
 absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
