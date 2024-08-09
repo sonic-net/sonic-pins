@@ -52,6 +52,7 @@ enum class BreakoutSpeed {
   k200GB,
   k400GB,
 };
+std::string BreakoutSpeedToString(BreakoutSpeed speed);
 using BreakoutMode = std::vector<BreakoutSpeed>;
 std::ostream& operator<<(std::ostream& os, const BreakoutMode& breakout);
 
@@ -404,6 +405,10 @@ std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
 absl::StatusOr<int> FindPortWithBreakoutMode(
     absl::string_view json_config, const BreakoutMode& breakout,
     const absl::flat_hash_set<int>& ignore_ports = {});
+
+// Return the interfaces under the input port.
+absl::StatusOr<std::vector<std::string>> GetInterfacesOnPort(
+    absl::string_view json_config, int port_number);
 
 // Returns a map from physical transceiver names to ethernet PMD type.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
