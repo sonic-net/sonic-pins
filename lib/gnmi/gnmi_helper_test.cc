@@ -2338,6 +2338,33 @@ TEST(BreakoutModeMatchTest, LocalFileTestDataTest) {
       IsOkAndHolds(10));
 }
 
+TEST(InterfacesNameTest, LocalFileTestDataTest) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"Ethernet1/3/1"
+        },
+        {
+          "name":"Ethernet1/5/1"
+        },
+        {
+          "name":"Ethernet1/5/3"
+        },
+        {
+          "name_missing":"NotInterfaceName"
+        }
+      ]
+    }
+  })json";
+  EXPECT_THAT(GetInterfacesOnPort(interface_state, 1), IsOkAndHolds(IsEmpty()));
+  EXPECT_THAT(GetInterfacesOnPort(interface_state, 3),
+              IsOkAndHolds(ElementsAre("Ethernet1/3/1")));
+  EXPECT_THAT(
+      GetInterfacesOnPort(interface_state, 5),
+      IsOkAndHolds(UnorderedElementsAre("Ethernet1/5/1", "Ethernet1/5/3")));
+}
+
 TEST(GetAllInterfaceCounters, Works) {
   static constexpr absl::string_view kInterfaceJson = R"(
 {
