@@ -67,13 +67,13 @@ const auto& GetSutInterfaceInfo() {
            {"Ethernet24",
             thinkit::InterfaceInfo{
                 .interface_modes = {thinkit::TRAFFIC_GENERATOR},
-                .peer_interface_name = "ixia.google.com/1/1",
-                .peer_traffic_location = "ixia.google.com;1;1"}},
+                .peer_interface_name = "ixia.abc.com/1/1",
+                .peer_traffic_location = "ixia.abc.com;1;1"}},
            {"Ethernet32",
             thinkit::InterfaceInfo{
                 .interface_modes = {thinkit::TRAFFIC_GENERATOR},
-                .peer_interface_name = "ixia.google.com/1/2",
-                .peer_traffic_location = "ixia.google.com;1;2"}}});
+                .peer_interface_name = "ixia.abc.com/1/2",
+                .peer_traffic_location = "ixia.abc.com;1;2"}}});
   return *kSutInterfaceInfo;
 }
 
@@ -98,11 +98,11 @@ TEST(GenericTestbedUtils, GetAllTrafficGeneratorLinks) {
       GetAllTrafficGeneratorLinks(GetSutInterfaceInfo()),
       UnorderedElementsAre(
           InterfaceLink{.sut_interface = "Ethernet24",
-                        .peer_interface = "ixia.google.com/1/1",
-                        .peer_traffic_location = "ixia.google.com;1;1"},
+                        .peer_interface = "ixia.abc.com/1/1",
+                        .peer_traffic_location = "ixia.abc.com;1;1"},
           InterfaceLink{.sut_interface = "Ethernet32",
-                        .peer_interface = "ixia.google.com/1/2",
-                        .peer_traffic_location = "ixia.google.com;1;2"}));
+                        .peer_interface = "ixia.abc.com/1/2",
+                        .peer_traffic_location = "ixia.abc.com;1;2"}));
 }
 
 TEST(GenericTestbedUtils, GetAllLoopbackInterfaces) {
@@ -257,8 +257,8 @@ TEST(GenericTestbedUtils, GetUpInterfaceLinks) {
   EXPECT_THAT(GetUpLinks(GetAllTrafficGeneratorLinks, testbed),
               IsOkAndHolds(UnorderedElementsAre(InterfaceLink{
                   .sut_interface = "Ethernet24",
-                  .peer_interface = "ixia.google.com/1/1",
-                  .peer_traffic_location = "ixia.google.com;1;1"})));
+                  .peer_interface = "ixia.abc.com/1/1",
+                  .peer_traffic_location = "ixia.abc.com;1;1"})));
 }
 
 TEST(OtgHelperTest, GetLayer1SpeedFromBitsPerSecondWorks) {

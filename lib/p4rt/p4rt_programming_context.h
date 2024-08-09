@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_LIB_P4RT_P4RT_PROGRAMMING_CONTEXT_H_
-#define GOOGLE_LIB_P4RT_P4RT_PROGRAMMING_CONTEXT_H_
+#ifndef PINS_LIB_P4RT_P4RT_PROGRAMMING_CONTEXT_H_
+#define PINS_LIB_P4RT_P4RT_PROGRAMMING_CONTEXT_H_
 
 #include <functional>
 #include <utility>
@@ -82,4 +82,4 @@ class P4rtProgrammingContext {
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_LIB_P4RT_P4RT_PROGRAMMING_CONTEXT_H_
+#endif  // PINS_LIB_P4RT_P4RT_PROGRAMMING_CONTEXT_H_

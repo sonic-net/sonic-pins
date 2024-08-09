@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_TESTS_GNMI_LINK_FLAP_TESTS_H_
-#define GOOGLE_TESTS_GNMI_LINK_FLAP_TESTS_H_
+#ifndef PINS_TESTS_GNMI_LINK_FLAP_TESTS_H_
+#define PINS_TESTS_GNMI_LINK_FLAP_TESTS_H_
 
 #include "thinkit/generic_testbed_fixture.h"
 
@@ -25,4 +25,4 @@ class ExampleTestFixture : public thinkit::GenericTestbedFixture<> {
 
 }  // namespace pins_test
 
-#endif  // GOOGLE_TESTS_GNMI_LINK_FLAP_TESTS_H_
+#endif  // PINS_TESTS_GNMI_LINK_FLAP_TESTS_H_
