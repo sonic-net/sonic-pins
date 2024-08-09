@@ -36,6 +36,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "glog/logging.h"
 #include "google/protobuf/struct.pb.h"
 #include "gutil/collections.h"
 #include "gutil/overload.h"
@@ -546,7 +547,7 @@ absl::Status StopTraffic(absl::Span<const std::string> trefs,
   return absl::OkStatus();
 }
 
-absl::Status SetFrameRate(absl::string_view tref, uint32_t fps,
+absl::Status SetFrameRate(absl::string_view tref, int64_t fps,
                           thinkit::GenericTestbed &generic_testbed) {
   // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/frameRate
   // with {"rate":NNN,"type":"framesPerSecond"}
@@ -565,7 +566,7 @@ absl::Status SetFrameRate(absl::string_view tref, uint32_t fps,
   return absl::OkStatus();
 }
 
-absl::Status SetLineRate(absl::string_view tref, uint32_t percent,
+absl::Status SetLineRate(absl::string_view tref, int32_t percent,
                          thinkit::GenericTestbed &generic_testbed) {
   // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/frameRate
   // with {"rate":NNN,"type":"percentLineRate"}
@@ -584,7 +585,7 @@ absl::Status SetLineRate(absl::string_view tref, uint32_t percent,
   return absl::OkStatus();
 }
 
-absl::Status SetFrameCount(absl::string_view tref, uint32_t frames,
+absl::Status SetFrameCount(absl::string_view tref, int64_t frames,
                            thinkit::GenericTestbed &generic_testbed) {
   // Set the transmissionControl type to fixed count and the frame count
   // to NNN
@@ -607,7 +608,7 @@ absl::Status SetFrameCount(absl::string_view tref, uint32_t frames,
   return absl::OkStatus();
 }
 
-absl::Status SetFrameSize(absl::string_view tref, uint32_t framesize,
+absl::Status SetFrameSize(absl::string_view tref, int32_t framesize,
                           thinkit::GenericTestbed &generic_testbed) {
   // Set the frame size to 1514 bytes
   // PATCH to /ixnetwork/traffic/trafficItem/1/configElement/1/frameSize
@@ -1236,7 +1237,7 @@ absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
                    FindIdByField(views, "caption", "Flow Statistics"));
   // It takes some time for stats to become "ready", so we have to poll.
   // TODO: Do not hardcode this.
-  constexpr absl::Duration kPollDuration = absl::Seconds(45);
+  constexpr absl::Duration kPollDuration = absl::Minutes(2);
   const absl::Time kTimeout = absl::Now() + kPollDuration;
   while (absl::Now() < kTimeout) {
     ASSIGN_OR_RETURN(
@@ -1251,6 +1252,8 @@ absl::StatusOr<TrafficStats> GetAllTrafficItemStats(
           << "\nwhile trying to parse the following stats:\n"
           << FormatJsonBestEffort(raw_stats);
     }
+    LOG(INFO) << "Stats ready after "
+              << absl::Now() - (kTimeout - kPollDuration) << " of polling.";
     return stats;
   }
 
