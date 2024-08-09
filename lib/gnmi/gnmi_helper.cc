@@ -15,6 +15,7 @@
 #include "lib/gnmi/gnmi_helper.h"
 
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -233,23 +234,42 @@ absl::StatusOr<int> FindBreakoutModeFromComponentJsonArray(
   for (const auto& component : json_array) {
     auto port_id = AccessJsonValue(
         component, {"port", "config", "openconfig-pins-platform-port:port-id"});
-    if (ignore_ports.contains(*port_id)) {
-      LOG(INFO) << "skiped the ingore port: " << *port_id;
-      continue;
-    }
     auto breakout_group = AccessJsonValue(
         component,
         {"port", "openconfig-platform-port:breakout-mode", "groups", "group"});
 
     if (!port_id.ok() || !breakout_group.ok()) continue;
 
+    if (ignore_ports.contains(*port_id)) {
+      LOG(INFO) << "Skipped the ignore port: " << *port_id;
+      continue;
+    }
+
     if (IsBreakoutModeMatch(breakout, *breakout_group).ok()) {
+      LOG(INFO) << *port_id << " matches the given breakout mode";
       return *port_id;
-    } else {
-      LOG(INFO) << *port_id << " doesn't match the given breakout mode";
     }
   }
   return absl::NotFoundError("Couldn't find the breakout mode");
+}
+
+absl::StatusOr<std::vector<std::string>>
+FindInterfacesNameFromInterfaceJsonArray(int port_number,
+                                         const json& json_array) {
+  std::vector<std::string> interfaces_name;
+  RET_CHECK(json_array.is_array())
+      << "The interface should be a valid Json array";
+  for (const auto& interface : json_array) {
+    auto interface_name = AccessJsonValue(interface, {"name"});
+
+    if (!interface_name.ok()) continue;
+    auto interface_name_str = interface_name->get<std::string>();
+    if (absl::StartsWith(interface_name_str,
+                         absl::StrFormat("Ethernet1/%d/", port_number))) {
+      interfaces_name.push_back(interface_name_str);
+    }
+  }
+  return interfaces_name;
 }
 
 absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
@@ -263,6 +283,7 @@ absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
   }
   RETURN_IF_ERROR(gutil::GrpcStatusToAbslStatus(
                       gnmi_stub->Get(&context, request, &response)))
+          .LogError()
           .SetPrepend()
       << "GET request failed with error: ";
   LOG(INFO) << "Received GET response: " << response.ShortDebugString();
@@ -645,19 +666,18 @@ absl::Status PushGnmiConfig(thinkit::Switch& chassis,
 absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
                                           const std::string& gnmi_config,
                                           const absl::Duration& timeout) {
-  VLOG(1) << "Waiting for gNMI to converge.";
+  absl::Time deadline = absl::Now() + timeout;
+
   // Get expected port ID mapping from the gNMI config.
   absl::flat_hash_map<std::string, std::string> expected_port_id_by_name;
   ASSIGN_OR_RETURN(
       expected_port_id_by_name,
       GetPortNameToIdMapFromJsonString(gnmi_config, /*field_type=*/"config"));
-  VLOG(1) << "gNMI has converged.";
 
   // Poll the switch's state waiting for the port name and ID mappings to match.
-  absl::Time start_time = absl::Now();
-  bool converged = false;
   LOG(INFO) << "Waiting for port name & ID mappings to converge.";
-  while (!converged && (absl::Now() < (start_time + timeout))) {
+  absl::flat_hash_map<std::string, std::string> actual_port_id_by_name;
+  while (expected_port_id_by_name != actual_port_id_by_name) {
     ASSIGN_OR_RETURN(gnmi::GetResponse response,
                      GetAllInterfaceOverGnmi(stub, absl::Seconds(60)));
     if (response.notification_size() < 1) {
@@ -665,22 +685,23 @@ absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
           absl::StrCat("Invalid response: ", response.DebugString()));
     }
 
-    absl::flat_hash_map<std::string, std::string> actual_port_id_by_name;
     ASSIGN_OR_RETURN(
         actual_port_id_by_name,
         GetPortNameToIdMapFromJsonString(
             response.notification(0).update(0).val().json_ietf_val(),
             /*field_type=*/"state"));
 
-    if (expected_port_id_by_name == actual_port_id_by_name) {
-      converged = true;
+    if (absl::Now() > deadline) {
+      return gutil::FailedPreconditionErrorBuilder()
+             << "Port IDs did not coverge after " << timeout << ": got=\n  "
+             << absl::StrJoin(actual_port_id_by_name, "\n  ",
+                              absl::PairFormatter(":"))
+             << "\nwant=\n  "
+             << absl::StrJoin(expected_port_id_by_name, "\n  ",
+                              absl::PairFormatter(":"));
     }
   }
 
-  if (!converged) {
-    return gutil::FailedPreconditionErrorBuilder()
-           << "gNMI config did not coverge after " << timeout << ".";
-  }
   return absl::OkStatus();
 }
 
@@ -1438,7 +1459,7 @@ absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
   return absl::OkStatus();
 }
 
-std::string ToString(BreakoutSpeed breakout_speed) {
+std::string BreakoutSpeedToString(BreakoutSpeed breakout_speed) {
   switch (breakout_speed) {
     case BreakoutSpeed::k100GB:
       return "100GB";
@@ -1454,7 +1475,7 @@ std::string ToString(BreakoutSpeed breakout_speed) {
 
 struct BreakoutSpeedFormatter {
   void operator()(std::string* out, BreakoutSpeed breakout_speed) const {
-    out->append(ToString(breakout_speed));
+    out->append(BreakoutSpeedToString(breakout_speed));
   }
 };
 
@@ -1476,6 +1497,18 @@ absl::StatusOr<int> FindPortWithBreakoutMode(
   LOG(INFO) << "Will search breakout mode to match: " << breakout;
   return FindBreakoutModeFromComponentJsonArray(breakout, component_array,
                                                 ignore_ports);
+}
+
+absl::StatusOr<std::vector<std::string>> GetInterfacesOnPort(
+    absl::string_view json_config, int port_number) {
+  //  Parse the open config as JSON value.
+  auto config_json = json::parse(json_config);
+  ASSIGN_OR_RETURN(
+      const auto& interface_array,
+      AccessJsonValue(config_json,
+                      {"openconfig-interfaces:interfaces", "interface"}));
+  LOG(INFO) << "Will search interfaces name with port number: " << port_number;
+  return FindInterfacesNameFromInterfaceJsonArray(port_number, interface_array);
 }
 
 std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
@@ -1731,6 +1764,22 @@ absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
       GetGnmiStatePathInfo(&gnmi_stub, oper_status_state_path, parse_str));
 
   return ops_response == "\"UP\"";
+}
+
+absl::Status SetPortLoopbackMode(bool port_loopback,
+                                 absl::string_view interface_name,
+                                 gnmi::gNMI::StubInterface& gnmi_stub) {
+  std::string config_path = absl::StrCat(
+      "interfaces/interface[name=", interface_name, "]/config/loopback-mode");
+  std::string config_json;
+  if (port_loopback) {
+    config_json = "{\"openconfig-interfaces:loopback-mode\":true}";
+  } else {
+    config_json = "{\"openconfig-interfaces:loopback-mode\":false}";
+  }
+
+  return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
+                                      GnmiSetType::kUpdate, config_json);
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
