@@ -205,7 +205,6 @@ absl::Status PinsControlDevice::Reboot(thinkit::RebootType reboot_type) {
   gnoi::system::RebootRequest request;
   if (reboot_type == thinkit::RebootType::kCold) {
     request.set_method(gnoi::system::RebootMethod::COLD);
-    request.set_delay(absl::ToInt64Nanoseconds(absl::Seconds(1)));
   } else if (reboot_type == thinkit::RebootType::kWarm) {
     request.set_method(gnoi::system::RebootMethod::WARM);
   } else {

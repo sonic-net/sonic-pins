@@ -117,6 +117,7 @@ cc_library(
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/netaddr:mac_address",
         "//thinkit:generic_testbed",
+        "@com_github_google_glog//:glog",
         "@com_github_nlohmann_json//:nlohmann_json",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/random",
