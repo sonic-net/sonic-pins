@@ -21,11 +21,13 @@
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/functional/any_invocable.h"
 #include "absl/numeric/int128.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -52,12 +54,20 @@ enum class BreakoutSpeed {
   k200GB,
   k400GB,
 };
+std::string BreakoutSpeedToString(BreakoutSpeed speed);
 using BreakoutMode = std::vector<BreakoutSpeed>;
 std::ostream& operator<<(std::ostream& os, const BreakoutMode& breakout);
 
 enum class GnmiSetType : char { kUpdate, kReplace, kDelete };
 
 enum class OperStatus {
+  kUnknown,
+  kUp,
+  kDown,
+  kTesting,
+};
+
+enum class AdminStatus {
   kUnknown,
   kUp,
   kDown,
@@ -90,6 +100,13 @@ struct TransceiverPart {
                                      other.manufacturer_name,
                                      other.serial_number, other.rev);
   }
+};
+
+enum class InterfaceType {
+  kAny,
+  kLag,
+  kSingleton,
+  kLoopback,
 };
 
 // Interface counters exposed by gNMI.
@@ -161,9 +178,27 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
                                absl::string_view config_path,
                                GnmiSetType operation, absl::string_view value);
 
+// Send and update operation for a gNMI config leaf.
+// The config path should not contain the /openconfig/ prefix.
+// Example:
+//   UpdateGnmiConfigLeaf(gnmi_stub, "system/config/boot-time", "12345678")
+absl::Status UpdateGnmiConfigLeaf(gnmi::gNMI::StubInterface* gnmi_stub,
+                                  absl::string_view config_path,
+                                  absl::string_view value);
+
+// Send and update operation for a gNMI config leaf and wait for the state value
+// to update.
+absl::Status UpdateAndVerifyGnmiConfigLeaf(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view config_path,
+    absl::string_view value, absl::Duration timeout = absl::Minutes(2));
+
 absl::StatusOr<std::string> GetGnmiStatePathInfo(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path,
     absl::string_view resp_parse_str = {});
+
+// Return the string value of a gNMI state leaf.
+absl::StatusOr<std::string> GetGnmiStateLeafValue(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path);
 
 struct ResultWithTimestamp {
   std::string response;
@@ -208,20 +243,20 @@ GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response);
 // configure the arbitration settings for the request.
 absl::Status PushGnmiConfig(
     gnmi::gNMI::StubInterface& stub, const std::string& chassis_name,
-    const std::string& gnmi_config,
+    absl::string_view gnmi_config,
     absl::uint128 election_id = pdpi::TimeBasedElectionId());
 
 // Pushes a given gNMI config to a thinkit switch. This method will make
 // sensible changes to the config like:
 //    * Update the P4RT device ID to match the chassis settings.
 absl::Status PushGnmiConfig(thinkit::Switch& chassis,
-                            const std::string& gnmi_config);
+                            absl::string_view gnmi_config);
 
 absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
-                                          const std::string& gnmi_config,
+                                          absl::string_view gnmi_config,
                                           const absl::Duration& timeout);
 absl::Status WaitForGnmiPortIdConvergence(thinkit::Switch& chassis,
-                                          const std::string& gnmi_config,
+                                          absl::string_view gnmi_config,
                                           const absl::Duration& timeout);
 
 // Waits until the interface <-> P4RT port id mappings in the config path of the
@@ -258,20 +293,53 @@ gnoi::types::Path GnmiToGnoiPath(gnmi::Path path);
 
 // Gets all the EthernetXX interfaces whose operational status is UP.
 absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
-    gnmi::gNMI::StubInterface& stub,
+    gnmi::gNMI::StubInterface& stub, InterfaceType type = InterfaceType::kAny,
     absl::Duration timeout = absl::Seconds(60));
+
+// Gets all the EthernetXX interfaces whose operational status is UP.
+inline absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
+  return GetUpInterfacesOverGnmi(stub, InterfaceType::kAny, timeout);
+}
+
+// Returns a set of interfaces which are in the disabled state.
+absl::StatusOr<absl::flat_hash_set<std::string>> GetConfigDisabledInterfaces(
+    gnmi::gNMI::StubInterface& stub);
 
 // Gets the operational status of an interface.
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::string_view if_name);
 
-// Returns the interface name to port id map from a gNMI config.
-absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-GetAllInterfaceNameToPortId(absl::string_view gnmi_config);
+// Gets the administrative status of an interface.
+absl::StatusOr<AdminStatus> GetInterfaceAdminStatusOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::string_view if_name);
 
-// Reads the gNMI state and returns the interface name to port id map.
+// GetAllInterfaceNameToPortId are helper methods that fetch the P4Runtime port
+// name to ID mapping of a switch. The `field_type` argument can be used to
+// fetch this mapping based on either the switch configuration or its state.
+//
+// A filter can be used to erase unintersing port name to ID mappings for a
+// given test. By default we restrict only the CPU port which behaves
+// differently than the front-panel ports most tests are interested in.
+using PortIdByNameIterType = std::pair<std::string, std::string>;
+
+inline bool GetAllPorts(const PortIdByNameIterType&) {
+  return false;  // do not filiter anything.
+}
+inline bool IgnoreCpuPortName(const PortIdByNameIterType& iter) {
+  return iter.first == "CPU";
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub);
+GetAllInterfaceNameToPortId(
+    absl::string_view gnmi_config, absl::string_view field_type = "config",
+    absl::AnyInvocable<bool(const PortIdByNameIterType&)> filter =
+        IgnoreCpuPortName);
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+GetAllInterfaceNameToPortId(
+    gnmi::gNMI::StubInterface& stub, absl::string_view field_type = "state",
+    absl::AnyInvocable<bool(const PortIdByNameIterType&)> filter =
+        IgnoreCpuPortName);
 
 // Gets interfaces from the switch and returns them as a proto.
 absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
@@ -393,9 +461,12 @@ GetTransceiverToFormFactorMap(gnmi::gNMI::StubInterface& gnmi_stub);
 absl::Status SetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub,
                          uint32_t device_id);
 
+// Gets the device ID from Switch state Database.
+absl::StatusOr<uint64_t> GetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub);
+
 // Takes a gNMI config in JSON format and updates the P4RT Device ID. Adding it
 // when it doesn't exist, or updating the value if it does.
-std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
+std::string UpdateDeviceIdInJsonConfig(absl::string_view gnmi_config,
                                        const std::string& device_id);
 
 // Return the port id whose breakout mode matches the given input.
@@ -404,6 +475,10 @@ std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
 absl::StatusOr<int> FindPortWithBreakoutMode(
     absl::string_view json_config, const BreakoutMode& breakout,
     const absl::flat_hash_set<int>& ignore_ports = {});
+
+// Return the interfaces under the input port.
+absl::StatusOr<std::vector<std::string>> GetInterfacesOnPort(
+    absl::string_view json_config, int port_number);
 
 // Returns a map from physical transceiver names to ethernet PMD type.
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
@@ -455,6 +530,13 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
 // Gets counters for all interfaces.
 absl::StatusOr<absl::flat_hash_map<std::string, Counters>>
 GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub);
+
+// Removes specified characters from Json object string.
+void StripSymbolFromString(std::string& str, char symbol);
+
+// Returns the 'value' section of a packed json with format:
+//   {"field":"value"}
+absl::StatusOr<std::string> ParseJsonValue(absl::string_view json);
 
 }  // namespace pins_test
 #endif  // PINS_LIB_GNMI_GNMI_HELPER_H_
