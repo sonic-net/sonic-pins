@@ -272,8 +272,9 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
   ASSIGN_OR_RETURN(pdpi::IrEntities entities,
                    pdpi::ReadIrEntitiesSorted(*sut.p4rt));
   // Retrieve auxiliary entries for v1model targets.
-  ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
-                   backend.CreateV1ModelAuxiliaryEntities(entities, *sut.gnmi));
+  ASSIGN_OR_RETURN(
+      pdpi::IrEntities v1model_auxiliary_table_entries,
+      backend.CreateV1ModelAuxiliaryEntities(entities, ir_p4info, *sut.gnmi));
 
   RETURN_IF_ERROR(writer.AppendToTestArtifact(
       "v1model_auxiliary_table_entries.txt",
@@ -358,7 +359,7 @@ absl::Status AttachPacketTrace(
       absl::StrCat(
           failed_packet_test.test_result().failure().description(),
           "\n== EXPECTED INPUT-OUTPUT TRACE (P4 SIMULATION) SUMMARY"
-          "=========================\n",
+          " =========================\n",
           "DISCLAIMER: The following trace is produced from a simulation based "
           "on the P4 model of the switch. Its sole purpose is to explain why "
           "the test expects the output it expects. It does NOT necessarily "
@@ -401,42 +402,43 @@ absl::Status IncreasePerEntryRateLimitsToAvoidBogusDrops(
       gutil::Version minimum_version,
       gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_METER_CONFIG_USES_INT64));
 
-  if (switch_p4_version >= minimum_version) {
-    // Loop through the entities and modify those with MeterConfigs such that
-    // the MeterConfig has 1000Gbps as the rate limit and 128Mb as the burst
-    // limit.
-    constexpr int64_t kHighRateLimit = 125000000000;
-    constexpr int64_t kHighBurstLimit = 16000000;
-    std::vector<p4::v1::Update> pi_updates;
+  // TODO: Remove when backwards compatibility is no longer
+  // required.
+  if (switch_p4_version < minimum_version) return absl::OkStatus();
 
-    for (const auto& entity : original_entities) {
-      if (entity.has_table_entry() && entity.table_entry().has_meter_config()) {
-        p4::v1::Update update;
-        update.set_type(p4::v1::Update::MODIFY);
-        *update.mutable_entity() = entity;
-        update.mutable_entity()
-            ->mutable_table_entry()
-            ->mutable_meter_config()
-            ->set_cir(kHighRateLimit);
-        update.mutable_entity()
-            ->mutable_table_entry()
-            ->mutable_meter_config()
-            ->set_pir(kHighRateLimit);
-        update.mutable_entity()
-            ->mutable_table_entry()
-            ->mutable_meter_config()
-            ->set_cburst(kHighBurstLimit);
-        update.mutable_entity()
-            ->mutable_table_entry()
-            ->mutable_meter_config()
-            ->set_pburst(kHighBurstLimit);
-        pi_updates.push_back(std::move(update));
-      }
+  // Loop through the entities and modify those with MeterConfigs such that
+  // the MeterConfig has 1000Gbps as the rate limit and 128Mb as the burst
+  // limit.
+  constexpr int64_t kHighRateLimit = 125000000000;
+  constexpr int64_t kHighBurstLimit = 16000000;
+  std::vector<p4::v1::Update> pi_updates;
+
+  for (const auto& entity : original_entities) {
+    if (entity.has_table_entry() && entity.table_entry().has_meter_config()) {
+      p4::v1::Update update;
+      update.set_type(p4::v1::Update::MODIFY);
+      *update.mutable_entity() = entity;
+      update.mutable_entity()
+          ->mutable_table_entry()
+          ->mutable_meter_config()
+          ->set_cir(kHighRateLimit);
+      update.mutable_entity()
+          ->mutable_table_entry()
+          ->mutable_meter_config()
+          ->set_pir(kHighRateLimit);
+      update.mutable_entity()
+          ->mutable_table_entry()
+          ->mutable_meter_config()
+          ->set_cburst(kHighBurstLimit);
+      update.mutable_entity()
+          ->mutable_table_entry()
+          ->mutable_meter_config()
+          ->set_pburst(kHighBurstLimit);
+      pi_updates.push_back(std::move(update));
     }
-    // Send MODIFY updates to the switch.
-    return pdpi::SendPiUpdates(sut.p4rt.get(), pi_updates);
   }
-  return absl::OkStatus();
+  // Send MODIFY updates to the switch.
+  return pdpi::SendPiUpdates(sut.p4rt.get(), pi_updates);
 }
 
 absl::StatusOr<ValidationResult>
@@ -447,8 +449,6 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> original_entities,
                    pdpi::ReadPiEntitiesSorted(*sut.p4rt));
 
-  // TODO: Remove when backwards compatibility is no longer
-  // required.
   RETURN_IF_ERROR(
       IncreasePerEntryRateLimitsToAvoidBogusDrops(original_entities, sut));
 
@@ -562,7 +562,7 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       // Retrieve auxiliary entries for v1model targets.
       ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
                        backend_->CreateV1ModelAuxiliaryEntities(
-                           v1model_augmented_entities, *sut.gnmi));
+                           v1model_augmented_entities, ir_p4info, *sut.gnmi));
       v1model_augmented_entities.MergeFrom(v1model_auxiliary_table_entries);
 
       ASSIGN_OR_RETURN(packet_traces,
