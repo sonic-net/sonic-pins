@@ -45,7 +45,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/packetlib/packetlib.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -205,7 +205,6 @@ absl::Status PinsControlDevice::Reboot(thinkit::RebootType reboot_type) {
   gnoi::system::RebootRequest request;
   if (reboot_type == thinkit::RebootType::kCold) {
     request.set_method(gnoi::system::RebootMethod::COLD);
-    request.set_delay(absl::ToInt64Nanoseconds(absl::Seconds(1)));
   } else if (reboot_type == thinkit::RebootType::kWarm) {
     request.set_method(gnoi::system::RebootMethod::WARM);
   } else {
@@ -289,6 +288,12 @@ absl::Status PinsControlDevice::CheckUp() { return SwitchReady(*sut_); }
 absl::Status PinsControlDevice::ValidatePortsUp(
     absl::Span<const std::string> interfaces) {
       return PortsUp(*sut_, interfaces);
+}
+
+absl::Status PinsControlDevice::FlapLinks(const absl::string_view interface,
+                                          const absl::Duration down_duration) {
+  return absl::UnimplementedError(
+      "FlapLinks is not supported by PinsControlDevice.");
 }
 
 absl::StatusOr<std::vector<std::string>>

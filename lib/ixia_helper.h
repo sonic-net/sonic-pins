@@ -149,25 +149,25 @@ absl::Status StopTraffic(absl::Span<const std::string> trefs,
 
 // SetFrameRate - sets the frame rate for the traffic to be generated
 // Takes in the tref returned by IxiaSession
-absl::Status SetFrameRate(absl::string_view tref, uint32_t fps,
+absl::Status SetFrameRate(absl::string_view tref, int64_t fps,
                           thinkit::GenericTestbed &generic_testbed);
 
 // SetLineRate - sets the line rate as 1-100 percent of max line rate
 // This is an alternative to SetFrameRate. Takes in the tref returned
 // by IxiaSession
-absl::Status SetLineRate(absl::string_view tref, uint32_t percent,
+absl::Status SetLineRate(absl::string_view tref, int32_t percent,
                          thinkit::GenericTestbed &generic_testbed);
 
 // SetFrameCount - sets the number of frames to send before stopping
 // If this isn't called transmission will continue until manually stopped
 // Takes in the tref returned by IxiaSession
-absl::Status SetFrameCount(absl::string_view tref, uint32_t frames,
+absl::Status SetFrameCount(absl::string_view tref, int64_t frames,
                            thinkit::GenericTestbed &generic_testbed);
 
 // SetFrameSize - sets the frame size
 // If not called the frame size will default to 64 bytes
 // Takes in the tref returned by IxiaSession
-absl::Status SetFrameSize(absl::string_view tref, uint32_t framesize,
+absl::Status SetFrameSize(absl::string_view tref, int32_t framesize,
                           thinkit::GenericTestbed &generic_testbed);
 
 // SetDestMac - sets the destination MAC address for frames to be sent
@@ -279,9 +279,9 @@ struct PercentOfMaxLineRate {
 struct TrafficParameters {
   // The number of frames to send before stopping. If unset, traffic will
   // continue until manually stopped.
-  std::optional<int> frame_count;
+  std::optional<int64_t> frame_count;
   // The frame size. If unset, will default to 64 bytes.
-  std::optional<int> frame_size_in_bytes;
+  std::optional<int32_t> frame_size_in_bytes;
   // The speed at which to send frames (required).
   std::variant<FramesPerSecond, PercentOfMaxLineRate> traffic_speed;
 

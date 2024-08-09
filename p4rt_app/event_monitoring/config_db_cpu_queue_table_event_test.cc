@@ -32,8 +32,8 @@ MATCHER_P2(BidirectionallyMaps, name, id,
   bool success = true;
   auto id_lookup = arg.NameToId(name);
   if (!id_lookup.ok()) {
-    *result_listener << "arg.NameToId(" << name << ")"
-                     << " returned status " << id_lookup.status();
+    *result_listener << "arg.NameToId(" << name << ")" << " returned status "
+                     << id_lookup.status();
     success = false;
   } else if (*id_lookup != id) {
     *result_listener << "arg.NameToId(" << name << ")"
@@ -42,8 +42,8 @@ MATCHER_P2(BidirectionallyMaps, name, id,
   }
   auto name_lookup = arg.IdToName(id);
   if (!name_lookup.ok()) {
-    *result_listener << "arg.IdToName(" << id << ")"
-                     << " returned status " << name_lookup.status();
+    *result_listener << "arg.IdToName(" << id << ")" << " returned status "
+                     << name_lookup.status();
     success = false;
   } else if (*name_lookup != name) {
     *result_listener << "arg.IdToName(" << id << ")"

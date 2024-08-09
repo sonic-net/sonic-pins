@@ -228,8 +228,7 @@ TEST_F(VerifyTest, DoesNotUpdateDatabases) {
   // this failure with suggestions for fixing verification issues.
   EXPECT_OK(p4rt_session_->SetForwardingPipelineConfig(request))
       << "Is the p4info_verification_schema updated? If not, run: "
-      << "p4rt_app/scripts/"
-      << "update_p4info_verification_schema.sh";
+      << "p4rt_app/scripts/" << "update_p4info_verification_schema.sh";
   EXPECT_THAT(p4rt_service_->GetP4rtAppDbTable().GetAllKeys(), IsEmpty());
   EXPECT_THAT(p4rt_service_->GetHostStatsStateDbTable().GetAllKeys(),
               IsEmpty());

@@ -61,6 +61,9 @@ class MockControlDevice : public ControlDevice {
   MOCK_METHOD(absl::Status, CheckUp, (), (override));
   MOCK_METHOD(absl::Status, ValidatePortsUp,
               (absl::Span<const std::string> interfaces), (override));
+  MOCK_METHOD(absl::Status, FlapLinks,
+              (absl::string_view interface, absl::Duration down_duration),
+              (override));
   MOCK_METHOD(absl::StatusOr<std::vector<std::string>>,
               FilterCollateralDownOnAdminDownInterfaces,
               (absl::Span<const std::string> interfaces), (override));

@@ -31,7 +31,6 @@
 #include "absl/time/time.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "grpc/impl/codegen/grpc_types.h"
 #include "grpcpp/security/authorization_policy_provider.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/security/tls_certificate_provider.h"
