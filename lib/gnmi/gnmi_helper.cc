@@ -21,13 +21,11 @@
 #include <memory>
 #include <optional>
 #include <ostream>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
-#include "absl/base/log_severity.h"
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
@@ -39,6 +37,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
@@ -56,7 +55,6 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "lib/utils/json_utils.h"
-#include "p4_pdpi/p4_runtime_session.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "re2/re2.h"
@@ -634,6 +632,47 @@ absl::Status SetGnmiConfigPath(gnmi::gNMI::StubInterface* gnmi_stub,
   return absl::OkStatus();
 }
 
+absl::Status UpdateGnmiConfigLeaf(gnmi::gNMI::StubInterface* gnmi_stub,
+                                  absl::string_view config_path,
+                                  absl::string_view value) {
+  size_t leaf_pos = config_path.find_last_of('/');
+  if (leaf_pos == config_path.npos) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Unable to update gNMI leaf. Config path must be of the form "
+           << "<subtree>/<leaf>: " << config_path;
+  }
+  if (!absl::StrContains(config_path, "/config/")) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Unable to update gNMI leaf. Config path must be in a '/config/ "
+           << "subtree: " << config_path;
+  }
+  absl::string_view leaf = config_path.substr(leaf_pos + 1);
+  RETURN_IF_ERROR(
+      SetGnmiConfigPath(gnmi_stub, config_path, GnmiSetType::kUpdate,
+                        absl::Substitute("{\"$0\":\"$1\"}", leaf, value)));
+  return absl::OkStatus();
+}
+
+absl::Status UpdateAndVerifyGnmiConfigLeaf(gnmi::gNMI::StubInterface* gnmi_stub,
+                                           absl::string_view config_path,
+                                           absl::string_view value,
+                                           absl::Duration timeout) {
+  absl::Time deadline = absl::Now() + timeout;
+  RETURN_IF_ERROR(UpdateGnmiConfigLeaf(gnmi_stub, config_path, value));
+  std::string state_path =
+      absl::StrReplaceAll(config_path, {{"/config/", "/state/"}});
+  absl::StatusOr<std::string> state_value;
+  do {
+    state_value = GetGnmiStateLeafValue(gnmi_stub, state_path);
+    if (state_value.ok() && *state_value == value) return absl::OkStatus();
+  } while (absl::Now() < deadline);
+  return gutil::DeadlineExceededErrorBuilder()
+         << "Failed to verify gNMI state leaf after configuration for path ["
+         << config_path << "]. "
+         << (state_value.ok() ? "Final value: " : "Final status: ")
+         << (state_value.ok() ? *state_value : state_value.status().ToString());
+}
+
 absl::Status PushGnmiConfig(gnmi::gNMI::StubInterface& stub,
                             const std::string& chassis_name,
                             const std::string& gnmi_config,
@@ -878,6 +917,16 @@ absl::StatusOr<ResultWithTimestamp> GetGnmiStatePathAndTimestamp(
                              .timestamp = response.notification(0).timestamp()};
 }
 
+absl::StatusOr<std::string> GetGnmiStateLeafValue(
+    gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view state_path) {
+  ASSIGN_OR_RETURN(std::string json,
+                   GetGnmiStatePathInfo(gnmi_stub, state_path));
+  ASSIGN_OR_RETURN(
+      std::string value, ParseJsonValue(json),
+      _ << "Failed to parse state path info for [" << state_path << "]");
+  return value;
+}
+
 void AddSubtreeToGnmiSubscription(absl::string_view subtree_root,
                                   gnmi::SubscriptionList& subscription_list,
                                   gnmi::SubscriptionMode mode,
@@ -1097,21 +1146,28 @@ absl::StatusOr<std::vector<std::string>> GetNUpInterfacePortIds(
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-GetAllInterfaceNameToPortId(absl::string_view gnmi_config) {
-  return GetPortNameToIdMapFromJsonString(gnmi_config, /*field_type=*/"config");
+GetAllInterfaceNameToPortId(
+    absl::string_view gnmi_config, absl::string_view field_type,
+    absl::AnyInvocable<bool(const PortIdByNameIterType&)> filter) {
+  ASSIGN_OR_RETURN(auto result,
+                   GetPortNameToIdMapFromJsonString(gnmi_config, field_type));
+  absl::erase_if(result, std::move(filter));
+  return result;
 }
 
 absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
-GetAllInterfaceNameToPortId(gnmi::gNMI::StubInterface& stub) {
+GetAllInterfaceNameToPortId(
+    gnmi::gNMI::StubInterface& stub, absl::string_view field_type,
+    absl::AnyInvocable<bool(const PortIdByNameIterType&)> filter) {
   ASSIGN_OR_RETURN(gnmi::GetResponse response,
                    pins_test::GetAllInterfaceOverGnmi(stub, absl::Seconds(60)));
   if (response.notification_size() < 1) {
     return absl::InternalError(
         absl::StrCat("Invalid response: ", response.DebugString()));
   }
-  return GetPortNameToIdMapFromJsonString(
-      response.notification(0).update(0).val().json_ietf_val(),
-      /*field_type=*/"state");
+  return GetAllInterfaceNameToPortId(
+      response.notification(0).update(0).val().json_ietf_val(), field_type,
+      std::move(filter));
 }
 
 absl::Status MapP4rtIdsToMatchingInterfaces(
@@ -1801,9 +1857,9 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
       "interfaces/interface[name=", interface_name, "]/config/loopback-mode");
   std::string config_json;
   if (port_loopback) {
-    config_json = "{\"openconfig-interfaces:loopback-mode\":true}";
+    config_json = "{\"openconfig-interfaces:loopback-mode\":\"FACILITY\"}";
   } else {
-    config_json = "{\"openconfig-interfaces:loopback-mode\":false}";
+    config_json = "{\"openconfig-interfaces:loopback-mode\":\"NONE\"}";
   }
 
   return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
