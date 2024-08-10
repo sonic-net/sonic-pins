@@ -945,7 +945,12 @@ TEST(GetInterfacePortIdMap, ReturnsOnlyUpInterfacesWithIDs) {
       "interface":[
         {
           "name":"bond0",
-          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1,
+              "management":true
+            }
         },
         {
           "name":"Ethernet1/1/1",
@@ -988,7 +993,12 @@ TEST(GetUpInterfacePortIDs, CanGetNUpInterfaces) {
       "interface":[
         {
           "name":"bond0",
-          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1,
+              "management":true
+            }
         },
         {
           "name":"Ethernet1/1/1",
@@ -1033,7 +1043,12 @@ TEST(GetUpInterfacePortIDs, GetNFailsWhenNotEnoughInterfacesAreUpWithAPortId) {
       "interface":[
         {
           "name":"bond0",
-          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1,
+              "management":true
+            }
         },
         {
           "name":"Ethernet1/1/1",
@@ -1072,7 +1087,12 @@ TEST(GetUpInterfacePortIDs, CanGetAnyInterfaceThatIsUpWithAPortId) {
       "interface":[
         {
           "name":"bond0",
-          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1,
+              "management":true
+            }
         },
         {
           "name":"Ethernet1/1/1",
@@ -1113,7 +1133,12 @@ TEST(GetUpInterfacePortIDs, GetAnyFailsWhenNoInterfacesAreUpOrHaveAPortId) {
       "interface":[
         {
           "name":"bond0",
-          "state":{"oper-status":"UP","openconfig-p4rt:id":1}
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1,
+              "management":true
+            }
         },
         {
           "name":"Ethernet1/1/1",
@@ -1472,6 +1497,215 @@ TEST(GetInterfaceOperStatusOverGnmi, OperStatusTesting) {
               IsOkAndHolds(OperStatus::kTesting));
 }
 
+TEST(GetInterfaceAdminStatusOverGnmi, RpcFails) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_, EqualsProto(R"pb(type: STATE
+                                      prefix { origin: "openconfig" }
+                                      path {
+                                        elem { name: "interfaces" }
+                                        elem {
+                                          name: "interface"
+                                          key { key: "name" value: "Ethernet0" }
+                                        }
+                                        elem { name: "state" }
+                                        elem { name: "admin-status" }
+                                      }
+                  )pb"),
+                  _))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(GetInterfaceAdminStatusOverGnmi(stub, "Ethernet0"),
+              StatusIs(absl::StatusCode::kDeadlineExceeded));
+}
+
+TEST(GetInterfaceAdminStatusOverGnmi, InvalidResponse) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_, EqualsProto(R"pb(type: STATE
+                                      prefix { origin: "openconfig" }
+                                      path {
+                                        elem { name: "interfaces" }
+                                        elem {
+                                          name: "interface"
+                                          key { key: "name" value: "Ethernet0" }
+                                        }
+                                        elem { name: "state" }
+                                        elem { name: "admin-status" }
+                                      }
+                  )pb"),
+                  _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+                    R"pb(notification {})pb")),
+                Return(grpc::Status::OK)));
+  EXPECT_THAT(GetInterfaceAdminStatusOverGnmi(stub, "Ethernet0"),
+              StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(GetInterfaceAdminStatusOverGnmi, AdminStatusUp) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_, EqualsProto(R"pb(type: STATE
+                                      prefix { origin: "openconfig" }
+                                      path {
+                                        elem { name: "interfaces" }
+                                        elem {
+                                          name: "interface"
+                                          key { key: "name" value: "Ethernet0" }
+                                        }
+                                        elem { name: "state" }
+                                        elem { name: "admin-status" }
+                                      }
+                  )pb"),
+                  _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path {
+                         elem { name: "interfaces" }
+                         elem {
+                           name: "interface"
+                           key { key: "name" value: "Ethernet0" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "admin-status" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:admin-status\":{\"admin-status\":\"UP\"}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetInterfaceAdminStatusOverGnmi(stub, "Ethernet0"),
+              IsOkAndHolds(AdminStatus::kUp));
+}
+
+TEST(GetInterfaceAdminStatusOverGnmi, AdminStatusDown) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_, EqualsProto(R"pb(type: STATE
+                                      prefix { origin: "openconfig" }
+                                      path {
+                                        elem { name: "interfaces" }
+                                        elem {
+                                          name: "interface"
+                                          key { key: "name" value: "Ethernet0" }
+                                        }
+                                        elem { name: "state" }
+                                        elem { name: "admin-status" }
+                                      }
+                  )pb"),
+                  _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path {
+                         elem { name: "interfaces" }
+                         elem {
+                           name: "interface"
+                           key { key: "name" value: "Ethernet0" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "admin-status" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:admin-status\":{\"admin-status\":\"DOWN\"}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetInterfaceAdminStatusOverGnmi(stub, "Ethernet0"),
+              IsOkAndHolds(AdminStatus::kDown));
+}
+
+TEST(GetInterfaceAdminStatusOverGnmi, AdminStatusTesting) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_, EqualsProto(R"pb(type: STATE
+                                      prefix { origin: "openconfig" }
+                                      path {
+                                        elem { name: "interfaces" }
+                                        elem {
+                                          name: "interface"
+                                          key { key: "name" value: "Ethernet0" }
+                                        }
+                                        elem { name: "state" }
+                                        elem { name: "admin-status" }
+                                      }
+                  )pb"),
+                  _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path {
+                         elem { name: "interfaces" }
+                         elem {
+                           name: "interface"
+                           key { key: "name" value: "Ethernet0" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "admin-status" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:admin-status\":{\"admin-status\":\"TESTING\"}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetInterfaceAdminStatusOverGnmi(stub, "Ethernet0"),
+              IsOkAndHolds(AdminStatus::kTesting));
+}
+
+TEST(GetInterfaceAdminStatusOverGnmi, AdminStatusUnknown) {
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_, EqualsProto(R"pb(type: STATE
+                                      prefix { origin: "openconfig" }
+                                      path {
+                                        elem { name: "interfaces" }
+                                        elem {
+                                          name: "interface"
+                                          key { key: "name" value: "Ethernet0" }
+                                        }
+                                        elem { name: "state" }
+                                        elem { name: "admin-status" }
+                                      }
+                  )pb"),
+                  _))
+      .WillOnce(DoAll(
+          SetArgPointee<2>(gutil::ParseProtoOrDie<gnmi::GetResponse>(
+              R"pb(notification {
+                     timestamp: 1620348032128305716
+                     prefix { origin: "openconfig" }
+                     update {
+                       path {
+                         elem { name: "interfaces" }
+                         elem {
+                           name: "interface"
+                           key { key: "name" value: "Ethernet0" }
+                         }
+                         elem { name: "state" }
+                         elem { name: "admin-status" }
+                       }
+                       val {
+                         json_ietf_val: "{\"openconfig-interfaces:admin-status\":{\"admin-status\":\"UNKNOWN\"}}"
+                       }
+                     }
+                   })pb")),
+          Return(grpc::Status::OK)));
+  EXPECT_THAT(GetInterfaceAdminStatusOverGnmi(stub, "Ethernet0"),
+              IsOkAndHolds(AdminStatus::kUnknown));
+}
+
 TEST(CheckAllInterfaceOperState, FailsToGetInterfaceOperStatusMap) {
   gnmi::MockgNMIStub stub;
   EXPECT_CALL(stub, Get).WillOnce(
@@ -1662,7 +1896,7 @@ TEST(GetUpInterfaces, SuccessfullyGetsUpInterface) {
                  update {
                    path { elem { name: "interfaces" } }
                    val {
-                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"bond0\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                     json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"bond0\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\":1}}]}}"
                    }
                  }
                })pb")),
@@ -1670,6 +1904,76 @@ TEST(GetUpInterfaces, SuccessfullyGetsUpInterface) {
 
   EXPECT_THAT(GetUpInterfacesOverGnmi(stub),
               IsOkAndHolds(ContainerEq(std::vector<std::string>{"Ethernet0"})));
+}
+
+TEST(GetUpInterfaces, FiltersInterfacesByType) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"loopback0",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1,
+              "type":"softwareLoopback",
+            }
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":2,
+              "type":"ethernetCsmacd"
+            }
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":3,
+              "type":"ethernetCsmacd"
+            }
+        },
+        {
+          "name":"PortChannel1234",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1234,
+              "type":"ieee8023adLag"
+            }
+        },
+        {
+          "name":"PortChannel1235",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1235,
+              "type":"ieee8023adLag"
+            }
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetUpInterfacesOverGnmi(stub, InterfaceType::kLoopback),
+              IsOkAndHolds(UnorderedElementsAre("loopback0")));
+  EXPECT_THAT(
+      GetUpInterfacesOverGnmi(stub, InterfaceType::kSingleton),
+      IsOkAndHolds(UnorderedElementsAre("Ethernet1/1/1", "Ethernet1/2/1")));
+  EXPECT_THAT(
+      GetUpInterfacesOverGnmi(stub, InterfaceType::kLag),
+      IsOkAndHolds(UnorderedElementsAre("PortChannel1234", "PortChannel1235")));
 }
 
 TEST(CheckParseGnmiGetResponse, FailDuetoUpdateSize) {

@@ -67,6 +67,13 @@ enum class OperStatus {
   kTesting,
 };
 
+enum class AdminStatus {
+  kUnknown,
+  kUp,
+  kDown,
+  kTesting,
+};
+
 enum class GnmiFieldType {
   kConfig,
   kState,
@@ -93,6 +100,13 @@ struct TransceiverPart {
                                      other.manufacturer_name,
                                      other.serial_number, other.rev);
   }
+};
+
+enum class InterfaceType {
+  kAny,
+  kLag,
+  kSingleton,
+  kLoopback,
 };
 
 // Interface counters exposed by gNMI.
@@ -279,11 +293,21 @@ gnoi::types::Path GnmiToGnoiPath(gnmi::Path path);
 
 // Gets all the EthernetXX interfaces whose operational status is UP.
 absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
-    gnmi::gNMI::StubInterface& stub,
+    gnmi::gNMI::StubInterface& stub, InterfaceType type = InterfaceType::kAny,
     absl::Duration timeout = absl::Seconds(60));
+
+// Gets all the EthernetXX interfaces whose operational status is UP.
+inline absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
+  return GetUpInterfacesOverGnmi(stub, InterfaceType::kAny, timeout);
+}
 
 // Gets the operational status of an interface.
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::string_view if_name);
+
+// Gets the administrative status of an interface.
+absl::StatusOr<AdminStatus> GetInterfaceAdminStatusOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::string_view if_name);
 
 // GetAllInterfaceNameToPortId are helper methods that fetch the P4Runtime port

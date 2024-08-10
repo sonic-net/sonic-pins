@@ -965,23 +965,38 @@ GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response) {
 }
 
 absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
-    gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(const auto interface_to_oper_status_map,
-                   GetInterfaceToOperStatusMapOverGnmi(stub, timeout));
+    gnmi::gNMI::StubInterface& stub, InterfaceType type,
+    absl::Duration timeout) {
+  ASSIGN_OR_RETURN(
+      const auto interfaces,
+      GetMatchingInterfacesAsProto(
+          stub, gnmi::GetRequest::STATE,
+          [type](const openconfig::Interfaces::Interface& interface) {
+            const auto& state = interface.state();
+            if (state.p4rt_id() == 0) return false;
+            if (state.cpu() || state.management()) return false;
+            switch (type) {
+              case InterfaceType::kAny:
+                return true;
+              case InterfaceType::kSingleton:
+                return absl::EndsWithIgnoreCase(state.type(), "ethernetCsmacd");
+              case InterfaceType::kLag:
+                return absl::EndsWithIgnoreCase(state.type(), "ieee8023adLag");
+              case InterfaceType::kLoopback:
+                return absl::EndsWithIgnoreCase(state.type(),
+                                                "softwareLoopback");
+            }
+            return false;  // Should never be hit.
+          },
+          timeout));
 
   std::vector<std::string> up_interfaces;
-  for (const auto& [interface, oper_status] : interface_to_oper_status_map) {
-    // Ignore the interfaces that is not EthernetXX. For example: bond0,
-    // Loopback0, etc.
-    if (!absl::StartsWith(interface, "Ethernet")) {
-      LOG(INFO) << "Ignoring interface: " << interface;
-      continue;
-    }
-    if (oper_status == "UP") {
-      up_interfaces.push_back(interface);
+  for (const openconfig::Interfaces::Interface& interface :
+       interfaces.interfaces()) {
+    if (interface.state().oper_status() == "UP") {
+      up_interfaces.push_back(interface.name());
     }
   }
-
   return up_interfaces;
 }
 
@@ -1014,6 +1029,37 @@ absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
     return OperStatus::kTesting;
   }
   return OperStatus::kUnknown;
+}
+
+absl::StatusOr<AdminStatus> GetInterfaceAdminStatusOverGnmi(
+    gnmi::gNMI::StubInterface& stub, absl::string_view if_name) {
+  std::string if_req = absl::StrCat("interfaces/interface[name=", if_name,
+                                    "]/state/admin-status");
+  ASSIGN_OR_RETURN(auto request,
+                   BuildGnmiGetRequest(if_req, gnmi::GetRequest::STATE));
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(&stub, request, /*timeout=*/std::nullopt));
+
+  if (response.notification_size() != 1 ||
+      response.notification(0).update_size() != 1) {
+    return absl::InternalError(
+        absl::StrCat("Invalid response: ", response.DebugString()));
+  }
+  ASSIGN_OR_RETURN(
+      std::string admin_status,
+      ParseGnmiGetResponse(response, "openconfig-interfaces:admin-status"));
+
+  if (absl::StrContains(admin_status, "UP")) {
+    return AdminStatus::kUp;
+  }
+  if (absl::StrContains(admin_status, "DOWN")) {
+    return AdminStatus::kDown;
+  }
+  if (absl::StrContains(admin_status, "TESTING")) {
+    return AdminStatus::kTesting;
+  }
+  return AdminStatus::kUnknown;
 }
 
 absl::StatusOr<openconfig::Interfaces> GetInterfacesAsProto(
