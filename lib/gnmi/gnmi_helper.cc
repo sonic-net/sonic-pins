@@ -676,7 +676,7 @@ absl::Status UpdateAndVerifyGnmiConfigLeaf(gnmi::gNMI::StubInterface* gnmi_stub,
 
 absl::Status PushGnmiConfig(gnmi::gNMI::StubInterface& stub,
                             const std::string& chassis_name,
-                            const std::string& gnmi_config,
+                            absl::string_view gnmi_config,
                             absl::uint128 election_id) {
   gnmi::SetRequest req;
   req.mutable_prefix()->set_origin("openconfig");
@@ -700,7 +700,7 @@ absl::Status PushGnmiConfig(gnmi::gNMI::StubInterface& stub,
 }
 
 absl::Status PushGnmiConfig(thinkit::Switch& chassis,
-                            const std::string& gnmi_config) {
+                            absl::string_view gnmi_config) {
   ASSIGN_OR_RETURN(auto stub, chassis.CreateGnmiStub());
   return pins_test::PushGnmiConfig(
       *stub, chassis.ChassisName(),
@@ -709,7 +709,7 @@ absl::Status PushGnmiConfig(thinkit::Switch& chassis,
 }
 
 absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
-                                          const std::string& gnmi_config,
+                                          absl::string_view gnmi_config,
                                           const absl::Duration& timeout) {
   absl::Time deadline = absl::Now() + timeout;
 
@@ -751,7 +751,7 @@ absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
 }
 
 absl::Status WaitForGnmiPortIdConvergence(thinkit::Switch& chassis,
-                                          const std::string& gnmi_config,
+                                          absl::string_view gnmi_config,
                                           const absl::Duration& timeout) {
   ASSIGN_OR_RETURN(auto stub, chassis.CreateGnmiStub());
   return WaitForGnmiPortIdConvergence(*stub, gnmi_config, timeout);
@@ -998,6 +998,19 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
     }
   }
   return up_interfaces;
+}
+
+absl::StatusOr<absl::flat_hash_set<std::string>> GetConfigDisabledInterfaces(
+    gnmi::gNMI::StubInterface& stub) {
+  absl::flat_hash_set<std::string> disabled_interfaces;
+  ASSIGN_OR_RETURN(auto all_interfaces, pins_test::GetInterfacesAsProto(
+                                            stub, gnmi::GetRequest::CONFIG));
+  for (const auto& interface : all_interfaces.interfaces()) {
+    if (interface.config().enabled() == false) {
+      disabled_interfaces.insert(interface.name());
+    }
+  }
+  return disabled_interfaces;
 }
 
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
@@ -1642,7 +1655,7 @@ absl::StatusOr<std::vector<std::string>> GetInterfacesOnPort(
   return FindInterfacesNameFromInterfaceJsonArray(port_number, interface_array);
 }
 
-std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
+std::string UpdateDeviceIdInJsonConfig(absl::string_view gnmi_config,
                                        const std::string& device_id) {
   LOG(INFO) << "Forcing P4RT device ID to be '" << device_id << "'.";
 
@@ -1933,7 +1946,8 @@ GetAllInterfaceCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
       continue;
     }
     Counters& port_counters = counters[name.get<std::string>()];
-    ASSIGN_OR_RETURN(port_counters, GetCountersForInterface(interface));
+    ASSIGN_OR_RETURN(port_counters, GetCountersForInterface(interface),
+                     _.SetPrepend() << name.get<std::string>() << " -> ");
     port_counters.timestamp_ns = timestamp;
   }
   return counters;

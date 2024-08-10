@@ -243,20 +243,20 @@ GnmiGetElementFromTelemetryResponse(const gnmi::SubscribeResponse& response);
 // configure the arbitration settings for the request.
 absl::Status PushGnmiConfig(
     gnmi::gNMI::StubInterface& stub, const std::string& chassis_name,
-    const std::string& gnmi_config,
+    absl::string_view gnmi_config,
     absl::uint128 election_id = pdpi::TimeBasedElectionId());
 
 // Pushes a given gNMI config to a thinkit switch. This method will make
 // sensible changes to the config like:
 //    * Update the P4RT device ID to match the chassis settings.
 absl::Status PushGnmiConfig(thinkit::Switch& chassis,
-                            const std::string& gnmi_config);
+                            absl::string_view gnmi_config);
 
 absl::Status WaitForGnmiPortIdConvergence(gnmi::gNMI::StubInterface& stub,
-                                          const std::string& gnmi_config,
+                                          absl::string_view gnmi_config,
                                           const absl::Duration& timeout);
 absl::Status WaitForGnmiPortIdConvergence(thinkit::Switch& chassis,
-                                          const std::string& gnmi_config,
+                                          absl::string_view gnmi_config,
                                           const absl::Duration& timeout);
 
 // Waits until the interface <-> P4RT port id mappings in the config path of the
@@ -301,6 +301,10 @@ inline absl::StatusOr<std::vector<std::string>> GetUpInterfacesOverGnmi(
     gnmi::gNMI::StubInterface& stub, absl::Duration timeout) {
   return GetUpInterfacesOverGnmi(stub, InterfaceType::kAny, timeout);
 }
+
+// Returns a set of interfaces which are in the disabled state.
+absl::StatusOr<absl::flat_hash_set<std::string>> GetConfigDisabledInterfaces(
+    gnmi::gNMI::StubInterface& stub);
 
 // Gets the operational status of an interface.
 absl::StatusOr<OperStatus> GetInterfaceOperStatusOverGnmi(
@@ -462,7 +466,7 @@ absl::StatusOr<uint64_t> GetDeviceId(gnmi::gNMI::StubInterface& gnmi_stub);
 
 // Takes a gNMI config in JSON format and updates the P4RT Device ID. Adding it
 // when it doesn't exist, or updating the value if it does.
-std::string UpdateDeviceIdInJsonConfig(const std::string& gnmi_config,
+std::string UpdateDeviceIdInJsonConfig(absl::string_view gnmi_config,
                                        const std::string& device_id);
 
 // Return the port id whose breakout mode matches the given input.
