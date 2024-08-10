@@ -31,11 +31,17 @@ namespace pins_test {
 struct InterfaceLink {
   std::string sut_interface;
   std::string peer_interface;
+  std::string peer_mac_address;
+  std::string peer_ipv4_address;
+  std::string peer_ipv6_address;
   std::string peer_traffic_location;
 
   bool operator==(const InterfaceLink& other) const {
     return sut_interface == other.sut_interface &&
            peer_interface == other.peer_interface &&
+           peer_mac_address == other.peer_mac_address &&
+           peer_ipv4_address == other.peer_ipv4_address &&
+           peer_ipv6_address == other.peer_ipv6_address &&
            peer_traffic_location == other.peer_traffic_location;
   }
 };

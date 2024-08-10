@@ -290,6 +290,12 @@ absl::Status PinsControlDevice::ValidatePortsUp(
       return PortsUp(*sut_, interfaces);
 }
 
+absl::Status PinsControlDevice::FlapLinks(const absl::string_view interface,
+                                          const absl::Duration down_duration) {
+  return absl::UnimplementedError(
+      "FlapLinks is not supported by PinsControlDevice.");
+}
+
 absl::StatusOr<std::vector<std::string>>
 PinsControlDevice::FilterCollateralDownOnAdminDownInterfaces(
     absl::Span<const std::string> interfaces) {

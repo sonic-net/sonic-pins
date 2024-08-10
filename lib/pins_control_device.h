@@ -88,6 +88,9 @@ class PinsControlDevice : public thinkit::ControlDevice {
   absl::Status ValidatePortsUp(
       absl::Span<const std::string> interfaces) override;
 
+  absl::Status FlapLinks(absl::string_view interface,
+                         absl::Duration down_duration) override;
+
   absl::StatusOr<std::vector<std::string>>
   FilterCollateralDownOnAdminDownInterfaces(
       absl::Span<const std::string> interfaces) override;
