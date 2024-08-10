@@ -16,6 +16,7 @@
 #define PINS_LIB_PINS_CONTROL_DEVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "absl/container/flat_hash_map.h"
@@ -23,10 +24,12 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "diag/diag.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "diag/diag.pb.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -44,18 +47,19 @@ class PinsControlDevice : public thinkit::ControlDevice {
  public:
   static absl::StatusOr<PinsControlDevice> Create(
       std::unique_ptr<thinkit::Switch> sut,
-      sai::Instantiation instantiation = sai::Instantiation::kMiddleblock);
+      p4::config::v1::P4Info p4_info =
+          sai::GetP4Info(sai::Instantiation::kMiddleblock));
 
   PinsControlDevice(
-      std::unique_ptr<thinkit::Switch> sut, sai::Instantiation instantiation,
+      std::unique_ptr<thinkit::Switch> sut, pdpi::IrP4Info ir_p4_info,
       std::unique_ptr<pdpi::P4RuntimeSession> control_session,
       absl::flat_hash_map<std::string, std::string> interface_name_to_port_id);
 
   absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>
   CollectPackets(thinkit::PacketCallback callback) override;
 
-  absl::Status SendPacket(absl::string_view interface,
-                          absl::string_view packet) override;
+  absl::Status SendPacket(absl::string_view interface, absl::string_view packet,
+                          std::optional<absl::Duration> packet_delay) override;
 
   bool SupportsSendPacket() const override { return true; }
 
@@ -80,10 +84,20 @@ class PinsControlDevice : public thinkit::ControlDevice {
       absl::Span<const std::string> interfaces) override;
 
   absl::Status CheckUp() override;
+  
+  absl::Status ValidatePortsUp(
+      absl::Span<const std::string> interfaces) override;
+
+  absl::Status FlapLinks(absl::string_view interface,
+                         absl::Duration down_duration) override;
+
+  absl::StatusOr<std::vector<std::string>>
+  FilterCollateralDownOnAdminDownInterfaces(
+      absl::Span<const std::string> interfaces) override;
 
  private:
   std::unique_ptr<thinkit::Switch> sut_;
-  sai::Instantiation instantiation_;
+  pdpi::IrP4Info ir_p4_info_;
   std::unique_ptr<pdpi::P4RuntimeSession> control_session_;
   absl::flat_hash_map<std::string, std::string> interface_name_to_port_id_;
   absl::flat_hash_map<std::string, std::string> interface_port_id_to_name_;

@@ -25,25 +25,21 @@
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "thinkit/generic_testbed.h"
 
 namespace pins_test::basic_traffic {
 namespace {
 
 absl::Status WritePdWriteRequest(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    sai::Instantiation instantiation,
+    const pdpi::IrP4Info& ir_p4info,
     const sai::WriteRequest& pd_write_request) {
   ASSIGN_OR_RETURN(p4::v1::WriteRequest pi_write_request,
-                   pdpi::PdWriteRequestToPi(sai::GetIrP4Info(instantiation),
-                                            pd_write_request));
+                   pdpi::PdWriteRequestToPi(ir_p4info, pd_write_request));
   return write_request(pi_write_request);
 }
 
@@ -51,7 +47,7 @@ absl::Status WritePdWriteRequest(
 
 absl::Status ProgramTrafficVrf(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    sai::Instantiation instantiation) {
+    const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(auto vrf_request,
                    gutil::ParseTextProto<sai::WriteRequest>(
                        R"pb(updates {
@@ -63,8 +59,7 @@ absl::Status ProgramTrafficVrf(
                                 }
                               }
                             })pb"));
-  RETURN_IF_ERROR(
-      WritePdWriteRequest(write_request, instantiation, vrf_request))
+  RETURN_IF_ERROR(WritePdWriteRequest(write_request, ir_p4info, vrf_request))
       << "Error writing VRF request.";
 
   ASSIGN_OR_RETURN(auto pre_ingress_request,
@@ -80,14 +75,14 @@ absl::Status ProgramTrafficVrf(
                      }
                    )pb"));
   RETURN_IF_ERROR(
-      WritePdWriteRequest(write_request, instantiation, pre_ingress_request))
+      WritePdWriteRequest(write_request, ir_p4info, pre_ingress_request))
       << "Error writing pre-ingress request.";
   return absl::OkStatus();
 }
 
 absl::Status ProgramRouterInterface(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    int port_id, sai::Instantiation instantiation) {
+    int port_id, const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(
       auto request,
       gutil::ParseTextProto<sai::WriteRequest>(absl::Substitute(
@@ -103,14 +98,14 @@ absl::Status ProgramRouterInterface(
             }
           )pb",
           port_id, PortIdToMac(port_id))));
-  RETURN_IF_ERROR(WritePdWriteRequest(write_request, instantiation, request))
+  RETURN_IF_ERROR(WritePdWriteRequest(write_request, ir_p4info, request))
       << "Error writing router interface request.";
   return absl::OkStatus();
 }
 
 absl::Status ProgramIPv4Route(
     const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
-    int port_id, sai::Instantiation instantiation) {
+    int port_id, const pdpi::IrP4Info& ir_p4info) {
   ASSIGN_OR_RETURN(
       auto neighbor_request,
       gutil::ParseTextProto<sai::WriteRequest>(absl::Substitute(
@@ -121,16 +116,16 @@ absl::Status ProgramIPv4Route(
                 neighbor_table_entry {
                   match {
                     router_interface_id: "traffic-router-interface-$0"
-                    neighbor_id: "$1"
+                    neighbor_id: "fe80::21a:11ff:fe17:0080"
                   }
                   action { set_dst_mac { dst_mac: "00:1A:11:17:00:80" } }
                 }
               }
             }
           )pb",
-          port_id, PortIdToIP(port_id))));
+          port_id)));
   RETURN_IF_ERROR(
-      WritePdWriteRequest(write_request, instantiation, neighbor_request))
+      WritePdWriteRequest(write_request, ir_p4info, neighbor_request))
       << "Error writing neighbor entry request.";
 
   ASSIGN_OR_RETURN(
@@ -143,18 +138,18 @@ absl::Status ProgramIPv4Route(
                 nexthop_table_entry {
                   match { nexthop_id: "traffic-nexthop-$0" }
                   action {
-                    set_nexthop {
+                    set_ip_nexthop {
                       router_interface_id: "traffic-router-interface-$0"
-                      neighbor_id: "$1"
+                      neighbor_id: "fe80::21a:11ff:fe17:0080"
                     }
                   }
                 }
               }
             }
           )pb",
-          port_id, PortIdToIP(port_id))));
+          port_id)));
   RETURN_IF_ERROR(
-      WritePdWriteRequest(write_request, instantiation, nexthop_request))
+      WritePdWriteRequest(write_request, ir_p4info, nexthop_request))
       << "Error writing nexthop entry request.";
 
   ASSIGN_OR_RETURN(
@@ -175,9 +170,40 @@ absl::Status ProgramIPv4Route(
             }
           )pb",
           port_id, PortIdToIP(port_id))));
-  RETURN_IF_ERROR(
-      WritePdWriteRequest(write_request, instantiation, ipv4_request))
+  RETURN_IF_ERROR(WritePdWriteRequest(write_request, ir_p4info, ipv4_request))
       << "Error writing IPv4 entry request.";
+  return absl::OkStatus();
+}
+
+absl::Status ProgramL3AdmitTableEntry(
+    const std::function<absl::Status(p4::v1::WriteRequest&)>& write_request,
+    const pdpi::IrP4Info& ir_p4info) {
+  sai::TableEntry l3_admit_table_entry;
+  ASSIGN_OR_RETURN(
+      auto l3_admit_request,
+      gutil::ParseTextProto<sai::WriteRequest>(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                l3_admit_table_entry {
+                  match {
+                    dst_mac {
+                      value: "00:00:00:00:00:00"
+                      mask: "01:00:00:00:00:00"
+                    }
+                  }
+                  action { admit_to_l3 {} }
+                  priority: 1
+                  controller_metadata: "Experimental_type: VARIOUS_L3ADMIT_PUNTFLOW"
+                }
+              }
+            }
+          )pb"));
+
+  RETURN_IF_ERROR(
+      WritePdWriteRequest(write_request, ir_p4info, l3_admit_request))
+      << "Error writing l3 admit table entry request.";
   return absl::OkStatus();
 }
 

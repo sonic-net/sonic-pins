@@ -21,6 +21,7 @@
 #include <string>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 
@@ -72,8 +73,12 @@ class P4rtPortId {
   uint32_t p4rt_port_id_ = 0;
 };
 
-// TODO: Remove and update the class to use AbslStringify.
 std::ostream& operator<<(std::ostream& os, const P4rtPortId& p4rt_port_id);
+
+template <typename Sink>
+inline void AbslStringify(Sink& sink, const P4rtPortId& p4rt_port_id) {
+  absl::Format(&sink, "%s", p4rt_port_id.GetP4rtEncoding());
+}
 
 }  // namespace pins_test
 

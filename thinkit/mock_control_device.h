@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
@@ -37,7 +38,8 @@ class MockControlDevice : public ControlDevice {
       absl::StatusOr<std::unique_ptr<thinkit::PacketGenerationFinalizer>>,
       CollectPackets, (PacketCallback callback), (override));
   MOCK_METHOD(absl::Status, SendPacket,
-              (absl::string_view interface, absl::string_view packet),
+              (absl::string_view interface, absl::string_view packet,
+               std::optional<absl::Duration> packet_delay),
               (override));
   MOCK_METHOD(bool, SupportsSendPacket, (), (const, override));
   MOCK_METHOD(absl::Status, SendPackets,
@@ -57,6 +59,14 @@ class MockControlDevice : public ControlDevice {
   MOCK_METHOD(absl::StatusOr<absl::flat_hash_set<std::string>>, GetUpLinks,
               (absl::Span<const std::string> sut_ports), (override));
   MOCK_METHOD(absl::Status, CheckUp, (), (override));
+  MOCK_METHOD(absl::Status, ValidatePortsUp,
+              (absl::Span<const std::string> interfaces), (override));
+  MOCK_METHOD(absl::Status, FlapLinks,
+              (absl::string_view interface, absl::Duration down_duration),
+              (override));
+  MOCK_METHOD(absl::StatusOr<std::vector<std::string>>,
+              FilterCollateralDownOnAdminDownInterfaces,
+              (absl::Span<const std::string> interfaces), (override));
 };
 
 }  // namespace thinkit

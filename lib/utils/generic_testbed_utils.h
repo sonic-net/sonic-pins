@@ -15,12 +15,15 @@
 #ifndef GOOGLE_LIB_UTILS_GENERIC_TESTBED_UTILS_H_
 #define GOOGLE_LIB_UTILS_GENERIC_TESTBED_UTILS_H_
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "artifacts/otg.pb.h"
 #include "thinkit/generic_testbed.h"
 
 namespace pins_test {
@@ -28,10 +31,18 @@ namespace pins_test {
 struct InterfaceLink {
   std::string sut_interface;
   std::string peer_interface;
+  std::string peer_mac_address;
+  std::string peer_ipv4_address;
+  std::string peer_ipv6_address;
+  std::string peer_traffic_location;
 
   bool operator==(const InterfaceLink& other) const {
     return sut_interface == other.sut_interface &&
-           peer_interface == other.peer_interface;
+           peer_interface == other.peer_interface &&
+           peer_mac_address == other.peer_mac_address &&
+           peer_ipv4_address == other.peer_ipv4_address &&
+           peer_ipv6_address == other.peer_ipv6_address &&
+           peer_traffic_location == other.peer_traffic_location;
   }
 };
 
@@ -84,6 +95,15 @@ absl::StatusOr<std::vector<std::string>> GetUpInterfaces(
 // e.g. GetUpLinks(GetAllControlLinks, testbed);
 absl::StatusOr<std::vector<InterfaceLink>> GetUpLinks(
     decltype(GetAllControlLinks) get_links, thinkit::GenericTestbed& testbed);
+
+// Checks whether all connected ports of SUT and connected Control Switch
+// interfaces are up.
+absl::Status ValidateTestbedPortsUp(thinkit::GenericTestbed& testbed);
+
+// Returns a speed enum to set in the OTG layer 1 config for a given speed in
+// bits per second.
+absl::StatusOr<otg::Layer1::Speed::Enum> GetLayer1SpeedFromBitsPerSecond(
+    int64_t bits_per_second);
 
 }  // namespace pins_test
 

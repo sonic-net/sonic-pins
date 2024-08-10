@@ -162,16 +162,12 @@ message Qos {
       [json_name = "buffer-allocation-profiles"];
 
   message BufferAllocationProfiles {
-    repeated BufferAllocationProfile buffer_allocation_profile = 1
-        [json_name = "buffer-allocation-profile"];
+    repeated BufferAllocationProfile buffer_allocation_profiles = 1
+        [json_name = "buffer-allocation-profiles"];
   }
   message BufferAllocationProfile {
     optional string name = 1;  // List key.
     Queues queues = 2;
-    Config config = 3;
-    message Config {
-      optional string name = 1;
-    }
   }
   message Queues {
     repeated Queue queue = 1;
@@ -191,26 +187,6 @@ message Qos {
           [json_name = "static-shared-buffer-limit"];
       optional int32 dynamic_limit_scaling_factor = 6
           [json_name = "dynamic-limit-scaling-factor"];
-    }
-  }
-
-  Interfaces interfaces = 7;
-  message Interfaces {
-    repeated Interface interface = 1;
-  }
-  message Interface {
-    optional string interface_id = 1 [json_name = "interface-id"];
-    optional Config config = 2;
-    message Config {
-      optional string interface_id = 1 [json_name = "interface-id"];
-    }
-    optional Output output = 3 [json_name = "output"];
-    message Output {
-      optional Config config = 1 [json_name = "config"];
-      message Config {
-        optional string buffer_allocation_profile = 1
-            [json_name = "buffer-allocation-profile"];
-      }
     }
   }
 }

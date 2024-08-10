@@ -48,8 +48,7 @@ inline std::string TestHeader(absl::string_view test_name) {
 
 inline void Fail(absl::string_view test_name, absl::string_view message) {
   // Splitting "DO NOT SUB***" into two pieces to avoid triggering our tools.
-  std::cout << "TEST FAILED (DO NOT "
-            << "SUBMIT)" << std::endl;
+  std::cout << "TEST FAILED (DO NOT " << "SUBMIT)" << std::endl;
   std::cout << "TEST NAME: " << test_name << std::endl;
   std::cout << "FAILURE REASON: " << message << std::endl << std::endl;
 }
