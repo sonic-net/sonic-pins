@@ -81,6 +81,9 @@ std::vector<InterfaceLink> GetAllTrafficGeneratorLinks(
       links.push_back(InterfaceLink{
           .sut_interface = sut_interface,
           .peer_interface = interface_info.peer_interface_name,
+          .peer_mac_address = interface_info.peer_mac_address,
+          .peer_ipv4_address = interface_info.peer_ipv4_address,
+          .peer_ipv6_address = interface_info.peer_ipv6_address,
           .peer_traffic_location = interface_info.peer_traffic_location});
     }
   }

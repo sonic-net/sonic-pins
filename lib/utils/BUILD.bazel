@@ -87,6 +87,7 @@ cc_test(
         "//thinkit:mock_switch",
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_otg_models//:otg_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
