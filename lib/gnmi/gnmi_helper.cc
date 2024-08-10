@@ -45,6 +45,7 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "github.com/openconfig/gnmi/proto/gnmi_ext/gnmi_ext.pb.h"
 #include "github.com/openconfig/gnoi/types/types.pb.h"
 #include "glog/logging.h"
 #include "google/protobuf/any.pb.h"
@@ -65,7 +66,7 @@ namespace {
 
 using ::nlohmann::json;
 
-// Splits string to tokens seperated by a char '/' as long as '/' is not
+// Splits string to tokens separated by a char '/' as long as '/' is not
 // included in [].
 const LazyRE2 kSplitBreakSquareBraceRE = {R"(([^\[\/]+(\[[^\]]+\])*)\/?)"};
 
@@ -518,7 +519,7 @@ gnmi::Path ConvertOCStringToPath(absl::string_view oc_path) {
       std::string value;
       static constexpr LazyRE2 kSplitAttributeValueRE = {
           R"(\[([^=]+)=([^\]]+)\])"};
-      // Keep parsing more <attributer, value> in this string. e.g,
+      // Keep parsing more <attributer, value> in this string. e.g.,
       // [address=127.0.0.1][port=6343] ==> {{address, 127.0.0.1}, {port, 6343}}
       while (RE2::Consume(&attr_to_value, *kSplitAttributeValueRE, &attribute,
                           &value)) {
@@ -873,8 +874,8 @@ absl::Status CheckInterfaceOperStateOverGnmi(
   if (!unavailable_interfaces.empty()) {
     return absl::UnavailableError(absl::StrCat(
         "Some interfaces are not in the expected state ", interface_oper_state,
-        ": \n", absl::StrJoin(unavailable_interfaces, "\n"),
-        "\n\nInterfaces provided: \n", absl::StrJoin(interfaces, "\n")));
+        ":\n", absl::StrJoin(unavailable_interfaces, "\n"),
+        "\n\nInterfaces provided:\n", absl::StrJoin(interfaces, "\n")));
   }
   return absl::OkStatus();
 }
