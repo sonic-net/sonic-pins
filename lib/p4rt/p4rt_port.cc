@@ -69,9 +69,10 @@ bool P4rtPortId::operator<(const P4rtPortId& other) const {
   return p4rt_port_id_ < other.p4rt_port_id_;
 }
 
+// TODO: Remove GetP4rtEncoding when we update to a new LTS
+// branch of Abseil.
 std::ostream& operator<<(std::ostream& os, const P4rtPortId& p4rt_port_id) {
-  return os << absl::StrCat("(p4rt_port_id: ", p4rt_port_id.GetP4rtEncoding(),
-                            ")");
+  return os << absl::StrCat(p4rt_port_id.GetP4rtEncoding());
 }
 
 }  // namespace pins_test
