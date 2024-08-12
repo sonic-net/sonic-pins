@@ -361,4 +361,8 @@ cc_test(
 cc_library(
     name = "packet_generation_finalizer",
     hdrs = ["packet_generation_finalizer.h"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/time",
+    ],
 )

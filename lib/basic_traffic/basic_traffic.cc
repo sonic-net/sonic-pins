@@ -299,14 +299,7 @@ absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
   absl::flat_hash_map<std::string, int> sent_packets;
   std::vector<std::tuple<std::string, std::string>> received_packets;
   {
-    ASSIGN_OR_RETURN(
-        auto finalizer,
-        testbed.ControlDevice().CollectPackets(
-            [&received_packets](absl::string_view control_interface,
-                                absl::string_view packet_string) {
-              received_packets.push_back(std::make_tuple(
-                  std::string(control_interface), std::string(packet_string)));
-            }));
+    ASSIGN_OR_RETURN(auto finalizer, testbed.ControlDevice().CollectPackets());
 
     LOG(INFO) << "Starting to send traffic.";
     absl::Time start_time = absl::Now();
@@ -326,7 +319,14 @@ absl::StatusOr<std::vector<TrafficStatistic>> SendTraffic(
         last_sent_time = absl::Now();
       }
     }
-    absl::SleepFor(kPassthroughWaitTime);
+
+    RETURN_IF_ERROR(finalizer->HandlePacketsFor(
+        kPassthroughWaitTime,
+        [&received_packets](absl::string_view control_interface,
+                            absl::string_view packet_string) {
+          received_packets.push_back(std::make_tuple(
+              std::string(control_interface), std::string(packet_string)));
+        }));
   }
   LOG(INFO) << "Traffic sending complete.";
 
