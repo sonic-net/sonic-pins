@@ -180,6 +180,8 @@ cc_library(
 
 cc_test(
     name = "fuzz_util_test",
+    size = "large",
+    timeout = "long",
     srcs = [
         "fuzz_util_test.cc",
     ],

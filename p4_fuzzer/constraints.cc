@@ -167,10 +167,44 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
 
   ASSIGN_OR_RETURN(TableEntry table_entry, constraint_solver.ConcretizeEntry());
 
+  // Construct a set of match field names that are disabled for constraint
+  // fuzzing.
+  // Disabled match fields are expressed as fully qualified names but
+  // constraint solver operates with match field names without table names
+  // as prefix so we need this set to translate between the two.
+  absl::flat_hash_set<std::string> disabled_keys_for_constraint_solver;
+  for (const auto& [name, match_field_def] : table.match_fields_by_name()) {
+    ASSIGN_OR_RETURN(std::string fully_qualified_name,
+                     GetFullyQualifiedMatchFieldName(table, match_field_def));
+    if (IsDisabledForFuzzing(config, fully_qualified_name)) {
+      disabled_keys_for_constraint_solver.insert(name);
+    }
+  }
+
+  TableEntry table_entry_without_disabled_fields = table_entry;
+  table_entry_without_disabled_fields.clear_match();
+  for (const auto& match : table_entry.match()) {
+    if (disabled_keys_for_constraint_solver.contains(
+            config.GetIrP4Info()
+                .tables_by_id()
+                .at(table_entry.table_id())
+                .match_fields_by_id()
+                .at(match.field_id())
+                .match_field()
+                .name())) {
+      continue;
+    }
+    *table_entry_without_disabled_fields.add_match() = match;
+  }
+
   // Fuzz all skipped keys normally.
   for (const auto& [name, match_field_def] :
        Ordered(table.match_fields_by_name())) {
-    // TODO: - Centralize shared logic with fuzz_util.cc
+    ASSIGN_OR_RETURN(std::string fully_qualified_name,
+                     GetFullyQualifiedMatchFieldName(table, match_field_def));
+    if (IsDisabledForFuzzing(config, fully_qualified_name)) {
+      continue;
+    }
     // Skip omittable match fields with probability specified in config.
     if (pdpi::IsOmittable(match_field_def) &&
         absl::Bernoulli(gen, config.GetMatchFieldWildcardProbability())) {
@@ -179,7 +213,7 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
     ASSIGN_OR_RETURN(bool key_skipped, skip_key(name));
     if (key_skipped) {
       ASSIGN_OR_RETURN(
-          *table_entry.add_match(),
+          *table_entry_without_disabled_fields.add_match(),
           FuzzFieldMatch(&gen, config, switch_state, match_field_def));
     }
   }
@@ -188,16 +222,16 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
   // TODO: - Potentially remove when ConcretizeEntry returns an
   // action too.
   ASSIGN_OR_RETURN(
-      *table_entry.mutable_action(),
+      *table_entry_without_disabled_fields.mutable_action(),
       FuzzAction(&gen, config, switch_state, table),
       _.SetPrepend()
           << "while fuzzing action for a P4-Constraint based table entry: ");
 
   // Set metadata to ensure the field works correctly.
-  table_entry.set_metadata(
+  table_entry_without_disabled_fields.set_metadata(
       absl::StrCat("some_integer_metadata: ", FuzzUint64(&gen, /*bits=*/64)));
 
-  return table_entry;
+  return table_entry_without_disabled_fields;
 }
 
 }  // namespace p4_fuzzer
