@@ -492,6 +492,11 @@ absl::StatusOr<absl::flat_hash_map<std::string, int>>
 GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub,
                            absl::flat_hash_set<std::string>& interface_names);
 
+// Return true only if interface supports BERT.
+bool InterfaceSupportsBert(
+    absl::string_view interface,
+    const absl::flat_hash_map<std::string, int>& interface_to_lane_speed);
+
 // Check if switch port link is up.
 absl::StatusOr<bool> CheckLinkUp(const std::string& interface_name,
                                  gnmi::gNMI::StubInterface& gnmi_stub);

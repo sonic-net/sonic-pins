@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -126,6 +127,9 @@ class ControlDevice {
   absl::Status FlapLinks(absl::string_view interface) {
     return FlapLinks(interface, kDefaultDownDuration);
   }
+
+  virtual absl::StatusOr<absl::flat_hash_map<std::string, int>>
+  GetInterfaceLaneSpeed(absl::flat_hash_set<std::string>& interfaces) = 0;
 
   // Return the subset of the given interfaces that, when admin-disabled, do not
   // cause link flaps on the other interfaces on the same physical port.

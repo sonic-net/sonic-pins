@@ -1814,6 +1814,29 @@ GetInterfaceToLaneSpeedMap(gnmi::gNMI::StubInterface& gnmi_stub,
   return interface_to_lane_speed;
 }
 
+bool InterfaceSupportsBert(
+    absl::string_view interface,
+    const absl::flat_hash_map<std::string, int>& interface_to_lane_speed) {
+  auto speed_it = interface_to_lane_speed.find(interface);
+  if (speed_it == interface_to_lane_speed.end()) {
+    LOG(WARNING) << "Interface "
+                 << interface << " not found in interface to speed map.";
+    return false;
+  }
+
+  // Skip BERT if per-lane speed >= 50G.
+  int lane_speed = speed_it->second;
+  constexpr int k50GSpeedInKbps = 50'000'000;
+  if (lane_speed >= k50GSpeedInKbps) {
+    LOG(INFO)
+        << "Interface "
+        << interface << " does not support BERT because per-lane speed is "
+        << lane_speed << " kbps.";
+    return false;
+  }
+  return true;
+}
+
 absl::Status SetPortSpeedInBitsPerSecond(const std::string& port_speed,
                                          const std::string& interface_name,
                                          gnmi::gNMI::StubInterface& gnmi_stub) {
