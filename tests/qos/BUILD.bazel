@@ -194,15 +194,14 @@ cc_library(
     srcs = ["gnmi_parsers.cc"],
     hdrs = ["gnmi_parsers.h"],
     deps = [
-        "//gutil:overload",
         "//gutil:proto",
         "//lib/gnmi:openconfig_cc_proto",
         "//p4_pdpi/netaddr:ipv4_address",
         "//p4_pdpi/netaddr:ipv6_address",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -215,6 +214,8 @@ cc_test(
         ":gnmi_parsers",
         "//gutil:proto",
         "//gutil:status",
+        "//p4_pdpi/internal:ordered_map",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",

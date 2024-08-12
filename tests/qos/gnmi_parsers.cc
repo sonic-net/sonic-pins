@@ -1,11 +1,13 @@
 #include "tests/qos/gnmi_parsers.h"
 
-#include <optional>
+#include <string>
+#include <utility>
+#include <variant>
+#include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "google/protobuf/util/json_util.h"
-#include "gutil/overload.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "lib/gnmi/openconfig.pb.h"
@@ -81,6 +83,25 @@ absl::StatusOr<std::vector<netaddr::Ipv6Address>> ParseLoopbackIpv6s(
     }
   }
   return ipv6s;
+}
+
+absl::StatusOr<absl::flat_hash_map<std::string, bool>>
+ParseIsIngressTimestampEnabledByInterfaceName(absl::string_view gnmi_config) {
+  ASSIGN_OR_RETURN(auto config,
+                   gutil::ParseJsonAsProto<openconfig::Config>(
+                       gnmi_config, /*ignore_unknown_fields=*/true));
+  return ParseIsIngressTimestampEnabledByInterfaceName(config.interfaces());
+}
+
+absl::flat_hash_map<std::string, bool>
+ParseIsIngressTimestampEnabledByInterfaceName(
+    const openconfig::Interfaces& interfaces) {
+  absl::flat_hash_map<std::string, bool> is_timestamp_enabled_by_interface_name;
+  for (auto& interface : interfaces.interfaces()) {
+    is_timestamp_enabled_by_interface_name[interface.name()] =
+        interface.ethernet().config().insert_ingress_timestamp();
+  }
+  return is_timestamp_enabled_by_interface_name;
 }
 
 }  // namespace pins_test
