@@ -11,6 +11,7 @@
 #include "gutil/status_matchers.h"
 #include "lib/ixia_helper.pb.h"
 #include "thinkit/generic_testbed.h"
+#include "thinkit/mock_generic_testbed.h"
 
 namespace pins_test::ixia {
 
@@ -19,6 +20,8 @@ using ::gutil::IsOkAndHolds;
 using ::gutil::StatusIs;
 
 using ::testing::Eq;
+using ::testing::HasSubstr;
+using ::testing::Return;
 
 TEST(FindIdByField, FindsId) {
   static constexpr absl::string_view kArray =
@@ -398,6 +401,79 @@ TEST(IxiaHelper, NoTimestampIsZeroRate) {
         last_time_stamp: 0.0
       )pb")),
       Eq(0.0));
+}
+
+TEST(IxiaHelper, SendAndWaitForCompleteImmediateSuccess) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(thinkit::RequestType::kPost,
+                            "/ixnetwork/traffic/operations/apply", "payload"))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 200}));
+  EXPECT_OK(SendAndWaitForComplete("/ixnetwork/traffic/operations/apply",
+                                   "payload", mock_generic_testbed));
+}
+
+TEST(IxiaHelper, SendAndWaitForCompleteImmediateSuccess2) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(thinkit::RequestType::kPost,
+                            "/ixnetwork/traffic/operations/apply", "payload"))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 202, .response = R"json({"state":"SUCCESS"})json"}));
+  EXPECT_OK(SendAndWaitForComplete("/ixnetwork/traffic/operations/apply",
+                                   "payload", mock_generic_testbed));
+}
+
+TEST(IxiaHelper, SendAndWaitForCompleteOtherError) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(thinkit::RequestType::kPost,
+                            "/ixnetwork/traffic/operations/apply", "payload"))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 503}));
+  EXPECT_THAT(SendAndWaitForComplete("/ixnetwork/traffic/operations/apply",
+                                     "payload", mock_generic_testbed),
+              StatusIs(absl::StatusCode::kInternal));
+}
+
+TEST(IxiaHelper, SendAndWaitForCompletePollSuccess) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(thinkit::RequestType::kPost,
+                            "/ixnetwork/traffic/operations/apply", "payload"))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 202,
+                                             .response =
+                                                 R"json({"state":"IN_PROGRESS",
+              "url":"/ixnetwork/traffic/operations/1"})json"}));
+  EXPECT_CALL(mock_generic_testbed,
+              SendRestRequestToIxia(thinkit::RequestType::kGet,
+                                    "/ixnetwork/traffic/operations/1", ""))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 200,
+          .response = R"json({"state":"IN_PROGRESS"})json"}))
+      .WillOnce(Return(thinkit::HttpResponse{
+          .response_code = 200, .response = R"json({"state":"SUCCESS"})json"}));
+  EXPECT_OK(SendAndWaitForComplete("/ixnetwork/traffic/operations/apply",
+                                   "payload", mock_generic_testbed));
+}
+
+TEST(IxiaHelper, SendAndWaitForCompleteOperationFailed) {
+  thinkit::MockGenericTestbed mock_generic_testbed;
+  EXPECT_CALL(
+      mock_generic_testbed,
+      SendRestRequestToIxia(thinkit::RequestType::kPost,
+                            "/ixnetwork/traffic/operations/apply", "payload"))
+      .WillOnce(Return(thinkit::HttpResponse{.response_code = 202,
+                                             .response =
+                                                 R"json({"state":"EXCEPTION",
+              "result":"Failed to start traffic"})json"}));
+  EXPECT_THAT(SendAndWaitForComplete("/ixnetwork/traffic/operations/apply",
+                                     "payload", mock_generic_testbed),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to start traffic")));
 }
 
 }  // namespace pins_test::ixia

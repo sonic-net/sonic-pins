@@ -70,15 +70,12 @@ absl::StatusOr<std::string> ExtractHref(thinkit::HttpResponse &resp);
 // IP address of chassis appended with the card number and port.
 absl::StatusOr<IxiaPortInfo> ExtractPortInfo(absl::string_view ixia_interface);
 
-// WaitForComplete - Checks the http response provided and if 202 was returned,
-// then check for IN_PROGRESS and if so polls until complete.  it returns
-// the href url from the response or an error. the timeout can be provided
-// if desired, and defaults to 1 minute if not. the timeout determines how
-// long we'll wait for the IN_PROGRESS to resolve. if the elapsed time exceeds
-// the timeout provided we'll return an error.
-absl::Status WaitForComplete(const thinkit::HttpResponse &response,
-                             thinkit::GenericTestbed &generic_testbed,
-                             absl::Duration timeout = absl::Seconds(60));
+// Sends the operation to the Ixia as a POST request
+// and waits for it to finish if the operation returns IN_PROGRESS.
+absl::Status SendAndWaitForComplete(absl::string_view operation_url,
+                                    absl::string_view payload,
+                                    thinkit::GenericTestbed &generic_testbed,
+                                    absl::Duration timeout = absl::Seconds(60));
 
 // IxiaConnect - connect to the Ixia.  returns the href from the response
 // or an error.  takes the IP address of the Ixia as a string parameter,
@@ -136,10 +133,13 @@ absl::Status DeleteTrafficItem(absl::string_view tref,
 absl::Status StartTraffic(absl::string_view tref, absl::string_view href,
                           thinkit::GenericTestbed &generic_testbed);
 
-// Same as above, except that `trefs` accept multiple traffics.
+// Same as above, except that `trefs` accept multiple traffics.By default,
+// the traffics in `trefs` start in parallel; set `run_in_parallel` to false
+// to start traffics sequentially.
 absl::Status StartTraffic(absl::Span<const std::string> trefs,
                           absl::string_view href,
-                          thinkit::GenericTestbed &generic_testbed);
+                          thinkit::GenericTestbed &generic_testbed,
+                          bool run_in_parallel = true);
 
 // StopTraffic - stops traffic running from the Ixia. StartTraffic is
 // presumed to have been run first. Takes in the tref returned by IxiaSession
@@ -321,7 +321,7 @@ absl::Status SetPfcPriorityEnableVector(
 
 // Sets the pause quanta values for queues in the PFC header.
 absl::Status SetPfcQueuePauseQuanta(
-    absl::string_view tref, const std::array<uint16_t, 8> queue_pause_quanta,
+    absl::string_view tref, const std::array<uint16_t, 8> &queue_pause_quanta,
     thinkit::GenericTestbed &generic_testbed);
 
 // -- Statistics ---------------------------------------------------------------
