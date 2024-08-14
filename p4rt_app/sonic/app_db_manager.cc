@@ -49,7 +49,7 @@ namespace sonic {
 namespace {
 
 // Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be deleted (i.e. alreay exist). On success the
+// verifies that the entry can be deleted (i.e. already exist). On success the
 // P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForDelete(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
@@ -67,7 +67,7 @@ absl::StatusOr<std::string> CreateEntryForDelete(
 }
 
 // Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be inserted (i.e. doesn't alreay exist). On
+// verifies that the entry can be inserted (i.e. doesn't already exist). On
 // success the P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForInsert(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
@@ -87,7 +87,7 @@ absl::StatusOr<std::string> CreateEntryForInsert(
 }
 
 // Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be modified (i.e. alreay exist). On success the
+// verifies that the entry can be modified (i.e. already exist). On success the
 // P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForModify(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
@@ -346,6 +346,8 @@ absl::StatusOr<std::string> GetRedisP4rtTableKey(
       json_key);
 }
 
+// This function can only be called for keys that point to IrTableEntry in the
+// P4RT_TABLE.  IrPacketReplicationEntry keys are handled separately.
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key) {
@@ -361,6 +363,7 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
         table_entry, p4rt_table.counter_db->get(absl::StrCat(
                          p4rt_table.app_db->getTablePrefix(), key))));
   }
+
   return table_entry;
 }
 
@@ -421,9 +424,9 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
              << entry.entry.ShortDebugString();
     } else if (entry.appdb_table == AppDbTableType::VRF_TABLE) {
       // Update non AppDb:P4RT entries (e.g. VRF_TABLE).
-      RETURN_IF_ERROR(UpdateAppDbVrfTable(vrf_table, entry.update_type,
-                                          entry.rpc_index, entry.entry,
-                                          *response));
+      RETURN_IF_ERROR(
+          UpdateAppDbVrfTable(vrf_table, entry.update_type, entry.rpc_index,
+                              entry.entry.table_entry(), *response));
       if (response->statuses(entry.rpc_index).code() != google::rpc::Code::OK) {
         fail_on_first_error = true;
       } 
@@ -434,16 +437,16 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
     absl::StatusOr<std::string> key;
     switch (entry.update_type) {
       case p4::v1::Update::INSERT:
-        key =
-            CreateEntryForInsert(p4rt_table, entry.entry, p4_info, kfv_updates);
+        key = CreateEntryForInsert(p4rt_table, entry.entry.table_entry(),
+                                   p4_info, kfv_updates);
         break;
       case p4::v1::Update::MODIFY:
-        key =
-            CreateEntryForModify(p4rt_table, entry.entry, p4_info, kfv_updates);
+        key = CreateEntryForModify(p4rt_table, entry.entry.table_entry(),
+                                   p4_info, kfv_updates);
         break;
       case p4::v1::Update::DELETE:
-        key =
-            CreateEntryForDelete(p4rt_table, entry.entry, p4_info, kfv_updates);
+        key = CreateEntryForDelete(p4rt_table, entry.entry.table_entry(),
+                                   p4_info, kfv_updates);
         break;
       default:
         key = gutil::InvalidArgumentErrorBuilder()

@@ -797,5 +797,36 @@ TEST(TranslateTableEntry, FailsIfAppDbQueueIsNotAString) {
   EXPECT_FALSE(TranslateTableEntry(options, ir_table_entry).ok());
 }
 
+TEST(TranslateEntity, FailsIfPacketReplicationHasDuplicateReplicas) {
+  p4::v1::Entity pi_entity;
+  // This packet replication entry is invalid, due to the duplicate replica.
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas { port: "Ethernet0" instance: 0 }
+            replicas { port: "Ethernet0" instance: 0 }
+          }
+        }
+      )pb",
+      &pi_entity));
+
+  EXPECT_FALSE(TranslatePiEntityForOrchAgent(
+                   pi_entity, GetIrP4Info(), /*translate_port_ids=*/true,
+                   /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+                   /*translate_key_only=*/false)
+                   .ok());
+}
+
+TEST(TranslateEntity, UnsupportedEntityTypeFails) {
+  p4::v1::Entity pi_entity;
+  EXPECT_FALSE(TranslatePiEntityForOrchAgent(
+                   pi_entity, GetIrP4Info(), /*translate_port_ids=*/true,
+                   /*port_translation_map=*/{}, EmptyCpuQueueTranslator(),
+                   /*translate_key_only=*/false)
+                   .ok());
+}
+
 }  // namespace
 }  // namespace p4rt_app

@@ -101,31 +101,33 @@ class AppDbManagerTest : public ::testing::Test {
 };
 
 TEST_F(AppDbManagerTest, InsertTableEntry) {
-  pdpi::IrTableEntry table_entry;
+  pdpi::IrEntity entity;
   ASSERT_TRUE(
       TextFormat::ParseFromString(R"pb(
-                                    table_name: "router_interface_table"
-                                    priority: 123
-                                    matches {
-                                      name: "router_interface_id"
-                                      exact { hex_str: "16" }
-                                    }
-                                    action {
-                                      name: "set_port_and_src_mac"
-                                      params {
-                                        name: "port"
-                                        value { str: "Ethernet28/5" }
+                                    table_entry {
+                                      table_name: "router_interface_table"
+                                      priority: 123
+                                      matches {
+                                        name: "router_interface_id"
+                                        exact { hex_str: "16" }
                                       }
-                                      params {
-                                        name: "src_mac"
-                                        value { mac: "00:02:03:04:05:06" }
+                                      action {
+                                        name: "set_port_and_src_mac"
+                                        params {
+                                          name: "port"
+                                          value { str: "Ethernet28/5" }
+                                        }
+                                        params {
+                                          name: "src_mac"
+                                          value { mac: "00:02:03:04:05:06" }
+                                        }
                                       }
                                     })pb",
-                                  &table_entry));
+                                  &entity));
   AppDbUpdates updates;
   updates.entries.push_back(AppDbEntry{
       .rpc_index = 0,
-      .entry = table_entry,
+      .entry = entity,
       .update_type = p4::v1::Update::INSERT,
       .appdb_table = AppDbTableType::P4RT,
   });
@@ -161,33 +163,35 @@ TEST_F(AppDbManagerTest, InsertTableEntry) {
 }
 
 TEST_F(AppDbManagerTest, InsertWithUnknownAppDbTableTypeFails) {
-  pdpi::IrTableEntry table_entry;
+  pdpi::IrEntity entity;
   ASSERT_TRUE(
       TextFormat::ParseFromString(R"pb(
-                                    table_name: "router_interface_table"
-                                    priority: 123
-                                    matches {
-                                      name: "router_interface_id"
-                                      exact { hex_str: "16" }
-                                    }
-                                    action {
-                                      name: "set_port_and_src_mac"
-                                      params {
-                                        name: "port"
-                                        value { str: "Ethernet28/5" }
+                                    table_entry {
+                                      table_name: "router_interface_table"
+                                      priority: 123
+                                      matches {
+                                        name: "router_interface_id"
+                                        exact { hex_str: "16" }
                                       }
-                                      params {
-                                        name: "src_mac"
-                                        value { mac: "00:02:03:04:05:06" }
+                                      action {
+                                        name: "set_port_and_src_mac"
+                                        params {
+                                          name: "port"
+                                          value { str: "Ethernet28/5" }
+                                        }
+                                        params {
+                                          name: "src_mac"
+                                          value { mac: "00:02:03:04:05:06" }
+                                        }
                                       }
                                     })pb",
-                                  &table_entry));
+                                  &entity));
 
   // The appdb_table value is set to unknown.
   AppDbUpdates updates;
   updates.entries.push_back(AppDbEntry{
       .rpc_index = 0,
-      .entry = table_entry,
+      .entry = entity,
       .update_type = p4::v1::Update::INSERT,
       .appdb_table = AppDbTableType::UNKNOWN,
   });
@@ -201,31 +205,33 @@ TEST_F(AppDbManagerTest, InsertWithUnknownAppDbTableTypeFails) {
 }
 
 TEST_F(AppDbManagerTest, ModifyTableEntry) {
-  pdpi::IrTableEntry table_entry;
+  pdpi::IrEntity entity;
   ASSERT_TRUE(
       TextFormat::ParseFromString(R"pb(
-                                    table_name: "router_interface_table"
-                                    priority: 123
-                                    matches {
-                                      name: "router_interface_id"
-                                      exact { hex_str: "16" }
-                                    }
-                                    action {
-                                      name: "set_port_and_src_mac"
-                                      params {
-                                        name: "port"
-                                        value { str: "Ethernet28/5" }
+                                    table_entry {
+                                      table_name: "router_interface_table"
+                                      priority: 123
+                                      matches {
+                                        name: "router_interface_id"
+                                        exact { hex_str: "16" }
                                       }
-                                      params {
-                                        name: "src_mac"
-                                        value { mac: "00:02:03:04:05:06" }
+                                      action {
+                                        name: "set_port_and_src_mac"
+                                        params {
+                                          name: "port"
+                                          value { str: "Ethernet28/5" }
+                                        }
+                                        params {
+                                          name: "src_mac"
+                                          value { mac: "00:02:03:04:05:06" }
+                                        }
                                       }
                                     })pb",
-                                  &table_entry));
+                                  &entity));
   AppDbUpdates updates;
   updates.entries.push_back(AppDbEntry{
       .rpc_index = 0,
-      .entry = table_entry,
+      .entry = entity,
       .update_type = p4::v1::Update::MODIFY,
       .appdb_table = AppDbTableType::P4RT,
   });
@@ -260,31 +266,33 @@ TEST_F(AppDbManagerTest, ModifyTableEntry) {
 }
 
 TEST_F(AppDbManagerTest, DeleteTableEntry) {
-  pdpi::IrTableEntry table_entry;
+  pdpi::IrEntity entity;
   ASSERT_TRUE(
       TextFormat::ParseFromString(R"pb(
-                                    table_name: "router_interface_table"
-                                    priority: 123
-                                    matches {
-                                      name: "router_interface_id"
-                                      exact { hex_str: "16" }
-                                    }
-                                    action {
-                                      name: "set_port_and_src_mac"
-                                      params {
-                                        name: "port"
-                                        value { str: "Ethernet28/5" }
+                                    table_entry {
+                                      table_name: "router_interface_table"
+                                      priority: 123
+                                      matches {
+                                        name: "router_interface_id"
+                                        exact { hex_str: "16" }
                                       }
-                                      params {
-                                        name: "src_mac"
-                                        value { mac: "00:02:03:04:05:06" }
+                                      action {
+                                        name: "set_port_and_src_mac"
+                                        params {
+                                          name: "port"
+                                          value { str: "Ethernet28/5" }
+                                        }
+                                        params {
+                                          name: "src_mac"
+                                          value { mac: "00:02:03:04:05:06" }
+                                        }
                                       }
                                     })pb",
-                                  &table_entry));
+                                  &entity));
   AppDbUpdates updates;
   updates.entries.push_back(AppDbEntry{
       .rpc_index = 0,
-      .entry = table_entry,
+      .entry = entity,
       .update_type = p4::v1::Update::DELETE,
       .appdb_table = AppDbTableType::P4RT,
   });
