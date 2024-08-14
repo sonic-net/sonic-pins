@@ -207,6 +207,7 @@ cc_test(
         ":sai_p4info_cc",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
+        "//gutil:version",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/strings",

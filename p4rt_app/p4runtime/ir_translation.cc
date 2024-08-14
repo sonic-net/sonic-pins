@@ -105,7 +105,7 @@ absl::Status TranslateAction(const TranslateTableEntryOptions& options,
   }
 
   for (auto& param : *action.mutable_params()) {
-    // If the paramter field isn't a port then ignore it.
+    // If the parameter field isn't a port then ignore it.
     const pdpi::IrActionDefinition::IrActionParamDefinition* param_def =
         gutil::FindOrNull(action_def->params_by_name(), param.name());
     if (param_def == nullptr) {
@@ -328,6 +328,41 @@ void Convert64BitIpv6AclMatchFieldsTo128Bit(
           (*mask_address << 64).ToString());
     }
   }
+}
+
+absl::StatusOr<pdpi::IrEntity> TranslatePiEntityForOrchAgent(
+    const p4::v1::Entity& pi_entity, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only) {
+  pdpi::IrEntity ir_entity;
+  switch (pi_entity.entity_case()) {
+    case p4::v1::Entity::kTableEntry: {
+      ASSIGN_OR_RETURN(
+          *ir_entity.mutable_table_entry(),
+          TranslatePiTableEntryForOrchAgent(
+              pi_entity.table_entry(), ir_p4_info, translate_port_ids,
+              port_translation_map, cpu_queue_translator, translate_key_only));
+      break;
+    }
+    case p4::v1::Entity::kPacketReplicationEngineEntry: {
+      // Updated in later CL in this chain.
+      ASSIGN_OR_RETURN(ir_entity,
+                       pdpi::PiEntityToIr(ir_p4_info, pi_entity,
+                                          pdpi::TranslationOptions{
+                                              .key_only = translate_key_only,
+                                          }));
+      break;
+    }
+    default: {
+      ASSIGN_OR_RETURN(ir_entity,
+                       pdpi::PiEntityToIr(ir_p4_info, pi_entity,
+                                          pdpi::TranslationOptions{
+                                              .key_only = translate_key_only,
+                                          }));
+    }
+  }
+  return ir_entity;
 }
 
 absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(

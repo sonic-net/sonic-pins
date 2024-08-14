@@ -224,6 +224,24 @@ TEST(StateVerificationTest, DuplicateAppStateDbFieldNameInEntryFails) {
               ElementsAre(HasSubstr("AppStateDb has duplicate fields")));
 }
 
+TEST(StateVerificationTest, PacketReplicationNotSupportedYet) {
+  MockTableAdapter mock_app_db;
+
+  pdpi::IrP4Info ir_p4_info;
+  pdpi::IrEntity ir_entity;
+  auto* group_entry = ir_entity.mutable_packet_replication_engine_entry()
+                          ->mutable_multicast_group_entry();
+  group_entry->set_multicast_group_id(1);
+  auto* replica = group_entry->add_replicas();
+  replica->set_port("Ethernet0");
+  replica->set_instance(0);
+
+  EXPECT_EQ(
+      VerifyP4rtTableWithCacheEntities(mock_app_db, {ir_entity}, ir_p4_info)
+          .size(),
+      0);
+}
+
 }  // namespace
 }  // namespace sonic
 }  // namespace p4rt_app
