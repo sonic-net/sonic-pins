@@ -7,6 +7,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/collections.h"
@@ -133,6 +134,70 @@ absl::StatusOr<IrActionField> CreateIrActionField(absl::string_view action_name,
   field.set_parameter_name(param_name);
   field.set_parameter_id(param->param().id());
   return field;
+}
+
+absl::StatusOr<std::string> GetNameOfTable(const IrTable &table) {
+  switch (table.table_case()) {
+    case IrTable::kP4Table: {
+      return table.p4_table().table_name();
+    }
+    case IrTable::kBuiltInTable: {
+      return IrBuiltInTableToString(table.built_in_table());
+    }
+    case IrTable::TABLE_NOT_SET: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "IrTable table oneof not set.";
+    }
+  }
+}
+
+absl::StatusOr<std::string> GetNameOfField(const IrField &field) {
+  switch (field.field_case()) {
+    case IrField::kMatchField: {
+      return field.match_field().field_name();
+    }
+    case IrField::kActionField: {
+      return absl::StrCat(field.action_field().action_name(), ".",
+                          field.action_field().parameter_name());
+    }
+    case IrField::kBuiltInField: {
+      return IrBuiltInFieldToString(field.built_in_field());
+    }
+    case IrField::FIELD_NOT_SET: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "IrField field oneof not set.";
+    }
+  }
+}
+
+absl::StatusOr<std::string> GetNameOfAction(const IrField &field) {
+  switch (field.field_case()) {
+    case IrField::kActionField: {
+      return field.action_field().action_name();
+    }
+    case IrField::kBuiltInField: {
+      switch (field.built_in_field()) {
+        case IrBuiltInField::BUILT_IN_FIELD_REPLICA_INSTANCE:
+        case IrBuiltInField::BUILT_IN_FIELD_REPLICA_PORT:
+          return "replica";
+        default:
+          return gutil::InvalidArgumentErrorBuilder()
+                 << "Built-in field '"
+                 << IrBuiltInField_Name(field.built_in_field())
+                 << "' is not considered an action field";
+      }
+    }
+    case IrField::kMatchField: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Match fields are not part of an action. Provided IrField "
+                "contained a match field: "
+             << field.match_field().DebugString();
+    }
+    case IrField::FIELD_NOT_SET: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "IrField field oneof not set.";
+    }
+  }
 }
 
 absl::StatusOr<std::vector<ParsedRefersToAnnotation>>

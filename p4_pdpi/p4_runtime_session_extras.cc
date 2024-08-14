@@ -22,14 +22,9 @@ namespace pdpi {
 absl::Status InstallPdTableEntries(
     P4RuntimeSession& p4rt, const google::protobuf::Message& pd_table_entries) {
   // Convert entries to PI representation.
-  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
-                   GetForwardingPipelineConfig(&p4rt));
-  if (gutil::IsEmptyProto(config.config().p4info())) {
-    return gutil::FailedPreconditionErrorBuilder()
-           << "cannot install entries on switch since no P4Info has been "
-              "installed";
-  }
-  ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
+  ASSIGN_OR_RETURN(IrP4Info info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot install entries on switch: failed "
+                                     "to pull P4Info from switch: ");
   ASSIGN_OR_RETURN(
       std::vector<p4::v1::Entity> pi_entities,
       PdTableEntriesToPiEntities(info, pd_table_entries),
@@ -51,6 +46,7 @@ absl::Status InstallPdTableEntry(
               "installed";
   }
   ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
+  // Convert entry to PI representation.
   ASSIGN_OR_RETURN(
       p4::v1::Entity pi_entity, PdTableEntryToPiEntity(info, pd_table_entry),
       _.SetPrepend()
@@ -63,9 +59,9 @@ absl::Status InstallPdTableEntry(
 absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
                                    const IrTableEntries& ir_table_entries) {
   // Get P4Info from switch.
-  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
-                   GetForwardingPipelineConfig(&p4rt));
-  ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
+  ASSIGN_OR_RETURN(IrP4Info info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot install entries on switch: failed "
+                                     "to pull P4Info from switch: ");
 
   // Convert entries to PI representation.
   ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> pi_entries,
@@ -75,12 +71,27 @@ absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
   return InstallPiTableEntries(&p4rt, info, pi_entries);
 }
 
+absl::Status InstallIrEntities(P4RuntimeSession& p4rt,
+                               const IrEntities& ir_entities) {
+  // Get P4Info from switch.
+  ASSIGN_OR_RETURN(IrP4Info info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot install entries on switch: failed "
+                                     "to pull P4Info from switch: ");
+
+  // Convert entries to PI representation.
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
+                   IrEntitiesToPi(info, ir_entities));
+
+  // Install entries.
+  return InstallPiEntities(&p4rt, info, pi_entities);
+}
+
 absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
                                  const IrTableEntry& ir_table_entry) {
   // Get P4Info from switch.
-  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
-                   GetForwardingPipelineConfig(&p4rt));
-  ASSIGN_OR_RETURN(IrP4Info info, CreateIrP4Info(config.config().p4info()));
+  ASSIGN_OR_RETURN(IrP4Info info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot install entries on switch: failed "
+                                     "to pull P4Info from switch: ");
 
   // Convert entry to PI representation.
   ASSIGN_OR_RETURN(p4::v1::TableEntry pi_entry,
@@ -128,26 +139,24 @@ absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntriesSorted(
 }
 
 absl::StatusOr<IrTableEntries> ReadIrTableEntries(P4RuntimeSession& p4rt) {
-  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   GetForwardingPipelineConfig(&p4rt));
-  ASSIGN_OR_RETURN(IrP4Info ir_info,
-                   CreateIrP4Info(response.config().p4info()));
+  ASSIGN_OR_RETURN(IrP4Info info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot install entries on switch: failed "
+                                     "to pull P4Info from switch: ");
 
   ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> entries,
                    ReadPiTableEntries(&p4rt));
-  return PiTableEntriesToIr(ir_info, entries);
+  return PiTableEntriesToIr(info, entries);
 }
 
 absl::StatusOr<IrTableEntries> ReadIrTableEntriesSorted(
     P4RuntimeSession& p4rt) {
-  ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                   GetForwardingPipelineConfig(&p4rt));
-  ASSIGN_OR_RETURN(IrP4Info ir_info,
-                   CreateIrP4Info(response.config().p4info()));
+  ASSIGN_OR_RETURN(IrP4Info info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot install entries on switch: failed "
+                                     "to pull P4Info from switch: ");
 
   ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> entries,
                    ReadPiTableEntriesSorted(p4rt));
-  return PiTableEntriesToIr(ir_info, entries);
+  return PiTableEntriesToIr(info, entries);
 }
 
 absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
@@ -168,6 +177,19 @@ absl::StatusOr<IrWriteRpcStatus> SendPiUpdatesAndReturnPerUpdateStatus(
     const google::protobuf::RepeatedPtrField<p4::v1::Update>& updates) {
   return SendPiUpdatesAndReturnPerUpdateStatus(
       p4rt, std::vector<p4::v1::Update>(updates.begin(), updates.end()));
+}
+absl::StatusOr<p4::config::v1::P4Info> GetP4Info(P4RuntimeSession& p4rt) {
+  ASSIGN_OR_RETURN(auto response, GetForwardingPipelineConfig(&p4rt));
+  if (gutil::IsEmptyProto(response.config().p4info())) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "no P4Info configured on switch";
+  }
+  return response.config().p4info();
+}
+
+absl::StatusOr<IrP4Info> GetIrP4Info(P4RuntimeSession& p4rt) {
+  ASSIGN_OR_RETURN(p4::config::v1::P4Info p4info, GetP4Info(p4rt));
+  return CreateIrP4Info(p4info);
 }
 
 }  // namespace pdpi
