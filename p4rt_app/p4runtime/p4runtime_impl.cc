@@ -97,17 +97,17 @@ std::string GetKeyErrorMessage(pdpi::IrEntity entity,
   switch (entity.entity_case()) {
     case pdpi::IrEntity::kTableEntry:
       return absl::Substitute(
+          "[P4RT App] Table entry with the given key $0 in table '$1'", extra,
+          entity.table_entry().table_name());
+      break;
+    case pdpi::IrEntity::kPacketReplicationEngineEntry:
+      return absl::Substitute(
           "[P4RT App] Packet Replication Engine entry with key of multicast "
           "group ID '$0' $1",
           entity.packet_replication_engine_entry()
               .multicast_group_entry()
               .multicast_group_id(),
           extra);
-      break;
-    case pdpi::IrEntity::kPacketReplicationEngineEntry:
-      return absl::Substitute(
-          "[P4RT App] Table entry with the given key $0 in table '$1'", extra,
-          entity.table_entry().table_name());
       break;
     default:
       break;
@@ -300,10 +300,14 @@ absl::StatusOr<sonic::AppDbEntry> PiUpdateToAppDbEntry(
   }
 
   if (ir_entity->entity_case() == pdpi::IrEntity::kTableEntry) {
-    // If the constraints are not met then we should just report an error
-    // (i.e. do not try to handle the entry in lower layers).
-    RETURN_IF_ERROR(ValidateTableEntryConstraints(
-        pi_update.entity().table_entry(), constraint_info));
+    // Skip the constraint check for DELETE requests because existing entries
+    // already satisfy constraints, and the request may also omit actions.
+    if (pi_update.type() != p4::v1::Update::DELETE) {
+      // If the constraints are not met then we should just report an error
+      // (i.e. do not try to handle the entry in lower layers).
+      RETURN_IF_ERROR(ValidateTableEntryConstraints(
+          pi_update.entity().table_entry(), constraint_info));
+    }
 
     // Apply any custom translation that are needed on the switch side to
     // account for gNMI configs (e.g. port ID translation).
@@ -719,6 +723,9 @@ grpc::Status P4RuntimeImpl::Write(grpc::ServerContext* context,
 grpc::Status P4RuntimeImpl::Read(
     grpc::ServerContext* context, const p4::v1::ReadRequest* request,
     grpc::ServerWriter<p4::v1::ReadResponse>* response_writer) {
+  // Default max receive message size in GRPC is 4MB, setting the batch size to
+  // 2500 assuming each response message is less than ~1600 bytes max.
+  constexpr int kReadResponseBatchSize = 2500;
   absl::MutexLock l(&server_state_lock_);
 
 #ifdef __EXCEPTIONS
@@ -744,17 +751,20 @@ grpc::Status P4RuntimeImpl::Read(
                           "ReadResponse writer cannot be a nullptr.");
     }
 
-    auto response_status = ReadAllEntities(
-        *request, *ir_p4info_, entity_cache_, translate_port_ids_,
-        port_translation_map_, *cpu_queue_translator_, p4rt_table_);
-    if (!response_status.ok()) {
-      LOG(WARNING) << "Read failure: " << response_status.status();
+    auto responses_status = ReadAllEntitiesInBatches(
+        kReadResponseBatchSize, *request, *ir_p4info_, entity_cache_,
+        translate_port_ids_, port_translation_map_, *cpu_queue_translator_,
+        p4rt_table_);
+    if (!responses_status.ok()) {
+      LOG(WARNING) << "Read failure: " << responses_status.status();
       return grpc::Status(
           grpc::StatusCode::UNKNOWN,
-          absl::StrCat("Read failure: ", response_status.status().ToString()));
+          absl::StrCat("Read failure: ", responses_status.status().ToString()));
     }
 
-    response_writer->Write(response_status.value());
+    for (auto& response : responses_status.value()) {
+      response_writer->Write(response);
+    }
 
     absl::Duration read_execution_time = absl::Now() - read_start_time;
     read_total_requests_ += 1;

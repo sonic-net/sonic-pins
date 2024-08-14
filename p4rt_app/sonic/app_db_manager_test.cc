@@ -15,6 +15,7 @@
 
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
@@ -410,14 +411,27 @@ TEST_F(AppDbManagerTest, ReadAclTableEntryIgnoresInvalidCounterData) {
                                 .SetPriority(123)
                                 .AddMatchField("ether_type", "0x0800&0xFFFF")
                                 .SetAction("drop");
+  auto app_db_values = app_db_entry.GetValueList();
+  app_db_values.push_back(std::make_pair("meter/cir", "123"));
+  app_db_values.push_back(std::make_pair("meter/cburst", "234"));
+  app_db_values.push_back(std::make_pair("meter/pir", "345"));
+  app_db_values.push_back(std::make_pair("meter/pburst", "456"));
 
   EXPECT_CALL(*mock_p4rt_app_db_, getTablePrefix());
   EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
-      .WillOnce(Return(app_db_entry.GetValueList()));
+      .WillOnce(Return(app_db_values));
 
   EXPECT_CALL(*mock_p4rt_counter_db_, get(app_db_entry.GetKey()))
       .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
-          {"packets", "A"}, {"bytes", "B"}}));
+          {"packets", "A"},
+          {"bytes", "B"},
+          {"green_packets", "A"},
+          {"green_bytes", "B"},
+          {"yellow_packets", "A"},
+          {"yellow_bytes", "B"},
+          {"red_packets", "A"},
+          {"red_bytes", "B"},
+      }));
 
   auto table_entry_status = ReadP4TableEntry(
       mock_p4rt_table_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
@@ -425,17 +439,19 @@ TEST_F(AppDbManagerTest, ReadAclTableEntryIgnoresInvalidCounterData) {
   ASSERT_TRUE(table_entry_status.ok()) << table_entry_status.status();
   pdpi::IrTableEntry table_entry = table_entry_status.value();
 
-  EXPECT_THAT(table_entry, EqualsProto(R"pb(
-                table_name: "acl_ingress_table"
-                priority: 123
-                matches {
-                  name: "ether_type"
-                  ternary {
-                    value { hex_str: "0x0800" }
-                    mask { hex_str: "0xFFFF" }
-                  }
-                }
-                action { name: "drop" })pb"));
+  EXPECT_THAT(
+      table_entry, EqualsProto(R"pb(
+        table_name: "acl_ingress_table"
+        priority: 123
+        matches {
+          name: "ether_type"
+          ternary {
+            value { hex_str: "0x0800" }
+            mask { hex_str: "0xFFFF" }
+          }
+        }
+        action { name: "drop" }
+        meter_config { cir: 123 cburst: 234 pir: 345 pburst: 456 })pb"));
 }
 
 TEST_F(AppDbManagerTest, ReadAclTableEntryIgnoresCountersForFixedTables) {
@@ -474,6 +490,67 @@ TEST_F(AppDbManagerTest, ReadAclTableEntryIgnoresCountersForFixedTables) {
                     name: "src_mac"
                     value { mac: "00:02:03:04:05:06" }
                   }
+                })pb"));
+}
+
+TEST_F(AppDbManagerTest, ReadAclTableEntryWithMeterCounterData) {
+  const auto app_db_entry = AppDbEntryBuilder{}
+                                .SetTableName("ACL_ACL_INGRESS_TABLE")
+                                .SetPriority(123)
+                                .AddMatchField("ether_type", "0x0800&0xFFFF")
+                                .SetAction("drop");
+  EXPECT_CALL(*mock_p4rt_app_db_, getTablePrefix());
+  auto app_db_values = app_db_entry.GetValueList();
+  app_db_values.push_back(std::make_pair("meter/cir", "123"));
+  app_db_values.push_back(std::make_pair("meter/cburst", "234"));
+  app_db_values.push_back(std::make_pair("meter/pir", "345"));
+  app_db_values.push_back(std::make_pair("meter/pburst", "456"));
+  EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_entry.GetKey())))
+      .WillOnce(Return(app_db_values));
+
+  // We want to support 64-bit integers for both the number of packets, as well
+  // as the number of bytes.
+  //
+  // Using decimal numbers:
+  //    1152921504606846975 = 0x0FFF_FFFF_FFFF_FFFF
+  //    1076078835964837887 = 0x0EEE_FFFF_FFFF_FFFF
+  EXPECT_CALL(*mock_p4rt_counter_db_, get(app_db_entry.GetKey()))
+      .WillOnce(Return(std::vector<std::pair<std::string, std::string>>{
+          {"packets", "1076078835964837887"},
+          {"bytes", "1152921504606846975"},
+          {"green_packets", "10"},
+          {"green_bytes", "100"},
+          {"yellow_packets", "11"},
+          {"yellow_bytes", "101"},
+          {"red_packets", "12"},
+          {"red_bytes", "102"},
+      }));
+
+  auto table_entry_status = ReadP4TableEntry(
+      mock_p4rt_table_, sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+      app_db_entry.GetKey());
+  ASSERT_TRUE(table_entry_status.ok()) << table_entry_status.status();
+  pdpi::IrTableEntry table_entry = table_entry_status.value();
+  EXPECT_THAT(table_entry, EqualsProto(R"pb(
+                table_name: "acl_ingress_table"
+                priority: 123
+                matches {
+                  name: "ether_type"
+                  ternary {
+                    value { hex_str: "0x0800" }
+                    mask { hex_str: "0xFFFF" }
+                  }
+                }
+                action { name: "drop" }
+                meter_config { cir: 123 cburst: 234 pir: 345 pburst: 456 }
+                counter_data {
+                  byte_count: 1152921504606846975
+                  packet_count: 1076078835964837887
+                }
+                meter_counter_data {
+                  green { byte_count: 100 packet_count: 10 }
+                  yellow { byte_count: 101 packet_count: 11 }
+                  red { byte_count: 102 packet_count: 12 }
                 })pb"));
 }
 

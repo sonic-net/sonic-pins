@@ -13,7 +13,9 @@
 // limitations under the License.
 #include "p4rt_app/sonic/app_db_manager.h"
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -23,8 +25,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
@@ -109,29 +113,55 @@ absl::StatusOr<std::string> CreateEntryForModify(
 absl::Status AppendCounterData(
     pdpi::IrTableEntry& table_entry,
     const std::vector<std::pair<std::string, std::string>>& counter_data) {
-  for (const auto& [field, data] : counter_data) {
-    // Update packet count only if data is present.
-    if (field == "packets") {
-      uint64_t packets = 0;
-      if (absl::SimpleAtoi(data, &packets)) {
-        table_entry.mutable_counter_data()->set_packet_count(packets);
-      } else {
-        LOG(ERROR) << "Unexpected packets value '" << data
-                   << "' in CountersDB for table entry: "
-                   << table_entry.ShortDebugString();
-      }
+  auto field_value_error = [&table_entry](absl::string_view field,
+                                          absl::string_view value) {
+    return absl::Substitute(
+        "Unexpected value '$0' for field '$1' in CountersDB for table entry: "
+        "$2",
+        value, field, table_entry.ShortDebugString());
+  };
+
+  for (const auto& [field, value] : counter_data) {
+    uint64_t counter_value = 0;
+    if (!absl::SimpleAtoi(value, &counter_value)) {
+      LOG(ERROR) << field_value_error(field, value);
+      continue;
     }
 
-    // Update byte count only if data is present.
-    if (field == "bytes") {
-      uint64_t bytes = 0;
-      if (absl::SimpleAtoi(data, &bytes)) {
-        table_entry.mutable_counter_data()->set_byte_count(bytes);
-      } else {
-        LOG(ERROR) << "Unexpected bytes value '" << data
-                   << "' in CountersDB for table entry: "
-                   << table_entry.ShortDebugString();
-      }
+    // Update counter data if present.
+    if (field == "packets") {
+      table_entry.mutable_counter_data()->set_packet_count(counter_value);
+    } else if (field == "bytes") {
+      table_entry.mutable_counter_data()->set_byte_count(counter_value);
+    }
+
+    if (!table_entry.has_meter_config()) continue;
+
+    // Update meter counter data if present.
+    // Meter color counters are in the form of `color`_packets and
+    // `color`_bytes.
+    // Example: {red_packets 100}, {red_bytes 1000}.
+    if (field == "green_packets") {
+      table_entry.mutable_meter_counter_data()
+          ->mutable_green()
+          ->set_packet_count(counter_value);
+    } else if (field == "green_bytes") {
+      table_entry.mutable_meter_counter_data()->mutable_green()->set_byte_count(
+          counter_value);
+    } else if (field == "yellow_packets") {
+      table_entry.mutable_meter_counter_data()
+          ->mutable_yellow()
+          ->set_packet_count(counter_value);
+    } else if (field == "yellow_bytes") {
+      table_entry.mutable_meter_counter_data()
+          ->mutable_yellow()
+          ->set_byte_count(counter_value);
+    } else if (field == "red_packets") {
+      table_entry.mutable_meter_counter_data()->mutable_red()->set_packet_count(
+          counter_value);
+    } else if (field == "red_bytes") {
+      table_entry.mutable_meter_counter_data()->mutable_red()->set_byte_count(
+          counter_value);
     }
   }
 
