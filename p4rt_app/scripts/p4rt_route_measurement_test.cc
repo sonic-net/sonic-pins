@@ -133,10 +133,6 @@ DEFINE_bool(wcmp_set_watch_port, false,
 DEFINE_string(seed_seq, "",
               "Force a specific seed_seq value to repeat a test.");
 
-// Pass a comma separated list of digits to reproduce a specific test.
-DEFINE_string(seed_seq, "",
-              "Force a specific seed_seq value to repeat a test.");
-
 namespace p4rt_app {
 namespace {
 
