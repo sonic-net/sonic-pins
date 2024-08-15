@@ -20,11 +20,18 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "dvaas/output_writer.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
+#include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
+
+// Returns all the field descriptors from packetlib::Packet for `header_cases`.
+absl::StatusOr<std::vector<const google::protobuf::FieldDescriptor *>>
+GetAllFieldDescriptorsOfHeaders(
+    const absl::flat_hash_set<packetlib::Header::HeaderCase> &header_cases);
 
 // Parameters to control the comparison between the actual switch output and the
 // expected switch output per input packet.

@@ -86,6 +86,10 @@ double ValidationResult::GetSuccessRate() const {
          static_cast<double>(test_vector_stats_.num_vectors);
 }
 
+bool ValidationResult::HasFailure() const {
+  return test_vector_stats_.num_vectors_passed < test_vector_stats_.num_vectors;
+}
+
 const ValidationResult& ValidationResult::LogStatistics() const {
   LOG(INFO) << ExplainTestVectorStats(test_vector_stats_);
   return *this;

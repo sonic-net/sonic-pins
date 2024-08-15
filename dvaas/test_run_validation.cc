@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -31,15 +32,15 @@
 #include "dvaas/output_writer.h"
 #include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
-#include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/proto_ordering.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace dvaas {
 
@@ -322,6 +323,62 @@ static constexpr absl::string_view kExpectationBanner =
     "== EXPECTED OUTPUT "
     "=============================================================";
 }  // namespace
+
+absl::StatusOr<std::vector<const google::protobuf::FieldDescriptor *>>
+GetAllFieldDescriptorsOfHeaders(
+    const absl::flat_hash_set<packetlib::Header::HeaderCase> &header_cases) {
+  std::vector<const google::protobuf::FieldDescriptor *> descriptors;
+
+  for (packetlib::Header::HeaderCase header_case : header_cases) {
+    const auto *reflection = packetlib::Header::GetReflection();
+    if (reflection == nullptr) {
+      return absl::NotFoundError("Reflection for packetlib::Header not found");
+    }
+    const auto *oneof_descriptor =
+        packetlib::Header::GetDescriptor()->FindOneofByName("header");
+    if (oneof_descriptor == nullptr) {
+      return absl::NotFoundError(
+          "Oneof descriptor for packetlib::Header not found");
+    }
+
+    // Find the index of `header_case`.
+    // Unfortunately, HeaderCases are tag numbers and don't use zero-based
+    // indexing (proto tags can have arbitrary value with gaps in between). So
+    // to find the index of a header case to call OneOfDescriptor::field(),
+    // we need to iterate through all header cases to find its index in the
+    // header.
+    std::optional<int> header_case_index;
+    for (int i = 0; i < oneof_descriptor->field_count(); ++i) {
+      if (oneof_descriptor->field(i)->number() == header_case) {
+        header_case_index = i;
+        break;
+      }
+    }
+    if (header_case_index == std::nullopt) {
+      return absl::NotFoundError(absl::StrCat("Header case with tag number ",
+                                              header_case,
+                                              " is not found in packetlib"));
+    }
+    const auto *oneof_field_descriptor =
+        oneof_descriptor->field(*header_case_index);
+
+    if (oneof_field_descriptor == nullptr) {
+      return absl::NotFoundError(
+          "Oneof field descriptor for packetlib::Header not found");
+    }
+    const auto *header_message_descriptor =
+        oneof_field_descriptor->message_type();
+    if (header_message_descriptor == nullptr) {
+      return absl::NotFoundError(
+          "Oneof message descriptor for packetlib::Header not found");
+    }
+    int field_count = header_message_descriptor->field_count();
+    for (int i = 0; i < field_count; ++i) {
+      descriptors.push_back(header_message_descriptor->field(i));
+    }
+  }
+  return descriptors;
+}
 
 PacketTestValidationResult ValidateTestRun(
     const PacketTestRun& test_run, const SwitchOutputDiffParams& diff_params) {
