@@ -60,6 +60,9 @@ public:
   // Returns the fraction of test vectors that passed.
   double GetSuccessRate() const;
 
+  // Returns true if there is any test failure, and false otherwise.
+  bool HasFailure() const;
+
   // Logs various statistics about the number of test vectors and how many of
   // them passed.
   const ValidationResult &LogStatistics() const;

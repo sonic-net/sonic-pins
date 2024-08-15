@@ -14,13 +14,15 @@
 
 #include "dvaas/dataplane_validation.h"
 
-#include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/algorithm/container.h"
+#include "absl/cleanup/cleanup.h"
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -50,10 +52,12 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_pdpi/sequencing.h"
 #include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "proto/gnmi/gnmi.pb.h"
 #include "sai_p4/instantiations/google/versions.h"
@@ -64,14 +68,41 @@ namespace dvaas {
 namespace {
 
 using ::p4_symbolic::packet_synthesizer::SynthesizedPacket;
+using ::packetlib::Packet;
 using ::pins_test::P4rtPortId;
+
+absl::StatusOr<SynthesizedPacket> GetSynthesizedPacketFromFromTestVector(
+    const dvaas::PacketTestVector& test_vector) {
+  // Create a synthesized packet from `test_vector`.
+  std::string_view packet_port = test_vector.input().packet().port();
+  Packet packet = test_vector.input().packet().parsed();
+  SynthesizedPacket synthesized_packet;
+  *synthesized_packet.mutable_packet() = packet.payload();
+  *synthesized_packet.mutable_ingress_port() = packet_port;
+
+  auto test_vector_predicts_drop =
+      [](const dvaas::SwitchOutput& output_packets) {
+        // If no packets make it out of a front-panel port, that is considered
+        // a drop.
+        return output_packets.packets().empty();
+      };
+
+  // Set `drop_expected` to be the same as `kTestVectorRequiresDrop` to avoid
+  // throwing an error in `CheckTestVectorPredictionConformity`.
+  const bool kTestVectorRequiresDrop = absl::c_all_of(
+      test_vector.acceptable_outputs(), test_vector_predicts_drop);
+  synthesized_packet.set_drop_expected(kTestVectorRequiresDrop);
+
+  return synthesized_packet;
+}
 
 // Determines the reproducibility rate of a test failure and sets it in
 // `test_outcome`.
 absl::Status DetermineReproducibilityRate(
     const DataplaneValidationParams& params,
-    const PacketInjectionParams& parameters, pdpi::P4RuntimeSession& sut,
-    pdpi::P4RuntimeSession& control_switch,
+    const PacketInjectionParams& parameters,
+    pdpi::P4RuntimeSession& sut_session,
+    pdpi::P4RuntimeSession& control_switch_session,
     dvaas::PacketTestOutcome& test_outcome) {
   // Duplicate the packet that caused a test failure.
   PacketTestVectorById test_vectors;
@@ -85,10 +116,11 @@ absl::Status DetermineReproducibilityRate(
   }
 
   // Call SendTestPacketsAndCollectOutputs.
-  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
-                   SendTestPacketsAndCollectOutputs(
-                       sut, control_switch, test_vectors, parameters,
-                       statistics, /*log_injection_progress=*/false));
+  ASSIGN_OR_RETURN(
+      PacketTestRuns test_runs,
+      SendTestPacketsAndCollectOutputs(sut_session, control_switch_session,
+                                       test_vectors, parameters, statistics,
+                                       /*log_injection_progress=*/false));
 
   ValidationResult validation_result =
       ValidationResult(test_runs, params.switch_output_diff_params,
@@ -99,6 +131,84 @@ absl::Status DetermineReproducibilityRate(
       ->mutable_minimization_analysis()
       ->set_reproducibility_rate(1 - validation_result.GetSuccessRate());
 
+  return absl::OkStatus();
+}
+
+absl::Status MinimizePacketTestVectors(
+    SwitchApi& sut_api, dvaas::PacketTestOutcome& test_outcome,
+    const std::function<absl::StatusOr<ValidationResult>(
+        const SynthesizedPacket& synthesized_packet,
+        pdpi::IrEntities& ir_entities)>
+        test_and_validate_callback) {
+  // Get the `pi_entities` from the SUT.
+  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
+                   pdpi::ReadPiEntities(sut_api.p4rt.get()));
+
+  // Clear and reinstall table entries on the SUT.
+  absl::Cleanup cleanup = [&pi_entities, &sut_api]() {
+    auto status = pdpi::ClearEntities(*sut_api.p4rt);
+    if (!status.ok()) {
+      LOG(WARNING) << "Failed to clear entities on the switch: "
+                   << status.message();
+    }
+    status = pdpi::InstallPiEntities(*sut_api.p4rt, pi_entities);
+    if (!status.ok()) {
+      LOG(WARNING) << "Failed to reinstall entities on the switch: "
+                   << status.message();
+    }
+  };
+
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::GetIrP4Info(*sut_api.p4rt));
+
+  // Create a synthesized packet from `test_outcome`.
+  ASSIGN_OR_RETURN(SynthesizedPacket synthesized_packet,
+                   GetSynthesizedPacketFromFromTestVector(
+                       test_outcome.test_run().test_vector()));
+
+  // Order the entities so that an entity that may be depended on by another
+  // entity comes first.
+  RETURN_IF_ERROR(pdpi::StableSortEntities(ir_p4info, pi_entities));
+
+  // Convert `pi_entities` to `ir_entities` to pass into
+  // `generate_test_vectors_callback`.
+  ASSIGN_OR_RETURN(pdpi::IrEntities result,
+                   pdpi::PiEntitiesToIr(ir_p4info, pi_entities));
+
+  // Iterate backwards through the entities, remove the current entity from the
+  // switch, and reinstall the entity on the switch if no failure occurs.
+  for (int i = result.entities_size() - 1; i >= 0; --i) {
+    // Store the `pi_entity` in case we need to reinstall it on the switch if no
+    // failure occurs.
+    pdpi::IrEntity ir_entity = result.entities().at(i);
+
+    // Remove the entity from the result.
+    result.mutable_entities()->DeleteSubrange(i, 1);
+
+    // Uninstall the entity from the switch.
+    if (!DeleteIrEntity(*sut_api.p4rt, ir_entity).ok()) {
+      continue;
+    }
+
+    // Validate test runs to create test outcomes.
+    ASSIGN_OR_RETURN(ValidationResult validation_result,
+                     test_and_validate_callback(synthesized_packet, result));
+
+    if (!validation_result.HasFailure()) {
+      // If there is no failure, reinstall the entity on the switch and add
+      // the entity back to the result.
+      RETURN_IF_ERROR(pdpi::InstallIrEntity(*sut_api.p4rt, ir_entity))
+          << "Failed to reinstall entity that we just deleted from switch:"
+          << gutil::PrintTextProto(ir_entity);
+      *result.add_entities() = ir_entity;
+    }
+  }
+  LOG(INFO) << "The initial number of entities is " << pi_entities.size()
+            << ".\n";
+  LOG(INFO) << "The final number of entities is " << result.entities_size()
+            << ".\n";
+  LOG(INFO)
+      << "The minimal set of entities that caused the test failure is: \n";
+  LOG(INFO) << gutil::PrintTextProto(result);
   return absl::OkStatus();
 }
 
@@ -295,7 +405,6 @@ absl::StatusOr<GenerateTestVectorsResult> GenerateTestVectors(
     return absl::InvalidArgumentError("Set of available P4RT ports is empty");
   }
   const P4rtPortId& default_ingress_port = ports[0];
-
   GenerateTestVectorsResult generate_test_vectors_result;
 
   // Synthesize test packets.
@@ -373,17 +482,36 @@ absl::Status AttachPacketTrace(
 
 absl::Status PostProcessTestVectorFailure(
     const DataplaneValidationParams& params,
-    const PacketInjectionParams& parameters, int failure_count,
-    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
+    const PacketInjectionParams& packet_injection_params, int failure_count,
+    SwitchApi& sut_api, SwitchApi& control_switch_api,
     dvaas::PacketTestOutcome& test_outcome,
     absl::btree_map<std::string, std::vector<dvaas::PacketTrace>>&
         packet_traces,
-    gutil::TestArtifactWriter& dvaas_test_artifact_writer) {
+    gutil::TestArtifactWriter& dvaas_test_artifact_writer,
+    const std::function<absl::StatusOr<ValidationResult>(
+        const SynthesizedPacket& synthesized_packet,
+        pdpi::IrEntities& ir_entities)>
+        test_and_validate_callback) {
   // Duplicate packet that caused test failure.
   if (failure_count <
       params.failure_enhancement_options.max_failures_to_attempt_to_replicate) {
-    RETURN_IF_ERROR(DetermineReproducibilityRate(params, parameters, sut,
-                                                 control_switch, test_outcome));
+    RETURN_IF_ERROR(DetermineReproducibilityRate(
+        params, packet_injection_params, *sut_api.p4rt,
+        *control_switch_api.p4rt, test_outcome));
+  }
+
+  // Only try to minimize the set of entities when the failure is perfectly
+  // reproducible.
+  if (test_outcome.test_result()
+              .failure()
+              .minimization_analysis()
+              .reproducibility_rate() == 1.0 &&
+      failure_count < params.failure_enhancement_options
+                          .max_number_of_failures_to_minimize) {
+    RETURN_IF_ERROR(MinimizePacketTestVectors(sut_api, test_outcome,
+                                              test_and_validate_callback))
+            .SetPrepend()
+        << "When minimizing failure: ";
   }
 
   // Print packet traces.
@@ -583,12 +711,55 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
         // Remove once packet trace, replication, and
         // minimization code is stably integrated.
         absl::Status status = PostProcessTestVectorFailure(
-            params, packet_injection_params, current_failures_count++,
-            *sut.p4rt, *control_switch.p4rt, test_outcome, packet_traces,
-            dvaas_test_artifact_writer);
+            params, packet_injection_params, current_failures_count++, sut,
+            control_switch, test_outcome, packet_traces,
+            dvaas_test_artifact_writer,
+            /*test_and_validate_callback=*/
+            [&](const SynthesizedPacket& synthesized_packet,
+                pdpi::IrEntities& ir_entities)
+                -> absl::StatusOr<ValidationResult> {
+              std::string_view packet_port =
+                  test_outcome.test_run().test_vector().input().packet().port();
+              ASSIGN_OR_RETURN(pins_test::P4rtPortId default_ingress_port,
+                               P4rtPortId::MakeFromP4rtEncoding(packet_port));
+
+              // Retrieve auxiliary entries for v1model targets.
+              ASSIGN_OR_RETURN(pdpi::IrEntities v1model_auxiliary_table_entries,
+                               backend_->CreateV1ModelAuxiliaryEntities(
+                                   ir_entities, ir_p4info, *sut.gnmi));
+              ir_entities.MergeFrom(v1model_auxiliary_table_entries);
+
+              // Get enabled Ethernet ports from SUT's GNMI config.
+              ASSIGN_OR_RETURN(
+                  std::vector<pins_test::P4rtPortId> ports,
+                  pins_test::GetMatchingP4rtPortIds(
+                      *sut.gnmi, pins_test::IsEnabledEthernetInterface));
+              std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>
+                  synthesized_packets = {synthesized_packet};
+              // TODO: Move to using `ValidateDataplane` once the
+              // bug is fixed.
+              ASSIGN_OR_RETURN(
+                  PacketTestVectorById test_vectors,
+                  backend_->GeneratePacketTestVectors(
+                      ir_p4info, ir_entities, p4_spec.bmv2_config, ports,
+                      synthesized_packets, default_ingress_port));
+
+              // Send packets to the switch and collect results.
+              PacketStatistics statistics;
+              ASSIGN_OR_RETURN(
+                  PacketTestRuns test_runs,
+                  SendTestPacketsAndCollectOutputs(
+                      *sut.p4rt, *control_switch.p4rt, test_vectors,
+                      packet_injection_params, statistics,
+                      /*log_injection_progress=*/false));
+              // Validate test runs to create test outcomes.
+              return ValidationResult(test_runs,
+                                      params.switch_output_diff_params,
+                                      /*packet_synthesis_result=*/{});
+            });
         if (!status.ok()) {
-          LOG(WARNING) << "Failed to extract packet trace and/or replicate: "
-                       << status;
+          LOG(WARNING) << "Got error when post-processing failure: "
+                       << status.message();
         }
       }
     }
@@ -655,7 +826,7 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                      pins_test::GetInterfacesAsProto(*control_switch.gnmi,
                                                      gnmi::GetRequest::CONFIG));
     // Set up control switch to be a mirror of SUT.
-    RETURN_IF_ERROR(pdpi::ClearTableEntries(control_switch.p4rt.get()));
+    RETURN_IF_ERROR(pdpi::ClearEntities(*sut.p4rt));
     // Mirror testbed ports.
     RETURN_IF_ERROR(
         pins_test::MirrorSutP4rtPortIdConfigToControlSwitch(testbed));
