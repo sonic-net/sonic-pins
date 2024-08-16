@@ -7,6 +7,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/collections.h"
@@ -178,21 +179,6 @@ absl::StatusOr<IrActionField> CreateIrActionField(absl::string_view action_name,
   }
 }
 
-absl::StatusOr<std::string> GetNameOfTable(const IrTable &table) {
-  switch (table.table_case()) {
-    case IrTable::kP4Table: {
-      return table.p4_table().table_name();
-    }
-    case IrTable::kBuiltInTable: {
-      return IrBuiltInTableToString(table.built_in_table());
-    }
-    case IrTable::TABLE_NOT_SET: {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "IrTable table oneof not set.";
-    }
-  }
-}
-
 absl::StatusOr<std::string> GetNameOfField(const IrField &field) {
   switch (field.field_case()) {
     case IrField::kMatchField: {
@@ -247,6 +233,21 @@ absl::StatusOr<std::string> GetNameOfAction(const IrActionField &field) {
     case IrField::FIELD_NOT_SET: {
       return gutil::InvalidArgumentErrorBuilder()
              << "IrActionField field oneof not set.";
+    }
+  }
+}
+
+absl::StatusOr<std::string> GetNameOfTable(const IrTable &table) {
+  switch (table.table_case()) {
+    case IrTable::kP4Table: {
+      return table.p4_table().table_name();
+    }
+    case IrTable::kBuiltInTable: {
+      return IrBuiltInTableToString(table.built_in_table());
+    }
+    case IrTable::TABLE_NOT_SET: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "IrTable table oneof not set.";
     }
   }
 }

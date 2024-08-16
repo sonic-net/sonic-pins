@@ -14,6 +14,7 @@
 #include "p4rt_app/p4runtime/p4runtime_read.h"
 
 #include <string>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -51,16 +52,20 @@ absl::Status AppendAclCounterData(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table) {
-  ASSIGN_OR_RETURN(pdpi::IrTableEntry ir_table_entry,
-                   TranslatePiTableEntryForOrchAgent(
-                       pi_table_entry, ir_p4_info, translate_port_ids,
-                       port_translation_map, cpu_queue_translator,
-                       /*translate_key_only=*/false));
+  ASSIGN_OR_RETURN(
+      pdpi::IrTableEntry ir_table_entry,
+      TranslatePiTableEntryForOrchAgent(
+          pi_table_entry, ir_p4_info, translate_port_ids, port_translation_map,
+          cpu_queue_translator, /*translate_key_only=*/false));
 
   RETURN_IF_ERROR(sonic::AppendCounterDataForTableEntry(
       ir_table_entry, p4rt_table, ir_p4_info));
   if (ir_table_entry.has_counter_data()) {
     *pi_table_entry.mutable_counter_data() = ir_table_entry.counter_data();
+  }
+  if (ir_table_entry.has_meter_counter_data()) {
+    *pi_table_entry.mutable_meter_counter_data() =
+        ir_table_entry.meter_counter_data();
   }
 
   return absl::OkStatus();
@@ -73,7 +78,7 @@ absl::Status AppendTableEntryReads(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator,
     sonic::P4rtTable& p4rt_table) {
-  // Fetch the table defintion since it will inform how we process the read
+  // Fetch the table definition since it will inform how we process the read
   // request.
   auto table_def = ir_p4_info.tables_by_id().find(cached_entry.table_id());
   if (table_def == ir_p4_info.tables_by_id().end()) {
@@ -113,25 +118,38 @@ absl::Status AppendTableEntryReads(
 
 }  // namespace
 
-absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
-    const p4::v1::ReadRequest& request, const pdpi::IrP4Info& ir_p4_info,
-    const absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>&
-        table_entry_cache,
+absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
+    int batch_size, const p4::v1::ReadRequest& request,
+    const pdpi::IrP4Info& ir_p4_info,
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     CpuQueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
-  p4::v1::ReadResponse response;
+  std::vector<p4::v1::ReadResponse> responses;
+  responses.push_back(p4::v1::ReadResponse{});
+  int i = 0;
   for (const auto& entity : request.entities()) {
     VLOG(1) << "Read request: " << entity.ShortDebugString();
     switch (entity.entity_case()) {
       case p4::v1::Entity::kTableEntry: {
         RETURN_IF_ERROR(SupportedTableEntryRequest(entity.table_entry()));
-        for (const auto& [_, entry] : table_entry_cache) {
-          RETURN_IF_ERROR(AppendTableEntryReads(
-              response, entry, request.role(), ir_p4_info, translate_port_ids,
-              port_translation_map, cpu_queue_translator, p4rt_table));
+        for (const auto& [_, entry] : entity_cache) {
+          if (entry.entity_case() == p4::v1::Entity::kTableEntry) {
+            RETURN_IF_ERROR(AppendTableEntryReads(
+                responses.back(), entry.table_entry(), request.role(),
+                ir_p4_info, translate_port_ids, port_translation_map,
+                cpu_queue_translator, p4rt_table));
+            if (++i >= batch_size) {
+              responses.push_back(p4::v1::ReadResponse{});
+              i = 0;
+            }
+          }
         }
         break;
+      }
+      case p4::v1::Entity::kPacketReplicationEngineEntry: {
+        // TODO: 298489493 - Add support for reading back multicast entries.
+        continue;
       }
       default:
         return gutil::UnimplementedErrorBuilder()
@@ -139,7 +157,7 @@ absl::StatusOr<p4::v1::ReadResponse> ReadAllTableEntries(
                << entity.ShortDebugString();
     }
   }
-  return response;
+  return responses;
 }
 
 }  // namespace p4rt_app

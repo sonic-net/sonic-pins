@@ -13,7 +13,9 @@
 // limitations under the License.
 #include "p4rt_app/sonic/app_db_manager.h"
 
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -23,8 +25,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "google/rpc/code.pb.h"
@@ -49,7 +53,7 @@ namespace sonic {
 namespace {
 
 // Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be deleted (i.e. alreay exist). On success the
+// verifies that the entry can be deleted (i.e. already exist). On success the
 // P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForDelete(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
@@ -67,7 +71,7 @@ absl::StatusOr<std::string> CreateEntryForDelete(
 }
 
 // Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be inserted (i.e. doesn't alreay exist). On
+// verifies that the entry can be inserted (i.e. doesn't already exist). On
 // success the P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForInsert(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
@@ -87,7 +91,7 @@ absl::StatusOr<std::string> CreateEntryForInsert(
 }
 
 // Translates the IR entry into a format understood by the OA layer. Also
-// verifies that the entry can be modified (i.e. alreay exist). On success the
+// verifies that the entry can be modified (i.e. already exist). On success the
 // P4RT key is returned.
 absl::StatusOr<std::string> CreateEntryForModify(
     P4rtTable& p4rt_table, const pdpi::IrTableEntry& entry,
@@ -109,29 +113,55 @@ absl::StatusOr<std::string> CreateEntryForModify(
 absl::Status AppendCounterData(
     pdpi::IrTableEntry& table_entry,
     const std::vector<std::pair<std::string, std::string>>& counter_data) {
-  for (const auto& [field, data] : counter_data) {
-    // Update packet count only if data is present.
-    if (field == "packets") {
-      uint64_t packets = 0;
-      if (absl::SimpleAtoi(data, &packets)) {
-        table_entry.mutable_counter_data()->set_packet_count(packets);
-      } else {
-        LOG(ERROR) << "Unexpected packets value '" << data
-                   << "' in CountersDB for table entry: "
-                   << table_entry.ShortDebugString();
-      }
+  auto field_value_error = [&table_entry](absl::string_view field,
+                                          absl::string_view value) {
+    return absl::Substitute(
+        "Unexpected value '$0' for field '$1' in CountersDB for table entry: "
+        "$2",
+        value, field, table_entry.ShortDebugString());
+  };
+
+  for (const auto& [field, value] : counter_data) {
+    uint64_t counter_value = 0;
+    if (!absl::SimpleAtoi(value, &counter_value)) {
+      LOG(ERROR) << field_value_error(field, value);
+      continue;
     }
 
-    // Update byte count only if data is present.
-    if (field == "bytes") {
-      uint64_t bytes = 0;
-      if (absl::SimpleAtoi(data, &bytes)) {
-        table_entry.mutable_counter_data()->set_byte_count(bytes);
-      } else {
-        LOG(ERROR) << "Unexpected bytes value '" << data
-                   << "' in CountersDB for table entry: "
-                   << table_entry.ShortDebugString();
-      }
+    // Update counter data if present.
+    if (field == "packets") {
+      table_entry.mutable_counter_data()->set_packet_count(counter_value);
+    } else if (field == "bytes") {
+      table_entry.mutable_counter_data()->set_byte_count(counter_value);
+    }
+
+    if (!table_entry.has_meter_config()) continue;
+
+    // Update meter counter data if present.
+    // Meter color counters are in the form of `color`_packets and
+    // `color`_bytes.
+    // Example: {red_packets 100}, {red_bytes 1000}.
+    if (field == "green_packets") {
+      table_entry.mutable_meter_counter_data()
+          ->mutable_green()
+          ->set_packet_count(counter_value);
+    } else if (field == "green_bytes") {
+      table_entry.mutable_meter_counter_data()->mutable_green()->set_byte_count(
+          counter_value);
+    } else if (field == "yellow_packets") {
+      table_entry.mutable_meter_counter_data()
+          ->mutable_yellow()
+          ->set_packet_count(counter_value);
+    } else if (field == "yellow_bytes") {
+      table_entry.mutable_meter_counter_data()
+          ->mutable_yellow()
+          ->set_byte_count(counter_value);
+    } else if (field == "red_packets") {
+      table_entry.mutable_meter_counter_data()->mutable_red()->set_packet_count(
+          counter_value);
+    } else if (field == "red_bytes") {
+      table_entry.mutable_meter_counter_data()->mutable_red()->set_byte_count(
+          counter_value);
     }
   }
 
@@ -346,6 +376,8 @@ absl::StatusOr<std::string> GetRedisP4rtTableKey(
       json_key);
 }
 
+// This function can only be called for keys that point to IrTableEntry in the
+// P4RT_TABLE.  IrPacketReplicationEntry keys are handled separately.
 absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
     P4rtTable& p4rt_table, const pdpi::IrP4Info& p4info,
     const std::string& key) {
@@ -361,6 +393,7 @@ absl::StatusOr<pdpi::IrTableEntry> ReadP4TableEntry(
         table_entry, p4rt_table.counter_db->get(absl::StrCat(
                          p4rt_table.app_db->getTablePrefix(), key))));
   }
+
   return table_entry;
 }
 
@@ -421,9 +454,9 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
              << entry.entry.ShortDebugString();
     } else if (entry.appdb_table == AppDbTableType::VRF_TABLE) {
       // Update non AppDb:P4RT entries (e.g. VRF_TABLE).
-      RETURN_IF_ERROR(UpdateAppDbVrfTable(vrf_table, entry.update_type,
-                                          entry.rpc_index, entry.entry,
-                                          *response));
+      RETURN_IF_ERROR(
+          UpdateAppDbVrfTable(vrf_table, entry.update_type, entry.rpc_index,
+                              entry.entry.table_entry(), *response));
       if (response->statuses(entry.rpc_index).code() != google::rpc::Code::OK) {
         fail_on_first_error = true;
       } 
@@ -434,16 +467,16 @@ absl::Status UpdateAppDb(P4rtTable& p4rt_table, VrfTable& vrf_table,
     absl::StatusOr<std::string> key;
     switch (entry.update_type) {
       case p4::v1::Update::INSERT:
-        key =
-            CreateEntryForInsert(p4rt_table, entry.entry, p4_info, kfv_updates);
+        key = CreateEntryForInsert(p4rt_table, entry.entry.table_entry(),
+                                   p4_info, kfv_updates);
         break;
       case p4::v1::Update::MODIFY:
-        key =
-            CreateEntryForModify(p4rt_table, entry.entry, p4_info, kfv_updates);
+        key = CreateEntryForModify(p4rt_table, entry.entry.table_entry(),
+                                   p4_info, kfv_updates);
         break;
       case p4::v1::Update::DELETE:
-        key =
-            CreateEntryForDelete(p4rt_table, entry.entry, p4_info, kfv_updates);
+        key = CreateEntryForDelete(p4rt_table, entry.entry.table_entry(),
+                                   p4_info, kfv_updates);
         break;
       default:
         key = gutil::InvalidArgumentErrorBuilder()

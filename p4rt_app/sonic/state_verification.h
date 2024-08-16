@@ -38,8 +38,8 @@ std::vector<std::string> VerifyAppStateDbAndAppDbEntries(
 //
 // On success an empty vector is returned. Otherwise, the vector will contain
 // one message for every error found.
-std::vector<std::string> VerifyP4rtTableWithCacheTableEntries(
-    TableAdapter& app_db, const std::vector<pdpi::IrTableEntry>& ir_entries,
+std::vector<std::string> VerifyP4rtTableWithCacheEntities(
+    TableAdapter& app_db, const std::vector<pdpi::IrEntity>& ir_entities,
     const pdpi::IrP4Info& ir_p4_info);
 
 }  // namespace sonic
