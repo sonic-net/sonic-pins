@@ -23,14 +23,17 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/optional.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "z3++.h"
@@ -490,6 +493,73 @@ absl::Status EvaluateParseState(const ir::P4Program &program,
   }
 }
 
+absl::Status EvaluateParseStateDfs(
+    const ir::P4Program &program, const ir::Parser &parser,
+    const std::string &state_name, SymbolicPerPacketState &headers,
+    z3::context &z3_context, SolverState &state,
+    packet_synthesizer::PacketSynthesisResults &results) {
+  // Base case. We got to the end of the parser execution path.
+  if (state_name == ir::EndOfParser()) {
+    // At the end of the parser pipeline for a particular path in the parser,
+    // the execution moves to the "ingress" pipeline.
+    // The "ingress" pipeline is the evaluated with the current parser path
+    // and the current headers packet state.
+    RETURN_IF_ERROR(
+        control::EvaluatePipelineDfs("ingress", state, headers, results));
+    return absl::OkStatus();
+  }
+
+  // Get the parse state with the given state name.
+  auto it = parser.parse_states().find(state_name);
+  if (it == parser.parse_states().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Parse state not found: " << state_name;
+  }
+
+  const ir::ParseState &parse_state = it->second;
+
+  // We evaluate a parse state by first evaluating all the parser operations
+  // defined in this state.
+
+  // Evaluate the parser operations in this parse state.
+  action::ActionContext fake_context = {state_name, {}};
+  for (const ir::ParserOperation &op : parse_state.parser_ops()) {
+    RETURN_IF_ERROR(EvaluateParserOperation(program, op, headers, fake_context,
+                                            z3_context,
+                                            z3_context.bool_val(true)));
+  }
+
+  // Construct the match condition of each transition.
+  ASSIGN_OR_RETURN(std::vector<z3::expr> match_conditions,
+                   ConstructMatchConditions(parse_state, headers, z3_context,
+                                            z3_context.bool_val(true)));
+
+  // Evaluate every parser transition one-by-one.
+  // For every transition, the match condition is added to the
+  // solver state to check if the path (with this transition) is satisfiable.
+  // If there is no solution, then the transition is not evaluated
+  // and the path following this transition is pruned and the execution
+  // moves to the next transition.
+  // If the path is valid (a solution exists), then the execution moves to the
+  // next transition.
+  state.solver->push();
+  for (size_t i = 0; i < match_conditions.size(); ++i) {
+    ASSIGN_OR_RETURN(std::string next_state,
+                     GetNextState(parse_state.transitions(i)));
+    state.solver->push();
+    state.solver->add(match_conditions[i]);
+    auto prune = (state.solver->check() == z3::unsat);
+    if (!prune) {
+      RETURN_IF_ERROR(EvaluateParseStateDfs(
+          program, parser, next_state, headers, z3_context, state, results));
+    }
+    state.solver->pop();
+  }
+  state.solver->pop();
+
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<z3::expr> GetErrorCodeExpression(const ir::P4Program &program,
@@ -527,6 +597,27 @@ absl::StatusOr<SymbolicPerPacketState> EvaluateParsers(
                                      parsed_headers, z3_context,
                                      z3_context.bool_val(true)));
   return parsed_headers;
+}
+
+absl::Status EvaluateParsersDfs(
+    const ir::P4Program &program, const SymbolicPerPacketState &headers,
+    z3::context &z3_context, SolverState &state,
+    packet_synthesizer::PacketSynthesisResults &results) {
+  // Make sure there is exactly one parser in the P4-Symbolic IR.
+  if (program.parsers_size() != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Invalid number of parsers: " << program.parsers_size();
+  }
+
+  // Duplicate the symbolic headers for evaluating the parsers. This is to
+  // preserve the symbolic state of the ingress packet before entering the
+  // parsers.
+  SymbolicPerPacketState parsed_headers = headers;
+  const ir::Parser &parser = program.parsers().begin()->second;
+  RETURN_IF_ERROR(EvaluateParseStateDfs(program, parser, parser.initial_state(),
+                                        parsed_headers, z3_context, state,
+                                        results));
+  return absl::OkStatus();
 }
 
 }  // namespace p4_symbolic::symbolic::parser
