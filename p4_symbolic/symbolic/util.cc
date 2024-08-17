@@ -16,10 +16,8 @@
 
 #include "p4_symbolic/symbolic/util.h"
 
-#include <optional>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "absl/container/btree_map.h"
 #include "absl/status/status.h"
@@ -36,9 +34,8 @@
 #include "p4_symbolic/symbolic/context.h"
 #include "p4_symbolic/symbolic/deparser.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "p4_symbolic/symbolic/symbolic_table_entry.h"
-#include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
@@ -59,7 +56,7 @@ absl::StatusOr<ir::HeaderField> GetFieldDefinition(
     return gutil::InvalidArgumentErrorBuilder()
            << "Unexpected header instance '" << header_name << "'";
   }
-  const p4_symbolic::ir::HeaderType &header = header_it->second;
+  const ir::HeaderType &header = header_it->second;
 
   // Extract the field definition from the header definition.
   auto field_it = header.fields().find(field_name);

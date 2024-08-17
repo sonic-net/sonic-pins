@@ -18,10 +18,12 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 #include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/solver_state.h"
 #include "z3++.h"
 
 namespace p4_symbolic::symbolic::v1model {
@@ -53,6 +55,15 @@ absl::Status InitializeIngressHeaders(const ir::P4Program &program,
 // model.
 absl::Status EvaluateV1model(SolverState &state,
                              const std::vector<int> &physical_ports);
+
+// Symbolically evaluates the parser, ingress, and egress pipelines of the given
+// P4 program with the given entries, assuming the program is written against V1
+// model.
+// This is currently being used to generate packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::StatusOr<packet_synthesizer::PacketSynthesisResults>
+EvaluateV1modelAndSynthesizePacketsCoveringAllControlFlowPaths(
+    SolverState &state, const std::vector<int> &physical_ports);
 
 }  // namespace p4_symbolic::symbolic::v1model
 
