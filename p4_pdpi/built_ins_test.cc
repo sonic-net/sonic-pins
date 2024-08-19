@@ -38,16 +38,52 @@ TEST(IrBuitInTable, AllTablesSupportedAndRoundTrip) {
   }
 }
 
-TEST(IrBuitInField, AllFieldsSupportedAndRoundTrip) {
-  for (int i = IrBuiltInField_MIN; i <= IrBuiltInField_MAX; ++i) {
+TEST(IrBuiltInMatchField, AllMatchFieldsSupportedAndRoundTrip) {
+  for (int i = IrBuiltInMatchField_MIN; i <= IrBuiltInMatchField_MAX; ++i) {
     // Skip unknown and default value of UNSPECIFIED.
-    if (!IrBuiltInField_IsValid(i) || i == 0) continue;
-    IrBuiltInField built_in_field = static_cast<IrBuiltInField>(i);
+    if (!IrBuiltInMatchField_IsValid(i) || i == 0) continue;
+    IrBuiltInMatchField built_in_field = static_cast<IrBuiltInMatchField>(i);
     ASSERT_OK_AND_ASSIGN(std::string built_in_string,
-                         IrBuiltInFieldToString(built_in_field));
-    ASSERT_OK_AND_ASSIGN(IrBuiltInField roundtrip_built_in_field,
-                         StringToIrBuiltInField(built_in_string));
+                         IrBuiltInMatchFieldToString(built_in_field));
+    ASSERT_OK_AND_ASSIGN(IrBuiltInMatchField roundtrip_built_in_field,
+                         StringToIrBuiltInMatchField(built_in_string));
     EXPECT_EQ(built_in_field, roundtrip_built_in_field);
+  }
+}
+
+TEST(IrBuiltInAction, AllActionsSupportedAndRoundTrip) {
+  for (int i = IrBuiltInAction_MIN; i <= IrBuiltInAction_MAX; ++i) {
+    // Skip unknown and default value of UNSPECIFIED.
+    if (!IrBuiltInAction_IsValid(i) || i == 0) continue;
+    IrBuiltInAction built_in_action = static_cast<IrBuiltInAction>(i);
+    ASSERT_OK_AND_ASSIGN(std::string built_in_string,
+                         IrBuiltInActionToString(built_in_action));
+    ASSERT_TRUE(IsBuiltInAction(built_in_string));
+    ASSERT_OK_AND_ASSIGN(IrBuiltInAction roundtrip_built_in_action,
+                         StringToIrBuiltInAction(built_in_string));
+    EXPECT_EQ(built_in_action, roundtrip_built_in_action);
+  }
+}
+
+TEST(IrBuiltInParameter, AllParametersSupportedAndRoundTrip) {
+  for (int i = IrBuiltInParameter_MIN; i <= IrBuiltInParameter_MAX; ++i) {
+    // Skip unknown and default value of UNSPECIFIED.
+    if (!IrBuiltInParameter_IsValid(i) || i == 0) continue;
+    IrBuiltInParameter built_in_parameter = static_cast<IrBuiltInParameter>(i);
+    ASSERT_OK_AND_ASSIGN(std::string built_in_string,
+                         IrBuiltInParameterToString(built_in_parameter));
+    ASSERT_OK_AND_ASSIGN(IrBuiltInParameter roundtrip_built_in_parameter,
+                         StringToIrBuiltInParameter(built_in_string));
+    EXPECT_EQ(built_in_parameter, roundtrip_built_in_parameter);
+  }
+}
+
+TEST(IrBuiltInParameter, AllParametersHaveAnAction) {
+  for (int i = IrBuiltInParameter_MIN; i <= IrBuiltInParameter_MAX; ++i) {
+    // Skip unknown and default value of UNSPECIFIED.
+    if (!IrBuiltInParameter_IsValid(i) || i == 0) continue;
+    EXPECT_OK(GetBuiltInActionFromBuiltInParameter(
+        static_cast<IrBuiltInParameter>(i)));
   }
 }
 
