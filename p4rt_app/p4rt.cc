@@ -21,6 +21,7 @@
 
 #include "absl/flags/parse.h"
 #include "glog/logging.h"
+#include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -417,14 +418,30 @@ int main(int argc, char** argv) {
     p4rt_options.forwarding_config_full_path = save_forwarding_config_file;
   }
 
-  // Create the P4RT server.
+  bool is_warm_start = swss::WarmStart::isWarmStart();
+  p4rt_options.is_freeze_mode = is_warm_start;
+  // Create the P4RT server. If boot up in warm start mode, set p4runtime_server
+  // in freeze mode to reject requests until unfreeze.
   p4rt_app::P4RuntimeImpl p4runtime_server(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
-      std::move(switch_table), std::move(port_table),
-      std::move(host_stats_table), std::move(packetio_impl),
+      std::move(switch_table), std::move(port_table), std::move(host_stats_table), 
+      std::make_unique<p4rt_app::sonic::WarmBootStateAdapter>(),
+      std::move(packetio_impl),
       //TODO(PINS): To add component_state_singleton, system_state_singleton, netdev_translator
       //component_state_singleton, system_state_singleton, netdev_translator,
       p4rt_options);
+
+  if (is_warm_start) {
+    // Set warm-start state to INITIALIZED if boot up in warm-start mode.
+    // TODO: Use warm boot state adaptor.
+    swss::WarmStart::setWarmStartState(
+        "p4rt", swss::WarmStart::WarmStartState::INITIALIZED);
+    // TODO: Perform Reconciliation.
+    p4runtime_server.GetOrchAgentWarmStartReconcliationState();
+    // TODO: If P4RT and OA is reconciled and SV is
+    // disabled, then unfreeze P4RT server. If SV is enabled, run SV and keep
+    // p4runtimer_server frozen until unfreeze notification is received.
+  }
 
   // Create a server to listen on the unix socket port.
   std::thread internal_server_thread;

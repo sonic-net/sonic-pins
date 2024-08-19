@@ -31,6 +31,7 @@
 #include "p4rt_app/sonic/adapters/fake_producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/adapters/fake_table_adapter.h"
+#include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 //TODO(PINS): Add Component/System state Translator
@@ -144,7 +145,9 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
   p4runtime_server_ = absl::make_unique<P4RuntimeImpl>(
       std::move(p4rt_table), std::move(vrf_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
-      std::move(host_stats_table), std::move(fake_packetio_interface),
+      std::move(host_stats_table),
+      std::make_unique<p4rt_app::sonic::FakeWarmBootStateAdapter>(),
+      std::move(fake_packetio_interface),
      // TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
      // fake_component_state_helper_, fake_system_state_helper_, fake_netdev_translator_, 
       options);
@@ -221,6 +224,11 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtStateDbTable() {
 
 sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHostStatsStateDbTable() {
   return fake_host_stats_table_;
+}
+
+sonic::FakeWarmBootStateAdapter&
+P4RuntimeGrpcService::GetWarmBootStateAdapter() {
+  return fake_warm_boot_state_adapter_;
 }
 
 sonic::FakePacketIoInterface& P4RuntimeGrpcService::GetFakePacketIoInterface() {
