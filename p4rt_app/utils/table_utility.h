@@ -18,9 +18,11 @@
 #define PINS_P4RT_APP_UTILS_TABLE_UTILITY_H_
 
 #include <string>
+#include <vector>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "gutil/status.h"
+#include "google/protobuf/map.h"
 #include "p4_pdpi/ir.pb.h"
 
 
@@ -48,6 +50,12 @@ absl::StatusOr<Type> TypeParse(absl::string_view type_name);
 // Returns the table type of the provided table.
 absl::StatusOr<table::Type> GetTableType(
     const pdpi::IrTableDefinition& ir_table);
+
+// Looks at the bitwidth for all match fields in a table and returns an ordered
+// list of table definitions in decreasing order.
+std::vector<pdpi::IrTableDefinition> OrderTablesBySize(
+    const google::protobuf::Map<std::string, pdpi::IrTableDefinition>&
+        tables_by_name);
 
 }  // namespace p4rt_app
 

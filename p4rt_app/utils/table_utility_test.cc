@@ -13,14 +13,23 @@
 // limitations under the License.
 #include "p4rt_app/utils/table_utility.h"
 
-#include "glog/logging.h"
+#include <string>
+
+#include "absl/status/status.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/map.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
+#include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status_matchers.h"  // NOLINT
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4rt_app {
 namespace {
+
+using ::gutil::EqualsProto;
+using ::testing::ElementsAre;
 
 TEST(GetTableType, ReturnsAclForSaiAclAnnotation) {
   pdpi::IrTableDefinition ir_table;
@@ -101,6 +110,79 @@ INSTANTIATE_TEST_SUITE_P(
     [](const testing::TestParamInfo<TypeTest::ParamType>& info) {
       return table::TypeName(info.param);
     });
+
+TEST(OrderTablesBySize, OrdersTablesBySize) {
+  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table_size_5,
+                       gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         match_fields_by_name {
+                           key: "a"
+                           value { match_field { bitwidth: 5 } }
+                         }
+                       )pb"));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table_size_10,
+                       gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         match_fields_by_name {
+                           key: "b"
+                           value { match_field { bitwidth: 3 } }
+                         }
+                         match_fields_by_name {
+                           key: "c"
+                           value { match_field { bitwidth: 7 } }
+                         }
+                       )pb"));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table_size_15,
+                       gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         match_fields_by_name {
+                           key: "d"
+                           value { match_field { bitwidth: 15 } }
+                         }
+                       )pb"));
+
+  google::protobuf::Map<std::string, pdpi::IrTableDefinition> tables_by_name;
+  tables_by_name["table_size_10"] = table_size_10;
+  tables_by_name["table_size_5"] = table_size_5;
+  tables_by_name["table_size_15"] = table_size_15;
+
+  EXPECT_THAT(
+      OrderTablesBySize(tables_by_name),
+      ElementsAre(EqualsProto(table_size_15), EqualsProto(table_size_10),
+                  EqualsProto(table_size_5)));
+}
+
+TEST(OrderTablesBySize, OrdersTablesByNameToBreakTies) {
+  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table0,
+                       gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         match_fields_by_name {
+                           key: "a"
+                           value { match_field { bitwidth: 5 } }
+                         }
+                       )pb"));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table1,
+                       gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         match_fields_by_name {
+                           key: "b"
+                           value { match_field { bitwidth: 5 } }
+                         }
+                       )pb"));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrTableDefinition table2,
+                       gutil::ParseTextProto<pdpi::IrTableDefinition>(R"pb(
+                         match_fields_by_name {
+                           key: "d"
+                           value { match_field { bitwidth: 6 } }
+                         }
+                       )pb"));
+
+  google::protobuf::Map<std::string, pdpi::IrTableDefinition> tables_by_name;
+  tables_by_name["a"] = table0;
+  tables_by_name["b"] = table1;
+  tables_by_name["c"] = table2;
+
+  // Note that `table2` has a larger size so it will be first. Then table 1
+  // because its name is larger than table0.
+  EXPECT_THAT(OrderTablesBySize(tables_by_name),
+              ElementsAre(EqualsProto(table2), EqualsProto(table1),
+                          EqualsProto(table0)));
+}
 
 }  // namespace
 }  // namespace p4rt_app

@@ -11,13 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+// =============================================================================
 // Convenience functions to simplify working with `P4RuntimeSession`.
 //
 // These functions are in a separate file since they pull in additional
 // dependencies that some users may wish to avoid.
 //
-// NOTE: Like `P4RuntimeSession`  itself, these function are optimized for
+// NOTE: Like `P4RuntimeSession` itself, these function are optimized for
 // convenience, not for performance. They are intended for use in testing &
 // experimentation, not for use in production.
 
@@ -27,12 +27,14 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "google/protobuf/message.h"
 #include "google/protobuf/repeated_field.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -76,6 +78,8 @@ absl::Status InstallPdTableEntry(P4RuntimeSession& p4rt,
 // in translation from the switch.
 absl::Status InstallIrTableEntries(P4RuntimeSession& p4rt,
                                    const IrTableEntries& ir_table_entries);
+absl::Status InstallIrEntities(P4RuntimeSession& p4rt,
+                               const IrEntities& ir_entities);
 
 // Like `InstallIrTableEntries`, but for a single entry.
 absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,

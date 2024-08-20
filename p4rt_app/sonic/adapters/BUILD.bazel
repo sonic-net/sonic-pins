@@ -146,6 +146,7 @@ cc_library(
     deps = [
         ":table_adapter",
         "@com_google_googletest//:gtest",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -159,6 +160,18 @@ cc_library(
         ":table_adapter",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/strings",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_library(
+    name = "fake_warm_boot_state_adapter",
+    testonly = True,
+    srcs = ["fake_warm_boot_state_adapter.cc"],
+    hdrs = ["fake_warm_boot_state_adapter.h"],
+    deps = [
+        ":warm_boot_state_adapter",
+        "@sonic_swss_common//:libswsscommon",
     ],
 )
 
@@ -187,5 +200,33 @@ cc_test(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "fake_warm_boot_state_adapter_test",
+    srcs = ["fake_warm_boot_state_adapter_test.cc"],
+    deps = [
+        ":fake_warm_boot_state_adapter",
+        "@com_google_googletest//:gtest_main",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_library(
+    name = "warm_boot_state_adapter",
+    srcs = ["warm_boot_state_adapter.cc"],
+    hdrs = ["warm_boot_state_adapter.h"],
+    deps = ["@sonic_swss_common//:libswsscommon"],
+)
+
+cc_library(
+    name = "mock_warm_boot_state_adapter",
+    testonly = True,
+    hdrs = ["mock_warm_boot_state_adapter.h"],
+    deps = [
+        ":warm_boot_state_adapter",
+        "@com_google_googletest//:gtest",
+        "@sonic_swss_common//:common",
     ],
 )

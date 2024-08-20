@@ -9,12 +9,16 @@
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
+#include "gutil/version.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 
 namespace sai {
 namespace {
+
+using gutil::IsOkAndHolds;
+using testing::_;
 
 class InstantiationTest : public testing::TestWithParam<Instantiation> {};
 
@@ -23,6 +27,15 @@ TEST_P(InstantiationTest, GetP4InfoDoesNotCrashAndP4ConstraintsAreParsable) {
   auto info = GetP4Info(GetParam());
   ASSERT_OK_AND_ASSIGN(p4_constraints::ConstraintInfo constraint_info,
                        p4_constraints::P4ToConstraintInfo(info));
+}
+
+TEST_P(InstantiationTest, GetP4InfoDoesNotCrashAndPkgInfoVersionIsParsable) {
+  if (GetParam() == Instantiation::kWbb) {
+    GTEST_SKIP() << "WBB is not a SAI P4 instantiation";
+  }
+  // GetP4Info contains a CHECK; ensure it doesn't fail.
+  auto info = GetP4Info(GetParam());
+  EXPECT_THAT(gutil::ParseVersion(info.pkg_info().version()), IsOkAndHolds(_));
 }
 
 // GetIrP4Info contains a CHECK; ensure it doesn't fail.

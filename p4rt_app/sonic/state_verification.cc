@@ -115,24 +115,31 @@ RedisTable ReadAllEntriesFromRedisTable(TableAdapter& table,
   return result;
 }
 
-RedisTable TranslateIrEntriesIntoRedisTable(
-    const std::vector<pdpi::IrTableEntry>& ir_entries,
-    absl::string_view db_name, const pdpi::IrP4Info& ir_p4_info) {
+RedisTable TranslateIrEntitiesIntoRedisTable(
+    const std::vector<pdpi::IrEntity>& ir_entities, absl::string_view db_name,
+    const pdpi::IrP4Info& ir_p4_info) {
   RedisTable result{.db_name = std::string{db_name}};
-  for (const auto& ir_table_entry : ir_entries) {
+  for (const auto& ir_entity : ir_entities) {
     RedisTableEntry table_entry;
 
     // If we fail to get the key we won't be able to add it as a table entry. In
     // this case, later checks should still fail because the value will appear
     // to be missing from the cache.
-    auto table_key = GetRedisP4rtTableKey(ir_table_entry, ir_p4_info);
+    // TODO: Updated in child CL in this chain.
+    if (ir_entity.entity_case() != pdpi::IrEntity::kTableEntry) {
+      LOG(ERROR) << db_name
+                 << " could not get key for: " << ir_entity.ShortDebugString();
+      continue;
+    }
+    auto table_key = GetRedisP4rtTableKey(ir_entity.table_entry(), ir_p4_info);
     if (!table_key.ok()) {
-      LOG(ERROR) << db_name << " could not get key for: "
-                 << ir_table_entry.ShortDebugString();
+      LOG(ERROR) << db_name
+                 << " could not get key for: " << ir_entity.ShortDebugString();
       continue;
     }
 
-    auto app_db_values = IrTableEntryToAppDbValues(ir_table_entry);
+    // TODO: Updated in child CL in this chain.
+    auto app_db_values = IrTableEntryToAppDbValues(ir_entity.table_entry());
     if (!app_db_values.ok()) {
       table_entry.errors = absl::StrCat(
           db_name,
@@ -243,8 +250,8 @@ std::vector<std::string> VerifyAppStateDbAndAppDbEntries(
       ReadAllEntriesFromRedisTable(app_state_db, "AppStateDb"));
 }
 
-std::vector<std::string> VerifyP4rtTableWithCacheTableEntries(
-    TableAdapter& app_db, const std::vector<pdpi::IrTableEntry>& ir_entries,
+std::vector<std::string> VerifyP4rtTableWithCacheEntities(
+    TableAdapter& app_db, const std::vector<pdpi::IrEntity>& ir_entities,
     const pdpi::IrP4Info& ir_p4_info) {
   std::vector<std::string> failures;
 
@@ -256,8 +263,8 @@ std::vector<std::string> VerifyP4rtTableWithCacheTableEntries(
   });
 
   std::vector<std::string> comparison_failures = CompareTables(
-      redis_db_entries, TranslateIrEntriesIntoRedisTable(
-                            ir_entries, "TableEntryCache", ir_p4_info));
+      redis_db_entries, TranslateIrEntitiesIntoRedisTable(
+                            ir_entities, "EntityCache", ir_p4_info));
   failures.insert(failures.end(), comparison_failures.begin(),
                   comparison_failures.end());
   return failures;

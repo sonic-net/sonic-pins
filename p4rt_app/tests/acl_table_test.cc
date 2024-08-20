@@ -61,21 +61,23 @@ class MiddleblockAclTableTest : public test_lib::P4RuntimeComponentTestFixture {
 };
 
 TEST_F(MiddleblockAclTableTest, ReadCounters) {
-  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest request,
-                       test_lib::PdWriteRequestToPi(
-                           R"pb(
-                             updates {
-                               type: INSERT
-                               table_entry {
-                                 acl_ingress_table_entry {
-                                   match { is_ip { value: "0x1" } }
-                                   priority: 10
-                                   action { acl_copy { qos_queue: "0x1" } }
-                                 }
-                               }
-                             }
-                           )pb",
-                           ir_p4_info_));
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                acl_ingress_table_entry {
+                  match { is_ip { value: "0x1" } }
+                  priority: 10
+                  action { acl_copy { qos_queue: "0x1" } }
+                  meter_config { bytes_per_second: 123 burst_bytes: 345 }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
 
@@ -88,7 +90,16 @@ TEST_F(MiddleblockAclTableTest, ReadCounters) {
                               .SetPriority(10)
                               .AddMatchField("is_ip", "0x1");
   p4rt_service_.GetP4rtCountersDbTable().InsertTableEntry(
-      counter_db_entry.GetKey(), {{"packets", "1"}, {"bytes", "128"}});
+      counter_db_entry.GetKey(), {
+                                     {"packets", "1"},
+                                     {"bytes", "128"},
+                                     {"green_packets", "2"},
+                                     {"green_bytes", "129"},
+                                     {"yellow_packets", "3"},
+                                     {"yellow_bytes", "130"},
+                                     {"red_packets", "4"},
+                                     {"red_bytes", "131"},
+                                 });
 
   // Verify the entry we read back has counter information.
   p4::v1::ReadRequest read_request;
@@ -100,6 +111,10 @@ TEST_F(MiddleblockAclTableTest, ReadCounters) {
   ASSERT_EQ(read_response.entities_size(), 1);  // Only one write.
   EXPECT_THAT(read_response.entities(0).table_entry().counter_data(),
               EqualsProto(R"pb(byte_count: 128 packet_count: 1)pb"));
+  EXPECT_THAT(read_response.entities(0).table_entry().meter_counter_data(),
+              EqualsProto(R"pb(green { byte_count: 129 packet_count: 2 }
+                               yellow { byte_count: 130 packet_count: 3 }
+                               red { byte_count: 131 packet_count: 4 })pb"));
 }
 
 TEST_F(MiddleblockAclTableTest, ReadMeters) {

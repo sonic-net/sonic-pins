@@ -8,14 +8,6 @@ tables {
     parameters { name: "route_metadata" bitwidth: 6 }
   }
   actions {
-    name: "set_multicast_group_id"
-    parameters {
-      name: "multicast_group_id"
-      format: HEX_STRING
-      bitwidth: 16
-    }
-  }
-  actions {
     name: "set_nexthop_id"
     parameters { name: "nexthop_id" format: STRING }
   }
@@ -43,14 +35,6 @@ tables {
   actions {
     name: "set_metadata_and_drop"
     parameters { name: "route_metadata" bitwidth: 6 }
-  }
-  actions {
-    name: "set_multicast_group_id"
-    parameters {
-      name: "multicast_group_id"
-      format: HEX_STRING
-      bitwidth: 16
-    }
   }
   actions {
     name: "set_nexthop_id"
@@ -103,7 +87,12 @@ tables {
 tables {
   name: "multicast_router_interface_table"
   match_fields { name: "multicast_replica_port" format: STRING type: EXACT }
-  match_fields { name: "multicast_replica_instance" format: STRING type: EXACT }
+  match_fields {
+    name: "multicast_replica_instance"
+    format: HEX_STRING
+    bitwidth: 16
+    type: EXACT
+  }
   actions {
     name: "set_multicast_src_mac"
     parameters { name: "src_mac" format: MAC }
@@ -196,4 +185,30 @@ tables {
     type: TERNARY
   }
   actions { name: "disable_vlan_checks" }
+}
+tables {
+  name: "ipv4_multicast_table"
+  match_fields { name: "ipv4_dst" format: IPV4 type: EXACT }
+  match_fields { name: "vrf_id" format: STRING type: EXACT }
+  actions {
+    name: "set_multicast_group_id"
+    parameters {
+      name: "multicast_group_id"
+      format: HEX_STRING
+      bitwidth: 16
+    }
+  }
+}
+tables {
+  name: "ipv6_multicast_table"
+  match_fields { name: "ipv6_dst" format: IPV6 type: EXACT }
+  match_fields { name: "vrf_id" format: STRING type: EXACT }
+  actions {
+    name: "set_multicast_group_id"
+    parameters {
+      name: "multicast_group_id"
+      format: HEX_STRING
+      bitwidth: 16
+    }
+  }
 }

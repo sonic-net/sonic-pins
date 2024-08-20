@@ -73,6 +73,7 @@ cc_library(
         "//p4rt_app/sonic/adapters:fake_producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:fake_sonic_db_table",
         "//p4rt_app/sonic/adapters:fake_table_adapter",
+        "//p4rt_app/sonic/adapters:fake_warm_boot_state_adapter",
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/memory",

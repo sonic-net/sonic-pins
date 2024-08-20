@@ -43,6 +43,7 @@
 #include "p4rt_app/p4runtime/cpu_queue_translator.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
+#include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/utils/event_data_tracker.h"
@@ -55,6 +56,7 @@ namespace p4rt_app {
 struct P4RuntimeImplOptions {
   bool use_genetlink = false;
   bool translate_port_ids = true;
+  bool is_freeze_mode = false;
   absl::optional<std::string> forwarding_config_full_path;
 };
 
@@ -90,8 +92,8 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
  public:
   P4RuntimeImpl(sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
                 sonic::HashTable hash_table, sonic::SwitchTable switch_table,
-                sonic::PortTable port_table,
-                sonic::HostStatsTable host_stats_table,
+                sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
+                std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
                 std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
                 //TODO(PINS): To add component_state, system_state and netdev_translator.
                 /* swss::ComponentStateHelperInterface& component_state,
@@ -206,6 +208,12 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   sonic::PacketIoCounters GetPacketIoCounters()
       ABSL_LOCKS_EXCLUDED(server_state_lock_);
 
+  // TODO: Move to warm boot state adaptor and add tests.
+  // In WarmBoot mode, poll and return OA Reconciliation status, timeout after
+  // 1min. If OA is RECONCILED/FAILED, exit loop early.
+  swss::WarmStart::WarmStartState GetOrchAgentWarmStartReconcliationState()
+      const;
+
  protected:
   // Simple constructor that should only be used for testing purposes.
   P4RuntimeImpl(bool translate_port_ids)
@@ -288,6 +296,8 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   sonic::SwitchTable switch_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::PortTable port_table_ ABSL_GUARDED_BY(server_state_lock_);
   sonic::HostStatsTable host_stats_table_ ABSL_GUARDED_BY(server_state_lock_);
+  const std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter_
+      ABSL_GUARDED_BY(server_state_lock_);
 
   // P4RT can accept multiple connections to a single switch for redundancy.
   // When there is >1 connection the switch chooses a primary which is used for
@@ -307,7 +317,7 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
       ABSL_GUARDED_BY(server_state_lock_);
 
   // A forwarding pipeline config with a P4Info protobuf will be set once a
-  // controller connects to the swtich. Only after we receive this config can
+  // controller connects to the switch. Only after we receive this config can
   // the P4RT service start processing write requests.
   absl::optional<p4::v1::ForwardingPipelineConfig> forwarding_pipeline_config_
       ABSL_GUARDED_BY(server_state_lock_);
@@ -332,14 +342,26 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
   std::unique_ptr<sonic::PacketIoInterface> packetio_impl_
       ABSL_GUARDED_BY(server_state_lock_);
 
-  // Some switch enviornments cannot rely on the SONiC port names, and can
+  /* TODO(PINS): To handle component_state, system_state and netdev_translator later.
+  // When the switch is in critical state the P4RT service shuould not accept
+  // write requests, but can still handle reads.
+  swss::ComponentStateHelperInterface& component_state_;
+  swss::SystemStateHelperInterface& system_state_;
+
+  // Some controllers may want to use port names that include the
+  // slot/port/channel format (e.g. Ethernet1/1/1) which does not work for
+  // Linux's netdev interfaces. This translator can be used to convert the names
+  // into a valid Linux name (e.g. Ethernet1_1_1).
+  swss::IntfTranslator& netdev_translator_ ABSL_GUARDED_BY(server_state_lock_); */
+
+  // Some switch environments cannot rely on the SONiC port names, and can
   // instead choose to use port ID's configured through gNMI.
   const bool translate_port_ids_ ABSL_GUARDED_BY(server_state_lock_);
 
   // Reading a large number of entries from Redis is costly. To improve the
   // read performance we cache table entries in software.
-  absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>
-      table_entry_cache_ ABSL_GUARDED_BY(server_state_lock_);
+  absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> entity_cache_
+      ABSL_GUARDED_BY(server_state_lock_);
 
   // Monitoring resources in hardware can be difficult. For example in WCMP if a
   // port is down the lower layers will remove those path both freeing resources
@@ -369,6 +391,9 @@ class P4RuntimeImpl : public p4::v1::P4Runtime::Service {
 
   // PacketIO debug counters.
   sonic::PacketIoCounters packetio_counters_;
+
+  // Flag to indicate whether P4RT is in warm-boot freeze process.
+  bool is_freeze_mode_ ABSL_GUARDED_BY(server_state_lock_) = false;
 };
 
 }  // namespace p4rt_app

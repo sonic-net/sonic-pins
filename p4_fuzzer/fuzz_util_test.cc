@@ -58,6 +58,19 @@ TEST(FuzzUtilTest, SetUnusedBitsToZeroInNineBytes) {
             std::string("\x00\x00\x00\x00\x00\x00\x00\x00\x00", 9));
 }
 
+TEST(FuzzUtilTest, ZeroNLeastSignificantBits) {
+  std::string data("\xff\xff\xff", 3);
+  EXPECT_EQ(ZeroNLeastSignificantBits(0, data), std::string("\xff\xff\xff", 3));
+  EXPECT_EQ(ZeroNLeastSignificantBits(1, data), std::string("\xff\xff\xfe", 3));
+  EXPECT_EQ(ZeroNLeastSignificantBits(4, data), std::string("\xff\xff\xf0", 3));
+  EXPECT_EQ(ZeroNLeastSignificantBits(8, data), std::string("\xff\xff\x00", 3));
+  EXPECT_EQ(ZeroNLeastSignificantBits(9, data), std::string("\xff\xfe\x00", 3));
+  EXPECT_EQ(ZeroNLeastSignificantBits(16, data),
+            std::string("\xff\x00\x00", 3));
+  EXPECT_EQ(ZeroNLeastSignificantBits(24, data),
+            std::string("\x00\x00\x00", 3));
+}
+
 TEST(FuzzUtilTest, BitsToUint64) {
   EXPECT_EQ(BitsToUint64(std::string("\0\0\0\0\0\0\0\x63", 8)), 0x63);
   EXPECT_EQ(BitsToUint64(std::string("\0\0\0\0\0\0\x30\x63", 8)), 0x3063);

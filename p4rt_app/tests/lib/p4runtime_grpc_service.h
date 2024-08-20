@@ -19,6 +19,7 @@
 #include "grpcpp/server.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
+#include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 //TODO(PINS):
 // #include "swss/fakes/fake_component_state_helper.h"
@@ -56,6 +57,9 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable& GetP4rtStateDbTable();
   sonic::FakeSonicDbTable& GetHostStatsStateDbTable();
 
+  // Accessor for WarmBootStateAdapter.
+  sonic::FakeWarmBootStateAdapter* GetWarmBootStateAdapter();
+
   // Accessor for PacketIO interface.
   sonic::FakePacketIoInterface& GetFakePacketIoInterface();
 
@@ -86,6 +90,9 @@ class P4RuntimeGrpcService {
 
   // Faked StateDb tables.
   sonic::FakeSonicDbTable fake_host_stats_table_;
+
+  // Faked warm-boot state.
+  sonic::FakeWarmBootStateAdapter* fake_warm_boot_state_adapter_;
 
   // Faked PacketIO interface.
   sonic::FakePacketIoInterface* fake_packetio_interface_;  // No ownership.
