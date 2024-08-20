@@ -29,17 +29,24 @@ constexpr absl::string_view kBuiltInPrefix = "builtin::";
 constexpr absl::string_view kMulticastGroupTableString =
     "multicast_group_table";
 constexpr absl::string_view kMulticastGroupIdString = "multicast_group_id";
-constexpr absl::string_view kMulticastReplicaPortString = "replica.port";
-constexpr absl::string_view kMulticastReplicaInstanceString =
-    "replica.instance";
+constexpr absl::string_view kReplicaString = "replica";
+constexpr absl::string_view kReplicaPortString = "replica.port";
+constexpr absl::string_view kReplicaInstanceString = "replica.instance";
 }  // namespace
 
-bool BuiltInTableHasField(IrBuiltInTable table, IrBuiltInField field) {
+bool IsBuiltInTable(absl::string_view table_name) {
+  return StringToIrBuiltInTable(table_name).ok();
+}
+
+bool IsBuiltInAction(absl::string_view action_name) {
+  return StringToIrBuiltInAction(action_name).ok();
+}
+
+bool BuiltInTableHasMatchField(IrBuiltInTable table,
+                               IrBuiltInMatchField field) {
   switch (table) {
     case BUILT_IN_TABLE_MULTICAST_GROUP_TABLE: {
-      return field == BUILT_IN_FIELD_MULTICAST_GROUP_ID ||
-             field == BUILT_IN_FIELD_REPLICA_PORT ||
-             field == BUILT_IN_FIELD_REPLICA_INSTANCE;
+      return field == BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID;
     }
     default: {
       return false;
@@ -47,8 +54,44 @@ bool BuiltInTableHasField(IrBuiltInTable table, IrBuiltInField field) {
   }
 }
 
-bool IsBuiltInTable(absl::string_view table_name) {
-  return StringToIrBuiltInTable(table_name).ok();
+bool BuiltInTableHasAction(IrBuiltInTable table, IrBuiltInAction action) {
+  switch (table) {
+    case BUILT_IN_TABLE_MULTICAST_GROUP_TABLE: {
+      return action == BUILT_IN_ACTION_REPLICA;
+    }
+    default: {
+      return false;
+    }
+  }
+}
+
+bool BuiltInActionHasParameter(IrBuiltInAction action,
+                               IrBuiltInParameter parameter) {
+  switch (action) {
+    case BUILT_IN_TABLE_MULTICAST_GROUP_TABLE: {
+      return parameter == BUILT_IN_PARAMETER_REPLICA_PORT ||
+             parameter == BUILT_IN_PARAMETER_REPLICA_INSTANCE;
+    }
+    default: {
+      return false;
+    }
+  }
+}
+
+absl::StatusOr<IrBuiltInAction> GetBuiltInActionFromBuiltInParameter(
+    IrBuiltInParameter parameter) {
+  switch (parameter) {
+    case BUILT_IN_PARAMETER_REPLICA_PORT: {
+      return BUILT_IN_ACTION_REPLICA;
+    }
+    case BUILT_IN_PARAMETER_REPLICA_INSTANCE: {
+      return BUILT_IN_ACTION_REPLICA;
+    }
+    default: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unknown built-in parameter.";
+    }
+  }
 }
 
 absl::StatusOr<std::string> IrBuiltInTableToString(IrBuiltInTable table) {
@@ -62,6 +105,46 @@ absl::StatusOr<std::string> IrBuiltInTableToString(IrBuiltInTable table) {
   }
 }
 
+absl::StatusOr<std::string> IrBuiltInMatchFieldToString(
+    IrBuiltInMatchField field) {
+  switch (field) {
+    case BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID: {
+      return std::string(kMulticastGroupIdString);
+    }
+    default: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unknown built-in match field.";
+    }
+  }
+}
+
+absl::StatusOr<std::string> IrBuiltInActionToString(IrBuiltInAction action) {
+  switch (action) {
+    case BUILT_IN_ACTION_REPLICA: {
+      return absl::StrCat(kBuiltInPrefix, kReplicaString);
+    }
+    default: {
+      return gutil::InvalidArgumentErrorBuilder() << "Unknown built-in action.";
+    }
+  }
+}
+
+absl::StatusOr<std::string> IrBuiltInParameterToString(
+    IrBuiltInParameter parameter) {
+  switch (parameter) {
+    case BUILT_IN_PARAMETER_REPLICA_PORT: {
+      return std::string(kReplicaPortString);
+    }
+    case BUILT_IN_PARAMETER_REPLICA_INSTANCE: {
+      return std::string(kReplicaInstanceString);
+    }
+    default: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Unknown built-in parameter.";
+    }
+  }
+}
+
 absl::StatusOr<IrBuiltInTable> StringToIrBuiltInTable(absl::string_view table) {
   if (table == absl::StrCat(kBuiltInPrefix, kMulticastGroupTableString)) {
     return pdpi::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE;
@@ -70,35 +153,34 @@ absl::StatusOr<IrBuiltInTable> StringToIrBuiltInTable(absl::string_view table) {
          << "'" << table << "' is not a built-in table.";
 }
 
-absl::StatusOr<std::string> IrBuiltInFieldToString(IrBuiltInField field) {
-  switch (field) {
-    case BUILT_IN_FIELD_MULTICAST_GROUP_ID: {
-      return std::string(kMulticastGroupIdString);
-    }
-    case BUILT_IN_FIELD_REPLICA_PORT: {
-      return std::string(kMulticastReplicaPortString);
-    }
-    case BUILT_IN_FIELD_REPLICA_INSTANCE: {
-      return std::string(kMulticastReplicaInstanceString);
-    }
-    default: {
-      return gutil::InvalidArgumentErrorBuilder() << "Unknown built-in field.";
-    }
-  }
-}
-
-absl::StatusOr<IrBuiltInField> StringToIrBuiltInField(absl::string_view field) {
+absl::StatusOr<IrBuiltInMatchField> StringToIrBuiltInMatchField(
+    absl::string_view field) {
   if (field == kMulticastGroupIdString) {
-    return BUILT_IN_FIELD_MULTICAST_GROUP_ID;
-  }
-  if (field == kMulticastReplicaPortString) {
-    return BUILT_IN_FIELD_REPLICA_PORT;
-  }
-  if (field == kMulticastReplicaInstanceString) {
-    return BUILT_IN_FIELD_REPLICA_INSTANCE;
+    return BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID;
   }
   return gutil::InvalidArgumentErrorBuilder()
-         << "'" << field << "' is not a built-in field.";
+         << "'" << field << "' is not a built-in match field.";
+}
+
+absl::StatusOr<IrBuiltInAction> StringToIrBuiltInAction(
+    absl::string_view action) {
+  if (action == absl::StrCat(kBuiltInPrefix, kReplicaString)) {
+    return BUILT_IN_ACTION_REPLICA;
+  }
+  return gutil::InvalidArgumentErrorBuilder()
+         << "'" << action << "' is not a built-in action.";
+}
+
+absl::StatusOr<IrBuiltInParameter> StringToIrBuiltInParameter(
+    absl::string_view parameter) {
+  if (parameter == kReplicaPortString) {
+    return BUILT_IN_PARAMETER_REPLICA_PORT;
+  }
+  if (parameter == kReplicaInstanceString) {
+    return BUILT_IN_PARAMETER_REPLICA_INSTANCE;
+  }
+  return gutil::InvalidArgumentErrorBuilder()
+         << "'" << parameter << "' is not a built-in paramter.";
 }
 
 }  // namespace pdpi

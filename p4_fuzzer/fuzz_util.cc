@@ -4,6 +4,7 @@
 #include "absl/base/casts.h"
 #include "absl/base/internal/endian.h"
 #include "gutil/collections.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/annotation_util.h"
 #include "p4_fuzzer/mutation.h"
 #include "p4_pdpi/pd.h"
@@ -30,7 +31,9 @@ constexpr float kAddUpdateProbability = 0.98;
 // removing one, which means that eventually the switch fills up. 0.8 is a nice
 // number because it causes the switch to fill up quickly, but there is still a
 // good chance to get a couple of deletes in a row.
-constexpr float kInsertProbability = 0.8;
+// TODO: change this back to 0.8 once we can generate enough valid
+// inserts.
+constexpr float kInsertProbability = 1;
 // Upper bound of the number of actions in an ActionProfileActionSet for tables
 // that support one-shot action selector programming.
 constexpr uint32_t kActionProfileActionSetMax = 16;
@@ -154,7 +157,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const pdpi::IrP4Info& ir_p4_info,
       case Mutation::INVALID_ACTION_SELECTOR_WEIGHT:
         table_ids = GetOneShotTableIds(ir_p4_info);
         if (table_ids.empty()) {
-          // Retry mutating the update.
+          // Retry.
           return FuzzUpdate(gen, ir_p4_info, switch_state);
         }
 
@@ -163,7 +166,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const pdpi::IrP4Info& ir_p4_info,
       case Mutation::MISSING_MANDATORY_MATCH_FIELD:
         table_ids = GetMandatoryMatchTableIds(ir_p4_info);
         if (table_ids.empty()) {
-          // Retry mutating the update.
+          // Retry.
           return FuzzUpdate(gen, ir_p4_info, switch_state);
         }
         break;
@@ -271,6 +274,27 @@ std::string SetUnusedBitsToZero(int used_bits, std::string data) {
   return data;
 }
 
+std::string ZeroNLeastSignificantBits(int zero_bits, std::string data) {
+  const int bytes = data.size();
+  const int total_bits = bytes * kBitsInByte;
+  const int used_bits = total_bits - zero_bits;
+  const int fully_used_bytes = used_bits / kBitsInByte;
+  const bool has_partial_byte = used_bits % kBitsInByte != 0;
+
+  CHECK_GE(total_bits, zero_bits);  // Crash okay
+  CHECK_GE(zero_bits, 0);           // Crash okay
+
+  for (int i = fully_used_bytes; i < bytes; i++) {
+    if (i == fully_used_bytes && has_partial_byte) {
+      const int mask = ~((1 << (kBitsInByte - (used_bits % kBitsInByte))) - 1);
+      data[i] &= mask;
+    } else {
+      data[i] = 0;
+    }
+  }
+  return data;
+}
+
 uint64_t BitsToUint64(const std::string& data) {
   CHECK_EQ(data.size(), sizeof(uint64_t)) << "Data: " << data;
   return gntohll(reinterpret_cast<const uint64_t&>(data[0]));
@@ -288,27 +312,28 @@ std::string FuzzBits(absl::BitGen* gen, int bits) {
   return FuzzBits(gen, bits, DivideRoundedUp(bits, kBitsInByte));
 }
 
+std::string FuzzNonZeroBits(absl::BitGen* gen, int bits) {
+  CHECK_NE(bits, 0);  // Crash okay
+  while (true) {
+    std::string result = FuzzBits(gen, bits);
+    if (!pdpi::IsAllZeros(result)) return result;
+  }
+}
+
 uint64_t FuzzUint64(absl::BitGen* gen, int bits) {
   return BitsToUint64(FuzzBits(gen, bits, sizeof(uint64_t)));
 }
 
 p4::v1::FieldMatch FuzzTernaryFieldMatch(absl::BitGen* gen, int bits) {
-  std::string mask = FuzzBits(gen, bits);
+  std::string mask = FuzzNonZeroBits(gen, bits);
   std::string value = FuzzBits(gen, bits);
 
   // If a mask bit is 0, the corresponding value bit also has to be 0.
   value = pdpi::Intersection(value, mask).value();
 
   p4::v1::FieldMatch match;
-
-  // If the mask is 0 (then the value must also be 0), so clear the field,
-  // as demanded by P4Runtime.
-  // If the value is 0, but the mask is not, then just set the fields normally.
-  if (!pdpi::IsAllZeros(mask)) {
-    match.mutable_ternary()->set_mask(mask);
-    match.mutable_ternary()->set_value(value);
-  }
-
+  match.mutable_ternary()->set_mask(mask);
+  match.mutable_ternary()->set_value(value);
   return match;
 }
 
@@ -321,15 +346,18 @@ p4::v1::FieldMatch FuzzLpmFieldMatch(absl::BitGen* gen, int bits) {
   }
 
   int prefix_len;
-  if (bits >= kBitsInByte && absl::Bernoulli(*gen, 0.5)) {
+  if (bits >= kBitsInByte && absl::Bernoulli(*gen, 0.2)) {
     prefix_len = UniformFromVector(gen, likely_bits);
   } else {
-    prefix_len = absl::Uniform(*gen, 0, bits + 1);
+    // Don't generate /0, since we don't want wildcards
+    prefix_len = absl::Uniform(*gen, 1, bits + 1);
   }
 
   p4::v1::FieldMatch match;
   match.mutable_lpm()->set_prefix_len(prefix_len);
-  match.mutable_lpm()->set_value(FuzzBits(gen, prefix_len));
+  // We need a value that has prefix_len many random bits, followed by zeros.
+  match.mutable_lpm()->set_value(
+      ZeroNLeastSignificantBits(bits - prefix_len, FuzzBits(gen, bits)));
   return match;
 }
 
@@ -340,10 +368,9 @@ p4::v1::FieldMatch FuzzExactFieldMatch(absl::BitGen* gen, int bits) {
   return match;
 }
 
-p4::v1::FieldMatch FuzzExactFieldMatch(absl::BitGen* gen, int bits, int bytes) {
+p4::v1::FieldMatch FuzzOptionalFieldMatch(absl::BitGen* gen, int bits) {
   p4::v1::FieldMatch match;
-  // Note that exact messages have to be provided, even if the value is 0.
-  match.mutable_exact()->set_value(FuzzBits(gen, bits, bytes));
+  match.mutable_optional()->set_value(FuzzNonZeroBits(gen, bits));
   return match;
 }
 
@@ -353,22 +380,25 @@ p4::v1::FieldMatch FuzzFieldMatch(
   const p4::config::v1::MatchField& match_field_info =
       ir_match_field_info.match_field();
 
-  p4::v1::FieldMatch match_field;
+  p4::v1::FieldMatch match;
   switch (match_field_info.match_type()) {
     case p4::config::v1::MatchField::TERNARY:
-      match_field = FuzzTernaryFieldMatch(gen, match_field_info.bitwidth());
+      match = FuzzTernaryFieldMatch(gen, match_field_info.bitwidth());
       break;
     case p4::config::v1::MatchField::LPM:
-      match_field = FuzzLpmFieldMatch(gen, match_field_info.bitwidth());
+      match = FuzzLpmFieldMatch(gen, match_field_info.bitwidth());
       break;
     case p4::config::v1::MatchField::EXACT:
-      match_field = FuzzExactFieldMatch(gen, match_field_info.bitwidth());
+      match = FuzzExactFieldMatch(gen, match_field_info.bitwidth());
+      break;
+    case p4::config::v1::MatchField::OPTIONAL:
+      match = FuzzOptionalFieldMatch(gen, match_field_info.bitwidth());
       break;
     default:
       LOG(FATAL) << "Unsupported match: " << match_field_info.DebugString();
   }
-  match_field.set_field_id(match_field_info.id());
-  return match_field;
+  match.set_field_id(match_field_info.id());
+  return match;
 }
 
 p4::v1::Action FuzzAction(absl::BitGen* gen,
@@ -401,16 +431,6 @@ p4::v1::ActionProfileActionSet FuzzActionProfileActionSet(
   return action_set;
 }
 
-p4::v1::FieldMatch MakeIPv4EthTypeMatch(
-    const p4::config::v1::MatchField& match_field_info) {
-  p4::v1::FieldMatch match;
-  match.set_field_id(match_field_info.id());
-  // Exact match on IPv4 ETH TYPE
-  match.mutable_ternary()->set_mask(std::string("\xff\xff", 2));
-  match.mutable_ternary()->set_value(std::string("\x08\x00", 2));
-  return match;
-}
-
 void EnforceTableConstraints(absl::BitGen* gen,
                              const pdpi::IrP4Info& ir_p4_info,
                              const pdpi::IrTableDefinition& ir_table_info,
@@ -439,6 +459,8 @@ TableEntry FuzzValidTableEntry(absl::BitGen* gen,
     // represented as the absence of that match.
     if (match_field_info.match_field().match_type() ==
             p4::config::v1::MatchField::TERNARY ||
+        match_field_info.match_field().match_type() ==
+            p4::config::v1::MatchField::OPTIONAL ||
         (match_field_info.match_field().match_type() ==
              p4::config::v1::MatchField::LPM &&
          absl::Bernoulli(*gen, kFieldMatchWildcardProbability))) {
@@ -462,11 +484,8 @@ TableEntry FuzzValidTableEntry(absl::BitGen* gen,
 
   // Set cookie and priority.
   table_entry.set_controller_metadata(FuzzUint64(gen, /*bits=*/64));
-  for (const auto& match : table_entry.match()) {
-    if (match.has_ternary()) {
-      table_entry.set_priority(FuzzUint64(gen, /*bits=*/16));
-      break;
-    }
+  if (ir_table_info.requires_priority()) {
+    table_entry.set_priority(FuzzUint64(gen, /*bits=*/16));
   }
 
   // TODO: Fuzz default actions.
@@ -499,7 +518,7 @@ std::vector<AnnotatedTableEntry> ValidForwardingEntries(
     update.set_type(p4::v1::Update::INSERT);
     *update.mutable_entity()->mutable_table_entry() = entry;
 
-    state.ApplyUpdate(update);
+    CHECK(state.ApplyUpdate(update).ok());  // Crash okay
 
     entries.push_back(
         GetAnnotatedTableEntry(ir_p4_info, entry, /*mutations = */ {}));

@@ -3422,48 +3422,60 @@ tables_by_id {
       field_references {
         source {
           action_field {
-            action_name: "referring_to_two_match_fields_action"
-            action_id: 23923420
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_two_match_fields_action"
+              action_id: 23923420
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "referring_to_two_match_fields_action"
-            action_id: 23923420
-            parameter_name: "referring_id_2"
-            parameter_id: 2
+            p4_action_field {
+              action_name: "referring_to_two_match_fields_action"
+              action_id: 23923420
+              parameter_name: "referring_id_2"
+              parameter_id: 2
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "id_2"
+              field_id: 2
+            }
           }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "referring_to_one_match_field_action"
-            action_id: 31920929
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_one_match_field_action"
+              action_id: 31920929
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
@@ -3484,28 +3496,36 @@ tables_by_id {
       field_references {
         source {
           match_field {
-            field_name: "referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_id_1"
+              field_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
       field_references {
         source {
           match_field {
-            field_name: "referring_id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "referring_id_2"
+              field_id: 2
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "id_2"
+              field_id: 2
+            }
           }
         }
       }
@@ -3768,14 +3788,18 @@ tables_by_id {
       field_references {
         source {
           match_field {
-            field_name: "referring_to_referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_to_referring_id_1"
+              field_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_id_1"
+              field_id: 1
+            }
           }
         }
       }
@@ -4155,25 +4179,33 @@ tables_by_id {
       field_references {
         source {
           match_field {
-            field_name: "group_id"
-            field_id: 1
+            p4_match_field {
+              field_name: "group_id"
+              field_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "refers_to_multicast_action"
-            action_id: 18598416
-            parameter_name: "multicast_group_id"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "refers_to_multicast_action"
+              action_id: 18598416
+              parameter_name: "multicast_group_id"
+              parameter_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
     }
@@ -4294,14 +4326,18 @@ tables_by_id {
       field_references {
         source {
           action_field {
-            action_name: "refers_to_multicast_action"
-            action_id: 18598416
-            parameter_name: "multicast_group_id"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "refers_to_multicast_action"
+              action_id: 18598416
+              parameter_name: "multicast_group_id"
+              parameter_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
     }
@@ -4526,16 +4562,20 @@ tables_by_id {
       field_references {
         source {
           action_field {
-            action_name: "referring_to_one_match_field_action"
-            action_id: 31920929
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_one_match_field_action"
+              action_id: 31920929
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id"
-            field_id: 1
+            p4_match_field {
+              field_name: "id"
+              field_id: 1
+            }
           }
         }
       }
@@ -4780,16 +4820,20 @@ tables_by_id {
       field_references {
         source {
           action_field {
-            action_name: "referring_to_one_match_field_action"
-            action_id: 31920929
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_one_match_field_action"
+              action_id: 31920929
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id"
-            field_id: 1
+            p4_match_field {
+              field_name: "id"
+              field_id: 1
+            }
           }
         }
       }
@@ -4810,48 +4854,60 @@ tables_by_id {
       field_references {
         source {
           action_field {
-            action_name: "referring_to_two_match_fields_action"
-            action_id: 23923420
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_two_match_fields_action"
+              action_id: 23923420
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "referring_to_two_match_fields_action"
-            action_id: 23923420
-            parameter_name: "referring_id_2"
-            parameter_id: 2
+            p4_action_field {
+              action_name: "referring_to_two_match_fields_action"
+              action_id: 23923420
+              parameter_name: "referring_id_2"
+              parameter_id: 2
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "id_2"
+              field_id: 2
+            }
           }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "referring_to_one_match_field_action"
-            action_id: 31920929
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_one_match_field_action"
+              action_id: 31920929
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
@@ -4976,23 +5032,37 @@ tables_by_id {
       }
       field_references {
         source {
-          built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+          action_field {
+            built_in_action_field {
+              action: BUILT_IN_ACTION_REPLICA
+              parameter: BUILT_IN_PARAMETER_REPLICA_INSTANCE
+            }
+          }
         }
         destination {
           match_field {
-            field_name: "instance_str"
-            field_id: 2
+            p4_match_field {
+              field_name: "instance_str"
+              field_id: 2
+            }
           }
         }
       }
       field_references {
         source {
-          built_in_field: BUILT_IN_FIELD_REPLICA_PORT
+          action_field {
+            built_in_action_field {
+              action: BUILT_IN_ACTION_REPLICA
+              parameter: BUILT_IN_PARAMETER_REPLICA_PORT
+            }
+          }
         }
         destination {
           match_field {
-            field_name: "port_str"
-            field_id: 1
+            p4_match_field {
+              field_name: "port_str"
+              field_id: 1
+            }
           }
         }
       }
@@ -5145,28 +5215,36 @@ tables_by_id {
       field_references {
         source {
           match_field {
-            field_name: "referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_id_1"
+              field_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
       field_references {
         source {
           match_field {
-            field_name: "referring_id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "referring_id_2"
+              field_id: 2
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "id_2"
+              field_id: 2
+            }
           }
         }
       }
@@ -5187,14 +5265,18 @@ tables_by_id {
       field_references {
         source {
           match_field {
-            field_name: "referring_to_referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_to_referring_id_1"
+              field_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_id_1"
+              field_id: 1
+            }
           }
         }
       }
@@ -6924,16 +7006,20 @@ tables_by_name {
       field_references {
         source {
           action_field {
-            action_name: "referring_to_one_match_field_action"
-            action_id: 31920929
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_one_match_field_action"
+              action_id: 31920929
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id"
-            field_id: 1
+            p4_match_field {
+              field_name: "id"
+              field_id: 1
+            }
           }
         }
       }
@@ -7308,23 +7394,37 @@ tables_by_name {
       }
       field_references {
         source {
-          built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+          action_field {
+            built_in_action_field {
+              action: BUILT_IN_ACTION_REPLICA
+              parameter: BUILT_IN_PARAMETER_REPLICA_INSTANCE
+            }
+          }
         }
         destination {
           match_field {
-            field_name: "instance_str"
-            field_id: 2
+            p4_match_field {
+              field_name: "instance_str"
+              field_id: 2
+            }
           }
         }
       }
       field_references {
         source {
-          built_in_field: BUILT_IN_FIELD_REPLICA_PORT
+          action_field {
+            built_in_action_field {
+              action: BUILT_IN_ACTION_REPLICA
+              parameter: BUILT_IN_PARAMETER_REPLICA_PORT
+            }
+          }
         }
         destination {
           match_field {
-            field_name: "port_str"
-            field_id: 1
+            p4_match_field {
+              field_name: "port_str"
+              field_id: 1
+            }
           }
         }
       }
@@ -7569,16 +7669,20 @@ tables_by_name {
       field_references {
         source {
           action_field {
-            action_name: "referring_to_one_match_field_action"
-            action_id: 31920929
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_one_match_field_action"
+              action_id: 31920929
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id"
-            field_id: 1
+            p4_match_field {
+              field_name: "id"
+              field_id: 1
+            }
           }
         }
       }
@@ -7599,48 +7703,60 @@ tables_by_name {
       field_references {
         source {
           action_field {
-            action_name: "referring_to_two_match_fields_action"
-            action_id: 23923420
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_two_match_fields_action"
+              action_id: 23923420
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "referring_to_two_match_fields_action"
-            action_id: 23923420
-            parameter_name: "referring_id_2"
-            parameter_id: 2
+            p4_action_field {
+              action_name: "referring_to_two_match_fields_action"
+              action_id: 23923420
+              parameter_name: "referring_id_2"
+              parameter_id: 2
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "id_2"
+              field_id: 2
+            }
           }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "referring_to_one_match_field_action"
-            action_id: 31920929
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_one_match_field_action"
+              action_id: 31920929
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
@@ -7793,28 +7909,36 @@ tables_by_name {
       field_references {
         source {
           match_field {
-            field_name: "referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_id_1"
+              field_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
       field_references {
         source {
           match_field {
-            field_name: "referring_id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "referring_id_2"
+              field_id: 2
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "id_2"
+              field_id: 2
+            }
           }
         }
       }
@@ -7835,14 +7959,18 @@ tables_by_name {
       field_references {
         source {
           match_field {
-            field_name: "referring_to_referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_to_referring_id_1"
+              field_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_id_1"
+              field_id: 1
+            }
           }
         }
       }
@@ -7953,14 +8081,18 @@ tables_by_name {
       field_references {
         source {
           match_field {
-            field_name: "referring_to_referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_to_referring_id_1"
+              field_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_id_1"
+              field_id: 1
+            }
           }
         }
       }
@@ -8082,14 +8214,18 @@ tables_by_name {
       field_references {
         source {
           action_field {
-            action_name: "refers_to_multicast_action"
-            action_id: 18598416
-            parameter_name: "multicast_group_id"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "refers_to_multicast_action"
+              action_id: 18598416
+              parameter_name: "multicast_group_id"
+              parameter_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
     }
@@ -8212,25 +8348,33 @@ tables_by_name {
       field_references {
         source {
           match_field {
-            field_name: "group_id"
-            field_id: 1
+            p4_match_field {
+              field_name: "group_id"
+              field_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "refers_to_multicast_action"
-            action_id: 18598416
-            parameter_name: "multicast_group_id"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "refers_to_multicast_action"
+              action_id: 18598416
+              parameter_name: "multicast_group_id"
+              parameter_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
     }
@@ -8697,48 +8841,60 @@ tables_by_name {
       field_references {
         source {
           action_field {
-            action_name: "referring_to_two_match_fields_action"
-            action_id: 23923420
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_two_match_fields_action"
+              action_id: 23923420
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "referring_to_two_match_fields_action"
-            action_id: 23923420
-            parameter_name: "referring_id_2"
-            parameter_id: 2
+            p4_action_field {
+              action_name: "referring_to_two_match_fields_action"
+              action_id: 23923420
+              parameter_name: "referring_id_2"
+              parameter_id: 2
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "id_2"
+              field_id: 2
+            }
           }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "referring_to_one_match_field_action"
-            action_id: 31920929
-            parameter_name: "referring_id_1"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "referring_to_one_match_field_action"
+              action_id: 31920929
+              parameter_name: "referring_id_1"
+              parameter_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
@@ -8759,28 +8915,36 @@ tables_by_name {
       field_references {
         source {
           match_field {
-            field_name: "referring_id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "referring_id_1"
+              field_id: 1
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_1"
-            field_id: 1
+            p4_match_field {
+              field_name: "id_1"
+              field_id: 1
+            }
           }
         }
       }
       field_references {
         source {
           match_field {
-            field_name: "referring_id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "referring_id_2"
+              field_id: 2
+            }
           }
         }
         destination {
           match_field {
-            field_name: "id_2"
-            field_id: 2
+            p4_match_field {
+              field_name: "id_2"
+              field_id: 2
+            }
           }
         }
       }
@@ -10531,23 +10695,37 @@ built_in_tables {
       }
       field_references {
         source {
-          built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+          action_field {
+            built_in_action_field {
+              action: BUILT_IN_ACTION_REPLICA
+              parameter: BUILT_IN_PARAMETER_REPLICA_INSTANCE
+            }
+          }
         }
         destination {
           match_field {
-            field_name: "instance_str"
-            field_id: 2
+            p4_match_field {
+              field_name: "instance_str"
+              field_id: 2
+            }
           }
         }
       }
       field_references {
         source {
-          built_in_field: BUILT_IN_FIELD_REPLICA_PORT
+          action_field {
+            built_in_action_field {
+              action: BUILT_IN_ACTION_REPLICA
+              parameter: BUILT_IN_PARAMETER_REPLICA_PORT
+            }
+          }
         }
         destination {
           match_field {
-            field_name: "port_str"
-            field_id: 1
+            p4_match_field {
+              field_name: "port_str"
+              field_id: 1
+            }
           }
         }
       }
@@ -10565,14 +10743,18 @@ built_in_tables {
       field_references {
         source {
           action_field {
-            action_name: "refers_to_multicast_action"
-            action_id: 18598416
-            parameter_name: "multicast_group_id"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "refers_to_multicast_action"
+              action_id: 18598416
+              parameter_name: "multicast_group_id"
+              parameter_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
     }
@@ -10589,25 +10771,33 @@ built_in_tables {
       field_references {
         source {
           match_field {
-            field_name: "group_id"
-            field_id: 1
+            p4_match_field {
+              field_name: "group_id"
+              field_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
       field_references {
         source {
           action_field {
-            action_name: "refers_to_multicast_action"
-            action_id: 18598416
-            parameter_name: "multicast_group_id"
-            parameter_id: 1
+            p4_action_field {
+              action_name: "refers_to_multicast_action"
+              action_id: 18598416
+              parameter_name: "multicast_group_id"
+              parameter_id: 1
+            }
           }
         }
         destination {
-          built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
+          match_field {
+            built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+          }
         }
       }
     }

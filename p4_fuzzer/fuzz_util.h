@@ -66,6 +66,9 @@ const T& UniformFromVector(absl::BitGen* gen, const std::vector<T>& vec) {
 // The numbers above the string indicate each bit's index in the string.
 std::string SetUnusedBitsToZero(int used_bits, std::string data);
 
+// Set the N least significant bits to zero in data.
+std::string ZeroNLeastSignificantBits(int zero_bits, std::string data);
+
 // Takes an 8 byte string that represents a number in network byte order, and
 // turns it into a uint64 in host byte order. Dies if the string is not 8 byte.
 uint64_t BitsToUint64(const std::string& data);
@@ -88,6 +91,7 @@ uint64_t FuzzUint64(absl::BitGen* gen, int bits);
 // Randomly generates a ternary field match with a bitwidth of `bits`.
 // Does not set the match field id. See "9.1.1. Match Format" in the P4Runtime
 // specification for details about which FieldMatch values are valid.
+// Guarantees not to be a wildcard match.
 p4::v1::FieldMatch FuzzTernaryFieldMatch(absl::BitGen* gen, int bits);
 
 // Randomly generates a field match that conforms to the given
