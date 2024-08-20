@@ -129,6 +129,18 @@ absl::StatusOr<p4::config::v1::P4Info> GetP4Info(P4RuntimeSession& p4rt);
 // conversion fails.
 absl::StatusOr<IrP4Info> GetIrP4Info(P4RuntimeSession& p4rt);
 
+// Returns the P4Info on the switch. If the switch does not have a P4Info,
+// pushes the supplied P4Info to the switch and returns the supplied P4Info.
+absl::StatusOr<p4::config::v1::P4Info> GetOrSetP4Info(
+    pdpi::P4RuntimeSession& p4rt_session,
+    const p4::config::v1::P4Info& default_p4info);
+
+// Deletes the given `ir_entity` from the switch.
+absl::Status DeleteIrEntity(P4RuntimeSession& p4rt, const IrEntity& Ir_entity);
+
+// Deletes the given `pi_entity` from the switch.
+absl::Status DeletePiEntity(P4RuntimeSession& p4rt, const p4::v1::Entity& pi_entity);
+
 // == END OF PUBLIC INTERFACE ==================================================
 
 // -- Internal implementation details follow -----------------------------------
