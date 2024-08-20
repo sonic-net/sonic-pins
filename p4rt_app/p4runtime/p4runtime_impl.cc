@@ -1440,9 +1440,9 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
   nlohmann::json ext_tables_json = {};
 
   // Setup definitions for each each P4 ACL table.
-  for (const auto& pair : ir_p4info.tables_by_name()) {
-    std::string table_name = pair.first;
-    pdpi::IrTableDefinition table = pair.second;
+  for (const pdpi::IrTableDefinition& table :
+       OrderTablesBySize(ir_p4info.tables_by_name())) {
+    std::string table_name = table.preamble().alias();
     ASSIGN_OR_RETURN(table::Type table_type, GetTableType(table),
                      _ << "Failed to configure table " << table_name << ".");
 

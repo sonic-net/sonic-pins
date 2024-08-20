@@ -22,6 +22,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
@@ -46,6 +47,8 @@ constexpr absl::string_view kCompositeMatchAnnotationLabel = "composite_field";
 constexpr absl::string_view kUdfMatchAnnotationLabel = "sai_udf";
 constexpr absl::string_view kActionAnnotationLabel = "sai_action";
 constexpr absl::string_view kActionParamAnnotationLabel = "sai_action_param";
+constexpr absl::string_view kActionParamObjectTypeAnnotationLabel =
+    "sai_action_param_object_type";
 
 using ::absl::Status;
 using ::absl::StatusOr;
@@ -68,6 +71,16 @@ std::string GetStageName(swss::acl::Stage stage) {
 bool IsValidColor(absl::string_view color) {
   return color == "SAI_PACKET_COLOR_GREEN" ||
          color == "SAI_PACKET_COLOR_YELLOW" || color == "SAI_PACKET_COLOR_RED";
+}
+
+bool IsValidRedirectObjectType(absl::string_view type) {
+  return type == "SAI_OBJECT_TYPE_BRIDGE_PORT" ||
+         type == "SAI_OBJECT_TYPE_IPMC_GROUP" ||
+         type == "SAI_OBJECT_TYPE_L2MC_GROUP" ||
+         type == "SAI_OBJECT_TYPE_LAG" || type == "SAI_OBJECT_TYPE_NEXT_HOP" ||
+         type == "SAI_OBJECT_TYPE_NEXT_HOP_GROUP" ||
+         type == "SAI_OBJECT_TYPE_PORT" ||
+         type == "SAI_OBJECT_TYPE_SYSTEM_PORT";
 }
 
 // Generates the AppDB DEFINITION:ACL_* Entry key for an ACL table.
@@ -517,6 +530,7 @@ struct IrActionInfo {
     std::string action;     // SAI action name.
     std::string parameter;  // Parameter name (empty for unparameterized action)
     std::string color;      // SaiAction color (empty for unmetered actions)
+    std::string object_type;  // SAI object type (empty by default)
   };
 
   std::string name;  // Action name
@@ -554,6 +568,30 @@ StatusOr<IrActionInfo::SaiAction> ExtractActionAndColor(
   return sai_action;
 }
 
+// If the sai_action_param_object_type is included,
+//   Returns the sai_object_type.
+// Otherwise,
+//   Returns an empty string.
+StatusOr<std::string> ExtractActionParamSaiObjectType(
+    const std::vector<std::string>& arg_list) {
+  if (arg_list.empty()) {
+    return "";
+  }
+  if (arg_list.size() > 1) {
+    return InvalidArgumentErrorBuilder()
+           << "ACL action parameter object type annotation '@"
+           << kActionParamObjectTypeAnnotationLabel << "("
+           << absl::StrJoin(arg_list, ",")
+           << ")' has too many arguments (expected 1).";
+  }
+  if (!IsValidRedirectObjectType(arg_list[0])) {
+    return InvalidArgumentErrorBuilder()
+           << "Annotation argument '" << arg_list[0]
+           << "' is not a valid sai object type.";
+  }
+  return arg_list[0];
+}
+
 StatusOr<IrActionInfo::SaiAction> ParseActionParam(
     const IrActionDefinition::IrActionParamDefinition& param) {
   auto annotation_args_result = pdpi::GetAnnotationAsArgList(
@@ -574,6 +612,16 @@ StatusOr<IrActionInfo::SaiAction> ParseActionParam(
                    ExtractActionAndColor(annotation_args_result.value()),
                    _ << " Failed to process action parameter ["
                      << param.ShortDebugString() << "].");
+  // This is an optional annotation.
+  auto annotation_object_type_args_list = pdpi::GetAnnotationAsArgList(
+      kActionParamObjectTypeAnnotationLabel, param.param().annotations());
+  if (annotation_object_type_args_list.ok()) {
+    ASSIGN_OR_RETURN(sai_action.object_type,
+                     ExtractActionParamSaiObjectType(
+                         annotation_object_type_args_list.value()),
+                     _ << " Failed to process action parameter ["
+                       << param.ShortDebugString() << "].");
+  }
   if (!sai_action.color.empty()) {
     return InvalidArgumentErrorBuilder()
            << "Action parameter [" << param.ShortDebugString()
@@ -692,6 +740,8 @@ StatusOr<IrActionInfo> ParseAction(const IrActionDefinition& action) {
 //  {"action": "SAI_PACKET_ACTION_SET_TC", "param": "tc"}
 //  {"action": "SAI_PACKET_ACTION_DROP", "packet_color": "RED"}
 //  {"action": "SAI_PACKET_ACTION_COPY"}
+//  {"action": "SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT", "param": "0x0001",
+//   "object_type": "SAI_OBJECT_TYPE_IPMC_GROUP"}
 nlohmann::json CreateSaiActionJson(const IrActionInfo::SaiAction& parameter) {
   nlohmann::json json;
   json["action"] = parameter.action;
@@ -700,6 +750,9 @@ nlohmann::json CreateSaiActionJson(const IrActionInfo::SaiAction& parameter) {
   }
   if (!parameter.color.empty()) {
     json["packet_color"] = parameter.color;
+  }
+  if (!parameter.object_type.empty()) {
+    json["object_type"] = parameter.object_type;
   }
 
   return json;

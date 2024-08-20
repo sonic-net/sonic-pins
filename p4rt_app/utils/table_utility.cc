@@ -13,9 +13,19 @@
 // limitations under the License.
 #include "p4rt_app/utils/table_utility.h"
 
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "google/protobuf/map.h"
 #include "gutil/status.h"
 #include "absl/strings/substitute.h"
+#include "p4/config/v1/p4info.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/utils/annotation_parser.h"
 #include "swss/schema.h"
 
@@ -102,6 +112,56 @@ absl::StatusOr<table::Type> GetTableType(
       return gutil::InvalidArgumentErrorBuilder()
              << "Failed to determine table type: " << result.status();
   }
+}
+
+std::vector<pdpi::IrTableDefinition> OrderTablesBySize(
+    const google::protobuf::Map<std::string, pdpi::IrTableDefinition>&
+        tables_by_name) {
+  // Store the table definition, and any interesting fields for determining the
+  // order.
+  struct OrderingFields {
+    pdpi::IrTableDefinition table_def;
+    std::string table_name;
+    int bitwidth;
+  };
+
+  // Collect all the table definitions and sum the bitwidths of all the match
+  // fields.
+  //
+  // NOTE: Not all match fields in P4 will have a bitwidth (e.g. in_port), and
+  // this logic will treat those fields as having a bitwidth of 0. So this is
+  // not a perfect solution, but since most fields will have a bitwidth we
+  // consider it "good enough".
+  std::vector<OrderingFields> acl_tables;
+  acl_tables.reserve(tables_by_name.size());
+  for (const auto& [table_name, table_def] : tables_by_name) {
+    int bitwidth = 0;
+    for (const auto& [field_name, field_def] :
+         table_def.match_fields_by_name()) {
+      bitwidth += field_def.match_field().bitwidth();
+    }
+    acl_tables.push_back(OrderingFields{
+        .table_def = table_def,
+        .table_name = table_name,
+        .bitwidth = bitwidth,
+    });
+  }
+
+  // Sort in descending bitwidth order.
+  std::sort(acl_tables.begin(), acl_tables.end(),
+            [](const OrderingFields& lhs, const OrderingFields& rhs) {
+              if (lhs.bitwidth != rhs.bitwidth) {
+                return lhs.bitwidth > rhs.bitwidth;
+              }
+              return lhs.table_name > rhs.table_name;
+            });
+
+  std::vector<pdpi::IrTableDefinition> result;
+  result.reserve(acl_tables.size());
+  for (const auto& table : acl_tables) {
+    result.push_back(std::move(table.table_def));
+  }
+  return result;
 }
 
 }  // namespace p4rt_app
