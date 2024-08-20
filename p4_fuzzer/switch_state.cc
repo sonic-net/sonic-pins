@@ -5,10 +5,12 @@
 #include <set>
 
 #include "absl/algorithm/container.h"
+#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "glog/logging.h"
 #include "gutil/collections.h"
+#include "gutil/status.h"
 
 namespace p4_fuzzer {
 
@@ -23,7 +25,7 @@ using ::pdpi::IrP4Info;
 namespace {
 
 std::string GetTableName(const IrP4Info& info, const uint32_t table_id) {
-  return FindOrDie(info.tables_by_id(), table_id).preamble().name();
+  return FindOrDie(info.tables_by_id(), table_id).preamble().alias();
 }
 
 }  // namespace
@@ -50,6 +52,14 @@ bool SwitchState::IsTableFull(const uint32_t table_id) const {
 
 int64_t SwitchState::GetNumTableEntries(const uint32_t table_id) const {
   return FindOrDie(tables_, table_id).size();
+}
+
+int64_t SwitchState::GetNumTableEntries() const {
+  int result = 0;
+  for (const auto& [key, table] : tables_) {
+    result += table.size();
+  }
+  return result;
 }
 
 const std::vector<uint32_t> SwitchState::AllTableIds() const {
@@ -95,7 +105,7 @@ absl::optional<TableEntry> SwitchState::GetTableEntry(TableEntry entry) const {
   return absl::nullopt;
 }
 
-void SwitchState::ApplyUpdate(const Update& update) {
+absl::Status SwitchState::ApplyUpdate(const Update& update) {
   const int table_id = update.entity().table_entry().table_id();
 
   auto& table = FindOrDie(tables_, table_id);
@@ -107,20 +117,25 @@ void SwitchState::ApplyUpdate(const Update& update) {
       auto [iter, not_present] =
           table.insert(/*value=*/{TableEntryKey(table_entry), table_entry});
 
-      CHECK(not_present)
-          << "Cannot install the same table entry multiple times. Update: "
-          << update.DebugString();
+      if (!not_present) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Cannot install the same table entry multiple times. Update: "
+               << update.DebugString();
+      }
       break;
     }
 
     case Update::DELETE:
-      CHECK_EQ(tables_[table_id].erase(TableEntryKey(table_entry)), 1)
-          << "Cannot erase non-existent table entries. Update: "
-          << update.DebugString();
+      if (tables_[table_id].erase(TableEntryKey(table_entry)) != 1) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Cannot erase non-existent table entries. Update: "
+               << update.DebugString();
+      }
       break;
     default:
       LOG(FATAL) << "Update of unsupported type: " << update.DebugString();
   }
+  return absl::OkStatus();
 }
 
 std::string SwitchState::SwitchStateSummary() const {

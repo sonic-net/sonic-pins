@@ -2,6 +2,7 @@
 
 #include "glog/logging.h"
 #include "gtest/gtest.h"
+#include "gutil/status_matchers.h"
 #include "p4_pdpi/ir.h"
 
 namespace p4_fuzzer {
@@ -55,7 +56,7 @@ TEST(SwitchStateTest, RuleInsert) {
   TableEntry* entry = update.mutable_entity()->mutable_table_entry();
   entry->set_table_id(42);
 
-  state.ApplyUpdate(update);
+  ASSERT_OK(state.ApplyUpdate(update));
 
   EXPECT_FALSE(state.AllTablesEmpty());
   EXPECT_FALSE(state.IsTableEmpty(42));
@@ -90,10 +91,10 @@ TEST(SwitchStateTest, RuleDelete) {
   TableEntry* entry = update.mutable_entity()->mutable_table_entry();
   entry->set_table_id(42);
 
-  state.ApplyUpdate(update);
+  ASSERT_OK(state.ApplyUpdate(update));
 
   update.set_type(Update::DELETE);
-  state.ApplyUpdate(update);
+  ASSERT_OK(state.ApplyUpdate(update));
 
   EXPECT_TRUE(state.AllTablesEmpty());
 
