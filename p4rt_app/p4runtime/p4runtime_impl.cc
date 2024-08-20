@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -28,6 +29,7 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -1513,15 +1515,15 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
         return gutil::StatusBuilder(port_id_or.status())
                << "Could not send PacketIn request because of bad source port "
                   "name."
-               << port_id_or.status().message();
+               << port_id_or.status().message() << "Packet(hex): "
+               << absl::BytesToHexString(payload).substr(
+                      0, std::min<int>(payload.size(), 100));
       }
       source_port_id = *port_id_or;
     } else {
       source_port_id = sonic_source_port_name;
     }
 
-    // TODO: Until string port names are supported, re-assign empty
-    // target egress port names to match the ingress port.
     std::string target_port_id = source_port_id;
     if (!sonic_target_port_name.empty()) {
       if (translate_port_ids_) {
@@ -1533,7 +1535,9 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
           return gutil::StatusBuilder(port_id_or.status())
                  << "Could not send PacketIn request because of bad target "
                     "port name."
-                 << port_id_or.status().message();
+                 << port_id_or.status().message() << "Packet(hex): "
+                 << absl::BytesToHexString(payload).substr(
+                        0, std::min<int>(payload.size(), 100));
         }
         target_port_id = *port_id_or;
       } else {

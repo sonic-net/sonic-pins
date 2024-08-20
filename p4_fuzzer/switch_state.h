@@ -57,6 +57,9 @@ class SwitchState {
   // Returns the number of table entries in a given table.
   int64_t GetNumTableEntries(const uint32_t table_id) const;
 
+  // Returns the total number of table entries in all tables.
+  int64_t GetNumTableEntries() const;
+
   // Returns the current state of a table entry (or nullopt if it is not
   // present).  Only the uniquely identifying fields of entry are considered.
   absl::optional<p4::v1::TableEntry> GetTableEntry(
@@ -67,9 +70,8 @@ class SwitchState {
 
   // Applies the given update to the given table entries. Assumes that all
   // updates can actually be applied successfully e.g for INSERT, an entry
-  // cannot already be present, and crashed otherwise. Updates are applied in
-  // the order given.
-  void ApplyUpdate(const p4::v1::Update& update);
+  // cannot already be present, and returns an error otherwise.
+  absl::Status ApplyUpdate(const p4::v1::Update& update);
 
   // Returns a summary of the state.
   std::string SwitchStateSummary() const;

@@ -126,7 +126,11 @@ absl::optional<std::string> SequenceOfUpdatesOracle(
 
     // Update the state
     if (status.canonical_code() == 0) {
-      state.ApplyUpdate(update);
+      const auto& status = state.ApplyUpdate(update);
+      if (!status.ok()) {
+        error +=
+            absl::StrCat("\n- ", "Failed to update state: ", status.message());
+      }
     }
   }
 

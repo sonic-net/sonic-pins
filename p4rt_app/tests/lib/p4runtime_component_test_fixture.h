@@ -47,7 +47,7 @@ class P4RuntimeComponentTestFixture : public testing::Test {
   const p4::config::v1::P4Info p4_info_;
   const pdpi::IrP4Info ir_p4_info_;
 
-  // Bring up a fake P4Runtime gRPC server to run tests against.
+  // A testable P4Runtime gRPC server with fake DB connections
   P4RuntimeGrpcService p4rt_service_;
 
   // The P4RT gRPC client session tests will use to connect to the fake
