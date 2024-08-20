@@ -410,7 +410,7 @@ PacketTestValidationResult ValidateTestRun(
         absl::StrJoin(diff_params.ignored_packetlib_fields, ",",
                       [](std::string* out,
                          const google::protobuf::FieldDescriptor* field) {
-                        absl::StrAppend(out, "'", field->name(), "'");
+                        absl::StrAppend(out, "'", field->full_name(), "'");
                       }),
         ")");
   }
