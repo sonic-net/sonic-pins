@@ -64,6 +64,7 @@
 #include "p4rt_app/p4runtime/packetio_helpers.h"
 #include "p4rt_app/p4runtime/resource_utilization.h"
 #include "p4rt_app/p4runtime/sdn_controller_manager.h"
+#include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/packetio_interface.h"
@@ -565,6 +566,7 @@ P4RuntimeImpl::P4RuntimeImpl(
     sonic::P4rtTable p4rt_table, sonic::VrfTable vrf_table,
     sonic::HashTable hash_table, sonic::SwitchTable switch_table,
     sonic::PortTable port_table, sonic::HostStatsTable host_stats_table,
+    std::unique_ptr<sonic::WarmBootStateAdapter> warm_boot_state_adapter,
     std::unique_ptr<sonic::PacketIoInterface> packetio_impl,
 //TODO(PINS): To add component_state, system_state and netdev_translator.
 /*  swss::ComponentStateHelperInterface& component_state,
@@ -577,6 +579,7 @@ P4RuntimeImpl::P4RuntimeImpl(
       switch_table_(std::move(switch_table)),
       port_table_(std::move(port_table)),
       host_stats_table_(std::move(host_stats_table)),
+      warm_boot_state_adapter_(std::move(warm_boot_state_adapter)),
       forwarding_config_full_path_(p4rt_options.forwarding_config_full_path),
       packetio_impl_(std::move(packetio_impl)),
 //TODO(PINS): To add component_state, system_state and netdev_translator.
@@ -584,7 +587,8 @@ P4RuntimeImpl::P4RuntimeImpl(
       system_state_(system_state),
       netdev_translator_(netdev_translator), */
       translate_port_ids_(p4rt_options.translate_port_ids),
-      cpu_queue_translator_(CpuQueueTranslator::Empty()) {
+      cpu_queue_translator_(CpuQueueTranslator::Empty()),
+      is_freeze_mode_(p4rt_options.is_freeze_mode) {
   absl::optional<std::string> init_failure;
 
   // Start the controller manager.
@@ -1561,4 +1565,21 @@ absl::StatusOr<std::thread> P4RuntimeImpl::StartReceive(
   // Spawn the receiver thread.
   return packetio_impl_->StartReceive(SendPacketInToController, use_genetlink);
 }
+
+swss::WarmStart::WarmStartState
+P4RuntimeImpl::GetOrchAgentWarmStartReconcliationState() const {
+  constexpr absl::Duration kPollDuration = absl::Minutes(1);
+  const absl::Time kTimeout = absl::Now() + kPollDuration;
+  swss::WarmStart::WarmStartState oa_wb_state;
+  while (absl::Now() < kTimeout) {
+    swss::WarmStart::getWarmStartState("orchagent", oa_wb_state);
+    if (oa_wb_state == swss::WarmStart::WarmStartState::RECONCILED ||
+        oa_wb_state == swss::WarmStart::WarmStartState::WSDISABLED) {
+      return oa_wb_state;
+    }
+    absl::SleepFor(absl::Seconds(1));
+  }
+  return swss::WarmStart::WarmStartState::WSUNKNOWN;
+}
+
 }  // namespace p4rt_app

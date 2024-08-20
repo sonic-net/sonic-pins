@@ -141,28 +141,44 @@ TEST(GetNameOfTable, FailsForUnknownIrBuiltInTable) {
 
 TEST(GetNameOfField, WorksForMatchField) {
   EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
-                match_field { field_name: "field" }
+                match_field { p4_match_field { field_name: "field" } }
               )pb")),
               IsOkAndHolds(Eq("field")));
 }
 
 TEST(GetNameOfField, WorksForActionField) {
-  EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
-                action_field { action_name: "action" parameter_name: "param" }
-              )pb")),
-              IsOkAndHolds(Eq("action.param")));
+  EXPECT_THAT(
+      GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
+        action_field {
+          p4_action_field { action_name: "action" parameter_name: "param" }
+        }
+      )pb")),
+      IsOkAndHolds(Eq("action.param")));
 }
 
-TEST(GetNameOfField, WorksForBuiltInField) {
+TEST(GetNameOfField, WorksForBuiltInMatchField) {
   EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
-                built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+                match_field {
+                  built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+                }
+              )pb")),
+              IsOkAndHolds(Eq("multicast_group_id")));
+}
+
+TEST(GetNameOfField, WorksForBuiltInActionField) {
+  EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
+                action_field {
+                  built_in_action_field {
+                    action: BUILT_IN_ACTION_REPLICA
+                    parameter: BUILT_IN_PARAMETER_REPLICA_INSTANCE
+                  }
+                }
               )pb")),
               IsOkAndHolds(Eq("replica.instance")));
 }
 
-TEST(GetNameOfField, FailsForUnknownIrBuiltInField) {
+TEST(GetNameOfField, FailsForUnknownField) {
   EXPECT_THAT(GetNameOfField(ParseProtoOrDie<IrField>(R"pb(
-                built_in_field: BUILT_IN_FIELD_UNSPECIFIED
               )pb")),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
@@ -170,50 +186,42 @@ TEST(GetNameOfField, FailsForUnknownIrBuiltInField) {
 // -- GetNameOfActionField -----------------------------------------------------
 
 TEST(GetNameOfAction, WorksForActionField) {
-  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrField>(R"pb(
-                action_field { action_name: "action" parameter_name: "param" }
-              )pb")),
-              IsOkAndHolds(Eq("action")));
+  EXPECT_THAT(
+      GetNameOfAction(ParseProtoOrDie<IrActionField>(R"pb(
+        p4_action_field { action_name: "action" parameter_name: "param" }
+      )pb")),
+      IsOkAndHolds(Eq("action")));
 }
 
 TEST(GetNameOfAction, WorksForValidBuiltInField) {
-  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrField>(R"pb(
-                built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE
+  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrActionField>(R"pb(
+                built_in_action_field { action: BUILT_IN_ACTION_REPLICA }
               )pb")),
-              IsOkAndHolds(Eq("replica")));
+              IsOkAndHolds(Eq("builtin::replica")));
 }
 
-TEST(GetNameOfAction, FailsForInvalidIrBuiltInField) {
-  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrField>(R"pb(
-                built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
-              )pb")),
-              StatusIs(absl::StatusCode::kInvalidArgument));
-}
-
-TEST(GetNameOfAction, FailsForMatchField) {
-  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrField>(R"pb(
-                match_field { field_name: "field" }
+TEST(GetNameOfAction, FailsForInvalidIrBuiltInAction) {
+  EXPECT_THAT(GetNameOfAction(ParseProtoOrDie<IrActionField>(R"pb(
+                built_in_action_field { action: BUILT_IN_ACTION_UNSPECIFIED }
               )pb")),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 // -- CreateIrField Tests ------------------------------------------------------
 
-TEST(CreateIrBuiltInField, WorksForBuiltInField) {
-  EXPECT_THAT(CreateIrBuiltInField("builtin::multicast_group_table",
-                                   "multicast_group_id"),
-              IsOkAndHolds(Eq(BUILT_IN_FIELD_MULTICAST_GROUP_ID)));
+TEST(CreateIrMatchField, WorksForBuiltInMatchField) {
+  IrMatchField expected_ir_field;
+  expected_ir_field.set_built_in_match_field(
+      BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID);
+  EXPECT_THAT(CreateIrMatchField("builtin::multicast_group_table",
+                                 "multicast_group_id", IrP4Info()),
+              IsOkAndHolds(EqualsProto(expected_ir_field)));
 }
 
-TEST(CreateIrBuiltInField, FailsForUnknownTable) {
-  EXPECT_THAT(CreateIrBuiltInField("dragon_table", "multicast_group_id"),
+TEST(CreateIrMatchField, FailsForUnknownBuiltInMatchField) {
+  EXPECT_THAT(CreateIrMatchField("builtin::multicast_group_table",
+                                 "dragon_field", IrP4Info()),
               StatusIs(absl::StatusCode::kInvalidArgument));
-}
-
-TEST(CreateIrBuiltInField, FailsForUnknownField) {
-  EXPECT_THAT(
-      CreateIrBuiltInField("builtin::multicast_group_table", "dragon_field"),
-      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CreateIrMatchField, WorksForExactMatchField) {
@@ -236,8 +244,10 @@ TEST(CreateIrMatchField, WorksForExactMatchField) {
   ASSERT_TRUE(table.has_value() && match_field.has_value());
   // Populate proto with the match_field info.
   IrMatchField expected_ir_field;
-  expected_ir_field.set_field_name(match_field->match_field().name());
-  expected_ir_field.set_field_id(match_field->match_field().id());
+  expected_ir_field.mutable_p4_match_field()->set_field_name(
+      match_field->match_field().name());
+  expected_ir_field.mutable_p4_match_field()->set_field_id(
+      match_field->match_field().id());
 
   // Execute and Test:
   EXPECT_THAT(CreateIrMatchField(table->preamble().alias(),
@@ -270,12 +280,12 @@ TEST(CreateIrMatchField, FailsForNonExactMatchField) {
               StatusIs(absl::StatusCode::kUnimplemented));
 }
 
-TEST(CreateIrMatchField, FailsForUnknownTable) {
+TEST(CreateIrMatchField, FailsForUnknownP4Table) {
   EXPECT_THAT(CreateIrMatchField("dragon_table", "dragon_field", IrP4Info()),
               StatusIs(absl::StatusCode::kNotFound));
 }
 
-TEST(CreateIrMatchField, FailsForUnknownField) {
+TEST(CreateIrMatchField, FailsForUnknownP4Field) {
   // Setup: Grab some known table to avoid unknown table failure.
   IrP4Info info = GetTestIrP4Info();
   ASSERT_TRUE(!info.tables_by_name().empty());
@@ -285,6 +295,23 @@ TEST(CreateIrMatchField, FailsForUnknownField) {
   // Execute and Test:
   EXPECT_THAT(CreateIrMatchField(table_name, "dragon_field", info),
               StatusIs(absl::StatusCode::kNotFound));
+}
+
+TEST(CreateIrActionField, WorksForBuiltInParam) {
+  IrActionField expected_ir_field;
+  expected_ir_field.mutable_built_in_action_field()->set_action(
+      BUILT_IN_ACTION_REPLICA);
+  expected_ir_field.mutable_built_in_action_field()->set_parameter(
+      BUILT_IN_PARAMETER_REPLICA_PORT);
+  EXPECT_THAT(
+      CreateIrActionField("builtin::replica", "replica.port", IrP4Info()),
+      IsOkAndHolds(EqualsProto(expected_ir_field)));
+}
+
+TEST(CreateIrMatchField, FailsForUnknownBuiltInParam) {
+  EXPECT_THAT(
+      CreateIrActionField("builtin::replica", "dragon_param", IrP4Info()),
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CreateIrActionField, WorksForActionField) {
@@ -302,10 +329,14 @@ TEST(CreateIrActionField, WorksForActionField) {
       action->params_by_name().begin()->second;
   // Populate proto with action and parameter information.
   IrActionField expected_ir_field;
-  expected_ir_field.set_action_name(action->preamble().alias());
-  expected_ir_field.set_action_id(action->preamble().id());
-  expected_ir_field.set_parameter_name(param.param().name());
-  expected_ir_field.set_parameter_id(param.param().id());
+  expected_ir_field.mutable_p4_action_field()->set_action_name(
+      action->preamble().alias());
+  expected_ir_field.mutable_p4_action_field()->set_action_id(
+      action->preamble().id());
+  expected_ir_field.mutable_p4_action_field()->set_parameter_name(
+      param.param().name());
+  expected_ir_field.mutable_p4_action_field()->set_parameter_id(
+      param.param().id());
 
   // Execute and Test:
   EXPECT_THAT(CreateIrActionField(action->preamble().alias(),
@@ -313,12 +344,12 @@ TEST(CreateIrActionField, WorksForActionField) {
               IsOkAndHolds(EqualsProto(expected_ir_field)));
 }
 
-TEST(CreateIrActionField, FailsForUnknownAction) {
+TEST(CreateIrActionField, FailsForUnknownP4Action) {
   EXPECT_THAT(CreateIrActionField("dragon_action", "dragon_param", IrP4Info()),
               StatusIs(absl::StatusCode::kNotFound));
 }
 
-TEST(CreateIrActionField, FailsForUnknownParam) {
+TEST(CreateIrActionField, FailsForUnknownP4Param) {
   // Setup: Grab some known action to avoid unknown action failure.
   IrP4Info info = GetTestIrP4Info();
   ASSERT_TRUE(!info.tables_by_name().empty());
@@ -357,10 +388,12 @@ TEST(CreateIrFieldFromRefersTo, WorksForMatchField) {
   ASSERT_TRUE(table.has_value() && match_field.has_value());
   // Populate proto with info.
   IrField expected_ir_field;
-  expected_ir_field.mutable_match_field()->set_field_name(
-      match_field->match_field().name());
-  expected_ir_field.mutable_match_field()->set_field_id(
-      match_field->match_field().id());
+  expected_ir_field.mutable_match_field()
+      ->mutable_p4_match_field()
+      ->set_field_name(match_field->match_field().name());
+  expected_ir_field.mutable_match_field()
+      ->mutable_p4_match_field()
+      ->set_field_id(match_field->match_field().id());
 
   // Execute And Test:
   EXPECT_THAT(CreateIrFieldFromRefersTo(
@@ -396,17 +429,30 @@ TEST(CreateIrFieldFromRefersTo, FailsForAction) {
               StatusIs(absl::StatusCode::kUnimplemented));
 }
 
-TEST(CreateIrFieldFromReferencedBy, WorksForBuiltInField) {
+TEST(CreateIrFieldFromReferencedBy, WorksForBuiltInMatchField) {
+  EXPECT_THAT(
+      CreateIrFieldFromReferencedBy(
+          ParsedReferencedByAnnotation{
+              .table = "builtin::multicast_group_table",
+              .field = "multicast_group_id",
+          },
+          IrP4Info()),
+      IsOkAndHolds(EqualsProto(ParseProtoOrDie<IrField>(
+          R"pb(
+            match_field {
+              built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+            }
+          )pb"))));
+}
+
+TEST(CreateIrFieldFromReferencedBy, FailsForUnknownBuiltInField) {
   EXPECT_THAT(CreateIrFieldFromReferencedBy(
                   ParsedReferencedByAnnotation{
                       .table = "builtin::multicast_group_table",
-                      .field = "multicast_group_id",
+                      .field = "dragon",
                   },
                   IrP4Info()),
-              IsOkAndHolds(EqualsProto(ParseProtoOrDie<IrField>(
-                  R"pb(
-                    built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID
-                  )pb"))));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(CreateIrFieldFromReferencedBy, FailsForMatchField) {
@@ -505,10 +551,14 @@ TEST(ParseIrTableReferences, SucceedsWithMatchToMatchReference) {
             }
             field_references {
               source {
-                match_field { field_name: "src_match_field" field_id: 1 }
+                match_field {
+                  p4_match_field { field_name: "src_match_field" field_id: 1 }
+                }
               }
               destination {
-                match_field { field_name: "dst_match_field" field_id: 1 }
+                match_field {
+                  p4_match_field { field_name: "dst_match_field" field_id: 1 }
+                }
               }
             }
           )pb")))));
@@ -558,14 +608,18 @@ TEST(ParseIrTableReferences, SucceedsWithActionToMatchReference) {
             field_references {
               source {
                 action_field {
-                  action_name: "src_action"
-                  action_id: 1
-                  parameter_name: "src_param"
-                  parameter_id: 1
+                  p4_action_field {
+                    action_name: "src_action"
+                    action_id: 1
+                    parameter_name: "src_param"
+                    parameter_id: 1
+                  }
                 }
               }
               destination {
-                match_field { field_name: "dst_match_field" field_id: 1 }
+                match_field {
+                  p4_match_field { field_name: "dst_match_field" field_id: 1 }
+                }
               }
             }
           )pb")))));
@@ -598,9 +652,15 @@ TEST(ParseIrTableReferences, SucceedsWithMatchToBuiltInReference) {
             }
             field_references {
               source {
-                match_field { field_name: "src_match_field" field_id: 1 }
+                match_field {
+                  p4_match_field { field_name: "src_match_field" field_id: 1 }
+                }
               }
-              destination { built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID }
+              destination {
+                match_field {
+                  built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+                }
+              }
             }
           )pb")))));
 }
@@ -640,13 +700,19 @@ TEST(ParseIrTableReferences, SucceedsWithActionToBuiltInReference) {
             field_references {
               source {
                 action_field {
-                  action_name: "src_action"
-                  action_id: 1
-                  parameter_name: "src_param"
-                  parameter_id: 1
+                  p4_action_field {
+                    action_name: "src_action"
+                    action_id: 1
+                    parameter_name: "src_param"
+                    parameter_id: 1
+                  }
                 }
               }
-              destination { built_in_field: BUILT_IN_FIELD_MULTICAST_GROUP_ID }
+              destination {
+                match_field {
+                  built_in_match_field: BUILT_IN_MATCH_FIELD_MULTICAST_GROUP_ID
+                }
+              }
             }
           )pb")))));
 }
@@ -679,9 +745,18 @@ TEST(ParseIrTableReferences, SucceedsWithBuiltInToMatchReference) {
               p4_table { table_name: "dst_table" table_id: 3 }
             }
             field_references {
-              source { built_in_field: BUILT_IN_FIELD_REPLICA_INSTANCE }
+              source {
+                action_field {
+                  built_in_action_field {
+                    action: BUILT_IN_ACTION_REPLICA
+                    parameter: BUILT_IN_PARAMETER_REPLICA_INSTANCE
+                  }
+                }
+              }
               destination {
-                match_field { field_name: "dst_match_field" field_id: 1 }
+                match_field {
+                  p4_match_field { field_name: "dst_match_field" field_id: 1 }
+                }
               }
             }
           )pb")))));
