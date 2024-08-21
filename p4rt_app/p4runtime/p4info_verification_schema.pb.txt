@@ -83,6 +83,30 @@ tables {
     parameters { name: "tos" bitwidth: 8 }
     parameters { name: "ttl" bitwidth: 8 }
   }
+  actions {
+    name: "mirror_with_vlan_tag_and_ipfix_encapsulation"
+    parameters { name: "monitor_port" format: STRING }
+    parameters { name: "monitor_failover_port" format: STRING }
+    parameters { name: "mirror_encap_src_mac" format: MAC }
+    parameters { name: "mirror_encap_dst_mac" format: MAC }
+    parameters {
+      name: "mirror_encap_vlan_id"
+      format: HEX_STRING
+      bitwidth: 16
+    }
+    parameters { name: "mirror_encap_dst_ip" format: IPV6 }
+    parameters { name: "mirror_encap_src_ip" format: IPV6 }
+    parameters {
+      name: "mirror_encap_udp_src_port"
+      format: HEX_STRING
+      bitwidth: 16
+    }
+    parameters {
+      name: "mirror_encap_udp_dst_port"
+      format: HEX_STRING
+      bitwidth: 16
+    }
+  }
 }
 tables {
   name: "multicast_router_interface_table"
@@ -97,6 +121,7 @@ tables {
     name: "set_multicast_src_mac"
     parameters { name: "src_mac" format: MAC }
   }
+  actions { name: "l2_multicast_passthrough" }
 }
 tables {
   name: "neighbor_table"
@@ -130,10 +155,10 @@ tables {
     name: "set_ip_nexthop_and_disable_rewrites"
     parameters { name: "router_interface_id" format: STRING }
     parameters { name: "neighbor_id" format: IPV6 }
-    parameters { name: "disable_decrement_ttl" bitwidth: 1}
-    parameters { name: "disable_src_mac_rewrite" bitwidth: 1}
-    parameters { name: "disable_dst_mac_rewrite" bitwidth: 1}
-    parameters { name: "disable_vlan_rewrite" bitwidth: 1}
+    parameters { name: "disable_decrement_ttl" bitwidth: 1 }
+    parameters { name: "disable_src_mac_rewrite" bitwidth: 1 }
+    parameters { name: "disable_dst_mac_rewrite" bitwidth: 1 }
+    parameters { name: "disable_vlan_rewrite" bitwidth: 1 }
   }
 }
 tables {
@@ -171,10 +196,8 @@ tables {
 tables {
   name: "ipv6_tunnel_termination_table"
   match_fields { name: "dst_ipv6" format: IPV6 type: TERNARY }
-  actions {
-    name: "mark_for_tunnel_decap_and_set_vrf"
-    parameters { name: "vrf_id" format: STRING }
-  }
+  match_fields { name: "src_ipv6" format: IPV6 type: TERNARY }
+  actions { name: "tunnel_decap" }
 }
 tables {
   name: "disable_vlan_checks_table"
