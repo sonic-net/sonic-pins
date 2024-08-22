@@ -133,11 +133,12 @@ absl::Status DetermineReproducibilityRate(
   return absl::OkStatus();
 }
 
-absl::Status MinimizePacketTestVectors(
+absl::StatusOr<pdpi::IrEntities> MinimizePacketTestVectors(
     SwitchApi& sut_api, dvaas::PacketTestOutcome& test_outcome,
     const std::function<absl::StatusOr<ValidationResult>(
         const SynthesizedPacket& synthesized_packet,
-        pdpi::IrEntities& ir_entities)>
+        // `ir_entities` must be passed in by value.
+        pdpi::IrEntities ir_entities)>
         test_and_validate_callback) {
   // Get the `pi_entities` from the SUT.
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
@@ -208,7 +209,7 @@ absl::Status MinimizePacketTestVectors(
   LOG(INFO)
       << "The minimal set of entities that caused the test failure is: \n";
   LOG(INFO) << gutil::PrintTextProto(result);
-  return absl::OkStatus();
+  return result;
 }
 
 std::string ToString(
@@ -545,7 +546,8 @@ absl::Status PostProcessTestVectorFailure(
     gutil::TestArtifactWriter& dvaas_test_artifact_writer,
     const std::function<absl::StatusOr<ValidationResult>(
         const SynthesizedPacket& synthesized_packet,
-        pdpi::IrEntities& ir_entities)>
+        // `ir_entities` must be passed in by value.
+        pdpi::IrEntities ir_entities)>
         test_and_validate_callback) {
   // Duplicate packet that caused test failure.
   if (failure_count <
@@ -563,10 +565,12 @@ absl::Status PostProcessTestVectorFailure(
               .reproducibility_rate() == 1.0 &&
       failure_count < params.failure_enhancement_options
                           .max_number_of_failures_to_minimize) {
-    RETURN_IF_ERROR(MinimizePacketTestVectors(sut_api, test_outcome,
-                                              test_and_validate_callback))
-            .SetPrepend()
-        << "When minimizing failure: ";
+    ASSIGN_OR_RETURN(pdpi::IrEntities result,
+                     MinimizePacketTestVectors(sut_api, test_outcome,
+                                               test_and_validate_callback),
+                     _.SetPrepend() << "When minimizing failure: ");
+    RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+        "minimal_set_of_entities_that_caused_test_failure.txt", result));
   }
 
   // Output an Arriba test vector to test artifacts.
@@ -636,7 +640,7 @@ absl::Status ResetRateLimitsToOriginal(
   std::vector<p4::v1::Update> pi_updates;
   for (const auto& entity : original_entities) {
     if (entity.has_table_entry() && entity.table_entry().has_meter_config()) {
-      p4::v1::Update update = pi_updates.emplace_back();
+      p4::v1::Update& update = pi_updates.emplace_back();
       update.set_type(p4::v1::Update::MODIFY);
       *update.mutable_entity() = entity;
     }
@@ -740,14 +744,8 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
 
   // Validate test runs to create test outcomes.
-  dvaas::PacketTestOutcomes test_outcomes;
-  test_outcomes.mutable_outcomes()->Reserve(test_runs.test_runs_size());
-  for (const auto& test_run : test_runs.test_runs()) {
-    dvaas::PacketTestOutcome& test_outcome = *test_outcomes.add_outcomes();
-    *test_outcome.mutable_test_run() = test_run;
-    *test_outcome.mutable_test_result() =
-        ValidateTestRun(test_run, params.switch_output_diff_params);
-  }
+  dvaas::PacketTestOutcomes test_outcomes =
+      dvaas::ValidateTestRuns(test_runs, params.switch_output_diff_params);
 
   // Store the packet trace for all failed test outcomes.
   ASSIGN_OR_RETURN(P4Specification p4_spec,
@@ -799,7 +797,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
             dvaas_test_artifact_writer,
             /*test_and_validate_callback=*/
             [&](const SynthesizedPacket& synthesized_packet,
-                pdpi::IrEntities& ir_entities)
+                // `ir_entities` need to be copied and modified, so we take it
+                // by value.
+                pdpi::IrEntities ir_entities)
                 -> absl::StatusOr<ValidationResult> {
               std::string_view packet_port =
                   test_outcome.test_run().test_vector().input().packet().port();

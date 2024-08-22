@@ -19,8 +19,10 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
+#include "dvaas/packet_injection.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
+#include "dvaas/validation_result.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
 
@@ -41,6 +43,17 @@ struct ArribaTestVectorValidationParams {
   // TODO: Increase default packet injection rate when rate
   // limites are disabled.
   std::optional<int> max_packets_to_send_per_second = 100;
+
+  // Add the rate of packets expected to pass with the test. For new
+  // implementations, this value may be less than 1, ie, not all the packets
+  // pass. The value should be <= 1.0.
+  double expected_minimum_success_rate = 1.0;
+
+  // For a packet in from SUT or control switch without a test tag (i.e. an
+  // "unsolicited packet"), if this function return false, packet injection
+  // fails immediately.
+  IsExpectedUnsolicitedPacketFunctionType is_expected_unsolicited_packet =
+      DefaultIsExpectedUnsolicitedPacket;
 };
 
 // Validates the `sut` in the provided mirror testbed (`sut` and
@@ -59,7 +72,7 @@ struct ArribaTestVectorValidationParams {
 // Post-condition (on a successful run):
 //   - Control switch contains entries to punt all packets.
 //   - SUT constains the entries in arriba_test_vector.ir_entries.
-absl::Status ValidateAgainstArribaTestVector(
+absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params = {});
