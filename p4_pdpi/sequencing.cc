@@ -26,6 +26,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
 #include "boost/graph/adjacency_list.hpp"
@@ -34,6 +35,7 @@
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/helpers.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/sequencing_util.h"
 
@@ -328,6 +330,41 @@ absl::Status SortTableEntries(const IrP4Info& info,
           std::move(updates[update_index].entity().table_entry()));
     }
   }
+
+  return absl::OkStatus();
+}
+
+// Returns true if the table of `first` comes before the table of `second` in
+// the dependency order contained in `info`. I.e. if installing `first` before
+// `second` never fails due to dependency issues between them.
+absl::StatusOr<bool> GreaterThanInDependencyOrder(
+    const IrP4Info& info, const p4::v1::Entity& first,
+    const p4::v1::Entity& second) {
+  ASSIGN_OR_RETURN(std::string first_table, EntityToTableName(info, first));
+  ASSIGN_OR_RETURN(std::string second_table, EntityToTableName(info, second));
+  ASSIGN_OR_RETURN(
+      int first_order,
+      gutil::FindOrStatus(info.dependency_rank_by_table_name(), first_table));
+  ASSIGN_OR_RETURN(
+      int second_order,
+      gutil::FindOrStatus(info.dependency_rank_by_table_name(), second_table));
+  return first_order > second_order;
+}
+
+absl::Status StableSortEntities(const IrP4Info& info,
+                          std::vector<p4::v1::Entity>& entities) {
+  absl::c_stable_sort(
+      entities, [&](const p4::v1::Entity& a, const p4::v1::Entity& b) {
+        auto b_may_depend_on_a = GreaterThanInDependencyOrder(info, a, b);
+        if (!b_may_depend_on_a.ok()) {
+          LOG(ERROR) << "Failed to compare entities with error: "
+                     << b_may_depend_on_a.status() << "\nEntities were:\n"
+                     << a.DebugString() << "\n\n   and   \n\n"
+                     << b.DebugString();
+          return false;
+        }
+        return *b_may_depend_on_a;
+      });
 
   return absl::OkStatus();
 }

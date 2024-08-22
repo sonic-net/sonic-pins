@@ -133,6 +133,7 @@ cc_library(
     # Disable default arguments internally. Using them in PDPI itself is very likely a bug.
     local_defines = ["PDPI_DISABLE_TRANSLATION_OPTIONS_DEFAULT"],
     deps = [
+        ":helpers",
         ":ir_cc_proto",
         ":sequencing_util",
         "//gutil:collections",
@@ -503,6 +504,36 @@ cc_test(
         "//gutil:status_matchers",
         "@com_google_absl//absl/hash:hash_testing",
         "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "helpers",
+    srcs = ["helpers.cc"],
+    hdrs = ["helpers.h"],
+    deps = [
+        ":built_ins",
+        ":ir_cc_proto",
+        "//gutil:collections",
+        "//gutil:status",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "helpers_test",
+    srcs = ["helpers_test.cc"],
+    deps = [
+        ":built_ins",
+        ":helpers",
+        ":ir_cc_proto",
+        "//gutil:status_matchers",
+        "//p4_pdpi/testing:test_p4info_cc",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_googletest//:gtest_main",
     ],
 )
