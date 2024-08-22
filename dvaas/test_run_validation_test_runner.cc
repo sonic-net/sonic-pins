@@ -341,6 +341,92 @@ std::vector<TestCase> TestCases() {
     test = TestCase{
         .description =
             "Packet gets forwarded with an unexpected\nmodification of two "
+            "header fields. This is the same test case as above,"
+            "\nbut ethernet header is ignored and dscp field in ipv4"
+            "\nis ignored by test_run_validation.",
+        .test_vector = ParseProtoOrDie<PacketTestVector>(R"pb(
+          input {
+            type: DATAPLANE
+            packet {
+              port: "1"
+              parsed {
+                headers {
+                  ethernet_header {
+                    ethernet_destination: "02:03:04:05:06:07"
+                    ethernet_source: "00:01:02:03:04:05"
+                    ethertype: "0x0800"
+                  }
+                }
+                headers {
+                  ipv4_header {
+                    version: "0x4"
+                    ihl: "0x5"
+                    dscp: "0x1c"
+                    ecn: "0x0"
+                    total_length: "0x012e"
+                    identification: "0x0000"
+                    flags: "0x0"
+                    fragment_offset: "0x0000"
+                    ttl: "0x20"
+                    protocol: "0x11"
+                    checksum: "0x1b62"
+                    ipv4_source: "10.0.0.0"
+                    ipv4_destination: "10.206.105.32"
+                  }
+                }
+                headers {
+                  udp_header {
+                    source_port: "0x0000"
+                    destination_port: "0x0000"
+                    length: "0x011a"
+                    checksum: "0xad82"
+                  }
+                }
+                payload: "test packet"
+              }
+            }
+          }
+          # Acceptable outputs and actual output filled in below.
+        )pb"),
+        .actual_output = SwitchOutput(),
+        .diff_params =
+            {.ignored_packetlib_fields =
+                 {
+                     packetlib::Ipv4Header::descriptor()->FindFieldByName(
+                         "checksum"),
+                     packetlib::Header::descriptor()->FindFieldByName(
+                         "udp_header"),
+                 }},
+    };
+
+    // We expect the packet to be forwarded out of port 12 unmodified.
+    auto& acceptable_output =
+        *test.test_vector.add_acceptable_outputs()->add_packets();
+    acceptable_output = test.test_vector.input().packet();
+    acceptable_output.set_port("12");
+
+    // The packet instead gets forwarded with three header field modifications.
+    // Two of the mods are ignored but the DSCP modification will fail
+    // the validation.
+    auto& actual_output = *test.actual_output.add_packets();
+    actual_output = acceptable_output;
+    actual_output.mutable_parsed()
+        ->mutable_headers(1)
+        ->mutable_ipv4_header()
+        ->set_checksum("0x0000");
+    actual_output.mutable_parsed()
+        ->mutable_headers(1)
+        ->mutable_ipv4_header()
+        ->set_dscp("0x00");
+    // Erase UDP header's fields but the UDP header is still present.
+    actual_output.mutable_parsed()->mutable_headers(2)->mutable_udp_header();
+  }
+
+  {
+    TestCase& test = tests.emplace_back();
+    test = TestCase{
+        .description =
+            "Packet gets forwarded with an unexpected\nmodification of two "
             "header fields. This is the same test case as above,\nbut many "
             "fields are ignored by test_run_validation."
             "\nOne of the modified field is ignored by test_run_validation.",
