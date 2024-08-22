@@ -40,6 +40,7 @@
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
 #include "gutil/status.h"
+#include "gutil/syslog_sink.h"
 #include "p4rt_app/event_monitoring/app_state_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_cpu_queue_table_event.h"
@@ -364,6 +365,7 @@ void ConfigDbEventLoop(P4RuntimeImpl* p4runtime_server,
 }  // namespace p4rt_app
 
 int main(int argc, char** argv) {
+  gutil::SyslogSink syslog_sink("p4rt");
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   

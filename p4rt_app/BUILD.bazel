@@ -40,6 +40,7 @@ cc_binary(
         "@com_google_absl//absl/time",
         "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "//gutil:status",
+        "//gutil:syslog_sink",
         "//p4rt_app/event_monitoring:app_state_db_port_table_event",
         "//p4rt_app/event_monitoring:app_state_db_send_to_ingress_port_table_event",
         "//p4rt_app/event_monitoring:config_db_cpu_queue_table_event",
