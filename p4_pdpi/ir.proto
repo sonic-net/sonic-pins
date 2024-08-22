@@ -358,6 +358,10 @@ message IrP4Info {
   // Maps built-in table name to definitions. Refer to `IrBuiltInTable` for
   // valid built-in table names.
   map<string, IrBuiltInTableDefinition> built_in_tables = 13;
+  // Maps each table alias to a dependency rank such that if an entry in A can
+  // depend on an entry in B (including transitively), then
+  // dependency_rank_by_table_name[B] > dependency_rank_by_table_name[A].
+  map<string, int32> dependency_rank_by_table_name = 14;
 }
 
 // -- Table entries ------------------------------------------------------------

@@ -1203,6 +1203,492 @@ updates {
 }
 
 =========================================================================
+SortTest: Empty input
+=========================================================================
+
+--- PD entries (input):
+<empty>
+
+--- Sorted entities (output):
+<empty>
+
+=========================================================================
+SortTest: EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a, 0x002}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryWithTwoKeys{key-a, 0x002} -> EntryThatRefersTo{key-a, 0x002}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x002"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x002"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryThatRefersTo{key-a, 0x002} -> EntryWithTwoKeys{key-c, 0x004}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+=========================================================================
+SortTest: Entries at same rank should maintain the original order.
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+packet_count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    packet_count_and_meter {
+    }
+  }
+}
+
+--- Sorted entities (output):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+packet_count_and_meter_table_entry {
+  match {
+    ipv4 {
+      value: "16.36.50.0"
+      prefix_length: 24
+    }
+  }
+  action {
+    packet_count_and_meter {
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a} , another entry
+=========================================================================
+
+--- PD entries (input):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: 96
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+lpm2_table_entry {
+  match {
+    ipv6 {
+      value: "ffff::abcd:0:0"
+      prefix_length: 96
+    }
+  }
+  action {
+    NoAction {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+=========================================================================
+SortTest: EntryWithOneKey{key-a} -> EntryThatRefersTo{key-a} ,EntryWithOneKey{key-b} -> EntryThatRefersTo{key-b}
+=========================================================================
+
+--- PD entries (input):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_one_match_field_action {
+      referring_id_1: "key-a"
+    }
+  }
+}
+
+one_match_field_table_entry {
+  match {
+    id: "key-a"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+referring_by_action_table_entry {
+  match {
+    val: "0x001"
+  }
+  action {
+    referring_to_two_match_fields_action {
+      referring_id_1: "key-a"
+      referring_id_2: "0x002"
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-c"
+    id_2: "0x004"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+=========================================================================
+SortTest: two_match_fields_table_entry -> referring_by_match_field_table_entry
+=========================================================================
+
+--- PD entries (input):
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+--- Sorted entities (output):
+referring_by_match_field_table_entry {
+  match {
+    referring_id_1: "key-a"
+    referring_id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+two_match_fields_table_entry {
+  match {
+    id_1: "key-a"
+    id_2: "0x001"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+}
+
+=========================================================================
 GetEntriesUnreachableFromRootsTest: Empty input generates no garbage.
 =========================================================================
 
