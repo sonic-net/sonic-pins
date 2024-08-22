@@ -1,5 +1,5 @@
-#ifndef PINS_INFRA_P4_PDPI_HELPERS_H_
-#define PINS_INFRA_P4_PDPI_HELPERS_H_
+#ifndef PINS_P4_PDPI_HELPERS_H_
+#define PINS_P4_PDPI_HELPERS_H_
 
 #include <string>
 
@@ -14,4 +14,4 @@ absl::StatusOr<std::string> EntityToTableName(const IrP4Info& info,
                                               const p4::v1::Entity& entity);
 }  // namespace pdpi
 
-#endif  // PINS_INFRA_P4_PDPI_HELPERS_H_
+#endif  // PINS_P4_PDPI_HELPERS_H_
