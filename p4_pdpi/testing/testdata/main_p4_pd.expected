@@ -206,6 +206,8 @@ message UnsupportedTableEntry {
   message Match {
     string ipv6 = 1; // exact match / Format::IPV6 / 128 bits
     string ipv4 = 2; // exact match / Format::IPV4
+    // Refers to 'exact_table.mac'.
+    string mac = 3; // exact match / Format::MAC
   }
   Match match = 1;
   message Action {
@@ -486,6 +488,8 @@ message DoThing4Action {
 
 // CAUTION: This action is not (yet) supported.
 message UnsupportedAction {
+  // Refers to 'exact_table.normal'.
+  string normal = 1; // Format::HEX_STRING / 10 bits
 }
 
 message PacketCountAndMeterAction {

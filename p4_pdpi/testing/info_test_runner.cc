@@ -15,10 +15,14 @@
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "glog/logging.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
@@ -48,6 +52,10 @@ static void RunP4InfoTest(const std::string& test_name, const P4Info& p4info) {
   auto info_without_unsupported = *info;
   pdpi::RemoveUnsupportedEntities(info_without_unsupported);
   std::string diff = gutil::ProtoDiff(*info, info_without_unsupported).value();
+  // The produced diff is apparently non-deterministic, so this orders it.
+  std::vector<std::string> diff_as_list = absl::StrSplit(diff, '\n');
+  absl::c_sort(diff_as_list);
+  diff = absl::StrJoin(diff_as_list, "\n");
 
   std::cout
       << "-- pdpi::RemoveUnsupportedEntities diff ---------------------------"

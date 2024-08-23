@@ -1603,7 +1603,8 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
         ir_match_field->match_field().match_type() != MatchField::OPTIONAL) {
       return gutil::InvalidArgumentErrorBuilder()
              << "Invalid @refers_to annotation: Only exact and optional "
-                "match fields can be used.";
+                "match fields can be used, but got: "
+             << ir_match_field->DebugString();
     }
   }
 
@@ -2956,11 +2957,9 @@ bool IsSupported(const Value &value) {
   return !value.is_unsupported();
 }
 
-template <>
-bool IsSupported(const pdpi::IrActionReference &value) {
-  return !value.action().is_unsupported();
+bool IsSupported(const IrActionReference &action_ref) {
+  return !action_ref.action().is_unsupported();
 }
-
 template <class Key, class Value>
 void RemoveUnsupportedValues(google::protobuf::Map<Key, Value> &map) {
   google::protobuf::Map<Key, Value> tmp;
@@ -3102,6 +3101,8 @@ void RemoveUnsupportedEntities(IrP4Info &p4_info) {
   RemoveUnsupportedTables(p4_info);
   RemoveUnsupportedActions(p4_info);
   RemoveUnsupportedMatchFields(p4_info);
+  // This must be called after the above functions since it uses their results.
+  RemoveDanglingReferences(p4_info);
 }
 
 }  // namespace pdpi
