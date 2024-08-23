@@ -369,6 +369,28 @@ absl::Status StableSortEntities(const IrP4Info& info,
   return absl::OkStatus();
 }
 
+absl::Status StableSortUpdates(
+    const IrP4Info& info,
+    google::protobuf::RepeatedPtrField<p4::v1::Update>& updates,
+    bool reverse_ordering) {
+  std::stable_sort(
+      updates.begin(), updates.end(),
+      [&](const p4::v1::Update& a, const p4::v1::Update& b) {
+        auto b_may_depend_on_a =
+            GreaterThanInDependencyOrder(info, a.entity(), b.entity());
+        if (!b_may_depend_on_a.ok()) {
+          LOG(ERROR) << "Failed to compare updates with error: "
+                     << b_may_depend_on_a.status() << "\nUpdates were:\n"
+                     << a.DebugString() << "\n\n   and   \n\n"
+                     << b.DebugString();
+          return false;
+        }
+        return reverse_ordering ? !*b_may_depend_on_a : *b_may_depend_on_a;
+      });
+
+  return absl::OkStatus();
+}
+
 absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
     absl::Span<const p4::v1::Entity> entities,
     absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
