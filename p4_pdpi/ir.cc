@@ -1189,11 +1189,6 @@ absl::Status InsertOutgoingReferenceInfo(const IrTableReference &reference,
     case IrTable::kBuiltInTable: {
       ASSIGN_OR_RETURN(const std::string built_in_table_name,
                        IrBuiltInTableToString(source.built_in_table()));
-      auto [it, fresh] = info.mutable_built_in_tables()->insert(
-          {built_in_table_name, IrBuiltInTableDefinition()});
-      if (fresh) {
-        it->second.set_built_in_table(source.built_in_table());
-      }
       *info.mutable_built_in_tables()
            ->at(built_in_table_name)
            .add_outgoing_references() = reference;
@@ -1235,11 +1230,6 @@ absl::Status InsertIncomingReferenceInfo(const IrTableReference &reference,
     case IrTable::kBuiltInTable: {
       ASSIGN_OR_RETURN(const std::string built_in_table_name,
                        IrBuiltInTableToString(destination.built_in_table()));
-      auto [it, fresh] = info.mutable_built_in_tables()->insert(
-          {built_in_table_name, IrBuiltInTableDefinition()});
-      if (fresh) {
-        it->second.set_built_in_table(destination.built_in_table());
-      }
       *info.mutable_built_in_tables()
            ->at(built_in_table_name)
            .add_incoming_references() = reference;
@@ -1655,6 +1645,20 @@ StatusOr<IrP4Info> CreateIrP4Info(const p4::config::v1::P4Info &p4_info) {
     }
   }
 
+  // Pre-construct all built-in tables.
+  for (const auto &built_in_table_enum :
+       {IrBuiltInTable::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE,
+        IrBuiltInTable::BUILT_IN_TABLE_CLONE_SESSION_TABLE}) {
+    IrBuiltInTableDefinition built_in_table;
+    built_in_table.set_built_in_table(built_in_table_enum);
+
+    ASSIGN_OR_RETURN(const std::string built_in_table_name,
+                     IrBuiltInTableToString(built_in_table_enum));
+    (*info.mutable_built_in_tables())[built_in_table_name] =
+        std::move(built_in_table);
+  }
+
+  // Add references.
   ASSIGN_OR_RETURN(std::vector<IrTableReference> references,
                    ParseIrTableReferences(info));
   for (const auto &reference : references) {
