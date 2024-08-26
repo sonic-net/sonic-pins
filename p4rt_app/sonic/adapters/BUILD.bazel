@@ -214,6 +214,27 @@ cc_test(
 )
 
 cc_library(
+    name = "subscriber_state_table_adapter",
+    srcs = ["subscriber_state_table_adapter.cc"],
+    hdrs = ["subscriber_state_table_adapter.h"],
+    deps = [
+        "@com_github_google_glog//:glog",
+        "@sonic_swss_common//:libswsscommon",
+    ],
+)
+
+cc_library(
+    name = "mock_subscriber_state_table_adapter",
+    testonly = True,
+    hdrs = ["mock_subscriber_state_table_adapter.h"],
+    deps = [
+        ":subscriber_state_table_adapter",
+        "@com_google_googletest//:gtest",
+        "@sonic_swss_common//:common",
+    ],
+)
+
+cc_library(
     name = "warm_boot_state_adapter",
     srcs = ["warm_boot_state_adapter.cc"],
     hdrs = ["warm_boot_state_adapter.h"],
