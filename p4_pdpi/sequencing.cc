@@ -352,7 +352,7 @@ absl::StatusOr<bool> GreaterThanInDependencyOrder(
 }
 
 absl::Status StableSortEntities(const IrP4Info& info,
-                          std::vector<p4::v1::Entity>& entities) {
+                                std::vector<p4::v1::Entity>& entities) {
   absl::c_stable_sort(
       entities, [&](const p4::v1::Entity& a, const p4::v1::Entity& b) {
         auto b_may_depend_on_a = GreaterThanInDependencyOrder(info, a, b);

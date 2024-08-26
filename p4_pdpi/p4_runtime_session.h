@@ -350,7 +350,12 @@ absl::Status SetMetadataAndSendPiWriteRequests(
     P4RuntimeSession* session,
     std::vector<p4::v1::WriteRequest>& write_requests);
 
+// Reads PI (program independent) entities.
+absl::StatusOr<std::vector<p4::v1::Entity>> ReadPiEntities(
+    P4RuntimeSession* session);
+
 // Reads PI (program independent) table entries.
+ABSL_DEPRECATED("Prefer ReadPiEntities instead.")
 absl::StatusOr<std::vector<p4::v1::TableEntry>> ReadPiTableEntries(
     P4RuntimeSession* session);
 
@@ -387,8 +392,17 @@ absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
                                absl::Span<const p4::v1::Entity> pi_entities);
 
 // Sends the given PI updates to the switch.
+//
+// Optionally, `max_batch_size` can be used to limit the number of updates in a
+// single write request. Sending too many updates in a single write request will
+// return a RESOURCE EXHAUSTED error due to the amount of metadata in the
+// response. The P4 Runtime specification states that a good rule of thumb for
+// the size of request is "8192 + MAX_UPDATES_PER_WRITE * 100 bytes of
+// metadata". P4RuntimeSession uses a 1MB limit and 5000 updates falls safely
+// within those limits and is simultaneously more than we ever tend to send.
 absl::Status SendPiUpdates(P4RuntimeSession* session,
-                           absl::Span<const p4::v1::Update> pi_updates);
+                           absl::Span<const p4::v1::Update> pi_updates,
+                           std::optional<int> max_batch_size = 5000);
 
 // Sets the forwarding pipeline to the given P4 info and, optionally, device
 // configuration.

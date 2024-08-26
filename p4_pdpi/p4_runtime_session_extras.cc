@@ -33,7 +33,7 @@ absl::Status InstallPdTableEntries(
           << "failed to translate PD entries to PI using switch P4Info: ");
 
   // Install entities.
-  return InstallPiEntities(p4rt, pi_entities);
+  return InstallPiEntities(&p4rt, info, pi_entities);
 }
 
 absl::Status InstallPdTableEntry(
@@ -104,18 +104,19 @@ absl::Status InstallIrTableEntry(P4RuntimeSession& p4rt,
 
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                const PiEntities& entities) {
-  for (const p4::v1::Entity& entity : entities.entities()) {
-    RETURN_IF_ERROR(InstallPiEntity(&p4rt, entity));
-  }
-  return absl::OkStatus();
+  return InstallPiEntities(
+      p4rt, std::vector<p4::v1::Entity>{entities.entities().begin(),
+                                        entities.entities().end()});
 }
 
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,
                                absl::Span<const p4::v1::Entity> entities) {
-  for (const p4::v1::Entity& entity : entities) {
-    RETURN_IF_ERROR(InstallPiEntity(&p4rt, entity));
-  }
-  return absl::OkStatus();
+  // Get P4Info from switch.
+  ASSIGN_OR_RETURN(IrP4Info info, GetIrP4Info(p4rt),
+                   _.SetPrepend() << "cannot install entries on switch: failed "
+                                     "to pull P4Info from switch: ");
+
+  return InstallPiEntities(&p4rt, info, entities);
 }
 
 absl::Status InstallPiEntities(P4RuntimeSession& p4rt,

@@ -15,6 +15,7 @@
 #include "p4_pdpi/p4_runtime_session.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>  // NOLINT: third_party code.
 #include <utility>
@@ -449,6 +450,17 @@ absl::Status SetMetadataAndSendPiWriteRequests(
   return absl::OkStatus();
 }
 
+absl::StatusOr<std::vector<Entity>> ReadPiEntities(P4RuntimeSession* session) {
+  ReadRequest read_request;
+  read_request.add_entities()->mutable_table_entry();
+  read_request.add_entities()->mutable_packet_replication_engine_entry();
+  ASSIGN_OR_RETURN(ReadResponse read_response,
+                   SetMetadataAndSendPiReadRequest(session, read_request));
+
+  return std::vector<Entity>{read_response.entities().begin(),
+                             read_response.entities().end()};
+}
+
 absl::StatusOr<std::vector<TableEntry>> ReadPiTableEntries(
     P4RuntimeSession* session) {
   ReadRequest read_request;
@@ -583,29 +595,45 @@ absl::Status InstallPiEntity(P4RuntimeSession* session,
 }
 
 absl::Status SendPiUpdates(P4RuntimeSession* session,
-                           absl::Span<const p4::v1::Update> updates) {
+                           absl::Span<const p4::v1::Update> updates,
+                           std::optional<int> max_batch_size) {
+  if (max_batch_size.has_value() && *max_batch_size <= 0) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Max batch size must be > 0. Max batch size: " << *max_batch_size;
+  }
+
+  std::vector<WriteRequest> requests;
   WriteRequest request;
   for (const p4::v1::Update& update : updates) {
     *request.add_updates() = update;
+    if (max_batch_size.has_value() &&
+        request.updates_size() >= *max_batch_size) {
+      requests.push_back(std::move(request));
+      request = WriteRequest();
+    }
   }
-  return SetMetadataAndSendPiWriteRequest(session, request);
+  requests.push_back(std::move(request));
+  return SetMetadataAndSendPiWriteRequests(session, requests);
 }
 
 absl::Status InstallPiTableEntries(P4RuntimeSession* session,
                                    const IrP4Info& info,
                                    absl::Span<const TableEntry> pi_entries) {
-  std::vector<Update> pi_updates = CreatePiUpdates(pi_entries, Update::INSERT);
-  ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_write_requests,
-                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
-  return SetMetadataAndSendPiWriteRequests(session, sequenced_write_requests);
+  std::vector<Entity> pi_entities;
+  pi_entities.reserve(pi_entries.size());
+  for (const auto& pi_entry : pi_entries) {
+    *pi_entities.emplace_back().mutable_table_entry() = pi_entry;
+  }
+  return InstallPiEntities(session, info, pi_entities);
 }
 
 absl::Status InstallPiEntities(P4RuntimeSession* session, const IrP4Info& info,
                                absl::Span<const Entity> pi_entities) {
-  std::vector<Update> pi_updates = CreatePiUpdates(pi_entities, Update::INSERT);
-  ASSIGN_OR_RETURN(std::vector<WriteRequest> sequenced_write_requests,
-                   pdpi::SequencePiUpdatesIntoWriteRequests(info, pi_updates));
-  return SetMetadataAndSendPiWriteRequests(session, sequenced_write_requests);
+  std::vector<Entity> sorted_pi_entities{pi_entities.begin(),
+                                         pi_entities.end()};
+  RETURN_IF_ERROR(pdpi::StableSortEntities(info, sorted_pi_entities));
+  return SendPiUpdates(session,
+                       CreatePiUpdates(sorted_pi_entities, Update::INSERT));
 }
 
 absl::Status SetMetadataAndSetForwardingPipelineConfig(

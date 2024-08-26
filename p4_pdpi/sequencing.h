@@ -64,10 +64,10 @@ absl::Status SortTableEntries(const IrP4Info& info,
 
 // Stably sorts the entities such that entities that may be depended on come
 // first. That is, two entities x and y where x could refer to y will be sorted
-// as [y, x]. This is done based on the dependency rank remain in the same relative order.
+// as [y, x]. This is done based on the dependency ranks given in the IrP4Info.
 // Any entities with the same dependency rank remain in the same relative order.
 absl::Status StableSortEntities(const IrP4Info& info,
-                          std::vector<p4::v1::Entity>& entities);
+                                std::vector<p4::v1::Entity>& entities);
 
 // Same as StableSortEntities but sorts the repeated `Update` message.
 absl::Status StableSortUpdates(
