@@ -735,6 +735,10 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         field_id: 2
                         exact { value: "\x10\x24\x32\x52" }
                       }
+                      match {
+                        field_id: 3
+                        exact { value: "\021\"3DUf" }
+                      }
                     }
                   )pb"));
 
@@ -746,7 +750,12 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                         field_id: 1
                         ternary { value: "\xd0" mask: "\x00\xff" }
                       }
-                      action { action { action_id: 16777223 } }
+                      action {
+                        action {
+                          action_id: 16777223
+                          params { param_id: 1 value: "\xd0" }
+                        }
+                      }
                       priority: 32
                     }
                   )pb"));
@@ -862,6 +871,10 @@ static void RunIrTernaryTableTests(const pdpi::IrP4Info info) {
                         name: "ipv6"
                         exact { ipv6: "::ff22" }
                       }
+                      matches {
+                        name: "mac"
+                        exact { mac: "00:11:22:33:44:55" }
+                      }
                     }
                   )pb"));
   RunIrEntityTest(info, "ternary table - unsupported action used",
@@ -872,7 +885,13 @@ static void RunIrTernaryTableTests(const pdpi::IrP4Info info) {
                         name: "normal"
                         ternary { value { hex_str: "0x00" } }
                       }
-                      action { name: "unsupported_action" }
+                      action {
+                        name: "unsupported_action"
+                        params {
+                          name: "normal"
+                          value { hex_str: "0x012" }
+                        }
+                      }
                       priority: 32
                     }
                   )pb"));
@@ -2653,13 +2672,17 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
   RunPdTableEntryTest(
       info, "unsupported table used",
       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
-        unsupported_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
+        unsupported_table_entry {
+          match { ipv4: "10.10.10.10" ipv6: "::ff22" mac: "11:22:33:44:55:66" }
+        }
       )pb"),
       INPUT_IS_INVALID);
   RunPdTableEntryTest(
       info, "unsupported table used",
       gutil::ParseProtoOrDie<pdpi::TableEntry>(R"pb(
-        unsupported_table_entry { match { ipv4: "10.10.10.10" ipv6: "::ff22" } }
+        unsupported_table_entry {
+          match { ipv4: "10.10.10.10" ipv6: "::ff22" mac: "11:22:33:44:55:66" }
+        }
       )pb"),
       INPUT_IS_VALID, pdpi::TranslationOptions{.allow_unsupported = true});
 
@@ -2668,7 +2691,7 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
                         ternary_table_entry {
                           match { normal { value: "0x052" mask: "0x273" } }
                           priority: 32
-                          action { unsupported_action {} }
+                          action { unsupported_action { normal: "0x054" } }
                         }
                       )pb"),
                       INPUT_IS_INVALID);
@@ -2677,7 +2700,7 @@ static void RunPdTestsOnlyKey(const pdpi::IrP4Info info) {
                         ternary_table_entry {
                           match { normal { value: "0x052" mask: "0x273" } }
                           priority: 32
-                          action { unsupported_action {} }
+                          action { unsupported_action { normal: "0x054" } }
                         }
                       )pb"),
                       INPUT_IS_VALID,

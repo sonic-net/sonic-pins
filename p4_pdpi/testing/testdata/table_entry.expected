@@ -1053,6 +1053,12 @@ table_entry {
       value: "\020$2R"
     }
   }
+  match {
+    field_id: 3
+    exact {
+      value: "\021\"3DUf"
+    }
+  }
 }
 
 --- PI is invalid/unsupported:
@@ -1075,6 +1081,10 @@ table_entry {
   action {
     action {
       action_id: 16777223
+      params {
+        param_id: 1
+        value: "\320"
+      }
     }
   }
   priority: 32
@@ -2965,6 +2975,12 @@ table_entry {
       ipv6: "::ff22"
     }
   }
+  matches {
+    name: "mac"
+    exact {
+      mac: "00:11:22:33:44:55"
+    }
+  }
 }
 
 --- IR (converting to PI) is invalid/unsupported:
@@ -2987,6 +3003,12 @@ table_entry {
     name: "ipv6"
     exact {
       ipv6: "::ff22"
+    }
+  }
+  matches {
+    name: "mac"
+    exact {
+      mac: "00:11:22:33:44:55"
     }
   }
 }
@@ -3012,6 +3034,12 @@ table_entry {
   priority: 32
   action {
     name: "unsupported_action"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x012"
+      }
+    }
   }
 }
 
@@ -3038,6 +3066,12 @@ table_entry {
   priority: 32
   action {
     name: "unsupported_action"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x012"
+      }
+    }
   }
 }
 
@@ -6836,6 +6870,7 @@ unsupported_table_entry {
   match {
     ipv6: "::ff22"
     ipv4: "10.10.10.10"
+    mac: "11:22:33:44:55:66"
   }
 }
 
@@ -6851,6 +6886,7 @@ unsupported_table_entry {
   match {
     ipv6: "::ff22"
     ipv4: "10.10.10.10"
+    mac: "11:22:33:44:55:66"
   }
 }
 
@@ -6869,6 +6905,12 @@ table_entry {
       ipv4: "10.10.10.10"
     }
   }
+  matches {
+    name: "mac"
+    exact {
+      mac: "11:22:33:44:55:66"
+    }
+  }
 }
 
 --- PI:
@@ -6884,6 +6926,12 @@ table_entry {
     field_id: 2
     exact {
       value: "\n\n\n\n"
+    }
+  }
+  match {
+    field_id: 3
+    exact {
+      value: "\021\"3DUf"
     }
   }
 }
@@ -6904,6 +6952,7 @@ ternary_table_entry {
   }
   action {
     unsupported_action {
+      normal: "0x054"
     }
   }
   priority: 32
@@ -6926,6 +6975,7 @@ ternary_table_entry {
   }
   action {
     unsupported_action {
+      normal: "0x054"
     }
   }
   priority: 32
@@ -6948,6 +6998,12 @@ table_entry {
   priority: 32
   action {
     name: "unsupported_action"
+    params {
+      name: "normal"
+      value {
+        hex_str: "0x054"
+      }
+    }
   }
 }
 
@@ -6964,6 +7020,10 @@ table_entry {
   action {
     action {
       action_id: 16777223
+      params {
+        param_id: 1
+        value: "T"
+      }
     }
   }
   priority: 32
