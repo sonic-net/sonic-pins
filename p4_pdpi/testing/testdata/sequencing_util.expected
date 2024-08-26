@@ -6,6 +6,10 @@ CreateReferenceRelationsTest
 =========================================================================
 -- INPUT -----------------------------------------------------------------------
 -- IrP4Info's references --
+table: "exact_table"
+match_field: "normal"
+table_id: 33554434
+match_field_id: 1
 table: "two_match_fields_table"
 match_field: "id_1"
 table_id: 34805412
@@ -22,9 +26,14 @@ table: "referring_by_match_field_table"
 match_field: "referring_id_1"
 table_id: 49592401
 match_field_id: 1
+table: "exact_table"
+match_field: "mac"
+table_id: 33554434
+match_field_id: 4
 
 -- OUTPUT ----------------------------------------------------------------------
 -- ReferenceRelations --
+ReferenceRelationKey{referred_table_id: 33554434}, ReferenceRelation{match_field_ids: [1, 4]}
 ReferenceRelationKey{referred_table_id: 34805412}, ReferenceRelation{match_field_ids: [1, 2]}
 ReferenceRelationKey{referred_table_id: 46253494}, ReferenceRelation{match_field_ids: [1]}
 ReferenceRelationKey{referred_table_id: 49592401}, ReferenceRelation{match_field_ids: [1]}
