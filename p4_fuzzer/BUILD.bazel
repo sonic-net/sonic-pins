@@ -182,6 +182,28 @@ cc_library(
 )
 
 cc_test(
+    name = "oracle_util_test",
+    srcs = ["oracle_util_test.cc"],
+    deps = [
+        ":oracle_util",
+        "//gutil:collections",
+        "//gutil:status",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "//p4_pdpi/netaddr:ipv4_address",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "fuzzer_showcase_test",
     srcs = [
         "fuzzer_showcase_test.cc",
