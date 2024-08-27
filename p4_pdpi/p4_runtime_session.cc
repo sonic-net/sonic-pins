@@ -548,8 +548,6 @@ absl::Status CheckNoEntities(P4RuntimeSession& session) {
   return absl::OkStatus();
 }
 
-namespace {
-
 absl::StatusOr<int> GetEntityRank(const pdpi::IrP4Info& info,
                                   const p4::v1::Entity& entity) {
   ASSIGN_OR_RETURN(std::string table_name, EntityToTableName(info, entity));
