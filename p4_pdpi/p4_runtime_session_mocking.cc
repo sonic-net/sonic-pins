@@ -32,6 +32,7 @@
 #include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4/v1/p4runtime_mock.grpc.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
 namespace pdpi {
@@ -50,6 +51,11 @@ using ::testing::Return;
 // when sequencing updates to clear tables on the switch.
 constexpr uint32_t kTableId = 33554433;
 constexpr uint32_t kActionId = 16777217;
+
+// Arbitrarily chosen.
+constexpr uint32_t kMulticastGroupId = 1;
+constexpr uint32_t kMulticastGroupReplicaInstance = 2;
+constexpr absl::string_view kMulticastGroupReplicaPort = "3";
 
 }  // namespace
 
@@ -72,16 +78,16 @@ p4::v1::MasterArbitrationUpdate ConstructMasterArbitrationUpdate(
 }
 
 void SetNextReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
-                         std::vector<p4::v1::TableEntry> read_entries) {
+                         std::vector<p4::v1::Entity> read_entities) {
   EXPECT_CALL(mock_p4rt_stub, ReadRaw)
-      .WillOnce([read_entries = std::move(read_entries)](auto*, auto&) {
+      .WillOnce([read_entities = std::move(read_entities)](auto*, auto&) {
         auto* reader =
             new grpc::testing::MockClientReader<p4::v1::ReadResponse>();
         InSequence s;
         EXPECT_CALL(*reader, Read)
             .WillOnce([=](p4::v1::ReadResponse* response) -> bool {
-              for (const auto& entry : read_entries) {
-                *response->add_entities()->mutable_table_entry() = entry;
+              for (const auto& entity : read_entities) {
+                *response->add_entities() = entity;
               }
               return true;
             });
@@ -92,16 +98,16 @@ void SetNextReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
 }
 
 void SetDefaultReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
-                            std::vector<p4::v1::TableEntry> read_entries) {
+                            std::vector<p4::v1::Entity> read_entities) {
   ON_CALL(mock_p4rt_stub, ReadRaw)
-      .WillByDefault([read_entries = std::move(read_entries)](auto*, auto&) {
+      .WillByDefault([read_entities = std::move(read_entities)](auto*, auto&) {
         auto* reader =
             new grpc::testing::MockClientReader<p4::v1::ReadResponse>();
         InSequence s;
-        for (const auto& entry : read_entries) {
+        for (const auto& entity : read_entities) {
           EXPECT_CALL(*reader, Read)
               .WillOnce([&](p4::v1::ReadResponse* response) -> bool {
-                *response->add_entities()->mutable_table_entry() = entry;
+                *response->add_entities() = entity;
                 return true;
               });
         }
@@ -109,6 +115,26 @@ void SetDefaultReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
         EXPECT_CALL(*reader, Finish).WillOnce(Return(grpc::Status::OK));
         return reader;
       });
+}
+
+void SetNextReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
+                         std::vector<p4::v1::TableEntry> read_entries) {
+  std::vector<p4::v1::Entity> read_entities;
+  read_entities.reserve(read_entries.size());
+  for (const auto& entry : read_entries) {
+    *read_entities.emplace_back().mutable_table_entry() = entry;
+  }
+  SetNextReadResponse(mock_p4rt_stub, read_entities);
+}
+
+void SetDefaultReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
+                            std::vector<p4::v1::TableEntry> read_entries) {
+  std::vector<p4::v1::Entity> read_entities;
+  read_entities.reserve(read_entries.size());
+  for (const auto& entry : read_entries) {
+    *read_entities.emplace_back().mutable_table_entry() = entry;
+  }
+  SetDefaultReadResponse(mock_p4rt_stub, read_entities);
 }
 
 void MockP4RuntimeSessionCreate(p4::v1::MockP4RuntimeStub& stub,
@@ -166,19 +192,84 @@ p4::v1::TableEntry ConstructTableEntry() {
   return table_entry;
 }
 
+p4::v1::Entity ConstructMulticastEntity() {
+  p4::v1::Entity entity;
+  p4::v1::MulticastGroupEntry* multicast_entry =
+      entity.mutable_packet_replication_engine_entry()
+          ->mutable_multicast_group_entry();
+  multicast_entry->set_multicast_group_id(kMulticastGroupId);
+  multicast_entry->add_replicas()->set_instance(kMulticastGroupReplicaInstance);
+  multicast_entry->mutable_replicas(0)->set_port(kMulticastGroupReplicaPort);
+  return entity;
+}
+
 p4::v1::WriteRequest ConstructDeleteRequest(
     const P4RuntimeSessionOptionalArgs& metadata,
-    const p4::v1::TableEntry& table_entry) {
-  p4::v1::Update delete_update;
-  delete_update.set_type(p4::v1::Update::DELETE);
-  *delete_update.mutable_entity()->mutable_table_entry() = table_entry;
-
+    const std::vector<p4::v1::Entity>& entities) {
   p4::v1::WriteRequest delete_request;
-  *delete_request.add_updates() = delete_update;
   delete_request.set_device_id(kDeviceId);
   delete_request.set_role(metadata.role);
   *delete_request.mutable_election_id() = ConstructElectionId(metadata);
+
+  for (const p4::v1::Entity& entity : entities) {
+    p4::v1::Update* delete_update = delete_request.add_updates();
+    delete_update->set_type(p4::v1::Update::DELETE);
+    *delete_update->mutable_entity() = entity;
+  }
+
   return delete_request;
+}
+
+void MockCheckNoEntities(p4::v1::MockP4RuntimeStub& stub,
+                         std::optional<P4Info> p4info) {
+  // We need to return a valid p4info to get to the stage where we read
+  // entities.
+  EXPECT_CALL(stub, GetForwardingPipelineConfig)
+      .WillOnce([=](auto, auto,
+                    p4::v1::GetForwardingPipelineConfigResponse*
+                        get_pipeline_response) {
+        *get_pipeline_response->mutable_config()->mutable_p4info() =
+            p4info.value_or(P4Info());
+        return grpc::Status::OK;
+      });
+
+  SetNextReadResponse(stub, std::vector<p4::v1::Entity>());
+}
+
+void MockClearEntities(p4::v1::MockP4RuntimeStub& stub, const P4Info& p4info,
+                       const P4RuntimeSessionOptionalArgs& metadata) {
+  // We need to return a valid p4info to get to the stage where we read
+  // entities.
+  EXPECT_CALL(stub, GetForwardingPipelineConfig)
+      .WillOnce([&](auto, auto,
+                    p4::v1::GetForwardingPipelineConfigResponse*
+                        get_pipeline_response) {
+        *get_pipeline_response->mutable_config()->mutable_p4info() = p4info;
+        return grpc::Status::OK;
+      });
+
+  {
+    InSequence s;
+    p4::v1::Entity table_entity;
+    *table_entity.mutable_table_entry() = ConstructTableEntry();
+    p4::v1::Entity multicast_entity = ConstructMulticastEntity();
+
+    // We return two entities so that the function exercises the deletion
+    // portion of clearing entities.
+    SetNextReadResponse(stub, {table_entity, multicast_entity});
+
+    // Mocks the call to delete the entities that we have created, in reverse
+    // dependency order.
+    EXPECT_CALL(stub, Write(_,
+                            EqualsProto(ConstructDeleteRequest(
+                                metadata, {multicast_entity, table_entity})),
+                            _))
+        .Times(1);
+
+    // Mocks a `CheckNoEntities` call, ensuring that the entities are really
+    // cleared.
+    MockCheckNoEntities(stub, p4info);
+  }
 }
 
 void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
@@ -193,7 +284,7 @@ void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
         return grpc::Status::OK;
       });
 
-  SetNextReadResponse(stub, {});
+  SetNextReadResponse(stub, std::vector<p4::v1::TableEntry>());
 }
 
 void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
@@ -210,16 +301,18 @@ void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
 
   {
     InSequence s;
-    p4::v1::TableEntry table_entry = ConstructTableEntry();
+    p4::v1::Entity table_entity;
+    *table_entity.mutable_table_entry() = ConstructTableEntry();
 
-    // We return a table entry so that the function exercises the deletion
-    // portion of clearing table entries.
-    SetNextReadResponse(stub, {table_entry});
+    // We return the table entity so that the function exercises the deletion
+    // portion to clear it.
+    SetNextReadResponse(stub, {table_entity});
 
-    // Mocks the call to delete table entry that we have created.
+    // Mocks the call to delete the table_entity that we have created.
     EXPECT_CALL(
         stub,
-        Write(_, EqualsProto(ConstructDeleteRequest(metadata, table_entry)), _))
+        Write(_, EqualsProto(ConstructDeleteRequest(metadata, {table_entity})),
+              _))
         .Times(1);
 
     // Mocks a `CheckNoEntries` call, ensuring that the tables are really
@@ -247,7 +340,7 @@ ConstructForwardingPipelineConfigRequest(
 
 absl::StatusOr<P4SessionWithMockStub> MakeP4SessionWithMockStub(
     const P4RuntimeSessionOptionalArgs& metadata) {
-  // No leak: P4RuntimeSession will take ownerhsip.
+  // No leak: P4RuntimeSession will take ownership.
   auto* mock_p4rt_stub = new testing::NiceMock<p4::v1::MockP4RuntimeStub>();
   MockP4RuntimeSessionCreate(*mock_p4rt_stub, metadata);
   ASSIGN_OR_RETURN(std::unique_ptr<P4RuntimeSession> p4rt_session,

@@ -80,7 +80,9 @@ absl::Status StableSortUpdates(
 // root entity in `entities`, where a root entity is determined by the
 // `is_root_entity` function. An entity `e` is reachable from a root entity `r`
 // if and only if `r` refers to `e`, directly or transitively. The reference
-// info comes from `ir_p4info`.
+// info comes from `ir_p4info`. Returns invalid argument error if root entities
+// are not a `table_entry` or `multicast_group_entry` and non-root entities are
+// not a `table_entry`.
 absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
     absl::Span<const p4::v1::Entity> entities,
     absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>

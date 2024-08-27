@@ -2270,6 +2270,62 @@ referring_by_action_table_entry {
 }
 
 =========================================================================
+GetEntriesUnreachableFromRootsTest: Entries referenced by multicast entries are not garbage collected
+=========================================================================
+
+--- PD entries (input):
+multicast_group_table_entry {
+  match {
+    multicast_group_id: "0x0037"
+  }
+  action {
+    replicate {
+      replicas {
+        port: "port_1"
+        instance: "0x0031"
+      }
+    }
+  }
+}
+
+referenced_by_multicast_replica_table_entry {
+  match {
+    port: "port_1"
+    instance: "0x0031"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Not Garbage"
+}
+
+referenced_by_multicast_replica_table_entry {
+  match {
+    port: "port_12"
+    instance: "0x0031"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+--- Unreachable entries from roots (output):
+referenced_by_multicast_replica_table_entry {
+  match {
+    port: "port_12"
+    instance: "0x0031"
+  }
+  action {
+    do_thing_4 {
+    }
+  }
+  controller_metadata: "Garbage"
+}
+
+=========================================================================
 GetEntriesUnreachableFromRootsTest: Reference via match fields: partially referred to non-root entries are unreachable.
 =========================================================================
 

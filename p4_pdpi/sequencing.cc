@@ -32,10 +32,12 @@
 #include "absl/types/span.h"
 #include "boost/graph/adjacency_list.hpp"
 #include "glog/logging.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/helpers.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/references.h"
@@ -336,6 +338,28 @@ absl::Status SortTableEntries(const IrP4Info& info,
   return absl::OkStatus();
 }
 
+absl::StatusOr<google::protobuf::RepeatedPtrField<IrTableReference>>
+GetOutgoingReferences(const IrP4Info& info, const p4::v1::Entity& entity) {
+  if (entity.has_table_entry()) {
+    ASSIGN_OR_RETURN(auto* table_def,
+                     gutil::FindPtrOrStatus(info.tables_by_id(),
+                                            entity.table_entry().table_id()));
+    return table_def->outgoing_references();
+  }
+  if (entity.packet_replication_engine_entry().has_multicast_group_entry()) {
+    ASSIGN_OR_RETURN(
+        std::string multicast_table,
+        IrBuiltInTableToString(BUILT_IN_TABLE_MULTICAST_GROUP_TABLE));
+    ASSIGN_OR_RETURN(
+        auto* multicast_group_def,
+        gutil::FindPtrOrStatus(info.built_in_tables(), multicast_table));
+    return multicast_group_def->outgoing_references();
+  }
+
+  return gutil::InvalidArgumentErrorBuilder()
+         << "Unsupported entity type: " << entity.DebugString();
+}
+
 // Returns true if the table of `first` comes before the table of `second` in
 // the dependency order contained in `info`. I.e. if installing `first` before
 // `second` never fails due to dependency issues between them.
@@ -408,6 +432,15 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
 
   for (int i = 0; i < entities.size(); i++) {
     const p4::v1::Entity& entity = entities[i];
+
+    if (!entity.has_table_entry() &&
+        !entity.packet_replication_engine_entry().has_multicast_group_entry()) {
+      return absl::UnimplementedError(
+          absl::StrCat("Garbage collection only supports entities of type "
+                       "table entry or multicast group entry.",
+                       entity.DebugString()));
+    }
+
     ASSIGN_OR_RETURN(bool is_root_entity, is_root_entity(entity));
     if (is_root_entity) {
       if (entity.has_packet_replication_engine_entry()) {
@@ -454,13 +487,11 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
   absl::flat_hash_set<int> reached_indices;
   while (!frontier_indices.empty()) {
     const p4::v1::Entity& frontier_entity = entities[frontier_indices.front()];
-    ASSIGN_OR_RETURN(
-        auto* table_def,
-        gutil::FindPtrOrStatus(ir_p4info.tables_by_id(),
-                               frontier_entity.table_entry().table_id()));
+    ASSIGN_OR_RETURN(auto outgoing_references,
+                     GetOutgoingReferences(ir_p4info, frontier_entity));
     reached_indices.insert(frontier_indices.front());
     frontier_indices.pop();
-    for (const auto& reference_info : table_def->outgoing_references()) {
+    for (const auto& reference_info : outgoing_references) {
       ASSIGN_OR_RETURN(
           absl::flat_hash_set<ConcreteTableReference> reference_entries,
           OutgoingConcreteTableReferences(reference_info, frontier_entity));
@@ -521,6 +552,7 @@ absl::StatusOr<std::vector<p4::v1::Entity>> OldGetEntitiesUnreachableFromRoots(
     const p4::v1::Entity& entity = entities[i];
     ASSIGN_OR_RETURN(bool is_root_entity, is_root_entity(entity));
     if (is_root_entity) {
+      // Old implementation ignores multicast entries.
       if (entity.has_packet_replication_engine_entry()) {
         continue;
       }

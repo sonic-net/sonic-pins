@@ -55,10 +55,10 @@ p4::v1::MasterArbitrationUpdate ConstructMasterArbitrationUpdate(
 // Constructs a generic table entry.
 p4::v1::TableEntry ConstructTableEntry();
 
-// Sets up a write request to delete the given table entry.
+// Sets up a write request to delete the given entities.
 p4::v1::WriteRequest ConstructDeleteRequest(
     const P4RuntimeSessionOptionalArgs& metadata,
-    const p4::v1::TableEntry& table_entry);
+    const std::vector<p4::v1::Entity>& entities);
 
 // Constructs a valid forwarding pipeline config request with the given p4info
 // and metadata.
@@ -70,9 +70,19 @@ ConstructForwardingPipelineConfigRequest(
     absl::optional<absl::string_view> p4_device_config = absl::nullopt);
 
 // Configures the given `MockP4RuntimeStub` such that the given sequence of
+// entities will be returned for the next P4RT Read request.
+void SetNextReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
+                         std::vector<p4::v1::Entity> read_entities);
+
+// Configures the given `MockP4RuntimeStub` such that the given sequence of
 // table entries will be returned for the next P4RT Read request.
 void SetNextReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
                          std::vector<p4::v1::TableEntry> read_entries);
+
+// Configures the given `MockP4RuntimeStub` such that the given sequence of
+// entities will be returned for any P4RT Read request by default.
+void SetDefaultReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
+                            std::vector<p4::v1::Entity> read_entities);
 
 // Configures the given `MockP4RuntimeStub` such that the given sequence of
 // table entries will be returned for any P4RT Read request by default.
@@ -88,9 +98,27 @@ void SetDefaultReadResponse(p4::v1::MockP4RuntimeStub& mock_p4rt_stub,
 void MockP4RuntimeSessionCreate(p4::v1::MockP4RuntimeStub& stub,
                                 const P4RuntimeSessionOptionalArgs& metadata);
 
+// Mocks a `CheckNoEntities` call using the stub in a previously
+// mocked P4RuntimeSession.
+// Ensures that there are no entities remaining.
+void MockCheckNoEntities(p4::v1::MockP4RuntimeStub& stub,
+                         std::optional<p4::config::v1::P4Info> p4info);
+
+// Mocks a ClearEntities call using the stub and p4info in a previously
+// mocked P4RuntimeSession.
+// Pulls the p4info from the switch, then reads a table entry and a multicast
+// entity, deletes them, and reads again ensuring that there are no entities
+// remaining.
+void MockClearEntities(p4::v1::MockP4RuntimeStub& stub,
+                       const p4::config::v1::P4Info& p4info,
+                       const P4RuntimeSessionOptionalArgs& metadata);
+
 // Mocks a `CheckNoEntries` call using the stub in a previously
 // mocked P4RuntimeSession.
 // Ensures that there are no table entries remaining.
+ABSL_DEPRECATED(
+    "Use MockCheckNoEntities instead due to transition to using entities "
+    "everywhere. See b/293888656 for more information.")
 void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
                         std::optional<p4::config::v1::P4Info> p4info);
 
@@ -98,6 +126,9 @@ void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
 // mocked P4RuntimeSession.
 // Pulls the p4info from the switch, then reads a table entry, deletes it, and
 // reads again ensuring that there are no table entries remaining.
+ABSL_DEPRECATED(
+    "Use MockClearEntities instead due to transition to using entities "
+    "everywhere. See b/293888656 for more information.")
 void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
                            const p4::config::v1::P4Info& p4info,
                            const P4RuntimeSessionOptionalArgs& metadata);

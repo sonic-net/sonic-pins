@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/memory/memory.h"
 #include "absl/numeric/int128.h"
@@ -54,7 +55,7 @@ constexpr p4::v1::SetForwardingPipelineConfigRequest::Action
         p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT;
 
 // Tests that CreateWithP4InfoAndClearTables creates a P4RuntimeSession,
-// clears all table entries currently on the switch (mocked to be one), and
+// clears all entities currently on the switch (mocked to be two), and
 // pushes a new p4info.
 TEST(P4RuntimeSessionTest, CreateWithP4InfoAndClearTables) {
   const p4::config::v1::P4Info& p4info = GetTestP4Info();
@@ -72,10 +73,11 @@ TEST(P4RuntimeSessionTest, CreateWithP4InfoAndClearTables) {
     // handshake.
     MockP4RuntimeSessionCreate(*stub, metadata);
 
-    // Mocks a `ClearTableEntries` call.
-    // Pulls the p4info from the switch, then reads a table entry, deletes it,
-    // and reads again ensuring that there are no table entries remaining.
-    MockClearTableEntries(*stub, p4info, metadata);
+    // Mocks a `ClearEntities` call.
+    // Pulls the p4info from the switch, then reads a table entry and a
+    // multicast entity, deletes them, and reads again ensuring that there are
+    // no entities remaining.
+    MockClearEntities(*stub, p4info, metadata);
 
     // Mocks a `SetForwardingPipelineConfig` call.
     EXPECT_CALL(*stub, SetForwardingPipelineConfig(
@@ -85,8 +87,8 @@ TEST(P4RuntimeSessionTest, CreateWithP4InfoAndClearTables) {
                            _))
         .Times(1);
 
-    // Mocks a `CheckNoEntries` call.
-    MockCheckNoEntries(*stub, p4info);
+    // Mocks a `CheckNoEntities` call.
+    MockCheckNoEntities(*stub, p4info);
   }
 
   // Mocks the first part of a P4RuntimeSession `Create` call.
@@ -108,7 +110,7 @@ TEST(ReadPiCounterDataTest, ReturnsNotFoundWhenNoEntriesPresent) {
                        MakeP4SessionWithMockStub(metadata));
 
   // Mock that no table entries are installed on the switch.
-  SetDefaultReadResponse(mock_p4rt_stub, {});
+  SetDefaultReadResponse(mock_p4rt_stub, std::vector<p4::v1::TableEntry>());
 
   // Actual test: without table entries, expect reading counter to fail.
   p4::v1::TableEntry target_entry_signature;
