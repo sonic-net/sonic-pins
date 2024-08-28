@@ -1269,7 +1269,6 @@ actions {
     id: 1
     name: "referring_id_1"
     annotations: "@refers_to(one_match_field_table , id)"
-    annotations: "@refers_to(two_match_fields_table , id_1)"
     type_name {
       name: "string_id_t"
     }
@@ -3696,26 +3695,6 @@ tables_by_id {
           }
         }
       }
-      field_references {
-        source {
-          action_field {
-            p4_action_field {
-              action_name: "referring_to_one_match_field_action"
-              action_id: 31920929
-              parameter_name: "referring_id_1"
-              parameter_id: 1
-            }
-          }
-        }
-        destination {
-          match_field {
-            p4_match_field {
-              field_name: "id_1"
-              field_id: 1
-            }
-          }
-        }
-      }
     }
     incoming_references {
       source_table {
@@ -4976,7 +4955,6 @@ tables_by_id {
               id: 1
               name: "referring_id_1"
               annotations: "@refers_to(one_match_field_table , id)"
-              annotations: "@refers_to(two_match_fields_table , id_1)"
               type_name {
                 name: "string_id_t"
               }
@@ -4986,12 +4964,6 @@ tables_by_id {
               table: "one_match_field_table"
               match_field: "id"
               table_id: 46253494
-              match_field_id: 1
-            }
-            references {
-              table: "two_match_fields_table"
-              match_field: "id_1"
-              table_id: 34805412
               match_field_id: 1
             }
           }
@@ -5003,7 +4975,6 @@ tables_by_id {
               id: 1
               name: "referring_id_1"
               annotations: "@refers_to(one_match_field_table , id)"
-              annotations: "@refers_to(two_match_fields_table , id_1)"
               type_name {
                 name: "string_id_t"
               }
@@ -5013,12 +4984,6 @@ tables_by_id {
               table: "one_match_field_table"
               match_field: "id"
               table_id: 46253494
-              match_field_id: 1
-            }
-            references {
-              table: "two_match_fields_table"
-              match_field: "id_1"
-              table_id: 34805412
               match_field_id: 1
             }
           }
@@ -5133,26 +5098,6 @@ tables_by_id {
             p4_match_field {
               field_name: "id_2"
               field_id: 2
-            }
-          }
-        }
-      }
-      field_references {
-        source {
-          action_field {
-            p4_action_field {
-              action_name: "referring_to_one_match_field_action"
-              action_id: 31920929
-              parameter_name: "referring_id_1"
-              parameter_id: 1
-            }
-          }
-        }
-        destination {
-          match_field {
-            p4_match_field {
-              field_name: "id_1"
-              field_id: 1
             }
           }
         }
@@ -7945,7 +7890,6 @@ tables_by_name {
               id: 1
               name: "referring_id_1"
               annotations: "@refers_to(one_match_field_table , id)"
-              annotations: "@refers_to(two_match_fields_table , id_1)"
               type_name {
                 name: "string_id_t"
               }
@@ -7955,12 +7899,6 @@ tables_by_name {
               table: "one_match_field_table"
               match_field: "id"
               table_id: 46253494
-              match_field_id: 1
-            }
-            references {
-              table: "two_match_fields_table"
-              match_field: "id_1"
-              table_id: 34805412
               match_field_id: 1
             }
           }
@@ -7972,7 +7910,6 @@ tables_by_name {
               id: 1
               name: "referring_id_1"
               annotations: "@refers_to(one_match_field_table , id)"
-              annotations: "@refers_to(two_match_fields_table , id_1)"
               type_name {
                 name: "string_id_t"
               }
@@ -7982,12 +7919,6 @@ tables_by_name {
               table: "one_match_field_table"
               match_field: "id"
               table_id: 46253494
-              match_field_id: 1
-            }
-            references {
-              table: "two_match_fields_table"
-              match_field: "id_1"
-              table_id: 34805412
               match_field_id: 1
             }
           }
@@ -8102,26 +8033,6 @@ tables_by_name {
             p4_match_field {
               field_name: "id_2"
               field_id: 2
-            }
-          }
-        }
-      }
-      field_references {
-        source {
-          action_field {
-            p4_action_field {
-              action_name: "referring_to_one_match_field_action"
-              action_id: 31920929
-              parameter_name: "referring_id_1"
-              parameter_id: 1
-            }
-          }
-        }
-        destination {
-          match_field {
-            p4_match_field {
-              field_name: "id_1"
-              field_id: 1
             }
           }
         }
@@ -9255,26 +9166,6 @@ tables_by_name {
           }
         }
       }
-      field_references {
-        source {
-          action_field {
-            p4_action_field {
-              action_name: "referring_to_one_match_field_action"
-              action_id: 31920929
-              parameter_name: "referring_id_1"
-              parameter_id: 1
-            }
-          }
-        }
-        destination {
-          match_field {
-            p4_match_field {
-              field_name: "id_1"
-              field_id: 1
-            }
-          }
-        }
-      }
     }
     incoming_references {
       source_table {
@@ -10364,7 +10255,6 @@ actions_by_id {
           id: 1
           name: "referring_id_1"
           annotations: "@refers_to(one_match_field_table , id)"
-          annotations: "@refers_to(two_match_fields_table , id_1)"
           type_name {
             name: "string_id_t"
           }
@@ -10374,12 +10264,6 @@ actions_by_id {
           table: "one_match_field_table"
           match_field: "id"
           table_id: 46253494
-          match_field_id: 1
-        }
-        references {
-          table: "two_match_fields_table"
-          match_field: "id_1"
-          table_id: 34805412
           match_field_id: 1
         }
       }
@@ -10391,7 +10275,6 @@ actions_by_id {
           id: 1
           name: "referring_id_1"
           annotations: "@refers_to(one_match_field_table , id)"
-          annotations: "@refers_to(two_match_fields_table , id_1)"
           type_name {
             name: "string_id_t"
           }
@@ -10401,12 +10284,6 @@ actions_by_id {
           table: "one_match_field_table"
           match_field: "id"
           table_id: 46253494
-          match_field_id: 1
-        }
-        references {
-          table: "two_match_fields_table"
-          match_field: "id_1"
-          table_id: 34805412
           match_field_id: 1
         }
       }
@@ -10893,7 +10770,6 @@ actions_by_name {
           id: 1
           name: "referring_id_1"
           annotations: "@refers_to(one_match_field_table , id)"
-          annotations: "@refers_to(two_match_fields_table , id_1)"
           type_name {
             name: "string_id_t"
           }
@@ -10903,12 +10779,6 @@ actions_by_name {
           table: "one_match_field_table"
           match_field: "id"
           table_id: 46253494
-          match_field_id: 1
-        }
-        references {
-          table: "two_match_fields_table"
-          match_field: "id_1"
-          table_id: 34805412
           match_field_id: 1
         }
       }
@@ -10920,7 +10790,6 @@ actions_by_name {
           id: 1
           name: "referring_id_1"
           annotations: "@refers_to(one_match_field_table , id)"
-          annotations: "@refers_to(two_match_fields_table , id_1)"
           type_name {
             name: "string_id_t"
           }
@@ -10930,12 +10799,6 @@ actions_by_name {
           table: "one_match_field_table"
           match_field: "id"
           table_id: 46253494
-          match_field_id: 1
-        }
-        references {
-          table: "two_match_fields_table"
-          match_field: "id_1"
-          table_id: 34805412
           match_field_id: 1
         }
       }
