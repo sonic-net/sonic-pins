@@ -369,9 +369,11 @@ cc_library(
         "p4_runtime_session.h",
     ],
     deps = [
+        ":helpers",
         ":ir",
         ":ir_cc_proto",
         ":sequencing",
+        "//gutil:collections",
         "//gutil:status",
         "//gutil:version",
         "//sai_p4/fixed:p4_roles",
