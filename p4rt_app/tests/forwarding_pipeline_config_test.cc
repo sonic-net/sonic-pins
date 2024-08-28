@@ -345,6 +345,10 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
   p4rt_service_->GetVrfAppDbTable().InsertTableEntry("vrf-0", {});
 
   // Add a packet replication engine entry.
+  ASSERT_OK(
+      p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet1/1/1", "1"));
+  ASSERT_OK(
+      p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet3/1/1", "2"));
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
       std::make_pair("Ethernet1/1/1:0x1", "replica"),
       std::make_pair("Ethernet3/1/1:0x1", "replica"),
