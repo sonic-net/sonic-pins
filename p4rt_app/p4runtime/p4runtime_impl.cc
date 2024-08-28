@@ -70,6 +70,7 @@
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
+#include "p4rt_app/sonic/packet_replication_entry_translation.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/sonic/response_handler.h"
@@ -533,25 +534,48 @@ RebuildEntityEntryCache(
     }
     *cache[pdpi::EntityKey(*vrf_entry)].mutable_table_entry() = *vrf_entry;
   }
+
+  // Get all REPLICATION_IP_MULTICAST_TABLE entries from the AppDb.
+  ASSIGN_OR_RETURN(std::vector<pdpi::IrPacketReplicationEngineEntry>
+                       packet_replication_entries,
+                   sonic::GetAllAppDbPacketReplicationTableEntries(p4rt_table));
+  for (const auto& ir_entry : packet_replication_entries) {
+    auto pi_entry = pdpi::IrPacketReplicationEngineEntryToPi(p4_info, ir_entry);
+    if (!pi_entry.ok()) {
+      LOG(ERROR) << "PDPI could not translate IR packet replication to PI: "
+                 << ir_entry.ShortDebugString();
+      return gutil::StatusBuilder(pi_entry.status().code())
+             << "[P4RT/PDPI] " << pi_entry.status().message();
+    }
+    p4::v1::Entity pi_entity;
+    *pi_entity.mutable_packet_replication_engine_entry() = *pi_entry;
+    ASSIGN_OR_RETURN(auto entity_key,
+                     pdpi::EntityKey::MakeEntityKey(pi_entity));
+    cache[entity_key] = pi_entity;
+  }
+
   return cache;
 }
 
-std::vector<pdpi::IrEntity> GetP4rtIrEntitiesFromCache(
+std::vector<pdpi::IrEntity> GetIrEntitiesFromCache(
     const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
     const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator,
+    const p4::v1::Entity::EntityCase entity_type,
     std::vector<std::string>& failures) {
-  // Translate the Table cache into IR entries for comparison.
+  // Translate the Entity cache into IR entries for comparison.
   std::vector<pdpi::IrEntity> ir_entries;
-  int p4rt_translation_failures = 0;
+  int failure_count = 0;
   for (const auto& [_, pi_entity] : entity_cache) {
+    if (entity_type != pi_entity.entity_case()) {
+      continue;
+    }
     auto ir_entity = TranslatePiEntityForOrchAgent(
         pi_entity, ir_p4_info, translate_port_ids, port_translation_map,
-        cpu_queue_translator,
-        /*translate_key_only=*/false);
+        cpu_queue_translator, /*translate_key_only=*/false);
     if (!ir_entity.ok()) {
-      p4rt_translation_failures++;
+      failure_count++;
       continue;
     }
     if (GetAppDbTableType(*ir_entity) != sonic::AppDbTableType::P4RT) {
@@ -559,12 +583,11 @@ std::vector<pdpi::IrEntity> GetP4rtIrEntitiesFromCache(
     }
     ir_entries.push_back(*std::move(ir_entity));
   }
-  if (p4rt_translation_failures > 0) {
-    failures.push_back(absl::StrCat("Failed to translate ",
-                                    p4rt_translation_failures,
-                                    " entries from the table entry cache."));
+  if (failure_count > 0) {
+    failures.push_back(absl::StrCat("Failed to translate ", failure_count,
+                                    " for entity type ", entity_type,
+                                    " from the entity cache."));
   }
-
   return ir_entries;
 }
 
@@ -1171,9 +1194,9 @@ absl::Status P4RuntimeImpl::VerifyState() {
   std::vector<std::string> failures = {"P4RT App State Verification failures:"};
 
   // Verify the P4RT_TABLE entries against the cache.
-  std::vector<pdpi::IrEntity> p4rt_entities = GetP4rtIrEntitiesFromCache(
+  std::vector<pdpi::IrEntity> p4rt_entities = GetIrEntitiesFromCache(
       entity_cache_, *ir_p4info_, translate_port_ids_, port_translation_map_,
-      *cpu_queue_translator_, failures);
+      *cpu_queue_translator_, p4::v1::Entity::kTableEntry, failures);
   std::vector<std::string> p4rt_table_failures =
       sonic::VerifyP4rtTableWithCacheEntities(*p4rt_table_.app_db,
                                               p4rt_entities, *ir_p4info_);
@@ -1207,6 +1230,20 @@ absl::Status P4RuntimeImpl::VerifyState() {
   if (!switch_table_failures.empty()) {
     failures.insert(failures.end(), switch_table_failures.begin(),
                     switch_table_failures.end());
+  }
+
+  // Verify the REPLICATION_IP_MULTICAST_TABLE entries.
+  std::vector<pdpi::IrEntity> packet_replication_entries =
+      GetIrEntitiesFromCache(entity_cache_, *ir_p4info_, translate_port_ids_,
+                             port_translation_map_, *cpu_queue_translator_,
+                             p4::v1::Entity::kPacketReplicationEngineEntry,
+                             failures);
+  std::vector<std::string> packet_replication_table_failures =
+      sonic::VerifyPacketReplicationWithCacheEntities(
+          p4rt_table_, packet_replication_entries);
+  if (!packet_replication_table_failures.empty()) {
+    failures.insert(failures.end(), packet_replication_table_failures.begin(),
+                    packet_replication_table_failures.end());
   }
 
   if (failures.size() > 1) {

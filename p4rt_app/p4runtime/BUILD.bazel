@@ -146,6 +146,7 @@ cc_library(
         "//p4_pdpi:translation_options",
         "//p4rt_app/sonic:app_db_acl_def_table_manager",
         "//p4rt_app/sonic:app_db_manager",
+        "//p4rt_app/sonic:packet_replication_entry_translation",
         "//p4rt_app/sonic:packetio_interface",
         "//p4rt_app/sonic:redis_connections",
         "//p4rt_app/sonic:response_handler",

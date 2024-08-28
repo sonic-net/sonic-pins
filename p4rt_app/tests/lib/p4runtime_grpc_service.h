@@ -63,11 +63,16 @@ class P4RuntimeGrpcService {
   // Accessor for PacketIO interface.
   sonic::FakePacketIoInterface& GetFakePacketIoInterface();
 
+  //TODO(PINS): To handle Fake Component State and Fake System State later.
+  // Accessors for application state management.
+  /*swss::FakeComponentStateHelper& GetComponentStateHelper();
+  swss::FakeSystemStateHelper& GetSystemStateHelper();*/
+
   // Accessor for the P4RT server.
   P4RuntimeImpl& GetP4rtServer();
 
  private:
-  // The TCP port used to  open the P4RT App service. It is choosen randomly in
+  // The TCP port used to  open the P4RT App service. It is chosen randomly in
   // the ctor, and shouldn't be modified otherwise.
   int grpc_port_;
 
@@ -98,7 +103,7 @@ class P4RuntimeGrpcService {
   sonic::FakePacketIoInterface* fake_packetio_interface_;  // No ownership.
 
 // TODO(PINS):
-// Faked state state managment.
+// Faked state state management.
 // swss::FakeComponentStateHelper fake_component_state_helper_;
 // swss::FakeSystemStateHelper fake_system_state_helper_;
 

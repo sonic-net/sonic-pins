@@ -31,18 +31,13 @@
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/app_db_manager.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
+#include "p4rt_app/sonic/packet_replication_entry_translation.h"
+#include "p4rt_app/sonic/redis_connections.h"
+#include "swss/schema.h"
 
 namespace p4rt_app {
 namespace sonic {
 namespace {
-
-// Helper function to ensure all state verification errors are reported in a
-// similar fashion.
-void ReportVerificationFailure(std::vector<std::string>& failures,
-                               const std::string& error_message) {
-  LOG(ERROR) << "State verification: " << error_message;
-  failures.push_back(error_message);
-}
 
 // Helper function to format RedisDb entries in error messages.
 //
@@ -115,7 +110,7 @@ RedisTable ReadAllEntriesFromRedisTable(TableAdapter& table,
   return result;
 }
 
-RedisTable TranslateIrEntitiesIntoRedisTable(
+RedisTable TranslateP4rtIrEntitiesIntoRedisTable(
     const std::vector<pdpi::IrEntity>& ir_entities, absl::string_view db_name,
     const pdpi::IrP4Info& ir_p4_info) {
   RedisTable result{.db_name = std::string{db_name}};
@@ -125,10 +120,9 @@ RedisTable TranslateIrEntitiesIntoRedisTable(
     // If we fail to get the key we won't be able to add it as a table entry. In
     // this case, later checks should still fail because the value will appear
     // to be missing from the cache.
-    // TODO: Updated in child CL in this chain.
+
     if (ir_entity.entity_case() != pdpi::IrEntity::kTableEntry) {
-      LOG(ERROR) << db_name
-                 << " could not get key for: " << ir_entity.ShortDebugString();
+      // This function is ony used in the context of P4RT table entries.
       continue;
     }
     auto table_key = GetRedisP4rtTableKey(ir_entity.table_entry(), ir_p4_info);
@@ -138,7 +132,6 @@ RedisTable TranslateIrEntitiesIntoRedisTable(
       continue;
     }
 
-    // TODO: Updated in child CL in this chain.
     auto app_db_values = IrTableEntryToAppDbValues(ir_entity.table_entry());
     if (!app_db_values.ok()) {
       table_entry.errors = absl::StrCat(
@@ -183,15 +176,13 @@ std::vector<std::string> CompareTables(const RedisTable& table_a,
   auto iter_b = table_b.entries.begin();
   while (iter_a != table_a.entries.end() && iter_b != table_b.entries.end()) {
     if (iter_a->first > iter_b->first) {
-      ReportVerificationFailure(
-          failures,
+      failures.push_back(
           absl::StrCat(table_a.db_name, " is missing key: ", iter_b->first));
       ++iter_b;
       continue;
     }
     if (iter_a->first < iter_b->first) {
-      ReportVerificationFailure(
-          failures,
+      failures.push_back(
           absl::StrCat(table_b.db_name, " is missing key: ", iter_a->first));
       ++iter_a;
       continue;
@@ -200,11 +191,11 @@ std::vector<std::string> CompareTables(const RedisTable& table_a,
     // Verify that the 2 entries are valid.
     bool bad_entry_found = false;
     if (!iter_a->second.errors.empty()) {
-      ReportVerificationFailure(failures, iter_a->second.errors);
+      failures.push_back(iter_a->second.errors);
       bad_entry_found = true;
     }
     if (!iter_b->second.errors.empty()) {
-      ReportVerificationFailure(failures, iter_b->second.errors);
+      failures.push_back(iter_b->second.errors);
       bad_entry_found = true;
     }
 
@@ -215,7 +206,7 @@ std::vector<std::string> CompareTables(const RedisTable& table_a,
           CompareTableEntries(iter_a->first, table_a.db_name, iter_a->second,
                               table_b.db_name, iter_b->second);
       if (!error_message.empty()) {
-        ReportVerificationFailure(failures, error_message);
+        failures.push_back(error_message);
       }
     }
     ++iter_a;
@@ -224,16 +215,14 @@ std::vector<std::string> CompareTables(const RedisTable& table_a,
 
   // Any extra keys in Table A must be missing from Table B.
   while (iter_a != table_a.entries.end()) {
-    ReportVerificationFailure(
-        failures,
+    failures.push_back(
         absl::StrCat(table_b.db_name, " is missing key: ", iter_a->first));
     ++iter_a;
   }
 
   // Any extra keys in Table B must be missing from Table A.
   while (iter_b != table_b.entries.end()) {
-    ReportVerificationFailure(
-        failures,
+    failures.push_back(
         absl::StrCat(table_a.db_name, " is missing key: ", iter_b->first));
     ++iter_b;
   }
@@ -257,14 +246,44 @@ std::vector<std::string> VerifyP4rtTableWithCacheEntities(
 
   RedisTable redis_db_entries = ReadAllEntriesFromRedisTable(app_db, "AppDb");
 
-  // Remove any entries for ACL table definitions.
+  // Remove any entries for ACL table definitions or packet replication.
   absl::erase_if(redis_db_entries.entries, [](const auto& iter) {
-    return (absl::StartsWith(iter.first, "ACL_TABLE_DEFINITION_TABLE:") || absl::StartsWith(iter.first, "TABLES_DEFINITION_TABLE:"));
+    return (absl::StartsWith(iter.first, "ACL_TABLE_DEFINITION_TABLE:") ||
+            absl::StartsWith(iter.first, "TABLES_DEFINITION_TABLE:") ||
+            absl::StartsWith(iter.first, APP_P4RT_REPLICATION_IP_MULTICAST_TABLE_NAME));
   });
 
   std::vector<std::string> comparison_failures = CompareTables(
-      redis_db_entries, TranslateIrEntitiesIntoRedisTable(
+      redis_db_entries, TranslateP4rtIrEntitiesIntoRedisTable(
                             ir_entities, "EntityCache", ir_p4_info));
+  failures.insert(failures.end(), comparison_failures.begin(),
+                  comparison_failures.end());
+  return failures;
+}
+
+std::vector<std::string> VerifyPacketReplicationWithCacheEntities(
+    P4rtTable& p4rt_table,
+    const std::vector<pdpi::IrEntity>& cache_ir_entities) {
+  std::vector<std::string> failures;
+
+  auto redis_db_ir_entries =
+      GetAllAppDbPacketReplicationTableEntries(p4rt_table);
+  if (!redis_db_ir_entries.ok()) {
+    failures.push_back(
+        absl::StrCat("Unable to fetch packet replication entries: ",
+                     redis_db_ir_entries.status().message()));
+  }
+
+  std::vector<pdpi::IrEntity> redis_db_ir_entities;
+  for (auto& entry : *redis_db_ir_entries) {
+    pdpi::IrEntity entity;
+    *entity.mutable_packet_replication_engine_entry() = entry;
+    redis_db_ir_entities.push_back(entity);
+  }
+
+  std::vector<std::string> comparison_failures =
+      ComparePacketReplicationTableEntries(redis_db_ir_entities,
+                                           cache_ir_entities);
   failures.insert(failures.end(), comparison_failures.begin(),
                   comparison_failures.end());
   return failures;

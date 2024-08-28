@@ -13,26 +13,61 @@
 // limitations under the License.
 #include "p4rt_app/sonic/state_verification.h"
 
+#include <memory>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
+#include "p4rt_app/sonic/adapters/mock_consumer_notifier_adapter.h"
+#include "p4rt_app/sonic/adapters/mock_notification_producer_adapter.h"
 #include "p4rt_app/sonic/adapters/mock_table_adapter.h"
+#include "p4rt_app/sonic/redis_connections.h"
 
 namespace p4rt_app {
 namespace sonic {
 namespace {
 
+using ::google::protobuf::TextFormat;
 using ::testing::ElementsAre;
+using ::testing::Eq;
 using ::testing::HasSubstr;
 using ::testing::IsEmpty;
 using ::testing::Return;
 
 using ListOfKeys = std::vector<std::string>;
 using ListOfValues = std::vector<std::pair<std::string, std::string>>;
+
+class StateVerificationPacketReplicationTest : public ::testing::Test {
+ protected:
+  StateVerificationPacketReplicationTest() {
+    auto p4rt_notification_producer =
+        std::make_unique<MockNotificationProducerAdapter>();
+    auto p4rt_notifier = std::make_unique<MockConsumerNotifierAdapter>();
+    auto p4rt_app_db = std::make_unique<MockTableAdapter>();
+    auto p4rt_counter_db = std::make_unique<MockTableAdapter>();
+
+    // Save a pointer so we can test against the mocks.
+    mock_p4rt_app_db_ = p4rt_app_db.get();
+    mock_p4rt_notification_producer_ = p4rt_notification_producer.get();
+
+    mock_p4rt_table_ = P4rtTable{
+        .notification_producer = std::move(p4rt_notification_producer),
+        .notification_consumer = std::move(p4rt_notifier),
+        .app_db = std::move(p4rt_app_db),
+        .counter_db = std::move(p4rt_counter_db),
+    };
+  }
+
+  // Mock AppDb tables.
+  MockTableAdapter* mock_p4rt_app_db_;
+  P4rtTable mock_p4rt_table_;
+  MockNotificationProducerAdapter* mock_p4rt_notification_producer_;
+};
 
 TEST(StateVerificationTest, VerifyStateMatches) {
   MockTableAdapter mock_app_state_db;
@@ -224,22 +259,84 @@ TEST(StateVerificationTest, DuplicateAppStateDbFieldNameInEntryFails) {
               ElementsAre(HasSubstr("AppStateDb has duplicate fields")));
 }
 
-TEST(StateVerificationTest, PacketReplicationNotSupportedYet) {
+TEST_F(StateVerificationPacketReplicationTest,
+       PacketReplicationEntriesIgnoredByP4rtTable) {
   MockTableAdapter mock_app_db;
-
   pdpi::IrP4Info ir_p4_info;
+
   pdpi::IrEntity ir_entity;
-  auto* group_entry = ir_entity.mutable_packet_replication_engine_entry()
-                          ->mutable_multicast_group_entry();
-  group_entry->set_multicast_group_id(1);
-  auto* replica = group_entry->add_replicas();
-  replica->set_port("Ethernet0");
-  replica->set_instance(0);
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(packet_replication_engine_entry {
+             multicast_group_entry {
+               multicast_group_id: 1
+               replicas { port: "Ethernet0" instance: 0 }
+             }
+           })pb",
+      &ir_entity));
+
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
 
   EXPECT_EQ(
       VerifyP4rtTableWithCacheEntities(mock_app_db, {ir_entity}, ir_p4_info)
           .size(),
       0);
+}
+
+TEST_F(StateVerificationPacketReplicationTest, VerifyPacketReplicationSuccess) {
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
+      std::make_pair("Ethernet1/1/1:0x1", "replica"),
+      std::make_pair("Ethernet1/1/3:0x1", "replica"),
+  };
+
+  EXPECT_CALL(*mock_p4rt_app_db_, keys)
+      .WillOnce(Return(std::vector<std::string>{app_db_key1}));
+  EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_key1)))
+      .WillOnce(Return(kfv_values1));
+
+  pdpi::IrEntity ir_entity;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(packet_replication_engine_entry {
+             multicast_group_entry {
+               multicast_group_id: 1
+               replicas { port: "Ethernet1/1/1" instance: 1 }
+               replicas { port: "Ethernet1/1/3" instance: 1 }
+             }
+           })pb",
+      &ir_entity));
+  EXPECT_EQ(
+      VerifyPacketReplicationWithCacheEntities(mock_p4rt_table_, {ir_entity})
+          .size(),
+      0);
+}
+
+TEST_F(StateVerificationPacketReplicationTest, VerifyPacketReplicationFails) {
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
+      std::make_pair("Ethernet1/1/1:0x1", "replica"),
+  };
+
+  EXPECT_CALL(*mock_p4rt_app_db_, keys)
+      .WillOnce(Return(std::vector<std::string>{app_db_key1}));
+  EXPECT_CALL(*mock_p4rt_app_db_, get(Eq(app_db_key1)))
+      .WillOnce(Return(kfv_values1));
+
+  pdpi::IrEntity ir_entity;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(packet_replication_engine_entry {
+             multicast_group_entry {
+               multicast_group_id: 1
+               replicas { port: "Ethernet1/1/1" instance: 1 }
+               replicas { port: "Ethernet1/1/3" instance: 1 }
+             }
+           })pb",
+      &ir_entity));
+
+  auto result =
+      VerifyPacketReplicationWithCacheEntities(mock_p4rt_table_, {ir_entity});
+  ASSERT_THAT(result.size(), 1);
+  EXPECT_EQ(result.at(0),
+            "APP DB is missing replica Ethernet1/1/3_1 for group id 1");
 }
 
 }  // namespace

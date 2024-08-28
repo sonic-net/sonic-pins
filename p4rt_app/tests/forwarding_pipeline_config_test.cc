@@ -18,6 +18,7 @@
 #include <string>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -343,6 +344,14 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
       p4rt_entry.GetKey(), p4rt_entry.GetValueList());
   p4rt_service_->GetVrfAppDbTable().InsertTableEntry("vrf-0", {});
 
+  // Add a packet replication engine entry.
+  const std::vector<std::pair<std::string, std::string>> kfv_values = {
+      std::make_pair("Ethernet1/1/1:0x1", "replica"),
+      std::make_pair("Ethernet3/1/1:0x1", "replica"),
+  };
+  p4rt_service_->GetP4rtAppDbTable().InsertTableEntry(
+      "REPLICATION_IP_MULTICAST_TABLE:0x1", kfv_values);
+
   // Then we'll load the saved config with the COMMIT action.
   SetForwardingPipelineConfigRequest load_request = GetBasicForwardingRequest();
   load_request.set_action(SetForwardingPipelineConfigRequest::COMMIT);
@@ -362,6 +371,13 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
   ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
                        p4rt_session_->Read(read_request));
   EXPECT_EQ(read_response.entities_size(), 2);
+
+  p4::v1::ReadRequest read_request_pre;
+  read_request_pre.set_device_id(p4rt_session_->DeviceId());
+  read_request_pre.add_entities()->mutable_packet_replication_engine_entry();
+  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response_pre,
+                       p4rt_session_->Read(read_request_pre));
+  EXPECT_EQ(read_response_pre.entities_size(), 1);
 }
 
 /* TODO(PINS): To handle GoesCriticalIfReadingCacheFails test in November release.
@@ -678,7 +694,7 @@ TEST_F(ForwardingPipelineConfigTest, InvalidP4ConstraintDoesNotGoCritical) {
 
 class PerConfigTest : public ForwardingPipelineConfigTest,
                       public testing::WithParamInterface<
-                          std::tuple<sai::Instantiation, sai::ClosStage> > {};
+                          std::tuple<sai::Instantiation, sai::ClosStage>> {};
 
 TEST_P(PerConfigTest, VerifySucceeds) {
   auto request = GetBasicForwardingRequest();
