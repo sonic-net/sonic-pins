@@ -34,6 +34,7 @@
 #include "p4rt_app/sonic/adapters/mock_table_adapter.h"
 #include "p4rt_app/sonic/redis_connections.h"
 #include "p4rt_app/tests/lib/app_db_entry_builder.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "swss/rediscommand.h"
 

@@ -39,7 +39,7 @@ namespace {
 constexpr char kServerAddr[] = "localhost:9999";
 
 // This test suite doesn't deal with the P4Runtime service so we do not need to
-// properly confiugre the fake DB connections.
+// properly configure the fake DB connections.
 P4RuntimeImpl DummyP4RuntimeImpl() {
   // Dummy RedisDB tables.
   sonic::P4rtTable dummy_p4rt_table;

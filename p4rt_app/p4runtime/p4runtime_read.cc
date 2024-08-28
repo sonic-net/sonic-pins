@@ -46,6 +46,17 @@ absl::Status SupportedTableEntryRequest(const p4::v1::TableEntry& table_entry) {
   return absl::OkStatus();
 }
 
+absl::Status SupportedPacketReplicationEntryRequest(
+    const p4::v1::PacketReplicationEngineEntry& replication_entry) {
+  if (replication_entry.multicast_group_entry().multicast_group_id() != 0 ||
+      !replication_entry.multicast_group_entry().replicas().empty()) {
+    return gutil::UnimplementedErrorBuilder()
+           << "Read request for packet_replication_engine_entry: "
+           << replication_entry.ShortDebugString();
+  }
+  return absl::OkStatus();
+}
+
 absl::Status AppendAclCounterData(
     p4::v1::TableEntry& pi_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
@@ -116,6 +127,13 @@ absl::Status AppendTableEntryReads(
   return absl::OkStatus();
 }
 
+absl::Status AppendPacketReplicationEntryReads(
+    p4::v1::ReadResponse& response, const p4::v1::Entity& cached_entry) {
+  // Update the response to include the packet replication entry.
+  *response.add_entities() = cached_entry;
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
@@ -127,7 +145,6 @@ absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
     CpuQueueTranslator& cpu_queue_translator, sonic::P4rtTable& p4rt_table) {
   std::vector<p4::v1::ReadResponse> responses;
   responses.push_back(p4::v1::ReadResponse{});
-  int i = 0;
   for (const auto& entity : request.entities()) {
     VLOG(1) << "Read request: " << entity.ShortDebugString();
     switch (entity.entity_case()) {
@@ -139,23 +156,36 @@ absl::StatusOr<std::vector<p4::v1::ReadResponse>> ReadAllEntitiesInBatches(
                 responses.back(), entry.table_entry(), request.role(),
                 ir_p4_info, translate_port_ids, port_translation_map,
                 cpu_queue_translator, p4rt_table));
-            if (++i >= batch_size) {
+            if (responses.size() >= batch_size) {
               responses.push_back(p4::v1::ReadResponse{});
-              i = 0;
             }
           }
         }
         break;
       }
       case p4::v1::Entity::kPacketReplicationEngineEntry: {
-        // TODO: 298489493 - Add support for reading back multicast entries.
-        continue;
+        RETURN_IF_ERROR(SupportedPacketReplicationEntryRequest(
+            entity.packet_replication_engine_entry()));
+        for (const auto& [_, entry] : entity_cache) {
+          if (entry.entity_case() ==
+              p4::v1::Entity::kPacketReplicationEngineEntry) {
+            RETURN_IF_ERROR(
+                AppendPacketReplicationEntryReads(responses.back(), entry));
+            if (responses.size() >= batch_size) {
+              responses.push_back(p4::v1::ReadResponse{});
+            }
+          }
+        }
+        break;
       }
       default:
         return gutil::UnimplementedErrorBuilder()
                << "Read has not been implemented for: "
                << entity.ShortDebugString();
     }
+  }
+  if (responses.size() > 1 && responses.back().entities().empty()) {
+    responses.pop_back();
   }
   return responses;
 }
