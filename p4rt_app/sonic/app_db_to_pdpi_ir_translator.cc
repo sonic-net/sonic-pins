@@ -46,7 +46,7 @@ namespace {
 //   P4RT_TABLE:FIXED_ROUTER_TABLE:{json_key}
 constexpr char kP4rtKeyDelineator = ':';
 
-// P4RT match keys are identified by the P4Info match paramter alias and this
+// P4RT match keys are identified by the P4Info match parameter alias and this
 // prefix.
 constexpr absl::string_view kMatchPrefix = "match/";
 
@@ -539,7 +539,7 @@ absl::StatusOr<pdpi::IrTableEntry> AppDbKeyAndValuesToIrTableEntry(
                                           SonicDbKeyToAppDbKey(app_db_key)));
 
   // We need to know the table action when translating action parameters. If we
-  // see an action paramter, but the action name isn't set it is an error.
+  // see an action parameter, but the action name isn't set it is an error.
   std::optional<std::string> action_name;
   for (const auto &[field, data] : app_db_values) {
     if (field == "action") {

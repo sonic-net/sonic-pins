@@ -39,7 +39,7 @@ namespace {
 constexpr char kServerAddr[] = "localhost:9999";
 
 // This test suite doesn't deal with the P4Runtime service so we do not need to
-// properly confiugre the fake DB connections.
+// properly configure the fake DB connections.
 P4RuntimeImpl DummyP4RuntimeImpl() {
   // Dummy RedisDB tables.
   sonic::P4rtTable dummy_p4rt_table;
@@ -53,7 +53,7 @@ P4RuntimeImpl DummyP4RuntimeImpl() {
   auto packet_io = std::make_unique<sonic::FakePacketIoInterface>();
 
 //TODO(PINS): To add fake component_state_helper, system_state_helper and netdev_translator.
-  // Dummy state managment.
+  // Dummy state management.
   // swss::FakeComponentStateHelper component_state_helper;
   // swss::FakeSystemStateHelper system_state_helper;
 
@@ -107,7 +107,7 @@ TEST(GrpcBehaviorTest,
   // gets closed.
   p4::v1::StreamMessageResponse dummy_response;
   while (client_stream->Read(&dummy_response)) {
-    // We do not expect a resposne since no request was sent, but we log
+    // We do not expect a response since no request was sent, but we log
     // anything just in case.
     LOG(WARNING) << dummy_response.DebugString();
   }

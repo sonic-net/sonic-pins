@@ -60,6 +60,7 @@ cc_library(
     hdrs = ["app_db_manager.h"],
     deps = [
         ":app_db_to_pdpi_ir_translator",
+        ":packet_replication_entry_translation",
         ":redis_connections",
         ":response_handler",
         ":vrf_entry_translation",
@@ -96,6 +97,7 @@ cc_test(
         "//p4rt_app/sonic/adapters:mock_producer_state_table_adapter",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
         "//p4rt_app/tests/lib:app_db_entry_builder",
+        "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_google_glog//:glog",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -327,6 +329,8 @@ cc_library(
     deps = [
         ":app_db_manager",
         ":app_db_to_pdpi_ir_translator",
+        ":packet_replication_entry_translation",
+        ":redis_connections",
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
         "//p4rt_app/sonic/adapters:table_adapter",
@@ -345,11 +349,15 @@ cc_test(
     name = "state_verification_test",
     srcs = ["state_verification_test.cc"],
     deps = [
+        ":redis_connections",
         ":state_verification",
         "//gutil:status_matchers",
+        "//p4rt_app/sonic/adapters:mock_consumer_notifier_adapter",
+        "//p4rt_app/sonic/adapters:mock_notification_producer_adapter",
         "//p4rt_app/sonic/adapters:mock_table_adapter",
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -405,6 +413,7 @@ cc_library(
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

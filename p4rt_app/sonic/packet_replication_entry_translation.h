@@ -14,6 +14,8 @@
 #ifndef PINS_P4RT_APP_SONIC_PACKET_REPLICATION_ENTRY_TRANSLATION_H_
 #define PINS_P4RT_APP_SONIC_PACKET_REPLICATION_ENTRY_TRANSLATION_H_
 
+#include <vector>
+
 #include "absl/status/statusor.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.h"
@@ -31,14 +33,21 @@ absl::StatusOr<std::string> CreatePacketReplicationTableUpdateForAppDb(
     const pdpi::IrPacketReplicationEngineEntry& entry,
     std::vector<swss::KeyOpFieldsValuesTuple>& kfv_updates);
 
-// Returns all REPLICATION_MULTICAST_TABLE keys currently installed in AppDb.
+// Returns all REPLICATION_IP_MULTICAST_TABLE keys currently installed in AppDb.
 std::vector<std::string> GetAllPacketReplicationTableEntryKeys(
     P4rtTable& p4rt_table);
 
-// Returns all the REPLICATION_MULTICAST_TABLE entries currently installed in
+// Returns all the REPLICATION_IP_MULTICAST_TABLE entries currently installed in
 // the AppDb.
 absl::StatusOr<std::vector<pdpi::IrPacketReplicationEngineEntry>>
 GetAllAppDbPacketReplicationTableEntries(P4rtTable& p4rt_table);
+
+// Determines if the packet replication entries on both lists are equivalent.
+// Returns a list of comparison failure messages, if any.
+// There is no assumption that matching entries are found in the same index.
+std::vector<std::string> ComparePacketReplicationTableEntries(
+    const std::vector<pdpi::IrEntity>& entries_app_db,
+    const std::vector<pdpi::IrEntity>& entries_cache);
 
 }  // namespace sonic
 }  // namespace p4rt_app

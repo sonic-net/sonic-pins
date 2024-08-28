@@ -299,6 +299,126 @@ TEST_F(PacketReplicationEntryTranslationTest, PortNamesWithColonsOk) {
                 })pb"))));
 }
 
+TEST_F(PacketReplicationEntryTranslationTest, CompareEntriesSuccess) {
+  pdpi::IrEntity entity;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas { port: "Ethernet0" instance: 0 }
+            replicas { port: "Ethernet1" instance: 0 }
+          }
+        })pb",
+      &entity));
+
+  std::vector<pdpi::IrEntity> input = {entity};
+  EXPECT_THAT(ComparePacketReplicationTableEntries(input, input).size(), 0);
+}
+
+TEST_F(PacketReplicationEntryTranslationTest, CompareEntriesMissingId) {
+  pdpi::IrEntity entity1;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas { port: "Ethernet0" instance: 0 }
+          }
+        })pb",
+      &entity1));
+  pdpi::IrEntity entity2;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 2
+            replicas { port: "Ethernet0" instance: 0 }
+          }
+        })pb",
+      &entity2));
+
+  std::vector<pdpi::IrEntity> input1 = {entity1};
+  std::vector<pdpi::IrEntity> input2 = {entity2};
+  auto result = ComparePacketReplicationTableEntries(input1, input2);
+  ASSERT_THAT(result.size(), 2);
+  EXPECT_EQ(result.at(0),
+            "Packet replication cache is missing multicast group ID 1");
+  EXPECT_EQ(result.at(1), "APP DB is missing multicast group ID 2");
+}
+
+TEST_F(PacketReplicationEntryTranslationTest, CompareEntriesMissingId2) {
+  pdpi::IrEntity entity1;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas { port: "Ethernet0" instance: 0 }
+          }
+        })pb",
+      &entity1));
+  pdpi::IrEntity entity2;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas { port: "Ethernet0" instance: 0 }
+          }
+        })pb",
+      &entity2));
+  pdpi::IrEntity entity3;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 2
+            replicas { port: "Ethernet0" instance: 0 }
+          }
+        })pb",
+      &entity3));
+
+  std::vector<pdpi::IrEntity> input1 = {entity1};
+  std::vector<pdpi::IrEntity> input2 = {entity2, entity3};
+  auto result = ComparePacketReplicationTableEntries(input1, input2);
+  ASSERT_THAT(result.size(), 1);
+  EXPECT_EQ(result.at(0), "APP DB is missing multicast group ID 2");
+}
+
+TEST_F(PacketReplicationEntryTranslationTest, CompareEntriesDifferentReplica) {
+  pdpi::IrEntity entity1;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas { port: "Ethernet0" instance: 0 }
+          }
+        })pb",
+      &entity1));
+  pdpi::IrEntity entity2;
+  ASSERT_TRUE(TextFormat::ParseFromString(
+      R"pb(
+        packet_replication_engine_entry {
+          multicast_group_entry {
+            multicast_group_id: 1
+            replicas { port: "Ethernet0" instance: 1 }
+          }
+        })pb",
+      &entity2));
+
+  std::vector<pdpi::IrEntity> input1 = {entity1};
+  std::vector<pdpi::IrEntity> input2 = {entity2};
+  auto result = ComparePacketReplicationTableEntries(input1, input2);
+  ASSERT_THAT(result.size(), 2);
+  EXPECT_EQ(
+      result.at(0),
+      "Packet replication cache is missing replica Ethernet0_0 for group id 1");
+  EXPECT_EQ(result.at(1),
+            "APP DB is missing replica Ethernet0_1 for group id 1");
+}
+
 }  // namespace
 }  // namespace sonic
 }  // namespace p4rt_app

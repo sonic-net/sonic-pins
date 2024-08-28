@@ -411,7 +411,7 @@ TEST(TranslateAppDbToPdpiTest, ActionParameterMustHaveAPrefix) {
        R"({"action":"set_nexthop_id","param/nexthop_id":"9","weight":2}])"},
   };
 
-  // P4 action paramters should start with param/.
+  // P4 action parameters should start with param/.
   ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info p4info, GetCanonicalP4Info());
   EXPECT_THAT(
       AppDbKeyAndValuesToIrTableEntry(p4info, app_db_key, app_db_values),
