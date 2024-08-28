@@ -76,7 +76,6 @@ referring_by_action_table_entry {
 
 -- OUTPUT ----------------------------------------------------------------------
 -- ReferredTableEntries --
-ReferredTableEntry{table_id: 34805412, match_fields and values: [ReferredField{match_field_id: 1,field_value: key-a}]}
 ReferredTableEntry{table_id: 46253494, match_fields and values: [ReferredField{match_field_id: 1,field_value: key-a}]}
 
 =========================================================================
