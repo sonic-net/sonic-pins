@@ -522,7 +522,6 @@ message OtherGoldenTestFriendlyAction {
 
 message ReferringToOneMatchFieldAction {
   // Refers to 'one_match_field_table.id'.
-  // Refers to 'two_match_fields_table.id_1'.
   string referring_id_1 = 1; // Format::STRING
 }
 

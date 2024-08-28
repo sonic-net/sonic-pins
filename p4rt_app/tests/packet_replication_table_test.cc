@@ -21,6 +21,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "p4rt_app/tests/lib/p4runtime_request_helpers.h"
@@ -310,6 +311,7 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
   EXPECT_THAT(read_response2.entities(0),
               EqualsProto(request2.updates(0).entity()));
 }
+
 TEST_F(PacketReplicationTableTest, PopulatedReadRequestFails) {
   // Read back the entry which should result in the same packet replication
   // entry.

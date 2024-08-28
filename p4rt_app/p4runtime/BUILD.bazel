@@ -158,6 +158,7 @@ cc_library(
         "//p4rt_app/utils:table_utility",
         "@boost//:bimap",
         "@boost//:graph",
+        "@com_github_gflags_gflags//:gflags",
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++_public_hdrs",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",

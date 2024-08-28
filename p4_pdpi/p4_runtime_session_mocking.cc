@@ -258,13 +258,27 @@ void MockClearEntities(p4::v1::MockP4RuntimeStub& stub, const P4Info& p4info,
     // portion of clearing entities.
     SetNextReadResponse(stub, {table_entity, multicast_entity});
 
-    // Mocks the call to delete the entities that we have created, in reverse
-    // dependency order.
-    EXPECT_CALL(stub, Write(_,
-                            EqualsProto(ConstructDeleteRequest(
-                                metadata, {multicast_entity, table_entity})),
-                            _))
+    // Mocks the calls (multiple due to bug) to delete the entities that we have
+    // created, in reverse dependency order.
+    EXPECT_CALL(
+        stub,
+        Write(_,
+              EqualsProto(ConstructDeleteRequest(metadata, {multicast_entity})),
+              _))
         .Times(1);
+    EXPECT_CALL(
+        stub,
+        Write(_, EqualsProto(ConstructDeleteRequest(metadata, {table_entity})),
+              _))
+        .Times(1);
+
+    // // Mocks the call to delete the entities that we have created, in reverse
+    // // dependency order.
+    // EXPECT_CALL(stub, Write(_,
+    //                         EqualsProto(ConstructDeleteRequest(
+    //                             metadata, {multicast_entity, table_entity})),
+    //                         _))
+    //     .Times(1);
 
     // Mocks a `CheckNoEntities` call, ensuring that the entities are really
     // cleared.
