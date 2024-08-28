@@ -243,6 +243,45 @@ TEST_F(ResponsePathTest, DuplicateTableEntryInsertFails) {
               EqualsProto(write_request.updates(0).entity()));
 }
 
+TEST_F(ResponsePathTest, DuplicatePacketReplicationEngineEntryInsertFails) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  // P4 write request.
+  p4::v1::WriteRequest write_request;
+  ASSERT_OK(gutil::ReadProtoFromString(
+      R"pb(updates {
+             type: INSERT
+             entity {
+               packet_replication_engine_entry {
+                 multicast_group_entry {
+                   multicast_group_id: 1
+                   replicas { port: "1" instance: 0 }
+                 }
+               }
+             }
+           })pb",
+      &write_request));
+
+  // The first insert is expected to pass since the entry does not exist.
+  EXPECT_OK(pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                                   write_request));
+
+  // The second insert is expected to fail since the entry already exists.
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(absl::StatusCode::kUnknown, HasSubstr("ALREADY_EXISTS")));
+
+  // Reading back we should only see one result.
+  p4::v1::ReadRequest read_request;
+  read_request.add_entities()->mutable_packet_replication_engine_entry();
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::ReadResponse read_response,
+      pdpi::SetMetadataAndSendPiReadRequest(p4rt_session_.get(), read_request));
+  ASSERT_EQ(read_response.entities_size(), 1);
+  EXPECT_THAT(read_response.entities(0),
+              EqualsProto(write_request.updates(0).entity()));
+}
+
 TEST_F(ResponsePathTest, TableEntryModifyFailsIfEntryDoesNotExist) {
   // P4 write request.
   ASSERT_OK_AND_ASSIGN(

@@ -48,6 +48,11 @@ absl::StatusOr<std::string> TranslatePort(
 absl::Status TranslateTableEntry(const TranslateTableEntryOptions& options,
                                  pdpi::IrTableEntry& entry);
 
+// Translates all the port fields in a PDPI IrPacketReplicationEngineEntry.
+absl::Status TranslatePacketReplicationEntry(
+    const TranslateTableEntryOptions& options,
+    pdpi::IrPacketReplicationEngineEntry& entry);
+
 // Updates the IrP4Info so that the contents can be consumed by the OrchAgent.
 // For example:
 //  * OA expects UDF formats to be HEX_STRINGS
@@ -74,11 +79,36 @@ absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only);
 
-// Updates a IR table entry from the controller to an IR format with fields
+// Translates a PI packet replication engine entry from the controller into an
+// IR format with field values consumable by the OA.
+absl::StatusOr<pdpi::IrPacketReplicationEngineEntry>
+TranslatePiPacketReplicationEngineEntryForOrchAgent(
+    const p4::v1::PacketReplicationEngineEntry& pi_packet_replication_entry,
+    const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only);
+
+// Updates an IR entity from the controller to an IR format with field values
+// consumable by the OA.
+absl::Status UpdateIrEntityForOrchAgent(
+    pdpi::IrEntity& ir_entity, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator);
+
+// Updates a IR table entry from the controller to an IR format with field
 // values consumable by the OA.
 absl::Status UpdateIrTableEntryForOrchAgent(
     pdpi::IrTableEntry& ir_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator);
+
+// Updates a IR packet replication engine entry from the controller to an IR
+// format with field values consumable by the OA.
+absl::Status UpdateIrPacketReplicationEngineEntryForOrchAgent(
+    pdpi::IrPacketReplicationEngineEntry& ir_packet_replication_entry,
+    const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
     const boost::bimap<std::string, std::string>& port_translation_map,
     const CpuQueueTranslator& cpu_queue_translator);
 

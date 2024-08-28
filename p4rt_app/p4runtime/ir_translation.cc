@@ -191,6 +191,16 @@ absl::Status TranslateMatchField(const TranslateTableEntryOptions& options,
   return absl::OkStatus();
 }
 
+absl::Status TranslatePortInReplica(const TranslateTableEntryOptions& options,
+                                    pdpi::IrReplica& replica) {
+  if (options.translate_port_ids) {
+    ASSIGN_OR_RETURN(
+        *replica.mutable_port(),
+        TranslatePort(options.direction, options.port_map, replica.port()));
+  }
+  return absl::OkStatus();
+}
+
 void SetCompositeUdfFieldFormatToHexString(
     pdpi::IrMatchFieldDefinition& match_def) {
   static constexpr absl::string_view kCompositeMatchLabel = "composite_field";
@@ -284,6 +294,17 @@ absl::Status TranslateTableEntry(const TranslateTableEntryOptions& options,
   return absl::OkStatus();
 }
 
+absl::Status TranslatePacketReplicationEntry(
+    const TranslateTableEntryOptions& options,
+    pdpi::IrPacketReplicationEngineEntry& entry) {
+  // Update ports in each replica.
+  for (auto& replica :
+       *entry.mutable_multicast_group_entry()->mutable_replicas()) {
+    RETURN_IF_ERROR(TranslatePortInReplica(options, replica));
+  }
+  return absl::OkStatus();
+}
+
 void TranslateIrP4InfoForOrchAgent(pdpi::IrP4Info& p4_info) {
   for (auto& [table_id, table_def] : *p4_info.mutable_tables_by_id()) {
     TranslateIrTableDefForOrchAgent(table_def);
@@ -346,12 +367,11 @@ absl::StatusOr<pdpi::IrEntity> TranslatePiEntityForOrchAgent(
       break;
     }
     case p4::v1::Entity::kPacketReplicationEngineEntry: {
-      // Updated in later CL in this chain.
-      ASSIGN_OR_RETURN(ir_entity,
-                       pdpi::PiEntityToIr(ir_p4_info, pi_entity,
-                                          pdpi::TranslationOptions{
-                                              .key_only = translate_key_only,
-                                          }));
+      ASSIGN_OR_RETURN(*ir_entity.mutable_packet_replication_engine_entry(),
+                       TranslatePiPacketReplicationEngineEntryForOrchAgent(
+                           pi_entity.packet_replication_engine_entry(),
+                           ir_p4_info, translate_port_ids, port_translation_map,
+                           cpu_queue_translator, translate_key_only));
       break;
     }
     default: {
@@ -388,6 +408,57 @@ absl::StatusOr<pdpi::IrTableEntry> TranslatePiTableEntryForOrchAgent(
   return *ir_table_entry;
 }
 
+absl::StatusOr<pdpi::IrPacketReplicationEngineEntry>
+TranslatePiPacketReplicationEngineEntryForOrchAgent(
+    const p4::v1::PacketReplicationEngineEntry& pi_packet_replication_entry,
+    const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator, bool translate_key_only) {
+  auto ir_packet_replication_engine_entry =
+      pdpi::PiPacketReplicationEngineEntryToIr(
+          ir_p4_info, pi_packet_replication_entry,
+          pdpi::TranslationOptions{
+              .key_only = translate_key_only,
+          });
+  if (!ir_packet_replication_engine_entry.ok()) {
+    LOG(ERROR) << "PDPI could not translate PI packet replication entry to IR: "
+               << pi_packet_replication_entry.ShortDebugString();
+    return gutil::StatusBuilder(
+               ir_packet_replication_engine_entry.status().code())
+           << "[P4RT/PDPI] "
+           << ir_packet_replication_engine_entry.status().message();
+  }
+  RETURN_IF_ERROR(UpdateIrPacketReplicationEngineEntryForOrchAgent(
+      *ir_packet_replication_engine_entry, ir_p4_info, translate_port_ids,
+      port_translation_map, cpu_queue_translator));
+  return *ir_packet_replication_engine_entry;
+}
+
+absl::Status UpdateIrEntityForOrchAgent(
+    pdpi::IrEntity& ir_entity, const pdpi::IrP4Info& ir_p4_info,
+    bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator) {
+  switch (ir_entity.entity_case()) {
+    case pdpi::IrEntity::kTableEntry:
+      RETURN_IF_ERROR(UpdateIrTableEntryForOrchAgent(
+          *ir_entity.mutable_table_entry(), ir_p4_info, translate_port_ids,
+          port_translation_map, cpu_queue_translator));
+      break;
+    case pdpi::IrEntity::kPacketReplicationEngineEntry:
+      RETURN_IF_ERROR(UpdateIrPacketReplicationEngineEntryForOrchAgent(
+          *ir_entity.mutable_packet_replication_engine_entry(), ir_p4_info,
+          translate_port_ids, port_translation_map, cpu_queue_translator));
+      break;
+    default:
+      return gutil::InvalidArgumentErrorBuilder()
+             << "[P4RT App] Cannot update IR entity for unsupported type: "
+             << ir_entity.ShortDebugString();
+      break;
+  }
+  return absl::OkStatus();
+}
+
 absl::Status UpdateIrTableEntryForOrchAgent(
     pdpi::IrTableEntry& ir_table_entry, const pdpi::IrP4Info& ir_p4_info,
     bool translate_port_ids,
@@ -395,8 +466,8 @@ absl::Status UpdateIrTableEntryForOrchAgent(
     const CpuQueueTranslator& cpu_queue_translator) {
   // TODO: Remove this when P4Info uses 64-bit IPv6 ACL matchess.
   // We don't allow overwriting of the p4info, so static is ok here.
-  Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
 
+  Convert64BitIpv6AclMatchFieldsTo128Bit(ir_table_entry);
   RETURN_IF_ERROR(TranslateTableEntry(
       TranslateTableEntryOptions{
           .direction = TranslationDirection::kForOrchAgent,
@@ -406,6 +477,23 @@ absl::Status UpdateIrTableEntryForOrchAgent(
           .cpu_queue_translator = cpu_queue_translator,
       },
       ir_table_entry));
+  return absl::OkStatus();
+}
+
+absl::Status UpdateIrPacketReplicationEngineEntryForOrchAgent(
+    pdpi::IrPacketReplicationEngineEntry& ir_packet_replication_entry,
+    const pdpi::IrP4Info& ir_p4_info, bool translate_port_ids,
+    const boost::bimap<std::string, std::string>& port_translation_map,
+    const CpuQueueTranslator& cpu_queue_translator) {
+  RETURN_IF_ERROR(TranslatePacketReplicationEntry(
+      TranslateTableEntryOptions{
+          .direction = TranslationDirection::kForOrchAgent,
+          .ir_p4_info = ir_p4_info,
+          .translate_port_ids = translate_port_ids,
+          .port_map = port_translation_map,
+          .cpu_queue_translator = cpu_queue_translator,
+      },
+      ir_packet_replication_entry));
   return absl::OkStatus();
 }
 
