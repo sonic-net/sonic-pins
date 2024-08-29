@@ -15,7 +15,6 @@
 #ifndef PINS_P4_PDPI_SEQUENCING_H_
 #define PINS_P4_PDPI_SEQUENCING_H_
 
-#include <functional>
 #include <optional>
 #include <vector>
 
@@ -50,12 +49,12 @@ SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
                                    absl::Span<const p4::v1::Update> updates,
                                    std::optional<int> max_batch_size = 5000);
 
-// Splits up `write_request` into ceil(write_request.update_size() /
-// max_write_request_size) number of p4::WriteRequest(s). The order of updates
-// across the resulting WriteRequests remains the same as the order of updates
-// in `write_request`.
-absl::StatusOr<std::vector<p4::v1::WriteRequest>> SplitUpWriteRequest(
-    const p4::v1::WriteRequest& write_request,
+// Extracts updates in `write_request` and form
+// ceil(write_request.update_size() / max_write_request_size) number of
+// p4::WriteRequest(s). The order of updates across the resulting WriteRequests
+// remains the same as the order of updates in `write_request`.
+absl::StatusOr<std::vector<p4::v1::WriteRequest>> ExtractWriteRequests(
+    p4::v1::WriteRequest&& write_request,
     std::optional<int> max_write_request_size = 5000);
 
 // Returns a vector of batches, where each batch is given by a vector of indices
