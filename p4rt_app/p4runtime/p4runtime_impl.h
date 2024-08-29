@@ -24,7 +24,6 @@
 #include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -51,8 +50,6 @@
 //TODO(PINS):
 //#include "swss/component_state_helper_interface.h"
 //#include "swss/intf_translator.h"
-
-DECLARE_bool(enable_packet_replication_entries);
 
 namespace p4rt_app {
 
