@@ -39,7 +39,6 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "boost/bimap.hpp"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "google/protobuf/util/json_util.h"
 #include "google/protobuf/util/message_differencer.h"
@@ -83,9 +82,6 @@
 #include "swss/intf_translator.h"*/
 #include "swss/json.h"
 #include <nlohmann/json.hpp>
-
-DEFINE_bool(enable_packet_replication_entries, false,
-            "Enable use of packet replication for multicast");
 
 namespace p4rt_app {
 namespace {

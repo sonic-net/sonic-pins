@@ -94,10 +94,16 @@ TEST_F(PacketReplicationEntryTranslationTest, InsertPacketReplicationEntry) {
       &pre_entry));
 
   // Expected RedisDB entry.
+  const std::string json_array =
+      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet3/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet5/1/1"}])j";
+
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
-      std::make_pair("Ethernet1/1/1:0x1", "replica"),
-      std::make_pair("Ethernet3/1/1:0x1", "replica"),
-      std::make_pair("Ethernet5/1/1:0x1", "replica"),
+      std::make_pair("replicas", json_array),
   };
   const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x1";
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
@@ -121,9 +127,14 @@ TEST_F(PacketReplicationEntryTranslationTest, ModifyPacketReplicationEntry) {
       &pre_entry));
 
   // Expected RedisDB entry.
+  const std::string json_array =
+      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
+
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
-      std::make_pair("Ethernet1/1/1:0x1", "replica"),
-      std::make_pair("Ethernet3/1/1:0x1", "replica"),
+      std::make_pair("replicas", json_array),
   };
   const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x1";
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
@@ -195,15 +206,22 @@ TEST_F(PacketReplicationEntryTranslationTest,
 
 TEST_F(PacketReplicationEntryTranslationTest,
        GetAllAppDbPacketReplicationTableEntries) {
+  const std::string json_array1 =
+      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
   const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
-      std::make_pair("Ethernet1/1/1:0x1", "replica"),
-      std::make_pair("Ethernet3/1/1:0x1", "replica"),
+      std::make_pair("replicas", json_array1),
   };
 
+  const std::string json_array2 =
+      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"}])j";
   const std::string app_db_key2 = "REPLICATION_IP_MULTICAST_TABLE:0x2";
   const std::vector<std::pair<std::string, std::string>> kfv_values2 = {
-      std::make_pair("Ethernet1/1/1:0x1", "replica"),
+      std::make_pair("replicas", json_array2),
   };
 
   EXPECT_CALL(*mock_pre_app_db_, keys)
@@ -249,10 +267,14 @@ TEST_F(PacketReplicationEntryTranslationTest, InvalidMulticastGroupId) {
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, InvalidInstance) {
+  const std::string json_array1 =
+      R"j([{"multicast_replica_instance":"0xZZ",)j"
+      R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
+      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
   const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
-      std::make_pair("Ethernet1/1/1:0xZZ", "replica"),
-      std::make_pair("Ethernet3/1/1:0x1", "replica"),
+      std::make_pair("replicas", json_array1),
   };
 
   EXPECT_CALL(*mock_pre_app_db_, keys)
@@ -263,11 +285,11 @@ TEST_F(PacketReplicationEntryTranslationTest, InvalidInstance) {
   EXPECT_FALSE(GetAllAppDbPacketReplicationTableEntries(mock_p4rt_table_).ok());
 }
 
-TEST_F(PacketReplicationEntryTranslationTest, InvalidPortInstanceSplit) {
+TEST_F(PacketReplicationEntryTranslationTest, MissingMulticastReplicaPort) {
+  const std::string json_array1 = R"j([{"multicast_replica_instance":"0x1"}])j";
   const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
-      std::make_pair("Ethernet1/1/1:0x1:Extra", "replica"),
-      std::make_pair("Ethernet3/1/1:0x1", "replica"),
+      std::make_pair("replicas", json_array1),
   };
 
   EXPECT_CALL(*mock_pre_app_db_, keys)
@@ -278,11 +300,12 @@ TEST_F(PacketReplicationEntryTranslationTest, InvalidPortInstanceSplit) {
   EXPECT_FALSE(GetAllAppDbPacketReplicationTableEntries(mock_p4rt_table_).ok());
 }
 
-TEST_F(PacketReplicationEntryTranslationTest, PortNamesWithColonsOk) {
+TEST_F(PacketReplicationEntryTranslationTest, MissingMulticastReplicaInstance) {
+  const std::string json_array1 =
+      R"j([{"multicast_replica_port":"Ethernet1/1/1"}])j";
   const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
-      std::make_pair("Ethernet1:1:0x1", "replica"),
-      std::make_pair("Ethernet3:3:3:0x1", "replica"),
+      std::make_pair("replicas", json_array1),
   };
 
   EXPECT_CALL(*mock_pre_app_db_, keys)
@@ -290,13 +313,7 @@ TEST_F(PacketReplicationEntryTranslationTest, PortNamesWithColonsOk) {
   EXPECT_CALL(*mock_pre_app_db_, get(Eq(app_db_key1)))
       .WillOnce(Return(kfv_values1));
 
-  EXPECT_THAT(GetAllAppDbPacketReplicationTableEntries(mock_p4rt_table_),
-              IsOkAndHolds(UnorderedElementsAre(EqualsProto(R"pb(
-                multicast_group_entry {
-                  multicast_group_id: 1
-                  replicas { port: "Ethernet1:1" instance: 1 }
-                  replicas { port: "Ethernet3:3:3" instance: 1 }
-                })pb"))));
+  EXPECT_FALSE(GetAllAppDbPacketReplicationTableEntries(mock_p4rt_table_).ok());
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, CompareEntriesSuccess) {
