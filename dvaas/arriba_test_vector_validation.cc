@@ -17,7 +17,6 @@
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/packet_injection.h"
@@ -89,8 +88,9 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
 
   // Compare the switch output with expected output for each test vector.
   LOG(INFO) << "Validating test runs";
-  PacketTestOutcomes test_outcomes =
-      ValidateTestRuns(test_runs, params.switch_output_diff_params);
+  ASSIGN_OR_RETURN(
+      PacketTestOutcomes test_outcomes,
+      ValidateTestRuns(test_runs, params.switch_output_diff_params));
   RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
       "test_outcomes.txtpb", gutil::PrintTextProto(test_outcomes)));
 
