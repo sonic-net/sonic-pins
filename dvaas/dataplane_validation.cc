@@ -121,9 +121,10 @@ absl::Status DetermineReproducibilityRate(
                                        test_vectors, parameters, statistics,
                                        /*log_injection_progress=*/false));
 
-  ValidationResult validation_result =
-      ValidationResult(test_runs, params.switch_output_diff_params,
-                       /*packet_synthesis_result=*/{});
+  ASSIGN_OR_RETURN(
+      ValidationResult validation_result,
+      ValidationResult::Create(test_runs, params.switch_output_diff_params,
+                               /*packet_synthesis_result=*/{}));
 
   test_outcome.mutable_test_result()
       ->mutable_failure()
@@ -744,8 +745,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
       "test_runs.textproto", gutil::PrintTextProto(test_runs)));
 
   // Validate test runs to create test outcomes.
-  dvaas::PacketTestOutcomes test_outcomes =
-      dvaas::ValidateTestRuns(test_runs, params.switch_output_diff_params);
+  ASSIGN_OR_RETURN(
+      dvaas::PacketTestOutcomes test_outcomes,
+      dvaas::ValidateTestRuns(test_runs, params.switch_output_diff_params));
 
   // Store the packet trace for all failed test outcomes.
   ASSIGN_OR_RETURN(P4Specification p4_spec,
@@ -836,9 +838,9 @@ DataplaneValidator::ValidateDataplaneUsingExistingSwitchApis(
                       packet_injection_params, statistics,
                       /*log_injection_progress=*/false));
               // Validate test runs to create test outcomes.
-              return ValidationResult(test_runs,
-                                      params.switch_output_diff_params,
-                                      /*packet_synthesis_result=*/{});
+              return ValidationResult::Create(test_runs,
+                                              params.switch_output_diff_params,
+                                              /*packet_synthesis_result=*/{});
             });
         if (!status.ok()) {
           LOG(WARNING) << "Got error when post-processing failure: "
