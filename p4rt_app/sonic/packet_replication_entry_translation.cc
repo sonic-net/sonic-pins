@@ -30,9 +30,11 @@
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
+#include "nlohmann/json.hpp"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/app_db_to_pdpi_ir_translator.h"
 #include "p4rt_app/sonic/redis_connections.h"
+#include "swss/json.h"
 #include "swss/schema.h"
 #include "swss/table.h"
 
@@ -71,15 +73,17 @@ std::string CreateEntryForInsert(
   kfvKey(key_value) = key;
   kfvOp(key_value) = "SET";
 
-  for (auto& r : entry.multicast_group_entry().replicas()) {
-    // Since port and/or instance are not independently unique for a group, we
-    // make a key here that is a combination, which is guaranteed to be unique.
-    // The value "replica" is not used.
-    std::string port_instance =
-        absl::StrCat(r.port(), ":0x", absl::Hex(r.instance()));
-    kfvFieldsValues(key_value).push_back(
-        std::make_pair(port_instance, "replica"));
+  nlohmann::json json_array = nlohmann::json::array();
+  for (auto& replica : entry.multicast_group_entry().replicas()) {
+    nlohmann::json json;
+    json["multicast_replica_port"] = replica.port();
+    json["multicast_replica_instance"] =
+        absl::StrCat("0x", absl::Hex(replica.instance()));
+    json_array.push_back(json);
   }
+  kfvFieldsValues(key_value).push_back(
+      std::make_pair("replicas", json_array.dump()));
+
   p4rt_inserts.push_back(std::move(key_value));
   return key;
 }
@@ -207,27 +211,56 @@ GetAllAppDbPacketReplicationTableEntries(P4rtTable& p4rt_table) {
     }
 
     // Build replicas.
-    for (auto& kfv : p4rt_table.app_db->get(key)) {
-      auto value_split = kfv.first.rfind(":");
-      if (value_split == std::string::npos) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Unexpected multicast port/instance format '" << kfv.first
-               << "' for APP DB packet replication";
-      }
-      std::string port = kfv.first.substr(0, value_split);
-      std::string instance_str = kfv.first.substr(value_split + 1);
+    for (const auto& [field, data] : p4rt_table.app_db->get(key)) {
+      if (field == "replicas") {
+        nlohmann::json json;
+#ifdef __EXCEPTIONS
+        try {
+#endif
+          json = nlohmann::json::parse(data);
+#ifdef __EXCEPTIONS
+        } catch (...) {
+          return gutil::InternalErrorBuilder()
+                 << "Could not parse JSON string: " << data;
+        }
+#endif
 
-      uint32_t instance;
-      if (!absl::SimpleHexAtoi(instance_str, &instance)) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "Unexpected replica instance value '" << instance_str
-               << "' for APP DB packet replication";
+        for (const auto& json_replica : json) {
+          std::string port_name;
+          uint32_t instance;
+          if (json_replica.find("multicast_replica_port") !=
+              json_replica.end()) {
+            port_name =
+                json_replica.at("multicast_replica_port").get<std::string>();
+          } else {
+            return gutil::InvalidArgumentErrorBuilder()
+                   << "JSON replica for multicast group ID "
+                   << absl::StrCat("0x", absl::Hex(group_id))
+                   << " is missing multicast_replica_port: " << json_replica;
+          }
+          if (json_replica.find("multicast_replica_instance") !=
+              json_replica.end()) {
+            std::string inst = json_replica.at("multicast_replica_instance")
+                                   .get<std::string>();
+            if (!absl::SimpleHexAtoi(inst, &instance)) {
+              return gutil::InvalidArgumentErrorBuilder()
+                     << "Failed to parse multicast_replica_instance in "
+                     << "multicast group ID "
+                     << absl::StrCat("0x", absl::Hex(group_id))
+                     << " from JSON replica " << json_replica;
+            }
+          } else {
+            return gutil::InvalidArgumentErrorBuilder()
+                   << "JSON replica for multicast group ID "
+                   << absl::StrCat("0x", absl::Hex(group_id))
+                   << " is missing multicast_replica_instance: "
+                   << json_replica;
+          }
+          auto* replica = multicast_group_entry->add_replicas();
+          replica->set_port(port_name);
+          replica->set_instance(instance);
+        }
       }
-
-      auto* replica = multicast_group_entry->add_replicas();
-      replica->set_port(port);
-      replica->set_instance(instance);
-      // We ignore the value in the kfv, as it is not used.
     }
     pre_entries.push_back(pre_entry);
   }
