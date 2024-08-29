@@ -38,8 +38,8 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/built_ins.h"
-#include "p4_pdpi/helpers.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/names.h"
 #include "p4_pdpi/references.h"
 #include "p4_pdpi/sequencing_util.h"
 
