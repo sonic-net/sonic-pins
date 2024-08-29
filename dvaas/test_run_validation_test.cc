@@ -35,20 +35,22 @@ TEST(TestRunValidationTest,
   )pb");
 
   // Without ignoring ethertype, validation must fail.
-  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
-              HasSubstr("modified:"));
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result,
+                       ValidateTestRun(test_run));
+  ASSERT_THAT(result.failure().description(), HasSubstr("modified:"));
 
   const google::protobuf::FieldDescriptor* ethertype_field_descriptor =
       packetlib::EthernetHeader::descriptor()->FindFieldByName("ethertype");
   ASSERT_THAT(ethertype_field_descriptor, testing::NotNull());
 
   // Ignoring ethertype, validation must succeed.
-  ASSERT_THAT(ValidateTestRun(
+  ASSERT_OK_AND_ASSIGN(
+      result, ValidateTestRun(
                   test_run,
                   {
                       .ignored_packetlib_fields = {ethertype_field_descriptor},
-                  }),
-              EqualsProto(R"pb()pb"));
+                  }));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 // When a header is ignored via ignored_packetlib_fields, none of the field
 // of the ignored header in actual_output is checked against acceptable_outputs.
@@ -87,20 +89,22 @@ TEST(TestRunValidationTest, IgnoringEntireHeaderIgnoresAllHeaderFields) {
   )pb");
 
   // Without ignoring IPFIX header, validation must fail.
-  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
-              HasSubstr("modified:"));
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result,
+                       ValidateTestRun(test_run));
+  ASSERT_THAT(result.failure().description(), HasSubstr("modified:"));
 
   const google::protobuf::FieldDescriptor* ipfix_header_descriptor =
       packetlib::Header::descriptor()->FindFieldByName("ipfix_header");
   ASSERT_THAT(ipfix_header_descriptor, testing::NotNull());
 
   // Ignoring IPFIX header, validation must succeed.
-  ASSERT_THAT(
+  ASSERT_OK_AND_ASSIGN(
+      result,
       ValidateTestRun(test_run,
                       {
                           .ignored_packetlib_fields = {ipfix_header_descriptor},
-                      }),
-      EqualsProto(R"pb()pb"));
+                      }));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 
 // When a header is ignored via ignored_packetlib_fields, the header's presence
@@ -132,14 +136,13 @@ TEST(TestRunValidationTest, IgnoringEntireHeaderStillChecksForPresence) {
 
   // Even though UDP header is ignored, the fact that it is missing in
   // actual_output is still considered a failure.
-  ASSERT_THAT(
+  ASSERT_OK_AND_ASSIGN(
+      PacketTestValidationResult result,
       ValidateTestRun(test_run,
                       {
                           .ignored_packetlib_fields = {udp_header_descriptor},
-                      })
-          .failure()
-          .description(),
-      HasSubstr("deleted:"));
+                      }));
+  ASSERT_THAT(result.failure().description(), HasSubstr("deleted:"));
 
   test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
     test_vector {
@@ -162,14 +165,13 @@ TEST(TestRunValidationTest, IgnoringEntireHeaderStillChecksForPresence) {
   )pb");
   // Even though UDP header is ignored, the fact that it is present in
   // actual_output is still considered a failure.
-  ASSERT_THAT(
+  ASSERT_OK_AND_ASSIGN(
+      result,
       ValidateTestRun(test_run,
                       {
                           .ignored_packetlib_fields = {udp_header_descriptor},
-                      })
-          .failure()
-          .description(),
-      HasSubstr("added:"));
+                      }));
+  ASSERT_THAT(result.failure().description(), HasSubstr("added:"));
 }
 
 TEST(TestRunValidationTest,
@@ -190,20 +192,22 @@ TEST(TestRunValidationTest,
   )pb");
 
   // Without ignoring ethertype, validation must fail.
-  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
-              HasSubstr("modified:"));
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result,
+                       ValidateTestRun(test_run));
+  ASSERT_THAT(result.failure().description(), HasSubstr("modified:"));
 
   const google::protobuf::FieldDescriptor* ethertype_field_descriptor =
       packetlib::EthernetHeader::descriptor()->FindFieldByName("ethertype");
   ASSERT_THAT(ethertype_field_descriptor, testing::NotNull());
 
   // Ignoring ethertype, validation must succeed.
-  ASSERT_THAT(ValidateTestRun(
+  ASSERT_OK_AND_ASSIGN(
+      result, ValidateTestRun(
                   test_run,
                   {
                       .ignored_packetlib_fields = {ethertype_field_descriptor},
-                  }),
-              EqualsProto(R"pb()pb"));
+                  }));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 
 TEST(TestRunValidationTest,
@@ -230,44 +234,48 @@ TEST(TestRunValidationTest,
   )pb");
 
   // Without ignoring target_egress_port, validation must fail.
-  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
-              HasSubstr("modified:"));
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result,
+                       ValidateTestRun(test_run));
+  ASSERT_THAT(result.failure().description(), HasSubstr("modified:"));
 
   // Ignoring target_egress_port, validation must succeed.
-  ASSERT_THAT(
+  ASSERT_OK_AND_ASSIGN(
+      result,
       ValidateTestRun(test_run,
                       {
                           .ignored_packet_in_metadata = {"target_egress_port"},
-                      }),
-      EqualsProto(R"pb()pb"));
+                      }));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 
 TEST(TestRunValidationTest,
      DifferenceBetweenPortsInActualAndAcceptableOutputLeadToFailure) {
   // Without ignoring target_egress_port, validation must fail.
-  ASSERT_THAT(ValidateTestRun(gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
-                test_vector { acceptable_outputs { packets { port: "1" } } }
-                actual_output { packets { port: "2" } }
-              )pb"))
-                  .failure()
-                  .description(),
-              HasSubstr("mismatched ports:"));
+  ASSERT_OK_AND_ASSIGN(
+      PacketTestValidationResult result,
+      ValidateTestRun(gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+        test_vector { acceptable_outputs { packets { port: "1" } } }
+        actual_output { packets { port: "2" } }
+      )pb")));
+  ASSERT_THAT(result.failure().description(), HasSubstr("mismatched ports:"));
 }
 
 TEST(TestRunValidationTest, DifferentPortOrderOfPacketsIsOk) {
-  EXPECT_FALSE(ValidateTestRun(gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
-                 test_vector {
-                   acceptable_outputs {
-                     packets { port: "1" }
-                     packets { port: "2" }
-                   }
-                 }
-                 actual_output {
-                   packets { port: "2" }
-                   packets { port: "1" }
-                 }
-               )pb"))
-                   .has_failure());
+  ASSERT_OK_AND_ASSIGN(
+      PacketTestValidationResult result,
+      ValidateTestRun(gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+        test_vector {
+          acceptable_outputs {
+            packets { port: "1" }
+            packets { port: "2" }
+          }
+        }
+        actual_output {
+          packets { port: "2" }
+          packets { port: "1" }
+        }
+      )pb")));
+  EXPECT_FALSE(result.has_failure());
 }
 
 TEST(TestRunValidationTest,
@@ -288,17 +296,19 @@ TEST(TestRunValidationTest,
   )pb");
 
   // Without ignoring packet-ins, validation must fail.
-  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
-              HasSubstr("packet in"));
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result,
+                       ValidateTestRun(test_run));
+  ASSERT_THAT(result.failure().description(), HasSubstr("packet in"));
 
   // Ignoring packet-ins, validation must succeed.
-  ASSERT_THAT(
+  ASSERT_OK_AND_ASSIGN(
+      result,
       ValidateTestRun(
           test_run,
           {
               .treat_expected_and_actual_outputs_as_having_no_packet_ins = true,
-          }),
-      EqualsProto(R"pb()pb"));
+          }));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 
 TEST(TestRunValidationTest,
@@ -327,21 +337,24 @@ TEST(TestRunValidationTest,
   )pb");
 
   // Without ignoring packet-ins, validation must fail.
-  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
-              HasSubstr("target_egress_port"));
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result,
+                       ValidateTestRun(test_run));
+  ASSERT_THAT(result.failure().description(), HasSubstr("target_egress_port"));
 
   // Ignoring packet-ins, validation must succeed.
-  ASSERT_THAT(
+  ASSERT_OK_AND_ASSIGN(
+      result,
       ValidateTestRun(
           test_run,
           {
               .treat_expected_and_actual_outputs_as_having_no_packet_ins = true,
-          }),
-      EqualsProto(R"pb()pb"));
+          }));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 
 TEST(TestRunValidationTest, IgnorePacketInsHasNoEffectWhenPacketInsMatch) {
-  ASSERT_THAT(
+  ASSERT_OK_AND_ASSIGN(
+      PacketTestValidationResult result,
       ValidateTestRun(
           gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
             test_vector {
@@ -367,8 +380,8 @@ TEST(TestRunValidationTest, IgnorePacketInsHasNoEffectWhenPacketInsMatch) {
           )pb"),
           {
               .treat_expected_and_actual_outputs_as_having_no_packet_ins = true,
-          }),
-      EqualsProto(R"pb()pb"));
+          }));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 
 TEST(TestRunValidationTest, PacketFieldReasonsInvalidIsIgnored) {
@@ -393,7 +406,9 @@ TEST(TestRunValidationTest, PacketFieldReasonsInvalidIsIgnored) {
   )pb");
 
   // Validation must succeed.
-  ASSERT_THAT(ValidateTestRun(test_run), EqualsProto(R"pb()pb"));
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result,
+                       ValidateTestRun(test_run));
+  ASSERT_THAT(result, EqualsProto(R"pb()pb"));
 }
 
 }  // namespace

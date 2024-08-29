@@ -16,7 +16,6 @@
 
 #include <memory>
 #include <optional>
-#include <string>
 #include <thread>  // NOLINT: third_party code.
 #include <utility>
 #include <vector>
@@ -193,7 +192,7 @@ absl::StatusOr<ValidationResult> SimpleTrafficGenerator::GetValidationResult() {
   test_runs_mutex_.Lock();
   PacketTestRuns test_runs = test_runs_;
   test_runs_mutex_.Unlock();
-  return ValidationResult(
+  return ValidationResult::Create(
       test_runs, params_.validation_params.switch_output_diff_params,
       generate_test_vectors_result_.packet_synthesis_result);
 }
@@ -205,7 +204,7 @@ SimpleTrafficGenerator::GetAndClearValidationResult() {
   test_runs_.clear_test_runs();
   test_runs_mutex_.Unlock();
 
-  return ValidationResult(
+  return ValidationResult::Create(
       test_runs, params_.validation_params.switch_output_diff_params,
       generate_test_vectors_result_.packet_synthesis_result);
 }
@@ -597,9 +596,10 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
         collected_traffic_by_id.erase(injected_traffic.tag);
       }
       // Validate test runs to create test outcomes.
-      *test_outcome->mutable_test_result() =
+      ASSIGN_OR_RETURN(
+          *test_outcome->mutable_test_result(),
           ValidateTestRun(*packet_test_run,
-                          params_.validation_params.switch_output_diff_params);
+                          params_.validation_params.switch_output_diff_params));
       if (test_outcome->test_result().has_failure()) {
         failed_switch_inputs.push_back(
             test_outcome->test_run().test_vector().input());

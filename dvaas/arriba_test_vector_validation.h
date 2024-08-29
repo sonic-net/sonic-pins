@@ -15,16 +15,14 @@
 #ifndef PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
 #define PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
 
-#include <vector>
+#include <optional>
 
-#include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
 #include "dvaas/packet_injection.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/validation_result.h"
 #include "p4_pdpi/p4_runtime_session.h"
-#include "thinkit/mirror_testbed.h"
 
 namespace dvaas {
 
