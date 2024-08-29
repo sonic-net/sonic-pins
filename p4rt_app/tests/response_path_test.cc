@@ -835,6 +835,251 @@ TEST_F(ResponsePathTest, FailOnFirstErrorInVrfTable) {
                      HasSubstr("#3: ABORTED: Not attempted"))));
 }
 
+TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorAffectsVlanTable) {
+  // Although VLAN table entries are written into VLAN_TABLE and other P4 table
+  // entries are written into the P4RT table, fail-on-first should still apply.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_table_entry {
+                  match { vlan_id: "0x002" }
+                  action { no_action {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-2"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_table_entry {
+                  match { vlan_id: "0x003" }
+                  action { no_action {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_table_entry {
+                  match { vlan_id: "0x004" }
+                  action { no_action {} }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Fake valid error (INVALID_ARG) for the middle entry.
+  auto failed_ipv6_entry =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_IPV6_TABLE")
+          .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
+          .AddMatchField("vrf_id", "vrf-2");
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      failed_ipv6_entry.GetKey(), "SWSS_RC_INVALID_PARAM", "error with vrf-2");
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: OK"),
+                     HasSubstr("#2: INVALID_ARGUMENT: error with vrf-2"),
+                     HasSubstr("#3: ABORTED: Not attempted"),
+                     HasSubstr("#4: ABORTED: Not attempted"))));
+}
+
+TEST_F(ResponsePathTest, P4rtTableFailOnFirstErrorAffectsVlanMemberTable) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  // Although VLAN member table entries are written into VLAN_MEMBER_TABLE and
+  // other P4 table entries are written into the P4RT table, fail-on-first
+  // should still apply.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_membership_table_entry {
+                  match { vlan_id: "0x002" port: "1" }
+                  action { make_untagged_member {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-2"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_membership_table_entry {
+                  match { vlan_id: "0x003" port: "1" }
+                  action { make_untagged_member {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_membership_table_entry {
+                  match { vlan_id: "0x004" port: "1" }
+                  action { make_tagged_member {} }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  // Fake valid error (INVALID_ARG) for the middle entry.
+  auto failed_ipv6_entry =
+      test_lib::AppDbEntryBuilder{}
+          .SetTableName("FIXED_IPV6_TABLE")
+          .AddMatchField("ipv6_dst", "2002:a17:506:c114::/64")
+          .AddMatchField("vrf_id", "vrf-2");
+  p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
+      failed_ipv6_entry.GetKey(), "SWSS_RC_INVALID_PARAM", "error with vrf-2");
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: OK"),
+                     HasSubstr("#2: INVALID_ARGUMENT: error with vrf-2"),
+                     HasSubstr("#3: ABORTED: Not attempted"),
+                     HasSubstr("#4: ABORTED: Not attempted"))));
+}
+
+TEST_F(ResponsePathTest, FailOnFirstErrorInVlanTable) {
+  // VLAN entry failure will cause the subsequent entries not to be updated
+  // to App Db and hence the status returned as ABORTED for those entries.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_table_entry {
+                  match { vlan_id: "0x002" }
+                  action { no_action {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-2"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_table_entry {
+                  match { vlan_id: "0x003" }
+                  action { no_action {} }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  p4rt_service_.GetVlanAppDbTable().SetResponseForKey(
+      "Vlan2", "SWSS_RC_INVALID_PARAM", "error with Vlan2");
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(absl::StatusCode::kUnknown,
+               AllOf(HasSubstr("#1: INVALID_ARGUMENT: error with Vlan2"),
+                     HasSubstr("#2: ABORTED: Not attempted"),
+                     HasSubstr("#3: ABORTED: Not attempted"))));
+}
+
+TEST_F(ResponsePathTest, FailOnFirstErrorInVlanMemberTable) {
+  ASSERT_OK(p4rt_service_.GetP4rtServer().AddPortTranslation("Ethernet0", "1"));
+  // VLAN member entry failure will cause the subsequent entries not to be
+  // updated to App Db and hence the status returned as ABORTED for those
+  // entries.
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::WriteRequest write_request,
+      test_lib::PdWriteRequestToPi(
+          R"pb(
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_membership_table_entry {
+                  match { vlan_id: "0x002" port: "1" }
+                  action { make_tagged_member {} }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                ipv6_table_entry {
+                  match {
+                    vrf_id: "vrf-2"
+                    ipv6_dst { value: "2002:a17:506:c114::" prefix_length: 64 }
+                  }
+                  action { set_nexthop_id { nexthop_id: "20" } }
+                }
+              }
+            }
+            updates {
+              type: INSERT
+              table_entry {
+                vlan_membership_table_entry {
+                  match { vlan_id: "0x003" port: "1" }
+                  action { make_untagged_member {} }
+                }
+              }
+            }
+          )pb",
+          ir_p4_info_));
+
+  p4rt_service_.GetVlanMemberAppDbTable().SetResponseForKey(
+      "Vlan2:Ethernet0", "SWSS_RC_INVALID_PARAM", "error with Vlan2:Ethernet0");
+
+  EXPECT_THAT(
+      pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(),
+                                             write_request),
+      StatusIs(
+          absl::StatusCode::kUnknown,
+          AllOf(HasSubstr("#1: INVALID_ARGUMENT: error with Vlan2:Ethernet0"),
+                HasSubstr("#2: ABORTED: Not attempted"),
+                HasSubstr("#3: ABORTED: Not attempted"))));
+}
+
 TEST_F(ResponsePathTest, FailsOnFirstErrorInP4rtTable) {
   // Any P4RT error in write request translation should fail on first error,
   // with the first error having the actual failed code and the subsequent ones
