@@ -95,17 +95,17 @@ TEST_F(PacketReplicationEntryTranslationTest, InsertPacketReplicationEntry) {
 
   // Expected RedisDB entry.
   const std::string json_array =
-      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j([{"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
-      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet3/1/1"},)j"
-      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet5/1/1"}])j";
 
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
       std::make_pair("replicas", json_array),
   };
-  const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
       std::make_tuple(expected_key, "SET", kfv_values)};
 
@@ -128,15 +128,15 @@ TEST_F(PacketReplicationEntryTranslationTest, ModifyPacketReplicationEntry) {
 
   // Expected RedisDB entry.
   const std::string json_array =
-      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j([{"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
-      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
 
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
       std::make_pair("replicas", json_array),
   };
-  const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
       std::make_tuple(expected_key, "SET", kfv_values)};
 
@@ -159,9 +159,10 @@ TEST_F(PacketReplicationEntryTranslationTest, DeletePacketReplicationEntry) {
 
   // Expected RedisDB entry.
   const std::vector<std::pair<std::string, std::string>> empty_values;
-  const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::string expected_key = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple("REPLICATION_IP_MULTICAST_TABLE:0x1", "DEL", empty_values)};
+      std::make_tuple("REPLICATION_IP_MULTICAST_TABLE:0x0001", "DEL",
+                      empty_values)};
 
   std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
   ASSERT_THAT(CreatePacketReplicationTableUpdateForAppDb(
@@ -182,7 +183,8 @@ TEST_F(PacketReplicationEntryTranslationTest, UnspecifiedOperationFails) {
   // Expected RedisDB entry.
   const std::vector<std::pair<std::string, std::string>> empty_values;
   const std::vector<swss::KeyOpFieldsValuesTuple> expected_key_value = {
-      std::make_tuple("REPLICATION_IP_MULTICAST_TABLE:0x1", "SET", empty_values)};
+      std::make_tuple("REPLICATION_IP_MULTICAST_TABLE:0x0001", "SET",
+                      empty_values)};
 
   std::vector<swss::KeyOpFieldsValuesTuple> kfvs;
   EXPECT_THAT(
@@ -207,19 +209,19 @@ TEST_F(PacketReplicationEntryTranslationTest,
 TEST_F(PacketReplicationEntryTranslationTest,
        GetAllAppDbPacketReplicationTableEntries) {
   const std::string json_array1 =
-      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j([{"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
-      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
-  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
       std::make_pair("replicas", json_array1),
   };
 
   const std::string json_array2 =
-      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j([{"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet1/1/1"}])j";
-  const std::string app_db_key2 = "REPLICATION_IP_MULTICAST_TABLE:0x2";
+  const std::string app_db_key2 = "REPLICATION_IP_MULTICAST_TABLE:0x0002";
   const std::vector<std::pair<std::string, std::string>> kfv_values2 = {
       std::make_pair("replicas", json_array2),
   };
@@ -270,9 +272,9 @@ TEST_F(PacketReplicationEntryTranslationTest, InvalidInstance) {
   const std::string json_array1 =
       R"j([{"multicast_replica_instance":"0xZZ",)j"
       R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
-      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
-  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
       std::make_pair("replicas", json_array1),
   };
@@ -286,8 +288,9 @@ TEST_F(PacketReplicationEntryTranslationTest, InvalidInstance) {
 }
 
 TEST_F(PacketReplicationEntryTranslationTest, MissingMulticastReplicaPort) {
-  const std::string json_array1 = R"j([{"multicast_replica_instance":"0x1"}])j";
-  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::string json_array1 =
+      R"j([{"multicast_replica_instance":"0x0001"}])j";
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
       std::make_pair("replicas", json_array1),
   };
@@ -303,7 +306,7 @@ TEST_F(PacketReplicationEntryTranslationTest, MissingMulticastReplicaPort) {
 TEST_F(PacketReplicationEntryTranslationTest, MissingMulticastReplicaInstance) {
   const std::string json_array1 =
       R"j([{"multicast_replica_port":"Ethernet1/1/1"}])j";
-  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const std::string app_db_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
   const std::vector<std::pair<std::string, std::string>> kfv_values1 = {
       std::make_pair("replicas", json_array1),
   };
