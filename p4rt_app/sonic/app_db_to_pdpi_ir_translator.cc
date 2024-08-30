@@ -590,7 +590,8 @@ absl::StatusOr<pdpi::IrTableEntry> AppDbKeyAndValuesToIrTableEntry(
 
 std::string IrMulticastGroupEntryToAppDbKey(
     const pdpi::IrMulticastGroupEntry &entry) {
-  return absl::StrCat("0x", absl::Hex(entry.multicast_group_id()));
+  return absl::StrCat("0x",
+                      absl::Hex(entry.multicast_group_id(), absl::kZeroPad4));
 }
 
 }  // namespace sonic

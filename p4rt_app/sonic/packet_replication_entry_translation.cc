@@ -78,7 +78,7 @@ std::string CreateEntryForInsert(
     nlohmann::json json;
     json["multicast_replica_port"] = replica.port();
     json["multicast_replica_instance"] =
-        absl::StrCat("0x", absl::Hex(replica.instance()));
+        absl::StrCat("0x", absl::Hex(replica.instance(), absl::kZeroPad4));
     json_array.push_back(json);
   }
   kfvFieldsValues(key_value).push_back(
