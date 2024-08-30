@@ -67,7 +67,7 @@ TEST_F(PacketReplicationTableTest, InsertReadAndDeleteEntry) {
   EXPECT_OK(
       pdpi::SetMetadataAndSendPiWriteRequest(p4rt_session_.get(), request));
 
-  const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
 
   ASSERT_OK(p4rt_service_.GetP4rtAppDbTable().ReadTableEntry(expected_key1))
       << "Unable to read entry for " << expected_key1;
@@ -140,7 +140,7 @@ TEST_F(PacketReplicationTableTest, InsertRequestFails) {
                              })pb",
                            ir_p4_info_));
 
-  const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x11";
+  const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0011";
 
   // Assume the Orchagent fails with an invalid parameter.
   p4rt_service_.GetP4rtAppDbTable().SetResponseForKey(
@@ -204,7 +204,7 @@ TEST_F(PacketReplicationTableTest, DeleteRequestFails) {
                              })pb",
                            ir_p4_info_));
 
-  const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
 
   // First we insert the entry because a delete isn't allowed on non-existing
   // table entries.
@@ -251,7 +251,7 @@ TEST_F(PacketReplicationTableTest, ModifySuccess) {
                              })pb",
                            ir_p4_info_));
 
-  const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x1";
+  const auto expected_key1 = "REPLICATION_IP_MULTICAST_TABLE:0x0001";
 
   // First, insert an entry.
   EXPECT_OK(

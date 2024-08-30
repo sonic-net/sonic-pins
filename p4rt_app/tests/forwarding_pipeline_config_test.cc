@@ -350,15 +350,15 @@ TEST_F(CommitTest, LoadsLastSavedConfig) {
   ASSERT_OK(
       p4rt_service_->GetP4rtServer().AddPortTranslation("Ethernet3/1/1", "2"));
   const std::string json_array =
-      R"j([{"multicast_replica_instance":"0x1",)j"
+      R"j([{"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet1/1/1"},)j"
-      R"j({"multicast_replica_instance":"0x1",)j"
+      R"j({"multicast_replica_instance":"0x0001",)j"
       R"j("multicast_replica_port":"Ethernet3/1/1"}])j";
   const std::vector<std::pair<std::string, std::string>> kfv_values = {
       std::make_pair("replicas", json_array),
   };
   p4rt_service_->GetP4rtAppDbTable().InsertTableEntry(
-      "REPLICATION_IP_MULTICAST_TABLE:0x1", kfv_values);
+      "REPLICATION_IP_MULTICAST_TABLE:0x0001", kfv_values);
 
   // Then we'll load the saved config with the COMMIT action.
   SetForwardingPipelineConfigRequest load_request = GetBasicForwardingRequest();
