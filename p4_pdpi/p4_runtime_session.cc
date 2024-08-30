@@ -14,6 +14,7 @@
 
 #include "p4_pdpi/p4_runtime_session.h"
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
@@ -60,6 +61,31 @@ using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::p4::v1::Update_Type;
 using ::p4::v1::WriteRequest;
+
+namespace {
+
+absl::StatusOr<p4::v1::TableEntry> GetPiTableEntryFromSwitch(
+    P4RuntimeSession* session, const pdpi::TableEntryKey& target_key) {
+  // Some targets only support wildcard reads, so we read back all entries
+  // before looking for the one we are interested in.
+  std::vector<TableEntry> entries;
+  ASSIGN_OR_RETURN(entries, ReadPiTableEntries(session));
+  if (auto iter = std::find_if(entries.begin(), entries.end(),
+                               [&target_key](const TableEntry& entry) {
+                                 return TableEntryKey(entry) == target_key;
+                               });
+      iter != entries.end()) {
+    return *iter;
+  }
+
+  return gutil::NotFoundErrorBuilder()
+         << "failed to read counter data for the table entry with the "
+            "following signature, since no table entry matching the signature "
+            "exists: <"
+         << target_key << ">";
+}
+
+}  // namespace
 
 // Create P4Runtime Stub.
 std::unique_ptr<P4Runtime::Stub> CreateP4RuntimeStub(
@@ -486,39 +512,19 @@ absl::StatusOr<std::vector<TableEntry>> ReadPiTableEntries(
 absl::StatusOr<p4::v1::CounterData> ReadPiCounterData(
     P4RuntimeSession* session,
     const p4::v1::TableEntry& target_entry_signature) {
-  // Some targets only support wildcard reads, so we read back all entries
-  // before looking for the one we are interested in.
-  ASSIGN_OR_RETURN(std::vector<TableEntry> entries,
-                   ReadPiTableEntries(session));
+  ASSIGN_OR_RETURN(p4::v1::TableEntry entry,
+                   GetPiTableEntryFromSwitch(
+                       session, pdpi::TableEntryKey(target_entry_signature)));
+  return entry.counter_data();
+}
 
-  // We use a protobuf differ to find the entry we are interested in based on
-  // its "signature", given by the `table_id`, `match`, and `priority` fields.
-  using google::protobuf::util::MessageDifferencer;
-  MessageDifferencer differ;
-  differ.set_repeated_field_comparison(MessageDifferencer::AS_SET);
-  std::vector<const google::protobuf::FieldDescriptor*> signature_fields;
-  for (std::string field_name : {"table_id", "match", "priority"}) {
-    const google::protobuf::FieldDescriptor* field_descriptor =
-        TableEntry::descriptor()->FindFieldByName(field_name);
-    if (field_descriptor == nullptr) {
-      return gutil::InternalErrorBuilder()
-             << "failed to obtain FieldDescriptor for field '" << field_name
-             << "' of p4::v1::TableEntry";
-    }
-    signature_fields.push_back(field_descriptor);
-  }
-
-  for (const auto& entry : entries) {
-    if (differ.CompareWithFields(entry, target_entry_signature,
-                                 signature_fields, signature_fields)) {
-      return entry.counter_data();
-    }
-  }
-  return gutil::NotFoundErrorBuilder()
-         << "failed to read counter data for the table entry with the "
-            "following signature, since no table entry matching the signature "
-            "exists: <"
-         << target_entry_signature.ShortDebugString() << ">";
+absl::StatusOr<p4::v1::MeterCounterData> ReadPiMeterCounterData(
+    P4RuntimeSession* session,
+    const p4::v1::TableEntry& target_entry_signature) {
+  ASSIGN_OR_RETURN(p4::v1::TableEntry entry,
+                   GetPiTableEntryFromSwitch(
+                       session, pdpi::TableEntryKey(target_entry_signature)));
+  return entry.meter_counter_data();
 }
 
 absl::Status CheckNoEntities(P4RuntimeSession& session) {

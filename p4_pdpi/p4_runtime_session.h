@@ -375,6 +375,12 @@ absl::Status CheckNoEntities(P4RuntimeSession& session);
 // Deletes all entities read from `session`.
 absl::Status ClearEntities(P4RuntimeSession& session);
 
+// Returns the `MeterCounterData` for the matching table entry, ignoring
+// `action` and `meter_config`.
+absl::StatusOr<p4::v1::MeterCounterData> ReadPiMeterCounterData(
+    P4RuntimeSession* session,
+    const p4::v1::TableEntry& target_entry_signature);
+
 // Checks that there are no table entries.
 ABSL_DEPRECATED("Use CheckNoEntities instead.")
 absl::Status CheckNoTableEntries(P4RuntimeSession* session);
