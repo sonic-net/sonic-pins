@@ -156,6 +156,43 @@ absl::StatusOr<std::unique_ptr<PacketSynthesizer>> PacketSynthesizer::Create(
   return absl::WrapUnique(new PacketSynthesizer(std::move(*solver_state)));
 }
 
+// Performs DFS based symbolic execution
+// and synthesizes packets for path coverage
+// (go/p4-symbolic-path-coverage).
+absl::StatusOr<PacketSynthesisResults>
+PacketSynthesizer::SynthesizePacketsForPathCoverage(
+    const PacketSynthesisParams& params) {
+  gutil::Timer timer;
+
+  // Extract data from params.
+  const p4::v1::ForwardingPipelineConfig& config = params.pipeline_config();
+  std::vector<p4::v1::Entity> entities(params.pi_entities().begin(),
+                                       params.pi_entities().end());
+  std::vector<int> physical_ports(params.physical_port().begin(),
+                                  params.physical_port().end());
+  symbolic::TranslationPerType translation_per_type;
+  for (const auto& [type_name, data] : params.translation_per_type()) {
+    symbolic::values::TranslationData translation;
+    translation.dynamic_translation = data.dynamic_translation();
+    for (const auto& mapping : data.static_mapping()) {
+      translation.static_mapping.push_back(
+          {mapping.string_value(), mapping.integer_value()});
+    }
+    translation_per_type.insert({type_name, translation});
+  }
+
+  // Evaluate P4 pipeline to get solver_state.
+  ASSIGN_OR_RETURN(
+      auto packet_synthesis_results,
+      symbolic::
+          EvaluateP4ProgramAndSynthesizePacketsCoveringAllControlFlowPaths(
+              config, entities, physical_ports, translation_per_type));
+
+  LOG(INFO) << "Evaluated and Synthesized packets in " << timer.GetDuration();
+
+  return packet_synthesis_results;
+}
+
 absl::StatusOr<PacketSynthesisResult> PacketSynthesizer::SynthesizePacket(
     const PacketSynthesisCriteria& criteria) {
   PacketSynthesisResult result;

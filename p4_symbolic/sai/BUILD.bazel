@@ -78,7 +78,9 @@ cc_test(
     srcs = ["packet_synthesizer_test.cc"],
     deps = [
         ":sai",
+        "//gutil:proto",
         "//gutil:status_matchers",
+        "//gutil:test_artifact_writer",
         "//gutil:testing",
         "//p4_pdpi:pd",
         "//p4_pdpi/packetlib",
