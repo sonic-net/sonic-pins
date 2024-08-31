@@ -64,21 +64,73 @@ inline CoverageGoals SaiDefaultCoverageGoals() {
               # TODO: Currently must ignore cover for default
               # action of empty tables due to the limitation of
               # packet_util::SynthesizePackets's return type
-              # (TestPacketsByTargetEntry).
+              # (TestPacketsByTargetEntity).
               # TODO: Also covering these tables is
               # expensive. Remove when these limitations are addressed.
               exclude_empty_tables: true
             }
-            # Avoid L2 broadcast packets.
-            # TODO: Remove when L2 broadcast is modeled
             custom_criteria_coverage {
               criteria_list {
                 input_packet_header_criteria {
+                  # Don't test PTP packets. Forwarding behavior is very switch
+                  # dependent. The spec allows for packets to be dropped,
+                  # updated to newer versions, or ignored
+                  # PTP behavior will be covered in
+                  # standalone tests: go/switch-ptp-tp.
+                  field_criteria {
+                    negated: true
+                    field_match {
+                      name: "udp.dst_port"
+                      exact { hex_str: "0x013f" }  # PTP: port=319
+                    }
+                  }
+                  # Today we only model PSP transport mode in our P4 programs.
+                  # So we  should not see the optional virtualization cookie
+                  # which is only used by PSP tunnel mode.
+                  #
+                  # In our P4 program the psp_info field holds:
+                  #   +-+-+-+-+-+-+-+-+
+                  #   |S|D|Version|V|R|
+                  #   +-+-+-+-+-+-+-+-+
+                  #    7 6 5 4 3 2 1 0
+                  # Where V is the bit that says whether a virutalization cookie
+                  # is present or not.
+                  field_criteria {
+                    field_match {
+                      name: "psp.psp_info"
+                      ternary {
+                        value { hex_str: "0x00" }
+                        mask { hex_str: "0x02" }
+                      }
+                    }
+                  }
+                  # Avoid L2 broadcast packets.
+                  # TODO: Remove when L2 broadcast is modeled
                   field_criteria {
                     negated: true
                     field_match {
                       name: "ethernet.dst_addr"
                       exact { mac: "ff:ff:ff:ff:ff:ff" }
+                    }
+                  }
+                  # Avoid IPv4 packets with src IP 255.255.255.255 (broadcast).
+                  # Per https://www.rfc-editor.org/rfc/rfc1812#section-5.3.7
+                  # such packets are martian packets and should not be forwarded
+                  # but some of our targets are not compliant so we avoid
+                  # testing them.
+                  # TODO: Remove when all targets are compliant.
+                  field_criteria {
+                    negated: true
+                    field_match {
+                      name: "ipv4.src_addr"
+                      exact { ipv4: "255.255.255.255" }
+                    }
+                  }
+                  field_criteria {
+                    negated: true
+                    field_match {
+                      name: "inner_ipv4.src_addr"
+                      exact { ipv4: "255.255.255.255" }
                     }
                   }
                 }
