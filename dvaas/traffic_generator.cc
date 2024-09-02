@@ -250,6 +250,10 @@ void TrafficGeneratorWithGuaranteedRate::SetState(State state) {
 
 absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
     thinkit::MirrorTestbed* testbed, const TrafficGenerator::Params& params) {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot initialize in the error state.");
+  }
   if (GetState() == kTrafficInjectionAndCollection) {
     return absl::FailedPreconditionError(
         "Cannot initialize while traffic is being injected and collected.");
@@ -314,6 +318,10 @@ absl::StatusOr<PacketSynthesisStats> TrafficGeneratorWithGuaranteedRate::Init(
 
 absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
   State state = GetState();
+  if (state == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot start traffic in the error state.");
+  }
   if (state == kUninitialized) {
     return absl::FailedPreconditionError(
         "Cannot start traffic before initialization.");
@@ -329,14 +337,28 @@ absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
 
   // Spawn traffic injection thread.
   traffic_injection_thread_ = std::thread([&]() {
-    CHECK_OK(  // Crash OK
-        TrafficGeneratorWithGuaranteedRate::InjectInputTraffic());
+    absl::Status status =
+        TrafficGeneratorWithGuaranteedRate::InjectInputTraffic();
+    if (!status.ok()) {
+      SetState(kError);
+      LOG(ERROR) << "Switching to error state because `InjectInputTraffic` "
+                    "returned error status: "
+                 << status;
+      traffic_collection_thread_.join();
+    }
   });
 
   // Spawn traffic collection thread.
   traffic_collection_thread_ = std::thread([&]() {
-    CHECK_OK(  // Crash OK
-        TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic());
+    absl::Status status =
+        TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic();
+    if (!status.ok()) {
+      SetState(kError);
+      LOG(ERROR) << "Switching to error state because `CollectOutputTraffic` "
+                    "returned error status: "
+                 << status;
+      traffic_injection_thread_.join();
+    }
   });
 
   // Wait for state to change before returning.
@@ -348,6 +370,10 @@ absl::Status TrafficGeneratorWithGuaranteedRate::StartTraffic() {
 }
 
 absl::Status TrafficGeneratorWithGuaranteedRate::StopTraffic() {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot stop traffic in the error state.");
+  }
   if (GetState() != kTrafficInjectionAndCollection) {
     return absl::FailedPreconditionError(
         "Cannot stop traffic if not already flowing.");
@@ -544,6 +570,10 @@ absl::Status TrafficGeneratorWithGuaranteedRate::CollectOutputTraffic() {
 
 absl::StatusOr<ValidationResult>
 TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
+  if (GetState() == kError) {
+    return absl::FailedPreconditionError(
+        "Cannot validate results in the error state.");
+  }
   LOG(INFO) << "Getting validation result";
   // Swap `injected_traffic_vector` and `injected_traffic_` and add the
   // `residual_injected_traffic_` to `injected_traffic_`.
