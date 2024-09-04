@@ -224,7 +224,8 @@ EntryBuilder& EntryBuilder::AddEntryAdmittingAllPacketsToL3() {
   return *this;
 }
 
-EntryBuilder& EntryBuilder::AddEntryPuntingAllPackets(PuntAction action) {
+EntryBuilder& EntryBuilder::AddEntryPuntingAllPackets(
+    PuntAction action, absl::string_view cpu_queue) {
   sai::TableEntry& entry = *entries_.add_entries();
   entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
