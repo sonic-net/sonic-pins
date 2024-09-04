@@ -293,7 +293,7 @@ GetXcvrToInterfacesMapGivenPmdType(gnmi::gNMI::StubInterface& sut_gnmi_stub,
       continue;
     }
     std::string ethernet_pmd = transceiver_to_ethernet_pmd_type_map[xcvr_name];
-    if (absl::StrContains(ethernet_pmd, pmd_type)) {
+    if (absl::StrContains(ethernet_pmd, pmd_type)) {    
       int xcvr_num;
       if (!absl::SimpleAtoi(xcvr_name.substr(kEthernetLen), &xcvr_num)) {
         return gutil::InternalErrorBuilder().LogError()

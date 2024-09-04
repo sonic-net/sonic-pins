@@ -311,7 +311,8 @@ class EntryBuilder {
 
   // Adds an entry that matches all packets and punts them according to
   // `action`.
-  EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
+  EntryBuilder& AddEntryPuntingAllPackets(PuntAction action,
+                                          absl::string_view cpu_queue = "0x7");
 
   // Constructs all entries required to forward all `ip_version` packets to
   // `egress_port` and modify them using `rewrite_options`.
@@ -421,6 +422,8 @@ class EntryBuilder {
       absl::string_view vlan_id_hexstr, absl::string_view acl_metadata_hexstr,
       const AclPreIngressVlanTableMatchFields& match_fields = {},
       int priority = 1);
+  EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf,
+                                                int priority = 1);
   EntryBuilder& AddEntrySettingVlanIdInPreIngress(
       absl::string_view vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt,

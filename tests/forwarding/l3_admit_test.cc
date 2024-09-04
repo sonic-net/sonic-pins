@@ -47,6 +47,7 @@
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/util.h"
 #include "tests/lib/p4info_helper.h"
 #include "tests/lib/p4rt_fixed_table_programming_helper.h"
@@ -64,39 +65,6 @@ constexpr absl::string_view kNoVlanId = "";
 // send_to_ingress is a special port created on the switch which allows the CPU
 // to inject a packet into the ingress pipeline.
 constexpr absl::string_view kSendToIngress = "send_to_ingress";
-
-absl::Status AddAndSetDefaultVrf(pdpi::P4RuntimeSession& session,
-                                 const pdpi::IrP4Info& ir_p4info,
-                                 const std::string& vrf_id) {
-  LOG(INFO) << "Assigning all packets to VRF " << vrf_id << ".";
-  pdpi::IrUpdate set_vrf_ir_update;
-  RETURN_IF_ERROR(gutil::ReadProtoFromString(
-      absl::Substitute(R"pb(
-                         type: INSERT
-                         entity {
-                           table_entry {
-                             table_name: "acl_pre_ingress_table"
-                             priority: 2000
-                             action {
-                               name: "set_vrf"
-                               params {
-                                 name: "vrf_id"
-                                 value { str: "$0" }
-                               }
-                             }
-                           }
-                         }
-                       )pb",
-                       vrf_id),
-      &set_vrf_ir_update));
-
-  p4::v1::WriteRequest pi_write_request;
-  ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
-                   VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, vrf_id));
-  ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
-                   pdpi::IrUpdateToPi(ir_p4info, set_vrf_ir_update));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
-}
 
 absl::Status AllowVrfTrafficToDstMac(pdpi::P4RuntimeSession& session,
                                      const pdpi::IrP4Info& ir_p4info,
@@ -136,35 +104,6 @@ absl::Status AllowVrfTrafficToDstMac(pdpi::P4RuntimeSession& session,
                    VrfTableUpdate(ir_p4info, p4::v1::Update::INSERT, vrf_id));
   ASSIGN_OR_RETURN(*pi_write_request.add_updates(),
                    pdpi::IrUpdateToPi(ir_p4info, set_vrf_ir_update));
-  return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
-}
-
-absl::Status PuntAllPacketsToController(pdpi::P4RuntimeSession& session,
-                                        const pdpi::IrP4Info& ir_p4info) {
-  pdpi::IrWriteRequest ir_write_request;
-  RETURN_IF_ERROR(gutil::ReadProtoFromString(
-      R"pb(
-        updates {
-          type: INSERT
-          entity {
-            table_entry {
-              table_name: "acl_ingress_table"
-              priority: 2
-              action {
-                name: "acl_trap",
-                params {
-                  name: "qos_queue"
-                  value { str: "0x1" }
-                }
-              }
-            }
-          }
-        }
-      )pb",
-      &ir_write_request));
-
-  ASSIGN_OR_RETURN(p4::v1::WriteRequest pi_write_request,
-                   pdpi::IrWriteRequestToPi(ir_p4info, ir_write_request));
   return pdpi::SetMetadataAndSendPiWriteRequest(&session, pi_write_request);
 }
 
@@ -371,8 +310,10 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  ASSERT_OK(
-      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap,
+                                           /*cpu_queue=*/"0x1")
+                .InstallDedupedEntities(*control_switch_p4rt_session_));
 
   // Add an L3 route to enable forwarding.
   L3Route l3_route{
@@ -385,8 +326,11 @@ TEST_P(L3AdmitTestFixture, L3PacketsAreRoutedOnlyWhenMacAddressIsInMyStation) {
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
+LOG(INFO) << "Assigning all packets to VRF " << l3_route.vrf_id << ".";
   ASSERT_OK(
-      AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
+	sai::EntryBuilder()
+          .AddEntrySettingVrfForAllPackets(l3_route.vrf_id, /*priority=*/2000)
+          .InstallDedupedEntities(*control_switch_p4rt_session_));
   ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
 
   // Admit only 1 MAC address to the forwarding pipeline.
@@ -459,9 +403,10 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  ASSERT_OK(
-      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
-
+ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap,
+                                           /*cpu_queue=*/"0x1")
+                .InstallDedupedEntities(*control_switch_p4rt_session_));
   // Add an L3 route to enable forwarding.
   L3Route l3_route{
       .vrf_id = "vrf-1",
@@ -473,8 +418,11 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseMaskToAllowMultipleMacAddresses) {
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
+LOG(INFO) << "Assigning all packets to VRF " << l3_route.vrf_id << ".";
   ASSERT_OK(
-      AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
+sai::EntryBuilder()
+          .AddEntrySettingVrfForAllPackets(l3_route.vrf_id, /*priority=*/2000)
+          .InstallDedupedEntities(*control_switch_p4rt_session_));
   ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
 
   // Admit multiple MAC addresses into L3 routing with a single L3 admit rule.
@@ -531,9 +479,10 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  ASSERT_OK(
-      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
-
+ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap,
+                                           /*cpu_queue=*/"0x1")
+                .InstallDedupedEntities(*control_switch_p4rt_session_));
   // Add an L3 route to enable forwarding.
   L3Route l3_route{
       .vrf_id = "vrf-1",
@@ -545,8 +494,11 @@ TEST_P(L3AdmitTestFixture, L3AdmitCanUseInPortToRestrictMacAddresses) {
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
+LOG(INFO) << "Assigning all packets to VRF " << l3_route.vrf_id << ".";
   ASSERT_OK(
-      AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
+      sai::EntryBuilder()
+          .AddEntrySettingVrfForAllPackets(l3_route.vrf_id, /*priority=*/2000)
+          .InstallDedupedEntities(*control_switch_p4rt_session_));
   ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
 
   // Admit the MAC addresses only on port XYZ
@@ -617,9 +569,10 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  ASSERT_OK(
-      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
-
+ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap,
+                                           /*cpu_queue=*/"0x1")
+                .InstallDedupedEntities(*control_switch_p4rt_session_));
   // Add an L3 route to enable forwarding, but do not add an explicit L3Admit
   // rule.
   L3Route l3_route{
@@ -632,8 +585,12 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeRoutedWithOnlyARouterInterface) {
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
+  LOG(INFO) << "Assigning all packets to VRF " << l3_route.vrf_id << ".";
   ASSERT_OK(
-      AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
+  sai::EntryBuilder()
+          .AddEntrySettingVrfForAllPackets(l3_route.vrf_id, /*priority=*/2000)
+          .InstallDedupedEntities(*control_switch_p4rt_session_));
+      
   ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
 
   // Send 1 set of packets to the switch using the switch's MAC address from the
@@ -687,9 +644,10 @@ TEST_P(L3AdmitTestFixture, L3PacketsCanBeClassifiedByDestinationMac) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  ASSERT_OK(
-      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
-
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap,
+                                           /*cpu_queue=*/"0x1")
+                .InstallDedupedEntities(*control_switch_p4rt_session_));
   // This test uses 2 MAC addresses. Both will be admitted to L3 routing, but
   // only one will get assigned a VRF ID. We expect packets receiving the
   // VRF ID (i.e. good) to get routed, and the others (i.e. bad/drop) to get
@@ -790,9 +748,10 @@ TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  ASSERT_OK(
-      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
-
+  ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap,
+                                           /*cpu_queue=*/"0x1")
+                .InstallDedupedEntities(*control_switch_p4rt_session_));
   // Add an L3 route to enable forwarding.
   L3Route l3_route{
       .vrf_id = "vrf-1",
@@ -804,8 +763,11 @@ TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
+   LOG(INFO) << "Assigning all packets to VRF " << l3_route.vrf_id << ".";
   ASSERT_OK(
-      AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
+  	sai::EntryBuilder()
+          .AddEntrySettingVrfForAllPackets(l3_route.vrf_id, /*priority=*/2000)
+          .InstallDedupedEntities(*control_switch_p4rt_session_));
   ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
 
   // Admit only 1 MAC address to the forwarding pipeline.
@@ -918,9 +880,10 @@ TEST_P(L3AdmitTestFixture, RoutedPacketsCanMatchOnCpuPort) {
 
   // Punt all traffic arriving at the control switch, and collect them to verify
   // forwarding.
-  ASSERT_OK(
-      PuntAllPacketsToController(*control_switch_p4rt_session_, ir_p4info_));
-
+ASSERT_OK(sai::EntryBuilder()
+                .AddEntryPuntingAllPackets(sai::PuntAction::kTrap,
+                                           /*cpu_queue=*/"0x1")
+                .InstallDedupedEntities(*control_switch_p4rt_session_));
   // Add an L3 route to enable forwarding.
   L3Route l3_route{
       .vrf_id = "vrf-1",
@@ -932,8 +895,11 @@ TEST_P(L3AdmitTestFixture, RoutedPacketsCanMatchOnCpuPort) {
       .router_interface_id = "rif-1",
       .nexthop_id = "nexthop-1",
   };
+  LOG(INFO) << "Assigning all packets to VRF " << l3_route.vrf_id << ".";
   ASSERT_OK(
-      AddAndSetDefaultVrf(*sut_p4rt_session_, ir_p4info_, l3_route.vrf_id));
+  	sai::EntryBuilder()
+          .AddEntrySettingVrfForAllPackets(l3_route.vrf_id, /*priority=*/2000)
+          .InstallDedupedEntities(*control_switch_p4rt_session_));
   ASSERT_OK(AddL3Route(*sut_p4rt_session_, ir_p4info_, l3_route));
 
   // Admit only 1 MAC address to the forwarding pipeline.
