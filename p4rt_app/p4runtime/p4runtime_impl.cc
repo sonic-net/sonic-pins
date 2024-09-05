@@ -69,6 +69,7 @@
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
+#include "p4rt_app/sonic/hashing.h"
 #include "p4rt_app/sonic/packet_replication_entry_translation.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -1524,6 +1525,14 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       }
     }
   }
+  // Program hash settings for ECMP & LAG hashing.
+  ASSIGN_OR_RETURN(auto hash_fields,
+                   sonic::ExtractHashPacketFieldConfigs(ir_p4info));
+  ASSIGN_OR_RETURN(auto hash_values, sonic::ExtractHashParamConfigs(ir_p4info));
+  RETURN_IF_ERROR(sonic::ProgramHashFieldTable(hash_table_, hash_fields));
+  RETURN_IF_ERROR(
+      sonic::ProgramSwitchTable(switch_table_, hash_values, hash_fields));
+
   return absl::OkStatus();
 }
 

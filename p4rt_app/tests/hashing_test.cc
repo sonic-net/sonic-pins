@@ -15,21 +15,20 @@
 #include <memory>
 #include <string>
 #include <tuple>
-#include <type_traits>
 #include <utility>
+#include <vector>
 
+#include "absl/container/btree_set.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "grpcpp/security/credentials.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
-#include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
@@ -38,6 +37,7 @@
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_p4info_fetcher.h"
+#include "swss/json.hpp"
 
 namespace p4rt_app {
 namespace {
@@ -50,12 +50,29 @@ using ::testing::HasSubstr;
 using ::testing::IsSupersetOf;
 using ::testing::Key;
 using ::testing::Pair;
+using ::testing::UnorderedElementsAreArray;
 using ::testing::Values;
 
 // The ECMP hashing test verifies a P4 instance has a valid configuration for
 // ECMP.
 using EcmpHashingTest =
     testing::TestWithParam<std::tuple<sai::Instantiation, sai::ClosStage>>;
+
+MATCHER_P(IsUnorderedJsonListOf, hash_fields_list,
+          absl::StrCat(negation ? "isn't" : "is",
+                       " a json list containing the expected fields: {",
+                       absl::StrJoin(hash_fields_list, ", "), "}")) {
+  nlohmann::json json = nlohmann::json::parse(arg);
+  if (!json.is_array()) {
+    *result_listener << "Expected a JSON array.";
+  }
+  absl::btree_set<std::string> arg_values;
+  for (const auto& field : json) {
+    arg_values.insert(field.get<std::string>());
+  }
+  return ExplainMatchResult(UnorderedElementsAreArray(hash_fields_list),
+                            arg_values, result_listener);
+}
 
 TEST_P(EcmpHashingTest, MustConfigureEcmpHashing) {
   // Start the P4RT service
@@ -84,12 +101,14 @@ TEST_P(EcmpHashingTest, MustConfigureEcmpHashing) {
       p4rt_service.GetHashAppDbTable().ReadTableEntry("compute_ecmp_hash_ipv4"),
       IsOkAndHolds(Contains(
           Pair("hash_field_list",
-               R"(["src_ip","dst_ip","l4_src_port","l4_dst_port"])"))));
+               IsUnorderedJsonListOf(std::vector<std::string>{
+                   "src_ip", "dst_ip", "l4_src_port", "l4_dst_port"})))));
   EXPECT_THAT(
       p4rt_service.GetHashAppDbTable().ReadTableEntry("compute_ecmp_hash_ipv6"),
-      IsOkAndHolds(Contains(Pair(
-          "hash_field_list",
-          R"(["src_ip","dst_ip","l4_src_port","l4_dst_port","ipv6_flow_label"])"))));
+      IsOkAndHolds(Contains(Pair("hash_field_list",
+                                 IsUnorderedJsonListOf(std::vector<std::string>{
+                                     "src_ip", "dst_ip", "l4_src_port",
+                                     "l4_dst_port", "ipv6_flow_label"})))));
 
   // Verify the AppDb SWITCH_TABLE has an entry for all the ECMP configuration
   // fields.
@@ -144,12 +163,14 @@ TEST_P(LagHashingTest, MustConfigureLagHashing) {
       p4rt_service.GetHashAppDbTable().ReadTableEntry("compute_lag_hash_ipv4"),
       IsOkAndHolds(Contains(
           Pair("hash_field_list",
-               R"(["src_ip","dst_ip","l4_src_port","l4_dst_port"])"))));
+               IsUnorderedJsonListOf(std::vector<std::string>{
+                   "src_ip", "dst_ip", "l4_src_port", "l4_dst_port"})))));
   EXPECT_THAT(
       p4rt_service.GetHashAppDbTable().ReadTableEntry("compute_lag_hash_ipv6"),
-      IsOkAndHolds(Contains(Pair(
-          "hash_field_list",
-          R"(["src_ip","dst_ip","l4_src_port","l4_dst_port","ipv6_flow_label"])"))));
+      IsOkAndHolds(Contains(Pair("hash_field_list",
+                                 IsUnorderedJsonListOf(std::vector<std::string>{
+                                     "src_ip", "dst_ip", "l4_src_port",
+                                     "l4_dst_port", "ipv6_flow_label"})))));
 
   // Verify the AppDb SWITCH_TABLE has an entry for all the lag configuration
   // fields.
