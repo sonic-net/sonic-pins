@@ -35,11 +35,10 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
-#include "google/protobuf/descriptor.h"
-#include "google/protobuf/util/message_differencer.h"
 #include "grpcpp/create_channel.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "gutil/version.h"
 #include "p4/v1/p4runtime.grpc.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
@@ -47,6 +46,12 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/names.h"
 #include "p4_pdpi/sequencing.h"
+// TODO: A temporary dependence on SAI to mask a bug. Safe to remove
+// in April 2024.
+#include "google/protobuf/descriptor.h"
+#include "google/protobuf/util/message_differencer.h"
+#include "gutil/status.h"
+#include "sai_p4/instantiations/google/versions.h"
 #include "thinkit/switch.h"
 
 namespace pdpi {
@@ -614,10 +619,29 @@ absl::Status ClearEntities(P4RuntimeSession& session) {
   RETURN_IF_ERROR(pdpi::StableSortEntities(info, entities));
   absl::c_reverse(entities);
 
-  RETURN_IF_ERROR(SplitSortedUpdatesIntoBatchesAndSend(
-      session, info, CreatePiUpdates(entities, Update::DELETE)))
-      << "when attempting to delete the following entities: "
-      << absl::StrJoin(entities, "\n");
+  // Get current switch version to determine if we need to mask old errors.
+  // TODO: Remove version check when the P4Info version in release is
+  // equal or higher than SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST. Almost
+  // certainly safe to remove by April 2024.
+  ASSIGN_OR_RETURN(
+      gutil::Version current_version,
+      gutil::ParseVersion(response.config().p4info().pkg_info().version()));
+  ASSIGN_OR_RETURN(
+      gutil::Version first_version_with_fail_on_first,
+      gutil::ParseVersion(SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST));
+  if (current_version >= first_version_with_fail_on_first) {
+    RETURN_IF_ERROR(
+        SendPiUpdates(&session, CreatePiUpdates(entities, Update::DELETE)))
+        << "when attempting to delete the following entities: "
+        << absl::StrJoin(entities, "\n");
+  } else {
+    // Ideally, whether to use batches or not should be determined by a P4Info
+    // option that will be introduced in b/259194587.
+    RETURN_IF_ERROR(SplitSortedUpdatesIntoBatchesAndSend(
+        session, info, CreatePiUpdates(entities, Update::DELETE)))
+        << "when attempting to delete the following entities: "
+        << absl::StrJoin(entities, "\n");
+  }
 
   // Verify that all entities were cleared successfully.
   RETURN_IF_ERROR(CheckNoEntities(session)).SetPrepend()

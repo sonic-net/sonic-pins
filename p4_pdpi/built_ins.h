@@ -34,6 +34,9 @@ std::string GetMulticastGroupTableName();
 // Returns the PDPI name for the clone session table.
 std::string GetCloneSessionTableName();
 
+// Returns the PDPI name for the replica action.
+std::string GetReplicaActionName();
+
 // Returns true if `table_name` is a known built_in table.
 // Useful for branching on table type.
 bool IsBuiltInTable(absl::string_view table_name);
