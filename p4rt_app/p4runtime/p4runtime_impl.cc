@@ -69,6 +69,7 @@
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
 #include "p4rt_app/sonic/app_db_manager.h"
+#include "p4rt_app/sonic/hashing.h"
 #include "p4rt_app/sonic/packet_replication_entry_translation.h"
 #include "p4rt_app/sonic/packetio_interface.h"
 #include "p4rt_app/sonic/redis_connections.h"
@@ -521,7 +522,7 @@ RebuildEntityEntryCache(
     *cache[pdpi::EntityKey(*vrf_entry)].mutable_table_entry() = *vrf_entry;
   }
 
-  // Get all REPLICATION_IP_MULTICAST_TABLE entries from the AppDb.
+  // Get all packet replication entries from the AppDb.
   ASSIGN_OR_RETURN(std::vector<pdpi::IrPacketReplicationEngineEntry>
                        packet_replication_entries,
                    sonic::GetAllAppDbPacketReplicationTableEntries(p4rt_table));
@@ -1227,7 +1228,7 @@ absl::Status P4RuntimeImpl::VerifyState() {
                     switch_table_failures.end());
   }
 
-  // Verify the REPLICATION_IP_MULTICAST_TABLE entries.
+  // Verify the packet replication entries.
   std::vector<pdpi::IrEntity> packet_replication_entries =
       GetIrEntitiesFromCache(entity_cache_, *ir_p4info_, translate_port_ids_,
                              port_translation_map_, *cpu_queue_translator_,
@@ -1524,6 +1525,14 @@ absl::Status P4RuntimeImpl::ConfigureAppDbTables(
       }
     }
   }
+  // Program hash settings for ECMP & LAG hashing.
+  ASSIGN_OR_RETURN(auto hash_fields,
+                   sonic::ExtractHashPacketFieldConfigs(ir_p4info));
+  ASSIGN_OR_RETURN(auto hash_values, sonic::ExtractHashParamConfigs(ir_p4info));
+  RETURN_IF_ERROR(sonic::ProgramHashFieldTable(hash_table_, hash_fields));
+  RETURN_IF_ERROR(
+      sonic::ProgramSwitchTable(switch_table_, hash_values, hash_fields));
+
   return absl::OkStatus();
 }
 
