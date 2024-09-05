@@ -14,24 +14,16 @@
 
 #include "p4_pdpi/p4_runtime_session.h"
 
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/memory/memory.h"
-#include "absl/numeric/int128.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/types/span.h"
 #include "gmock/gmock.h"
-#include "google/protobuf/repeated_field.h"
-#include "grpcpp/test/mock_stream.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
-#include "gutil/proto_matchers.h"
-#include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -58,7 +50,7 @@ constexpr p4::v1::SetForwardingPipelineConfigRequest::Action
 // clears all entities currently on the switch (mocked to be two), and
 // pushes a new p4info.
 TEST(P4RuntimeSessionTest, CreateWithP4InfoAndClearTables) {
-  const p4::config::v1::P4Info& p4info = GetTestP4Info();
+  p4::config::v1::P4Info p4info = GetTestP4Info();
   const P4RuntimeSessionOptionalArgs metadata;
   thinkit::MockSwitch mock_switch;
 
