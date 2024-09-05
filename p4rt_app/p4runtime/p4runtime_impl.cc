@@ -522,7 +522,7 @@ RebuildEntityEntryCache(
     *cache[pdpi::EntityKey(*vrf_entry)].mutable_table_entry() = *vrf_entry;
   }
 
-  // Get all REPLICATION_IP_MULTICAST_TABLE entries from the AppDb.
+  // Get all packet replication entries from the AppDb.
   ASSIGN_OR_RETURN(std::vector<pdpi::IrPacketReplicationEngineEntry>
                        packet_replication_entries,
                    sonic::GetAllAppDbPacketReplicationTableEntries(p4rt_table));
@@ -1228,7 +1228,7 @@ absl::Status P4RuntimeImpl::VerifyState() {
                     switch_table_failures.end());
   }
 
-  // Verify the REPLICATION_IP_MULTICAST_TABLE entries.
+  // Verify the packet replication entries.
   std::vector<pdpi::IrEntity> packet_replication_entries =
       GetIrEntitiesFromCache(entity_cache_, *ir_p4info_, translate_port_ids_,
                              port_translation_map_, *cpu_queue_translator_,
