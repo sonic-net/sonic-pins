@@ -153,6 +153,7 @@ cc_library(
     hdrs = ["annotation_util.h"],
     deps = [
         ":fuzzer_cc_proto",
+        "//gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi/utils:ir",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",

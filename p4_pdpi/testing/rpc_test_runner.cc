@@ -35,6 +35,7 @@
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/testing/main_p4_pd.pb.h"
 #include "p4_pdpi/testing/test_helper.h"
+#include "p4_pdpi/translation_options.h"
 
 using ::gutil::PrintTextProto;
 using ::p4::config::v1::P4Info;
@@ -49,18 +50,20 @@ std::ostream& operator<<(std::ostream& out,
 
 static void RunPiReadRequestTest(const pdpi::IrP4Info& info,
                                  const std::string& test_name,
-                                 const p4::v1::ReadRequest& pi) {
+                                 const p4::v1::ReadRequest& pi,
+                                 pdpi::TranslationOptions options = {}) {
   RunGenericPiTest<pdpi::IrReadRequest, p4::v1::ReadRequest>(
-      info, absl::StrCat("ReadRequest test: ", test_name), pi,
+      info, absl::StrCat("ReadRequest test: ", test_name), pi, options,
       pdpi::PiReadRequestToIr);
 }
 
 static void RunPdReadRequestTest(const pdpi::IrP4Info& info,
                                  const std::string& test_name,
                                  const pdpi::ReadRequest& pd,
-                                 const InputValidity validity) {
+                                 const InputValidity validity,
+                                 pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::ReadRequest, pdpi::IrReadRequest, p4::v1::ReadRequest>(
-      info, absl::StrCat("ReadRequest test: ", test_name), pd,
+      info, absl::StrCat("ReadRequest test: ", test_name), pd, options,
       pdpi::PdReadRequestToIr, pdpi::IrReadRequestToPd, pdpi::IrReadRequestToPi,
       pdpi::PiReadRequestToIr, pdpi::PdReadRequestToPi, pdpi::PiReadRequestToPd,
       validity);
@@ -68,12 +71,14 @@ static void RunPdReadRequestTest(const pdpi::IrP4Info& info,
 
 static void RunPiReadResponseTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
-                                  const p4::v1::ReadResponse& pi) {
+                                  const p4::v1::ReadResponse& pi,
+                                  pdpi::TranslationOptions options = {}) {
   RunGenericPiTest<pdpi::IrReadResponse, p4::v1::ReadResponse>(
-      info, absl::StrCat("ReadResponse test: ", test_name), pi,
+      info, absl::StrCat("ReadResponse test: ", test_name), pi, options,
       // We cannot pass `PiReadResponseToIr` directly, since it takes an
       // optional third parameter, which `RunGenericPiTest` does not expect.
-      [](const pdpi::IrP4Info& info, const p4::v1::ReadResponse& pi) {
+      [](const pdpi::IrP4Info& info, const p4::v1::ReadResponse& pi,
+         pdpi::TranslationOptions options) {
         return pdpi::PiReadResponseToIr(info, pi);
       });
 }
@@ -93,12 +98,14 @@ static void RunPdReadResponseTest(const pdpi::IrP4Info& info,
 
 static void RunPiUpdateTest(const pdpi::IrP4Info& info,
                             const std::string& test_name,
-                            const p4::v1::Update& pi) {
+                            const p4::v1::Update& pi,
+                            pdpi::TranslationOptions options = {}) {
   RunGenericPiTest<pdpi::IrUpdate, p4::v1::Update>(
-      info, absl::StrCat("Update test: ", test_name), pi,
+      info, absl::StrCat("Update test: ", test_name), pi, options,
       // We cannot pass `PiUpdateToIr` directly, since it takes an optional
       // third parameter, which `RunGenericPiTest` does not expect.
-      [](const pdpi::IrP4Info& info, const p4::v1::Update& pi) {
+      [](const pdpi::IrP4Info& info, const p4::v1::Update& pi,
+         pdpi::TranslationOptions options) {
         return pdpi::PiUpdateToIr(info, pi);
       });
 }
@@ -116,12 +123,14 @@ static void RunPdUpdateTest(const pdpi::IrP4Info& info,
 
 static void RunPiWriteRequestTest(const pdpi::IrP4Info& info,
                                   const std::string& test_name,
-                                  const p4::v1::WriteRequest& pi) {
+                                  const p4::v1::WriteRequest& pi,
+                                  pdpi::TranslationOptions options = {}) {
   RunGenericPiTest<pdpi::IrWriteRequest, p4::v1::WriteRequest>(
-      info, absl::StrCat("WriteRequest test: ", test_name), pi,
+      info, absl::StrCat("WriteRequest test: ", test_name), pi, options,
       // We cannot pass `PiWriteRequestToIr` directly, since it takes an
       // optional third parameter, which `RunGenericPiTest` does not expect.
-      [](const pdpi::IrP4Info& info, const p4::v1::WriteRequest& pi) {
+      [](const pdpi::IrP4Info& info, const p4::v1::WriteRequest& pi,
+         pdpi::TranslationOptions options) {
         return pdpi::PiWriteRequestToIr(info, pi);
       });
 }
@@ -192,7 +201,8 @@ static void RunInvalidIrFailToTranslateToGrpcTest(
 static void RunPdWriteRpcStatusTest(const std::string& test_name,
                                     const pdpi::WriteRpcStatus& pd,
                                     int number_of_update_status,
-                                    InputValidity validity) {
+                                    InputValidity validity,
+                                    pdpi::TranslationOptions options = {}) {
   if (validity == INPUT_IS_VALID) {
     std::cout << TestHeader(
         absl::StrCat("Pd WriteRpcStatus test (INPUT_IS_VALID): ", test_name));
@@ -213,7 +223,7 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
   diff.ReportDifferencesToString(&explanation);
 
   // PD -> IR
-  const auto& status_or_ir = pdpi::PdWriteRpcStatusToIr(pd);
+  const auto& status_or_ir = pdpi::PdWriteRpcStatusToIr(pd, options);
   if (!status_or_ir.ok()) {
     if (validity == INPUT_IS_VALID) {
       Fail(test_name,
@@ -310,19 +320,20 @@ static void RunPdWriteRpcStatusTest(const std::string& test_name,
 
 static void RunPiStreamMessageRequestTest(
     const pdpi::IrP4Info& info, const std::string& test_name,
-    const p4::v1::StreamMessageRequest& pi) {
+    const p4::v1::StreamMessageRequest& pi,
+    pdpi::TranslationOptions options = {}) {
   RunGenericPiTest<pdpi::IrStreamMessageRequest, p4::v1::StreamMessageRequest>(
-      info, absl::StrCat("StreamMessageRequest test: ", test_name), pi,
+      info, absl::StrCat("StreamMessageRequest test: ", test_name), pi, options,
       pdpi::PiStreamMessageRequestToIr);
 }
 
-static void RunPdStreamMessageRequestTest(const pdpi::IrP4Info& info,
-                                          const std::string& test_name,
-                                          const pdpi::StreamMessageRequest& pd,
-                                          const InputValidity validity) {
+static void RunPdStreamMessageRequestTest(
+    const pdpi::IrP4Info& info, const std::string& test_name,
+    const pdpi::StreamMessageRequest& pd, const InputValidity validity,
+    pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::StreamMessageRequest, pdpi::IrStreamMessageRequest,
                    p4::v1::StreamMessageRequest>(
-      info, absl::StrCat("StreamMessageRequest test: ", test_name), pd,
+      info, absl::StrCat("StreamMessageRequest test: ", test_name), pd, options,
       pdpi::PdStreamMessageRequestToIr, pdpi::IrStreamMessageRequestToPd,
       pdpi::IrStreamMessageRequestToPi, pdpi::PiStreamMessageRequestToIr,
       pdpi::PdStreamMessageRequestToPi, pdpi::PiStreamMessageRequestToPd,
@@ -331,23 +342,25 @@ static void RunPdStreamMessageRequestTest(const pdpi::IrP4Info& info,
 
 static void RunPiStreamMessageResponseTest(
     const pdpi::IrP4Info& info, const std::string& test_name,
-    const p4::v1::StreamMessageResponse& pi) {
+    const p4::v1::StreamMessageResponse& pi,
+    pdpi::TranslationOptions options = {}) {
   RunGenericPiTest<pdpi::IrStreamMessageResponse,
                    p4::v1::StreamMessageResponse>(
       info, absl::StrCat("StreamMessageResponse test: ", test_name), pi,
-      pdpi::PiStreamMessageResponseToIr);
+      options, pdpi::PiStreamMessageResponseToIr);
 }
 
 static void RunPdStreamMessageResponseTest(
     const pdpi::IrP4Info& info, const std::string& test_name,
-    const pdpi::StreamMessageResponse& pd, const InputValidity validity) {
+    const pdpi::StreamMessageResponse& pd, const InputValidity validity,
+    pdpi::TranslationOptions options = {}) {
   RunGenericPdTest<pdpi::StreamMessageResponse, pdpi::IrStreamMessageResponse,
                    p4::v1::StreamMessageResponse>(
       info, absl::StrCat("StreamMessageResponse test: ", test_name), pd,
-      pdpi::PdStreamMessageResponseToIr, pdpi::IrStreamMessageResponseToPd,
-      pdpi::IrStreamMessageResponseToPi, pdpi::PiStreamMessageResponseToIr,
-      pdpi::PdStreamMessageResponseToPi, pdpi::PiStreamMessageResponseToPd,
-      validity);
+      options, pdpi::PdStreamMessageResponseToIr,
+      pdpi::IrStreamMessageResponseToPd, pdpi::IrStreamMessageResponseToPi,
+      pdpi::PiStreamMessageResponseToIr, pdpi::PdStreamMessageResponseToPi,
+      pdpi::PiStreamMessageResponseToPd, validity);
 }
 
 static void RunReadRequestTests(pdpi::IrP4Info info) {

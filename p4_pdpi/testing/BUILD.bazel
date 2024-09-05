@@ -325,6 +325,7 @@ cc_test(
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
+        "//p4_pdpi:translation_options",
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
