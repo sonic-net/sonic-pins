@@ -45,6 +45,10 @@ std::string GetMulticastGroupTableName() {
   return absl::StrCat(kBuiltInPrefix, kMulticastGroupTableString);
 }
 
+std::string GetReplicaActionName() {
+  return absl::StrCat(kBuiltInPrefix, kReplicaString);
+}
+
 std::string GetCloneSessionTableName() {
   return absl::StrCat(kBuiltInPrefix, kCloneSessionTableString);
 }
