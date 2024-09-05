@@ -391,6 +391,7 @@ cc_library(
         "//gutil:status",
         "//gutil:version",
         "//sai_p4/fixed:p4_roles",
+        "//sai_p4/instantiations/google:p4_versions",
         "//thinkit:switch",
         "@com_github_google_glog//:glog",
         "@com_github_grpc_grpc//:grpc++",

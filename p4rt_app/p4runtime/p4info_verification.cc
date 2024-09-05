@@ -26,6 +26,7 @@
 #include "p4rt_app/p4runtime/p4info_verification_schema.h"
 #include "p4rt_app/p4runtime/p4info_verification_schema.pb.h"
 #include "p4rt_app/sonic/app_db_acl_def_table_manager.h"
+#include "p4rt_app/sonic/hashing.h"
 #include "p4rt_app/utils/status_utility.h"
 #include "p4rt_app/utils/table_utility.h"
 
@@ -111,14 +112,17 @@ absl::Status ValidatePacketIo(const p4::config::v1::P4Info& p4info) {
 absl::Status ValidateP4Info(const p4::config::v1::P4Info& p4info) {
   RETURN_IF_ERROR(ValidatePacketIo(p4info));
   ASSIGN_OR_RETURN(P4InfoVerificationSchema schema, SupportedSchema());
-  ASSIGN_OR_RETURN(auto ir_result, pdpi::CreateIrP4Info(p4info),
+  ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info),
                    _.SetPayload(kLibraryUrl, absl::Cord("PDPI")));
   // We allow arbitrary `@unsupported` entities in the P4Info and reject
   // programming those entities only at runtime.
-  pdpi::RemoveUnsupportedEntities(ir_result);
-  RETURN_IF_ERROR(IsSupportedBySchema(ir_result, schema));
+  pdpi::RemoveUnsupportedEntities(ir_p4info);
+  RETURN_IF_ERROR(IsSupportedBySchema(ir_p4info, schema));
 
-  for (const auto& [table_name, table] : ir_result.tables_by_name()) {
+  RETURN_IF_ERROR(sonic::ExtractHashPacketFieldConfigs(ir_p4info).status());
+  RETURN_IF_ERROR(sonic::ExtractHashParamConfigs(ir_p4info).status());
+
+  for (const auto& [table_name, table] : ir_p4info.tables_by_name()) {
     ASSIGN_OR_RETURN(table::Type table_type, GetTableType(table),
                      _.SetPrepend()
                          << "Failed to process table '" << table_name << "'. ");
