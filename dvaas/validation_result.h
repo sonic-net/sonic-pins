@@ -82,8 +82,7 @@ public:
   // and `packet_synthesis_result`. Uses `diff_params` while validating the test
   // runs. See `test_run_validation.h` for details.
   static absl::StatusOr<ValidationResult> Create(
-      const PacketTestRuns& test_runs,
-      const SwitchOutputDiffParams& diff_params,
+      PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
       const PacketSynthesisResult& packet_synthesis_result);
 
   // Returns true if and only if packet synthesis runs with a time limit and
