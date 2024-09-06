@@ -19,18 +19,21 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/strip.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
+#include "dvaas/switch_api.h"
 #include "dvaas/test_vector.pb.h"
 #include "glog/logging.h"
 #include "google/protobuf/descriptor.h"
+#include "google/protobuf/repeated_ptr_field.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/proto.h"
 #include "gutil/proto_ordering.h"
@@ -380,9 +383,20 @@ GetAllFieldDescriptorsOfHeaders(
 }
 
 absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
-    const PacketTestRun& test_run, const SwitchOutputDiffParams& diff_params) {
-  PacketTestValidationResult result;
+    PacketTestRun test_run, const SwitchOutputDiffParams& diff_params,
+    absl::Nullable<SwitchApi*> sut) {
+  if (diff_params.ModifyExpectedOutputPreDiffing) {
+    if (sut == nullptr) {
+      return absl::InvalidArgumentError(
+          "sut is nullptr but required to be non-null because "
+          "ModifyTestRunPreDiffing is set.");
+    }
+    RETURN_IF_ERROR(diff_params.ModifyExpectedOutputPreDiffing(
+        test_run.test_vector().input(), test_run.actual_output(),
+        *test_run.mutable_test_vector()->mutable_acceptable_outputs(), *sut));
+  }
 
+  PacketTestValidationResult result;
   const absl::optional<std::string> diff = CompareSwitchOutputs(
       test_run.test_vector(), test_run.actual_output(), diff_params);
   if (!diff.has_value()) return result;
@@ -450,16 +464,16 @@ absl::StatusOr<PacketTestValidationResult> ValidateTestRun(
 }
 
 absl::StatusOr<PacketTestOutcomes> ValidateTestRuns(
-    const PacketTestRuns& test_runs,
-    const SwitchOutputDiffParams& diff_params) {
+    const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
+    absl::Nullable<SwitchApi*> sut) {
   PacketTestOutcomes test_outcomes;
   test_outcomes.mutable_outcomes()->Reserve(test_runs.test_runs_size());
 
-  for (const auto& test_run : test_runs.test_runs()) {
+  for (const dvaas::PacketTestRun& test_run : test_runs.test_runs()) {
     PacketTestOutcome& test_outcome = *test_outcomes.add_outcomes();
     *test_outcome.mutable_test_run() = test_run;
     ASSIGN_OR_RETURN(*test_outcome.mutable_test_result(),
-                     ValidateTestRun(test_run, diff_params));
+                     ValidateTestRun(test_run, diff_params, /*sut=*/sut));
   }
 
   return test_outcomes;
