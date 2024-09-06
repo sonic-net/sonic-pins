@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright (c) 2025, Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
 
 #include "lib/validator/validator_lib.h"
 
-#include <stdio.h>
-
+#include <cstdio>
 #include <functional>
 #include <memory>
 #include <string>
@@ -45,6 +44,7 @@
 #include "thinkit/switch.h"
 
 namespace pins_test {
+namespace {
 
 constexpr char kPingCount[] = "4";
 constexpr char kV4PingCommand[] = R"(fping -c $1 $0 2>&1 >/dev/null)";
@@ -60,6 +60,21 @@ enum class PingResponseState {
   kAddressNotFound
 };
 
+PingResponseState GetPingResponseStable(const std::string& response) {
+  if (absl::StrContains(response, kAddressNotFound)) {
+    return PingResponseState::kAddressNotFound;
+  }
+  if (absl::StrContains(response, kNoPacketDroppedResponse)) {
+    return PingResponseState::kPingable;
+  }
+  if (absl::StrContains(response, kAllPacketsDroppedResponse)) {
+    return PingResponseState::kUnpingable;
+  }
+  return PingResponseState::kUnstable;
+}
+
+}  // namespace
+
 absl::StatusOr<std::string> internal::RunPingCommand(
     const std::string& ping_command) {
   FILE* in;
@@ -74,19 +89,6 @@ absl::StatusOr<std::string> internal::RunPingCommand(
   }
   pclose(in);
   return response;
-}
-
-PingResponseState GetPingResponseStable(const std::string& response) {
-  if (absl::StrContains(response, kAddressNotFound)) {
-    return PingResponseState::kAddressNotFound;
-  }
-  if (absl::StrContains(response, kNoPacketDroppedResponse)) {
-    return PingResponseState::kPingable;
-  }
-  if (absl::StrContains(response, kAllPacketsDroppedResponse)) {
-    return PingResponseState::kUnpingable;
-  }
-  return PingResponseState::kUnstable;
 }
 
 absl::Status Pingable(
@@ -173,13 +175,18 @@ absl::Status SSHable(thinkit::Switch& thinkit_switch,
 // PERMISSION_DENIED we are connecting the P4RT service and it is correctly
 // rejecting the write.
 absl::Status P4rtAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(auto p4rt_stub, thinkit_switch.CreateP4RuntimeStub());
+  auto p4rt_stub = thinkit_switch.CreateP4RuntimeStub();
+  if (absl::IsUnimplemented(p4rt_stub.status())) {
+    LOG(INFO) << "Skipping P4rtAble: " << p4rt_stub.status();
+    return absl::OkStatus();
+  }
+  RETURN_IF_ERROR(p4rt_stub.status());
   p4::v1::WriteRequest request;
   p4::v1::WriteResponse response;
 
   grpc::ClientContext context;
   context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
-  grpc::Status status = p4rt_stub->Write(&context, request, &response);
+  grpc::Status status = (*p4rt_stub)->Write(&context, request, &response);
 
   // Because we don't have an active stream acting as the controller
   if (status.error_code() == grpc::StatusCode::UNAVAILABLE) {
@@ -193,21 +200,30 @@ absl::Status P4rtAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
 // Checks if a gNMI get all interface request can be sent and a response
 // received.
 absl::Status GnmiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(auto gnmi_stub, thinkit_switch.CreateGnmiStub());
-  return pins_test::CanGetAllInterfaceOverGnmi(*gnmi_stub, timeout);
+  auto gnmi_stub = thinkit_switch.CreateGnmiStub();
+  if (absl::IsUnimplemented(gnmi_stub.status())) {
+    LOG(INFO) << "Skipping GnmiAble: " << gnmi_stub.status();
+    return absl::OkStatus();
+  }
+  RETURN_IF_ERROR(gnmi_stub.status());
+  return pins_test::CanGetAllInterfaceOverGnmi(**gnmi_stub, timeout);
 }
 
 // Checks if a gNOI system get time request can be sent and a response
 // received.
 absl::Status GnoiAble(thinkit::Switch& thinkit_switch, absl::Duration timeout) {
-  ASSIGN_OR_RETURN(auto gnoi_system_stub,
-                   thinkit_switch.CreateGnoiSystemStub());
+  auto gnoi_system_stub = thinkit_switch.CreateGnoiSystemStub();
+  if (absl::IsUnimplemented(gnoi_system_stub.status())) {
+    LOG(INFO) << "Skipping GnoiAble: " << gnoi_system_stub.status();
+    return absl::OkStatus();
+  }
+  RETURN_IF_ERROR(gnoi_system_stub.status());
   gnoi::system::TimeRequest request;
   gnoi::system::TimeResponse response;
   grpc::ClientContext context;
   context.set_deadline(absl::ToChronoTime(absl::Now() + timeout));
   return gutil::GrpcStatusToAbslStatus(
-      gnoi_system_stub->Time(&context, request, &response));
+      (*gnoi_system_stub)->Time(&context, request, &response));
 }
 
 absl::Status PortsUp(thinkit::Switch& thinkit_switch,
