@@ -629,7 +629,9 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
       ASSIGN_OR_RETURN(
           *test_outcome->mutable_test_result(),
           ValidateTestRun(*packet_test_run,
-                          params_.validation_params.switch_output_diff_params));
+                          /*diff_params=*/
+                          params_.validation_params.switch_output_diff_params,
+                          &testbed_configurator_->SutApi()));
       if (test_outcome->test_result().has_failure()) {
         failed_switch_inputs.push_back(
             test_outcome->test_run().test_vector().input());
