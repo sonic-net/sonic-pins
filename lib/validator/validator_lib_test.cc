@@ -14,14 +14,21 @@
 
 #include "lib/validator/validator_lib.h"
 
+#include <cstdint>
 #include <functional>
+#include <string>
+#include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
+#include "thinkit/switch.h"
 
 namespace pins_test {
 namespace {
@@ -32,6 +39,22 @@ using ::testing::MockFunction;
 
 constexpr char kSwitch[] = "switch";
 constexpr absl::Duration kDefaultTimeout = absl::Seconds(5);
+
+class EmptySwitch : public thinkit::Switch {
+ public:
+  const std::string& ChassisName() override { return empty_string_; }
+  uint32_t DeviceId() override { return 0; }
+
+ private:
+  std::string empty_string_;
+};
+
+TEST(ValidatorLib, UnimplementedGrpcIsConsideredPassing) {
+  EmptySwitch empty_switch;
+  EXPECT_OK(P4rtAble(empty_switch));
+  EXPECT_OK(GnmiAble(empty_switch));
+  EXPECT_OK(GnoiAble(empty_switch));
+}
 
 TEST(PingableTest, SwitchPingable) {
   EXPECT_OK(Pingable(kSwitch, kDefaultTimeout, /*run_ping_command=*/
