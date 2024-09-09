@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,49 +20,43 @@
 
 #include "p4_symbolic/symbolic/control.h"
 
-#include <string>
+#include <vector>
 
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "gutil/status.h"
-#include "p4_symbolic/ir/ir.h"
-#include "p4_symbolic/ir/ir.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/symbolic/conditional.h"
-#include "p4_symbolic/symbolic/context.h"
-#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
-#include "z3++.h"
 
-namespace p4_symbolic::symbolic::control {
+namespace p4_symbolic {
+namespace symbolic {
+namespace control {
 
-absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
-    const std::string &pipeline_name, SolverState &state,
-    SymbolicPerPacketState &headers, const z3::expr &guard) {
-  if (auto it = state.program.pipeline().find(pipeline_name);
-      it != state.program.pipeline().end()) {
-    return EvaluateControl(it->second.initial_control(), state, headers, guard);
-  }
-  return gutil::InvalidArgumentErrorBuilder()
-         << "cannot evaluate unknown pipeline: '" << pipeline_name << "'";
-}
-
-absl::StatusOr<SymbolicTableMatches> EvaluateControl(
-    const std::string &control_name, SolverState &state,
-    SymbolicPerPacketState &headers, const z3::expr &guard) {
+absl::StatusOr<SymbolicTrace> EvaluateControl(
+    const Dataplane &data_plane, const std::string &control_name,
+    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
+    const z3::expr &guard) {
   // Base case: we got to the end of the evaluation, no more controls!
-  if (control_name == ir::EndOfPipeline()) return SymbolicTableMatches();
+  if (control_name.empty()) {
+    return SymbolicTrace{{}, Z3Context().bool_val(false)};
+  }
 
   // Find out what type of control we need to evaluate.
-  if (state.program.tables().contains(control_name)) {
+  if (data_plane.program.tables().count(control_name) == 1) {
     // Table: call EvaluateTable on table and its entries.
-    const ir::Table &table = state.program.tables().at(control_name);
-    return table::EvaluateTable(table, state, headers, guard);
-  } else if (state.program.conditionals().contains(control_name)) {
+    const ir::Table &table = data_plane.program.tables().at(control_name);
+    std::vector<pdpi::IrTableEntry> table_entries;
+    if (data_plane.entries.count(control_name) == 1) {
+      table_entries = data_plane.entries.at(control_name);
+    }
+    return table::EvaluateTable(data_plane, table, table_entries, state,
+                                translator, guard);
+  } else if (data_plane.program.conditionals().count(control_name) == 1) {
     // Conditional: let EvaluateConditional handle it.
     const ir::Conditional &conditional =
-        state.program.conditionals().at(control_name);
-    return conditional::EvaluateConditional(conditional, state, headers, guard);
+        data_plane.program.conditionals().at(control_name);
+    return conditional::EvaluateConditional(data_plane, conditional, state,
+                                            translator, guard);
   } else {
     // Something else: unsupported.
     return absl::UnimplementedError(
@@ -71,4 +65,6 @@ absl::StatusOr<SymbolicTableMatches> EvaluateControl(
   }
 }
 
-}  // namespace p4_symbolic::symbolic::control
+}  // namespace control
+}  // namespace symbolic
+}  // namespace p4_symbolic

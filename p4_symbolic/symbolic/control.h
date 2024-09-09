@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,24 +59,20 @@
 
 #include <string>
 
-#include "absl/status/statusor.h"
-#include "p4_symbolic/symbolic/context.h"
+#include "gutil/status.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
 namespace control {
 
-// Evaluate the passed pipeline.
-absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
-    const std::string &pipeline_name, SolverState &state,
-    SymbolicPerPacketState &headers, const z3::expr &guard);
-
 // Evaluate the passed control construct.
-absl::StatusOr<SymbolicTableMatches> EvaluateControl(
-    const std::string &control_name, SolverState &state,
-    SymbolicPerPacketState &headers, const z3::expr &guard);
+absl::StatusOr<SymbolicTrace> EvaluateControl(
+    const Dataplane &data_plane, const std::string &control_name,
+    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
+    const z3::expr &guard);
 
 }  // namespace control
 }  // namespace symbolic

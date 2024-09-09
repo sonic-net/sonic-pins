@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,19 +18,21 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
 #define P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
 
-#include "absl/status/statusor.h"
+#include "gutil/status.h"
 #include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/symbolic/context.h"
+#include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/values.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
 namespace symbolic {
 namespace conditional {
 
-absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
-    const ir::Conditional &conditional, SolverState &state,
-    SymbolicPerPacketState &headers, const z3::expr &guard);
+absl::StatusOr<SymbolicTrace> EvaluateConditional(
+    const Dataplane data_plane, const ir::Conditional &conditional,
+    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
+    const z3::expr &guard);
 
 }  // namespace conditional
 }  // namespace symbolic
