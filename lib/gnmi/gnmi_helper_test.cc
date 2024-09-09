@@ -62,6 +62,7 @@ using ::testing::InSequence;
 using ::testing::IsEmpty;
 using ::testing::IsSubsetOf;
 using ::testing::Not;
+using ::testing::Pair;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::SizeIs;
@@ -1179,6 +1180,158 @@ TEST(GetUpInterfacePortIDs, GetAnyFailsWhenNoInterfacesAreUpOrHaveAPortId) {
             Return(grpc::Status::OK)));
 
   EXPECT_THAT(GetAnyUpInterfacePortId(stub),
+              StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+TEST(GetEthernetInterfacePortIDs, CanGetNEthernetInterfaces) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1,
+              "management":true
+            }
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":2,
+              "type":"ethernetCsmacd"
+            }
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":
+            {
+              "oper-status":"DOWN",
+              "openconfig-p4rt:id":3,
+              "type":"ethernetCsmacd"
+            }
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":{"oper-status":"UP","type":"ethernetCsmacd"}
+        },
+        {
+          "name":"PortChannel1234",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1234,
+              "type":"ieee8023adLag"
+            }
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":4,
+              "type":"ethernetCsmacd"
+            }
+        },
+        {
+          "name":"Ethernet1/5/1",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":5,
+              "type":"ethernetCsmacd"
+            }
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(1).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  // There are 3 valid ports, but we only choose 2. So we expect the result to
+  // be a subset of the valid ports.
+  EXPECT_THAT(GetNEthernetInterfacePortIds(stub, 2),
+              IsOkAndHolds(IsSubsetOf({"2", "3", "4", "5"})));
+}
+
+TEST(GetEthernetInterfacePortIDs,
+     GetNFailsWhenNotEnoughEthernetInterfacesAreAvailableWithAPortId) {
+  std::string interface_state = R"json({
+    "openconfig-interfaces:interfaces":{
+      "interface":[
+        {
+          "name":"bond0",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1,
+              "management":true
+            }
+        },
+        {
+          "name":"Ethernet1/1/1",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":2,
+              "type":"ethernetCsmacd"
+            }
+        },
+        {
+          "name":"Ethernet1/2/1",
+          "state":
+            {
+              "oper-status":"DOWN",
+              "openconfig-p4rt:id":3,
+              "type":"ethernetCsmacd"
+            }
+        },
+        {
+          "name":"Ethernet1/3/1",
+          "state":
+            {
+              "oper-status":"UP",
+              "type":"ethernetCsmacd"
+            }
+        },
+        {
+          "name":"PortChannel1234",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":1234,
+              "type":"ieee8023adLag"
+            }
+        },
+        {
+          "name":"Ethernet1/4/1",
+          "state":
+            {
+              "oper-status":"UP",
+              "openconfig-p4rt:id":4,
+              "type":"ethernetCsmacd"
+            }
+        }
+      ]
+    }
+  })json";
+
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub, Get).Times(1).WillRepeatedly(
+      DoAll(SetArgPointee<2>(ConstructResponse(
+                /*oc_path=*/"interfaces",
+                /*gnmi_config=*/interface_state)),
+            Return(grpc::Status::OK)));
+
+  EXPECT_THAT(GetNEthernetInterfacePortIds(stub, 5),
               StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
@@ -2949,6 +3102,192 @@ TEST(InterfacesNameTest, LocalFileTestDataTest) {
       IsOkAndHolds(UnorderedElementsAre("Ethernet1/5/1", "Ethernet1/5/3")));
 }
 
+TEST(GetCongestionQueueCounters, Works) {
+  static constexpr absl::string_view kInterfaceJson = R"(
+{
+    "openconfig-qos:interface": [
+        {
+            "config": {
+                "interface-id": "CPU"
+            },
+            "interface-id": "CPU",
+            "output": {
+                "config": {
+                    "buffer-allocation-profile": "staggered_queue"
+                }
+            },
+            "state": {
+                "interface-id": "CPU"
+            }
+        },
+        {
+            "config": {
+                "interface-id": "Ethernet1/1/1"
+            },
+            "interface-id": "Ethernet1/1/1",
+            "output": {
+                "config": {
+                    "buffer-allocation-profile": "staggered_queue"
+                },
+                "queues": {
+                    "queue": [
+                        {
+                            "config": {
+                                "name": "AF3",
+                                "queue-management-profile": "staggered_queue"
+                            },
+                            "name": "AF3",
+                            "state": {
+                                "dropped-pkts": "0",
+                                "google-pins-qos:diag": {
+                                    "dropped-packet-events": "1"
+                                },
+                                "google-pins-qos:max-periodic-queue-len": "0",
+                                "google-pins-qos:pfc-deadlock-detected": "0",
+                                "google-pins-qos:pfc-deadlock-restored": "0",
+                                "google-pins-qos:pfc-tx-dropped-pkts": "0",
+                                "google-pins-qos:pfc-tx-pkts": "0",
+                                "max-queue-len": "0",
+                                "name": "AF3",
+                                "openconfig-qos-ext:dropped-octets": "0",
+                                "openconfig-qos-ext:traffic-type": "UC",
+                                "openconfig-qos-ext:watermark": "0",
+                                "queue-management-profile": "staggered_queue",
+                                "transmit-octets": "0",
+                                "transmit-pkts": "0"
+                            }
+                        },
+                        {
+                            "config": {
+                                "name": "AF4",
+                                "queue-management-profile": "staggered_queue"
+                            },
+                            "name": "AF4",
+                            "state": {
+                                "dropped-pkts": "0",
+                                "google-pins-qos:diag": {
+                                    "dropped-packet-events": "2"
+                                },
+                                "google-pins-qos:max-periodic-queue-len": "0",
+                                "google-pins-qos:pfc-deadlock-detected": "0",
+                                "google-pins-qos:pfc-deadlock-restored": "0",
+                                "google-pins-qos:pfc-tx-dropped-pkts": "0",
+                                "google-pins-qos:pfc-tx-pkts": "0",
+                                "max-queue-len": "0",
+                                "name": "AF4",
+                                "openconfig-qos-ext:dropped-octets": "0",
+                                "openconfig-qos-ext:traffic-type": "UC",
+                                "openconfig-qos-ext:watermark": "0",
+                                "queue-management-profile": "staggered_queue",
+                                "transmit-octets": "0",
+                                "transmit-pkts": "0"
+                            }
+                        }
+                    ]
+                }
+            },
+            "state": {
+                "interface-id": "Ethernet1/1/1"
+            }
+        },
+        {
+            "config": {
+                "interface-id": "Ethernet1/1/3"
+            },
+            "interface-id": "Ethernet1/1/3",
+            "output": {
+                "config": {
+                    "buffer-allocation-profile": "staggered_queue"
+                },
+                "queues": {
+                    "queue": [
+                        {
+                            "config": {
+                                "name": "AF3",
+                                "queue-management-profile": "staggered_queue"
+                            },
+                            "name": "AF3",
+                            "state": {
+                                "dropped-pkts": "0",
+                                "google-pins-qos:diag": {
+                                    "dropped-packet-events": "3"
+                                },
+                                "google-pins-qos:max-periodic-queue-len": "0",
+                                "google-pins-qos:pfc-deadlock-detected": "0",
+                                "google-pins-qos:pfc-deadlock-restored": "0",
+                                "google-pins-qos:pfc-tx-dropped-pkts": "0",
+                                "google-pins-qos:pfc-tx-pkts": "0",
+                                "max-queue-len": "0",
+                                "name": "AF3",
+                                "openconfig-qos-ext:dropped-octets": "0",
+                                "openconfig-qos-ext:traffic-type": "UC",
+                                "openconfig-qos-ext:watermark": "0",
+                                "queue-management-profile": "staggered_queue",
+                                "transmit-octets": "0",
+                                "transmit-pkts": "0"
+                            }
+                        },
+                        {
+                            "config": {
+                                "name": "AF4",
+                                "queue-management-profile": "staggered_queue"
+                            },
+                            "name": "AF4",
+                            "state": {
+                                "dropped-pkts": "0",
+                                "google-pins-qos:diag": {
+                                    "dropped-packet-events": "4"
+                                },
+                                "google-pins-qos:max-periodic-queue-len": "0",
+                                "google-pins-qos:pfc-deadlock-detected": "0",
+                                "google-pins-qos:pfc-deadlock-restored": "0",
+                                "google-pins-qos:pfc-tx-dropped-pkts": "0",
+                                "google-pins-qos:pfc-tx-pkts": "0",
+                                "max-queue-len": "0",
+                                "name": "AF4",
+                                "openconfig-qos-ext:dropped-octets": "0",
+                                "openconfig-qos-ext:traffic-type": "UC",
+                                "openconfig-qos-ext:watermark": "0",
+                                "queue-management-profile": "staggered_queue",
+                                "transmit-octets": "0",
+                                "transmit-pkts": "0"
+                            }
+                        }
+                    ]
+                }
+            },
+            "state": {
+                "interface-id": "Ethernet1/1/3"
+            }
+        }
+    ]
+})";
+  gnmi::MockgNMIStub stub;
+  EXPECT_CALL(stub,
+              Get(_,
+                  EqualsProto(gutil::ParseProtoOrDie<gnmi::GetRequest>(
+                      R"pb(prefix { origin: "openconfig" target: "chassis" }
+                           path {
+                             elem { name: "qos" }
+                             elem { name: "interfaces" }
+                             elem { name: "interface" }
+                           }
+                           type: STATE
+                           encoding: JSON_IETF)pb")),
+                  _))
+      .WillOnce(DoAll(SetArgPointee<2>(ConstructResponse(
+                          "openconfig-qos:interface", kInterfaceJson)),
+                      Return(grpc::Status::OK)));
+
+  ASSERT_OK_AND_ASSIGN(auto congestion_counters,
+                       GetCongestionQueueCounters(stub));
+  EXPECT_THAT(congestion_counters, SizeIs(2));
+  EXPECT_THAT(congestion_counters["Ethernet1/1/1"],
+              UnorderedElementsAre(Pair("AF3", 1), Pair("AF4", 2)));
+  EXPECT_THAT(congestion_counters["Ethernet1/1/3"],
+              UnorderedElementsAre(Pair("AF3", 3), Pair("AF4", 4)));
+}
+
 TEST(GetAllInterfaceCounters, Works) {
   static constexpr absl::string_view kInterfaceJson = R"(
 {
@@ -3027,6 +3366,12 @@ TEST(GetAllInterfaceCounters, Works) {
                "out-octets":"9996",
                "out-pkts":"134",
                "out-unicast-pkts":"1010"
+            },
+            "blackhole":{
+               "in-discard-events":"1",
+               "out-discard-events":"2",
+               "in-error-events":"3",
+               "fec-not-correctable-events":"4"
             }
          },
          "subinterfaces":{
@@ -3104,6 +3449,12 @@ TEST(GetAllInterfaceCounters, Works) {
   EXPECT_EQ(counters.out_ipv6_discarded_pkts, 1015);
   EXPECT_EQ(counters.timestamp_ns, 1620348032128305716);
   EXPECT_EQ(counters.carrier_transitions, 1);
+
+  // Check the blackhole counters.
+  EXPECT_EQ(counters.blackhole_counters.in_discard_events, 1);
+  EXPECT_EQ(counters.blackhole_counters.out_discard_events, 2);
+  EXPECT_EQ(counters.blackhole_counters.in_error_events, 3);
+  EXPECT_EQ(counters.blackhole_counters.fec_not_correctable_events, 4);
 }
 
 TEST(GetAllInterfaceCounters, WorksWithoutOptionalValues) {

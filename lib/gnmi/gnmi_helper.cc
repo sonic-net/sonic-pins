@@ -415,6 +415,27 @@ absl::StatusOr<Counters> GetCountersForInterface(const json& interface_json) {
       counters.out_ipv6_discarded_pkts,
       ParseJsonValueAsUint(subinterface, {"openconfig-if-ip:ipv6", "state",
                                           "counters", "out-discarded-pkts"}));
+  // Copy the blackhole port counters when available.
+  absl::StatusOr<uint64_t> counter_val = ParseJsonValueAsUint(
+      interface_json, {"state", "blackhole", "in-discard-events"});
+  if (counter_val.ok()) {
+    counters.blackhole_counters.in_discard_events = *counter_val;
+  }
+  counter_val = ParseJsonValueAsUint(
+      interface_json, {"state", "blackhole", "out-discard-events"});
+  if (counter_val.ok()) {
+    counters.blackhole_counters.out_discard_events = *counter_val;
+  }
+  counter_val = ParseJsonValueAsUint(interface_json,
+                                     {"state", "blackhole", "in-error-events"});
+  if (counter_val.ok()) {
+    counters.blackhole_counters.in_error_events = *counter_val;
+  }
+  counter_val = ParseJsonValueAsUint(
+      interface_json, {"state", "blackhole", "fec-not-correctable-events"});
+  if (counter_val.ok()) {
+    counters.blackhole_counters.fec_not_correctable_events = *counter_val;
+  }
   return counters;
 }
 
@@ -612,7 +633,7 @@ absl::StatusOr<gnmi::SetRequest> BuildGnmiSetRequest(
     absl::string_view json_val) {
   gnmi::SetRequest req;
   req.mutable_prefix()->set_origin(kOpenconfigStr);
-  req.mutable_prefix()->set_target("chassis");
+  req.mutable_prefix()->set_target(kTestChassisNameForGnmi);
   gnmi::Path* path;
 
   switch (set_type) {
@@ -646,7 +667,7 @@ absl::StatusOr<gnmi::GetRequest> BuildGnmiGetRequest(
   gnmi::GetRequest req;
   req.set_type(req_type);
   req.mutable_prefix()->set_origin(kOpenconfigStr);
-  req.mutable_prefix()->set_target("chassis");
+  req.mutable_prefix()->set_target(kTestChassisNameForGnmi);
   req.set_encoding(gnmi::JSON_IETF);
   if (oc_path.empty()) {
     return req;
@@ -1317,6 +1338,25 @@ GetAllInterfaceNameToPortId(
   return GetAllInterfaceNameToPortId(
       response.notification(0).update(0).val().json_ietf_val(), field_type,
       std::move(filter));
+}
+
+absl::StatusOr<std::vector<std::string>> GetNEthernetInterfacePortIds(
+    gnmi::gNMI::StubInterface& stub, int num_interfaces) {
+  ASSIGN_OR_RETURN(auto ids_by_name, GetAllInterfaceNameToPortId(stub));
+  std::vector<std::string> result;
+  result.reserve(num_interfaces);
+  for (const auto& [name, id] : ids_by_name) {
+    if (!absl::StartsWith(name, "Ethernet")) {
+      continue;
+    }
+    LOG(INFO) << "Selecting interface " << name << " with ID " << id << ".";
+    result.push_back(id);
+    if (result.size() == num_interfaces) {
+      return result;
+    }
+  }
+  return absl::FailedPreconditionError(absl::StrCat(
+      "Could not find ", num_interfaces, " interfaces with a port ID."));
 }
 
 absl::Status MapP4rtIdsToMatchingInterfaces(
@@ -2163,10 +2203,43 @@ absl::StatusOr<BlackholeSwitchCounters> GetBlackholeSwitchCounters(
   return switch_counters;
 }
 
-absl::StatusOr<uint64_t>
-GetCongestionQueueCounter(absl::string_view interface_name,
-                          absl::string_view queue_name,
-                          gnmi::gNMI::StubInterface &gnmi_stub) {
+absl::StatusOr<absl::flat_hash_map<std::string,
+                                   absl::flat_hash_map<std::string, uint64_t>>>
+GetCongestionQueueCounters(gnmi::gNMI::StubInterface& gnmi_stub) {
+  ASSIGN_OR_RETURN(
+      gnmi::GetRequest request,
+      BuildGnmiGetRequest("qos/interfaces/interface", gnmi::GetRequest::STATE));
+  ASSIGN_OR_RETURN(
+      gnmi::GetResponse response,
+      SendGnmiGetRequest(&gnmi_stub, request, /*timeout=*/std::nullopt));
+  ASSIGN_OR_RETURN(std::string interface_info,
+                   ParseGnmiGetResponse(response, "openconfig-qos:interface"));
+  ASSIGN_OR_RETURN(json interfaces, json_yang::ParseJson(interface_info));
+  absl::flat_hash_map<std::string, absl::flat_hash_map<std::string, uint64_t>>
+      counters;
+  for (const json& interface : interfaces) {
+    ASSIGN_OR_RETURN(json pname, GetField(interface, "interface-id"));
+    if (!absl::StrContains(pname.get<std::string>(), "Ethernet")) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(json queues,
+                     AccessJsonValue(interface, {"output", "queues", "queue"}));
+    for (const json& queue : queues) {
+      ASSIGN_OR_RETURN(json qname, GetField(queue, "name"));
+      ASSIGN_OR_RETURN(
+          auto queue_dropped_packet_events,
+          ParseJsonValueAsUint(queue, {"state", "google-pins-qos:diag",
+                                       "dropped-packet-events"}));
+      counters[pname.get<std::string>()][qname.get<std::string>()] =
+          queue_dropped_packet_events;
+    }
+  }
+  return counters;
+}
+
+absl::StatusOr<uint64_t> GetCongestionQueueCounter(
+    absl::string_view interface_name, absl::string_view queue_name,
+    gnmi::gNMI::StubInterface& gnmi_stub) {
   const std::string ops_state_path = absl::StrFormat(
       "qos/interfaces/interface[interface-id=%s]/output/queues/queue[name=%s]/"
       "state",

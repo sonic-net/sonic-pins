@@ -47,8 +47,9 @@ namespace pins_test {
 namespace {
 
 constexpr char kPingCount[] = "4";
-constexpr char kV4PingCommand[] = R"(fping -c $1 $0 2>&1 >/dev/null)";
-constexpr char kV6PingCommand[] = R"(fping6 -c $1 $0 2>&1 >/dev/null)";
+// TODO - Remove -S:: workaround when fping is updated.
+constexpr char kV4PingCommand[] = R"(fping -S:: -c $1 $0 2>&1 >/dev/null)";
+constexpr char kV6PingCommand[] = R"(fping6 -S:: -c $1 $0 2>&1 >/dev/null)";
 constexpr char kAddressNotFound[] = "address not found";
 constexpr char kNoPacketDroppedResponse[] = "/0%";
 constexpr char kAllPacketsDroppedResponse[] = "/100%";
