@@ -1,0 +1,35 @@
+Finding packet for table MyIngress.ipv4_lpm and row -1
+Cannot find solution!
+
+Finding packet for table MyIngress.ipv4_lpm and row 0
+	Dropped = 0
+	standard_metadata.ingress_port = #b000000000
+	standard_metadata.egress_spec = #b000000000
+	ipv4.srcAddr = #x00000000
+	ipv4.dstAddr = #x0a0a0001
+	ethernet.dstAddr = #x000000000000
+
+Finding packet for table MyIngress.ipv4_lpm and row 1
+	Dropped = 0
+	standard_metadata.ingress_port = #b000000000
+	standard_metadata.egress_spec = #b000000001
+	ipv4.srcAddr = #x00000000
+	ipv4.dstAddr = #x0a0a0000
+	ethernet.dstAddr = #x000000000000
+
+Finding packet for table MyIngress.ipv4_lpm and row 2
+	Dropped = 0
+	standard_metadata.ingress_port = #b000000000
+	standard_metadata.egress_spec = #b000000001
+	ipv4.srcAddr = #x00000000
+	ipv4.dstAddr = #x0a8a0000
+	ethernet.dstAddr = #x00000000000a
+
+Finding packet for table MyIngress.ipv4_lpm and row 3
+	Dropped = 0
+	standard_metadata.ingress_port = #b000000000
+	standard_metadata.egress_spec = #b000000001
+	ipv4.srcAddr = #x00000000
+	ipv4.dstAddr = #x14140000
+	ethernet.dstAddr = #x160000000016
+
