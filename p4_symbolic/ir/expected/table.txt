@@ -128,23 +128,6 @@ headers {
         bitwidth: 3
       }
     }
-    ordered_fields_list: "ingress_port"
-    ordered_fields_list: "egress_spec"
-    ordered_fields_list: "egress_port"
-    ordered_fields_list: "instance_type"
-    ordered_fields_list: "packet_length"
-    ordered_fields_list: "enq_timestamp"
-    ordered_fields_list: "enq_qdepth"
-    ordered_fields_list: "deq_timedelta"
-    ordered_fields_list: "deq_qdepth"
-    ordered_fields_list: "ingress_global_timestamp"
-    ordered_fields_list: "egress_global_timestamp"
-    ordered_fields_list: "mcast_grp"
-    ordered_fields_list: "egress_rid"
-    ordered_fields_list: "checksum_error"
-    ordered_fields_list: "parser_error"
-    ordered_fields_list: "priority"
-    ordered_fields_list: "_padding"
   }
 }
 actions {
@@ -304,14 +287,6 @@ tables {
     }
     table_implementation {
       default_action: "NoAction"
-      action_to_next_control {
-        key: "MyIngress.set_egress_spec"
-        value: "__END_OF_PIPELINE__"
-      }
-      action_to_next_control {
-        key: "NoAction"
-        value: "__END_OF_PIPELINE__"
-      }
       match_name_to_field {
         key: "standard_metadata.ingress_port"
         value {
@@ -319,150 +294,44 @@ tables {
           field_name: "ingress_port"
         }
       }
-      optimized_symbolic_execution_info {
-        merge_point: "__END_OF_PIPELINE__"
-        continue_to_merge_point: true
-      }
     }
   }
 }
-pipeline {
-  key: "egress"
-  value {
-    name: "egress"
-    initial_control: "__END_OF_PIPELINE__"
-  }
-}
-pipeline {
-  key: "ingress"
-  value {
-    name: "ingress"
-    initial_control: "MyIngress.ports_exact"
-  }
-}
-parsers {
-  key: "parser"
-  value {
-    name: "parser"
-    initial_state: "start"
-    parse_states {
-      key: "start"
-      value {
-        name: "start"
-        transitions {
-          default_transition {
-            next_state: "__END_OF_PARSER__"
-          }
-        }
-        optimized_symbolic_execution_info {
-          merge_point: "__END_OF_PARSER__"
-          continue_to_merge_point: true
-        }
-      }
-    }
-  }
-}
-errors {
-  key: "HeaderTooShort"
-  value {
-    name: "HeaderTooShort"
-    value: 4
-  }
-}
-errors {
-  key: "NoError"
-  value {
-    name: "NoError"
-  }
-}
-errors {
-  key: "NoMatch"
-  value {
-    name: "NoMatch"
-    value: 2
-  }
-}
-errors {
-  key: "PacketTooShort"
-  value {
-    name: "PacketTooShort"
-    value: 1
-  }
-}
-errors {
-  key: "ParserInvalidArgument"
-  value {
-    name: "ParserInvalidArgument"
-    value: 6
-  }
-}
-errors {
-  key: "ParserTimeout"
-  value {
-    name: "ParserTimeout"
-    value: 5
-  }
-}
-errors {
-  key: "StackOutOfBounds"
-  value {
-    name: "StackOutOfBounds"
-    value: 3
-  }
-}
-deparsers {
-  key: "deparser"
-  value {
-    name: "deparser"
-  }
-}
+initial_control: "MyIngress.ports_exact"
 
 =====MyIngress.ports_exact Entries=====
 
-concrete_entry {
-  pdpi_ir_entity {
-    table_entry {
-      table_name: "MyIngress.ports_exact"
-      matches {
-        name: "standard_metadata.ingress_port"
-        exact {
-          hex_str: "0x000"
-        }
-      }
-      action {
-        name: "MyIngress.set_egress_spec"
-        params {
-          name: "port"
-          value {
-            hex_str: "0x001"
-          }
-        }
-      }
+table_name: "MyIngress.ports_exact"
+matches {
+  name: "standard_metadata.ingress_port"
+  exact {
+    hex_str: "0x000"
+  }
+}
+action {
+  name: "MyIngress.set_egress_spec"
+  params {
+    name: "port"
+    value {
+      hex_str: "0x001"
     }
   }
 }
 
-concrete_entry {
-  pdpi_ir_entity {
-    table_entry {
-      table_name: "MyIngress.ports_exact"
-      matches {
-        name: "standard_metadata.ingress_port"
-        exact {
-          hex_str: "0x001"
-        }
-      }
-      action {
-        name: "MyIngress.set_egress_spec"
-        params {
-          name: "port"
-          value {
-            hex_str: "0x000"
-          }
-        }
-      }
+table_name: "MyIngress.ports_exact"
+matches {
+  name: "standard_metadata.ingress_port"
+  exact {
+    hex_str: "0x001"
+  }
+}
+action {
+  name: "MyIngress.set_egress_spec"
+  params {
+    name: "port"
+    value {
+      hex_str: "0x000"
     }
   }
-  index: 1
 }
 
