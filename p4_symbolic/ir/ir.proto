@@ -15,17 +15,17 @@
 // This file defines the overall structure of a P4 program in our IR, as well
 // as the supported statements and expressions.
 // The structure is tailored to be easy to consume rather than produce.
-// It deviates from the underlying bmv2 JSON format, which is mimicked closely
+// It deviates from the underlying bmv2 JSON format, which is mimiced closely
 // by p4_symbolic/bmv2/bmv2.proto.
 // The bmv2 proto is used to initially parse the JSON format, which is then
 // processed by our tool and transformed into the IR.
 // The IR does not cover all the features of P4 programs.
-// Specifically, we intentionally ignore de-parsers, stacks, unions, checksum
-// calculations, and extern definitions.
+// Specifically, we intentionally ignore parsers, de-parsers, stacks and unions,
+// checksum calculations, and extern definitions.
 // Additionally, some types of expressions and statements are unsupported, these
 // are described in the relevant sections of this file.
 // See the bmv2 JSON format reference for more information:
-// https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md
+// https://github.com/p4lang/behavioral-model/blob/master/docs/JSON_format.md
 
 syntax = "proto3";
 
@@ -46,18 +46,15 @@ message P4Program {
   map<string, Table> tables = 3;
   // Conditionals, keyed by their name.
   map<string, Conditional> conditionals = 4;
-  // Pipelines, keyed by their name.
-  map<string, Pipeline> pipeline = 5;
-  // Parsers, keyed by parser names.
-  map<string, Parser> parsers = 6;
-  // Errors, keyed by error names.
-  map<string, Error> errors = 7;
-  // Deparsers, keyed by deparser names.
-  map<string, Deparser> deparsers = 8;
 
   // TODO: If needed in the future, action calls can be added here, for
   // action calls that are not wrapped in other control constructs.
-  // https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#pipelines
+  // https://github.com/p4lang/behavioral-model/blob/master/docs/JSON_format.md#pipelines
+
+  // The name of the initial control construct, typically
+  // this is a table, but it might be a conditional (or an action call if
+  // action_calls mentioned above get supported).
+  string initial_control = 6;
 }
 
 // A header type definition.
@@ -66,9 +63,6 @@ message HeaderType {
   int32 id = 2;
   // Maps a field name to its definition.
   map<string, HeaderField> fields = 3;
-  // The ordered list of field names from the outer-most field to the inner-most
-  // field according to the P4 program.
-  repeated string ordered_fields_list = 4;
 }
 
 // A P4 header type definition.
@@ -76,140 +70,6 @@ message HeaderField {
   string name = 1;
   int32 bitwidth = 2;
   bool signed = 3;
-}
-
-// A P4 parser definition.
-message Parser {
-  // The name of the parser.
-  string name = 1;
-  // The name of the initial state of the state machine, usually "start".
-  string initial_state = 2;
-  // Defines all parse states of the state machine.
-  map<string, ParseState> parse_states = 3;
-  // The names of the ordered header instances from the outer-most header to the
-  // inner-most header. When the target switch invokes the parser, the ingress
-  // packet will be deserialized in this order into headers based on the state
-  // transitions.
-  repeated string header_order = 4;
-}
-
-// Defines a parse state.
-// A parse state defines a state and its outgoing transitions in the parser's
-// state machine.
-message ParseState {
-  string name = 1;
-  // Operations performed in the parse state in the order defined by the P4
-  // program.
-  repeated ParserOperation parser_ops = 2;
-  // Fields of the transition key for the parser state (usually just one field).
-  repeated ParserTransitionKeyField transition_key_fields = 3;
-  // All transitions from this state to the next states.
-  repeated ParserTransition transitions = 4;
-  // Control flow information for optimized symbolic execution.
-  OptimizedSymbolicExecutionInfo optimized_symbolic_execution_info = 5;
-}
-
-// Defines a parser operation, which corresponds to a single statement in a
-// parse state. For instance, a parser operation can be a "set" operation
-// (corresponding to an assignment statement), an "extract" operation
-// (corresponding to an "extract" method call), or other primitives supported by
-// the target implementation.
-//
-// Reference:
-// https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#parser-operations.
-//
-// Note that only "extract", "set", and "primitive" operations are supported for
-// now since others are not required at the moment. To support more complicated
-// parsers, other operations may be supported in the future.
-message ParserOperation {
-  // Defines an "extract" parser operation, which performs extraction for a
-  // fixed-width header.
-  message Extract {
-    // The name of the header instance to be extracted.
-    HeaderValue header = 1;
-  }
-
-  // Defines a "set" parser operation, which sets a field with the given value.
-  message Set {
-    // The field whose value is to be updated with the rvalue.
-    FieldValue lvalue = 1;
-
-    // The value used to update the field specified by the lvalue.
-    oneof rvalue {
-      FieldValue field_rvalue = 2;
-      HexstrValue hexstr_rvalue = 3;
-      LookaheadValue lookahead_rvalue = 4;
-      RExpression expression_rvalue = 5;
-    }
-  }
-
-  // Defines a "primitive" parser operation. The exact list of primitives
-  // supported depends on the individual targets. The format is similar to
-  // actions. Reference:
-  // https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#parser-operations
-  // https://github.com/p4lang/behavioral-model/blob/main/src/bm_sim/core/primitives.cpp
-  // https://github.com/p4lang/behavioral-model/blob/main/targets/simple_switch/primitives.cpp
-  message Primitive {
-    // The statement interpreted from the primitive.
-    oneof statement {
-      AssignmentStatement assignment = 1;
-    }
-  }
-
-  oneof operation {
-    Extract extract = 1;
-    Set set = 3;
-    Primitive primitive = 7;
-  }
-}
-
-// A single field in a transition key used in a parse state.
-message ParserTransitionKeyField {
-  oneof key_field {
-    // Specifies a header field as part of the transition key.
-    FieldValue field = 1;
-    // Specifies the lookahead value as part of the transition key.
-    // It evaluates to a set of bits from the input packet without advancing the
-    // current read position.
-    LookaheadValue lookahead = 2;
-  }
-}
-
-// Defines a transition between two parse states.
-message ParserTransition {
-  oneof transition {
-    // A default transition, applied when no other transitions are matched.
-    DefaultTransition default_transition = 1;
-    // A hex string transition, applied when the given hex string matches the
-    // key.
-    HexStringTransition hex_string_transition = 2;
-  }
-}
-
-// Defines a default transition.
-message DefaultTransition {
-  // The name of the next state
-  string next_state = 1;
-}
-
-// Defines a hex string transition.
-message HexStringTransition {
-  // Hex string value to be matched against the key.
-  HexstrValue value = 1;
-  // Hex string mask, to be ANDed with both the key and the value if not empty.
-  HexstrValue mask = 2;
-  // The name of the next state.
-  string next_state = 3;
-}
-
-// A P4 deparser definition.
-message Deparser {
-  // The name of the deparser.
-  string name = 1;
-  // The names of the ordered header instances from the outer-most header to the
-  // inner-most header. When the target switch invokes the deparser, the headers
-  // will be serialized in this order, and invalid headers will be skipped.
-  repeated string header_order = 2;
 }
 
 // Overall action structure, combining definition with implementation.
@@ -225,19 +85,6 @@ message ActionImplementation {
   map<string, int32> parameter_to_bitwidth = 2;
   // List of statements in action body in sequence.
   repeated Statement action_body = 3;
-}
-
-// Control flow information used during optimized symbolic execution
-// (go/optimized-symbolic-execution) for each control point.
-message OptimizedSymbolicExecutionInfo {
-  // The name of the first control point where all execution paths branched
-  // from the current control point will converge (refer to the respective field
-  // in `CfgNode` for precise definition).
-  string merge_point = 1;
-  // Whether symbolic execution must continue (to the merge point) after
-  // traversing the subgraph of the current control point (refer to the
-  // respective field in `CfgNode` for details).
-  bool continue_to_merge_point = 2;
 }
 
 // Overall table structure, combining definition with implementation.
@@ -268,18 +115,13 @@ message TableImplementation {
 
   // Maps every action used by this table (by name) to the next control
   // construct to be taken (also by name) if that action was matched.
-  // All action names must be present in the map. In case the next control is
-  // determined by whether the table is hit or not rather than by the executed
-  // action, the map must contain exactly two special actions: "__HIT__" and
-  // "__MISS__".
+  // if an action is not in this map, or is mapped to the empty string, then
+  // that action is at the end of the flow.
   map<string, string> action_to_next_control = 4;
 
   // Maps the name of a match (identical to the name used in p4 info), to
   // that match's target field.
   map<string, FieldValue> match_name_to_field = 5;
-
-  // Control flow information for optimized symbolic execution.
-  OptimizedSymbolicExecutionInfo optimized_symbolic_execution_info = 6;
 }
 
 // A conditional statement.
@@ -294,26 +136,9 @@ message Conditional {
   // The name is unique among conditionals AND tables.
   string name = 1;
   RValue condition = 2;
-  // The next control points to execute for if and else branches (always
-  // present).
+  // If a branch does not exist or is empty, this will be the empty string.
   string if_branch = 3;
   string else_branch = 4;
-  // Control flow information for optimized symbolic execution.
-  OptimizedSymbolicExecutionInfo optimized_symbolic_execution_info = 5;
-}
-
-message Pipeline {
-  string name = 1;
-  // The name of the initial control construct.
-  string initial_control = 2;
-}
-
-// Defines an error code that may be used in the program.
-message Error {
-  // The name of the error.
-  string name = 1;
-  // The value of the error code.
-  uint32 value = 2;
 }
 
 // An abstract p4 statement corresponding to a top level operation within
@@ -326,9 +151,6 @@ message Statement {
     DropStatement drop = 3;
     CloneStatement clone = 4;
     HashStatement hash = 5;
-    ExitStatement exit = 6;
-    HeaderAssignmentStatement header_assignment = 7;
-    RecirculateStatement recirculate = 8;
   }
 }
 
@@ -353,14 +175,6 @@ message CloneStatement {
   // 3. We do not support clone calls preserving custom fields.
 }
 
-// A statement recirculating egress packet to ingress, corresponds to
-// `recirculate`.
-message RecirculateStatement {
-  // We do not care about the arguments to recirculate as we do not currently
-  // fully model recirculation. We only set the kGotRecirculated pseudo field
-  // to true when recirculate is called.
-}
-
 // Hashing statement to modify a selected field based on a hash calculation.
 // Corresponds to calls to `hash`.
 message HashStatement {
@@ -370,16 +184,6 @@ message HashStatement {
   // range size, base value, and input fields).
   // These should perhaps be added in the future if the hash symbolic modeling
   // becomes more sophisticated.
-}
-
-// Statement that terminates the execution of all blocks currently executing.
-message ExitStatement {}
-
-// An assignment statement of the form <left> = <right>, where both <left> and
-// <right> describe a header instance.
-message HeaderAssignmentStatement {
-  HeaderValue left = 1;
-  HeaderValue right = 2;
 }
 
 // The structure of an abstract RValue.
@@ -435,14 +239,6 @@ message BoolValue {
 // A string literal value.
 message StringValue {
   string value = 1;
-}
-
-// A lookahead value.
-message LookaheadValue {
-  // Bit offset of the lookahead operation.
-  int32 offset = 1;
-  // Bit width of the lookahead operation.
-  int32 bitwidth = 2;
 }
 
 // A variable used within an LValue or RValue.
@@ -515,78 +311,4 @@ message BuiltinExpression {
   }
   Function function = 1;
   repeated RValue arguments = 2;
-}
-
-// A concrete table entry, i.e., a table entry where all fields have concrete
-// values.
-message ConcreteTableEntry {
-  // The entry in PDPI IR representation, but using fully qualified names for
-  // tables, actions, etc., instead of aliases like in PDPI.
-  pdpi.IrEntity pdpi_ir_entity = 1;
-
-  // The original index of this entry within the user-provided list of entries,
-  // restricted to entries in the same table only.
-  // Useful as a unique ID in formula generation and in user-facing messages.
-  //
-  // Not hoisted to `TableEntry` so it is available to functions operating only
-  // on `ConcreteTableEntry`, not the super type `TableEntry`.
-  int32 index = 2;
-}
-
-// A symbolic table entry, i.e., a table entry where some fields may be
-// symbolic, i.e., are treated like algebraic variables with an unknown value.
-message SymbolicTableEntry {
-  // We reuse the PDPI IR table entry to constrain a symbolic table entry.
-  //
-  // Uses fully qualified names for tables, action, etc., instead of aliases
-  // like in PDPI.
-  //
-  // General semantics:
-  //   - If a field is not set, it is treated as symbolic.
-  //   - If a field is set, the concrete value is used to construct an equality
-  //     constraint on that table entry.
-  // Specific semantics:
-  //   - A match that is completely omitted is treated as a wildcard.
-  //     This conforms to the P4Runtime specification.
-  //     https://p4.org/p4-spec/p4runtime/v1.3.0/P4Runtime-Spec.html#sec-match-format
-  //   - To specify a symbolic match, provide a concrete match name without any
-  //     values.
-  //   - For the prefix lengths in symbolic LPM matches, any negative value
-  //     denotes a symbolic prefix length and a non-negative value represents a
-  //     concrete prefix length value.
-  //   - The `priority` must be concrete. It must be strictly positive if there
-  //     are range, ternary, or optional matches, and must be zero if there are
-  //     only LPM or exact matches.
-  //   - If the `priority` is 0 and there is an LPM match, the prefix length of
-  //     the LPM match must be concrete, because it determines the entry's
-  //     priority.
-  //   - If neither `action` nor `action_set` is set, it is treated as a
-  //     symbolic action or action set following the P4Info specification.
-  //   - An `IrActionInvocation` with an empty `name` also denotes a symbolic
-  //     action, in which case the `params` must also be empty.
-  //   - All symbolic actions in an action set must be explicitly specified with
-  //     empty action names and parameters.
-  //
-  // In the future, we may copy the fields over from the PDPI IR to have more
-  // flexbility if needed.
-  //
-  // TODO: Align with `ConcreteTableEntry` by generalizing
-  // this to `pdpi.IrEntity`.
-  pdpi.IrTableEntry sketch = 1;
-
-  // The original index of this entry within the user-provided list of entries,
-  // restricted to entries in the same table only.
-  // Useful as a unique ID in formula generation and in user-facing messages.
-  //
-  // Not hoisted to `TableEntry` so it is available to functions operating only
-  // on `SymbolicTableEntry`, not the super type `TableEntry`.
-  int32 index = 3;
-}
-
-// Describes a table entry, which may be concrete or symbolic.
-message TableEntry {
-  oneof entry {
-    ConcreteTableEntry concrete_entry = 1;
-    SymbolicTableEntry symbolic_entry = 2;
-  }
 }
