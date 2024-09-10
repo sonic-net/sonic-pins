@@ -164,11 +164,6 @@ def bmv2_protobuf_parsing_test(name, p4_program, golden_file, p4_deps = []):
             ("--bmv2=$(location %s)" % bmv2_json),
             ("--protobuf=$(location %s)" % proto_filename),
             ("--json=$(location %s)" % json_filename),
-            # The following line makes sure hexstrings are lowercase in the protobuf file.
-            # This is needed because the hexstring representation of boost::multiprecision::cpp_int
-            # seems to behave differently accross different versions of boost (although the root
-            # cause has not been fully investigated).
-            "&& sed -i 's/0x[0-9A-F]\\+/\\L&/g' $(location %s)" % proto_filename,
         ]),
     )
 
