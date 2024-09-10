@@ -12,30 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Contains functions used to symbolically evaluate P4 conditionals and their
-// branches.
+// This file defines the main API entry point for parsing input files
+// into our IR representation.
 
-#ifndef P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
-#define P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
+#ifndef P4_SYMBOLIC_PARSER_H_
+#define P4_SYMBOLIC_PARSER_H_
+
+#include <string>
 
 #include "gutil/status.h"
 #include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/symbolic/values.h"
-#include "z3++.h"
 
 namespace p4_symbolic {
-namespace symbolic {
-namespace conditional {
 
-absl::StatusOr<SymbolicTrace> EvaluateConditional(
-    const Dataplane data_plane, const ir::Conditional &conditional,
-    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
-    const z3::expr &guard);
+absl::StatusOr<symbolic::Dataplane> ParseToIr(
+    const std::string &bmv2_path, const std::string &p4info_path,
+    const std::string &table_entries_path);
 
-}  // namespace conditional
-}  // namespace symbolic
 }  // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_SYMBOLIC_CONDITIONAL_H_
+#endif  // P4_SYMBOLIC_PARSER_H_
