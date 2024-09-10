@@ -19,6 +19,7 @@
 // objects using protobuf text format and json format to two output files.
 // The output files paths are provided as command line flags.
 
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -27,11 +28,11 @@
 #include "absl/flags/usage.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "google/protobuf/text_format.h"
 #include "google/protobuf/util/json_util.h"
-#include "gutil/io.h"
-#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.h"
+#include "p4_symbolic/util/io.h"
 
 ABSL_FLAG(std::string, bmv2, "", "The path to the bmv2 json file (required)");
 ABSL_FLAG(std::string, protobuf, "",
@@ -39,8 +40,6 @@ ABSL_FLAG(std::string, protobuf, "",
 ABSL_FLAG(std::string, json, "", "The path to the output json file (required)");
 
 namespace {
-
-using ::gutil::PrintTextProto;
 
 absl::Status Test() {
   const std::string &bmv2_path = absl::GetFlag(FLAGS_bmv2);
@@ -57,7 +56,7 @@ absl::Status Test() {
 
   // Dumping protobuf.
   RETURN_IF_ERROR(
-      gutil::WriteFile(PrintTextProto(bmv2), protobuf_path.c_str()));
+      p4_symbolic::util::WriteFile(bmv2.DebugString(), protobuf_path.c_str()));
 
   // Dumping JSON.
   google::protobuf::util::JsonPrintOptions dumping_options;
@@ -69,7 +68,8 @@ absl::Status Test() {
   RETURN_IF_ERROR(
       gutil::ToAbslStatus(google::protobuf::util::MessageToJsonString(
           bmv2, &json_output_str, dumping_options)));
-  RETURN_IF_ERROR(gutil::WriteFile(json_output_str, json_path.c_str()));
+  RETURN_IF_ERROR(
+      p4_symbolic::util::WriteFile(json_output_str, json_path.c_str()));
 
   return absl::OkStatus();
 }
@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
   // Verify link and compile versions are the same.
   // GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-  // Command line arguments and help message.
+  // Command line arugments and help message.
   absl::SetProgramUsageMessage(
       absl::StrFormat("usage: %s %s", argv[0],
                       "--bmv2=path/to/bmv2.json "
