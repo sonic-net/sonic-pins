@@ -17,25 +17,22 @@
 #include <string>
 
 #include "google/protobuf/util/json_util.h"
-#include "gutil/io.h"
 #include "gutil/status.h"
+#include "p4_symbolic/util/io.h"
 
 namespace p4_symbolic {
 namespace bmv2 {
 
 absl::StatusOr<P4Program> ParseBmv2JsonFile(const std::string &json_path) {
-  ASSIGN_OR_RETURN(std::string json, gutil::ReadFile(json_path));
-  return ParseBmv2JsonString(json);
-}
+  ASSIGN_OR_RETURN(std::string file_content, util::ReadFile(json_path));
 
-absl::StatusOr<P4Program> ParseBmv2JsonString(const std::string &json_string) {
   P4Program output;
   google::protobuf::util::JsonParseOptions options;
   options.ignore_unknown_fields = true;
 
   RETURN_IF_ERROR(
       gutil::ToAbslStatus(google::protobuf::util::JsonStringToMessage(
-          json_string, &output, options)));
+          file_content, &output, options)));
 
   return output;
 }
