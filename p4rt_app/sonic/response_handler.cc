@@ -38,7 +38,7 @@ namespace p4rt_app {
 namespace sonic {
 namespace {
 
-// Converts a SWSS error code into a Google RPC code.
+// Converts a SWSS error code into a RPC code.
 google::rpc::Code SwssToP4RTErrorCode(const std::string& status_str) {
   switch (swss::strToStatusCode(status_str)) {
     case swss::StatusCode::SWSS_RC_SUCCESS:

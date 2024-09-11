@@ -152,7 +152,6 @@ absl::Status ParseAndEvaluate() {
 
 int main(int argc, char *argv[]) {
   // Verify link and compile versions are the same.
-  // GOOGLE_PROTOBUF_VERIFY_VERSION;
 
   // Command line arguments and help message.
   absl::SetProgramUsageMessage(absl::StrFormat(

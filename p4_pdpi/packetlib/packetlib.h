@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4_PDPI_PACKETLIB_PACKETLIB_H_
-#define GOOGLE_P4_PDPI_PACKETLIB_PACKETLIB_H_
+#ifndef PINS_P4_PDPI_PACKETLIB_PACKETLIB_H_
+#define PINS_P4_PDPI_PACKETLIB_PACKETLIB_H_
 
 #include <cstdint>
 #include <string>
@@ -226,4 +226,4 @@ std::string ValidateAndConvertToHexString(uint64_t input) {
 
 }  // namespace packetlib
 
-#endif  // GOOGLE_P4_PDPI_PACKETLIB_PACKETLIB_H_
+#endif  // PINS_P4_PDPI_PACKETLIB_PACKETLIB_H_
