@@ -197,7 +197,13 @@ struct local_metadata_t {
   bool vlan_id_valid;  // True iff `vlan_id` is valid.
   bool admit_to_l3;
   vrf_id_t vrf_id;
+
+  // Rewrite related fields.
+  bool enable_ttl_rewrite;
+  bool enable_src_mac_rewrite;
+  bool enable_dst_mac_rewrite;
   packet_rewrites_t packet_rewrites;
+
   bit<16> l4_src_port;
   bit<16> l4_dst_port;
   bit<WCMP_SELECTOR_INPUT_BITWIDTH> wcmp_selector_input;

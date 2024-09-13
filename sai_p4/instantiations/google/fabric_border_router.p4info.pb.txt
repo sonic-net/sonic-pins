@@ -226,6 +226,41 @@ tables {
 }
 tables {
   preamble {
+    id: 33554498
+    name: "ingress.routing.nexthop_table"
+    alias: "nexthop_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+  }
+  match_fields {
+    id: 1
+    name: "nexthop_id"
+    match_type: EXACT
+    type_name {
+      name: "nexthop_id_t"
+    }
+  }
+  action_refs {
+    id: 16777236
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777234
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777239
+    annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 1024
+}
+tables {
+  preamble {
     id: 33554512
     name: "ingress.routing.tunnel_table"
     alias: "tunnel_table"
@@ -250,37 +285,6 @@ tables {
   }
   const_default_action_id: 21257015
   size: 512
-}
-tables {
-  preamble {
-    id: 33554498
-    name: "ingress.routing.nexthop_table"
-    alias: "nexthop_table"
-    annotations: "@p4runtime_role(\"sdn_controller\")"
-  }
-  match_fields {
-    id: 1
-    name: "nexthop_id"
-    match_type: EXACT
-    type_name {
-      name: "nexthop_id_t"
-    }
-  }
-  action_refs {
-    id: 16777236
-    annotations: "@proto_id(1)"
-  }
-  action_refs {
-    id: 16777234
-    annotations: "@proto_id(2)"
-  }
-  action_refs {
-    id: 21257015
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  const_default_action_id: 21257015
-  size: 1024
 }
 tables {
   preamble {
@@ -902,30 +906,46 @@ actions {
 }
 actions {
   preamble {
-    id: 16777235
-    name: "ingress.routing.mark_for_p2p_tunnel_encap"
-    alias: "mark_for_p2p_tunnel_encap"
+    id: 16777239
+    name: "ingress.routing.set_ip_nexthop_and_disable_rewrites"
+    alias: "set_ip_nexthop_and_disable_rewrites"
+    annotations: "@unsupported"
   }
   params {
     id: 1
-    name: "encap_src_ip"
-    annotations: "@format(IPV6_ADDRESS)"
-    bitwidth: 128
+    name: "router_interface_id"
+    annotations: "@refers_to(router_interface_table , router_interface_id)"
+    annotations: "@refers_to(neighbor_table , router_interface_id)"
+    type_name {
+      name: "router_interface_id_t"
+    }
   }
   params {
     id: 2
-    name: "encap_dst_ip"
+    name: "neighbor_id"
     annotations: "@format(IPV6_ADDRESS)"
     annotations: "@refers_to(neighbor_table , neighbor_id)"
     bitwidth: 128
   }
   params {
     id: 3
-    name: "router_interface_id"
-    annotations: "@refers_to(router_interface_table , router_interface_id)"
-    type_name {
-      name: "router_interface_id_t"
-    }
+    name: "disable_ttl_rewrite"
+    bitwidth: 1
+  }
+  params {
+    id: 4
+    name: "disable_src_mac_rewrite"
+    bitwidth: 1
+  }
+  params {
+    id: 5
+    name: "disable_dst_mac_rewrite"
+    bitwidth: 1
+  }
+  params {
+    id: 6
+    name: "disable_vlan_rewrite"
+    bitwidth: 1
   }
 }
 actions {
@@ -963,6 +983,35 @@ actions {
     annotations: "@refers_to(tunnel_table , tunnel_id)"
     type_name {
       name: "tunnel_id_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777235
+    name: "ingress.routing.mark_for_p2p_tunnel_encap"
+    alias: "mark_for_p2p_tunnel_encap"
+  }
+  params {
+    id: 1
+    name: "encap_src_ip"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+  }
+  params {
+    id: 2
+    name: "encap_dst_ip"
+    annotations: "@format(IPV6_ADDRESS)"
+    annotations: "@refers_to(neighbor_table , neighbor_id)"
+    bitwidth: 128
+  }
+  params {
+    id: 3
+    name: "router_interface_id"
+    annotations: "@refers_to(neighbor_table , router_interface_id)"
+    annotations: "@refers_to(router_interface_table , router_interface_id)"
+    type_name {
+      name: "router_interface_id_t"
     }
   }
 }

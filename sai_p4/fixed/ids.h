@@ -37,6 +37,8 @@
 #define ROUTING_SET_WCMP_GROUP_ID_ACTION_ID 0x01000004               // 16777220
 #define ROUTING_SET_WCMP_GROUP_ID_AND_METADATA_ACTION_ID 0x01000011  // 16777233
 #define ROUTING_SET_NEXTHOP_ID_ACTION_ID 0x01000005                  // 16777221
+// 16777239
+#define ROUTING_SET_IP_NEXTHOP_AND_DISABLE_REWRITES_ACTION_ID 0x01000017
 #define ROUTING_SET_NEXTHOP_ID_AND_METADATA_ACTION_ID 0x01000010     // 16777232
 #define ROUTING_DROP_ACTION_ID 0x01000006                            // 16777222
 #define ROUTING_SET_P2P_TUNNEL_ENCAP_NEXTHOP_ACTION_ID 0x01000012    // 16777234
@@ -52,7 +54,7 @@
 #define TRAP_ACTION_ID 0x0100000F                                    // 16777231
 #define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015           // 16777237
 #define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016       // 16777238
-// Next available action id: 0x01000017 (16777239)
+// Next available action id: 0x01000018 (16777240)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for
