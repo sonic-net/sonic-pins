@@ -301,6 +301,11 @@ uint64_t BitsToUint64(const std::string& data) {
 }
 
 std::string FuzzBits(absl::BitGen* gen, int bits, int bytes) {
+  if (bits == 0 && bytes == 0) {
+    // TODO: For now, the fuzzer does not fuzz string fields (which have
+    // 0 bits), but instead just uses a fixed string.
+    return "some-id";
+  }
   std::string data(bytes, 0);
   for (int i = 0; i < bytes; ++i)
     data[i] = absl::implicit_cast<char>(Uniform<uint8_t>(*gen));
@@ -369,6 +374,14 @@ p4::v1::FieldMatch FuzzExactFieldMatch(absl::BitGen* gen, int bits) {
 }
 
 p4::v1::FieldMatch FuzzOptionalFieldMatch(absl::BitGen* gen, int bits) {
+  p4::v1::FieldMatch match;
+  if (absl::Bernoulli(*gen, 0.5)) {
+    match.mutable_optional()->set_value(FuzzBits(gen, bits));
+  }
+  return match;
+}
+
+p4::v1::FieldMatch FuzzExactFieldMatch(absl::BitGen* gen, int bits, int bytes) {
   p4::v1::FieldMatch match;
   match.mutable_optional()->set_value(FuzzNonZeroBits(gen, bits));
   return match;
@@ -534,6 +547,9 @@ AnnotatedWriteRequest FuzzWriteRequest(absl::BitGen* gen,
 
   while (absl::Bernoulli(*gen, kAddUpdateProbability)) {
     *request.add_updates() = FuzzUpdate(gen, ir_p4_info, switch_state);
+    // TODO: For now, we only send requests of size <= 1. This makes
+    // debugging easier.
+    break;
   }
 
   return request;

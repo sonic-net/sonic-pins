@@ -13,20 +13,21 @@
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/switch_state.h"
+#include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
 
 // An update and it's corresponding status.
 struct UpdateStatus {
   p4::v1::Update update;
-  p4::v1::Error status;
+  pdpi::IrUpdateStatus status;
 };
 
 // An update with an index and it's corresponding status.
 struct IndexUpdateStatus {
   int index;
   p4::v1::Update update;
-  p4::v1::Error status;
+  pdpi::IrUpdateStatus status;
 };
 
 // Is the given update well-formed according to the P4RT specification (e.g.,
@@ -38,7 +39,7 @@ absl::Status IsWellformedUpdate(const pdpi::IrP4Info& ir_p4_info,
 // the given state?
 absl::Status UpdateOracle(const pdpi::IrP4Info& ir_p4_info,
                           const p4::v1::Update& update,
-                          const p4::v1::Error& status,
+                          const pdpi::IrUpdateStatus& status,
                           const SwitchState& state);
 
 // Takes a batch and checks whether the way the switch responded is legal.  For
@@ -46,7 +47,7 @@ absl::Status UpdateOracle(const pdpi::IrP4Info& ir_p4_info,
 // valid, and a list of problems otherwise.
 absl::optional<std::vector<std::string>> WriteRequestOracle(
     const pdpi::IrP4Info& ir_p4_info, const p4::v1::WriteRequest& request,
-    const absl::Span<const ::p4::v1::Error>& statuses,
+    const absl::Span<const pdpi::IrUpdateStatus>& statuses,
     const SwitchState& state);
 
 }  // namespace p4_fuzzer
