@@ -226,6 +226,33 @@ tables {
 }
 tables {
   preamble {
+    id: 33554512
+    name: "ingress.routing.tunnel_table"
+    alias: "tunnel_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+  }
+  match_fields {
+    id: 1
+    name: "tunnel_id"
+    match_type: EXACT
+    type_name {
+      name: "tunnel_id_t"
+    }
+  }
+  action_refs {
+    id: 16777235
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 512
+}
+tables {
+  preamble {
     id: 33554498
     name: "ingress.routing.nexthop_table"
     alias: "nexthop_table"
@@ -240,12 +267,12 @@ tables {
     }
   }
   action_refs {
-    id: 16777219
+    id: 16777236
     annotations: "@proto_id(1)"
   }
   action_refs {
-    id: 16777236
-    annotations: "@proto_id(3)"
+    id: 16777234
+    annotations: "@proto_id(2)"
   }
   action_refs {
     id: 21257015
@@ -1332,6 +1359,34 @@ actions {
 }
 actions {
   preamble {
+    id: 16777235
+    name: "ingress.routing.mark_for_p2p_tunnel_encap"
+    alias: "mark_for_p2p_tunnel_encap"
+  }
+  params {
+    id: 1
+    name: "encap_src_ip"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+  }
+  params {
+    id: 2
+    name: "encap_dst_ip"
+    annotations: "@format(IPV6_ADDRESS)"
+    annotations: "@refers_to(neighbor_table , neighbor_id)"
+    bitwidth: 128
+  }
+  params {
+    id: 3
+    name: "router_interface_id"
+    annotations: "@refers_to(router_interface_table , router_interface_id)"
+    type_name {
+      name: "router_interface_id_t"
+    }
+  }
+}
+actions {
+  preamble {
     id: 16777236
     name: "ingress.routing.set_ip_nexthop"
     alias: "set_ip_nexthop"
@@ -1355,26 +1410,17 @@ actions {
 }
 actions {
   preamble {
-    id: 16777219
-    name: "ingress.routing.set_nexthop"
-    alias: "set_nexthop"
-    annotations: "@deprecated(\"Use set_ip_nexthop instead.\")"
+    id: 16777234
+    name: "ingress.routing.set_p2p_tunnel_encap_nexthop"
+    alias: "set_p2p_tunnel_encap_nexthop"
   }
   params {
     id: 1
-    name: "router_interface_id"
-    annotations: "@refers_to(router_interface_table , router_interface_id)"
-    annotations: "@refers_to(neighbor_table , router_interface_id)"
+    name: "tunnel_id"
+    annotations: "@refers_to(tunnel_table , tunnel_id)"
     type_name {
-      name: "router_interface_id_t"
+      name: "tunnel_id_t"
     }
-  }
-  params {
-    id: 2
-    name: "neighbor_id"
-    annotations: "@format(IPV6_ADDRESS)"
-    annotations: "@refers_to(neighbor_table , neighbor_id)"
-    bitwidth: 128
   }
 }
 actions {
@@ -1949,6 +1995,15 @@ type_info {
   }
   new_types {
     key: "router_interface_id_t"
+    value {
+      translated_type {
+        sdn_string {
+        }
+      }
+    }
+  }
+  new_types {
+    key: "tunnel_id_t"
     value {
       translated_type {
         sdn_string {
