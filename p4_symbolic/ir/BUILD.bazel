@@ -36,3 +36,105 @@ cc_library(
         "//p4_pdpi:ir_cc_proto",
     ],
 )
+
+cc_proto_library(
+    name = "ir_cc_proto",
+    visibility = ["//p4_symbolic:__subpackages__"],
+    deps = [":ir_proto"],
+)
+
+proto_library(
+    name = "ir_proto",
+    srcs = ["ir.proto"],
+    deps = [
+        "//p4_pdpi:ir_proto",
+        "//p4_symbolic/bmv2:bmv2_proto",
+    ],
+)
+
+cc_library(
+    name = "table_entries",
+    srcs = [
+        "table_entries.cc",
+    ],
+    hdrs = [
+        "table_entries.h",
+    ],
+    visibility = ["//p4_symbolic:__subpackages__"],
+    deps = [
+        ":ir_cc_proto",
+        "//gutil:proto",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_symbolic/util",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "ir",
+    srcs = [
+        "ir.cc",
+    ],
+    hdrs = [
+        "ir.h",
+    ],
+    visibility = ["//p4_symbolic:__subpackages__"],
+    deps = [
+        ":ir_cc_proto",
+        ":table_entries",
+        "//gutil:status",
+        "//p4_symbolic/bmv2:bmv2_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_binary(
+    name = "test",
+    srcs = [
+        "test.cc",
+    ],
+    deps = [
+        "//gutil:status",
+        "//p4_symbolic:parser",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/flags:parse",
+        "@com_google_absl//absl/flags:usage",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+# Golden file testing rules to test p4_symbolic/ir/ir.cc.
+ir_parsing_test(
+    name = "port_table_test",
+    golden_file = "expected/table.txt",
+    p4_program = "//p4_symbolic/testdata:port-table/table.p4",
+    table_entries = "//p4_symbolic/testdata:port-table/entries.pb.txt",
+)
+
+ir_parsing_test(
+    name = "port_hardcoded_test",
+    golden_file = "expected/hardcoded.txt",
+    p4_program = "//p4_symbolic/testdata:hardcoded/hardcoded.p4",
+)
+
+ir_parsing_test(
+    name = "reflector_test",
+    golden_file = "expected/reflector.txt",
+    p4_program = "//p4_symbolic/testdata:reflector/reflector.p4",
+)
+
+ir_parsing_test(
+    name = "ipv4_routing_test",
+    golden_file = "expected/basic.txt",
+    p4_program = "//p4_symbolic/testdata:ipv4-routing/basic.p4",
+    table_entries = "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
+)
+
