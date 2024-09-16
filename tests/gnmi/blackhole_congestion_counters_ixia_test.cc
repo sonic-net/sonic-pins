@@ -364,6 +364,163 @@ absl::StatusOr<int64_t> GetQueuePir(absl::string_view port_name,
       absl::StrCat("No scheduler found for queue: ", queue_name));
 }
 
+TEST_P(BlackholeCongestionCountersIxiaTestFixture,
+       TestCongestionsAboveThreshIncrementOutDiscardsAndCongestionCounters) {
+  constexpr double kOutDiscardsRate = kOutDiscardsRateThresh + 0.025;
+  constexpr absl::Duration kTrafficDuration = absl::Seconds(5);
+  constexpr double kOutDiscardsRateTolerance = 0.025;
+
+  // Connect to TestTracker to track test status.
+  generic_testbed_->Environment().SetTestCaseID(
+      "8b1b40fe-62ea-4312-94df-01e857e6a786");
+
+  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
+                       TriggerOutDiscards(kOutDiscardsRate, kTrafficDuration));
+
+  // Check the changes are as expected.
+  double observed_out_discard_rate =
+      (double)out_discard_counters.port_out_discard_packets /
+      out_discard_counters.port_out_packets;
+  LOG(INFO) << "Observed out discard rate: " << observed_out_discard_rate;
+  EXPECT_NEAR(observed_out_discard_rate, kOutDiscardsRate,
+              kOutDiscardsRateTolerance);
+  EXPECT_GE(out_discard_counters.port_blackhole_out_discard_events, 1);
+  EXPECT_GE(out_discard_counters.switch_blackhole_out_discard_events, 1);
+  EXPECT_GE(out_discard_counters.switch_blackhole_events, 1);
+  EXPECT_GE(out_discard_counters.queue_dropped_packet_events, 1);
+  EXPECT_GE(out_discard_counters.switch_congestion_events, 1);
+}
+
+TEST_P(BlackholeCongestionCountersIxiaTestFixture,
+       TestCongestionsBelowThreshNotIncrementOutDiscardsAndCongestionCounters) {
+  constexpr double kOutDiscardsRate = kOutDiscardsRateThresh - 0.025;
+  constexpr absl::Duration kTrafficDuration = absl::Seconds(5);
+  constexpr double kOutDiscardsRateTolerance = 0.025;
+
+  // Connect to TestTracker to track test status.
+  generic_testbed_->Environment().SetTestCaseID(
+      "ab172e83-d5ae-4a62-8c9d-6def48de2263");
+
+  ASSERT_OK_AND_ASSIGN(OutDiscardCounters out_discard_counters,
+                       TriggerOutDiscards(kOutDiscardsRate, kTrafficDuration));
+
+  // Check the changes are as expected.
+  double observed_out_discard_rate =
+      (double)out_discard_counters.port_out_discard_packets /
+      out_discard_counters.port_out_packets;
+  LOG(INFO) << "Observed out discard rate: " << observed_out_discard_rate;
+  EXPECT_NEAR(observed_out_discard_rate, kOutDiscardsRate,
+              kOutDiscardsRateTolerance);
+  EXPECT_EQ(out_discard_counters.port_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_out_discard_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_blackhole_events, 0);
+  EXPECT_EQ(out_discard_counters.queue_dropped_packet_events, 0);
+  EXPECT_EQ(out_discard_counters.switch_congestion_events, 0);
+}
+
+}  // namespace
+
+void BlackholeCongestionCountersIxiaTestFixture::SetUp() {
+  thinkit::GenericTestbedFixture<>::SetUp();
+  // Pick a testbed with an Ixia Traffic Generator. A SUT is assumed.
+  thinkit::TestRequirements requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 2
+                 interface_mode: TRAFFIC_GENERATOR
+               })pb");
+
+  ASSERT_OK_AND_ASSIGN(generic_testbed_,
+                       GetTestbedWithRequirements(requirements));
+
+  ASSERT_OK_AND_ASSIGN(std::string blackhole_congestion_config,
+                       SetUpBlackholeCongestionConfig(GetParam().gnmi_config));
+  ASSERT_OK(generic_testbed_->Environment().StoreTestArtifact(
+      "gnmi_config.txt", GetParam().gnmi_config));
+  ASSERT_OK(generic_testbed_->Environment().StoreTestArtifact(
+      "blackhole_congestion_config.txt", blackhole_congestion_config));
+
+  // Hook up to gNMI.
+  ASSERT_OK_AND_ASSIGN(gnmi_stub_, generic_testbed_->Sut().CreateGnmiStub());
+
+  // Set up P4 Runtime session.
+  ASSERT_OK_AND_ASSIGN(sut_p4_session_,
+                       ConfigureSwitchAndReturnP4RuntimeSession(
+                           generic_testbed_->Sut(), blackhole_congestion_config,
+                           GetParam().p4_info));
+
+  ASSERT_OK_AND_ASSIGN(
+      traffic_generator_links_,
+      GetUpLinks(GetAllTrafficGeneratorLinks, *generic_testbed_));
+  ASSERT_FALSE(traffic_generator_links_.empty()) << "Ixia links are not ready";
+}
+
+void BlackholeCongestionCountersIxiaTestFixture::TearDown() {
+  // Restores the gNMI config and clears table entries.
+  ASSERT_OK(PushGnmiConfig(generic_testbed_->Sut(), GetParam().gnmi_config));
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
+  ASSERT_OK(sut_p4_session_->Finish());
+  thinkit::GenericTestbedFixture<>::TearDown();
+}
+
+absl::StatusOr<InErrorCounters>
+BlackholeCongestionCountersIxiaTestFixture::TriggerInFcsErrors(
+    int frame_rate_per_second, int frame_count) {
+  const std::string ixia_interface = traffic_generator_links_[0].peer_interface;
+  const std::string sut_interface = traffic_generator_links_[0].sut_interface;
+
+  ASSIGN_OR_RETURN(
+      IxiaSetUpResult ixia_setup_result,
+      SetUpIxiaForInFcsErrorTest(ixia_interface, *generic_testbed_,
+                                 frame_rate_per_second, frame_count));
+
+  // Read some initial counters via gMNI from the SUT.
+  ASSIGN_OR_RETURN(
+      const uint64_t initial_port_in_errors,
+      GetInterfaceCounter("in-errors", sut_interface, gnmi_stub_.get()));
+  ASSIGN_OR_RETURN(
+      const BlackholeSwitchCounters initial_blackhole_switch_counters,
+      GetBlackholeSwitchCounters(*gnmi_stub_));
+  ASSIGN_OR_RETURN(const BlackholePortCounters initial_blackhole_port_counters,
+                   GetBlackholePortCounters(sut_interface, *gnmi_stub_));
+
+  RETURN_IF_ERROR(ixia::StartTraffic(ixia_setup_result.traffic_ref,
+                                     ixia_setup_result.topology_ref,
+                                     *generic_testbed_));
+
+  absl::SleepFor(absl::Seconds(frame_count / frame_rate_per_second));
+
+  // Re-read the same counters via gMNI from the SUT.
+  ASSIGN_OR_RETURN(
+      const uint64_t final_port_in_errors,
+      GetInterfaceCounter("in-errors", sut_interface, gnmi_stub_.get()));
+  ASSIGN_OR_RETURN(
+      const BlackholeSwitchCounters final_blackhole_switch_counters,
+      GetBlackholeSwitchCounters(*gnmi_stub_));
+  ASSIGN_OR_RETURN(const BlackholePortCounters final_blackhole_port_counters,
+                   GetBlackholePortCounters(sut_interface, *gnmi_stub_));
+
+  // Compute the change for each counter.
+  const uint64_t port_in_errors_delta =
+      final_port_in_errors - initial_port_in_errors;
+  const BlackholeSwitchCounters blackhole_switch_delta =
+      final_blackhole_switch_counters - initial_blackhole_switch_counters;
+  const BlackholePortCounters blackhole_port_delta =
+      final_blackhole_port_counters - initial_blackhole_port_counters;
+
+  return InErrorCounters{
+      .port_in_error_packets = port_in_errors_delta,
+      .port_blackhole_in_error_events = blackhole_port_delta.in_error_events,
+      .switch_blackhole_in_error_events =
+          blackhole_switch_delta.in_error_events,
+      // Sometimes fec_not_correctable_events occur which the test can't
+      // control, so subtract those from the switch blackhole counter.
+      .switch_blackhole_events =
+          blackhole_switch_delta.blackhole_events -
+          blackhole_switch_delta.fec_not_correctable_events,
+  };
+}
+
 absl::StatusOr<OutDiscardCounters>
 BlackholeCongestionCountersIxiaTestFixture::TriggerOutDiscards(
     const double out_discard_rate, const absl::Duration traffic_duration) {
