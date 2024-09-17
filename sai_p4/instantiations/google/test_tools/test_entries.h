@@ -112,6 +112,9 @@ class EntryBuilder {
   EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
       absl::string_view vrf);
   EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
+  EntryBuilder& AddDisableVlanChecksEntry();
+  EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
+      absl::string_view vlan_id_hexstr, absl::string_view vrf);
 
  private:
   sai::TableEntries entries_;
