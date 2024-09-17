@@ -25,10 +25,10 @@ uint32_t UniformNotFromList(BitGen* gen, const std::vector<uint32_t>& list) {
 }
 
 // Returns the list of all table IDs in the underlying P4 program.
-const std::vector<uint32_t> AllTableIds(const pdpi::IrP4Info& ir_p4_info) {
+const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
-  for (auto& [table_id, table_def] : ir_p4_info.tables_by_id()) {
+  for (auto& [table_id, table_def] : config.info.tables_by_id()) {
     table_ids.push_back(table_id);
   }
 
@@ -36,10 +36,10 @@ const std::vector<uint32_t> AllTableIds(const pdpi::IrP4Info& ir_p4_info) {
 }
 
 // Returns the list of all action IDs in the underlying P4 program.
-const std::vector<uint32_t> AllActionIds(const pdpi::IrP4Info& ir_p4_info) {
+const std::vector<uint32_t> AllActionIds(const FuzzerConfig& config) {
   std::vector<uint32_t> action_ids;
 
-  for (auto& [action_id, action_def] : ir_p4_info.actions_by_id()) {
+  for (auto& [action_id, action_def] : config.info.actions_by_id()) {
     action_ids.push_back(action_id);
   }
 
@@ -48,12 +48,12 @@ const std::vector<uint32_t> AllActionIds(const pdpi::IrP4Info& ir_p4_info) {
 
 // Returns the list of all match field IDs in the underlying P4 program for
 // table with id table_id.
-const std::vector<uint32_t> AllMatchFieldIds(const pdpi::IrP4Info& ir_p4_info,
+const std::vector<uint32_t> AllMatchFieldIds(const FuzzerConfig& config,
                                              const uint32_t table_id) {
   std::vector<uint32_t> match_ids;
 
   for (auto& [match_id, match_def] :
-       gutil::FindOrDie(ir_p4_info.tables_by_id(), table_id)
+       gutil::FindOrDie(config.info.tables_by_id(), table_id)
            .match_fields_by_id()) {
     match_ids.push_back(match_id);
   }
@@ -61,24 +61,15 @@ const std::vector<uint32_t> AllMatchFieldIds(const pdpi::IrP4Info& ir_p4_info,
   return match_ids;
 }
 
-// Max size hint for lib protobuf mutator's Mutate function.
-const int32_t kProtobufMutatorMaxByteSize = 200;
-
 }  // namespace
 
-void MutateInvalidGeneric(TableEntry* entry) {
-  // TODO: mutator is not a visible class in google3.
-  // static protobuf_mutator::Mutator mutator;
-  // mutator.Mutate(entry, kProtobufMutatorMaxByteSize);
-}
-
 absl::Status MutateInvalidMatchFieldId(BitGen* gen, TableEntry* entry,
-                                       const pdpi::IrP4Info& ir_p4_info) {
+                                       const FuzzerConfig& config) {
   if (entry->match_size() == 0) {
     return absl::InvalidArgumentError("TableEntry has no match fields to fuzz");
   }
 
-  auto table_ids = AllTableIds(ir_p4_info);
+  auto table_ids = AllTableIds(config);
 
   if (absl::c_find(table_ids, entry->table_id()) == table_ids.end()) {
     return absl::InvalidArgumentError(
@@ -87,8 +78,8 @@ absl::Status MutateInvalidMatchFieldId(BitGen* gen, TableEntry* entry,
 
   int match_to_fuzz = Uniform<int>(*gen, 0, entry->match_size());
   entry->mutable_match(match_to_fuzz)
-      ->set_field_id(UniformNotFromList(
-          gen, AllMatchFieldIds(ir_p4_info, entry->table_id())));
+      ->set_field_id(
+          UniformNotFromList(gen, AllMatchFieldIds(config, entry->table_id())));
 
   return absl::OkStatus();
 }
@@ -130,18 +121,18 @@ absl::Status MutateDuplicateMatchField(BitGen* gen, TableEntry* entry) {
 }
 
 void MutateInvalidTableId(BitGen* gen, TableEntry* entry,
-                          const pdpi::IrP4Info& ir_p4_info) {
-  entry->set_table_id(UniformNotFromList(gen, AllTableIds(ir_p4_info)));
+                          const FuzzerConfig& config) {
+  entry->set_table_id(UniformNotFromList(gen, AllTableIds(config)));
 }
 
 void MutateInvalidActionId(BitGen* gen, TableEntry* entry,
-                           const pdpi::IrP4Info& ir_p4_info) {
+                           const FuzzerConfig& config) {
   auto action = entry->mutable_action();
 
   switch (action->type_case()) {
     case p4::v1::TableAction::kAction:
       action->mutable_action()->set_action_id(
-          UniformNotFromList(gen, AllActionIds(ir_p4_info)));
+          UniformNotFromList(gen, AllActionIds(config)));
       break;
     case p4::v1::TableAction::kActionProfileActionSet: {
       auto* action_set = action->mutable_action_profile_action_set();
@@ -151,7 +142,7 @@ void MutateInvalidActionId(BitGen* gen, TableEntry* entry,
       auto* action_profile_action =
           action_set->mutable_action_profile_actions(action_to_fuzz);
       action_profile_action->mutable_action()->set_action_id(
-          UniformNotFromList(gen, AllActionIds(ir_p4_info)));
+          UniformNotFromList(gen, AllActionIds(config)));
     }
 
     break;
@@ -161,9 +152,10 @@ void MutateInvalidActionId(BitGen* gen, TableEntry* entry,
   }
 }
 
-absl::Status MutateInvalidTableImplementation(
-    BitGen* gen, TableEntry* entry, const pdpi::IrP4Info& ir_p4_info) {
-  auto table_ids = AllTableIds(ir_p4_info);
+absl::Status MutateInvalidTableImplementation(BitGen* gen, TableEntry* entry,
+                                              const FuzzerConfig& config,
+                                              const SwitchState& switch_state) {
+  auto table_ids = AllTableIds(config);
 
   if (absl::c_find(table_ids, entry->table_id()) == table_ids.end()) {
     return absl::InvalidArgumentError(
@@ -171,18 +163,22 @@ absl::Status MutateInvalidTableImplementation(
   }
 
   pdpi::IrTableDefinition ir_table_info =
-      gutil::FindOrDie(ir_p4_info.tables_by_id(), entry->table_id());
+      gutil::FindOrDie(config.info.tables_by_id(), entry->table_id());
 
   switch (entry->action().type_case()) {
     case p4::v1::TableAction::kActionProfileActionSet: {
-      *entry->mutable_action()->mutable_action() = FuzzAction(
-          gen, ChooseNonDefaultActionRef(gen, ir_table_info).action());
+      ASSIGN_OR_RETURN(
+          *entry->mutable_action()->mutable_action(),
+          FuzzAction(
+              gen, config, switch_state,
+              ChooseNonDefaultActionRef(gen, config, ir_table_info).action()));
       break;
     }
 
     case p4::v1::TableAction::kAction: {
-      *entry->mutable_action()->mutable_action_profile_action_set() =
-          FuzzActionProfileActionSet(gen, ir_p4_info, ir_table_info);
+      ASSIGN_OR_RETURN(
+          *entry->mutable_action()->mutable_action_profile_action_set(),
+          FuzzActionProfileActionSet(gen, config, switch_state, ir_table_info));
       break;
     }
 
@@ -195,8 +191,9 @@ absl::Status MutateInvalidTableImplementation(
   return absl::OkStatus();
 }
 
-absl::Status MutateInvalidActionSelectorWeight(
-    BitGen* gen, p4::v1::TableEntry* entry, const pdpi::IrP4Info& ir_p4_info) {
+absl::Status MutateInvalidActionSelectorWeight(BitGen* gen,
+                                               p4::v1::TableEntry* entry,
+                                               const FuzzerConfig& config) {
   auto action = entry->mutable_action();
 
   if (action->type_case() != p4::v1::TableAction::kActionProfileActionSet) {
@@ -227,7 +224,7 @@ absl::Status MutateInvalidActionSelectorWeight(
 }
 
 absl::Status MutateDuplicateInsert(absl::BitGen* gen, p4::v1::Update* update,
-                                   const pdpi::IrP4Info& ir_p4_info,
+                                   const FuzzerConfig& config,
                                    const SwitchState& switch_state) {
   std::vector<TableEntry> entries;
 
@@ -251,11 +248,12 @@ absl::Status MutateDuplicateInsert(absl::BitGen* gen, p4::v1::Update* update,
 }
 
 absl::Status MutateNonexistingDelete(absl::BitGen* gen, p4::v1::Update* update,
-                                     const pdpi::IrP4Info& ir_p4_info,
+                                     const FuzzerConfig& config,
                                      const SwitchState& switch_state) {
-  const int table_id = FuzzTableId(gen, switch_state);
+  const int table_id = FuzzTableId(gen, config);
 
-  p4::v1::TableEntry entry = FuzzValidTableEntry(gen, ir_p4_info, table_id);
+  ASSIGN_OR_RETURN(p4::v1::TableEntry entry,
+                   FuzzValidTableEntry(gen, config, switch_state, table_id));
   if (switch_state.GetTableEntry(entry) != absl::nullopt) {
     return absl::InternalError("Generated entry that exists in switch");
   }
@@ -266,23 +264,23 @@ absl::Status MutateNonexistingDelete(absl::BitGen* gen, p4::v1::Update* update,
   return absl::OkStatus();
 }
 
-absl::Status MutateUpdate(BitGen* gen, p4::v1::Update* update,
-                          const pdpi::IrP4Info& ir_p4_info,
+absl::Status MutateUpdate(BitGen* gen, const FuzzerConfig& config,
+                          p4::v1::Update* update,
                           const SwitchState& switch_state,
                           const Mutation& mutation) {
   TableEntry* entry = update->mutable_entity()->mutable_table_entry();
 
   switch (mutation) {
     case Mutation::INVALID_TABLE_ID:
-      MutateInvalidTableId(gen, entry, ir_p4_info);
+      MutateInvalidTableId(gen, entry, config);
       return absl::OkStatus();
 
     case Mutation::INVALID_ACTION_ID:
-      MutateInvalidActionId(gen, entry, ir_p4_info);
+      MutateInvalidActionId(gen, entry, config);
       return absl::OkStatus();
 
     case Mutation::INVALID_MATCH_FIELD_ID:
-      return MutateInvalidMatchFieldId(gen, entry, ir_p4_info);
+      return MutateInvalidMatchFieldId(gen, entry, config);
 
     case Mutation::MISSING_MANDATORY_MATCH_FIELD:
       return MutateMissingMandatoryMatchField(gen, entry);
@@ -290,21 +288,17 @@ absl::Status MutateUpdate(BitGen* gen, p4::v1::Update* update,
     case Mutation::DUPLICATE_MATCH_FIELD:
       return MutateDuplicateMatchField(gen, entry);
 
-    case Mutation::INVALID_GENERIC:
-      MutateInvalidGeneric(entry);
-      return absl::OkStatus();
-
     case Mutation::INVALID_TABLE_IMPLEMENTATION:
-      return MutateInvalidTableImplementation(gen, entry, ir_p4_info);
+      return MutateInvalidTableImplementation(gen, entry, config, switch_state);
 
     case Mutation::INVALID_ACTION_SELECTOR_WEIGHT:
-      return MutateInvalidActionSelectorWeight(gen, entry, ir_p4_info);
+      return MutateInvalidActionSelectorWeight(gen, entry, config);
 
     case Mutation::DUPLICATE_INSERT:
-      return MutateDuplicateInsert(gen, update, ir_p4_info, switch_state);
+      return MutateDuplicateInsert(gen, update, config, switch_state);
 
     case Mutation::NONEXISTING_DELETE:
-      return MutateNonexistingDelete(gen, update, ir_p4_info, switch_state);
+      return MutateNonexistingDelete(gen, update, config, switch_state);
 
     default:
       LOG(FATAL) << "Unsupported mutation type";

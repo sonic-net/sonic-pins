@@ -53,28 +53,6 @@ cc_test(
 )
 
 cc_library(
-    name = "fuzzer_config",
-    srcs = [
-        "fuzzer_config.cc",
-    ],
-    hdrs = [
-        "fuzzer_config.h",
-    ],
-    deps = [
-        "//gutil:status",
-        "//lib/p4rt:p4rt_port",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-    ],
-)
-
-cc_library(
     name = "table_entry_key",
     srcs = ["table_entry_key.cc"],
     hdrs = ["table_entry_key.h"],
@@ -100,6 +78,16 @@ cc_test(
 )
 
 cc_library(
+    name = "fuzzer_config",
+    hdrs = [
+        "fuzzer_config.h",
+    ],
+    deps = [
+        "//p4_pdpi:ir_cc_proto",
+    ],
+)
+
+cc_library(
     name = "mutation_and_fuzz_util",
     srcs = [ 
         "fuzz_util.cc",
@@ -112,22 +100,26 @@ cc_library(
     deps = [ 
         ":annotation_util",
         ":fuzzer_cc_proto",
+        ":fuzzer_config",
         ":switch_state",
+        "//gutil:collections",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "//p4_pdpi/netaddr:ipv6_address",
+        "//p4_pdpi/utils:ir",
         "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/base:endian",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/strings",
-        # TODO: This target is not visible in google3.
-        # "//third_party/libprotobuf_mutator:libprotobuf_mutator_internals",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "//gutil:collections",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:pd",
-        "//p4_pdpi/utils:ir",
-    ],  
+        "@com_google_protobuf//:protobuf_lite",
+    ],
 )
 
 cc_test(
