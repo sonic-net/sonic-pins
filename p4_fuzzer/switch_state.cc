@@ -44,7 +44,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/translation_options.h"
 
-// TODO: b/316625656 - Remove death behavior from this file (i.e. remove
+// Remove death behavior from this file (i.e. remove
 // statements that crash like FindOrDie).
 
 namespace p4_fuzzer {
@@ -103,11 +103,28 @@ ActionProfileResources GetAllActionProfileResourceForTableEntry(
 absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
     const p4::config::v1::ActionProfile& action_profile,
     const UnorderedTableEntries& current_table,
-    const p4::v1::TableEntry& pi_table_entry) {
+    const p4::v1::Update& pi_update) {
+  if (pi_update.type() == Update::DELETE) {
+    return "The update is a DELETE which can always be accommodated.";
+  }
+
+  const p4::v1::TableEntry& pi_table_entry = pi_update.entity().table_entry();
   ActionProfileResources current_resources =
       GetAllActionProfileResourceForTable(current_table);
   ActionProfileResources needed_resources =
       GetAllActionProfileResourceForTableEntry(pi_table_entry);
+  // MODIFYs are treated as a DELETE + INSERT which means resources are removed
+  // before added. INSERTs do not remove resources.
+  ActionProfileResources removed_resources;
+  if (pi_update.type() == Update::MODIFY) {
+    auto it = current_table.find(pdpi::TableEntryKey(pi_table_entry));
+    if (it == current_table.end()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << " Cannot MODIFY an entry that does not exist. "
+             << gutil::PrintTextProto(pi_update);
+    }
+    removed_resources = GetAllActionProfileResourceForTableEntry(it->second);
+  }
 
   for (const p4::v1::ActionProfileAction& action :
        pi_table_entry.action()
@@ -146,7 +163,14 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
         "with space for %d, and the new entry needs %d.",
         current_resources.actions, action_profile.size(),
         needed_resources.actions);
-    if (current_resources.actions + needed_resources.actions <=
+    if (pi_update.type() == Update::MODIFY) {
+      absl::StrAppend(
+          &result,
+          " The update is a MODIFY and will replace an entry that had ",
+          removed_resources.actions, " members.");
+    }
+    if (current_resources.actions + needed_resources.actions -
+            removed_resources.actions <=
         action_profile.size()) {
       return result;
     }
@@ -168,7 +192,14 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
         "of %d with space for %d, and the new entry needs %d.",
         current_resources.total_weight, action_profile.size(),
         needed_resources.total_weight);
-    if (current_resources.total_weight + needed_resources.total_weight <=
+    if (pi_update.type() == Update::MODIFY) {
+      absl::StrAppend(&result,
+                      " The update is a MODIFY and will replace an entry that "
+                      "had weight ",
+                      removed_resources.total_weight, ".");
+    }
+    if (current_resources.total_weight + needed_resources.total_weight -
+            removed_resources.total_weight <=
         action_profile.size()) {
       return result;
     }
@@ -268,10 +299,25 @@ int64_t SwitchState::GetNumTableEntries() const { return current_entries_; }
 //   * table is full.
 //   * action profile resources are exhausted. (only applies to action sets)
 absl::Status SwitchState::ResourceExhaustedIsAllowed(
-    const p4::v1::TableEntry& pi_table_entry) const {
+    const p4::v1::Update& pi_update) const {
+  // DELETEs should never trigger resource exhaustion.
+  if (pi_update.type() == Update::DELETE) {
+    return gutil::FailedPreconditionErrorBuilder()
+           << "DELETEs should never trigger resource exhaustion."
+           << gutil::PrintTextProto(pi_update);
+  }
+
+  // Now that we have multicast platform properties, check
+  // for invalid multicast resource exhaustion.
+  if (!pi_update.entity().has_table_entry()) {
+    return gutil::UnimplementedErrorBuilder()
+           << "ResourceExhaustedIsAllowed only supports table entries.";
+  }
+
   std::vector<std::string> results;
   results.reserve(2);
 
+  const TableEntry& pi_table_entry = pi_update.entity().table_entry();
   uint32_t table_id = pi_table_entry.table_id();
   ASSIGN_OR_RETURN(const pdpi::IrTableDefinition* table_def,
                    FindPtrOrStatus(ir_p4info_.tables_by_id(), table_id));
@@ -280,12 +326,19 @@ absl::Status SwitchState::ResourceExhaustedIsAllowed(
 
   // If adding this entry would push the table size beyond what is defined then
   // ResourceExhausted is allowed.
-  if (table->size() + 1 > table_def->size()) {
+  if (pi_update.type() == Update::INSERT &&
+      table->size() + 1 > table_def->size()) {
     return absl::OkStatus();
   }
-  results.push_back(
-      absl::StrFormat("The table is holding %d entries, but has space for %d.",
-                      table->size(), table_def->size()));
+
+  std::string table_size_result =
+      absl::StrFormat("The table is holding %d entries and  has space for %d.",
+                      table->size(), table_def->size());
+  if (pi_update.type() == Update::MODIFY) {
+    absl::StrAppend(&table_size_result,
+                    " The update is a MODIFY and replaces an existing entry.");
+  }
+  results.push_back(table_size_result);
 
   // If the table uses an action profile then we also need to verify that the
   // profile itself has enough space.
@@ -300,7 +353,7 @@ absl::Status SwitchState::ResourceExhaustedIsAllowed(
     // Check if we have exhausted our action profile resources.
     absl::StatusOr<std::string> action_profile_has_space =
         ReasonActionProfileCanAccommodateTableEntry(action_profile, *table,
-                                                    pi_table_entry);
+                                                    pi_update);
 
     if (!action_profile_has_space.ok()) {
       // If we've exhausted our action profile resources then ResourceExhausted
