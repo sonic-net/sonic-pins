@@ -1,6 +1,7 @@
 #ifndef P4_FUZZER_TABLE_ENTRY_KEY_H_
 #define P4_FUZZER_TABLE_ENTRY_KEY_H_
 
+#include <algorithm>
 #include <vector>
 
 #include "absl/hash/hash.h"
@@ -15,7 +16,29 @@ class TableEntryKey {
   template <typename H>
   friend H AbslHashValue(H h, const TableEntryKey& key);
 
-  bool operator==(const TableEntryKey& other) const;
+  bool operator==(const TableEntryKey& other) const {
+    // Note: this must match the implementation of hash value below.
+    if ((table_id_ != other.table_id_) || (priority_ != other.priority_) ||
+        matches_.size() != other.matches_.size()) {
+      return false;
+    }
+
+    for (int i = 0; i < matches_.size(); i++) {
+      const auto& a = matches_[i];
+      const auto& b = other.matches_[i];
+      if (a.field_id() != b.field_id() ||
+          a.exact().value() != b.exact().value() ||
+          a.ternary().value() != b.ternary().value() ||
+          a.ternary().mask() != b.ternary().mask() ||
+          a.lpm().value() != b.lpm().value() ||
+          a.lpm().prefix_len() != b.lpm().prefix_len() ||
+          a.range().low() != b.range().low() ||
+          a.range().high() != b.range().high() ||
+          a.optional().value() != b.optional().value())
+        return false;
+    }
+    return true;
+  }
 
  private:
   uint32_t table_id_;
@@ -27,7 +50,7 @@ template <typename H>
 H AbslHashValue(H h, const TableEntryKey& key) {
   h = H::combine(std::move(h), key.table_id_, key.priority_);
 
-  for (auto field : key.matches_) {
+  for (const auto& field : key.matches_) {
     // Since protobufs yield a default value for an unset field and since {
     // exact, ternary, lpm, range, optional } are all part of the oneof
     // directive (i,e only one of them will be set at a given time), we can get
