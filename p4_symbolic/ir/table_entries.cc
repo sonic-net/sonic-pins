@@ -14,100 +14,66 @@
 
 #include "p4_symbolic/ir/table_entries.h"
 
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/types/span.h"
-#include "gutil/status.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_split.h"
+#include "gutil/proto.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
-#include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/names.h"
-#include "p4_symbolic/ir/ir.pb.h"
+#include "p4_symbolic/util/io.h"
 
 namespace p4_symbolic {
 namespace ir {
 
-namespace {
+absl::StatusOr<TableEntries> ParseAndFillEntries(
+    const pdpi::IrP4Info &p4info, const std::string &entries_path) {
+  // Parse table entries as a plain p4.v1.TableEntry proto.
+  p4::v1::WriteRequest entries_file;
+  RETURN_IF_ERROR(
+      gutil::ReadProtoFromFile(entries_path.c_str(), &entries_file));
 
-absl::Status UseFullyQualifiedTableName(const pdpi::IrP4Info &p4info,
-                                        pdpi::IrTableEntry &entry) {
-  auto &alias = entry.table_name();
-  RET_CHECK(p4info.tables_by_name().count(alias) == 1)
-      << "where alias = '" << alias << "' and IR table entry =\n"
-      << absl::StrCat(entry);
-  auto &full_name = p4info.tables_by_name().at(alias).preamble().name();
-  entry.set_table_name(full_name);
-  return absl::OkStatus();
-}
-
-absl::Status UseFullyQualifiedActionName(const pdpi::IrP4Info &p4info,
-                                         pdpi::IrActionInvocation &action) {
-  auto &alias = action.name();
-  RET_CHECK(p4info.actions_by_name().count(alias) == 1)
-      << "where alias = '" << alias;
-  auto &full_name = p4info.actions_by_name().at(alias).preamble().name();
-  action.set_name(full_name);
-  return absl::OkStatus();
-}
-
-absl::Status UseFullyQualifiedNamesInEntry(const pdpi::IrP4Info &info,
-                                           pdpi::IrTableEntry &entry) {
-  RETURN_IF_ERROR(UseFullyQualifiedTableName(info, entry));
-  switch (entry.type_case()) {
-    case pdpi::IrTableEntry::kAction:
-      return UseFullyQualifiedActionName(info, *entry.mutable_action());
-    case pdpi::IrTableEntry::kActionSet:
-      for (auto &action : *entry.mutable_action_set()->mutable_actions()) {
-        RETURN_IF_ERROR(
-            UseFullyQualifiedActionName(info, *action.mutable_action()));
-      }
-      return absl::OkStatus();
-    default:
-      break;
-  }
-  return gutil::InvalidArgumentErrorBuilder()
-         << "unexpected or missing action in table entry: "
-         << absl::StrCat(entry);
-}
-
-absl::Status UseFullyQualifiedNamesInEntity(const pdpi::IrP4Info &info,
-                                            pdpi::IrEntity &entity) {
-  switch (entity.entity_case()) {
-    case pdpi::IrEntity::kTableEntry:
-      return UseFullyQualifiedNamesInEntry(info, *entity.mutable_table_entry());
-    default:
-      return absl::OkStatus();
-  }
-}
-
-}  // namespace
-
-absl::StatusOr<TableEntries> ParseTableEntries(
-    const pdpi::IrP4Info &p4info, absl::Span<const p4::v1::Entity> entities) {
   // Use pdpi to transform each plain p4.v1.TableEntry to the pd representation
   // pdpi.ir.IrTableEntry.
   TableEntries output;
-  for (const p4::v1::Entity &pi_entity : entities) {
-    ASSIGN_OR_RETURN(
-        pdpi::IrEntity ir_entity,
-        pdpi::PiEntityToIr(p4info, pi_entity, {.allow_unsupported = true}));
-    // TODO: Consider removing this function call if we switch to
-    // using aliases as table/action names in P4-Symbolic.
-    RETURN_IF_ERROR(UseFullyQualifiedNamesInEntity(p4info, ir_entity));
-    ASSIGN_OR_RETURN(std::string table_name,
-                     pdpi::EntityToTableName(ir_entity));
+  for (const p4::v1::Update &update : entries_file.updates()) {
+    // Make sure update is of type insert.
+    if (update.type() != p4::v1::Update::INSERT) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Table entries file contains a non-insert update ",
+                       update.DebugString()));
+    }
 
-    std::vector<TableEntry> &output_entries = output[std::move(table_name)];
-    int index = output_entries.size();
-    ConcreteTableEntry &output_entry =
-        *output_entries.emplace_back().mutable_concrete_entry();
-    output_entry.set_index(index);
-    *output_entry.mutable_pdpi_ir_entity() = std::move(ir_entity);
+    // Make sure the entity is a table entry.
+    const p4::v1::Entity &entity = update.entity();
+    if (entity.entity_case() != p4::v1::Entity::kTableEntry) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Table entries file contains a non-table entry entity ",
+                       entity.DebugString()));
+    }
+
+    // Read table entry as a program-independent P4RT protobuf.
+    // Transform it to a program dependent pdpi protobuf.
+    const p4::v1::TableEntry &pi_entry = entity.table_entry();
+    ASSIGN_OR_RETURN(pdpi::IrTableEntry pdpi_entry,
+                     pdpi::PiTableEntryToIr(p4info, pi_entry));
+
+    // Replace table and action aliases with their respective full name.
+    const std::string &table_alias = pdpi_entry.table_name();
+    const std::string &action_alias = pdpi_entry.action().name();
+
+    // Make sure both table and action referred to by entry exist.
+    RET_CHECK(p4info.tables_by_name().count(table_alias) == 1);
+    RET_CHECK(p4info.actions_by_name().count(action_alias) == 1);
+
+    const std::string &table_name =
+        p4info.tables_by_name().at(table_alias).preamble().name();
+    const std::string &action_name =
+        p4info.actions_by_name().at(action_alias).preamble().name();
+
+    pdpi_entry.mutable_action()->set_name(action_name);
+    pdpi_entry.set_table_name(table_name);
+    output[pdpi_entry.table_name()].push_back(pdpi_entry);
   }
   return output;
 }
