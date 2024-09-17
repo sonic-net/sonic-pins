@@ -56,6 +56,7 @@
 #define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015           // 16777237
 #define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016       // 16777238
 #define DISABLE_VLAN_CHECKS_ACTION_ID 0x0100001A                   // 16777242
+// Next available action id: 0x0100001B (16777243)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for

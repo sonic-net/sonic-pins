@@ -142,8 +142,8 @@ absl::StatusOr<sai::TableEntry> MakePdEntryPuntingAllPackets(
                    gutil::ParseTextProto<sai::TableEntry>(
                        R"pb(
                          acl_ingress_table_entry {
-                           match {}     # Wildcard match
-                           priority: 1  # Highest priority
+                           match {}  # Wildcard match
+                           priority: 1
                          }
                        )pb"));
   auto& acl_action = *entry.mutable_acl_ingress_table_entry()->mutable_action();
@@ -444,7 +444,7 @@ EntryBuilder& EntryBuilder::AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
     ipv6_tunnel_termination_table_entry {
       match {}  # Wildcard match
       action { mark_for_tunnel_decap_and_set_vrf { vrf_id: "" } }
-      priority: 1  # Highest priority
+      priority: 1
     }
   )pb");
   entry.mutable_ipv6_tunnel_termination_table_entry()
@@ -462,6 +462,17 @@ EntryBuilder& EntryBuilder::AddDisableVlanChecksEntry() {
       priority: 1
     }
   )pb");
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddEntrySettingVrfBasedOnVlanId(
+    absl::string_view vlan_id_hexstr, absl::string_view vrf) {
+  sai::AclPreIngressTableEntry& entry =
+      *entries_.add_entries()->mutable_acl_pre_ingress_table_entry();
+  entry.mutable_match()->mutable_vlan_id()->set_value(vlan_id_hexstr);
+  entry.mutable_match()->mutable_vlan_id()->set_mask("0xfff");
+  entry.mutable_action()->mutable_set_vrf()->set_vrf_id(vrf);
+  entry.set_priority(1);
   return *this;
 }
 
