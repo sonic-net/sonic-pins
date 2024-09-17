@@ -274,6 +274,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Add support for this table once the switch
           // supports it.
           "ipv6_tunnel_termination_table",
+          // TODO: Add support for this table once the switch
+          // supports it.
+          "disable_vlan_checks_table",
       });
   return *kUnsupportedTables;
 }

@@ -25,7 +25,8 @@
 #define ECMP_HASHING_TABLE_ID 0x02000049                // 33554505
 #define ROUTING_TUNNEL_TABLE_ID 0x02000050              // 33554512
 #define IPV6_TUNNEL_TERMINATION_TABLE_ID 0x0200004B     // 33554507
-// Next available table id: 0x0200004C (33554508)
+#define DISABLE_VLAN_CHECKS_TABLE_ID 0x0200004D                 // 33554509
+// Next available table id: 0x0200004E (33554510)
 
 // --- Actions -----------------------------------------------------------------
 
@@ -54,7 +55,7 @@
 #define TRAP_ACTION_ID 0x0100000F                                    // 16777231
 #define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015           // 16777237
 #define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016       // 16777238
-// Next available action id: 0x01000018 (16777240)
+#define DISABLE_VLAN_CHECKS_ACTION_ID 0x0100001A                   // 16777242
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for

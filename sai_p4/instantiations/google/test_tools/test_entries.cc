@@ -455,4 +455,14 @@ EntryBuilder& EntryBuilder::AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddDisableVlanChecksEntry() {
+  *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
+    disable_vlan_checks_table_entry {
+      action { disable_vlan_checks {} }
+      priority: 1
+    }
+  )pb");
+  return *this;
+}
+
 }  // namespace sai
