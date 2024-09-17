@@ -1,0 +1,59 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package p4_symbolic.packet_synthesizer;
+
+import "p4/v1/p4runtime.proto";
+import "p4_pdpi/packetlib/packetlib.proto";
+
+// Protobuf equivalent of the struct in
+// third_party/pins_infra/p4_symbolic/symbolic/values.h.
+message TranslationData {
+  // Static mapping between string values and ids.
+  message StaticMapping {
+    string string_value = 1;
+    int32 integer_value = 2;
+  }
+
+  repeated StaticMapping static_mapping = 1;
+  bool dynamic_translation = 2;
+}
+
+// Contains the input parameters (P4 program, table entries, etc.) for
+// PacketSynthesizer to build the initial SMT formula.
+message PacketSynthesisParams {
+  p4.v1.ForwardingPipelineConfig pipeline_config = 1;
+  repeated p4.v1.TableEntry pi_entries = 2;
+  repeated int32 physical_port = 3;
+  map<string, TranslationData> translation_per_type = 4;
+}
+
+// Describes a packet synthesized for a given packet synthesis criteria, with an
+// expectation whether the packet gets dropped, punted to the controller, and/or
+// mirrored.
+message SynthesizedPacket {
+  packetlib.Packet packet = 1;
+  string ingress_port = 5;
+  bool drop_expected = 2;
+  bool punt_expected = 3;
+  bool mirror_expected = 4;
+}
+
+// The output of PacketSynthesizer::SynthesizePacket
+message PacketSynthesisResult {
+  // If empty, it means the input criteria was not satifiable.
+  SynthesizedPacket synthesized_packet = 1;
+}
