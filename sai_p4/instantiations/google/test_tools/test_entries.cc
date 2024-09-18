@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -30,7 +31,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "google/protobuf/repeated_ptr_field.h"
-#include "glog/logging.h"
 #include "gutil/gutil/overload.h"
 #include "gutil/gutil/proto_ordering.h"
 #include "gutil/gutil/status.h"

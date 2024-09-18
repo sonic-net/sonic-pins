@@ -24,11 +24,11 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
+#include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/rpc/code.pb.h"
 #include "grpcpp/client_context.h"
@@ -109,8 +109,8 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
   std::thread subscribe_thread([&subscription] {
     gnmi::SubscribeResponse response;
     while (subscription->Read(&response)) {
-      LOG_EVERY_N(INFO, 1000)
-          << "Received subscribe notification (Count: " << google::COUNTER
+      LOG_EVERY_POW_2(INFO)
+          << "Received subscribe notification (Count: " << COUNTER
           << "): " << response.ShortDebugString();
     }
   });

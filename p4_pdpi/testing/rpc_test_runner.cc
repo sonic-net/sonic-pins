@@ -19,7 +19,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
 #include "google/protobuf/any.pb.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "google/rpc/code.pb.h"

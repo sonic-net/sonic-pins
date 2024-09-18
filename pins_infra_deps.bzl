@@ -82,13 +82,6 @@ def pins_infra_deps():
             strip_prefix = "googleapis-f405c718d60484124808adb7fb5963974d654bb4",
             sha256 = "406b64643eede84ce3e0821a1d01f66eaf6254e79cb9c4f53be9054551935e79",
         )
-    if not native.existing_rule("com_github_google_glog"):
-        http_archive(
-            name = "com_github_google_glog",
-            url = "https://github.com/google/glog/archive/v0.6.0.tar.gz",
-            strip_prefix = "glog-0.6.0",
-            sha256 = "8a83bf982f37bb70825df71a9709fa90ea9f4447fb3c099e1d720a439d88bad6",
-        )
     if not native.existing_rule("com_github_otg_models"):
         http_archive(
             name = "com_github_otg_models",
@@ -97,16 +90,6 @@ def pins_infra_deps():
             build_file = "@//:bazel/BUILD.otg-models.bazel",
             sha256 = "1a63e769f1d7f42c79bc1115babf54acbc44761849a77ac28f47a74567f10090",
         )
-
-    # Needed to make glog happy.
-    if not native.existing_rule("com_github_gflags_gflags"):
-        http_archive(
-            name = "com_github_gflags_gflags",
-            url = "https://github.com/gflags/gflags/archive/v2.2.2.tar.gz",
-            strip_prefix = "gflags-2.2.2",
-            sha256 = "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf",
-        )
-
     if not native.existing_rule("com_github_gnmi"):
         http_archive(
             name = "com_github_gnmi",

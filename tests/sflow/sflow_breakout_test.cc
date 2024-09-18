@@ -5,6 +5,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -12,7 +13,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
 #include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status.h"

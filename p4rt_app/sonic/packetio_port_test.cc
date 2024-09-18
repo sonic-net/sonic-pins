@@ -16,7 +16,6 @@
 #include <cstddef>
 #include <memory>
 
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/gutil/status_matchers.h"

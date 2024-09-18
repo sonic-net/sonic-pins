@@ -16,10 +16,10 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
-#include "glog/logging.h"
 #include "gutil/gutil/testing.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"

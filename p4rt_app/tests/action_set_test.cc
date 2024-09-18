@@ -17,7 +17,6 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "grpcpp/security/credentials.h"
 #include "gtest/gtest.h"

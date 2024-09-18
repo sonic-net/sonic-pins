@@ -14,9 +14,12 @@
 
 #include "dvaas/mirror_testbed_config.h"
 
+#include <vector>
+
+#include "absl/container/btree_set.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
-#include "glog/logging.h"
 #include "gutil/gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4_pdpi/ir.h"
