@@ -341,32 +341,6 @@ absl::StatusOr<std::vector<std::vector<int>>> SequencePiUpdatesInPlace(
   return batches;
 }
 
-// The implementation can be reduced to sorting INSERTS using
-// SequencePiUpdatesIntoWriteRequests.
-absl::Status SortTableEntries(const IrP4Info& info,
-                              std::vector<p4::v1::TableEntry>& entries) {
-  std::vector<Update> updates;
-  updates.reserve(entries.size());
-  for (const auto& entry : entries) {
-    Update update;
-    update.set_type(Update::INSERT);
-    *update.mutable_entity()->mutable_table_entry() = std::move(entry);
-    updates.push_back(update);
-  }
-  ASSIGN_OR_RETURN(std::vector<std::vector<int>> batches,
-                   SequencePiUpdatesInPlace(info, updates));
-
-  entries.clear();
-  for (const std::vector<int>& batch : batches) {
-    for (int update_index : batch) {
-      entries.push_back(
-          std::move(updates[update_index].entity().table_entry()));
-    }
-  }
-
-  return absl::OkStatus();
-}
-
 // Returns true if the table of `first` comes before the table of `second` in
 // the dependency order contained in `info`. I.e. if installing `first` before
 // `second` never fails due to dependency issues between them.
@@ -537,95 +511,6 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
   // Returns unreachable entities in the order of their indices.
   for (int i : sorted_unreachable_indices) {
     unreachable_entities.push_back(entities[i]);
-  }
-  return unreachable_entities;
-}
-
-absl::StatusOr<std::vector<p4::v1::Entity>> OldGetEntitiesUnreachableFromRoots(
-    absl::Span<const p4::v1::Entity> entities,
-    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
-        is_root_entity,
-    const IrP4Info& ir_p4info) {
-  absl::flat_hash_map<ReferredTableEntry, std::vector<int>>
-      potentially_reachable_entries;
-  std::vector<int> unreachable_indices;
-  // `frontier_indices` stores indices for entries that could potentially refer
-  // to other entries, but whose references have not been examined yet.
-  std::queue<int> frontier_indices;
-  absl::flat_hash_map<ReferenceRelationKey, ReferenceRelation>
-      referred_relations = CreateReferenceRelations(ir_p4info);
-
-  for (int i = 0; i < entities.size(); i++) {
-    const p4::v1::Entity& entity = entities[i];
-    ASSIGN_OR_RETURN(bool is_root_entity, is_root_entity(entity));
-    if (is_root_entity) {
-      // Old implementation ignores multicast entries.
-      if (entity.has_packet_replication_engine_entry()) {
-        continue;
-      }
-      frontier_indices.push(i);
-      continue;
-    }
-    if (!entity.has_table_entry()) {
-      return absl::UnimplementedError(
-          absl::StrCat("Only entities of type table_entry can be garbage "
-                       "collected. Entity: ",
-                       entity.DebugString()));
-    }
-    const p4::v1::TableEntry& table_entry = entity.table_entry();
-    // If the table that entries[i] belongs to is referred to, entries[i] is
-    // potentially reachable. Else, entries[i] is not reachable.
-    if (referred_relations.contains(ReferenceRelationKey{
-            .referred_table_id = table_entry.table_id()})) {
-      ASSIGN_OR_RETURN(ReferredTableEntry referrable_table_entry,
-                       CreateReferrableTableEntry(ir_p4info, referred_relations,
-                                                  table_entry));
-      potentially_reachable_entries[referrable_table_entry].push_back(i);
-    } else {
-      LOG(WARNING) << "Found non-root entry that could never be reachable. "
-                      "This probably indicates some mistake in is_root_entry "
-                      "or the ir_p4info. Found entry: "
-                   << table_entry.DebugString();
-      unreachable_indices.push_back(i);
-    }
-  }
-
-  // Expand frontier of reachable entries.
-  // Pop an entry off the frontier and if that entry refers to some entries in
-  // potentially_reachable_entries, move them from
-  // `potentially_reachable_entries` to `frontier_indices`.
-  while (!frontier_indices.empty()) {
-    const ::p4::v1::TableEntry& frontier_entry =
-        entities[frontier_indices.front()].table_entry();
-    frontier_indices.pop();
-    ASSIGN_OR_RETURN(
-        std::vector<ReferredTableEntry> entries_referred_to_by_frontier_entry,
-        EntriesReferredToByTableEntry(ir_p4info, frontier_entry));
-    for (const ReferredTableEntry& referred_to_entry :
-         entries_referred_to_by_frontier_entry) {
-      if (auto it = potentially_reachable_entries.find(referred_to_entry);
-          it != potentially_reachable_entries.end()) {
-        absl::c_for_each(it->second, [&frontier_indices](int i) {
-          frontier_indices.push(i);
-        });
-        potentially_reachable_entries.erase(it);
-      }
-    }
-  }
-  // By the end of frontier expansion all remaining potentially reachable
-  // entries are not reachable.
-  for (const auto& [unused, indices] : potentially_reachable_entries) {
-    absl::c_for_each(indices, [&unreachable_indices](int i) {
-      unreachable_indices.push_back(i);
-    });
-  }
-  std::vector<p4::v1::Entity> unreachable_entities;
-  unreachable_entities.reserve(unreachable_indices.size());
-
-  // Returns unreachable entities in the order of their indices.
-  std::sort(unreachable_indices.begin(), unreachable_indices.end());
-  for (int i = 0; i < unreachable_indices.size(); i++) {
-    unreachable_entities.push_back(entities[unreachable_indices[i]]);
   }
   return unreachable_entities;
 }
