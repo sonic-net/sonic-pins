@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <iostream>
+#include <string>
 
+#include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
+#include "absl/log/initialize.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
-#include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "grpcpp/client_context.h"
 #include "grpcpp/security/credentials.h"
 #include "gutil/gutil/proto.h"
@@ -30,10 +32,10 @@
 #include "p4rt_app/scripts/p4rt_tool_helpers.h"
 
 // Flags to write table updates.
-DEFINE_string(ir_write_request_file, "",
-              "Reads a pdpi::IrWriteRequest from a file and sends it to the "
-              "P4RT service.");
-DEFINE_bool(force_delete, false, "Forces all write reqests to be deletes.");
+ABSL_FLAG(std::string, ir_write_request_file, "",
+          "Reads a pdpi::IrWriteRequest from a file and sends it to the "
+          "P4RT service.");
+ABSL_FLAG(bool, force_delete, false, "Forces all write reqests to be deletes.");
 
 namespace p4rt_app {
 namespace {
@@ -47,7 +49,8 @@ absl::StatusOr<pdpi::IrP4Info> GetIrP4infoFromSwitch(
 
 absl::StatusOr<p4::v1::WriteRequest> GetPiWriteRequest(
     const pdpi::IrP4Info& ir_p4info) {
-  std::string ir_write_request_file = FLAGS_ir_write_request_file;
+  std::string ir_write_request_file =
+      absl::GetFlag(FLAGS_ir_write_request_file);
 
   if (!ir_write_request_file.empty()) {
     pdpi::IrWriteRequest ir_write_request;
@@ -84,7 +87,7 @@ absl::Status Main() {
 
   // If the user asks us to force a delete then we will change all the request
   // types to DELETE. In addition we also reverse the order of the requests.
-  if (FLAGS_force_delete) {
+  if (absl::GetFlag(FLAGS_force_delete)) {
     p4::v1::WriteRequest reversed_write_request;
     for (auto iter = pi_write_request.updates().rbegin();
          iter != pi_write_request.updates().rend(); ++iter) {
@@ -106,8 +109,8 @@ absl::Status Main() {
 }  // namespace p4rt_app
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  absl::InitializeLog();
+  absl::ParseCommandLine(argc, argv);
 
   absl::Status status = p4rt_app::Main();
   if (!status.ok()) {

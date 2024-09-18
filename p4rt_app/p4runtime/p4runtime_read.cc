@@ -17,11 +17,11 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "boost/bimap.hpp"
-#include "glog/logging.h"
 #include "gutil/gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"

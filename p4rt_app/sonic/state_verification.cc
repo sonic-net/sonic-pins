@@ -19,13 +19,13 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 #include "gutil/gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"

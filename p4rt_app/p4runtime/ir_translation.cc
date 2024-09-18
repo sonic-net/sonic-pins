@@ -13,10 +13,12 @@
 // limitations under the License.
 #include "p4rt_app/p4runtime/ir_translation.h"
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
-#include "glog/logging.h"
+#include "absl/strings/numbers.h"
+#include "absl/strings/str_format.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"
 #include "p4/config/v1/p4types.pb.h"

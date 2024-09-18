@@ -13,10 +13,10 @@
 // limitations under the License.
 #include "p4rt_app/sonic/fake_packetio_interface.h"
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
-#include "glog/logging.h"
 #include "gutil/gutil/collections.h"
 
 namespace p4rt_app {
