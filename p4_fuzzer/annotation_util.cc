@@ -15,8 +15,8 @@
 
 #include <vector>
 
+#include "absl/log/check.h"
 #include "absl/log/log.h"
-#include "glog/logging.h"
 #include "gutil/gutil/status.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_pdpi/ir.h"

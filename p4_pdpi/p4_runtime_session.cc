@@ -24,6 +24,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/functional/any_invocable.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -34,7 +35,6 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "glog/logging.h"
 #include "grpcpp/create_channel.h"
 #include "gutil/gutil/collections.h"
 #include "gutil/gutil/status.h"

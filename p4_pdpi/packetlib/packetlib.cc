@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
@@ -31,7 +32,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "absl/types/variant.h"
-#include "glog/logging.h"
 #include "gutil/gutil/overload.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"

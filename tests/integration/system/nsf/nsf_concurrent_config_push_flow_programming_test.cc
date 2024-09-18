@@ -19,12 +19,12 @@
 #include <thread>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/message.h"
 #include "grpcpp/client_context.h"

@@ -2,7 +2,7 @@
 
 #include <optional>
 
-#include "glog/logging.h"
+#include "absl/log/check.h"
 #include "google/protobuf/text_format.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"

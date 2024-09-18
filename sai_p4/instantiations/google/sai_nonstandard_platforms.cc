@@ -4,12 +4,13 @@
 #include <optional>
 #include <string>
 
+#include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"

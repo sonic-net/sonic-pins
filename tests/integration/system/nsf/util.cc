@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "absl/base/nullability.h"
+#include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -35,7 +36,6 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "glog/logging.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "grpcpp/client_context.h"
 #include "gutil/gutil/overload.h"

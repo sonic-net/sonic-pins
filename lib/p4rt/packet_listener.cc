@@ -18,9 +18,9 @@
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
 #include "gutil/gutil/status.h"
 #include "gutil/gutil/testing.h"
 #include "lib/p4rt/p4rt_programming_context.h"
@@ -67,8 +67,7 @@ absl::Status PacketListener::HandlePacketsFor(
       LOG(WARNING) << port_id << " not found.";
       continue;
     }
-    LOG_EVERY_N(INFO, 1000)
-        << "Packet received (Count: " << google::COUNTER << ").";
+    LOG_EVERY_POW_2(INFO) << "Packet received (Count: " << COUNTER << ").";
     callback(port_name->second, pd_response.packet().payload());
   }
 

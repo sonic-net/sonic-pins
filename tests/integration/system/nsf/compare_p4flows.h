@@ -15,7 +15,7 @@
 #ifndef PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPARE_P4FLOWS_H_
 #define PINS_TESTS_INTEGRATION_SYSTEM_NSF_COMPARE_P4FLOWS_H_
 
-#include "glog/logging.h"
+#include "absl/log/log.h"
 #include "p4/v1/p4runtime.pb.h"
 
 namespace pins_test {

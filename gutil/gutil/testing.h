@@ -15,14 +15,12 @@
 #ifndef PINS_GUTIL_TESTING_H
 #define PINS_GUTIL_TESTING_H
 
+#include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "glog/logging.h"
 #include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
-
-// Crash if `status` is not okay. Only use in tests.
-#define CHECK_OK(val) CHECK_EQ(::absl::OkStatus(), (val))
 
 namespace gutil {
 

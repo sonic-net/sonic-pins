@@ -20,10 +20,10 @@
 #include <vector>
 
 #include "absl/strings/match.h"
+#include "absl/log/log.h"
 #include "absl/strings/numbers.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
 #include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "swss/schema.h"
