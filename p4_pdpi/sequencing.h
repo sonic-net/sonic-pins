@@ -65,12 +65,6 @@ absl::StatusOr<std::vector<std::vector<int>>>
 SequencePiUpdatesInPlace(const IrP4Info &info,
                          absl::Span<const p4::v1::Update> updates);
 
-// Sorts the table entries such that entries that are depended on come first.
-// That is, two entries x and y where x refers to y will be sorted as [y, x].
-ABSL_DEPRECATED("Prefer StableSortEntities")
-absl::Status SortTableEntries(const IrP4Info &info,
-                              std::vector<p4::v1::TableEntry> &entries);
-
 // Stably sorts the entities such that entities that may be depended on come
 // first. That is, two entities x and y where x could refer to y will be sorted
 // as [y, x]. This is done based on the dependency ranks given in the IrP4Info.
@@ -92,16 +86,6 @@ StableSortUpdates(const IrP4Info &info,
 // are not a `table_entry` or `multicast_group_entry` and non-root entities are
 // not a `table_entry`.
 absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
-    absl::Span<const p4::v1::Entity> entities,
-    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity &)>
-        is_root_entity,
-    const IrP4Info &ir_p4info);
-
-// Deprecated version of GetEntitiesUnreachableFromRoots.
-// This function only works for TableEntry entity type. Any non TableEntry type
-// in `entities` will be ignored.
-ABSL_DEPRECATED("Prefer GetEntitiesUnreachableFromRoots")
-absl::StatusOr<std::vector<p4::v1::Entity>> OldGetEntitiesUnreachableFromRoots(
     absl::Span<const p4::v1::Entity> entities,
     absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity &)>
         is_root_entity,
