@@ -358,7 +358,6 @@ absl::Status UnionFirstFieldIntoSecondAssertingIdenticalId(
         "Relevant differences: $1",
         action_profile.preamble().id(), *diff_result));
   }
-
   return absl::OkStatus();
 }
 
