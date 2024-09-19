@@ -2,7 +2,9 @@
 
 // #include "third_party/libprotobuf_mutator/src/mutator.h"
 #include "absl/algorithm/container.h"
+#include "absl/status/status.h"
 #include "gutil/collections.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzz_util.h"
 
 namespace p4_fuzzer {
@@ -264,6 +266,80 @@ absl::Status MutateNonexistingDelete(absl::BitGen* gen, p4::v1::Update* update,
   return absl::OkStatus();
 }
 
+absl::Status MutateInvalidValue(absl::BitGen* gen, p4::v1::Update* update,
+                                const FuzzerConfig& config,
+                                const SwitchState& switch_state,
+                                P4ValuePredicate predicate) {
+  std::string invalid_value = FuzzRandomId(gen);
+
+  // Try to find a match field.
+  auto* table_entry = update->mutable_entity()->mutable_table_entry();
+  ASSIGN_OR_RETURN(
+      auto table_definition,
+      gutil::FindOrStatus(config.info.tables_by_id(), table_entry->table_id()));
+  for (auto& match : *table_entry->mutable_match()) {
+    ASSIGN_OR_RETURN(auto match_definition,
+                     gutil::FindOrStatus(table_definition.match_fields_by_id(),
+                                         match.field_id()));
+    if (predicate(match_definition.match_field().type_name(),
+                  match_definition.references())) {
+      switch (match.field_match_type_case()) {
+        case p4::v1::FieldMatch::FieldMatchTypeCase::kExact:
+          match.mutable_exact()->set_value(invalid_value);
+          return absl::OkStatus();
+          break;
+
+        case p4::v1::FieldMatch::FieldMatchTypeCase::kOptional:
+          match.mutable_optional()->set_value(invalid_value);
+          return absl::OkStatus();
+        default:
+          return absl::InternalError(
+              "String fields should be exact or optional, cannot make it more "
+              "invalid.");
+      }
+    }
+  }
+
+  // Collect all actions.
+  std::vector<p4::v1::Action*> actions;
+  switch (table_entry->action().type_case()) {
+    case p4::v1::TableAction::kAction:
+      actions.push_back(table_entry->mutable_action()->mutable_action());
+      break;
+
+    case p4::v1::TableAction::kActionProfileActionSet:
+      for (auto& action : *table_entry->mutable_action()
+                               ->mutable_action_profile_action_set()
+                               ->mutable_action_profile_actions()) {
+        actions.push_back(action.mutable_action());
+      }
+      break;
+
+    default:
+      break;
+  }
+
+  // Try to find an action parameter.
+  for (p4::v1::Action* action : actions) {
+    ASSIGN_OR_RETURN(
+        const auto& action_definition,
+        gutil::FindOrStatus(config.info.actions_by_id(), action->action_id()));
+    for (auto& param : *action->mutable_params()) {
+      ASSIGN_OR_RETURN(const auto& param_definition,
+                       gutil::FindOrStatus(action_definition.params_by_id(),
+                                           param.param_id()));
+      if (predicate(param_definition.param().type_name(),
+                    param_definition.references())) {
+        param.set_value(invalid_value);
+        return absl::OkStatus();
+      }
+    }
+  }
+
+  return absl::InternalError(
+      "The table entry does not have a port, cannot make it invalid.");
+}
+
 absl::Status MutateUpdate(BitGen* gen, const FuzzerConfig& config,
                           p4::v1::Update* update,
                           const SwitchState& switch_state,
@@ -299,6 +375,22 @@ absl::Status MutateUpdate(BitGen* gen, const FuzzerConfig& config,
 
     case Mutation::NONEXISTING_DELETE:
       return MutateNonexistingDelete(gen, update, config, switch_state);
+
+    case Mutation::INVALID_PORT:
+      return MutateInvalidValue(gen, update, config, switch_state, IsPort);
+
+    case Mutation::INVALID_QOS_QUEUE:
+      return MutateInvalidValue(gen, update, config, switch_state, IsQosQueue);
+
+    case Mutation::INVALID_NEIGHBOR_ID:
+      return MutateInvalidValue(gen, update, config, switch_state, IsNeighbor);
+
+    case Mutation::INVALID_REFERRING_ID:
+      return MutateInvalidValue(gen, update, config, switch_state, IsReferring);
+
+    case Mutation::DIFFERENT_ROLE:
+      // We already picked the right table earlier on, so nothing to do here.
+      return absl::OkStatus();
 
     default:
       LOG(FATAL) << "Unsupported mutation type";
