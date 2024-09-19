@@ -57,6 +57,26 @@ bool IsReferring(
     const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
         references);
 
+// A predicate over P4 values (match field or action parameter).
+using P4ValuePredicate =
+    std::function<bool(const p4::config::v1::P4NamedType& type_name,
+                       const google::protobuf::RepeatedPtrField<
+                           pdpi::IrMatchFieldReference>& references)>;
+
+bool IsPort(const p4::config::v1::P4NamedType& type_name,
+            const google::protobuf::RepeatedPtrField<
+                pdpi::IrMatchFieldReference>& references = {});
+bool IsQosQueue(const p4::config::v1::P4NamedType& type_name,
+                const google::protobuf::RepeatedPtrField<
+                    pdpi::IrMatchFieldReference>& references = {});
+bool IsNeighbor(const p4::config::v1::P4NamedType& type_name,
+                const google::protobuf::RepeatedPtrField<
+                    pdpi::IrMatchFieldReference>& references = {});
+bool IsReferring(
+    const p4::config::v1::P4NamedType& type_name,
+    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
+        references);
+
 template <typename T>
 const T& UniformFromVector(absl::BitGen* gen, const std::vector<T>& vec) {
   CHECK(!vec.empty());

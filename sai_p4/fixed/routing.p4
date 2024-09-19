@@ -79,6 +79,24 @@ control routing(in headers_t headers,
     size = NEIGHBOR_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_SUB_PORT, and
+  // SAI_ROUTER_INTERFACE_ATTR_PORT_ID, and
+  // SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS, and
+  // SAI_ROUTER_INTERFACE_ATTR_OUTER_VLAN_ID.
+  @id(ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID)
+  // TODO: Remove @unsupported when the switch supports this
+  // action.
+  @unsupported
+  action set_port_and_src_mac_and_vlan_id(@id(1) port_id_t port,
+                                          @id(2) @format(MAC_ADDRESS)
+                                          ethernet_addr_t src_mac,
+                                          @id(3) vlan_id_t vlan_id) {
+    // Cast is necessary, because v1model does not define port using `type`.
+    standard_metadata.egress_spec = (bit<PORT_BITWIDTH>)port;
+    local_metadata.packet_rewrites.src_mac = src_mac;
+    local_metadata.packet_rewrites.vlan_id = vlan_id;
+  }
+
   // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_PORT, and
   // SAI_ROUTER_INTERFACE_ATTR_PORT_ID, and
   // SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS.
@@ -86,9 +104,7 @@ control routing(in headers_t headers,
   action set_port_and_src_mac(@id(1) port_id_t port,
                               @id(2) @format(MAC_ADDRESS)
                               ethernet_addr_t src_mac) {
-    // Cast is necessary, because v1model does not define port using `type`.
-    standard_metadata.egress_spec = (bit<PORT_BITWIDTH>)port;
-    local_metadata.packet_rewrites.src_mac = src_mac;
+    set_port_and_src_mac_and_vlan_id(port, src_mac, INTERNAL_VLAN_ID);
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
@@ -100,6 +116,7 @@ control routing(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_port_and_src_mac;
+      @proto_id(2) set_port_and_src_mac_and_vlan_id;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -291,12 +308,24 @@ control routing(in headers_t headers,
 
   // TODO: When the P4RT compiler supports the size selector
   // annotation, this should be used to specify the semantics.
+  // #if defined(SAI_INSTANTIATION_TOR)
+  // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_TOR)
+  // #else
   // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS)
+  // #endif
   // TODO: Uncomment when supported by the P4RT compiler.
   // @max_member_weight(WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT)
+#if defined(SAI_INSTANTIATION_TOR)
+  @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR)
+#else
   @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE)
+#endif
   action_selector(HashAlgorithm.identity,
-		  WCMP_GROUP_SELECTOR_SIZE,
+#if defined(SAI_INSTANTIATION_TOR)
+ WCMP_GROUP_SELECTOR_SIZE_TOR,
+#else
+ WCMP_GROUP_SELECTOR_SIZE,
+#endif
                   WCMP_SELECTOR_INPUT_BITWIDTH)
       wcmp_group_selector;
 
@@ -315,7 +344,11 @@ control routing(in headers_t headers,
     const default_action = NoAction;
     @id(ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID)
         implementation = wcmp_group_selector;
+#if defined(SAI_INSTANTIATION_TOR)
+    size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR;
+#else
     size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE;
+#endif
   }
 
   // Action that does nothing. Like `NoAction` in `core.p4`, but following

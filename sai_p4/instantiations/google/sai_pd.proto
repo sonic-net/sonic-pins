@@ -65,7 +65,11 @@ message RouterInterfaceTableEntry {
   }
   Match match = 1;
   message Action {
-    SetPortAndSrcMacAction set_port_and_src_mac = 1;
+    oneof action {
+      SetPortAndSrcMacAction set_port_and_src_mac = 1;
+      // CAUTION: This action is not (yet) supported.
+      SetPortAndSrcMacAndVlanIdAction set_port_and_src_mac_and_vlan_id = 2;
+    }
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -438,6 +442,9 @@ message AclEgressTableEntry {
 }
 
 // Table entry restrictions:
+// ## Forbid using ether_type for IP packets (by convention, use is_ip*
+// instead).
+//   ether_type != 0x0800 && ether_type != 0x86dd;
 // ## Forbid illegal combinations of IP_TYPE fields.
 //   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
 //   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -447,9 +454,10 @@ message AclEgressTableEntry {
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclPreIngressVlanTableEntry {
   message Match {
-    Optional is_ip = 1;    // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv4 = 2;  // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv6 = 3;  // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ip = 1;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;    // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;    // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
   }
   Match match = 1;
   message Action {
@@ -762,6 +770,13 @@ message SetIpNexthopAndDisableRewritesAction {
 }
 
 message DisableVlanChecksAction {}
+
+// CAUTION: This action is not (yet) supported.
+message SetPortAndSrcMacAndVlanIdAction {
+  string port = 1;     // Format::STRING
+  string src_mac = 2;  // Format::MAC
+  string vlan_id = 3;  // Format::HEX_STRING / 12 bits
+}
 
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.

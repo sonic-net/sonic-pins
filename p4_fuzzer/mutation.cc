@@ -361,6 +361,22 @@ absl::Status MutateUpdate(BitGen* gen, const FuzzerConfig& config,
       // We already picked the right table earlier on, so nothing to do here.
       return absl::OkStatus();
 
+    case Mutation::INVALID_PORT:
+      return MutateInvalidValue(gen, update, config, switch_state, IsPort);
+
+    case Mutation::INVALID_QOS_QUEUE:
+      return MutateInvalidValue(gen, update, config, switch_state, IsQosQueue);
+
+    case Mutation::INVALID_NEIGHBOR_ID:
+      return MutateInvalidValue(gen, update, config, switch_state, IsNeighbor);
+
+    case Mutation::INVALID_REFERRING_ID:
+      return MutateInvalidValue(gen, update, config, switch_state, IsReferring);
+
+    case Mutation::DIFFERENT_ROLE:
+      // We already picked the right table earlier on, so nothing to do here.
+      return absl::OkStatus();
+
     default:
       LOG(FATAL) << "Unsupported mutation type";
   }
