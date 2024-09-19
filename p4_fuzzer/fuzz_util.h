@@ -34,6 +34,26 @@ namespace p4_fuzzer {
 // programming.
 constexpr int32_t kActionProfileActionMaxWeight = 100;
 
+// A predicate over P4 values (match field or action parameter).
+using P4ValuePredicate =
+    std::function<bool(const p4::config::v1::P4NamedType& type_name,
+                       const google::protobuf::RepeatedPtrField<
+                           pdpi::IrMatchFieldReference>& references)>;
+
+bool IsPort(const p4::config::v1::P4NamedType& type_name,
+            const google::protobuf::RepeatedPtrField<
+                pdpi::IrMatchFieldReference>& references = {});
+bool IsQosQueue(const p4::config::v1::P4NamedType& type_name,
+                const google::protobuf::RepeatedPtrField<
+                    pdpi::IrMatchFieldReference>& references = {});
+bool IsNeighbor(const p4::config::v1::P4NamedType& type_name,
+                const google::protobuf::RepeatedPtrField<
+                    pdpi::IrMatchFieldReference>& references = {});
+bool IsReferring(
+    const p4::config::v1::P4NamedType& type_name,
+    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
+        references);
+
 template <typename T>
 const T& UniformFromVector(absl::BitGen* gen, const std::vector<T>& vec) {
   CHECK(!vec.empty());
@@ -88,6 +108,9 @@ std::string FuzzBits(absl::BitGen* gen, int bits);
 
 // Generates a `bits` long uint64 in host byte order.
 uint64_t FuzzUint64(absl::BitGen* gen, int bits);
+
+// Returns a random ID.
+std::string FuzzRandomId(absl::BitGen* gen);
 
 // Randomly generates a ternary field match with a bitwidth of `bits`.
 // Does not set the match field id. See "9.1.1. Match Format" in the P4Runtime
