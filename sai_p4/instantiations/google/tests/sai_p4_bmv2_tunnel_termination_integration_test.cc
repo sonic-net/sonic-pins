@@ -120,16 +120,12 @@ TEST_P(TunnelTerminationTest, PacketGetsDecapsulatedAndForwarded) {
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
               /*egress_port=*/"\001", sai::IpVersion::kIpv4, "vrf")
           .AddEntryAdmittingAllPacketsToL3()  // Needed for forwarding.
-          .GetDedupedEntries();
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::TableEntry> pi_entries,
-      pdpi::PdTableEntriesToPi(
-          kIrP4Info, entries,
-          // TODO: Remove once tunnel termination table is no
-          // longer `@unsupported`.
-          pdpi::TranslationOptions{.allow_unsupported = true}));
-  ASSERT_OK(pdpi::InstallPiTableEntries(&bmv2.P4RuntimeSession(), kIrP4Info,
-                                        pi_entries));
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info,
+                                // TODO: Remove once tunnel termination table is
+                                // no longer `@unsupported`.
+                                /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Inject Ipv4-in-IPv6 test packet and expect one output packet.
   ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet, GetIpv4InIpv6Packet());
@@ -199,16 +195,12 @@ TEST_P(TunnelTerminationTest,
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
               /*egress_port=*/"\003", sai::IpVersion::kIpv4And6, "acl-ipv6-vrf")
           .AddEntryAdmittingAllPacketsToL3()  // Needed for forwarding.
-          .GetDedupedEntries();
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::TableEntry> pi_entries,
-      pdpi::PdTableEntriesToPi(
-          kIrP4Info, entries,
-          // TODO: Remove once tunnel termination table is no
-          // longer `@unsupported`.
-          pdpi::TranslationOptions{.allow_unsupported = true}));
-  ASSERT_OK(pdpi::InstallPiTableEntries(&bmv2.P4RuntimeSession(), kIrP4Info,
-                                        pi_entries));
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info,
+                                // TODO: Remove once tunnel termination table is
+                                // no longer `@unsupported`.
+                                /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Inject Ipv4-in-IPv6 test packet and expect one output packet.
   ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet, GetIpv4InIpv6Packet());
@@ -239,16 +231,12 @@ TEST_P(TunnelTerminationTest, PuntedPacketIsNotDecapsulated) {
       sai::EntryBuilder()
           .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf")
           .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
-          .GetDedupedEntries();
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::TableEntry> pi_entries,
-      pdpi::PdTableEntriesToPi(
-          kIrP4Info, entries,
-          // TODO: Remove once tunnel termination table is no
-          // longer `@unsupported`.
-          pdpi::TranslationOptions{.allow_unsupported = true}));
-  ASSERT_OK(pdpi::InstallPiTableEntries(&bmv2.P4RuntimeSession(), kIrP4Info,
-                                        pi_entries));
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info,
+                                // TODO: Remove once tunnel termination table is
+                                // no longer `@unsupported`.
+                                /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Inject Ipv4-in-IPv6 test packet and expect 0 forwarded packets and 1
   // punted packet.

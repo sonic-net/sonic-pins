@@ -79,6 +79,24 @@ control routing(in headers_t headers,
     size = NEIGHBOR_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_SUB_PORT, and
+  // SAI_ROUTER_INTERFACE_ATTR_PORT_ID, and
+  // SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS, and
+  // SAI_ROUTER_INTERFACE_ATTR_OUTER_VLAN_ID.
+  @id(ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID)
+  // TODO: Remove @unsupported when the switch supports this
+  // action.
+  @unsupported
+  action set_port_and_src_mac_and_vlan_id(@id(1) port_id_t port,
+                                          @id(2) @format(MAC_ADDRESS)
+                                          ethernet_addr_t src_mac,
+                                          @id(3) vlan_id_t vlan_id) {
+    // Cast is necessary, because v1model does not define port using `type`.
+    standard_metadata.egress_spec = (bit<PORT_BITWIDTH>)port;
+    local_metadata.packet_rewrites.src_mac = src_mac;
+    local_metadata.packet_rewrites.vlan_id = vlan_id;
+  }
+
   // Sets SAI_ROUTER_INTERFACE_ATTR_TYPE to SAI_ROUTER_INTERFACE_TYPE_PORT, and
   // SAI_ROUTER_INTERFACE_ATTR_PORT_ID, and
   // SAI_ROUTER_INTERFACE_ATTR_SRC_MAC_ADDRESS.
@@ -86,9 +104,7 @@ control routing(in headers_t headers,
   action set_port_and_src_mac(@id(1) port_id_t port,
                               @id(2) @format(MAC_ADDRESS)
                               ethernet_addr_t src_mac) {
-    // Cast is necessary, because v1model does not define port using `type`.
-    standard_metadata.egress_spec = (bit<PORT_BITWIDTH>)port;
-    local_metadata.packet_rewrites.src_mac = src_mac;
+    set_port_and_src_mac_and_vlan_id(port, src_mac, INTERNAL_VLAN_ID);
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
@@ -100,6 +116,7 @@ control routing(in headers_t headers,
     }
     actions = {
       @proto_id(1) set_port_and_src_mac;
+      @proto_id(2) set_port_and_src_mac_and_vlan_id;
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -126,7 +143,7 @@ control routing(in headers_t headers,
       ipv6_addr_t neighbor_id,
       // TODO: Use @format(BOOL) once PDPI
       // supports it.
-      @id(3) bit<1> disable_ttl_rewrite,
+      @id(3) bit<1> disable_decrement_ttl,
       @id(4) bit<1> disable_src_mac_rewrite,
       @id(5) bit<1> disable_dst_mac_rewrite,
       // TODO: Implement disable_vlan_rewrite.
@@ -135,7 +152,7 @@ control routing(in headers_t headers,
     router_interface_id_value = router_interface_id;
     neighbor_id_valid = true;
     neighbor_id_value = neighbor_id;
-    local_metadata.enable_ttl_rewrite = !(bool) disable_ttl_rewrite;
+    local_metadata.enable_decrement_ttl = !(bool) disable_decrement_ttl;
     local_metadata.enable_src_mac_rewrite = !(bool) disable_src_mac_rewrite;
     local_metadata.enable_dst_mac_rewrite = !(bool) disable_dst_mac_rewrite;
   }
@@ -162,7 +179,7 @@ control routing(in headers_t headers,
       @refers_to(neighbor_table, neighbor_id)
       ipv6_addr_t neighbor_id) {
     set_ip_nexthop_and_disable_rewrites(router_interface_id, neighbor_id,
-      /*disable_ttl_rewrite*/0x0, /*disable_src_mac_rewrite*/0x0,
+      /*disable_decrement_ttl*/0x0, /*disable_src_mac_rewrite*/0x0,
       /*disable_dst_mac_rewrite*/0x0, /*disable_vlan_rewrite*/0x0);
   }
 
@@ -268,17 +285,13 @@ control routing(in headers_t headers,
     nexthop_id_value = nexthop_id;
   }
 
-  // When called from a route, sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
+  // Can only be called form a route. Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
   // SAI_PACKET_ACTION_FORWARD, and SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a
   // SAI_OBJECT_TYPE_NEXT_HOP.
-  //
-  // When called from a group, sets SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID.
-  // When called from a group, sets SAI_NEXT_HOP_GROUP_MEMBER_ATTR_WEIGHT.
+  // Also sets SAI_ROUTE_ENTRY_ATTR_META_DATA.
   //
   // This action can only refer to `nexthop_id`s that are programmed in the
   // `nexthop_table`.
-  //
-  // Also sets the route metadata available for Ingress ACL lookup.
   @id(ROUTING_SET_NEXTHOP_ID_AND_METADATA_ACTION_ID)
   action set_nexthop_id_and_metadata(@id(1)
                                      @refers_to(nexthop_table, nexthop_id)
@@ -291,12 +304,25 @@ control routing(in headers_t headers,
 
   // TODO: When the P4RT compiler supports the size selector
   // annotation, this should be used to specify the semantics.
+  // #if defined(SAI_INSTANTIATION_TOR)
+  // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS_TOR)
+  // #else
   // @selector_size_semantics(WCMP_GROUP_SELECTOR_SIZE_SEMANTICS)
+  // #endif
   // TODO: Uncomment when supported by the P4RT compiler.
   // @max_member_weight(WCMP_GROUP_SELECTOR_MAX_MEMBER_WEIGHT)
+#if defined(SAI_INSTANTIATION_TOR)
+  @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE_TOR)
+#else
   @max_group_size(WCMP_GROUP_SELECTOR_MAX_GROUP_SIZE)
+#endif
+  @id(ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID)
   action_selector(HashAlgorithm.identity,
-		  WCMP_GROUP_SELECTOR_SIZE,
+#if defined(SAI_INSTANTIATION_TOR)
+ WCMP_GROUP_SELECTOR_SIZE_TOR,
+#else
+ WCMP_GROUP_SELECTOR_SIZE,
+#endif
                   WCMP_SELECTOR_INPUT_BITWIDTH)
       wcmp_group_selector;
 
@@ -313,9 +339,12 @@ control routing(in headers_t headers,
       @defaultonly NoAction;
     }
     const default_action = NoAction;
-    @id(ROUTING_WCMP_GROUP_SELECTOR_ACTION_PROFILE_ID)
         implementation = wcmp_group_selector;
+#if defined(SAI_INSTANTIATION_TOR)
+    size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE_TOR;
+#else
     size = WCMP_GROUP_TABLE_MINIMUM_GUARANTEED_SIZE;
+#endif
   }
 
   // Action that does nothing. Like `NoAction` in `core.p4`, but following

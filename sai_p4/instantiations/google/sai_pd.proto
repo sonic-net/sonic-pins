@@ -65,7 +65,11 @@ message RouterInterfaceTableEntry {
   }
   Match match = 1;
   message Action {
-    SetPortAndSrcMacAction set_port_and_src_mac = 1;
+    oneof action {
+      SetPortAndSrcMacAction set_port_and_src_mac = 1;
+      // CAUTION: This action is not (yet) supported.
+      SetPortAndSrcMacAndVlanIdAction set_port_and_src_mac_and_vlan_id = 2;
+    }
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -438,6 +442,9 @@ message AclEgressTableEntry {
 }
 
 // Table entry restrictions:
+// ## Forbid using ether_type for IP packets (by convention, use is_ip*
+// instead).
+//   ether_type != 0x0800 && ether_type != 0x86dd;
 // ## Forbid illegal combinations of IP_TYPE fields.
 //   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
 //   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -447,9 +454,10 @@ message AclEgressTableEntry {
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclPreIngressVlanTableEntry {
   message Match {
-    Optional is_ip = 1;    // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv4 = 2;  // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv6 = 3;  // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ip = 1;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;    // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;    // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
   }
   Match match = 1;
   message Action {
@@ -483,6 +491,7 @@ message AclPreIngressMetadataTableEntry {
     Ternary icmpv6_type = 5;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary dscp = 6;         // ternary match / Format::HEX_STRING / 6 bits
     Ternary ecn = 7;          // ternary match / Format::HEX_STRING / 2 bits
+    Optional in_port = 8;     // optional match / Format::STRING
   }
   Match match = 1;
   message Action {
@@ -536,8 +545,9 @@ message AclIngressQosTableEntry {
       AclDropAction acl_drop = 4;
       SetQosQueueAndCancelCopyAboveRateLimitAction
           set_qos_queue_and_cancel_copy_above_rate_limit = 1;
-      SetQosQueueAndDenyAboveRateLimitAction
-          set_qos_queue_and_deny_above_rate_limit = 2;
+      SetCpuQueueAndDenyAboveRateLimitAction
+          set_cpu_queue_and_deny_above_rate_limit = 2;
+      SetCpuQueueAction set_cpu_queue = 5;
     }
   }
   Action action = 2;
@@ -625,13 +635,19 @@ message AclIngressCountingTableEntry {
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclIngressSecurityTableEntry {
   message Match {
-    Optional is_ip = 1;      // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv4 = 2;    // optional match / Format::HEX_STRING / 1 bits
-    Optional is_ipv6 = 3;    // optional match / Format::HEX_STRING / 1 bits
-    Ternary ether_type = 4;  // ternary match / Format::HEX_STRING / 16 bits
-    Ternary src_ip = 5;      // ternary match / Format::IPV4
-    Ternary dst_ip = 6;      // ternary match / Format::IPV4
-    Ternary src_ipv6 = 7;    // ternary match / Format::IPV6 / upper 64 bits
+    Optional is_ip = 1;        // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 2;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 3;      // optional match / Format::HEX_STRING / 1 bits
+    Ternary ether_type = 4;    // ternary match / Format::HEX_STRING / 16 bits
+    Ternary src_ip = 5;        // ternary match / Format::IPV4
+    Ternary dst_ip = 6;        // ternary match / Format::IPV4
+    Ternary src_ipv6 = 7;      // ternary match / Format::IPV6 / upper 64 bits
+    Ternary dscp = 8;          // ternary match / Format::HEX_STRING / 6 bits
+    Ternary ip_protocol = 9;   // ternary match / Format::HEX_STRING / 8 bits
+    Ternary l4_src_port = 10;  // ternary match / Format::HEX_STRING / 16 bits
+    Ternary l4_dst_port = 11;  // ternary match / Format::HEX_STRING / 16 bits
+    Ternary route_metadata = 12;  // ternary match / Format::HEX_STRING / 6 bits
+    Ternary acl_metadata = 13;    // ternary match / Format::HEX_STRING / 8 bits
   }
   Match match = 1;
   message Action {
@@ -755,13 +771,20 @@ message SetIpNexthopAndDisableRewritesAction {
   string router_interface_id = 1;  // Format::STRING
   // Refers to 'neighbor_table.neighbor_id'.
   string neighbor_id = 2;              // Format::IPV6 / 128 bits
-  string disable_ttl_rewrite = 3;      // Format::HEX_STRING / 1 bits
+  string disable_decrement_ttl = 3;    // Format::HEX_STRING / 1 bits
   string disable_src_mac_rewrite = 4;  // Format::HEX_STRING / 1 bits
   string disable_dst_mac_rewrite = 5;  // Format::HEX_STRING / 1 bits
   string disable_vlan_rewrite = 6;     // Format::HEX_STRING / 1 bits
 }
 
 message DisableVlanChecksAction {}
+
+// CAUTION: This action is not (yet) supported.
+message SetPortAndSrcMacAndVlanIdAction {
+  string port = 1;     // Format::STRING
+  string src_mac = 2;  // Format::MAC
+  string vlan_id = 3;  // Format::HEX_STRING / 12 bits
+}
 
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
@@ -805,11 +828,15 @@ message SetQosQueueAndCancelCopyAboveRateLimitAction {
 
 message AclEgressForwardAction {}
 
-message SetQosQueueAndDenyAboveRateLimitAction {
-  string qos_queue = 1;  // Format::STRING
+message SetCpuQueueAndDenyAboveRateLimitAction {
+  string cpu_queue = 1;  // Format::STRING
 }
 
 message AclDenyAction {}
+
+message SetCpuQueueAction {
+  string cpu_queue = 1;  // Format::STRING
+}
 
 message NoAction {}
 

@@ -20,6 +20,8 @@
 #ifndef GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 #define GOOGLE_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
 
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -43,7 +45,7 @@ enum class PuntAction {
 
 // Rewrite-related options for nexthop action generation.
 struct NexthopRewriteOptions {
-  bool disable_ttl_rewrite = false;
+  bool disable_decrement_ttl = false;
   bool disable_src_mac_rewrite = false;
   bool disable_dst_mac_rewrite = false;
   bool disable_vlan_rewrite = false;
@@ -106,7 +108,8 @@ class EntryBuilder {
   EntryBuilder& AddEntryAdmittingAllPacketsToL3();
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
       absl::string_view egress_port, IpVersion ip_version,
-      absl::string_view vrf);
+      absl::string_view vrf,
+      std::optional<absl::string_view> vlan_hexstr = std::nullopt);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
   EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
@@ -115,6 +118,7 @@ class EntryBuilder {
   EntryBuilder& AddDisableVlanChecksEntry();
   EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
       absl::string_view vlan_id_hexstr, absl::string_view vrf);
+  EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf);
 
  private:
   sai::TableEntries entries_;

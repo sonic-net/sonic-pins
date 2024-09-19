@@ -817,6 +817,7 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     }
     *action_set.add_action_profile_actions() = *action;
     unallocated_weight -= action->weight();
+
   }
 
   return action_set;
