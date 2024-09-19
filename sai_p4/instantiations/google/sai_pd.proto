@@ -548,6 +548,9 @@ message AclIngressQosTableEntry {
       SetCpuQueueAndDenyAboveRateLimitAction
           set_cpu_queue_and_deny_above_rate_limit = 2;
       SetCpuQueueAction set_cpu_queue = 5;
+      // CAUTION: This action is not (yet) supported.
+      SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction
+          set_cpu_and_multicast_queues_and_deny_above_rate_limit = 6;
     }
   }
   Action action = 2;
@@ -836,6 +839,13 @@ message AclDenyAction {}
 
 message SetCpuQueueAction {
   string cpu_queue = 1;  // Format::STRING
+}
+
+// CAUTION: This action is not (yet) supported.
+message SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction {
+  string cpu_queue = 1;                       // Format::STRING
+  string green_multicast_queue = 2;           // Format::STRING
+  string red_and_yellow_multicast_queue = 3;  // Format::STRING
 }
 
 message NoAction {}
