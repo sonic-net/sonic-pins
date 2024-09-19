@@ -15,6 +15,13 @@ control packet_rewrites(inout headers_t headers,
     // TODO: Use a more robust check to determine whether to rewrite
     // packets.
     if (local_metadata.admit_to_l3){
+      // VLAN id is kept in local_metadata until the end of egress pipeline
+      // where depending on the value of VLAN id and VLAN configuration the
+      // packet might potentially get VLAN tagged with that VLAN id.
+      // TODO: For now rewriting unconditionaly since disabling
+      // VLAN rewrite is not modeled yet. When modeled, this rewrite should
+      // become conditional too.
+//      local_metadata.vlan_id = local_metadata.packet_rewrites.vlan_id;
       if (local_metadata.enable_src_mac_rewrite) {
         headers.ethernet.src_addr = local_metadata.packet_rewrites.src_mac;
       }
@@ -22,7 +29,7 @@ control packet_rewrites(inout headers_t headers,
         headers.ethernet.dst_addr = local_metadata.packet_rewrites.dst_mac;
       }
       if (headers.ipv4.isValid()) {
-        if (headers.ipv4.ttl > 0 && local_metadata.enable_ttl_rewrite) {
+        if (headers.ipv4.ttl > 0 && local_metadata.enable_decrement_ttl) {
           headers.ipv4.ttl = headers.ipv4.ttl - 1;
         }
         // TODO: Verify this is accurate when TTL rewrite is
@@ -32,7 +39,7 @@ control packet_rewrites(inout headers_t headers,
         }
       }
       if (headers.ipv6.isValid()) {
-        if (headers.ipv6.hop_limit > 0 && local_metadata.enable_ttl_rewrite) {
+        if (headers.ipv6.hop_limit > 0 && local_metadata.enable_decrement_ttl) {
           headers.ipv6.hop_limit = headers.ipv6.hop_limit - 1;
         }
         // TODO: Verify this is accurate when TTL rewrite is

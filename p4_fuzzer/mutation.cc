@@ -185,6 +185,7 @@ absl::Status MutateInvalidActionSelectorWeight(BitGen* gen,
   } else {
     action_profile_action->set_weight(
         absl::Uniform<int32_t>(*gen, -1 * action_profile.max_group_size(), 0));
+
   }
 
   return absl::OkStatus();
