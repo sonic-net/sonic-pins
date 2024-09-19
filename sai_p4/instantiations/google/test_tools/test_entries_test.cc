@@ -190,7 +190,7 @@ TEST(EntryBuilder,
                   .AddEntriesForwardingIpPacketsToGivenPort(
                       "egress port",
                       NexthopRewriteOptions{
-                          .disable_ttl_rewrite = false,
+                          .disable_decrement_ttl = false,
                           .disable_src_mac_rewrite = false,
                           .disable_dst_mac_rewrite = false,
                       })
@@ -208,7 +208,7 @@ TEST(EntryBuilder,
           .AddEntriesForwardingIpPacketsToGivenPort(
               "egress port",
               NexthopRewriteOptions{
-                  .disable_ttl_rewrite = true,
+                  .disable_decrement_ttl = true,
                   .disable_src_mac_rewrite = false,
                   .disable_dst_mac_rewrite = true,
               })
@@ -220,7 +220,7 @@ TEST(EntryBuilder,
                          action {
                            name: "set_ip_nexthop_and_disable_rewrites"
                            params {
-                             name: "disable_ttl_rewrite"
+                             name: "disable_decrement_ttl"
                              value { hex_str: "0x1" }
                            }
                            params {
@@ -260,7 +260,7 @@ TEST(EntryBuilder,
           .AddEntriesForwardingIpPacketsToGivenPort(
               "egress port",
               NexthopRewriteOptions{
-                  .disable_ttl_rewrite = true,
+                  .disable_decrement_ttl = true,
                   .disable_src_mac_rewrite = true,
                   .disable_dst_mac_rewrite = true,
               })

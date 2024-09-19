@@ -341,12 +341,14 @@ absl::Status UnionFirstFieldIntoSecondAssertingIdenticalId(
     p4::config::v1::ActionProfile& unioned_action_profile) {
   RETURN_IF_ERROR(
       AssertIdsAreEqualForUnioning(action_profile, unioned_action_profile));
+
   // For all sizes, use the max size of any action profile.
   unioned_action_profile.set_size(
       std::max(unioned_action_profile.size(), action_profile.size()));
   unioned_action_profile.set_max_group_size(
       std::max(unioned_action_profile.max_group_size(),
                action_profile.max_group_size()));
+
   if (auto diff_result =
           DiffMessages(action_profile, unioned_action_profile,
                        /*ignored_fields=*/{"size", "max_group_size"});

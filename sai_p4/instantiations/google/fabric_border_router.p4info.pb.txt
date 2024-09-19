@@ -992,7 +992,7 @@ actions {
   }
   params {
     id: 3
-    name: "disable_ttl_rewrite"
+    name: "disable_decrement_ttl"
     bitwidth: 1
   }
   params {
