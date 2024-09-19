@@ -1,5 +1,8 @@
 #include "p4_fuzzer/fuzz_util.h"
 
+#include <cstdint>
+#include <functional>
+
 #include "absl/algorithm/container.h"
 #include "absl/base/casts.h"
 #include "absl/base/internal/endian.h"
@@ -49,6 +52,38 @@ constexpr uint32_t kActionProfileActionSetMax = 16;
 constexpr float kMutateUpdateProbability = 0.1;
 // The probability of using a wildcard for a ternary or lpm match field.
 constexpr float kFieldMatchWildcardProbability = 0.1;
+
+constexpr char kP4PortTypeName[] = "port_id_t";
+constexpr char kP4QosQueueTypeName[] = "qos_queue_t";
+constexpr char kP4NeighborTypeName[] = "neighbor_id_t";
+
+bool IsPort(
+    const p4::config::v1::P4NamedType& type_name,
+    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
+        references) {
+  return type_name.name() == kP4PortTypeName;
+}
+
+bool IsQosQueue(
+    const p4::config::v1::P4NamedType& type_name,
+    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
+        references) {
+  return type_name.name() == kP4QosQueueTypeName;
+}
+
+bool IsNeighbor(
+    const p4::config::v1::P4NamedType& type_name,
+    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
+        references) {
+  return type_name.name() == kP4NeighborTypeName;
+}
+
+bool IsReferring(
+    const p4::config::v1::P4NamedType& type_name,
+    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
+        references) {
+  return !references.empty();
+}
 
 namespace {
 
@@ -126,17 +161,45 @@ std::vector<uint32_t> GetMandatoryMatchTableIds(const FuzzerConfig& config) {
   return table_ids;
 }
 
-// Returns a random ID.
-std::string FuzzRandomId(absl::BitGen* gen) {
-  // Only sample from printable/readable characters, to make debugging easier.
-  // There is a smoke test that uses crazy characters.
-  static constexpr char kIdChars[] = "abcdefghijklmnopqrstuvwxyz0123456789-";
-  int num_chars = absl::Uniform(*gen, 0, 10);
-  std::string id;
-  for (int i = 0; i < num_chars; i++) {
-    id += kIdChars[absl::Uniform<int>(*gen, 0, sizeof(kIdChars) - 1)];
+// Returns the table ids of tables that don't have role config.role.
+std::vector<uint32_t> GetDifferentRoleTableIds(const FuzzerConfig& config) {
+  std::vector<uint32_t> table_ids;
+
+  for (auto& [key, table] : config.info.tables_by_id()) {
+    if (table.role() == config.role) continue;
+    table_ids.push_back(key);
   }
-  return id;
+
+  return table_ids;
+}
+
+// Returns the table ids of all tables that have at least one match field or
+// action argument that satisfies the given predicate.
+std::vector<uint32_t> GetTableIdsWithValuePredicate(
+    const FuzzerConfig& config, P4ValuePredicate predicate) {
+  std::vector<uint32_t> table_ids;
+
+  for (uint32_t id : TablesUsedByFuzzer(config)) {
+    bool include = false;
+    const auto& table = gutil::FindOrDie(config.info.tables_by_id(), id);
+    for (const auto& [match_id, match] : table.match_fields_by_id()) {
+      if (predicate(match.match_field().type_name(), match.references())) {
+        include = true;
+        break;
+      }
+    }
+    for (const auto& action : table.entry_actions()) {
+      for (const auto& [param_id, param] : action.action().params_by_id()) {
+        if (predicate(param.param().type_name(), param.references())) {
+          include = true;
+          break;
+        }
+      }
+    }
+    if (include) table_ids.push_back(id);
+  }
+
+  return table_ids;
 }
 
 // Randomly generates an update type.
@@ -197,23 +260,39 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
     switch (mutation) {
       case Mutation::INVALID_ACTION_SELECTOR_WEIGHT:
         table_ids = GetOneShotTableIds(config);
-        if (table_ids.empty()) {
-          // Retry.
-          return FuzzUpdate(gen, config, switch_state);
-        }
-
         break;
 
       case Mutation::MISSING_MANDATORY_MATCH_FIELD:
         table_ids = GetMandatoryMatchTableIds(config);
-        if (table_ids.empty()) {
-          // Retry.
-          return FuzzUpdate(gen, config, switch_state);
-        }
+        break;
+
+      case Mutation::INVALID_PORT:
+        table_ids = GetTableIdsWithValuePredicate(config, IsPort);
+        break;
+
+      case Mutation::INVALID_QOS_QUEUE:
+        table_ids = GetTableIdsWithValuePredicate(config, IsQosQueue);
+        break;
+
+      case Mutation::INVALID_NEIGHBOR_ID:
+        table_ids = GetTableIdsWithValuePredicate(config, IsNeighbor);
+        break;
+
+      case Mutation::INVALID_REFERRING_ID:
+        table_ids = GetTableIdsWithValuePredicate(config, IsReferring);
+        break;
+
+      case Mutation::DIFFERENT_ROLE:
+        table_ids = GetDifferentRoleTableIds(config);
         break;
 
       default:
         break;
+    }
+
+    if (table_ids.empty()) {
+      // Retry.
+      return FuzzUpdate(gen, config, switch_state);
     }
   }
 
@@ -271,6 +350,18 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
 
 }  // namespace
 
+std::string FuzzRandomId(absl::BitGen* gen) {
+  // Only sample from printable/readable characters, to make debugging easier.
+  // There is a smoke test that uses crazy characters.
+  static constexpr char kIdChars[] = "abcdefghijklmnopqrstuvwxyz0123456789-";
+  int num_chars = absl::Uniform(*gen, 0, 10);
+  std::string id;
+  for (int i = 0; i < num_chars; i++) {
+    id += kIdChars[absl::Uniform<int>(*gen, 0, sizeof(kIdChars) - 1)];
+  }
+  return id;
+}
+
 // Randomly generates a table id.
 int FuzzTableId(absl::BitGen* gen, const FuzzerConfig& config) {
   return UniformFromVector(gen, TablesUsedByFuzzer(config));
@@ -280,12 +371,6 @@ Mutation FuzzMutation(absl::BitGen* gen, const FuzzerConfig& config) {
   std::vector<int> valid_indexes;
 
   for (int i = Mutation_MIN; i <= Mutation_MAX; ++i) {
-    // TODO: implement missing mutations.
-    if (i == Mutation::INVALID_NEIGHBOR_ID || i == Mutation::INVALID_PORT ||
-        i == Mutation::INVALID_REFERRING_ID ||
-        i == Mutation::INVALID_QOS_QUEUE || i == Mutation::DIFFERENT_ROLE) {
-      continue;
-    }
     if (Mutation_IsValid(i)) {
       valid_indexes.push_back(i);
     }
@@ -382,17 +467,17 @@ absl::StatusOr<std::string> FuzzValue(
         references,
     bool non_zero) {
   // A port: pick any valid port randomly.
-  if (type_name.name() == "port_id_t") {
+  if (IsPort(type_name)) {
     return UniformFromVector(gen, config.ports);
   }
 
   // A qos queue: pick any valid qos queue randomly.
-  if (type_name.name() == "qos_queue_t") {
+  if (IsQosQueue(type_name)) {
     return UniformFromVector(gen, config.qos_queues);
   }
 
   // A neighbor ID (not referring to anything): Pick a random IPv6 address.
-  if (type_name.name() == "neighbor_id_t" && references.empty()) {
+  if (IsNeighbor(type_name) && references.empty()) {
     std::bitset<128> ipv6_bits;
     for (int i = 0; i < 128; ++i) {
       ipv6_bits.set(i, absl::Uniform<int>(*gen, 0, 1));
