@@ -25,6 +25,8 @@
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/message.h"
+#include "grpcpp/client_context.h"
 #include "gtest/gtest.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
@@ -51,6 +53,9 @@ constexpr int kMinNsfDelayDuration = 1;
 constexpr int kMaxNsfDelayDuration = 15;
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
+constexpr int kMaxGnmiGetClients = 15;
+constexpr int kMaxGnmiSubscribeClients = 10;
+constexpr absl::Duration kSubscribeWaitTime = absl::Seconds(100);
 
 void NsfConcurrentConfigPushFlowProgrammingTestFixture::SetUp() {
   flow_programmer_ = GetParam().create_flow_programmer();
@@ -146,6 +151,72 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   std::thread flow_programming_thread(
       [&]() { flow_programming_status = flow_programming_func(); });
 
+  // Get gNMI info thread. Fetch gNMI information multiple times periodically
+  // from different clients to increase stress from Get() clients.
+  auto get_gnmi_func = [&nsf_delay_duration, &sut]() -> absl::Status {
+    // Wait for sometime before initiating the gNMI connection. The order of
+    // test execution is as follows:
+    // 1) Create Get() threads.
+    // 2) Create NSF reboot thread.
+    // In each Get() thread, wait for sometime and then start Get() operation.
+    // This increases the chances of hitting the race condition between gNMI
+    // operation and NSF reboot request.
+    absl::SleepFor(absl::Seconds(nsf_delay_duration));
+    LOG(INFO) << "Fetching gNMI information on " << sut.ChassisName();
+    ASSIGN_OR_RETURN(auto gnmi_stub, sut.CreateGnmiStub());
+    auto status = GetGnmiStatePathInfo(gnmi_stub.get(), "");
+    LOG(INFO) << "gNMI Get() operation completed";
+    return absl::OkStatus();
+  };
+  std::vector<std::thread> gnmi_get_threads;
+  for (int i = 0; i < kMaxGnmiGetClients; i++) {
+    gnmi_get_threads.emplace_back(get_gnmi_func);
+  }
+
+  // gNMI subscribe thread to increase stress from gNMI subscribe clients.
+  auto subscribe_gnmi_func = [&nsf_delay_duration, &sut]() -> absl::Status {
+    // Wait for sometime before initiating the gNMI connection (same reason as
+    // gNMI Get() thread above).
+    absl::SleepFor(absl::Seconds(nsf_delay_duration));
+    ASSIGN_OR_RETURN(auto gnmi_stub, sut.CreateGnmiStub());
+    grpc::ClientContext context;
+    auto stream = gnmi_stub->Subscribe(&context);
+    if (stream == nullptr) {
+      return absl::InternalError("Cannot create gNMI stream");
+    }
+    gnmi::SubscribeRequest subscribe_request;
+    gnmi::SubscriptionList* subscription_list =
+        subscribe_request.mutable_subscribe();
+    subscription_list->set_mode(gnmi::SubscriptionList::STREAM);
+    subscription_list->mutable_prefix()->set_origin(kOpenconfigStr);
+    subscription_list->mutable_prefix()->set_target(kTarget);
+    AddSubtreeToGnmiSubscription("", *subscription_list, gnmi::SAMPLE,
+                                 /*suppress_redundant=*/false,
+                                 absl::Seconds(1));
+    LOG(INFO) << "Sending subscription request: "
+              << google::protobuf::ShortFormat(subscribe_request);
+    if (!stream->Write(subscribe_request)) {
+      return absl::InternalError("Failed to write subscribe request");
+    }
+    LOG(INFO) << "Write subscribe request successful. Reading from stream..";
+    const auto start_time = absl::Now();
+    while (absl::Now() < (start_time + kSubscribeWaitTime)) {
+      gnmi::SubscribeResponse response;
+      if (!stream->Read(&response)) {
+        // Stream to server is broken possibly due to warm reboot.
+        LOG(INFO) << "Subscribe client cannot read from the stream";
+        return absl::OkStatus();
+      }
+      LOG(INFO) << "Subscribe response received";
+    }
+    return absl::InternalError(
+        "subscribe client didn't break stream with server");
+  };
+  std::vector<std::thread> gnmi_subscribe_threads;
+  for (int i = 0; i < kMaxGnmiSubscribeClients; i++) {
+    gnmi_subscribe_threads.emplace_back(subscribe_gnmi_func);
+  }
+
   // NSF Reboot thread.
   absl::Status nsf_reboot_status = absl::UnknownError("Yet to do nsf reboot");
   ReadResponse p4flow_snapshot2;
@@ -181,6 +252,16 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   // SaveP4FlowSnapshot function before the NSF reboot.
   EXPECT_OK(SaveP4FlowSnapshot(p4flow_snapshot2,
                                "p4flow_snapshot2_before_nsf.txt", environment));
+  // Since gNMI Get and Subscribe clients are read-only and are being called to
+  // add delay during quiescence, we don't really care about the result of these
+  // calls. Therefore, joining these threads after all information has been
+  // fetched from the switch to perform validations.
+  for (auto& gnmi_get_thread : gnmi_get_threads) {
+    gnmi_get_thread.join();
+  }
+  for (auto& gnmi_subscribe_thread : gnmi_subscribe_threads) {
+    gnmi_subscribe_thread.join();
+  }
   EXPECT_OK(config_push_status) << "Failed to push config";
   EXPECT_OK(flow_programming_status) << "Failed to program flows";
   ASSERT_OK(nsf_reboot_status) << "Failed to initiate NSF reboot";

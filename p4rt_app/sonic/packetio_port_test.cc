@@ -53,11 +53,9 @@ using ::testing::Test;
 
 TEST(PacketIoTest, SendPacketOutOk) {
   MockSystemCallAdapter mock_call_adapter;
-  struct ifreq if_resp { /*ifr_name=*/
-    {""}, /*ifr_flags=*/{
-      { IFF_UP | IFF_RUNNING }
-    }
-  };
+  struct ifreq if_resp{/*ifr_name=*/
+                       {""},
+                       /*ifr_flags=*/{{IFF_UP | IFF_RUNNING}}};
   EXPECT_CALL(mock_call_adapter, ioctl)
       .WillOnce(DoAll(SetArgPointee<2>(if_resp), Return(0)));
   EXPECT_CALL(mock_call_adapter, write).WillOnce(Return(sizeof(kTestPacket)));
@@ -82,11 +80,9 @@ TEST(PacketIoTest, SendPacketOutIoctlError) {
 
 TEST(PacketIoTest, SendPacketOutLinkDown) {
   MockSystemCallAdapter mock_call_adapter;
-  struct ifreq if_resp { /*ifr_name=*/
-    {""}, /*ifr_flags=*/{
-      { IFF_UP }
-    }
-  };
+  struct ifreq if_resp{/*ifr_name=*/
+                       {""},
+                       /*ifr_flags=*/{{IFF_UP}}};
   EXPECT_CALL(mock_call_adapter, ioctl)
       .WillOnce(DoAll(SetArgPointee<2>(if_resp), Return(0)));
 
@@ -99,11 +95,9 @@ TEST(PacketIoTest, SendPacketOutLinkDown) {
 
 TEST(PacketIoTest, SendPacketOutWriteError) {
   MockSystemCallAdapter mock_call_adapter;
-  struct ifreq if_resp { /*ifr_name=*/
-    {""}, /*ifr_flags=*/{
-      { IFF_UP | IFF_RUNNING }
-    }
-  };
+  struct ifreq if_resp{/*ifr_name=*/
+                       {""},
+                       /*ifr_flags=*/{{IFF_UP | IFF_RUNNING}}};
   EXPECT_CALL(mock_call_adapter, ioctl)
       .WillOnce(DoAll(SetArgPointee<2>(if_resp), Return(0)));
   EXPECT_CALL(mock_call_adapter, write).WillOnce(Return(-1));
@@ -118,11 +112,9 @@ TEST(PacketIoTest, SendPacketOutWriteError) {
 
 TEST(PacketIoTest, SendPacketOutFailsOnGetSockOptError) {
   MockSystemCallAdapter mock_call_adapter;
-  struct ifreq if_resp { /*ifr_name=*/
-    {""}, /*ifr_flags=*/{
-      { IFF_UP | IFF_RUNNING }
-    }
-  };
+  struct ifreq if_resp{/*ifr_name=*/
+                       {""},
+                       /*ifr_flags=*/{{IFF_UP | IFF_RUNNING}}};
   EXPECT_CALL(mock_call_adapter, ioctl)
       .WillOnce(DoAll(SetArgPointee<2>(if_resp), Return(0)));
   EXPECT_CALL(mock_call_adapter, getsockopt).WillOnce(Return(-1));
@@ -137,11 +129,9 @@ TEST(PacketIoTest, SendPacketOutFailsOnGetSockOptError) {
 
 TEST(PacketIoTest, SendPacketOutOkWithClearPendingError) {
   MockSystemCallAdapter mock_call_adapter;
-  struct ifreq if_resp { /*ifr_name=*/
-    {""}, /*ifr_flags=*/{
-      { IFF_UP | IFF_RUNNING }
-    }
-  };
+  struct ifreq if_resp{/*ifr_name=*/
+                       {""},
+                       /*ifr_flags=*/{{IFF_UP | IFF_RUNNING}}};
   EXPECT_CALL(mock_call_adapter, ioctl)
       .WillOnce(DoAll(SetArgPointee<2>(if_resp), Return(0)));
   int optval = 100;
@@ -158,11 +148,9 @@ TEST(PacketIoTest, SendPacketOutOkWithClearPendingError) {
 
 TEST(PacketIoTest, SendPacketOutSplitWrite) {
   MockSystemCallAdapter mock_call_adapter;
-  struct ifreq if_resp { /*ifr_name=*/
-    {""}, /*ifr_flags=*/{
-      { IFF_UP | IFF_RUNNING }
-    }
-  };
+  struct ifreq if_resp{/*ifr_name=*/
+                       {""},
+                       /*ifr_flags=*/{{IFF_UP | IFF_RUNNING}}};
   EXPECT_CALL(mock_call_adapter, ioctl)
       .WillOnce(DoAll(SetArgPointee<2>(if_resp), Return(0)));
   EXPECT_CALL(mock_call_adapter, write)

@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "absl/base/nullability.h"
+#include "absl/flags/declare.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -36,6 +37,8 @@
 #include "thinkit/test_environment.h"
 
 namespace pins_test {
+
+constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(11);
 
 struct PinsSoftwareInfo {
   std::string name;

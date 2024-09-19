@@ -54,6 +54,7 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/util.h"
+#include "tests/gnmi/util.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "tests/qos/packet_in_receiver.h"
 #include "tests/qos/qos_test_util.h"
@@ -141,11 +142,20 @@ void PuntQoSTestWithIxia::SetUp() {
   ixia_sut_link_.sut_rx_interface = ready_links[0].sut_interface;
   ixia_sut_link_.ixia_rx_interface = ready_links[1].ixia_interface;
   ixia_sut_link_.sut_tx_interface = ready_links[1].sut_interface;
+  ixia_sut_link_.ixia_mirror_interface = ready_links[2].ixia_interface;
+  ixia_sut_link_.sut_mirror_interface = ready_links[2].sut_interface;
+  ixia_sut_link_.ixia_mirror_backup_interface = ready_links[3].ixia_interface;
+  ixia_sut_link_.sut_mirror_backup_interface = ready_links[3].sut_interface;
 
   LOG(INFO) << absl::StrFormat(
-      "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s]",
+      "Test packet route: [Ixia: %s] => [SUT: %s] -> [SUT: %s] => [Ixia: %s] "
+      "SUT Mirror port %s => Ixia port %s, SUT Mirror backup port %s => Ixia "
+      "port %s",
       ixia_sut_link_.ixia_tx_interface, ixia_sut_link_.sut_rx_interface,
-      ixia_sut_link_.sut_rx_interface, ixia_sut_link_.ixia_rx_interface);
+      ixia_sut_link_.sut_tx_interface, ixia_sut_link_.ixia_rx_interface,
+      ixia_sut_link_.sut_mirror_interface, ixia_sut_link_.ixia_mirror_interface,
+      ixia_sut_link_.sut_mirror_backup_interface,
+      ixia_sut_link_.ixia_mirror_backup_interface);
 
   ASSERT_OK_AND_ASSIGN(p4rt_id_by_interface_,
                        GetAllInterfaceNameToPortId(*sut_gnmi_stub_));
@@ -196,6 +206,7 @@ const sai::NexthopRewriteOptions kNextHopRewriteOptions = {
 // some amount of variance in rate measured end to end.
 // Level of tolerance for packet rate verification.
 constexpr float kTolerancePercent = 5.0;
+constexpr float kQueueCountersTolerancePercent = 10.0;
 
 // Ixia configurations:
 // 1. Frames sent per second by Ixia.
@@ -207,7 +218,15 @@ constexpr int kFramesPerSecond = 1000000;
 constexpr int kTotalFrames = 10000000;
 constexpr absl::Duration kTrafficDuration =
     absl::Seconds(kTotalFrames / kFramesPerSecond);
-constexpr int kFrameSize = 9212;
+constexpr int kFrameSize = 8000;
+
+// Constants for lower rate traffic.
+const int kTotalFramesTrafficLowTrafficRate = 500'000;
+const int kBytesPerSecondLowTrafficRate = 200'000'000;  // 200 MBps
+const int kFramesPerSecondLowTrafficRate =
+    kBytesPerSecondLowTrafficRate / (kFrameSize);
+constexpr absl::Duration kTrafficDurationLowTrafficRate = absl::Seconds(
+    kTotalFramesTrafficLowTrafficRate / kFramesPerSecondLowTrafficRate);
 
 struct PacketReceiveInfo {
   absl::Mutex mutex;
@@ -244,6 +263,17 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
   ASSERT_OK_AND_ASSIGN(const std::string kSutEgressPortP4rtId,
                        gutil::FindOrStatus(p4rt_id_by_interface_,
                                            ixia_sut_link_.sut_tx_interface));
+  ASSERT_OK_AND_ASSIGN(const std::string kSutIngressPortP4rtId,
+                       gutil::FindOrStatus(p4rt_id_by_interface_,
+                                           ixia_sut_link_.sut_rx_interface));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutMirrorToPortP4rtId,
+      gutil::FindOrStatus(p4rt_id_by_interface_,
+                          ixia_sut_link_.sut_mirror_interface));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutMirrorToBackupPortP4rtId,
+      gutil::FindOrStatus(p4rt_id_by_interface_,
+                          ixia_sut_link_.sut_mirror_backup_interface));
   // Listen for punted packets from the SUT.
   PacketReceiveInfo packet_receive_info;
   {
@@ -294,6 +324,20 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
         .burst_bytes = kFrameSize,
     };
 
+    // Add forwarding rule and mirror rule.
+    sai::MirrorSessionParams mirror_session_params = {
+        .mirror_session_id = "1",
+        .monitor_port = kSutMirrorToPortP4rtId,
+        .monitor_backup_port = kSutMirrorToBackupPortP4rtId,
+        .mirror_encap_src_mac = "02:02:02:02:02:01",
+        .mirror_encap_dst_mac = "02:02:02:02:02:02",
+        .mirror_encap_vlan_id = "0x001",
+        .mirror_encap_src_ip = "2000::1",
+        .mirror_encap_dst_ip = "2000::2",
+        .mirror_encap_udp_src_port = "0x1000",
+        .mirror_encap_udp_dst_port = "0x1001",
+    };
+
     ASSERT_OK_AND_ASSIGN(
         std::vector<p4::v1::Entity> entities,
         sai::EntryBuilder()
@@ -305,6 +349,10 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
                 dest_mac.ToString(), sai::PuntAction::kCopy, kDefaultCosQueue)
             .AddEntryToSetDscpAndQueuesAndDenyAboveRateLimit(
                 queue_assignments, meter_configuration)
+            .AddMirrorSessionTableEntry(mirror_session_params)
+            .AddMarkToMirrorAclEntry(
+                {.ingress_port = kSutIngressPortP4rtId,
+                 .mirror_session_id = mirror_session_params.mirror_session_id})
             .LogPdEntries()
             .GetDedupedPiEntities(ir_p4info));
 
@@ -334,6 +382,24 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
     ASSERT_OK(ixia::SetTrafficParameters(
         ixia_traffic_handle_, traffic_parameters, *generic_testbed_));
 
+    // Get packet count for Mirror-To-Port.
+    ASSERT_OK_AND_ASSIGN(
+        uint64_t mirror_packets_pre,
+        GetInterfaceCounter("out-unicast-pkts",
+                            ixia_sut_link_.sut_mirror_interface,
+                            sut_gnmi_stub_.get()));
+    LOG(INFO) << "Mirror-To-Port packets pre: " << mirror_packets_pre;
+    // Get queue counters for Mirror-To-Port.
+    ASSERT_OK_AND_ASSIGN(
+        QueueCounters initial_mirror_green_queue_counters,
+        GetGnmiQueueCounters(ixia_sut_link_.sut_mirror_interface,
+                             GetParam().multicast_green_queue,
+                             *sut_gnmi_stub_));
+
+    ASSERT_OK_AND_ASSIGN(
+        QueueCounters initial_mirror_red_queue_counters,
+        GetGnmiQueueCounters(ixia_sut_link_.sut_mirror_interface,
+                             GetParam().multicast_red_queue, *sut_gnmi_stub_));
     // Occasionally the Ixia API cannot keep up and starting traffic fails,
     // so we try up to 3 times.
     ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
@@ -446,6 +512,71 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
                                           (1 + kTolerancePercent / 100));
       EXPECT_GE(kObservedTrafficRate, flow_rate_limit_in_bytes_per_second *
                                           (1 - kTolerancePercent / 100));
+
+      ASSERT_OK_AND_ASSIGN(
+          auto mirror_packets_post,
+          GetInterfaceCounter("out-unicast-pkts",
+                              ixia_sut_link_.sut_mirror_interface,
+                              sut_gnmi_stub_.get()));
+
+      LOG(INFO) << "Mirror-To-Port packets post: " << mirror_packets_post;
+
+      ASSERT_OK_AND_ASSIGN(
+          QueueCounters final_mirror_green_queue_counters,
+          GetGnmiQueueCounters(ixia_sut_link_.sut_mirror_interface,
+                               GetParam().multicast_green_queue,
+                               *sut_gnmi_stub_));
+
+      ASSERT_OK_AND_ASSIGN(
+          QueueCounters final_mirror_red_queue_counters,
+          GetGnmiQueueCounters(ixia_sut_link_.sut_mirror_interface,
+                               GetParam().multicast_red_queue,
+                               *sut_gnmi_stub_));
+
+      QueueCounters delta_mirror_green = final_mirror_green_queue_counters -
+                                         initial_mirror_green_queue_counters;
+      QueueCounters delta_mirror_red =
+          final_mirror_red_queue_counters - initial_mirror_red_queue_counters;
+      LOG(INFO) << "Mirror-To-Port green queue delta: " << delta_mirror_green;
+      LOG(INFO) << "Mirror-To-Port red queue delta: " << delta_mirror_red;
+
+      ASSERT_OK_AND_ASSIGN(
+          auto mirror_queue_info,
+          ExtractQueueInfoViaGnmiConfig(ixia_sut_link_.sut_mirror_interface,
+                                        sut_gnmi_config_, false));
+      int64_t mirror_red_queue_rate_limit =
+          mirror_queue_info[GetParam().multicast_red_queue]
+              .rate_packets_per_second;
+      LOG(INFO) << "Mirror-To-Port red queue rate limit (bps): "
+                << mirror_red_queue_rate_limit;
+      int64_t expected_green_mirror_packets =
+          (absl::ToDoubleSeconds(kTrafficDuration) *
+           flow_rate_limit_in_bytes_per_second) /
+          kFrameSize;
+      int64_t expected_red_mirror_packets =
+          (absl::ToDoubleSeconds(kTrafficDuration) *
+           (mirror_red_queue_rate_limit / (8 * kFrameSize)));
+      int64_t expected_mirror_packets =
+          expected_green_mirror_packets + expected_red_mirror_packets;
+      LOG(INFO) << "Expected mirror packets: " << expected_mirror_packets;
+      // Verify Mirror-To-Port counters.
+      EXPECT_GE(mirror_packets_post - mirror_packets_pre,
+                expected_mirror_packets * (1 - kTolerancePercent / 100));
+      EXPECT_LE(mirror_packets_post - mirror_packets_pre,
+                expected_mirror_packets * (1 + kTolerancePercent / 100));
+
+      EXPECT_GE(delta_mirror_green.num_packets_transmitted,
+                expected_green_mirror_packets *
+                    (1 - kQueueCountersTolerancePercent / 100));
+      EXPECT_LE(delta_mirror_green.num_packets_transmitted,
+                expected_green_mirror_packets *
+                    (1 + kQueueCountersTolerancePercent / 100));
+      EXPECT_GE(delta_mirror_red.num_packets_transmitted,
+                expected_red_mirror_packets *
+                    (1 - kQueueCountersTolerancePercent / 100));
+      EXPECT_LE(delta_mirror_red.num_packets_transmitted,
+                expected_red_mirror_packets *
+                    (1 + kQueueCountersTolerancePercent / 100));
     }
   }  // for each queue.
 
@@ -453,5 +584,144 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
   receiver.Destroy();
 }
 
+// TODO: Disabled till failover is fixed.
+TEST_P(PuntQoSTestWithIxia, DISABLED_MirrorFailover) {
+  // Flow details.
+  const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
+  const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
+  const auto source_ip = netaddr::Ipv4Address(192, 168, 10, 1);
+  const auto dest_ip = netaddr::Ipv4Address(172, 0, 0, 1);
+
+  auto traffic_parameters = ixia::TrafficParameters{
+      .frame_count = kTotalFramesTrafficLowTrafficRate,
+      .frame_size_in_bytes = kFrameSize,
+      .traffic_speed = ixia::FramesPerSecond{kFramesPerSecondLowTrafficRate},
+      .src_mac = source_mac,
+      .dst_mac = dest_mac,
+      .ip_parameters = ixia::Ipv4TrafficParameters{
+          .src_ipv4 = source_ip,
+          .dst_ipv4 = dest_ip,
+          // Set ECN 0 to avoid RED drops.
+          .priority = ixia::IpPriority{.dscp = 0, .ecn = 0},
+      }};
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4info));
+  ASSERT_OK_AND_ASSIGN(const std::string kSutIngressPortP4rtId,
+                       gutil::FindOrStatus(p4rt_id_by_interface_,
+                                           ixia_sut_link_.sut_rx_interface));
+  ASSERT_OK_AND_ASSIGN(const std::string kSutEgressPortP4rtId,
+                       gutil::FindOrStatus(p4rt_id_by_interface_,
+                                           ixia_sut_link_.sut_tx_interface));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutMirrorToPortP4rtId,
+      gutil::FindOrStatus(p4rt_id_by_interface_,
+                          ixia_sut_link_.sut_mirror_interface));
+  ASSERT_OK_AND_ASSIGN(
+      const std::string kSutMirrorToBackupPortP4rtId,
+      gutil::FindOrStatus(p4rt_id_by_interface_,
+                          ixia_sut_link_.sut_mirror_backup_interface));
+
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4_session_));
+  // Add forwarding rule and mirror rule.
+  sai::MirrorSessionParams mirror_session_params = {
+      .mirror_session_id = "1",
+      .monitor_port = kSutMirrorToPortP4rtId,
+      .monitor_backup_port = kSutMirrorToBackupPortP4rtId,
+      .mirror_encap_src_mac = "02:02:02:02:02:01",
+      .mirror_encap_dst_mac = "02:02:02:02:02:02",
+      .mirror_encap_vlan_id = "0x001",
+      .mirror_encap_src_ip = "2000::1",
+      .mirror_encap_dst_ip = "2000::2",
+      .mirror_encap_udp_src_port = "0x1000",
+      .mirror_encap_udp_dst_port = "0x1001",
+  };
+
+  ASSERT_OK(
+      sai::EntryBuilder()
+          .AddEntriesForwardingIpPacketsToGivenPort(
+              /*egress_port=*/kSutEgressPortP4rtId,
+              /*ip_version=*/sai::IpVersion::kIpv4And6,
+              /*rewrite_options*/ kNextHopRewriteOptions)
+          .AddMirrorSessionTableEntry(mirror_session_params)
+          .AddMarkToMirrorAclEntry(
+              {.ingress_port = kSutIngressPortP4rtId,
+               .mirror_session_id = mirror_session_params.mirror_session_id})
+          .LogPdEntries()
+          .InstallDedupedEntities(*sut_p4_session_));
+
+  generic_testbed_->Environment().SetTestCaseID(
+      "46255587-1f7c-4254-8bd2-17b50e7f68f3");
+
+  ASSERT_OK(ixia::SetTrafficParameters(ixia_traffic_handle_, traffic_parameters,
+                                       *generic_testbed_));
+
+  // Get packet count for Mirror-To-Port.
+  ASSERT_OK_AND_ASSIGN(uint64_t mirror_packets_mtp_pre,
+                       GetInterfaceCounter("out-unicast-pkts",
+                                           ixia_sut_link_.sut_mirror_interface,
+                                           sut_gnmi_stub_.get()));
+  ASSERT_OK_AND_ASSIGN(
+      uint64_t mirror_packets_backup_mtp_pre,
+      GetInterfaceCounter("out-unicast-pkts",
+                          ixia_sut_link_.sut_mirror_backup_interface,
+                          sut_gnmi_stub_.get()));
+  LOG(INFO) << "Mirror-To-Port packets pre: " << mirror_packets_mtp_pre;
+  LOG(INFO) << "Mirror-To-Backup Port packets pre: "
+            << mirror_packets_backup_mtp_pre;
+
+  // Occasionally the Ixia API cannot keep up and starting traffic fails,
+  // so we try up to 3 times.
+  ASSERT_OK(pins::TryUpToNTimes(3, /*delay=*/absl::Seconds(1), [&] {
+    return ixia::StartTraffic(ixia_traffic_handle_, ixia_handle_,
+                              *generic_testbed_);
+  }));
+
+  LOG(INFO) << "Toggle interface started";
+  ASSERT_OK(SetAdminStatus(sut_gnmi_stub_.get(),
+                           ixia_sut_link_.sut_mirror_interface, "DOWN",
+                           absl::Minutes(2)));
+  LOG(INFO) << "Toggle interface ended";
+  LOG(INFO) << "Total Traffic duration: " << kTrafficDurationLowTrafficRate;
+  // Wait for Traffic to be sent.
+  absl::SleepFor(kTrafficDurationLowTrafficRate);
+
+  // Verify GNMI queue stats match packets received.
+  absl::SleepFor(absl::Seconds(10));
+
+  // Get packet count for Mirror-To-Port.
+  ASSERT_OK_AND_ASSIGN(auto mirror_packets_mtp_post,
+                       GetInterfaceCounter("out-unicast-pkts",
+                                           ixia_sut_link_.sut_mirror_interface,
+                                           sut_gnmi_stub_.get()));
+
+  LOG(INFO) << "Mirror-To-Port packets post: " << mirror_packets_mtp_post;
+  // Get packet count for Mirror-To-Port.
+  ASSERT_OK_AND_ASSIGN(
+      auto mirror_packets_backup_post,
+      GetInterfaceCounter("out-unicast-pkts",
+                          ixia_sut_link_.sut_mirror_backup_interface,
+                          sut_gnmi_stub_.get()));
+
+  LOG(INFO) << "Mirror-To-Backup-Port packets post: "
+            << mirror_packets_backup_post;
+
+  int64_t total_mirrored_packets =
+      (mirror_packets_mtp_post - mirror_packets_mtp_pre) +
+      (mirror_packets_backup_post - mirror_packets_backup_mtp_pre);
+  LOG(INFO) << "Total packets:" << kTotalFramesTrafficLowTrafficRate;
+  LOG(INFO) << "Total mirrored packets: " << total_mirrored_packets;
+  LOG(INFO) << "Packets not mirrored: "
+            << kTotalFramesTrafficLowTrafficRate - total_mirrored_packets;
+  // Verify drop duration is within acceptable limits.
+  int drop_duration_ms =
+      (kTotalFramesTrafficLowTrafficRate - total_mirrored_packets) *
+      kFrameSize * 1000 / kBytesPerSecondLowTrafficRate;
+  LOG(INFO) << "Mirror Failover duration (ms): " << drop_duration_ms;
+  EXPECT_LE(drop_duration_ms, 500) << "Drop duration exceeds 500ms";
+  EXPECT_OK(SetAdminStatus(sut_gnmi_stub_.get(),
+                           ixia_sut_link_.sut_mirror_interface, "UP",
+                           absl::Minutes(2)));
+}
 }  // namespace
 }  // namespace pins_test

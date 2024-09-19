@@ -54,8 +54,12 @@ struct ParamsForTestsWithIxia {
 struct IxiaSutLink {
   std::string ixia_tx_interface;
   std::string ixia_rx_interface;
+  std::string ixia_mirror_interface;
+  std::string ixia_mirror_backup_interface;
   std::string sut_tx_interface;
   std::string sut_rx_interface;
+  std::string sut_mirror_interface;
+  std::string sut_mirror_backup_interface;
 };
 
 class PuntQoSTestWithIxia

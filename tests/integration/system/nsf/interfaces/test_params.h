@@ -45,6 +45,7 @@ struct NsfTestParams {
   std::function<std::unique_ptr<thinkit::SSHClient>()> create_ssh_client;
   std::function<std::vector<std::string>(NsfUpgradeScenario)> get_test_case_ids;
   bool enable_interface_validation_during_nsf = true;
+  bool enable_dynamic_replay = false;
 };
 
 }  // namespace pins_test

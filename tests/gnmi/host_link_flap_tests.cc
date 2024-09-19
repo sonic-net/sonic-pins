@@ -16,6 +16,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/str_format.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
@@ -35,6 +36,8 @@ namespace pins_test {
 using ::gutil::IsOkAndHolds;
 using ::testing::Contains;
 using ::testing::IsEmpty;
+
+constexpr absl::Duration kFlapTimeout = absl::Minutes(2);
 
 TEST_P(ExampleTestFixture, LinkFlapTest) {
   LOG(INFO) << "Get testbed requirements.";
@@ -86,7 +89,8 @@ TEST_P(ExampleTestFixture, LinkFlapTest) {
   // device detects it.
   // Set admin-status DOWN through gNMI.
   LOG(INFO) << absl::StrFormat("Set SUT port %s admin DOWN", sut_interface);
-  EXPECT_OK(SetAdminStatus(gnmi_stub.get(), sut_interface, "DOWN"));
+  EXPECT_OK(
+      SetAdminStatus(gnmi_stub.get(), sut_interface, "DOWN", kFlapTimeout));
   LOG(INFO) << absl::StrFormat("Validate SUT port %s state: DOWN",
                                sut_interface);
   EXPECT_THAT(GetInterfaceOperStatusOverGnmi(*gnmi_stub, sut_interface),
@@ -94,7 +98,7 @@ TEST_P(ExampleTestFixture, LinkFlapTest) {
 
   // Set admin-status UP through gNMI.
   LOG(INFO) << absl::StrFormat("Set SUT port %s admin UP", sut_interface);
-  EXPECT_OK(SetAdminStatus(gnmi_stub.get(), sut_interface, "UP"));
+  EXPECT_OK(SetAdminStatus(gnmi_stub.get(), sut_interface, "UP", kFlapTimeout));
   LOG(INFO) << absl::StrFormat("Validate control device port %s state: UP",
                                peer_interface);
   EXPECT_THAT(generic_testbed->ControlDevice(peer_device_index)

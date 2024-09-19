@@ -183,7 +183,7 @@ absl::Status SetUpSut(pdpi::P4RuntimeSession& p4_session,
           ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
                          R"pb(
                            acl_pre_ingress_table_entry {
-                             match {}  # Wildcard match
+                             match {}                             # Wildcard match
                              action { set_vrf { vrf_id: "$0" } }  # Default vrf
                              priority: 1129
                            })pb",
