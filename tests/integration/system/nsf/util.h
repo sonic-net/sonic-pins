@@ -37,6 +37,8 @@
 
 namespace pins_test {
 
+constexpr absl::Duration kNsfRebootWaitTime = absl::Minutes(11);
+
 struct PinsSoftwareInfo {
   std::string name;
   std::string oper_status;
