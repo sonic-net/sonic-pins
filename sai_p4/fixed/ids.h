@@ -31,8 +31,10 @@
 // --- Actions -----------------------------------------------------------------
 
 // IDs of fixed SAI actions (8 most significant bits = 0x01).
-#define ROUTING_SET_DST_MAC_ACTION_ID 0x01000001                     // 16777217
-#define ROUTING_SET_PORT_AND_SRC_MAC_ACTION_ID 0x01000002            // 16777218
+#define ROUTING_SET_DST_MAC_ACTION_ID 0x01000001           // 16777217
+#define ROUTING_SET_PORT_AND_SRC_MAC_ACTION_ID 0x01000002  // 16777218
+#define ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID \
+  0x0100001B                                                         // 16777243
 #define ROUTING_SET_NEXTHOP_ACTION_ID 0x01000003                     // 16777219
 #define ROUTING_SET_IP_NEXTHOP_ACTION_ID 0x01000014                  // 16777236
 #define ROUTING_SET_WCMP_GROUP_ID_ACTION_ID 0x01000004               // 16777220
@@ -56,7 +58,7 @@
 #define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015           // 16777237
 #define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016       // 16777238
 #define DISABLE_VLAN_CHECKS_ACTION_ID 0x0100001A                   // 16777242
-// Next available action id: 0x0100001B (16777243)
+// Next available action id: 0x0100001C (16777244)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for
