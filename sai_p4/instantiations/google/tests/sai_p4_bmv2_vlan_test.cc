@@ -282,6 +282,7 @@ absl::Status InstallEntriesForwardingAndRewritingVlanInRifTable(
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
               egress_port, sai::IpVersion::kIpv4, "vrf-forward",
               {.disable_vlan_rewrite = disable_vlan_rewrite}, vlan_id_hexstr)));
+
   if (disable_vlan_checks) {
     return InstallEntries(bmv2, ir_p4info,
                           sai::EntryBuilder().AddDisableVlanChecksEntry());
@@ -441,8 +442,6 @@ TEST_P(VlanTest, IngressVidGetCarriedOverToEgressWhenVlanRewriteIsDisabled) {
 
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
       bmv2, kIrP4Info, /*vlan_id_hexstr=*/std::nullopt, kEgressPortProto,
-      /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/true));
-
   {
     // Inject packet without a VLAN tag.
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
