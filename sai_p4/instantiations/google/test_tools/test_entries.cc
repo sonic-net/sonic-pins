@@ -40,6 +40,16 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
+namespace {
+
+bool AllRewritesEnabled(const NexthopRewriteOptions& rewrite_options) {
+  return !rewrite_options.disable_decrement_ttl &&
+         !rewrite_options.disable_src_mac_rewrite &&
+         !rewrite_options.disable_dst_mac_rewrite &&
+         !rewrite_options.disable_vlan_rewrite;
+}
+
+std::string BoolToHexString(bool value) { return value ? "0x1" : "0x0"; }
 
 absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
     absl::string_view egress_port,
@@ -95,9 +105,7 @@ absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
   nexthop_table_entry.mutable_nexthop_table_entry()
       ->mutable_match()
       ->set_nexthop_id("nexthop");
-  if (!nexthop_rewrite_options.disable_decrement_ttl &&
-      !nexthop_rewrite_options.disable_src_mac_rewrite &&
-      !nexthop_rewrite_options.disable_dst_mac_rewrite) {
+  if (AllRewritesEnabled(nexthop_rewrite_options)) {
     SetIpNexthopAction* action =
         nexthop_table_entry.mutable_nexthop_table_entry()
             ->mutable_action()
@@ -112,13 +120,13 @@ absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
     action->set_router_interface_id("rif");
     action->set_neighbor_id("fe80::2:2ff:fe02:202");
     action->set_disable_decrement_ttl(
-        nexthop_rewrite_options.disable_decrement_ttl ? "0x1" : "0x0");
+        BoolToHexString(nexthop_rewrite_options.disable_decrement_ttl));
     action->set_disable_src_mac_rewrite(
-        nexthop_rewrite_options.disable_src_mac_rewrite ? "0x1" : "0x0");
+        BoolToHexString(nexthop_rewrite_options.disable_src_mac_rewrite));
     action->set_disable_dst_mac_rewrite(
-        nexthop_rewrite_options.disable_dst_mac_rewrite ? "0x1" : "0x0");
+        BoolToHexString(nexthop_rewrite_options.disable_dst_mac_rewrite));
     action->set_disable_vlan_rewrite(
-        nexthop_rewrite_options.disable_vlan_rewrite ? "0x1" : "0x0");
+        BoolToHexString(nexthop_rewrite_options.disable_vlan_rewrite));
   }
 
   sai::TableEntry& router_interface_table_entry = *entries.add_entries();
@@ -136,6 +144,8 @@ absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
       ->set_port(std::string(egress_port));
   return entries;
 }
+
+}  // namespace
 
 absl::StatusOr<sai::TableEntry> MakePdEntryPuntingAllPackets(
     PuntAction action) {
@@ -267,6 +277,7 @@ EntryBuilder& EntryBuilder::AddEntryPuntingAllPackets(PuntAction action) {
 
 EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
     absl::string_view egress_port, IpVersion ip_version, absl::string_view vrf,
+    const NexthopRewriteOptions& nexthop_rewrite_options,
     std::optional<absl::string_view> vlan_hexstr) {
   const std::string kNexthopId =
       absl::StrFormat("nexthop(%s, %s)", egress_port, vrf);
@@ -306,21 +317,29 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
         ->set_nexthop_id(kNexthopId);
   }
   {
-    sai::TableEntry& entry = *entries_.add_entries();
-    entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
-      nexthop_table_entry {
-        match { nexthop_id: "nexthop" }
-        action {
-          set_ip_nexthop { router_interface_id: "rif" neighbor_id: "fe80::2" }
-        }
-      }
-    )pb");
-    entry.mutable_nexthop_table_entry()->mutable_match()->set_nexthop_id(
-        kNexthopId);
-    entry.mutable_nexthop_table_entry()
-        ->mutable_action()
-        ->mutable_set_ip_nexthop()
-        ->set_router_interface_id(kRifId);
+    sai::NexthopTableEntry& nexthop_entry =
+        *entries_.add_entries()->mutable_nexthop_table_entry();
+    nexthop_entry.mutable_match()->set_nexthop_id(kNexthopId);
+    if (AllRewritesEnabled(nexthop_rewrite_options)) {
+      sai::SetIpNexthopAction& action =
+          *nexthop_entry.mutable_action()->mutable_set_ip_nexthop();
+      action.set_router_interface_id(kRifId);
+      action.set_neighbor_id("fe80::2");
+    } else {
+      sai::SetIpNexthopAndDisableRewritesAction& action =
+          *nexthop_entry.mutable_action()
+               ->mutable_set_ip_nexthop_and_disable_rewrites();
+      action.set_router_interface_id(kRifId);
+      action.set_neighbor_id("fe80::2");
+      action.set_disable_decrement_ttl(
+          BoolToHexString(nexthop_rewrite_options.disable_decrement_ttl));
+      action.set_disable_src_mac_rewrite(
+          BoolToHexString(nexthop_rewrite_options.disable_src_mac_rewrite));
+      action.set_disable_dst_mac_rewrite(
+          BoolToHexString(nexthop_rewrite_options.disable_dst_mac_rewrite));
+      action.set_disable_vlan_rewrite(
+          BoolToHexString(nexthop_rewrite_options.disable_vlan_rewrite));
+    }
   }
   {
     sai::TableEntry& entry = *entries_.add_entries();
