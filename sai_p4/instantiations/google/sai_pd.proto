@@ -65,7 +65,11 @@ message RouterInterfaceTableEntry {
   }
   Match match = 1;
   message Action {
-    SetPortAndSrcMacAction set_port_and_src_mac = 1;
+    oneof action {
+      SetPortAndSrcMacAction set_port_and_src_mac = 1;
+      // CAUTION: This action is not (yet) supported.
+      SetPortAndSrcMacAndVlanIdAction set_port_and_src_mac_and_vlan_id = 2;
+    }
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -762,6 +766,13 @@ message SetIpNexthopAndDisableRewritesAction {
 }
 
 message DisableVlanChecksAction {}
+
+// CAUTION: This action is not (yet) supported.
+message SetPortAndSrcMacAndVlanIdAction {
+  string port = 1;     // Format::STRING
+  string src_mac = 2;  // Format::MAC
+  string vlan_id = 3;  // Format::HEX_STRING / 12 bits
+}
 
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
