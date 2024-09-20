@@ -205,6 +205,7 @@ struct local_metadata_t {
   bool enable_decrement_ttl;
   bool enable_src_mac_rewrite;
   bool enable_dst_mac_rewrite;
+  bool enable_vlan_rewrite;
   packet_rewrites_t packet_rewrites;
 
   bit<16> l4_src_port;

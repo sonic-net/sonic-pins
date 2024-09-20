@@ -109,6 +109,7 @@ class EntryBuilder {
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
       absl::string_view egress_port, IpVersion ip_version,
       absl::string_view vrf,
+      const NexthopRewriteOptions& nexthop_rewrite_options = {},
       std::optional<absl::string_view> vlan_hexstr = std::nullopt);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
