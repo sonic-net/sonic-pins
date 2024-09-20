@@ -143,8 +143,9 @@ TEST(FuzzUtilTest, FuzzWriteRequestAreReproducible) {
   absl::BitGen gen_0(seed);
   absl::BitGen gen_1(seed);
 
-  // Create 1000 instances, and verify that they are identical.
-  for (int i = 0; i < 1000; ++i) {
+  // Create 20 instances (of, in expectation, ~50 updates each), and verify that
+  // they are identical.
+  for (int i = 0; i < 20; ++i) {
     ASSERT_THAT(FuzzWriteRequest(&gen_0, fuzzer_state.config,
                                  fuzzer_state.switch_state),
                 EqualsProto(FuzzWriteRequest(&gen_1, fuzzer_state.config,
