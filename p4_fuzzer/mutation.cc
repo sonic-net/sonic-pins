@@ -177,11 +177,14 @@ absl::Status MutateInvalidActionSelectorWeight(BitGen* gen,
   auto action_profile_action =
       action_set->mutable_action_profile_actions(action_to_fuzz);
 
+  ASSIGN_OR_RETURN(auto action_profile,
+                   GetActionProfile(config, entry->table_id()));
+
   if (absl::Bernoulli(*gen, 0.5)) {
     action_profile_action->set_weight(0);
   } else {
     action_profile_action->set_weight(
-        absl::Uniform<int32_t>(*gen, -1 * kActionProfileActionSetMaxWeight, 0));
+        absl::Uniform<int32_t>(*gen, -1 * action_profile.max_group_size(), 0));
   }
 
   return absl::OkStatus();
@@ -344,22 +347,6 @@ absl::Status MutateUpdate(BitGen* gen, const FuzzerConfig& config,
     case Mutation::NONEXISTING_MODIFY:
       return MutateNonexistingModifyDelete(gen, update, config, switch_state,
                                            p4::v1::Update::MODIFY);
-
-    case Mutation::INVALID_PORT:
-      return MutateInvalidValue(gen, update, config, switch_state, IsPort);
-
-    case Mutation::INVALID_QOS_QUEUE:
-      return MutateInvalidValue(gen, update, config, switch_state, IsQosQueue);
-
-    case Mutation::INVALID_NEIGHBOR_ID:
-      return MutateInvalidValue(gen, update, config, switch_state, IsNeighbor);
-
-    case Mutation::INVALID_REFERRING_ID:
-      return MutateInvalidValue(gen, update, config, switch_state, IsReferring);
-
-    case Mutation::DIFFERENT_ROLE:
-      // We already picked the right table earlier on, so nothing to do here.
-      return absl::OkStatus();
 
     case Mutation::INVALID_PORT:
       return MutateInvalidValue(gen, update, config, switch_state, IsPort);

@@ -29,33 +29,9 @@
 
 namespace p4_fuzzer {
 
-// Upper bound of the number of actions in an ActionProfileActionSet for tables
+// Upper bound on the number of actions in an ActionProfileActionSet for tables
 // that support one-shot action selector programming.
-constexpr uint32_t kActionProfileActionSetMaxCardinality = 32;
-// Upper bound on the weight of an ActionProfileActionSet for tables that
-// support one-shot action selector programming.
-// TODO: Update to use the @max_group_size annotation.
-constexpr int32_t kActionProfileActionSetMaxWeight = 256;
-
-// A predicate over P4 values (match field or action parameter).
-using P4ValuePredicate =
-    std::function<bool(const p4::config::v1::P4NamedType& type_name,
-                       const google::protobuf::RepeatedPtrField<
-                           pdpi::IrMatchFieldReference>& references)>;
-
-bool IsPort(const p4::config::v1::P4NamedType& type_name,
-            const google::protobuf::RepeatedPtrField<
-                pdpi::IrMatchFieldReference>& references = {});
-bool IsQosQueue(const p4::config::v1::P4NamedType& type_name,
-                const google::protobuf::RepeatedPtrField<
-                    pdpi::IrMatchFieldReference>& references = {});
-bool IsNeighbor(const p4::config::v1::P4NamedType& type_name,
-                const google::protobuf::RepeatedPtrField<
-                    pdpi::IrMatchFieldReference>& references = {});
-bool IsReferring(
-    const p4::config::v1::P4NamedType& type_name,
-    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
-        references);
+constexpr int kActionProfileActionSetMaxCardinality = 32;
 
 // A predicate over P4 values (match field or action parameter).
 using P4ValuePredicate =
@@ -83,6 +59,10 @@ const T& UniformFromVector(absl::BitGen* gen, const std::vector<T>& vec) {
   int index = absl::Uniform<int>(*gen, /*lo=*/0, /*hi=*/vec.size());
   return vec[index];
 }
+
+// Gets the action profile corresponding to the given table.
+absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
+    const FuzzerConfig& config, int table_id);
 
 // Returns the list of all table IDs in the underlying P4 program.
 const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config);

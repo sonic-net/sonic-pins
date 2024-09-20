@@ -157,6 +157,9 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
     updates.push_back({i, update, status});
   }
 
+  // TODO: Batching is not handled correctly here because we do not
+  // yet know what the right way to handle it is. We are hoping to change the
+  // P4RT specification.
   // Group by flow key.
   absl::flat_hash_map<TableEntryKey, std::vector<IndexUpdateStatus>>
       flowkey_to_updates;

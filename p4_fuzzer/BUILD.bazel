@@ -149,6 +149,8 @@ cc_test(
         "//sai_p4/instantiations/google:instantiations",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/random:distributions",
         "@com_google_absl//absl/random:seed_sequences",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -196,6 +198,7 @@ cc_test(
     srcs = ["oracle_util_test.cc"],
     deps = [
         ":oracle_util",
+        ":test_utils",
         "//gutil:collections",
         "//gutil:status",
         "//gutil:status_matchers",
@@ -287,6 +290,28 @@ p4_library(
 cc_library(
     name = "acl_table_test_ids",
     hdrs = ["p4_programs/sai-p4-google/ids.h"],
+)
+
+cc_library(
+    name = "test_utils",
+    testonly = True,
+    srcs = ["test_utils.cc"],
+    hdrs = ["test_utils.h"],
+    deps = [
+        ":fuzzer_config",
+        ":mutation_and_fuzz_util",
+        ":switch_state",
+        "//gutil:testing",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
 )
 
 p4_library(
