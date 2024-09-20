@@ -11,6 +11,7 @@
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
+
 // Options used in the construction of a P4Info by several helper functions.
 struct TestP4InfoOptions {
   int action_selector_table_id = 100;
