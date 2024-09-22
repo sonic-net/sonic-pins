@@ -243,6 +243,10 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 16777243
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -310,7 +314,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 512
+  size: 2048
 }
 tables {
   preamble {
@@ -841,6 +845,32 @@ actions {
 }
 actions {
   preamble {
+    id: 16777243
+    name: "ingress.routing.set_port_and_src_mac_and_vlan_id"
+    alias: "set_port_and_src_mac_and_vlan_id"
+    annotations: "@unsupported"
+  }
+  params {
+    id: 1
+    name: "port"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+  params {
+    id: 2
+    name: "src_mac"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+  }
+  params {
+    id: 3
+    name: "vlan_id"
+    bitwidth: 12
+  }
+}
+actions {
+  preamble {
     id: 16777218
     name: "ingress.routing.set_port_and_src_mac"
     alias: "set_port_and_src_mac"
@@ -884,7 +914,7 @@ actions {
   }
   params {
     id: 3
-    name: "disable_ttl_rewrite"
+    name: "disable_decrement_ttl"
     bitwidth: 1
   }
   params {
@@ -1129,7 +1159,7 @@ actions {
     id: 16777487
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DROP)"
+    annotations: "@sai_action(SAI_PACKET_ACTION_DENY)"
   }
 }
 actions {

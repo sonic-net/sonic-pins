@@ -20,7 +20,7 @@
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -29,13 +29,10 @@
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_pdpi/pd.h"
 #include "p4_pdpi/string_encodings/byte_string.h"
-#include "p4_pdpi/translation_options.h"
 #include "platforms/networking/p4/p4_infra/bmv2/bmv2.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
-#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/set_up_bmv2.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "tests/forwarding/packet_at_port.h"
@@ -181,7 +178,7 @@ void VerifyOutputPacketIsRewritten(
       ASSERT_TRUE(input_packet.headers(1).has_ipv4_header());
       ASSERT_TRUE(output_packet.headers(1).has_ipv4_header());
 
-      if (rewrite_options.disable_ttl_rewrite) {
+      if (rewrite_options.disable_decrement_ttl) {
         EXPECT_EQ(input_packet.headers(1).ipv4_header().ttl(),
                   output_packet.headers(1).ipv4_header().ttl());
       } else {
@@ -194,7 +191,7 @@ void VerifyOutputPacketIsRewritten(
       ASSERT_TRUE(input_packet.headers(1).has_ipv6_header());
       ASSERT_TRUE(output_packet.headers(1).has_ipv6_header());
 
-      if (rewrite_options.disable_ttl_rewrite) {
+      if (rewrite_options.disable_decrement_ttl) {
         EXPECT_EQ(input_packet.headers(1).ipv6_header().hop_limit(),
                   output_packet.headers(1).ipv6_header().hop_limit());
       } else {
@@ -217,10 +214,10 @@ struct PacketRewritesTestParams {
 template <typename Sink>
 void AbslStringify(Sink& sink, const PacketRewritesTestParams& param) {
   absl::Format(&sink,
-               "[disable_ttl_rewrite: %v, disable_src_mac_rewrite: %v, "
+               "[disable_decrement_ttl: %v, disable_src_mac_rewrite: %v, "
                "disable_dst_mac_rewrite: %v, ip_version: %v, instantiation: "
                "%v]",
-               param.nexthop_rewrite_options.disable_ttl_rewrite,
+               param.nexthop_rewrite_options.disable_decrement_ttl,
                param.nexthop_rewrite_options.disable_src_mac_rewrite,
                param.nexthop_rewrite_options.disable_dst_mac_rewrite,
                param.ip_version,
@@ -232,11 +229,11 @@ void AbslStringify(Sink& sink, const PacketRewritesTestParams& param) {
 std::vector<sai::NexthopRewriteOptions>
 CartesianProductOfNexthopRewriteOptions() {
   std::vector<sai::NexthopRewriteOptions> options;
-  for (bool disable_ttl_rewrite : {false, true}) {
+  for (bool disable_decrement_ttl : {false, true}) {
     for (bool disable_src_mac_rewrite : {false, true}) {
       for (bool disable_dst_mac_rewrite : {false, true}) {
         options.push_back(sai::NexthopRewriteOptions{
-            .disable_ttl_rewrite = disable_ttl_rewrite,
+            .disable_decrement_ttl = disable_decrement_ttl,
             .disable_src_mac_rewrite = disable_src_mac_rewrite,
             .disable_dst_mac_rewrite = disable_dst_mac_rewrite,
         });
@@ -272,19 +269,6 @@ CartesianProductOfIpVersionsAndInstantiationsAndGivenRewriteOptions(
 
 constexpr int kBmv2PortBitwidth = 9;
 
-// Translates `entries` into PI form and installs them to `bmv2`.
-absl::Status InstallEntriesToBmv2(const sai::TableEntries& entries,
-                                  const sai::Instantiation& instantiation,
-                                  Bmv2& bmv2) {
-  ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entries,
-                   pdpi::PdTableEntriesToPiEntities(
-                       sai::GetIrP4Info(instantiation), entries,
-                       // TODO: Remove once `@unsupported` annotation is removed
-                       // from set_ip_nexthop_and_disable_rewrites.
-                       pdpi::TranslationOptions{.allow_unsupported = true}));
-  return pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entries);
-}
-
 class PacketRewritesTest
     : public testing::TestWithParam<PacketRewritesTestParams> {};
 
@@ -297,13 +281,20 @@ TEST_P(PacketRewritesTest, PacketsAreForwardedWithCorrectRewrites) {
       GetParam().nexthop_rewrite_options;
 
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(instantiation));
-  ASSERT_OK(InstallEntriesToBmv2(
-      sai::PdEntryBuilder()
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort),
               rewrite_options)
-          .GetDedupedEntries(),
-      instantiation, bmv2));
+          .LogPdEntries()
+          .GetDedupedPiEntities(
+              sai::GetIrP4Info(instantiation),
+              // TODO: Remove once `@unsupported` annotation is
+              // removed from set_ip_nexthop_and_disable_rewrites.
+              /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+
   // Use input packet with TTL !=0/1. TTL == 0/1 scenarios are tested in
   // another test below.
   packetlib::Packet input_packet = GetIpPacket(ip_version, /*ttl=*/"0x22");
@@ -343,13 +334,19 @@ TEST_P(TtlRewriteTest, PacketWithZeroOrOneTtlTest) {
       GetParam().nexthop_rewrite_options;
 
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(instantiation));
-  ASSERT_OK(InstallEntriesToBmv2(
-      sai::PdEntryBuilder()
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort),
               rewrite_options)
-          .GetDedupedEntries(),
-      instantiation, bmv2));
+          .LogPdEntries()
+          .GetDedupedPiEntities(
+              sai::GetIrP4Info(instantiation),
+              // TODO: Remove once `@unsupported` annotation is
+              // removed from set_ip_nexthop_and_disable_rewrites.
+              /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Input packet with TTL == 1 should be forwarded.
   packetlib::Packet input_packet = GetIpPacket(ip_version, /*ttl=*/"0x01");
@@ -390,7 +387,7 @@ INSTANTIATE_TEST_SUITE_P(
     CartesianProductOfInstantiationsAndIpVersions, TtlRewriteTest,
     ValuesIn(
         CartesianProductOfIpVersionsAndInstantiationsAndGivenRewriteOptions(
-            {sai::NexthopRewriteOptions{.disable_ttl_rewrite = true}})));
+            {sai::NexthopRewriteOptions{.disable_decrement_ttl = true}})));
 
 class TtlRewriteAndPuntTest
     : public testing::TestWithParam<PacketRewritesTestParams> {};
@@ -403,10 +400,13 @@ TEST_P(TtlRewriteAndPuntTest, ZeroAndOneTtlPacketsAreTrapped) {
   const sai::IpVersion ip_version = GetParam().ip_version;
 
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(instantiation));
-  ASSERT_OK(InstallEntriesToBmv2(sai::PdEntryBuilder()
-                                     .AddEntryPuntingPacketsWithTtlZeroAndOne()
-                                     .GetDedupedEntries(),
-                                 instantiation, bmv2));
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddEntryPuntingPacketsWithTtlZeroAndOne()
+          .LogPdEntries()
+          .GetDedupedPiEntities(sai::GetIrP4Info(instantiation)));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Input packet with TTL == 1 should be trapped.
   packetlib::Packet ttl_1_input_packet =
@@ -442,7 +442,7 @@ INSTANTIATE_TEST_SUITE_P(
     CartesianProductOfInstantiationsAndIpVersions, TtlRewriteAndPuntTest,
     ValuesIn(
         CartesianProductOfIpVersionsAndInstantiationsAndGivenRewriteOptions(
-            {sai::NexthopRewriteOptions{.disable_ttl_rewrite = false}})));
+            {sai::NexthopRewriteOptions{.disable_decrement_ttl = false}})));
 
 }  // namespace
 }  // namespace pins
