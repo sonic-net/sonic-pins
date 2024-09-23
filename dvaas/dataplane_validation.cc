@@ -39,6 +39,7 @@
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "dvaas/thinkit_tests/dvaas_regression.pb.h"
 #include "dvaas/user_provided_packet_test_vector.h"
 #include "dvaas/validation_result.h"
 #include "glog/logging.h"
@@ -560,6 +561,8 @@ absl::Status PostProcessTestVectorFailure(
         // `ir_entities` must be passed in by value.
         pdpi::IrEntities ir_entities)>
         test_and_validate_callback) {
+  ASSIGN_OR_RETURN(pdpi::IrEntities best_known_set_of_entities,
+                   pdpi::ReadIrEntities(*sut_api.p4rt));
   // Duplicate packet that caused test failure.
   if (failure_count <
       params.failure_enhancement_options.max_failures_to_attempt_to_replicate) {
@@ -581,7 +584,7 @@ absl::Status PostProcessTestVectorFailure(
       failure_count < params.failure_enhancement_options
                           .max_number_of_failures_to_minimize) {
     absl::Time start = absl::Now();
-    ASSIGN_OR_RETURN(pdpi::IrEntities result,
+    ASSIGN_OR_RETURN(best_known_set_of_entities,
                      MinimizePacketTestVectors(sut_api, test_outcome,
                                                test_and_validate_callback),
                      _.SetPrepend() << "When minimizing failure: ");
@@ -589,13 +592,28 @@ absl::Status PostProcessTestVectorFailure(
               << absl::ToInt64Milliseconds(absl::Now() - start)
               << " milliseconds";
     RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
-        "minimal_set_of_entities_that_caused_test_failure.txt", result));
+        "minimal_set_of_entities_that_caused_test_failure.txt",
+        best_known_set_of_entities));
   }
 
   // Output an Arriba test vector to test artifacts.
   RETURN_IF_ERROR(StorePacketTestVectorAsArribaTestVector(
       test_outcome.test_run().test_vector(), packet_traces,
       dvaas_test_artifact_writer));
+
+  // Output dvaas_regression_test_proto.
+  DvaasRegressionTestProto dvaas_regression_test_proto;
+  *dvaas_regression_test_proto.mutable_test_vector() =
+      test_outcome.test_run().test_vector();
+  *dvaas_regression_test_proto.mutable_minimal_set_of_entities() =
+      best_known_set_of_entities;
+  dvaas_regression_test_proto.set_currently_failing(true);
+  ASSIGN_OR_RETURN(p4::config::v1::P4Info p4info,
+                   pdpi::GetP4Info(*sut_api.p4rt));
+  *dvaas_regression_test_proto.mutable_p4info() = p4info;
+
+  RETURN_IF_ERROR(dvaas_test_artifact_writer.AppendToTestArtifact(
+      "dvaas_regression_test_proto.txt", dvaas_regression_test_proto));
 
   // Print packet traces.
   if (params.failure_enhancement_options.collect_packet_trace) {

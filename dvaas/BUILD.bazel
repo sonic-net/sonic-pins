@@ -35,6 +35,7 @@ cc_library(
         ":test_vector_cc_proto",
         ":user_provided_packet_test_vector",
         ":validation_result",
+        "//dvaas/thinkit_tests:dvaas_regression_cc_proto",
         "//gutil:proto",
         "//gutil:proto_ordering",
         "//gutil:status",
