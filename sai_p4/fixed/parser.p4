@@ -15,9 +15,10 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.vlan_id = 0;
     local_metadata.admit_to_l3 = false;
     local_metadata.vrf_id = kDefaultVrf;
-    local_metadata.enable_ttl_rewrite = false;
+    local_metadata.enable_decrement_ttl = false;
     local_metadata.enable_src_mac_rewrite = false;
     local_metadata.enable_dst_mac_rewrite = false;
+    local_metadata.enable_vlan_rewrite = false;
     local_metadata.packet_rewrites.src_mac = 0;
     local_metadata.packet_rewrites.dst_mac = 0;
     local_metadata.l4_src_port = 0;

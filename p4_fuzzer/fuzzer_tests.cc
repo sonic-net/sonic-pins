@@ -101,7 +101,6 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
     WriteRequest request = RemoveAnnotations(annotated_request);
     num_updates += request.updates_size();
     max_batch_size = std::max(max_batch_size, request.updates_size());
-
     // Set IDs.
     request.set_device_id(session->DeviceId());
     *request.mutable_election_id() = session->ElectionId();
