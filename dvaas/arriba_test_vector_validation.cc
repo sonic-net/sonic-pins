@@ -86,6 +86,24 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
                        },
                        packet_statistics));
 
+  ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_sut,
+                   pdpi::ReadIrTableEntries(sut));
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "sut_installed_entries.txtpb",
+      gutil::PrintTextProto(installed_entries_sut)));
+
+  ASSIGN_OR_RETURN(const pdpi::IrTableEntries installed_entries_control,
+                   pdpi::ReadIrTableEntries(control_switch));
+  RETURN_IF_ERROR(artifact_writer.AppendToTestArtifact(
+      "control_installed_entries.txtpb",
+      gutil::PrintTextProto(installed_entries_control)));
+
+  LOG(INFO) << "Number of packets injected: "
+            << packet_statistics.total_packets_injected;
+  LOG(INFO) << "packet forwarded: "
+            << packet_statistics.total_packets_forwarded;
+  LOG(INFO) << "packet punted: " << packet_statistics.total_packets_punted;
+
   // Compare the switch output with expected output for each test vector.
   LOG(INFO) << "Validating test runs";
   ASSIGN_OR_RETURN(

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
@@ -21,15 +22,36 @@ cc_library(
     hdrs = ["dvaas_regression_test.h"],
     linkstatic = True,
     deps = [
+        ":dvaas_regression_cc_proto",
         "//dvaas:dataplane_validation",
         "//dvaas:mirror_testbed_config",
         "//dvaas:switch_api",
         "//dvaas:test_vector_cc_proto",
         "//dvaas:validation_result",
         "//gutil:status_matchers",
+        "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:p4_runtime_session_extras",
+        "//tests/lib:switch_test_setup_helpers",
+        "//thinkit:mirror_testbed",
         "//thinkit:mirror_testbed_fixture",
         "@com_google_googletest//:gtest",
     ],
     alwayslink = True,
+)
+
+proto_library(
+    name = "dvaas_regression_proto",
+    testonly = True,
+    srcs = ["dvaas_regression.proto"],
+    deps = [
+        "//dvaas:test_vector_proto",
+        "//p4_pdpi:ir_proto",
+        "@com_github_p4lang_p4runtime//:p4info_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "dvaas_regression_cc_proto",
+    testonly = True,
+    deps = [":dvaas_regression_proto"],
 )

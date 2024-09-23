@@ -5,6 +5,8 @@
 
 #include "dvaas/dataplane_validation.h"
 #include "dvaas/test_vector.pb.h"
+#include "dvaas/thinkit_tests/dvaas_regression.pb.h"
+#include "gtest/gtest.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "gtest/gtest.h"
 
@@ -24,13 +26,11 @@ struct DvaasRegressionTestParams {
   // dvaas::DataplaneValidationParams documentation for more details.
   dvaas::DataplaneValidationParams dvaas_params;
 
-  // The test vector that is used for validation of the forwarding behavior of
-  // the SUT in the given testbed.
-  PacketTestVector packet_test_vector;
-
-  // The minimal set of entities that can be used to reproduce the failure of
-  // the test vector.
-  pdpi::IrEntities minimal_set_of_entities;
+  // Contains the test vector that is used for the validation of the forwarding
+  // behavior of the SUT in the given testbed, the minimal set of entities
+  // that can be used to reproduce the failure of the test vector, the P4Info,
+  // and a boolean indicating whether the test is currently failing.
+  DvaasRegressionTestProto dvaas_regression_test_proto;
 };
 
 // TODO: Combine all the information required for a
