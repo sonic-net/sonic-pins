@@ -1,3 +1,16 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "p4_fuzzer/fuzz_util.h"
 
 #include <algorithm>
@@ -794,12 +807,12 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
                                              ir_table_info, max_weight));
 
     bool is_set_nexthop_action =
-        action->action().action_id() == ROUTING_SET_NEXTHOP_ID_ACTION_ID;
+        action.action().action_id() == ROUTING_SET_NEXTHOP_ID_ACTION_ID;
     // If this nexthop has already been used, skip. This will generate fewer
     // actions, but that's fine.
     if (is_wcmp_table && is_set_nexthop_action &&
-        action->action().params_size() == 1 &&
-        used_nexthops.insert(action->action().params()[0].value()).second) {
+        action.action().params_size() == 1 &&
+        used_nexthops.insert(action.action().params()[0].value()).second) {
       continue;
     }
     *action_set.add_action_profile_actions() = action;
