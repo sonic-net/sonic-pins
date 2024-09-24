@@ -716,9 +716,9 @@ absl::StatusOr<Replica> FuzzReplica(absl::BitGen* gen,
 
 // Randomly changes the `multicast_group_entry` without affecting the key
 // fields.
-void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
-                      const SwitchState& switch_state,
-                      MulticastGroupEntry* multicast_group_entry) {
+absl::Status FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
+                              const SwitchState& switch_state,
+                              MulticastGroupEntry* multicast_group_entry) {
   multicast_group_entry->clear_replicas();
   // Fuzz 0-8 unique replicas
   // TODO: - Replace how iteration count is chosen with information
@@ -730,27 +730,27 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
   // replicas generated can be less than `replica_fuzz_iterations`.
   for (int i = 0; i < replica_fuzz_iterations; ++i) {
     // Generate replica.
-    absl::StatusOr<Replica> replica =
-        FuzzReplica(gen, config, switch_state,
-                    config.GetIrP4Info().built_in_tables().at(
-                        pdpi::GetMulticastGroupTableName()));
+    ASSIGN_OR_RETURN(Replica replica,
+                     FuzzReplica(gen, config, switch_state,
+                                 config.GetIrP4Info().built_in_tables().at(
+                                     pdpi::GetMulticastGroupTableName())));
 
     // Within a given multicast entry, replicas must be unique.
-    if (replica.ok() &&
-        unique_replicas
-            .insert(std::make_pair(replica->instance(), replica->port()))
+    if (unique_replicas
+            .insert(std::make_pair(replica.instance(), replica.port()))
             .second) {
-      *multicast_group_entry->add_replicas() = std::move(*replica);
+      *multicast_group_entry->add_replicas() = std::move(replica);
     }
   }
+  return absl::OkStatus();
 }
 
 // Randomly changes the table_entry, without affecting the key fields.
-void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
-                      const SwitchState& switch_state,
-                      TableEntry* table_entry) {
+absl::Status FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
+                              const SwitchState& switch_state,
+                              TableEntry* table_entry) {
   // With some probability, don't modify the element at all.
-  if (absl::Bernoulli(*gen, 0.2)) return;
+  if (absl::Bernoulli(*gen, 0.2)) return absl::OkStatus();
 
   if (absl::Bernoulli(*gen, 0.25)) {
     if (absl::Bernoulli(*gen, 0.5)) {
@@ -758,17 +758,16 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
       // IsWellformedUpdate
       // will think the update is no longer well-formed.
     } else {
-      if (auto table_definition = gutil::FindOrStatus(
-              config.GetIrP4Info().tables_by_id(), table_entry->table_id());
-          table_definition.ok()) {
-        // Try up to 3 times to create a new action.
-        for (int i = 0; i < 3; ++i) {
-          if (auto action =
-                  FuzzAction(gen, config, switch_state, *table_definition);
-              action.ok()) {
-            *table_entry->mutable_action() = *action;
-            break;
-          }
+      ASSIGN_OR_RETURN(auto table_definition,
+                       gutil::FindOrStatus(config.GetIrP4Info().tables_by_id(),
+                                           table_entry->table_id()));
+      // Try up to 3 times to create a new action.
+      for (int i = 0; i < 3; ++i) {
+        if (auto action =
+                FuzzAction(gen, config, switch_state, table_definition);
+            action.ok()) {
+          *table_entry->mutable_action() = *action;
+          break;
         }
       }
     }
@@ -778,31 +777,29 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
   if (absl::Bernoulli(*gen, 0.25)) {
     if (absl::Bernoulli(*gen, 0.5)) {
       table_entry->clear_metadata();
-    } else {
-      // TODO: Currently, we only want to use metadata that looks
-      // similar to our expectation. Eventually, we should fuzz just a random ID
-      // with e.g. `FuzzRandomId(gen)`.
-      table_entry->set_metadata(
-          absl::StrCat("orion_cookie: ", FuzzUint64(gen, /*bits=*/64)));
     }
   }
   // TODO: also fuzz meters
+  return absl::OkStatus();
 }
 
 // Randomly changes the entity, without affecting the key fields.
-void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
-                      const SwitchState& switch_state, Entity* entity) {
+absl::Status FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
+                              const SwitchState& switch_state, Entity* entity) {
   // This function only supports table entries and multicast group entries.
   CHECK(entity->has_table_entry() ||  // Crash OK
         entity->packet_replication_engine_entry().has_multicast_group_entry());
   if (entity->has_table_entry()) {
-    FuzzNonKeyFields(gen, config, switch_state, entity->mutable_table_entry());
+    RETURN_IF_ERROR(FuzzNonKeyFields(gen, config, switch_state,
+                                     entity->mutable_table_entry()));
   }
   if (entity->packet_replication_engine_entry().has_multicast_group_entry()) {
-    FuzzNonKeyFields(gen, config, switch_state,
-                     entity->mutable_packet_replication_engine_entry()
-                         ->mutable_multicast_group_entry());
+    RETURN_IF_ERROR(
+        FuzzNonKeyFields(gen, config, switch_state,
+                         entity->mutable_packet_replication_engine_entry()
+                             ->mutable_multicast_group_entry()));
   }
+  return absl::OkStatus();
 }
 
 // Generates `WeightedItems` for all valid table_ids where weight is equal to
@@ -979,7 +976,13 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
         *entity.mutable_table_entry() =
             UniformValueFromMap(gen, switch_state.GetTableEntries(table_id));
       }
-      FuzzNonKeyFields(gen, config, switch_state, &entity);
+      if (!FuzzNonKeyFields(gen, config, switch_state, &entity).ok()) {
+        // Retry.
+        return FuzzUpdate(gen, config, switch_state);
+      }
+      // TODO: After this we may need to apply the ModifyFuzzedX
+      // functions to ensure that modified entities have their non-key fields
+      // correctly modified.
       break;
     }
     default:
@@ -1528,7 +1531,7 @@ absl::StatusOr<p4::v1::MulticastGroupEntry> FuzzValidMulticastGroupEntry(
   }
 
   // Fills in replicas randomly.
-  FuzzNonKeyFields(gen, config, switch_state, &entry);
+  RETURN_IF_ERROR(FuzzNonKeyFields(gen, config, switch_state, &entry));
 
   return entry;
 };
@@ -1592,9 +1595,6 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
                    FuzzAction(gen, config, switch_state, ir_table_info),
                    _.SetPrepend() << "while fuzzing action: ");
 
-  // Set cookie and priority.
-  table_entry.set_metadata(
-      absl::StrCat("orion_cookie: ", FuzzUint64(gen, /*bits=*/64)));
   if (ir_table_info.requires_priority()) {
     uint64_t priority;
     do {
