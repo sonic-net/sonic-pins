@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -281,7 +282,7 @@ FindInterfacesNameFromInterfaceJsonArray(int port_number,
 absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
     gnmi::gNMI::StubInterface* gnmi_stub, const gnmi::GetRequest& request,
     std::optional<absl::Duration> timeout) {
-  LOG(INFO) << "Sending GET request: " << request.ShortDebugString();
+  VLOG(1) << "Sending GET request: " << request.ShortDebugString();
   gnmi::GetResponse response;
   grpc::ClientContext context;
   if (timeout.has_value()) {
@@ -292,7 +293,7 @@ absl::StatusOr<gnmi::GetResponse> SendGnmiGetRequest(
           .LogError()
           .SetPrepend()
       << "GET request failed with error: ";
-  LOG(INFO) << "Received GET response: " << response.ShortDebugString();
+  VLOG(1) << "Received GET response: " << response.ShortDebugString();
   return response;
 }
 
@@ -2108,11 +2109,11 @@ absl::Status SetPortLoopbackMode(bool port_loopback,
       "interfaces/interface[name=", interface_name, "]/config/loopback-mode");
   std::string config_json;
   if (port_loopback) {
-    config_json = "{\"openconfig-interfaces:loopback-mode\":\"FACILITY\"}";
+    config_json =
+        "{\"openconfig-interfaces:loopback-mode\":\"ASIC_MAC_LOCAL\"}";
   } else {
     config_json = "{\"openconfig-interfaces:loopback-mode\":\"NONE\"}";
   }
-
   return pins_test::SetGnmiConfigPath(&gnmi_stub, config_path,
                                       GnmiSetType::kUpdate, config_json);
 }
@@ -2336,5 +2337,4 @@ GetInterfaceCounter(absl::string_view stat_name, absl::string_view interface,
   }
   return stat;
 }
-
 }  // namespace pins_test
