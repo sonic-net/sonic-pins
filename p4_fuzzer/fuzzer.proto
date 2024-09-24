@@ -1,3 +1,17 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 syntax = "proto3";
 
 package p4_fuzzer;
@@ -25,10 +39,6 @@ enum Mutation {
   // Duplicates a match field in a table entry.
   DUPLICATE_MATCH_FIELD = 4;
 
-  // Picks table entry fields and changes their value to randomly generated ones
-  // of the same type.
-  INVALID_GENERIC = 5;
-
   // Changes a table entry with an ActionProfileActionSet (intended for tables
   // that implement one-shot action selector programming) to a table that
   // expects a single action and vice versa.
@@ -43,6 +53,24 @@ enum Mutation {
 
   // Attempts to delete a table entry that does not exist in the switch.
   NONEXISTING_DELETE = 9;
+
+  // Picks a port that does not exist.
+  INVALID_PORT = 10;
+
+  // Picks an invalid qos_queue.
+  INVALID_QOS_QUEUE = 11;
+
+  // Picks an invalid neighbor id.
+  INVALID_NEIGHBOR_ID = 12;
+
+  // Picks a non-existing ID for a field that refers to another field.
+  INVALID_REFERRING_ID = 13;
+
+  // Picks a table that is not owned by the fuzzer role.
+  DIFFERENT_ROLE = 14;
+
+  // Attempts to modify a table entry that does not exist in the switch.
+  NONEXISTING_MODIFY = 15;
 }
 
 // Human readable version of a (fuzzed) table entry. Contains the original

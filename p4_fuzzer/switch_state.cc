@@ -1,3 +1,16 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "p4_fuzzer/switch_state.h"
 
 #include <algorithm>
@@ -125,13 +138,27 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
       break;
     }
 
-    case Update::DELETE:
+    case Update::DELETE: {
       if (tables_[table_id].erase(TableEntryKey(table_entry)) != 1) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Cannot erase non-existent table entries. Update: "
                << update.DebugString();
       }
       break;
+    }
+
+    case Update::MODIFY: {
+      auto [iter, not_present] =
+          table.insert(/*value=*/{TableEntryKey(table_entry), table_entry});
+
+      if (not_present) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Cannot modify a non-existing update. Update: "
+               << update.DebugString();
+      }
+      break;
+    }
+
     default:
       LOG(FATAL) << "Update of unsupported type: " << update.DebugString();
   }

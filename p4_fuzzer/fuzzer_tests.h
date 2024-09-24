@@ -11,24 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
-#define GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
+#ifndef GOOGLE_P4_FUZZER_FUZZER_TESTS_H_
+#define GOOGLE_P4_FUZZER_FUZZER_TESTS_H_
 
-#include "p4_pdpi/ir.pb.h"
+#include "thinkit/mirror_testbed_fixture.h"
 
 namespace p4_fuzzer {
 
-struct FuzzerConfig {
-  // The IrP4Info of the program to be fuzzed.
-  pdpi::IrP4Info info;
-  // The set of valid port names.
-  std::vector<std::string> ports;
-  // The set of valid QOS queues.
-  std::vector<std::string> qos_queues;
-  // The P4RT role the fuzzer should use.
-  std::string role;
-};
+class FuzzTest : public thinkit::MirrorTestbedFixture {};
 
 }  // namespace p4_fuzzer
 
-#endif  // GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
+#endif  // GOOGLE_P4_FUZZER_FUZZER_TESTS_H_

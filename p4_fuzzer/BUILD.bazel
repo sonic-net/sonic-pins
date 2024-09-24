@@ -53,28 +53,6 @@ cc_test(
 )
 
 cc_library(
-    name = "fuzzer_config",
-    srcs = [
-        "fuzzer_config.cc",
-    ],
-    hdrs = [
-        "fuzzer_config.h",
-    ],
-    deps = [
-        "//gutil:status",
-        "//lib/p4rt:p4rt_port",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-    ],
-)
-
-cc_library(
     name = "table_entry_key",
     srcs = ["table_entry_key.cc"],
     hdrs = ["table_entry_key.h"],
@@ -100,6 +78,16 @@ cc_test(
 )
 
 cc_library(
+    name = "fuzzer_config",
+    hdrs = [
+        "fuzzer_config.h",
+    ],
+    deps = [
+        "//p4_pdpi:ir_cc_proto",
+    ],
+)
+
+cc_library(
     name = "mutation_and_fuzz_util",
     srcs = [ 
         "fuzz_util.cc",
@@ -112,22 +100,33 @@ cc_library(
     deps = [ 
         ":annotation_util",
         ":fuzzer_cc_proto",
+        ":fuzzer_config",
         ":switch_state",
+        "//gutil:collections",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "//p4_pdpi/internal:ordered_map",
+        "//p4_pdpi/netaddr:ipv6_address",
+        "//p4_pdpi/utils:ir",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "//sai_p4/fixed:p4_ids",
         "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4types_cc_proto",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/base:endian",
         "@com_google_absl//absl/random",
+        "@com_google_absl//absl/random:distributions",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        # TODO: This target is not visible in google3.
-        # "//third_party/libprotobuf_mutator:libprotobuf_mutator_internals",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
-        "//gutil:collections",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:pd",
-        "//p4_pdpi/utils:ir",
-    ],  
+        "@com_google_protobuf//:protobuf_lite",
+    ],
 )
 
 cc_test(
@@ -139,9 +138,23 @@ cc_test(
     deps = [
         ":fuzzer_cc_proto",
         ":mutation_and_fuzz_util",
+        ":test_utils",
+        "//gutil:collections",
         "//gutil:proto",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
         "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:pd",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/random:distributions",
+        "@com_google_absl//absl/random:seed_sequences",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -185,7 +198,9 @@ cc_test(
     name = "oracle_util_test",
     srcs = ["oracle_util_test.cc"],
     deps = [
+        ":mutation_and_fuzz_util",
         ":oracle_util",
+        ":test_utils",
         "//gutil:collections",
         "//gutil:status",
         "//gutil:status_matchers",
@@ -196,6 +211,7 @@ cc_test(
         "//p4_pdpi/netaddr:ipv4_address",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -277,6 +293,28 @@ p4_library(
 cc_library(
     name = "acl_table_test_ids",
     hdrs = ["p4_programs/sai-p4-google/ids.h"],
+)
+
+cc_library(
+    name = "test_utils",
+    testonly = True,
+    srcs = ["test_utils.cc"],
+    hdrs = ["test_utils.h"],
+    deps = [
+        ":fuzzer_config",
+        ":mutation_and_fuzz_util",
+        ":switch_state",
+        "//gutil:testing",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
 )
 
 p4_library(
