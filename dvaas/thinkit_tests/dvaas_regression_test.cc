@@ -49,9 +49,7 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   // `ConfigureForForwardingTest`.
   pdpi::IrTableEntries ir_table_entries;
   for (const pdpi::IrEntity& ir_entity :
-       GetParam()
-           .dvaas_regression_test_proto.minimal_set_of_entities()
-           .entities()) {
+       GetParam().dvaas_regression_test_proto.entities().entities()) {
     if (ir_entity.has_table_entry()) {
       *ir_table_entries.add_entries() = ir_entity.table_entry();
     }
@@ -64,7 +62,7 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   // Install the entities on the switch.
   ASSERT_OK(pdpi::InstallIrEntities(
       *configured_testbed.SutApi().p4rt,
-      GetParam().dvaas_regression_test_proto.minimal_set_of_entities()));
+      GetParam().dvaas_regression_test_proto.entities()));
   dvaas::DataplaneValidationParams params = GetParam().dvaas_params;
   params.packet_test_vector_override = {
       GetParam().dvaas_regression_test_proto.test_vector(),
@@ -83,7 +81,6 @@ TEST_P(DvaasRegressionTest, DvaasRegressionTest) {
   } else {
     EXPECT_OK(validation_result.HasSuccessRateOfAtLeast(1.0));
   }
-  ASSERT_OK(configured_testbed.RestoreToOriginalConfiguration());
 }
 
 } // namespace
