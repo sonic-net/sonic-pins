@@ -5,6 +5,7 @@
 #include "headers.p4"
 #include "metadata.p4"
 #include "ids.h"
+#include "bmv2_intrinsics.h"
 
 // TODO: Clean up once we have better solution to handle packet-in
 // across platforms.
@@ -13,7 +14,7 @@ control packet_in_encap(inout headers_t headers,
                         inout standard_metadata_t standard_metadata) {
   apply {
 #if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
-    if (standard_metadata.instance_type == CLONE_REPLICA_INSTANCE_PACKET_IN) {
+    if (IS_PACKET_IN_COPY(standard_metadata)){
       headers.packet_out_header.setInvalid();
       headers.packet_in_header = {
         ingress_port = (port_id_t) local_metadata.packet_in_ingress_port,

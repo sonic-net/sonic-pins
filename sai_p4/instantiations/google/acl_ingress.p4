@@ -549,7 +549,7 @@ control acl_ingress(in headers_t headers,
 
     if (marked_to_copy && !cancel_copy) {
       clone_preserving_field_list(CloneType.I2E, COPY_TO_CPU_SESSION_ID,
-                                  PreservedFieldList.CLONE_I2E_PACKET_IN);
+                                  PreservedFieldList.MIRROR_AND_PACKET_IN_COPY);
     }
   }
 }  // control ACL_INGRESS
