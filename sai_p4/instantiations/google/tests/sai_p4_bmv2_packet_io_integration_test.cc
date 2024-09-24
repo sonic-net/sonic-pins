@@ -36,6 +36,7 @@
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/test_tools/set_up_bmv2.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 #include "sai_p4/tools/auxiliary_entries_for_v1model_targets.h"
 
@@ -111,21 +112,10 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesPuntPacketIn) {
   constexpr int kIngressPort = 1;
   constexpr int kEgressPort = 42;
 
-  ForwardingPipelineConfig bmv2_config =
-      sai::GetNonstandardForwardingPipelineConfig(GetParam(), kPlatformBmv2);
+  // Create and configure BMv2.
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(GetParam()));
   pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(GetParam());
 
-  // Create and configure BMv2.
-  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, Bmv2::Create({
-                                      .device_id = 1,
-                                      .cpu_port = SAI_P4_CPU_PORT,
-                                      .drop_port = SAI_P4_DROP_PORT,
-                                  }));
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      &bmv2.P4RuntimeSession(),
-      SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT, bmv2_config));
-
-  // Install table entries for punting packets.
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::TableEntry> table_entries,
       sai::MakePiEntriesForwardingIpPacketsToGivenPort(
@@ -136,9 +126,6 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesPuntPacketIn) {
       sai::MakePiEntryPuntingAllPackets(sai::PuntAction::kTrap, ir_p4info));
   ASSERT_OK(InstallPiTableEntries(&bmv2.P4RuntimeSession(), ir_p4info,
                                   table_entries));
-  ASSERT_OK(pdpi::InstallPiEntity(
-      &bmv2.P4RuntimeSession(),
-      sai::MakeV1modelPacketReplicationEngineEntryRequiredForPunts()));
   packetlib::Packet input_packet = GetIpv4TestPacket();
   ASSERT_OK_AND_ASSIGN(std::string raw_input_packet,
                        packetlib::SerializePacket(input_packet));
@@ -179,19 +166,9 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesCopyPacketIn) {
   constexpr int kIngressPort = 1;
   constexpr int kEgressPort = 42;
 
-  ForwardingPipelineConfig bmv2_config =
-      sai::GetNonstandardForwardingPipelineConfig(GetParam(), kPlatformBmv2);
-  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(GetParam());
-
   // Create and configure BMv2.
-  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, Bmv2::Create({
-                                      .device_id = 1,
-                                      .cpu_port = SAI_P4_CPU_PORT,
-                                      .drop_port = SAI_P4_DROP_PORT,
-                                  }));
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      &bmv2.P4RuntimeSession(),
-      SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT, bmv2_config));
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(GetParam()));
+  pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(GetParam());
 
   // Install table entries for punting packets.
   ASSERT_OK_AND_ASSIGN(
@@ -204,10 +181,6 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesCopyPacketIn) {
       sai::MakePiEntryPuntingAllPackets(sai::PuntAction::kCopy, ir_p4info));
   ASSERT_OK(InstallPiTableEntries(&bmv2.P4RuntimeSession(), ir_p4info,
                                   table_entries));
-  ASSERT_OK(pdpi::InstallPiEntity(
-      &bmv2.P4RuntimeSession(),
-      sai::MakeV1modelPacketReplicationEngineEntryRequiredForPunts()));
-
   packetlib::Packet input_packet = GetIpv4TestPacket();
   ASSERT_OK_AND_ASSIGN(std::string raw_input_packet,
                        packetlib::SerializePacket(input_packet));
@@ -260,19 +233,8 @@ TEST_P(BMv2PacketIOTest, ControllerReceivesCopyPacketIn) {
 TEST_P(BMv2PacketIOTest, P4RuntimePacketOutSubmitToIngressOk) {
   constexpr int kEgressPort = 42;
 
-  ForwardingPipelineConfig bmv2_config =
-      sai::GetNonstandardForwardingPipelineConfig(GetParam(), kPlatformBmv2);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(GetParam()));
   pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(GetParam());
-
-  // Create and configure BMv2.
-  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, Bmv2::Create({
-                                      .device_id = 1,
-                                      .cpu_port = SAI_P4_CPU_PORT,
-                                      .drop_port = SAI_P4_DROP_PORT,
-                                  }));
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      &bmv2.P4RuntimeSession(),
-      SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT, bmv2_config));
 
   // Install table entries for routing packets.
   ASSERT_OK_AND_ASSIGN(
@@ -345,19 +307,8 @@ TEST_P(BMv2PacketIOTest, P4RuntimePacketOutSubmitToIngressOk) {
 TEST_P(BMv2PacketIOTest, P4RuntimePacketOutSubmitToEgressOk) {
   constexpr int kEgressPort = 42;
 
-  ForwardingPipelineConfig bmv2_config =
-      sai::GetNonstandardForwardingPipelineConfig(GetParam(), kPlatformBmv2);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(GetParam()));
   pdpi::IrP4Info ir_p4info = sai::GetIrP4Info(GetParam());
-
-  // Create and configure BMv2.
-  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, Bmv2::Create({
-                                      .device_id = 1,
-                                      .cpu_port = SAI_P4_CPU_PORT,
-                                      .drop_port = SAI_P4_DROP_PORT,
-                                  }));
-  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      &bmv2.P4RuntimeSession(),
-      SetForwardingPipelineConfigRequest::VERIFY_AND_COMMIT, bmv2_config));
 
   // Although we gonna skip the ingress pipeline, we still install table entries
   // here to ensure the switch is not just doing submit to ingress again. Here
