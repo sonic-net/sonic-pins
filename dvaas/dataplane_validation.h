@@ -81,6 +81,9 @@ struct FailureEnhancementOptions {
   // Minimize the set of test vectors that caused the first
   // `max_number_of_failures_to_minimize` failures.
   int max_number_of_failures_to_minimize = 1;
+  // Ensures that any minimized failure maintains the original expectation and
+  // switch output.
+  bool maintain_original_failure_during_minimization = true;
 };
 
 // Specifies user-facing parameters of DVaaS. These are also the parameters that
