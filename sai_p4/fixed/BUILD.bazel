@@ -21,6 +21,7 @@ filegroup(
     name = "fixed",
     srcs = [
         "bitwidths.p4",
+        "bmv2_intrinsics.h",
 	"drop_martians.p4",
         "headers.p4",
         "ids.h",
@@ -48,4 +49,9 @@ cc_library(
 cc_library(
     name = "p4_roles",
     hdrs = ["roles.h"],
+)
+
+cc_library(
+    name = "bmv2_intrinsics",
+    hdrs = ["bmv2_intrinsics.h"],
 )

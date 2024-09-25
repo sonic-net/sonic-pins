@@ -1,3 +1,17 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 syntax = "proto3";
 
 package p4_fuzzer;
@@ -54,6 +68,14 @@ enum Mutation {
 
   // Picks a table that is not owned by the fuzzer role.
   DIFFERENT_ROLE = 14;
+
+  // Attempts to modify a table entry that does not exist in the switch.
+  NONEXISTING_MODIFY = 15;
+
+  // TODO: New mutation: Table entry without any actions.
+  // TODO: New mutation: Table entry with an action that exists,
+  // but is invalid for the table.
+  // TODO: New mutation: Delete/Insert with invalid references.
 }
 
 // Human readable version of a (fuzzed) table entry. Contains the original
@@ -79,13 +101,13 @@ message AnnotatedTableEntry {
 
 // Like AnnotatedTableEntry, but for updates instead.
 message AnnotatedUpdate {
-  p4.v1.Update pi = 1;
-
   oneof pd {
-    string error = 2;
+    string error = 1;
 
-    pdpi.IrUpdate ir = 3;
+    pdpi.IrUpdate ir = 2;
   }
+
+  p4.v1.Update pi = 3;
 
   repeated Mutation mutations = 4;
 }

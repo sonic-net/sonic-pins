@@ -30,12 +30,13 @@
 namespace p4_symbolic {
 namespace ir {
 
+// Table entries by table name.
 using TableEntries =
     std::unordered_map<std::string, std::vector<pdpi::IrTableEntry>>;
 
-// Parses entries read from entries_path, and fills them in given ir in place.
-absl::StatusOr<TableEntries> ParseAndFillEntries(
-    const pdpi::IrP4Info &p4info, const std::string &entries_path);
+// Returns table entries in PDPI IR representation, keyed by table name.
+absl::StatusOr<TableEntries> ParseTableEntries(
+    const pdpi::IrP4Info &p4info, absl::Span<const p4::v1::TableEntry> entries);
 
 }  // namespace ir
 }  // namespace p4_symbolic

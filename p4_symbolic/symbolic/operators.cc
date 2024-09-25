@@ -62,9 +62,10 @@ absl::StatusOr<std::pair<z3::expr, z3::expr>> SortCheckAndPad(
     const z3::expr &a, const z3::expr &b) {
   // Totally incompatible sorts (e.g. int and bitvector).
   if (a.get_sort().sort_kind() != b.get_sort().sort_kind()) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Incompatible sorts \"", a.get_sort().to_string(),
-                     "\" and \"", b.get_sort().to_string(), "\""));
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Incompatible sorts '%s' and '%s' in expressions '%s' and '%s'",
+        a.get_sort().to_string(), b.get_sort().to_string(), a.to_string(),
+        b.to_string()));
   }
   // If bit vectors, pad to the largest size.
   if (a.get_sort().is_bv()) {

@@ -1,0 +1,629 @@
+header_types {
+  name: "scalars_0"
+}
+header_types {
+  name: "standard_metadata"
+  id: 1
+  fields {
+    values {
+      string_value: "ingress_port"
+    }
+    values {
+      number_value: 9
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "egress_spec"
+    }
+    values {
+      number_value: 9
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "egress_port"
+    }
+    values {
+      number_value: 9
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "instance_type"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "packet_length"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "enq_timestamp"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "enq_qdepth"
+    }
+    values {
+      number_value: 19
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "deq_timedelta"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "deq_qdepth"
+    }
+    values {
+      number_value: 19
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "ingress_global_timestamp"
+    }
+    values {
+      number_value: 48
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "egress_global_timestamp"
+    }
+    values {
+      number_value: 48
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "mcast_grp"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "egress_rid"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "checksum_error"
+    }
+    values {
+      number_value: 1
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "parser_error"
+    }
+    values {
+      number_value: 32
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "priority"
+    }
+    values {
+      number_value: 3
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "_padding"
+    }
+    values {
+      number_value: 3
+    }
+    values {
+      bool_value: false
+    }
+  }
+}
+header_types {
+  name: "h_t"
+  id: 2
+  fields {
+    values {
+      string_value: "f"
+    }
+    values {
+      number_value: 16
+    }
+    values {
+      bool_value: false
+    }
+  }
+}
+headers {
+  name: "scalars"
+  header_type: "scalars_0"
+  metadata: true
+}
+headers {
+  id: 1
+  name: "standard_metadata"
+  header_type: "standard_metadata"
+  metadata: true
+}
+headers {
+  id: 2
+  name: "h"
+  header_type: "h_t"
+}
+parsers {
+  name: "parser"
+  init_state: "start"
+  parse_states {
+    name: "start"
+    transitions {
+    }
+  }
+}
+deparsers {
+  name: "deparser"
+  source_info {
+    line: 52
+    column: 8
+    source_fragment: "UselessDeparser"
+  }
+}
+actions {
+  name: "set_invalid63"
+  primitives {
+    fields {
+      key: "op"
+      value {
+        string_value: "assign"
+      }
+    }
+    fields {
+      key: "parameters"
+      value {
+        list_value {
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "field"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  list_value {
+                    values {
+                      string_value: "standard_metadata"
+                    }
+                    values {
+                      string_value: "egress_spec"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "hexstr"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  string_value: "0x0001"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    fields {
+      key: "source_info"
+      value {
+        struct_value {
+          fields {
+            key: "column"
+            value {
+              number_value: 12
+            }
+          }
+          fields {
+            key: "filename"
+            value {
+              string_value: ""
+            }
+          }
+          fields {
+            key: "line"
+            value {
+              number_value: 63
+            }
+          }
+          fields {
+            key: "source_fragment"
+            value {
+              string_value: "standard_metadata.egress_spec = 1"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  name: "set_invalid65"
+  id: 1
+  primitives {
+    fields {
+      key: "op"
+      value {
+        string_value: "assign"
+      }
+    }
+    fields {
+      key: "parameters"
+      value {
+        list_value {
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "field"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  list_value {
+                    values {
+                      string_value: "standard_metadata"
+                    }
+                    values {
+                      string_value: "egress_spec"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "hexstr"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  string_value: "0x0000"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    fields {
+      key: "source_info"
+      value {
+        struct_value {
+          fields {
+            key: "column"
+            value {
+              number_value: 12
+            }
+          }
+          fields {
+            key: "filename"
+            value {
+              string_value: ""
+            }
+          }
+          fields {
+            key: "line"
+            value {
+              number_value: 65
+            }
+          }
+          fields {
+            key: "source_fragment"
+            value {
+              string_value: "standard_metadata.egress_spec = 0"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  name: "set_invalid61"
+  id: 2
+  primitives {
+    fields {
+      key: "op"
+      value {
+        string_value: "remove_header"
+      }
+    }
+    fields {
+      key: "parameters"
+      value {
+        list_value {
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "header"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  string_value: "h"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    fields {
+      key: "source_info"
+      value {
+        struct_value {
+          fields {
+            key: "column"
+            value {
+              number_value: 8
+            }
+          }
+          fields {
+            key: "filename"
+            value {
+              string_value: ""
+            }
+          }
+          fields {
+            key: "line"
+            value {
+              number_value: 61
+            }
+          }
+          fields {
+            key: "source_fragment"
+            value {
+              string_value: "hdr.h.setInvalid()"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+pipelines {
+  name: "ingress"
+  source_info {
+    line: 57
+    column: 8
+    source_fragment: "MyIngress"
+  }
+  init_table: "tbl_set_invalid61"
+  tables {
+    name: "tbl_set_invalid61"
+    source_info {
+      line: 61
+      column: 8
+      source_fragment: "hdr.h.setInvalid()"
+    }
+    max_size: 1024
+    action_ids: 2
+    actions: "set_invalid61"
+    default_entry {
+      action_id: 2
+    }
+    next_tables {
+      key: "set_invalid61"
+      value: "node_3"
+    }
+  }
+  tables {
+    name: "tbl_set_invalid63"
+    id: 1
+    source_info {
+      line: 63
+      column: 42
+      source_fragment: "="
+    }
+    max_size: 1024
+    action_ids: 0
+    actions: "set_invalid63"
+    default_entry {
+    }
+    next_tables {
+      key: "set_invalid63"
+      value: ""
+    }
+  }
+  tables {
+    name: "tbl_set_invalid65"
+    id: 2
+    source_info {
+      line: 65
+      column: 42
+      source_fragment: "="
+    }
+    max_size: 1024
+    action_ids: 1
+    actions: "set_invalid65"
+    default_entry {
+      action_id: 1
+    }
+    next_tables {
+      key: "set_invalid65"
+      value: ""
+    }
+  }
+  conditionals {
+    name: "node_3"
+    expression {
+      fields {
+        key: "type"
+        value {
+          string_value: "expression"
+        }
+      }
+      fields {
+        key: "value"
+        value {
+          struct_value {
+            fields {
+              key: "left"
+              value {
+                struct_value {
+                  fields {
+                    key: "type"
+                    value {
+                      string_value: "field"
+                    }
+                  }
+                  fields {
+                    key: "value"
+                    value {
+                      list_value {
+                        values {
+                          string_value: "standard_metadata"
+                        }
+                        values {
+                          string_value: "ingress_port"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            fields {
+              key: "op"
+              value {
+                string_value: "=="
+              }
+            }
+            fields {
+              key: "right"
+              value {
+                struct_value {
+                  fields {
+                    key: "type"
+                    value {
+                      string_value: "hexstr"
+                    }
+                  }
+                  fields {
+                    key: "value"
+                    value {
+                      string_value: "0x0000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    true_next: "tbl_set_invalid63"
+    false_next: "tbl_set_invalid65"
+  }
+}
+pipelines {
+  name: "egress"
+  id: 1
+  source_info {
+    line: 42
+    column: 8
+    source_fragment: "UselessEgress"
+  }
+}

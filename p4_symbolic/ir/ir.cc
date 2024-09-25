@@ -43,7 +43,12 @@ absl::StatusOr<bmv2::StatementOp> StatementOpToEnum(const std::string &op) {
       {"clone_ingress_pkt_to_egress",  // clone3(...)
        bmv2::StatementOp::clone_ingress_pkt_to_egress},
       {"modify_field_with_hash_based_offset",  // hash(...)
-       bmv2::StatementOp::modify_field_with_hash_based_offset}};
+       bmv2::StatementOp::modify_field_with_hash_based_offset},
+      {"add_header",  // hdr.SetValid()
+       bmv2::StatementOp::add_header},
+      {"remove_header",  // hdr.SetInvalid()
+       bmv2::StatementOp::remove_header},
+      {"exit", bmv2::StatementOp::exit}};
 
   if (op_table.count(op) != 1) {
     return absl::UnimplementedError(
@@ -467,6 +472,140 @@ absl::StatusOr<RValue> ExtractRValue(
   }
 }
 
+absl::StatusOr<Statement> ExtractStatement(
+    const google::protobuf::Struct &action_primitive,
+    const std::vector<std::string> &parameter_map) {
+  if (action_primitive.fields().count("op") != 1 ||
+      action_primitive.fields().count("parameters") != 1 ||
+      action_primitive.fields().count("source_info") != 1) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Primitive statement should contain 'op', 'parameters', "
+                     "and 'source_info', found ",
+                     action_primitive.DebugString()));
+  }
+
+  Statement statement;
+  ASSIGN_OR_RETURN(
+      *statement.mutable_source_info(),
+      ExtractSourceLocation(action_primitive.fields().at("source_info")));
+  ASSIGN_OR_RETURN(
+      bmv2::StatementOp op_case,
+      StatementOpToEnum(action_primitive.fields().at("op").string_value()));
+
+  switch (op_case) {
+    case bmv2::StatementOp::assign: {
+      AssignmentStatement *assignment = statement.mutable_assignment();
+      const google::protobuf::Value &params =
+          action_primitive.fields().at("parameters");
+      if (params.kind_case() != google::protobuf::Value::kListValue ||
+          params.list_value().values_size() != 2) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Assignment statement must contain 2 parameters, found ",
+            action_primitive.DebugString()));
+      }
+
+      ASSIGN_OR_RETURN(
+          *assignment->mutable_left(),
+          ExtractLValue(params.list_value().values(0), parameter_map));
+      ASSIGN_OR_RETURN(
+          *assignment->mutable_right(),
+          ExtractRValue(params.list_value().values(1), parameter_map));
+      return statement;
+    }
+    case bmv2::StatementOp::mark_to_drop: {
+      DropStatement *drop = statement.mutable_drop();
+      const google::protobuf::Value &params =
+          action_primitive.fields().at("parameters");
+      if (params.kind_case() != google::protobuf::Value::kListValue ||
+          params.list_value().values_size() != 1) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Mark to drop statement must contain 1 parameter, found ",
+            action_primitive.DebugString()));
+      }
+
+      ASSIGN_OR_RETURN(
+          RValue drop_rvalue,
+          ExtractRValue(params.list_value().values(0), parameter_map));
+      if (drop_rvalue.rvalue_case() != RValue::kHeaderValue) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Mark to drop statement must be passed a header, found ",
+            action_primitive.DebugString()));
+      }
+      drop->set_allocated_header(drop_rvalue.release_header_value());
+      return statement;
+    }
+    case bmv2::StatementOp::modify_field_with_hash_based_offset: {
+      HashStatement *hash = statement.mutable_hash();
+
+      const google::protobuf::Value &params =
+          action_primitive.fields().at("parameters");
+      if (params.kind_case() != google::protobuf::Value::kListValue ||
+          params.list_value().values_size() < 1) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "hash statement must at least specify target field, found ",
+            action_primitive.DebugString()));
+      }
+
+      ASSIGN_OR_RETURN(
+          LValue hash_lvalue,
+          ExtractLValue(params.list_value().values(0), parameter_map));
+      if (hash_lvalue.lvalue_case() != LValue::kFieldValue) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Hash statement in action must target a field, found ",
+                         action_primitive.DebugString()));
+      }
+      hash->set_allocated_field(hash_lvalue.release_field_value());
+      return statement;
+    }
+    case bmv2::StatementOp::clone_ingress_pkt_to_egress: {
+      statement.mutable_clone();
+      return statement;
+    }
+
+    case bmv2::StatementOp::add_header: 
+    case bmv2::StatementOp::remove_header: {
+      const google::protobuf::Value &params =
+          action_primitive.fields().at("parameters");
+      if (params.kind_case() != google::protobuf::Value::kListValue ||
+          params.list_value().values_size() != 1) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "<header>.setValid() statement must contain 1 parameter, found ",
+            action_primitive.DebugString()));
+      }
+      ASSIGN_OR_RETURN(
+          RValue header,
+          ExtractRValue(params.list_value().values(0), parameter_map));
+      if (header.rvalue_case() != RValue::kHeaderValue) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("<header>.setValid() statement must contain header as "
+                         "parameter, found ",
+                         action_primitive.DebugString()));
+      }
+      const std::string &header_name = header.header_value().header_name();
+
+      AssignmentStatement &assignment = *statement.mutable_assignment();
+      // LValue: The validity bit of the header.
+      FieldValue &valid_bit = *assignment.mutable_left()->mutable_field_value();
+      valid_bit.set_header_name(header_name);
+      valid_bit.set_field_name("$valid$");
+      // RValue: The boolean constant true for add_header and false for
+      // remove_header.
+      assignment.mutable_right()->mutable_bool_value()->set_value(
+          op_case == bmv2::StatementOp::add_header);
+      return statement;
+    }
+
+    case bmv2::StatementOp::exit: {
+      statement.mutable_exit();
+      return statement;
+    }
+
+    default:
+      return absl::UnimplementedError(absl::StrCat(
+          "Unsupported statement: ", action_primitive.DebugString()));
+  }
+}
+
 // Parsing and validating actions.
 absl::StatusOr<Action> ExtractAction(
     const bmv2::Action &bmv2_action,
@@ -491,107 +630,10 @@ absl::StatusOr<Action> ExtractAction(
   // Parse every statement in body.
   // When encoutering a parameter, look it up in the parameter map.
   for (const google::protobuf::Struct &primitive : bmv2_action.primitives()) {
-    if (primitive.fields().count("op") != 1 ||
-        primitive.fields().count("parameters") != 1) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Primitive statement in action ", pdpi_action.preamble().name(),
-          " should contain 'op', 'parameters', found ",
-          primitive.DebugString()));
-    }
-
-    Statement *statement = action_impl->add_action_body();
-    ASSIGN_OR_RETURN(
-        bmv2::StatementOp op_case,
-        StatementOpToEnum(primitive.fields().at("op").string_value()));
-    switch (op_case) {
-      case bmv2::StatementOp::assign: {
-        AssignmentStatement *assignment = statement->mutable_assignment();
-        const google::protobuf::Value &params =
-            primitive.fields().at("parameters");
-        if (params.kind_case() != google::protobuf::Value::kListValue ||
-            params.list_value().values_size() != 2) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "Assignment statement in action ", pdpi_action.preamble().name(),
-              " must contain 2 parameters, found ", primitive.DebugString()));
-        }
-
-        ASSIGN_OR_RETURN(
-            *assignment->mutable_left(),
-            ExtractLValue(params.list_value().values(0), parameter_map));
-        ASSIGN_OR_RETURN(
-            *assignment->mutable_right(),
-            ExtractRValue(params.list_value().values(1), parameter_map));
-        break;
-      }
-      case bmv2::StatementOp::mark_to_drop: {
-        DropStatement *drop = statement->mutable_drop();
-        const google::protobuf::Value &params =
-            primitive.fields().at("parameters");
-        if (params.kind_case() != google::protobuf::Value::kListValue ||
-            params.list_value().values_size() != 1) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "Mark to drop statement in action ",
-              pdpi_action.preamble().name(),
-              " must contain 1 parameter, found ", primitive.DebugString()));
-        }
-
-        ASSIGN_OR_RETURN(
-            RValue drop_rvalue,
-            ExtractRValue(params.list_value().values(0), parameter_map));
-        if (drop_rvalue.rvalue_case() != RValue::kHeaderValue) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "Mark to drop statement in action ",
-              pdpi_action.preamble().name(), " must be passed a header, found ",
-              primitive.DebugString()));
-        }
-        drop->set_allocated_header(drop_rvalue.release_header_value());
-        break;
-      }
-      case bmv2::StatementOp::modify_field_with_hash_based_offset: {
-        HashStatement *hash = statement->mutable_hash();
-
-        const google::protobuf::Value &params =
-            primitive.fields().at("parameters");
-        if (params.kind_case() != google::protobuf::Value::kListValue ||
-            params.list_value().values_size() < 1) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "hash statement in action ", pdpi_action.preamble().name(),
-              " must at least specifiy target field, found ",
-              primitive.DebugString()));
-        }
-
-        ASSIGN_OR_RETURN(
-            LValue hash_lvalue,
-            ExtractLValue(params.list_value().values(0), parameter_map));
-        if (hash_lvalue.lvalue_case() != LValue::kFieldValue) {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "Hash statement in action ", pdpi_action.preamble().name(),
-              " must target a field, found ", primitive.DebugString()));
-        }
-        hash->set_allocated_field(hash_lvalue.release_field_value());
-        break;
-      }
-      case bmv2::StatementOp::clone_ingress_pkt_to_egress: {
-        statement->mutable_clone();
-        break;
-      }
-      default:
-        return absl::UnimplementedError(absl::StrCat(
-            "Unsupported statement in action ", pdpi_action.preamble().name(),
-            ", found ", primitive.DebugString()));
-    }
-
-    // Parse source_info struct into its own protobuf.
-    // Applies to all types of statements.
-    if (primitive.fields().count("source_info") != 1) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Statement in action ", pdpi_action.preamble().name(),
-          " does not have source_info, found ", primitive.DebugString()));
-    }
-
-    ASSIGN_OR_RETURN(
-        *(statement->mutable_source_info()),
-        ExtractSourceLocation(primitive.fields().at("source_info")));
+    ASSIGN_OR_RETURN(*action_impl->add_action_body(),
+                     ExtractStatement(primitive, parameter_map),
+                     _.SetPrepend() << "In action "
+                                    << pdpi_action.preamble().name() << ": ");
   }
 
   return output;

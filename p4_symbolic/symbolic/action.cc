@@ -17,6 +17,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "glog/logging.h"
 #include "p4_symbolic/symbolic/operators.h"
 
 namespace p4_symbolic {
@@ -62,11 +63,17 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
       RETURN_IF_ERROR(state->Set(field_name, free_variable, guard));
       return absl::OkStatus();
     }
-    default:
-      return absl::UnimplementedError(absl::StrCat(
-          "Action ", context->action_name, " contains unsupported statement ",
-          statement.DebugString()));
+    case ir::Statement::kExit: {
+      // TODO: Implement. For now, just a no-op.
+      LOG(ERROR) << "exit statement ignored since it is unsupported";
+      return absl::OkStatus();
+    }
+    case ir::Statement::STATEMENT_NOT_SET:
+      break;
   }
+  return absl::UnimplementedError(absl::StrCat(
+      "Action ", context->action_name, " contains unsupported statement ",
+      statement.DebugString()));
 }
 
 // Constructs a symbolic expression for the assignment value, and either

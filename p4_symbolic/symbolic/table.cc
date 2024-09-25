@@ -434,7 +434,7 @@ absl::StatusOr<SymbolicTrace> EvaluateTable(
                                             translator, guard));
 
   // The trace should not contain information for this table, otherwise, it
-  // means we visisted the table twice in the same execution path!
+  // means we visited the table twice in the same execution path!
   if (result.matched_entries.count(table_name) == 1) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Table \"", table_name, "\" was executed twice in the same path."));

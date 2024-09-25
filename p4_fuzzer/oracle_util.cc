@@ -1,3 +1,16 @@
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "p4_fuzzer/oracle_util.h"
 
 #include <algorithm>
@@ -9,6 +22,8 @@
 #include "absl/types/optional.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/switch_state.h"
 #include "p4_fuzzer/table_entry_key.h"
 #include "p4_pdpi/ir.h"
@@ -18,7 +33,6 @@ namespace p4_fuzzer {
 using absl::StatusCode;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
-using ::p4::v1::WriteRequest;
 
 absl::Status IsWellformedUpdate(const pdpi::IrP4Info& ir_p4_info,
                                 const Update& update) {
@@ -33,7 +47,8 @@ absl::Status IsWellformedUpdate(const pdpi::IrP4Info& ir_p4_info,
 }
 
 absl::Status UpdateOracle(const pdpi::IrP4Info& ir_p4_info,
-                          const p4::v1::Update& update, const pdpi::IrUpdateStatus& status,
+                          const Update& update,
+                          const pdpi::IrUpdateStatus& status,
                           const SwitchState& state) {
   StatusCode code = static_cast<StatusCode>(status.code());
   absl::Status invalid_reason = IsWellformedUpdate(ir_p4_info, update);
@@ -111,7 +126,7 @@ absl::optional<std::string> SequenceOfUpdatesOracle(
   std::string error = "";
   for (int i = 0; i < updates.size(); i++) {
     int index = updates[i].index;
-    const p4::v1::Update& update = updates[i].update;
+    const Update& update = updates[i].update.pi();
     const pdpi::IrUpdateStatus& status = updates[i].status;
 
     const auto& update_oracle_result =
@@ -139,11 +154,12 @@ absl::optional<std::string> SequenceOfUpdatesOracle(
 
 // See go/p4-fuzzing for more info on the design.
 absl::optional<std::vector<std::string>> WriteRequestOracle(
-    const pdpi::IrP4Info& ir_p4_info, const WriteRequest& request,
-    const absl::Span<const pdpi::IrUpdateStatus>& statuses, const SwitchState& state) {
+    const pdpi::IrP4Info& ir_p4_info, const AnnotatedWriteRequest& request,
+    const absl::Span<const pdpi::IrUpdateStatus>& statuses,
+    const SwitchState& state) {
   // For now, we only support checking requests with table entries.
-  CHECK(absl::c_all_of(request.updates(), [](const Update& update) {
-    return update.entity().has_table_entry();
+  CHECK(absl::c_all_of(request.updates(), [](const AnnotatedUpdate& update) {
+    return update.pi().entity().has_table_entry();
   }));
 
   std::vector<std::string> problems;
@@ -152,11 +168,14 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
   CHECK_EQ(request.updates_size(), statuses.size());
   std::vector<IndexUpdateStatus> updates;
   for (int i = 0; i < request.updates().size(); i++) {
-    const Update& update = request.updates(i);
+    const AnnotatedUpdate& update = request.updates(i);
     const pdpi::IrUpdateStatus& status = statuses[i];
     updates.push_back({i, update, status});
   }
 
+  // TODO: Batching is not handled correctly here because we do not
+  // yet know what the right way to handle it is. We are hoping to change the
+  // P4RT specification.
   // Group by flow key.
   absl::flat_hash_map<TableEntryKey, std::vector<IndexUpdateStatus>>
       flowkey_to_updates;
@@ -165,7 +184,7 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
     StatusCode code = static_cast<StatusCode>(update.status.code());
     if (code == StatusCode::kResourceExhausted) continue;
 
-    flowkey_to_updates[TableEntryKey(update.update.entity().table_entry())]
+    flowkey_to_updates[TableEntryKey(update.update.pi().entity().table_entry())]
         .push_back(update);
   }
 
@@ -180,7 +199,7 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
       // SequenceOfUpdatesOracle and can avoid the state copy.
       if (updates.size() == 1) {
         const auto& update_oracle_result = UpdateOracle(
-            ir_p4_info, updates[0].update, updates[0].status, state);
+            ir_p4_info, updates[0].update.pi(), updates[0].status, state);
         if (!update_oracle_result.ok()) {
           res = absl::StrCat(
               "The update with id=", updates[0].index,
@@ -208,7 +227,7 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
       std::string explanation;
       if (n == 1) {
         explanation = absl::StrCat("Flow #", updates[0].index,
-                                   " was not handeled correctly. Flow:", "\n\n",
+                                   " was not handled correctly. Flow:", "\n\n",
                                    updates[0].update.DebugString(), "\n\n",
                                    "Response by switch:", "\n\n",
                                    updates[0].status.DebugString(), "\n\n",
@@ -242,7 +261,7 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
   absl::flat_hash_map<int, int> table_id_to_num_inserts;
   for (const auto& update : updates) {
     StatusCode code = static_cast<StatusCode>(update.status.code());
-    const auto& p4update = update.update;
+    const Update& p4update = update.update.pi();
 
     // Not successful, skip.
     if (code != StatusCode::kOk) continue;
@@ -257,14 +276,14 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
   // okay.
   for (const auto& update : updates) {
     StatusCode code = static_cast<StatusCode>(update.status.code());
-    const auto& p4update = update.update;
+    const Update& p4update = update.update.pi();
     auto table_id = p4update.entity().table_entry().table_id();
     if (code != StatusCode::kResourceExhausted) continue;
 
     int num_inserts = table_id_to_num_inserts[table_id];
     if (state.CanAccommodateInserts(table_id, num_inserts + 1)) {
       std::string explanation = absl::StrCat(
-          "Flow #", update.index, " was not handeled correctly. Flow:", "\n\n",
+          "Flow #", update.index, " was not handled correctly. Flow:", "\n\n",
           update.update.DebugString(), "\n\n", "Response by switch:", "\n\n",
           update.status.DebugString(), "\n\n",
           "The switch rejected the flow with RESOURCE_EXHAUSTED, but the "

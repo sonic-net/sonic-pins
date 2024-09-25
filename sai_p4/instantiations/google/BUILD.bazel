@@ -301,6 +301,40 @@ cc_embed_data(
 
 # -- Non-standard platforms ----------------------------------------------------
 
+MACRO_BY_NONSTANDARD_PLATFORM_NAME = {
+    # (<name>, <macro>)
+    "bmv2": "PLATFORM_BMV2",
+    "p4_symbolic": "PLATFORM_P4SYMBOLIC",
+}
+
+[
+    p4_library(
+        name = "sai_%s_%s" % (instantiation, platform_name),
+        src = "%s.p4" % instantiation,
+        extra_args = "-D%s" % platform_macro,
+        p4info_out = "generated/sai_%s_%s.p4info.pb.txt" % (instantiation, platform_name),
+        target = "bmv2",
+        target_out = "generated/sai_%s_%s.config.json" % (instantiation, platform_name),
+        visibility = [
+            ":__pkg__",
+            # TODO: Legacy, remove.
+            "//platforms/networking/gpins/testing/blackbox/p4:__pkg__",
+        ],
+        deps = deps,
+)
+    for (instantiation, deps) in INSTANTIATIONS
+    for (platform_name, platform_macro) in MACRO_BY_NONSTANDARD_PLATFORM_NAME.items()
+]
+
+build_test(
+    name = "sai_nonstandard_platforms_build_test",
+    targets = [
+        ":sai_%s_%s" % (instantiation, platform)
+        for (instantiation, _) in INSTANTIATIONS
+        for (platform, _) in MACRO_BY_NONSTANDARD_PLATFORM_NAME.items()
+    ],
+)
+
 cc_library(
     name = "clos_stage",
     srcs = ["clos_stage.cc"],
@@ -324,3 +358,53 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+# P4 info and config for non-standard platforms, accessible via C++ API.
+cc_library(
+    name = "sai_nonstandard_platforms_cc",
+    srcs = ["sai_nonstandard_platforms.cc"],
+    hdrs = ["sai_nonstandard_platforms.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+	":instantiations",
+	":sai_nonstandard_platforms_embed",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_protobuf//:protobuf",
+	],
+)
+
+# Auxiliary target, see go/totw/128.
+cc_embed_data(
+    name = "sai_nonstandard_platforms_embed",
+    srcs = [
+        "generated/sai_%s_%s.%s" % (instantiation, platform, extension)
+        for (instantiation, _) in INSTANTIATIONS
+        for (platform, _) in MACRO_BY_NONSTANDARD_PLATFORM_NAME.items()
+        for extension in [
+            "config.json",
+            "p4info.pb.txt",
+        ]
+    ],
+    cc_file_output = "sai_nonstandard_platforms_embed.cc",
+    cpp_namespace = "sai",
+    flatten = True,
+    h_file_output = "sai_nonstandard_platforms_embed.h",
+)
+
+cc_test(
+    name = "sai_nonstandard_platforms_cc_test",
+    srcs = ["sai_nonstandard_platforms_test.cc"],
+    deps = [
+	":instantiations",
+        ":sai_nonstandard_platforms_cc",
+        "//gutil:status_matchers",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+

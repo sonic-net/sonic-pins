@@ -36,6 +36,7 @@ control ingress(inout headers_t headers,
       tunnel_termination_lookup.apply(headers, local_metadata);
       vlan_untag.apply(headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
+      ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
       tunnel_termination_decap.apply(headers, local_metadata);
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
@@ -51,9 +52,15 @@ control egress(inout headers_t headers,
                inout local_metadata_t local_metadata,
                inout standard_metadata_t standard_metadata) {
   apply {
-    packet_rewrites.apply(headers, local_metadata, standard_metadata);
-    mirroring_encap.apply(headers, local_metadata, standard_metadata);
     packet_in_encap.apply(headers, local_metadata, standard_metadata);
+    // TODO: Remove if statement once exit is supported in
+    // p4-symbolic.
+    if (!IS_PACKET_IN_COPY(standard_metadata)) {
+      packet_rewrites.apply(headers, local_metadata, standard_metadata);
+      mirroring_encap.apply(headers, local_metadata, standard_metadata);
+      egress_vlan_checks.apply(headers, local_metadata, standard_metadata);
+      vlan_tag.apply(headers, local_metadata, standard_metadata);
+    }
   }
 }  // control egress
 
