@@ -31,8 +31,11 @@
 // --- Actions -----------------------------------------------------------------
 
 // IDs of fixed SAI actions (8 most significant bits = 0x01).
-#define ROUTING_SET_DST_MAC_ACTION_ID 0x01000001                     // 16777217
-#define ROUTING_SET_PORT_AND_SRC_MAC_ACTION_ID 0x01000002            // 16777218
+#define ROUTING_NO_ACTION_ACTION_ID 0x01798B9E             // 24742814
+#define ROUTING_SET_DST_MAC_ACTION_ID 0x01000001           // 16777217
+#define ROUTING_SET_PORT_AND_SRC_MAC_ACTION_ID 0x01000002  // 16777218
+#define ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID \
+  0x0100001B                                                         // 16777243
 #define ROUTING_SET_NEXTHOP_ACTION_ID 0x01000003                     // 16777219
 #define ROUTING_SET_IP_NEXTHOP_ACTION_ID 0x01000014                  // 16777236
 #define ROUTING_SET_WCMP_GROUP_ID_ACTION_ID 0x01000004               // 16777220
@@ -56,7 +59,7 @@
 #define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015           // 16777237
 #define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016       // 16777238
 #define DISABLE_VLAN_CHECKS_ACTION_ID 0x0100001A                   // 16777242
-// Next available action id: 0x0100001B (16777243)
+// Next available action id: 0x0100001C (16777244)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for
@@ -77,7 +80,7 @@
 #define SAI_P4_DROP_PORT 511
 
 // --- Copy to CPU session -----------------------------------------------------
-
+// TODO: Remove COPY_TO_CPU_SESSION_ID and this example comment.
 // The COPY_TO_CPU_SESSION_ID must be programmed in the target using P4Runtime:
 //
 // type: INSERT
@@ -87,12 +90,11 @@
 //       session_id: COPY_TO_CPU_SESSION_ID
 //       replicas {
 //        egress_port: SAI_P4_CPU_PORT
-//        instance: CLONE_REPLICA_INSTANCE_PACKET_IN
+//        instance: SAI_P4_REPLICA_INSTANCE_PACKET_IN
 //       }
 //     }
 //   }
 // }
-//
 #define COPY_TO_CPU_SESSION_ID 255
 
 // --- Packet-IO ---------------------------------------------------------------
@@ -105,14 +107,24 @@
 #define PACKET_OUT_SUBMIT_TO_INGRESS_ID 2
 #define PACKET_OUT_UNUSED_PAD_ID 3
 
-//--- Packet Replication Engine Instances --------------------------------------
+// Values for standard_metadata.egress_rid set by the packet replication engine
+// (PRE) in the V1Model architecture. These values are used by
+// p4::v1::Replica::instance to indicate whether the replicated packet is for
+// mirroring, punting or other purposes. However, these values are
+// not defined by the P4 specification. Here we define our own values.
+#define SAI_P4_REPLICA_INSTANCE_PACKET_IN 1
+#define SAI_P4_REPLICA_INSTANCE_MIRRORING 2
 
-// Egress instance type definitions.
-// The egress instance is a 32-bit standard metadata set by the packet
-// replication engine (PRE) in the V1Model architecture. However, the values are
-// not defined by the P4 specification. Here we define our own values; these may
-// be changed when we adopt another architecture.
-#define CLONE_REPLICA_INSTANCE_PACKET_IN 1
-#define CLONE_REPLICA_INSTANCE_MIRRORING 2
+// Macros to determine whether a packet is replicated due to packet in or
+// replicated due to mirroring.
+#define IS_PACKET_IN_COPY(standard_metadata)                            \
+  standard_metadata.instance_type ==                                    \
+      PKT_INSTANCE_TYPE_INGRESS_CLONE&& standard_metadata.egress_rid == \
+      SAI_P4_REPLICA_INSTANCE_PACKET_IN
+
+#define IS_MIRROR_COPY(standard_metadata)                               \
+  standard_metadata.instance_type ==                                    \
+      PKT_INSTANCE_TYPE_INGRESS_CLONE&& standard_metadata.egress_rid == \
+      SAI_P4_REPLICA_INSTANCE_MIRRORING
 
 #endif  // SAI_IDS_H_

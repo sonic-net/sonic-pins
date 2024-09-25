@@ -66,7 +66,7 @@ control vlan_untag(inout headers_t headers,
      // Check if VLAN checks need to be disabled.
      disable_vlan_checks_table.apply();
   }
-}  // control vlan_ingress
+}  // control vlan_untag
 
 control vlan_tag(inout headers_t headers,
                  inout local_metadata_t local_metadata,
@@ -90,6 +90,6 @@ control vlan_tag(inout headers_t headers,
         headers.ethernet.ether_type = ETHERTYPE_8021Q;
       }
   }
-}  // control vlan_egress
+}  // control vlan_tag
 
 #endif  // SAI_VLAN_P4_
