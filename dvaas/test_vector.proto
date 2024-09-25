@@ -95,6 +95,7 @@ message PacketTestVector {
 message PacketTestRun {
   PacketTestVector test_vector = 1;
   SwitchOutput actual_output = 2;
+  string input_packet_injection_time = 3;
 }
 
 // A list of packet test runs.
