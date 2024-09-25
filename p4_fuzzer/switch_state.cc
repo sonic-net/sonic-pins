@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <iterator>
 #include <set>
+#include <string>
 
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
@@ -24,24 +25,17 @@
 #include "glog/logging.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
+#include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/internal/ordered_map.h"
+#include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
 
-using ::absl::StrAppend;
-using ::absl::StrCat;
-using ::absl::StrFormat;
 using ::gutil::FindOrDie;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::IrP4Info;
-
-namespace {
-
-std::string GetTableName(const IrP4Info& info, const uint32_t table_id) {
-  return FindOrDie(info.tables_by_id(), table_id).preamble().alias();
-}
-
-}  // namespace
 
 SwitchState::SwitchState(IrP4Info ir_p4info) : ir_p4info_(ir_p4info) {
   for (auto& [table_id, table] : ir_p4info_.tables_by_id()) {
@@ -168,16 +162,73 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
 std::string SwitchState::SwitchStateSummary() const {
   if (tables_.empty()) return std::string("EmptyState()");
   std::string res = "";
-  int total = 0;
-  for (const auto& [table_id, table] : tables_) {
-    total += table.size();
+  // Ordered is used to get a deterministic order for the summary.
+  for (const auto& [table_id, table] : Ordered(tables_)) {
+    const pdpi::IrTableDefinition& table_def =
+        FindOrDie(ir_p4info_.tables_by_id(), table_id);
+    const std::string& table_name = table_def.preamble().alias();
+    int max_size = table_def.size();
+    int current_size = table.size();
 
-    StrAppend(&res, "\n  ", absl::StrFormat("% 10d", table.size()), " ",
-              GetTableName(ir_p4info_, table_id));
+    absl::StrAppendFormat(&res, "\n % 12d% 12d    %s", current_size, max_size,
+                          table_name);
+
+    // Mark tables where we have exceeded their resource limits.
+    if (current_size > max_size) {
+      absl::StrAppend(&res, "*");
+    }
+
+    // If the table is a WCMP table, then we also print its total weight and
+    // max group weight. Only WCMP tables using one-shot programming are
+    // supported.
+    if (table_def.implementation_id_case() ==
+        pdpi::IrTableDefinition::kActionProfileId) {
+      int max_weight = 0;
+      int total_weight = 0;
+      int total_actions = 0;
+      for (auto& [_, table_entry] : table) {
+        int this_entry_weight = 0;
+        for (const p4::v1::ActionProfileAction& action :
+             table_entry.action()
+                 .action_profile_action_set()
+                 .action_profile_actions()) {
+          this_entry_weight += action.weight();
+        }
+        max_weight = std::max(max_weight, this_entry_weight);
+        total_weight += this_entry_weight;
+        total_actions += table_entry.action()
+                             .action_profile_action_set()
+                             .action_profile_actions_size();
+      }
+
+      const p4::config::v1::ActionProfile& action_profile =
+          FindOrDie(ir_p4info_.action_profiles_by_id(),
+                    table_def.action_profile_id())
+              .action_profile();
+
+      absl::StrAppendFormat(&res, "\n % 12d% 12d    %s.total_weight",
+                            total_weight, action_profile.size(), table_name);
+      // Mark if we have exceeded the total weight.
+      if (total_weight > action_profile.size()) {
+        absl::StrAppend(&res, "*");
+      }
+
+      absl::StrAppendFormat(&res, "\n % 12d% 12s    %s.total_actions",
+                            total_actions, "N/A", table_name);
+
+      absl::StrAppendFormat(&res, "\n % 12d% 12d    %s.max_weight", max_weight,
+                            action_profile.max_group_size(), table_name);
+      // Mark if we have exceeded the max weight for a given group.
+      if (max_weight > action_profile.max_group_size()) {
+        absl::StrAppend(&res, "*");
+      }
+    }
   }
-
-  return StrCat("State(", "\n  ", StrFormat("% 10d", total),
-                " total number of flows", res, "\n", ")");
+  return absl::StrFormat(
+      "State(\n % 12s% 12s    table_name\n % 12d% 12s    total number of "
+      "flows%s\n * marks tables where max size > current size.\n)",
+      "current size", "max size", GetNumTableEntries(), "N/A", res);
 }
+
 
 }  // namespace p4_fuzzer
