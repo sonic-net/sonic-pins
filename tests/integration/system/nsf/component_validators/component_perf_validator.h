@@ -25,8 +25,17 @@
 namespace pins_test {
 
 class ComponentPerfValidator : public ComponentValidator {
+  absl::Status OnImageCopy(absl::string_view version, const Testbed& testbed,
+                           thinkit::SSHClient& ssh_client) override;
   absl::Status OnNsfReboot(absl::string_view version, const Testbed& testbed,
                            thinkit::SSHClient& ssh_client) override;
+
+ private:
+  absl::Status FetchPreWarmRebootRegistrationInformation(thinkit::Switch& sut);
+  absl::Status ValidateComponentWarmbootPerformance(thinkit::Switch& sut);
+
+  absl::flat_hash_set<std::string> freeze_apps_;
+  absl::flat_hash_set<std::string> checkpoint_apps_;
 };
 
 }  // namespace pins_test

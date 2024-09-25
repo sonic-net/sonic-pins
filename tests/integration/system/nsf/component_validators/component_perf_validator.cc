@@ -33,15 +33,25 @@
 #include "thinkit/switch.h"
 
 namespace pins_test {
-namespace {
+namespace {}  // namespace
 
-absl::Status ValidateComponentWarmbootPerformance(thinkit::Switch& sut) {
+absl::Status ComponentPerfValidator::ValidateComponentWarmbootPerformance(
+    thinkit::Switch& sut) {
   absl::Status ret_status;
 
   return ret_status;
 }
 
-}  // namespace
+absl::Status ComponentPerfValidator::FetchPreWarmRebootRegistrationInformation(
+    thinkit::Switch& sut) {
+  return absl::OkStatus();
+}
+
+absl::Status ComponentPerfValidator::OnImageCopy(
+    absl::string_view version, const Testbed& testbed,
+    thinkit::SSHClient& ssh_client) {
+  return FetchPreWarmRebootRegistrationInformation(GetSut(testbed));
+}
 
 absl::Status ComponentPerfValidator::OnNsfReboot(
     absl::string_view version, const Testbed& testbed,

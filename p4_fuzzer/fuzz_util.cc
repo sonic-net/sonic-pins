@@ -1658,4 +1658,10 @@ AnnotatedWriteRequest FuzzWriteRequest(absl::BitGen* gen,
   return request;
 }
 
+absl::Status ModifyEntity(absl::BitGen* gen, const FuzzerConfig& config,
+                          const SwitchState& switch_state,
+                          p4::v1::Entity& entity) {
+  return FuzzNonKeyFields(gen, config, switch_state, &entity);
+}
+
 }  // namespace p4_fuzzer
