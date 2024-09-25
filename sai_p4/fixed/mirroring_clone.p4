@@ -85,7 +85,7 @@ control mirroring_clone(inout headers_t headers,
         if (mirror_port_to_pre_session_table.apply().hit) {
           clone_preserving_field_list(
             CloneType.I2E, pre_session,
-            (bit<8>)PreservedFieldList.CLONE_I2E_MIRRORING);
+            (bit<8>)PreservedFieldList.MIRROR_AND_PACKET_IN_COPY);
         }
       }
     }

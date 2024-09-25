@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -101,7 +101,6 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
     WriteRequest request = RemoveAnnotations(annotated_request);
     num_updates += request.updates_size();
     max_batch_size = std::max(max_batch_size, request.updates_size());
-
     // Set IDs.
     request.set_device_id(session->DeviceId());
     *request.mutable_election_id() = session->ElectionId();

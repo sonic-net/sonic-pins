@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,7 +68,6 @@ GetActionProfileImplementingTable(const pdpi::IrP4Info& info,
 void SetMaxGroupSizeInActionProfile(
     pdpi::IrP4Info& info, pdpi::IrActionProfileDefinition& action_profile,
     int max_group_size);
-
 }  // namespace p4_fuzzer
 
 #endif  // GOOGLE_P4_FUZZER_TEST_UTILS_H_

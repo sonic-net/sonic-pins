@@ -123,6 +123,8 @@ control acl_pre_ingress(in headers_t headers,
   @sai_acl(PRE_INGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @entry_restriction("
+    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
+    ether_type != 0x0800 && ether_type != 0x86dd;
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
     is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -130,6 +132,9 @@ control acl_pre_ingress(in headers_t headers,
     // Forbid unsupported combinations of IP_TYPE fields.
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
+    // Disallow match on reserved VLAN IDs to rule out vendor specific behavior.
+    vlan_id::mask != 0 -> (vlan_id != 4095 && vlan_id != 0);
+    // TODO: Disallow setting to reserved VLAN IDs when supported.
   ")
   table acl_pre_ingress_vlan_table {
     key = {
@@ -142,6 +147,10 @@ control acl_pre_ingress(in headers_t headers,
       headers.ipv6.isValid() : optional
           @id(3) @name("is_ipv6")
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
+      headers.ethernet.ether_type : ternary @name("ether_type") @id(4)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ETHER_TYPE);
+      local_metadata.vlan_id : ternary @id(5) @name("vlan_id")
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID);
     }
     actions = {
       @proto_id(1) set_outer_vlan_id;
