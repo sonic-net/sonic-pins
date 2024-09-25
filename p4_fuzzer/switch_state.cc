@@ -231,4 +231,5 @@ std::string SwitchState::SwitchStateSummary() const {
 }
 
 
+
 }  // namespace p4_fuzzer

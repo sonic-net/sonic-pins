@@ -40,6 +40,10 @@ using ::pdpi::CreateIrP4Info;
 using ::pdpi::IrP4Info;
 using ::testing::StrEq;
 
+// All P4Runtime table IDs must have their most significant byte equal to this
+// value.
+constexpr uint32_t kTableIdMostSignificantByte = 0x02'00'00'00;
+
 TEST(SwitchStateTest, TableEmptyTrivial) {
   IrP4Info info;
   SwitchState state(info);
