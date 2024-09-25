@@ -267,6 +267,11 @@ FuzzWriteRequest(absl::BitGen *gen, const FuzzerConfig &config,
                  const SwitchState &switch_state,
                  absl::optional<int> max_batch_size = absl::nullopt);
 
-} // namespace p4_fuzzer
+// Modifies non-key fields of `entity`.
+absl::Status ModifyEntity(absl::BitGen* gen, const FuzzerConfig& config,
+                          const SwitchState& switch_state,
+                          p4::v1::Entity& entity);
+
+}  // namespace p4_fuzzer
 
 #endif // P4_FUZZER_FUZZ_UTIL_H_

@@ -211,6 +211,52 @@ absl::Status ModifyEntityToAvoidKnownBug(const pdpi::IrP4Info& info,
   return absl::OkStatus();
 }
 
+absl::Status ModifyDeleteAndReinstallEntity(
+    const FuzzerConfig& config, const SwitchState& state,
+    const Entity& initial_entity, bool skip_modify, bool mask_known_failures,
+    absl::BitGen& gen, pdpi::P4RuntimeSession& session) {
+  p4::v1::Update update;
+  update.set_type(p4::v1::Update::MODIFY);
+  *update.mutable_entity() = initial_entity;
+
+  if (!skip_modify) {
+    const absl::Time kDeadline = absl::Now() + absl::Seconds(10);
+    bool entry_triggers_known_bug = false;
+    do {
+      RETURN_IF_ERROR(p4_fuzzer::ModifyEntity(&gen, config, state,
+                                              *update.mutable_entity()));
+      if (mask_known_failures) {
+        RETURN_IF_ERROR(ModifyEntityToAvoidKnownBug(config.GetIrP4Info(),
+                                                    *update.mutable_entity()));
+      }
+      ASSIGN_OR_RETURN(
+          entry_triggers_known_bug,
+          EntityTriggersKnownBug(config.GetIrP4Info(), update.entity(), state));
+    } while (mask_known_failures && entry_triggers_known_bug &&
+             absl::Now() < kDeadline);
+    // If we timeout, we return an error.
+    if (mask_known_failures && entry_triggers_known_bug) {
+      return gutil::DeadlineExceededErrorBuilder()
+             << "failed to generate a modification within 10s that doesn't "
+                "trigger a known bug for entity: "
+             << initial_entity.DebugString();
+    }
+
+    // Perform the modification if it was correctly generated.
+    RETURN_IF_ERROR(pdpi::SendPiUpdates(&session, {update}))
+        << "With update:\n"
+        << update.DebugString();
+  }
+
+  // TODO: b/367743919 - Add deletion and then re-insertion instead of modifying
+  // again.
+  if (!skip_modify) {
+    *update.mutable_entity() = initial_entity;
+    return pdpi::SendPiUpdates(&session, {update});
+  }
+  return absl::OkStatus();
+}
+
 // Generates valid entries for `table` until one meets the given
 // `predicate`. Unless an entry with the same keys already exists on the switch,
 // installs the generated entry and updates `state`.
@@ -238,6 +284,7 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
   // 10 seconds.
   const absl::Time kDeadline = absl::Now() + absl::Seconds(10);
   bool entry_triggers_known_bug = false;
+  bool mask_known_failures = environment.MaskKnownFailures();
   do {
     if (p4_table_def.has_value()) {
       ASSIGN_OR_RETURN(*entity.mutable_table_entry(),
@@ -249,7 +296,7 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
                             ->mutable_multicast_group_entry(),
                        FuzzValidMulticastGroupEntry(&gen, config, state));
     }
-    if (environment.MaskKnownFailures()) {
+    if (mask_known_failures) {
       RETURN_IF_ERROR(
           ModifyEntityToAvoidKnownBug(config.GetIrP4Info(), entity));
     }
@@ -257,11 +304,10 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
         entry_triggers_known_bug,
         EntityTriggersKnownBug(config.GetIrP4Info(), entity, state));
   } while ((!predicate(entity) ||
-            (environment.MaskKnownFailures() && entry_triggers_known_bug)) &&
+            (mask_known_failures && entry_triggers_known_bug)) &&
            absl::Now() < kDeadline);
   // If we timeout, we return an error.
-  if (!predicate(entity) ||
-      (environment.MaskKnownFailures() && entry_triggers_known_bug)) {
+  if (!predicate(entity) || (mask_known_failures && entry_triggers_known_bug)) {
     return gutil::DeadlineExceededErrorBuilder() << absl::Substitute(
                "failed to generate an entry meeting the given predicate and "
                "doesn't trigger a known bug for table '$0' within 10s",
@@ -277,19 +323,30 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
   ASSIGN_OR_RETURN(pdpi::IrEntity ir_entity,
                    pdpi::PiEntityToIr(config.GetIrP4Info(), entity));
   RETURN_IF_ERROR(environment.AppendToTestArtifact(
-      "requests_and_responses.txt",
+      "install_requests_and_responses.txt",
       absl::StrCat("# IR Entity:\n", ir_entity.DebugString())));
 
   if (absl::Status status = pdpi::InstallPiEntity(&session, entity);
       status.ok()) {
     RETURN_IF_ERROR(environment.AppendToTestArtifact(
-        "requests_and_responses.txt", "# Successfully installed!\n"));
+        "install_requests_and_responses.txt", "# Successfully installed!\n"));
   } else {
     RETURN_IF_ERROR(environment.AppendToTestArtifact(
-        "requests_and_responses.txt",
+        "install_requests_and_responses.txt",
         absl::StrCat("# Installation failed:\n", status.ToString())));
     RETURN_IF_ERROR(status) << "IR entity:\n" << ir_entity.DebugString();
   }
+
+  // Don't modify non-modifiable tables.
+  absl::string_view fully_qualified_table_name =
+      p4_table_def.has_value() ? p4_table_def->preamble().name() : table_name;
+  bool skip_modify =
+      config.GetNonModifiableTables().contains(fully_qualified_table_name);
+  // Test if modification and deletion works as expected for this entity.
+  RETURN_IF_ERROR(ModifyDeleteAndReinstallEntity(
+      config, state, entity, skip_modify, mask_known_failures, gen, session))
+      << absl::StrCat("When attempting to ", skip_modify ? "" : "modify, then ",
+                      "delete and reinstall IR entity:\n", ir_entity);
 
   // Update state.
   Update update;
