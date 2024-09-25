@@ -22,10 +22,13 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status.h"
+#include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_matchers.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -39,8 +42,12 @@
 namespace pins {
 namespace {
 
+using ::gutil::EqualsProto;
+using ::gutil::IsOkAndHolds;
 using ::orion::p4::test::Bmv2;
 using ::packetlib::HasHeaderCase;
+using ::pdpi::HasPacketIn;
+using ::pdpi::ParsedPayloadIs;
 using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::Eq;
@@ -697,6 +704,33 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
   }
+}
+
+// VLAN-tagged punt packets keep their VLAN tags regardless of their IDs.
+TEST(ButerTorVlanTest, VlanPreservedForPuntedPackets) {
+  const sai::Instantiation kInstantiation = GetParam();
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
+                       sai::EntryBuilder()
+                           .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
+                           .GetDedupedPiEntities(kIrP4Info));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+
+  constexpr absl::string_view kNonReservedVlanId = "0x123";
+  constexpr absl::string_view kReservedVlanId = "0xfff";
+
+  ASSERT_OK(bmv2.SendPacket(kIngressPort,
+                            GetVlanIpv4PacketOrDie(kNonReservedVlanId)));
+  ASSERT_OK(
+      bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(kReservedVlanId)));
+
+  EXPECT_THAT(bmv2.P4RuntimeSession().ReadStreamChannelResponsesAndFinish(),
+              IsOkAndHolds(ElementsAre(
+                  HasPacketIn(ParsedPayloadIs(
+                      EqualsProto(GetVlanIpv4PacketOrDie(kNonReservedVlanId)))),
+                  HasPacketIn(ParsedPayloadIs(
+                      EqualsProto(GetVlanIpv4PacketOrDie(kReservedVlanId)))))));
 }
 
 INSTANTIATE_TEST_SUITE_P(

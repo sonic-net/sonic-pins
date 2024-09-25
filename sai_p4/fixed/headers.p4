@@ -146,4 +146,23 @@ header gre_t {
   bit<16> protocol;
 }
 
+// IP Flow Information Export (IPFIX) header, pursuant to RFC 7011 section 3.1.
+header ipfix_t {
+  // Version of IPFIX to which this Message conforms.
+  bit<16> version_number;
+  // Total length of the IPFIX Message, measured in octets, including
+  // Message Header and Set(s).
+  bit<16> length;
+  // Time at which the IPFIX Message Header leaves the Exporter,
+  // expressed in seconds since the UNIX epoch.
+  bit<32> export_time;
+  // Incremental sequence counter modulo 2^32 of all IPFIX Data Records
+  // sent in the current stream.
+  bit<32> sequence_number;
+  // An identifier of the Observation Domain that is locally
+  // unique to the Exporting Process.
+  bit<32> observation_domain_id;
+}
+
+
 #endif  // SAI_HEADERS_P4_
