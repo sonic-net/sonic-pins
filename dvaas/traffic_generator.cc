@@ -614,6 +614,9 @@ TrafficGeneratorWithGuaranteedRate::GetValidationResult() {
       PacketTestRun* packet_test_run = test_outcome->mutable_test_run();
       *packet_test_run->mutable_test_vector() =
           injected_traffic.packet_test_vector;
+      *packet_test_run->mutable_input_packet_injection_time() =
+          absl::FormatTime(absl::RFC3339_full, injected_traffic.injection_time,
+                           absl::UTCTimeZone());
       if (collected_traffic_by_id.contains(injected_traffic.tag)) {
         *packet_test_run->mutable_actual_output() =
             collected_traffic_by_id[injected_traffic.tag];
