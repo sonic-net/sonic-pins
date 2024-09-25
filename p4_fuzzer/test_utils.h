@@ -22,23 +22,10 @@
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/testing/test_p4info.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace p4_fuzzer {
-
-// Options used in the construction of a P4Info by several helper functions.
-struct TestP4InfoOptions {
-  int action_selector_table_id = 100;
-  int action_id = 200;
-  int action_no_op_id = 201;
-  int action_profile_id = 300;
-  int action_profile_size = 65536;
-  int action_profile_max_group_size = 256;
-  int table_match_field_id = 1;
-  p4::config::v1::MatchField::MatchType table_match_field_type =
-      p4::config::v1::MatchField::EXACT;
-  absl::string_view table_match_field_valid_value = "1";
-};
-
 // Captures the general state shared between most fuzzing functions for use in
 // tests.
 struct FuzzerTestState {
@@ -47,21 +34,40 @@ struct FuzzerTestState {
   SwitchState switch_state;
 };
 
-// Constructs an IrP4Info to be used for testing using the options given as
-// input.
-absl::StatusOr<pdpi::IrP4Info> ConstructIrInfo(
-    const TestP4InfoOptions& options);
+// Constructs a FuzzerTestState from an IrP4Info, only fuzzing tables with the
+// given role.
+FuzzerTestState ConstructFuzzerTestState(const pdpi::IrP4Info& ir_info,const std::string& role);
 
-// Constructs a FuzzerTestState to be used for testing using the options
-// given as input.
-absl::StatusOr<FuzzerTestState> ConstructFuzzerTestState(
-    const TestP4InfoOptions& options);
+// Constructs a FuzzerTestState from a standard testing P4Info.
+// By default, this test state should be used for all tests.
+inline FuzzerTestState ConstructStandardFuzzerTestState() {
+  return ConstructFuzzerTestState(pdpi::GetTestIrP4Info(), /*role=*/"");
+}
 
 // TODO: Deprecated. Do not use. New tests should not depend on a
 // production P4 program. Old tests should be migrated to not rely on this
 // function.
-FuzzerTestState ConstructFuzzerTestStateFromSaiMiddleBlock();
+inline FuzzerTestState ConstructFuzzerTestStateFromSaiMiddleBlock() {
+  return ConstructFuzzerTestState(
+      sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
+      /*role=*/"sdn_controller");
+}
 
+// Helpers to get specific pieces of the IrP4Info.
+// Gets a table that uses one-shot programming. Deterministic for a given
+// IrP4Info.
+absl::StatusOr<pdpi::IrTableDefinition> GetAOneShotTableDefinition(
+    const pdpi::IrP4Info& info);
+
+// Gets the Action Profile that implements the given table.
+absl::StatusOr<pdpi::IrActionProfileDefinition>
+GetActionProfileImplementingTable(const pdpi::IrP4Info& info,
+                                  const pdpi::IrTableDefinition& table);
+
+// Helpers to modify specific pieces of the IrP4Info.
+void SetMaxGroupSizeInActionProfile(
+    pdpi::IrP4Info& info, pdpi::IrActionProfileDefinition& action_profile,
+    int max_group_size);
 }  // namespace p4_fuzzer
 
 #endif  // GOOGLE_P4_FUZZER_TEST_UTILS_H_

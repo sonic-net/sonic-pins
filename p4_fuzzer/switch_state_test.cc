@@ -13,10 +13,20 @@
 // limitations under the License.
 #include "p4_fuzzer/switch_state.h"
 
+#include <cstdint>
+
+#include "absl/strings/str_cat.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
+#include "gutil/collections.h"
 #include "gutil/status_matchers.h"
+#include "gutil/testing.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_fuzzer/test_utils.h"
 #include "p4_pdpi/ir.h"
+#include "p4_pdpi/testing/test_p4info.h"
+#include "p4_pdpi/testing/main_p4_pd.pb.h"
+#include "p4_pdpi/pd.h"
 
 namespace p4_fuzzer {
 namespace {
@@ -28,6 +38,7 @@ using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::CreateIrP4Info;
 using ::pdpi::IrP4Info;
+using ::testing::StrEq;
 
 TEST(SwitchStateTest, TableEmptyTrivial) {
   IrP4Info info;
@@ -113,6 +124,16 @@ TEST(SwitchStateTest, RuleDelete) {
 
   EXPECT_EQ(state.GetNumTableEntries(42), 0);
   EXPECT_EQ(state.GetTableEntries(42).size(), 0);
+}
+
+Update MakePiUpdate(const pdpi::IrP4Info& info, Update::Type type,
+                    const pdpi::TableEntry& entry) {
+  pdpi::Update pd;
+  pd.set_type(type);
+  *pd.mutable_table_entry() = entry;
+  auto pi = pdpi::PdUpdateToPi(info, pd);
+  CHECK_OK(pi.status());  // Crash ok
+  return *pi;
 }
 
 }  // namespace
