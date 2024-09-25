@@ -30,6 +30,10 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "gmpxx.h"
+#include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/utils/ir.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
@@ -92,6 +96,16 @@ uint64_t StringToInt(std::string value) {
   return std::stoull(binary);
 }
 
+z3::expr HexStringToZ3Expr(const std::string &hex_string,
+                           absl::optional<int> bitwidth = absl::nullopt) {
+  mpz_class integer = mpz_class(hex_string, /*base=*/0);
+  std::string decimal = integer.get_str(/*base=*/10);
+  if (!bitwidth.has_value()) {
+    bitwidth = integer.get_str(/*base=*/2).size();
+  }
+  return Z3Context().bv_val(decimal.c_str(), *bitwidth);
+}
+
 }  // namespace
 
 absl::StatusOr<pdpi::IrValue> ParseIrValue(std::string value) {
@@ -107,88 +121,23 @@ absl::StatusOr<pdpi::IrValue> ParseIrValue(std::string value) {
 
 absl::StatusOr<z3::expr> FormatBmv2Value(const pdpi::IrValue &value) {
   switch (value.format_case()) {
-    case pdpi::IrValue::kHexStr: {
-      const std::string &hexstr = value.hex_str();
-
-      uint64_t decimal;
-      std::stringstream converter;
-      converter << std::hex << hexstr;
-      if (converter >> decimal) {
-        return Z3Context().bv_val(std::to_string(decimal).c_str(),
-                                  FindBitsize(decimal));
-      }
-
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Cannot process hex string \"", hexstr, "\", the value is too big!"));
-    }
-
+    case pdpi::IrValue::kHexStr:
+      return HexStringToZ3Expr(value.hex_str());
     case pdpi::IrValue::kIpv4: {
-      uint32_t ip = 0;
-      std::vector<std::string> ipv4 = absl::StrSplit(value.ipv4(), '.');
-      for (size_t i = 0; i < ipv4.size(); i++) {
-        uint32_t shifted_component = static_cast<uint32_t>(std::stoull(ipv4[i]))
-                                     << ((ipv4.size() - i - 1) * 8);
-        ip += shifted_component;
-      }
-      return Z3Context().bv_val(std::to_string(ip).c_str(), 32);
+      ASSIGN_OR_RETURN(netaddr::Ipv4Address ipv4,
+                       netaddr::Ipv4Address::OfString(value.ipv4()));
+      return HexStringToZ3Expr(ipv4.ToHexString(), 32);
     }
-
-    case pdpi::IrValue::kMac: {
-      uint64_t mac = 0;  // Mac is 6 bytes, we can fit them in 8 bytes.
-      std::vector<std::string> split = absl::StrSplit(value.mac(), ':');
-      for (size_t i = 0; i < split.size(); i++) {
-        uint64_t decimal;  // Initially only 8 bits, but will be shifted.
-        std::stringstream converter;
-        converter << std::hex << split[i];
-        if (converter >> decimal) {
-          mac += decimal << ((split.size() - i - 1) * 8);
-        } else {
-          return absl::InvalidArgumentError(
-              absl::StrCat("Cannot process mac value \"", value.mac(), "\"!"));
-        }
-      }
-      return Z3Context().bv_val(std::to_string(mac).c_str(), 48);
-    }
-
     case pdpi::IrValue::kIpv6: {
-      uint64_t ipv6 = 0;  // Ipv6 is 128 bits, do it in two 64 bits steps.
-      std::vector<std::string> split = absl::StrSplit(value.ipv6(), ':');
-
-      // Transform the most significant 64 bits.
-      for (size_t i = 0; i < split.size() / 2; i++) {
-        uint64_t decimal;  // Initially only 16 bits, but will be shifted.
-        std::stringstream converter;
-        converter << std::hex << split[i];
-        if (converter >> decimal) {
-          ipv6 += decimal << ((split.size() / 2 - i - 1) * 16);
-        } else {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "Cannot process ipv6 value \"", value.ipv6(), "\"!"));
-        }
-      }
-      z3::expr hi = Z3Context().bv_val(std::to_string(ipv6).c_str(), 128);
-
-      // Transform the least significant 64 bits.
-      ipv6 = 0;
-      for (size_t i = split.size() / 2; i < split.size(); i++) {
-        uint64_t decimal;
-        std::stringstream converter;
-        converter << std::hex << split[i];
-        if (converter >> decimal) {
-          ipv6 += decimal << ((split.size() - i - 1) * 16);
-        } else {
-          return absl::InvalidArgumentError(absl::StrCat(
-              "Cannot process ipv6 value \"", value.ipv6(), "\"!"));
-        }
-      }
-      z3::expr lo = Z3Context().bv_val(std::to_string(ipv6).c_str(), 128);
-
-      // Add them together.
-      z3::expr shift = Z3Context().bv_val("18446744073709551616", 128);  // 2^64
-      ASSIGN_OR_RETURN(hi, operators::Times(hi, shift));  // shift << 64.
-      return operators::Plus(hi, lo);
+      ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6,
+                       netaddr::Ipv6Address::OfString(value.ipv6()));
+      return HexStringToZ3Expr(ipv6.ToHexString(), 128);
     }
-
+    case pdpi::IrValue::kMac: {
+      ASSIGN_OR_RETURN(netaddr::MacAddress mac,
+                       netaddr::MacAddress::OfString(value.mac()));
+      return HexStringToZ3Expr(mac.ToHexString(), 48);
+    }
     default:
       return absl::UnimplementedError(
           absl::StrCat("Found unsupported value type ", value.DebugString()));

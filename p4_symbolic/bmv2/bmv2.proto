@@ -329,6 +329,12 @@ enum StatementOp {
   modify_field_with_hash_based_offset = 2;
   // Cloning a packet.
   clone_ingress_pkt_to_egress = 3;
+  // Setting the validity bit of a header to true.
+  add_header = 4;
+  // Setting the validity bit of a header to false.
+  remove_header = 5;
+  // Terminating the execution of all blocks currently executing.
+  exit = 6;
 }
 
 // This specifies the exact expressions that are supported by our ir.
