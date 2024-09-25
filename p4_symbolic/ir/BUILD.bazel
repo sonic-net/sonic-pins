@@ -63,7 +63,6 @@ cc_library(
     visibility = ["//p4_symbolic:__subpackages__"],
     deps = [
         ":ir_cc_proto",
-        "//gutil:proto",
         "//gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
@@ -138,3 +137,8 @@ ir_parsing_test(
     table_entries = "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
 )
 
+ir_parsing_test(
+    name = "set_invalid_test",
+    golden_file = "expected/set_invalid.txt",
+    p4_program = "//p4_symbolic/testdata:set-invalid/set_invalid.p4",
+)

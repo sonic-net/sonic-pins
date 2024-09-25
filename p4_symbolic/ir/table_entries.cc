@@ -18,7 +18,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
-#include "gutil/proto.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_symbolic/util/io.h"
@@ -26,35 +25,13 @@
 namespace p4_symbolic {
 namespace ir {
 
-absl::StatusOr<TableEntries> ParseAndFillEntries(
-    const pdpi::IrP4Info &p4info, const std::string &entries_path) {
-  // Parse table entries as a plain p4.v1.TableEntry proto.
-  p4::v1::WriteRequest entries_file;
-  RETURN_IF_ERROR(
-      gutil::ReadProtoFromFile(entries_path.c_str(), &entries_file));
-
+absl::StatusOr<TableEntries> ParseTableEntries(
+    const pdpi::IrP4Info &p4info,
+    absl::Span<const p4::v1::TableEntry> entries) {
   // Use pdpi to transform each plain p4.v1.TableEntry to the pd representation
   // pdpi.ir.IrTableEntry.
   TableEntries output;
-  for (const p4::v1::Update &update : entries_file.updates()) {
-    // Make sure update is of type insert.
-    if (update.type() != p4::v1::Update::INSERT) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Table entries file contains a non-insert update ",
-                       update.DebugString()));
-    }
-
-    // Make sure the entity is a table entry.
-    const p4::v1::Entity &entity = update.entity();
-    if (entity.entity_case() != p4::v1::Entity::kTableEntry) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Table entries file contains a non-table entry entity ",
-                       entity.DebugString()));
-    }
-
-    // Read table entry as a program-independent P4RT protobuf.
-    // Transform it to a program dependent pdpi protobuf.
-    const p4::v1::TableEntry &pi_entry = entity.table_entry();
+  for (const p4::v1::TableEntry &pi_entry : entries) {
     ASSIGN_OR_RETURN(pdpi::IrTableEntry pdpi_entry,
                      pdpi::PiTableEntryToIr(p4info, pi_entry));
 

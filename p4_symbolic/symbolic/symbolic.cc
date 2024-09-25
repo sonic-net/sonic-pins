@@ -62,6 +62,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
 
   ASSIGN_OR_RETURN(z3::expr ingress_port,
                    ingress_headers.Get("standard_metadata.ingress_port"));
+  // TODO: Function hardcoded.
   SymbolicPacket ingress_packet =
       packet::ExtractSymbolicPacket(ingress_headers);
 

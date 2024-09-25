@@ -30,6 +30,10 @@ namespace bmv2 {
 // does not exist.
 absl::StatusOr<P4Program> ParseBmv2JsonFile(const std::string &json_path);
 
+// Like `ParseBmv2JsonFile`, but parsing from the given string instead of a
+// file.
+absl::StatusOr<P4Program> ParseBmv2JsonString(const std::string &json_string);
+
 }  // namespace bmv2
 }  // namespace p4_symbolic
 
