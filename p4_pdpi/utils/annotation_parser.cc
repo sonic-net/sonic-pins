@@ -55,8 +55,8 @@ absl::StatusOr<annotation::AnnotationComponents> ParseAnnotation(
   //   (label-only): '@label  ' --> 'label  '
   if (annotation_iter == annotation.end() || *annotation_iter != '@') {
     return gutil::InvalidArgumentErrorBuilder()
-           << "Annotation \"" << annotation
-           << "\" is malformed: " << "Annotations must begin with '@'";
+           << "Annotation \"" << annotation << "\" is malformed: "
+           << "Annotations must begin with '@'";
   }
   ++annotation_iter;
 
@@ -71,8 +71,8 @@ absl::StatusOr<annotation::AnnotationComponents> ParseAnnotation(
   }
   if (annotation_iter == label_start_iter) {
     return gutil::InvalidArgumentErrorBuilder()
-           << "Annotation \"" << annotation
-           << "\" is malformed: " << "Annotation contains no label text";
+           << "Annotation \"" << annotation << "\" is malformed: "
+           << "Annotation contains no label text";
   }
   std::string label(label_start_iter, annotation_iter);
 
@@ -91,9 +91,8 @@ absl::StatusOr<annotation::AnnotationComponents> ParseAnnotation(
   // '(body)  ' --> 'body)  '
   if (*annotation_iter != '(') {
     return gutil::InvalidArgumentErrorBuilder()
-           << "Annotation \"" << annotation
-           << "\" is malformed: " << "Expected '(' but found '"
-           << *annotation_iter << "'";
+           << "Annotation \"" << annotation << "\" is malformed: "
+           << "Expected '(' but found '" << *annotation_iter << "'";
   }
   ++annotation_iter;
   const auto body_start_iter = annotation_iter;
@@ -112,8 +111,8 @@ absl::StatusOr<annotation::AnnotationComponents> ParseAnnotation(
   // 'body)' --> 'body'
   if (*annotation_iter != ')') {
     return gutil::InvalidArgumentErrorBuilder()
-           << "Annotation \"" << annotation
-           << "\" is malformed: " << "Missing ')' at the end of the annotation";
+           << "Annotation \"" << annotation << "\" is malformed: "
+           << "Missing ')' at the end of the annotation";
   }
   std::string body(body_start_iter, annotation_iter);
 

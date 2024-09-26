@@ -447,8 +447,8 @@ StatusOr<nlohmann::json> GenerateCompositeMatchFieldJson(
     return gutil::InvalidArgumentErrorBuilder()
            << "Composite field bitwidth (" << json["bitwidth"]
            << ") does not match total element bitwidth ("
-           << total_element_bitwidth << "). Annotation: " << "@"
-           << annotation.label << "(" << annotation.body << ")";
+           << total_element_bitwidth << "). Annotation: "
+           << "@" << annotation.label << "(" << annotation.body << ")";
   }
   return json;
 }
