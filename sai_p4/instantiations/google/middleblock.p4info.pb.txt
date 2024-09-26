@@ -416,7 +416,7 @@ tables {
     annotations: "@proto_id(6)"
   }
   const_default_action_id: 16777222
-  size: 32768
+  size: 131072
 }
 tables {
   preamble {
@@ -466,7 +466,7 @@ tables {
     annotations: "@proto_id(6)"
   }
   const_default_action_id: 16777222
-  size: 4096
+  size: 17000
 }
 tables {
   preamble {
@@ -740,7 +740,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 2
+  size: 4
 }
 tables {
   preamble {

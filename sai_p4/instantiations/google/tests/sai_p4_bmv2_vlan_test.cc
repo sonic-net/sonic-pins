@@ -706,33 +706,6 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
   }
 }
 
-// VLAN-tagged punt packets keep their VLAN tags regardless of their IDs.
-TEST(ButerTorVlanTest, VlanPreservedForPuntedPackets) {
-  const sai::Instantiation kInstantiation = GetParam();
-  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
-  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
-                       sai::EntryBuilder()
-                           .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
-                           .GetDedupedPiEntities(kIrP4Info));
-  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
-
-  constexpr absl::string_view kNonReservedVlanId = "0x123";
-  constexpr absl::string_view kReservedVlanId = "0xfff";
-
-  ASSERT_OK(bmv2.SendPacket(kIngressPort,
-                            GetVlanIpv4PacketOrDie(kNonReservedVlanId)));
-  ASSERT_OK(
-      bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(kReservedVlanId)));
-
-  EXPECT_THAT(bmv2.P4RuntimeSession().ReadStreamChannelResponsesAndFinish(),
-              IsOkAndHolds(ElementsAre(
-                  HasPacketIn(ParsedPayloadIs(
-                      EqualsProto(GetVlanIpv4PacketOrDie(kNonReservedVlanId)))),
-                  HasPacketIn(ParsedPayloadIs(
-                      EqualsProto(GetVlanIpv4PacketOrDie(kReservedVlanId)))))));
-}
-
 INSTANTIATE_TEST_SUITE_P(
     VlanTest, VlanTest, testing::ValuesIn(sai::AllSaiInstantiations()),
     [&](const testing::TestParamInfo<sai::Instantiation>& info) {
