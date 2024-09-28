@@ -111,9 +111,9 @@ header packet_out_header_t {
   // sent directly?
   @id(2)
   bit<1> submit_to_ingress;
-  // BMV2 backend requires headers to be multiple of 8-bits.
+  // BMv2 backend requires headers to be multiple of 8-bits.
   @id(3)
-  bit<7> unused_pad;
+  bit<6> unused_pad;
 }
 
 #endif  // SAI_HEADERS_P4_

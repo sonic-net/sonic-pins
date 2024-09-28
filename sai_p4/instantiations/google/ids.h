@@ -1,5 +1,5 @@
-#ifndef GOOGLE_SAI_IDS_H_
-#define GOOGLE_SAI_IDS_H_
+#ifndef PINS_SAI_IDS_H_
+#define PINS_SAI_IDS_H_
 
 #include "../../fixed/ids.h"
 
@@ -81,5 +81,7 @@
 
 // Indicates that the program has packet out support.
 #define SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT "1.0.0"
+#define SAI_P4_PKGINFO_VERSION_LATEST \
+  SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT
 
-#endif  // GOOGLE_SAI_IDS_H_
+#endif  // PINS_SAI_IDS_H_

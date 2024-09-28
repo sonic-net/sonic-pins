@@ -35,7 +35,16 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.color = MeterColor_t.GREEN;
     local_metadata.ingress_port = (port_id_t)standard_metadata.ingress_port;
     local_metadata.route_metadata = 0;
+    local_metadata.bypass_ingress = false;
 
+  transition select(standard_metadata.ingress_port) {
+      SAI_P4_CPU_PORT: parse_packet_out_header;
+      _              : parse_ethernet;
+    }
+  }
+
+  state parse_packet_out_header {
+    packet.extract(headers.packet_out_header);
     transition parse_ethernet;
   }
 

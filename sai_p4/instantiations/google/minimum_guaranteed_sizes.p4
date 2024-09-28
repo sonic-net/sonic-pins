@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GOOGLE_SAI_RESOURCE_GUARANTEES_P4_
-#define GOOGLE_SAI_RESOURCE_GUARANTEES_P4_
+#ifndef PINS_SAI_RESOURCE_GUARANTEES_P4_
+#define PINS_SAI_RESOURCE_GUARANTEES_P4_
 
 // This file documents the resource guarantees that each table provides.
 // These guarantees are not based on the hardware limits of particular targets,
@@ -97,4 +97,4 @@
 // IPv4 and IPv6
 #define ACL_WBB_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE 8
 
-#endif  // GOOGLE_SAI_RESOURCE_GUARANTEES_P4_
+#endif  // PINS_SAI_RESOURCE_GUARANTEES_P4_

@@ -1,5 +1,5 @@
-#ifndef GOOGLE_SAI_VERSIONS_H_
-#define GOOGLE_SAI_VERSIONS_H_
+#ifndef PINS_SAI_VERSIONS_H_
+#define PINS_SAI_VERSIONS_H_
 
 // --- PkgInfo versions --------------------------------------------------------
 // For use in `@pkginfo(..., version = VERSION)` annotations.
@@ -56,4 +56,4 @@
 // Macro that always points to the latest SAI P4 version.
 #define SAI_P4_PKGINFO_VERSION_LATEST SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST
 
-#endif  // GOOGLE_SAI_VERSIONS_H_
+#endif  // PINS_SAI_VERSIONS_H_
