@@ -15,10 +15,6 @@
 #define IP_PROTOCOL_IPV6   0x29
 #define IP_PROTOCOLS_GRE   0x2f
 
-#define GRE_PROTOCOL_ERSPAN 0x88be
-
-#define ERSPAN_VERSION_TYPE_II 1
-
 typedef bit<48> ethernet_addr_t;
 typedef bit<32> ipv4_addr_t;
 typedef bit<128> ipv6_addr_t;

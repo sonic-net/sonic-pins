@@ -20,9 +20,7 @@ control acl_ingress(in headers_t headers,
   bit<2> ecn = 0;
   // IPv4 IP protocol or IPv6 next_header (or 0, for non-IP packets)
   bit<8> ip_protocol = 0;
-  // Captures whether to copy the packet at the end of the ingress pipeline.
-  bool marked_to_copy = false;
-  // Cancels out marked_to_copy when true.
+  // Cancels out local_metadata.marked_to_copy when true.
   bool cancel_copy = false;
 
   @id(ACL_INGRESS_METER_ID)
@@ -51,7 +49,7 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_COPY)
   action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_ingress_counter.count();
-    marked_to_copy = true;
+    local_metadata.marked_to_copy = true;
   }
 #else
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
@@ -63,7 +61,7 @@ control acl_ingress(in headers_t headers,
 
     // We model the behavior for GREEN packets only.
     // TODO: Branch on color and model behavior for all colors.
-    marked_to_copy = true;
+    local_metadata.marked_to_copy = true;
   }
 #endif
 
@@ -118,8 +116,8 @@ control acl_ingress(in headers_t headers,
       @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_MIRROR_INGRESS)
       mirror_session_id_t mirror_session_id) {
     acl_ingress_counter.count();
-    local_metadata.mirror_session_id_valid = true;
-    local_metadata.mirror_session_id_value = mirror_session_id;
+    local_metadata.marked_to_mirror = true;
+    local_metadata.mirror_session_id = mirror_session_id;
   }
 
   @id(ACL_INGRESS_SET_QOS_QUEUE_AND_CANCEL_COPY_ABOVE_RATE_LIMIT_ACTION_ID)
@@ -424,6 +422,24 @@ control acl_ingress(in headers_t headers,
     size = ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  // ACL table that mirrors and redirects packets.
+  @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
+  @sai_acl(INGRESS)
+  @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  table acl_ingress_mirror_and_redirect_table {
+    key = {
+      local_metadata.ingress_port : optional
+          @id(1) @name("in_port")  @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
+      // TODO: Add keys needed for redirect.
+    }
+    actions = {
+      @proto_id(1) acl_mirror();
+      @defaultonly NoAction;
+    }
+    const default_action = NoAction;
+    size = ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
   // ACL table that only drops or denies packets, and is otherwise a no-op.
   @id(ACL_INGRESS_SECURITY_TABLE_ID)
   @sai_acl(INGRESS)
@@ -547,9 +563,8 @@ control acl_ingress(in headers_t headers,
     acl_ingress_qos_table.apply();
 #endif
 
-    if (marked_to_copy && !cancel_copy) {
-      clone_preserving_field_list(CloneType.I2E, COPY_TO_CPU_SESSION_ID,
-                                  PreservedFieldList.MIRROR_AND_PACKET_IN_COPY);
+    if (cancel_copy) {
+      local_metadata.marked_to_copy = false;
     }
   }
 }  // control ACL_INGRESS

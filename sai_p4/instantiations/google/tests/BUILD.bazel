@@ -17,6 +17,7 @@ package(default_visibility = ["//visibility:public"])
 cc_test(
     name = "p4_constraints_integration_test",
     srcs = ["p4_constraints_integration_test.cc"],
+    shard_count = 5,
     deps = [
         "//gutil:proto",
         "//gutil:status_matchers",

@@ -28,7 +28,10 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.apply_tunnel_encap_at_egress = false;
     local_metadata.tunnel_encap_src_ipv6 = 0;
     local_metadata.tunnel_encap_dst_ipv6 = 0;
-    local_metadata.mirror_session_id_valid = false;
+    local_metadata.marked_to_copy = false;
+    local_metadata.marked_to_mirror = false;
+    local_metadata.mirror_session_id = 0;
+    local_metadata.mirror_egress_port = 0;
     local_metadata.color = MeterColor_t.GREEN;
     local_metadata.ingress_port = (port_id_t)standard_metadata.ingress_port;
     local_metadata.route_metadata = 0;
@@ -128,9 +131,6 @@ control packet_deparser(packet_out packet, in headers_t headers) {
 #if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
     packet.emit(headers.packet_in_header);
 #endif
-    packet.emit(headers.erspan_ethernet);
-    packet.emit(headers.erspan_ipv4);
-    packet.emit(headers.erspan_gre);
     packet.emit(headers.ethernet);
     packet.emit(headers.tunnel_encap_ipv6);
     packet.emit(headers.tunnel_encap_gre);
