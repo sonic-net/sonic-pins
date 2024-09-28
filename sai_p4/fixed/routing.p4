@@ -419,14 +419,6 @@ control routing(in headers_t headers,
     local_metadata.route_metadata = route_metadata;
   }
 
-  // Trap the packet and send it to CPU. Drop the packet in the dataplane.
-  @id(TRAP_ACTION_ID)
-  action trap() {
-    clone(CloneType.I2E, COPY_TO_CPU_SESSION_ID);
-    mark_to_drop(standard_metadata);
-  }
-
-#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
   // Set the metadata of the packet and mark the packet to drop at the end of
   // the ingress pipeline.
   @id(ROUTING_SET_METADATA_AND_DROP_ACTION_ID)
@@ -434,7 +426,6 @@ control routing(in headers_t headers,
     local_metadata.route_metadata = route_metadata;
     mark_to_drop(standard_metadata);
   }
-#endif
 
    @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(ROUTING_IPV4_TABLE_ID)
@@ -451,12 +442,9 @@ control routing(in headers_t headers,
       @proto_id(1) drop;
       @proto_id(2) set_nexthop_id;
       @proto_id(3) set_wcmp_group_id;
-      @proto_id(4) trap;
       @proto_id(5) set_nexthop_id_and_metadata;
       @proto_id(6) set_wcmp_group_id_and_metadata;
-#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
       @proto_id(7) set_metadata_and_drop;
-#endif
     }
     const default_action = drop;
     size = ROUTING_IPV4_TABLE_MINIMUM_GUARANTEED_SIZE;
@@ -477,12 +465,9 @@ control routing(in headers_t headers,
       @proto_id(1) drop;
       @proto_id(2) set_nexthop_id;
       @proto_id(3) set_wcmp_group_id;
-      @proto_id(4) trap;
       @proto_id(5) set_nexthop_id_and_metadata;
       @proto_id(6) set_wcmp_group_id_and_metadata;
-#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
       @proto_id(7) set_metadata_and_drop;
-#endif
     }
     const default_action = drop;
     size = ROUTING_IPV6_TABLE_MINIMUM_GUARANTEED_SIZE;

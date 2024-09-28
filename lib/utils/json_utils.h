@@ -172,4 +172,4 @@ std::string GetSimpleJsonValueAsString(const nlohmann::json& source);
 
 }  // namespace json_yang
 
-#endif  // PLATFORMS_NETWORKING_PINS_CONFIG_UTILS_JSON_UTILS_H_
+#endif  // PINS_LIB_UTILS_JSON_UTILS_H_

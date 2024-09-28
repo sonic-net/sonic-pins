@@ -32,7 +32,7 @@
 
 // -- Fixed Table sizes --------------------------------------------------------
 
-#define IPV6_TUNNEL_TERMINATION_TABLE_MINIMUM_GUARANTEED_SIZE 128
+#define IPV6_TUNNEL_TERMINATION_TABLE_MINIMUM_GUARANTEED_SIZE 126
 
 #define NEXTHOP_TABLE_MINIMUM_GUARANTEED_SIZE 1024
 
