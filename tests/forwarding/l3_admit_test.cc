@@ -826,10 +826,6 @@ TEST_P(L3AdmitTestFixture, VlanOverrideAdmitsAllPacketsToL3Routing) {
             table_entry {
               table_name: "acl_pre_ingress_vlan_table"
               priority: 10
-              matches {
-                name: "is_ipv4"
-                optional { value { hex_str: "0x1" } }
-              }
               action {
                 name: "set_outer_vlan_id",
                 params {
