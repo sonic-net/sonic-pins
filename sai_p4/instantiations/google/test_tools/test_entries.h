@@ -31,6 +31,7 @@
 #include "absl/strings/string_view.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
 namespace sai {
@@ -46,8 +47,14 @@ enum class PuntAction {
 // Rewrite-related options for nexthop action generation.
 struct NexthopRewriteOptions {
   bool disable_decrement_ttl = false;
-  bool disable_src_mac_rewrite = false;
-  bool disable_dst_mac_rewrite = false;
+  // When present, source MAC will be rewritten to the given address. When
+  // absent, no rewrite occurs.
+  std::optional<netaddr::MacAddress> src_mac_rewrite =
+      netaddr::MacAddress(1, 2, 3, 4, 5, 6);
+  // When present, destination MAC will be rewritten to the given address. When
+  // absent, no rewrite occurs.
+  std::optional<netaddr::MacAddress> dst_mac_rewrite =
+      netaddr::MacAddress(2, 2, 2, 2, 2, 2);
   bool disable_vlan_rewrite = false;
 };
 
@@ -115,10 +122,8 @@ class EntryBuilder {
 
   EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
   EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
-      absl::string_view egress_port);
-  EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port,
-      const NexthopRewriteOptions& rewrite_options);
+      IpVersion ip_version = IpVersion::kIpv4And6, NexthopRewriteOptions = {});
   EntryBuilder& AddVrfEntry(absl::string_view vrf);
   EntryBuilder& AddEntryAdmittingAllPacketsToL3();
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
@@ -144,49 +149,6 @@ class EntryBuilder {
  private:
   sai::TableEntries entries_;
 };
-
-// Returns an ACL table entry that punts all packets to the controller using the
-// given punt `action`.
-ABSL_DEPRECATED(
-    "Use "
-    "EntryBuilder().AddEntryPuntingAllPackets(`action`)."
-    "GetDedupedPiEntities(`ir_p4info`) instead.")
-absl::StatusOr<p4::v1::TableEntry> MakePiEntryPuntingAllPackets(
-    PuntAction action, const pdpi::IrP4Info& ir_p4info);
-ABSL_DEPRECATED(
-    "Use "
-    "EntryBuilder().AddEntryPuntingAllPackets(`action`)."
-    "GetDedupedIrEntities(`ir_p4info`) instead.")
-absl::StatusOr<pdpi::IrTableEntry> MakeIrEntryPuntingAllPackets(
-    PuntAction action, const pdpi::IrP4Info& ir_p4info);
-ABSL_DEPRECATED(
-    "Use "
-    "EntryBuilder().AddEntryPuntingAllPackets(`action`)."
-    "GetDedupedPiEntities(`ir_p4info`) instead.")
-absl::StatusOr<sai::TableEntry> MakePdEntryPuntingAllPackets(PuntAction action);
-
-// Returns a set of table entries that cause all IP packets to be forwarded
-// out of the given `egress_port`.
-ABSL_DEPRECATED(
-    "Use "
-    "EntryBuilder().AddEntriesForwardingIpPacketsToGivenPort(`egress_port`)."
-    "GetDedupedPiEntities(`ir_p4info`) instead.")
-absl::StatusOr<std::vector<p4::v1::TableEntry>>
-MakePiEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
-                                            const pdpi::IrP4Info& ir_p4info);
-ABSL_DEPRECATED(
-    "Use "
-    "EntryBuilder().AddEntriesForwardingIpPacketsToGivenPort(`egress_port`)."
-    "GetDedupedIrEntities(`ir_p4info`) instead.")
-absl::StatusOr<pdpi::IrTableEntries>
-MakeIrEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
-                                            const pdpi::IrP4Info& ir_p4info);
-ABSL_DEPRECATED(
-    "Use "
-    "EntryBuilder().AddEntriesForwardingIpPacketsToGivenPort(`egress_port`)."
-    "GetDedupedPiEntities(`ir_p4info`) instead.")
-absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
-    absl::string_view egress_port);
 
 }  // namespace sai
 
