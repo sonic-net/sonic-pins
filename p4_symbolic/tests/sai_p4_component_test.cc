@@ -2,6 +2,7 @@
 
 #include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
+#include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -22,6 +23,9 @@ namespace p4_symbolic {
 namespace {
 
 using ::gutil::ParseProtoOrDie;
+using ::p4::config::v1::P4Info;
+using ::testing::Eq;
+using ::testing::Not;
 
 constexpr absl::string_view kTableEntries = R"PB(
   entries {
@@ -95,7 +99,7 @@ TEST(P4SymbolicComponentTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
 
   // Prepare hard-coded table entries.
   auto pd_entries = ParseProtoOrDie<sai::TableEntries>(kTableEntries);
-  LOG(INFO) << "table entries = " << pd_entries.DebugString();
+  EXPECT_OK(env.StoreTestArtifact("pd_entries.textproto", pd_entries));
   std::vector<p4::v1::TableEntry> pi_entries;
   for (auto& pd_entry : pd_entries.entries()) {
     ASSERT_OK_AND_ASSIGN(pi_entries.emplace_back(),
@@ -108,7 +112,7 @@ TEST(P4SymbolicComponentTest, CanGenerateTestPacketsForSimpleSaiP4Entries) {
       ParseToIr(config.p4_device_config(), ir_p4info, pi_entries));
   std::vector<int> ports = {1, 2, 3, 4, 5};
   LOG(INFO) << "building model (this may take a while) ...";
-  absl::Time start_time = absl::Now(); 
+  absl::Time start_time = absl::Now();
   LOG(INFO) << "-> done in " << (absl::Now() - start_time);
 
   // TODO: Generate test packets.
