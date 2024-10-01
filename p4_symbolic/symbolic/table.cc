@@ -285,11 +285,9 @@ absl::StatusOr<SymbolicTrace> EvaluateTable(
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
   const std::string &table_name = table.table_definition().preamble().name();
-
   // Sort entries by priority deduced from match types.
   std::vector<std::pair<size_t, pdpi::IrTableEntry>> sorted_entries =
       SortEntries(table, entries);
-
   // The table semantically is just a bunch of if conditions, one per
   // table entry, we construct this big if-elseif-...-else symbolically.
   //
