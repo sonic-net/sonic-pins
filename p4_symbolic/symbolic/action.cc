@@ -318,6 +318,8 @@ absl::Status EvaluateAction(const ir::Action &action,
   ActionContext context;
   context.action_name = action.action_definition().preamble().name();
 
+  VLOG(1) << "evaluating action '" << context.action_name << "'";
+
   // Add action parameters to scope.
   const auto &parameters = action.action_definition().params_by_id();
   if (static_cast<int>(parameters.size()) != args.size()) {

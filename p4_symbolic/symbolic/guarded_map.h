@@ -17,8 +17,8 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_GUARDED_MAP_H_
 #define P4_SYMBOLIC_SYMBOLIC_GUARDED_MAP_H_
 
+#include <map>
 #include <string>
-#include <unordered_map>
 
 #include "absl/status/status.h"
 #include "google/protobuf/map.h"
@@ -29,7 +29,7 @@
 namespace p4_symbolic {
 namespace symbolic {
 
-// This class wraps around an internal std::unordered_map instance,
+// This class wraps around an internal std::map instance,
 // while enforcing the following:
 // 1. This class can only be instantiated with an instance of the IR
 //    header definitions. The resulting instance will be initialized
@@ -74,17 +74,16 @@ class SymbolicGuardedMap {
                    const z3::expr &guard);
 
   // Constant iterators.
-  using const_iterator =
-      std::unordered_map<std::string, z3::expr>::const_iterator;
+  using const_iterator = std::map<std::string, z3::expr>::const_iterator;
   const_iterator begin() const noexcept { return this->map_.cbegin(); }
   const_iterator end() const noexcept { return this->map_.cend(); }
 
  private:
   // The underlying map storing the keys and their values.
-  std::unordered_map<std::string, z3::expr> map_;
+  std::map<std::string, z3::expr> map_;
 
   // Private constructor used by factory.
-  explicit SymbolicGuardedMap(std::unordered_map<std::string, z3::expr> map)
+  explicit SymbolicGuardedMap(std::map<std::string, z3::expr> map)
       : map_(map) {}
 };
 

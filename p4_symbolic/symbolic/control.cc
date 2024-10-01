@@ -24,13 +24,55 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/symbolic/conditional.h"
+#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
 
-namespace p4_symbolic {
-namespace symbolic {
-namespace control {
+namespace p4_symbolic::symbolic::control {
+
+absl::StatusOr<SymbolicTrace> EvaluateV1model(
+    const Dataplane &data_plane, SymbolicPerPacketState *state,
+    values::P4RuntimeTranslator *translator) {
+  // Initial, empty trace.
+  auto trace = SymbolicTrace{.dropped = Z3Context().bool_val(false)};
+
+  // Extend trace by evaluating the v1model pipelines.
+  std::vector<std::string> v1model_pipelines = {"ingress", "egress"};
+  for (const auto &pipeline : v1model_pipelines) {
+    ASSIGN_OR_RETURN(SymbolicTrace suffix_trace,
+                     EvaluatePipeline(data_plane, pipeline, state, translator,
+                                      !trace.dropped));
+
+    // Extend existing trace with suffix.
+    trace.dropped = suffix_trace.dropped;
+    for (auto &[table, match] : suffix_trace.matched_entries) {
+      if (trace.matched_entries.count(table) != 0) {
+        return gutil::UnimplementedErrorBuilder()
+               << "table '" << table << "' was executed in '" << pipeline
+               << "' pipeline after already being executed in an earlier "
+                  "pipeline; this is not supported by p4-symbolic";
+      }
+      trace.matched_entries.insert({table, match});
+    }
+  }
+
+  return trace;
+}
+
+absl::StatusOr<SymbolicTrace> EvaluatePipeline(
+    const Dataplane &data_plane, const std::string &pipeline_name,
+    SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
+    const z3::expr &guard) {
+  if (auto it = data_plane.program.pipeline().find(pipeline_name);
+      it != data_plane.program.pipeline().end()) {
+    return EvaluateControl(data_plane, it->second.initial_control(), state,
+                           translator, guard);
+  }
+  return gutil::InvalidArgumentErrorBuilder()
+         << "cannot evaluate unknown pipeline: '" << pipeline_name << "'";
+}
 
 absl::StatusOr<SymbolicTrace> EvaluateControl(
     const Dataplane &data_plane, const std::string &control_name,
@@ -65,6 +107,4 @@ absl::StatusOr<SymbolicTrace> EvaluateControl(
   }
 }
 
-}  // namespace control
-}  // namespace symbolic
-}  // namespace p4_symbolic
+}  // namespace p4_symbolic::symbolic::control

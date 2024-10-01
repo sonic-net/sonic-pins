@@ -59,13 +59,10 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
   SymbolicPacket ingress_packet =
       packet::ExtractSymbolicPacket(ingress_headers);
 
-  // Evaluate the initial control, which will evaluate the next controls
-  // internally and return the full symbolic trace.
+  // Evaluate the main program.
   ASSIGN_OR_RETURN(
       SymbolicTrace trace,
-      control::EvaluateControl(data_plane, data_plane.program.initial_control(),
-                               &egress_headers, &translator,
-                               Z3Context().bool_val(true)));
+      control::EvaluateV1model(data_plane, &egress_headers, &translator));
 
   // Alias the event that the packet is dropped for ease of use in assertions.
   z3::expr dropped_value =

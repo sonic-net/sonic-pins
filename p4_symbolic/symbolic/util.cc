@@ -40,12 +40,12 @@ bool Z3BooltoBool(Z3_lbool z3_bool) {
 
 }  // namespace
 
-absl::StatusOr<std::unordered_map<std::string, z3::expr>> FreeSymbolicHeaders(
+absl::StatusOr<std::map<std::string, z3::expr>> FreeSymbolicHeaders(
     const google::protobuf::Map<std::string, ir::HeaderType> &headers) {
   // Loop over every header instance in the p4 program.
   // Find its type, and loop over every field in it, creating a symbolic free
   // variable for every field in every header instance.
-  std::unordered_map<std::string, z3::expr> symbolic_headers;
+  std::map<std::string, z3::expr> symbolic_headers;
   for (const auto &[header_name, header_type] : headers) {
     // Special validity field.
     std::string valid_field_name = absl::StrFormat("%s.$valid$", header_name);
@@ -111,17 +111,26 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
   // Extract the trace (matches on every table).
   bool dropped =
       Z3BooltoBool(model.eval(context.trace.dropped, true).bool_value());
-  std::unordered_map<std::string, ConcreteTableMatch> matches;
+  std::map<std::string, ConcreteTableMatch> matched_entries;
   for (const auto &[table, match] : context.trace.matched_entries) {
-    matches[table] = {
+    matched_entries[table] = {
         Z3BooltoBool(model.eval(match.matched, true).bool_value()),
         model.eval(match.entry_index, true).get_numeral_int()};
   }
-  ConcreteTrace trace = {matches, dropped};
 
-  return ConcreteContext{ingress_port,  egress_port,     ingress_packet,
-                         egress_packet, ingress_headers, egress_headers,
-                         trace};
+  return ConcreteContext{
+      .ingress_port = ingress_port,
+      .egress_port = egress_port,
+      .ingress_packet = ingress_packet,
+      .egress_packet = egress_packet,
+      .ingress_headers = ingress_headers,
+      .egress_headers = egress_headers,
+      .trace =
+          ConcreteTrace{
+              .matched_entries = matched_entries,
+              .dropped = dropped,
+          },
+  };
 }
 
 absl::StatusOr<SymbolicTrace> MergeTracesOnCondition(

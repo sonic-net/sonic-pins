@@ -176,5 +176,17 @@ tables {
     }
   }
 }
-initial_control: "tbl_reflector54"
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "tbl_reflector54"
+  }
+}
 
