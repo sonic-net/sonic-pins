@@ -609,7 +609,19 @@ conditionals {
     if_branch: "MyIngress.ipv4_lpm"
   }
 }
-initial_control: "node_2"
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "node_2"
+  }
+}
 
 =====MyIngress.ipv4_lpm Entries=====
 
