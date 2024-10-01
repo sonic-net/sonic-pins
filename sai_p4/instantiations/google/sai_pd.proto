@@ -123,7 +123,6 @@ message Ipv4TableEntry {
       SetWcmpGroupIdAction set_wcmp_group_id = 3;
       SetNexthopIdAction set_nexthop_id = 2;
       DropAction drop = 1;
-      TrapAction trap = 4;
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
@@ -145,7 +144,6 @@ message Ipv6TableEntry {
       SetWcmpGroupIdAction set_wcmp_group_id = 3;
       SetNexthopIdAction set_nexthop_id = 2;
       DropAction drop = 1;
-      TrapAction trap = 4;
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
@@ -161,7 +159,11 @@ message MirrorSessionTableEntry {
   }
   Match match = 1;
   message Action {
-    MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
+    oneof action {
+      MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
+      // CAUTION: This action is not (yet) supported.
+      MirrorWithPsampEncapsulationAction mirror_with_psamp_encapsulation = 2;
+    }
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -249,7 +251,9 @@ message TunnelTableEntry {
 //   ether_type != 0x0800 && ether_type != 0x86dd;
 // ## Only allow IP field matches for IP packets.
 //   dst_ip::mask != 0 -> is_ipv4 == 1;
+//   src_ip::mask != 0 -> is_ipv4 == 1;
 //   dst_ipv6::mask != 0 -> is_ipv6 == 1;
+//   src_ipv6::mask != 0 -> is_ipv6 == 1;
 //   ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 //   dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 //   ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
@@ -670,6 +674,19 @@ message AclIngressSecurityTableEntry {
   bytes controller_metadata = 8;
 }
 
+message AclIngressMirrorAndRedirectTableEntry {
+  message Match {
+    Optional in_port = 1;  // optional match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    AclMirrorAction acl_mirror = 1;
+  }
+  Action action = 2;
+  int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
 // Corresponds to `MulticastGroupEntry` in p4runtime.proto. This table is part
 // of the v1model architecture and is not explicitly present in the P4 program.
 message MulticastGroupTableEntry {
@@ -726,8 +743,6 @@ message MirrorAsIpv4ErspanAction {
 }
 
 message AdmitToL3Action {}
-
-message TrapAction {}
 
 message SetNexthopIdAndMetadataAction {
   // Refers to 'nexthop_table.nexthop_id'.
@@ -791,6 +806,11 @@ message SetPortAndSrcMacAndVlanIdAction {
   string port = 1;     // Format::STRING
   string src_mac = 2;  // Format::MAC
   string vlan_id = 3;  // Format::HEX_STRING / 12 bits
+}
+
+// CAUTION: This action is not (yet) supported.
+message MirrorWithPsampEncapsulationAction {
+  string monitor_port = 1;  // Format::STRING
 }
 
 message SetVrfAction {
@@ -895,6 +915,8 @@ message TableEntry {
     AclEgressDhcpToHostTableEntry acl_egress_dhcp_to_host_table_entry = 264;
     AclIngressCountingTableEntry acl_ingress_counting_table_entry = 265;
     AclIngressSecurityTableEntry acl_ingress_security_table_entry = 266;
+    AclIngressMirrorAndRedirectTableEntry
+        acl_ingress_mirror_and_redirect_table_entry = 267;
     MulticastGroupTableEntry multicast_group_table_entry = 2047;
   }
 }

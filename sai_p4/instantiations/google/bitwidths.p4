@@ -1,5 +1,5 @@
-#ifndef GOOGLE_SAI_BITWIDTHS_P4_
-#define GOOGLE_SAI_BITWIDTHS_P4_
+#ifndef PINS_SAI_BITWIDTHS_P4_
+#define PINS_SAI_BITWIDTHS_P4_
 
 #ifdef PLATFORM_BMV2
   // Number of bits used for types that use @p4runtime_translation("", string).
@@ -28,4 +28,4 @@
   #define TUNNEL_ID_BITWIDTH 10
 #endif
 
-#endif  // GOOGLE_SAI_BITWIDTHS_P4_
+#endif  // PINS_SAI_BITWIDTHS_P4_

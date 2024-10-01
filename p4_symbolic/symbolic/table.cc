@@ -285,11 +285,9 @@ absl::StatusOr<SymbolicTrace> EvaluateTable(
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
   const std::string &table_name = table.table_definition().preamble().name();
-
   // Sort entries by priority deduced from match types.
   std::vector<std::pair<size_t, pdpi::IrTableEntry>> sorted_entries =
       SortEntries(table, entries);
-
   // The table semantically is just a bunch of if conditions, one per
   // table entry, we construct this big if-elseif-...-else symbolically.
   //
@@ -434,7 +432,7 @@ absl::StatusOr<SymbolicTrace> EvaluateTable(
                                             translator, guard));
 
   // The trace should not contain information for this table, otherwise, it
-  // means we visisted the table twice in the same execution path!
+  // means we visited the table twice in the same execution path!
   if (result.matched_entries.count(table_name) == 1) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Table \"", table_name, "\" was executed twice in the same path."));

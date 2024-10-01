@@ -1,0 +1,33 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
+load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
+load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
+
+cc_test(
+    name = "sai_p4_component_test",
+    srcs = ["sai_p4_component_test.cc"],
+    deps = [
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+	"//p4_symbolic:parser",
+        "//p4_symbolic/symbolic",
+        "//sai_p4/instantiations/google:sai_nonstandard_platforms_cc",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//sai_p4/instantiations/google:instantiations",
+	"//thinkit:bazel_test_environment",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:span",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

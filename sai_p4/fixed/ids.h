@@ -26,7 +26,8 @@
 #define ROUTING_TUNNEL_TABLE_ID 0x02000050              // 33554512
 #define IPV6_TUNNEL_TERMINATION_TABLE_ID 0x0200004B     // 33554507
 #define DISABLE_VLAN_CHECKS_TABLE_ID 0x0200004D                 // 33554509
-// Next available table id: 0x0200004E (33554510)
+#define INGRESS_CLONE_TABLE_ID 0x02000051                       // 33554513
+// Next available table id: 0x02000052 (33554514)
 
 // --- Actions -----------------------------------------------------------------
 
@@ -48,6 +49,9 @@
 #define ROUTING_SET_P2P_TUNNEL_ENCAP_NEXTHOP_ACTION_ID 0x01000012    // 16777234
 #define ROUTING_MARK_FOR_P2P_TUNNEL_ENCAP_ACTION_ID 0x01000013       // 16777235
 #define MIRRORING_MIRROR_AS_IPV4_ERSPAN_ACTION_ID 0x01000007         // 16777223
+#define CLONING_INGRESS_CLONE_ACTION_ID 0x0100001C                 // 16777244
+#define CLONING_MIRROR_WITH_PSAMP_ENCAPSULATION_ACTION_ID \
+  0x0100001D                                                    // 16777245
 #define L3_ADMIT_ACTION_ID 0x01000008                                // 16777224
 #define MIRRORING_SET_PRE_SESSION_ACTION_ID 0x01000009               // 16777225
 #define SELECT_ECMP_HASH_ALGORITHM_ACTION_ID 0x010000A               // 16777226
@@ -55,11 +59,10 @@
 #define COMPUTE_ECMP_HASH_IPV6_ACTION_ID 0x0100000C                  // 16777228
 #define COMPUTE_LAG_HASH_IPV4_ACTION_ID 0x0100000D                   // 16777229
 #define COMPUTE_LAG_HASH_IPV6_ACTION_ID 0x0100000E                   // 16777230
-#define TRAP_ACTION_ID 0x0100000F                                    // 16777231
 #define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015           // 16777237
 #define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016       // 16777238
 #define DISABLE_VLAN_CHECKS_ACTION_ID 0x0100001A                   // 16777242
-// Next available action id: 0x0100001C (16777244)
+// Next available action id: 0x0100001E (16777246)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for
@@ -117,14 +120,13 @@
 
 // Macros to determine whether a packet is replicated due to packet in or
 // replicated due to mirroring.
-#define IS_PACKET_IN_COPY(standard_metadata)                            \
-  standard_metadata.instance_type ==                                    \
-      PKT_INSTANCE_TYPE_INGRESS_CLONE&& standard_metadata.egress_rid == \
-      SAI_P4_REPLICA_INSTANCE_PACKET_IN
+// The enclosing bracket pair allows the use of negation with the macros.
+#define IS_PACKET_IN_COPY(standard_metadata)                             \
+  (standard_metadata.instance_type == PKT_INSTANCE_TYPE_INGRESS_CLONE && \
+   standard_metadata.egress_rid == SAI_P4_REPLICA_INSTANCE_PACKET_IN)
 
-#define IS_MIRROR_COPY(standard_metadata)                               \
-  standard_metadata.instance_type ==                                    \
-      PKT_INSTANCE_TYPE_INGRESS_CLONE&& standard_metadata.egress_rid == \
-      SAI_P4_REPLICA_INSTANCE_MIRRORING
+#define IS_MIRROR_COPY(standard_metadata)                                \
+  (standard_metadata.instance_type == PKT_INSTANCE_TYPE_INGRESS_CLONE && \
+   standard_metadata.egress_rid == SAI_P4_REPLICA_INSTANCE_MIRRORING)
 
 #endif  // SAI_IDS_H_

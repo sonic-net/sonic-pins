@@ -22,6 +22,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
 #include "gutil/proto.h"
@@ -269,7 +270,16 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "tunnel_table",
           "nexthop_table",
           "wcmp_group_table",
+          // Logical table that is not supported by the switch.
+          "ingress_clone_table",
+          // TODO: Add support for this table once the switch
+          // supports it.
+          "acl_ingress_mirror_and_redirect_table",
+          // TODO: Add support for this table once the switch
+          // supports it.
           "mirror_session_table",
+          // TODO: Remove this table once the entire fleet's P4
+          // programs support ingress cloning.
           "mirror_port_to_pre_session_table",
           // TODO: Add support for this table once the switch
           // supports it.

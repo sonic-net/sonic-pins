@@ -41,6 +41,7 @@ using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::CreateIrP4Info;
 using ::pdpi::IrP4Info;
+using ::testing::StrEq;
 
 // All P4Runtime table IDs must have their most significant byte equal to this
 // value.

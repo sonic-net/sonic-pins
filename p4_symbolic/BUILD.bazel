@@ -19,7 +19,10 @@ load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
 
 cc_binary(
     name = "main",
@@ -51,13 +54,17 @@ cc_library(
     hdrs = [
         "parser.h",
     ],
-    visibility = ["//p4_symbolic/ir:__pkg__"],
+    visibility = ["//visibility:public"],
     deps = [
+	 "//gutil:proto",
         "//gutil:status",
+	"//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/bmv2",
         "//p4_symbolic/ir",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/ir:pdpi_driver",
         "//p4_symbolic/symbolic",
+	"//p4_symbolic/util",
+        "@com_google_absl//absl/types:span",
     ],
 )

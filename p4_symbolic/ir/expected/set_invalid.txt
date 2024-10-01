@@ -1,0 +1,314 @@
+headers {
+  key: "h"
+  value {
+    name: "h_t"
+    id: 2
+    fields {
+      key: "f"
+      value {
+        name: "f"
+        bitwidth: 16
+      }
+    }
+  }
+}
+headers {
+  key: "scalars"
+  value {
+    name: "scalars_0"
+  }
+}
+headers {
+  key: "standard_metadata"
+  value {
+    name: "standard_metadata"
+    id: 1
+    fields {
+      key: "_padding"
+      value {
+        name: "_padding"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "checksum_error"
+      value {
+        name: "checksum_error"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "deq_qdepth"
+      value {
+        name: "deq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "deq_timedelta"
+      value {
+        name: "deq_timedelta"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "egress_global_timestamp"
+      value {
+        name: "egress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "egress_port"
+      value {
+        name: "egress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "egress_rid"
+      value {
+        name: "egress_rid"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "egress_spec"
+      value {
+        name: "egress_spec"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "enq_qdepth"
+      value {
+        name: "enq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "enq_timestamp"
+      value {
+        name: "enq_timestamp"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ingress_global_timestamp"
+      value {
+        name: "ingress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ingress_port"
+      value {
+        name: "ingress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "instance_type"
+      value {
+        name: "instance_type"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "mcast_grp"
+      value {
+        name: "mcast_grp"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "packet_length"
+      value {
+        name: "packet_length"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "parser_error"
+      value {
+        name: "parser_error"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "priority"
+      value {
+        name: "priority"
+        bitwidth: 3
+      }
+    }
+  }
+}
+actions {
+  key: "set_invalid61"
+  value {
+    action_definition {
+      preamble {
+        id: 2
+        name: "set_invalid61"
+      }
+    }
+    action_implementation {
+      action_body {
+        source_info {
+          line: 61
+          column: 8
+          source_fragment: "hdr.h.setInvalid()"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "h"
+              field_name: "$valid$"
+            }
+          }
+          right {
+            bool_value {
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  key: "set_invalid63"
+  value {
+    action_definition {
+      preamble {
+        name: "set_invalid63"
+      }
+    }
+    action_implementation {
+      action_body {
+        source_info {
+          line: 63
+          column: 12
+          source_fragment: "standard_metadata.egress_spec = 1"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "standard_metadata"
+              field_name: "egress_spec"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x0001"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  key: "set_invalid65"
+  value {
+    action_definition {
+      preamble {
+        id: 1
+        name: "set_invalid65"
+      }
+    }
+    action_implementation {
+      action_body {
+        source_info {
+          line: 65
+          column: 12
+          source_fragment: "standard_metadata.egress_spec = 0"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "standard_metadata"
+              field_name: "egress_spec"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x0000"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "tbl_set_invalid61"
+  value {
+    table_definition {
+      preamble {
+        name: "tbl_set_invalid61"
+      }
+    }
+    table_implementation {
+      default_action: "set_invalid61"
+      action_to_next_control {
+        key: "set_invalid61"
+        value: "node_3"
+      }
+    }
+  }
+}
+tables {
+  key: "tbl_set_invalid63"
+  value {
+    table_definition {
+      preamble {
+        name: "tbl_set_invalid63"
+      }
+    }
+    table_implementation {
+      default_action: "set_invalid63"
+    }
+  }
+}
+tables {
+  key: "tbl_set_invalid65"
+  value {
+    table_definition {
+      preamble {
+        name: "tbl_set_invalid65"
+      }
+    }
+    table_implementation {
+      default_action: "set_invalid65"
+    }
+  }
+}
+conditionals {
+  key: "node_3"
+  value {
+    name: "node_3"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: EQUALS
+          left {
+            field_value {
+              header_name: "standard_metadata"
+              field_name: "ingress_port"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x0000"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "tbl_set_invalid63"
+    else_branch: "tbl_set_invalid65"
+  }
+}
+initial_control: "tbl_set_invalid61"
+

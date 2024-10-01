@@ -24,15 +24,18 @@ namespace p4_symbolic {
 namespace bmv2 {
 
 absl::StatusOr<P4Program> ParseBmv2JsonFile(const std::string &json_path) {
-  ASSIGN_OR_RETURN(std::string file_content, util::ReadFile(json_path));
+  ASSIGN_OR_RETURN(std::string json, util::ReadFile(json_path));
+  return ParseBmv2JsonString(json);
+}
 
+absl::StatusOr<P4Program> ParseBmv2JsonString(const std::string &json_string) {
   P4Program output;
   google::protobuf::util::JsonParseOptions options;
   options.ignore_unknown_fields = true;
 
   RETURN_IF_ERROR(
       gutil::ToAbslStatus(google::protobuf::util::JsonStringToMessage(
-          file_content, &output, options)));
+          json_string, &output, options)));
 
   return output;
 }

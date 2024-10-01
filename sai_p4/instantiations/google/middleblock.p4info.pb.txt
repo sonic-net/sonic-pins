@@ -1,6 +1,6 @@
 pkg_info {
   name: "middleblock.p4"
-  version: "1.6.2"
+  version: "1.0.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -28,7 +28,7 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  size: 128
+  size: 126
 }
 tables {
   preamble {
@@ -404,10 +404,6 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777231
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777232
     annotations: "@proto_id(5)"
   }
@@ -415,8 +411,12 @@ tables {
     id: 16777233
     annotations: "@proto_id(6)"
   }
+  action_refs {
+    id: 16777237
+    annotations: "@proto_id(7)"
+  }
   const_default_action_id: 16777222
-  size: 32768
+  size: 131072
 }
 tables {
   preamble {
@@ -454,10 +454,6 @@ tables {
     annotations: "@proto_id(3)"
   }
   action_refs {
-    id: 16777231
-    annotations: "@proto_id(4)"
-  }
-  action_refs {
     id: 16777232
     annotations: "@proto_id(5)"
   }
@@ -465,8 +461,12 @@ tables {
     id: 16777233
     annotations: "@proto_id(6)"
   }
+  action_refs {
+    id: 16777237
+    annotations: "@proto_id(7)"
+  }
   const_default_action_id: 16777222
-  size: 4096
+  size: 17000
 }
 tables {
   preamble {
@@ -476,7 +476,7 @@ tables {
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@sai_acl(INGRESS)"
     annotations: "@sai_acl_priority(5)"
-    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.\n    l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n\n    // Only allow arp_tpa matches for ARP packets.\n    arp_tpa::mask != 0 -> ether_type == 0x0806;\n\n\n\n\n\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n\n    src_ip::mask != 0 -> is_ipv4 == 1;\n\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    src_ipv6::mask != 0 -> is_ipv6 == 1;\n    ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ecn::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.\n    l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n\n    // Only allow arp_tpa matches for ARP packets.\n    arp_tpa::mask != 0 -> ether_type == 0x0806;\n\n\n\n\n\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
     id: 1
@@ -718,7 +718,7 @@ tables {
 tables {
   preamble {
     id: 33554502
-    name: "ingress.mirroring_clone.mirror_session_table"
+    name: "ingress.mirror_session_lookup.mirror_session_table"
     alias: "mirror_session_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }
@@ -735,30 +735,48 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 16777245
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 2
+  size: 4
 }
 tables {
   preamble {
-    id: 33554504
-    name: "ingress.mirroring_clone.mirror_port_to_pre_session_table"
-    alias: "mirror_port_to_pre_session_table"
+    id: 33554513
+    name: "ingress.ingress_cloning.ingress_clone_table"
+    alias: "ingress_clone_table"
+    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"packet_replication_engine_manager\")"
+    annotations: "@entry_restriction(\"\n    // mirror_egress_port is present iff marked_to_mirror is true.\n    // Exact match indicating presence of mirror_egress_port.\n    marked_to_mirror == 1 -> mirror_egress_port::mask == -1;\n    // Wildcard match indicating abscence of mirror_egress_port.\n    marked_to_mirror == 0 -> mirror_egress_port::mask == 0;\n  \")"
   }
   match_fields {
     id: 1
-    name: "mirror_port"
+    name: "marked_to_copy"
+    bitwidth: 1
     match_type: EXACT
+  }
+  match_fields {
+    id: 2
+    name: "marked_to_mirror"
+    bitwidth: 1
+    match_type: EXACT
+  }
+  match_fields {
+    id: 3
+    name: "mirror_egress_port"
+    match_type: OPTIONAL
     type_name {
       name: "port_id_t"
     }
   }
   action_refs {
-    id: 16777225
+    id: 16777244
     annotations: "@proto_id(1)"
   }
   action_refs {
@@ -766,7 +784,6 @@ tables {
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
   }
-  const_default_action_id: 21257015
   size: 1024
 }
 actions {
@@ -1086,9 +1103,14 @@ actions {
 }
 actions {
   preamble {
-    id: 16777231
-    name: "ingress.routing.trap"
-    alias: "trap"
+    id: 16777237
+    name: "ingress.routing.set_metadata_and_drop"
+    alias: "set_metadata_and_drop"
+  }
+  params {
+    id: 1
+    name: "route_metadata"
+    bitwidth: 6
   }
 }
 actions {
@@ -1165,7 +1187,7 @@ actions {
 actions {
   preamble {
     id: 16777223
-    name: "ingress.mirroring_clone.mirror_as_ipv4_erspan"
+    name: "ingress.mirror_session_lookup.mirror_as_ipv4_erspan"
     alias: "mirror_as_ipv4_erspan"
   }
   params {
@@ -1212,13 +1234,28 @@ actions {
 }
 actions {
   preamble {
-    id: 16777225
-    name: "ingress.mirroring_clone.set_pre_session"
-    alias: "set_pre_session"
+    id: 16777245
+    name: "ingress.mirror_session_lookup.mirror_with_psamp_encapsulation"
+    alias: "mirror_with_psamp_encapsulation"
+    annotations: "@unsupported"
   }
   params {
     id: 1
-    name: "id"
+    name: "monitor_port"
+    type_name {
+      name: "port_id_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777244
+    name: "ingress.ingress_cloning.ingress_clone"
+    alias: "ingress_clone"
+  }
+  params {
+    id: 1
+    name: "clone_session"
     bitwidth: 32
   }
 }

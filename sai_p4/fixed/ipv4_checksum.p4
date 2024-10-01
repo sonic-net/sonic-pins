@@ -31,23 +31,6 @@ control verify_ipv4_checksum(inout headers_t headers,
 control compute_ipv4_checksum(inout headers_t headers,
                               inout local_metadata_t local_metadata) {
   apply {
-    update_checksum(headers.erspan_ipv4.isValid(), {
-        headers.erspan_ipv4.version,
-        headers.erspan_ipv4.ihl,
-        headers.erspan_ipv4.dscp,
-        headers.erspan_ipv4.ecn,
-        headers.erspan_ipv4.total_len,
-        headers.erspan_ipv4.identification,
-        headers.erspan_ipv4.reserved,
-        headers.erspan_ipv4.do_not_fragment,
-        headers.erspan_ipv4.more_fragments,
-        headers.erspan_ipv4.frag_offset,
-        headers.erspan_ipv4.ttl,
-        headers.erspan_ipv4.protocol,
-        headers.erspan_ipv4.src_addr,
-        headers.erspan_ipv4.dst_addr
-      }, headers.erspan_ipv4.header_checksum, HashAlgorithm.csum16);
-
     update_checksum(headers.ipv4.isValid(), {
         headers.ipv4.version,
         headers.ipv4.ihl,

@@ -15,7 +15,7 @@
 // This file defines the overall structure of a P4 program in our IR, as well
 // as the supported statements and expressions.
 // The structure is tailored to be easy to consume rather than produce.
-// It deviates from the underlying bmv2 JSON format, which is mimiced closely
+// It deviates from the underlying bmv2 JSON format, which is mimicked closely
 // by p4_symbolic/bmv2/bmv2.proto.
 // The bmv2 proto is used to initially parse the JSON format, which is then
 // processed by our tool and transformed into the IR.
@@ -151,6 +151,7 @@ message Statement {
     DropStatement drop = 3;
     CloneStatement clone = 4;
     HashStatement hash = 5;
+    ExitStatement exit = 6;
   }
 }
 
@@ -185,6 +186,9 @@ message HashStatement {
   // These should perhaps be added in the future if the hash symbolic modeling
   // becomes more sophisticated.
 }
+
+// Statement that terminates the execution of all blocks currently executing.
+message ExitStatement {}
 
 // The structure of an abstract RValue.
 message RValue {

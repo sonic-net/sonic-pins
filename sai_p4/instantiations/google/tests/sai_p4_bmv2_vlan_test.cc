@@ -22,10 +22,13 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status.h"
+#include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_matchers.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -39,8 +42,12 @@
 namespace pins {
 namespace {
 
+using ::gutil::EqualsProto;
+using ::gutil::IsOkAndHolds;
 using ::orion::p4::test::Bmv2;
 using ::packetlib::HasHeaderCase;
+using ::pdpi::HasPacketIn;
+using ::pdpi::ParsedPayloadIs;
 using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::Eq;
