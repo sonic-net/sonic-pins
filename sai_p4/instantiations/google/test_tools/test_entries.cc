@@ -22,6 +22,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
@@ -35,6 +36,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/pd.h"
 #include "p4_pdpi/translation_options.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -44,172 +46,14 @@ namespace {
 
 bool AllRewritesEnabled(const NexthopRewriteOptions& rewrite_options) {
   return !rewrite_options.disable_decrement_ttl &&
-         !rewrite_options.disable_src_mac_rewrite &&
-         !rewrite_options.disable_dst_mac_rewrite &&
+         rewrite_options.src_mac_rewrite.has_value() &&
+         rewrite_options.dst_mac_rewrite.has_value() &&
          !rewrite_options.disable_vlan_rewrite;
 }
 
 std::string BoolToHexString(bool value) { return value ? "0x1" : "0x0"; }
 
-absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
-    absl::string_view egress_port,
-    const NexthopRewriteOptions& nexthop_rewrite_options) {
-  ASSIGN_OR_RETURN(
-      sai::TableEntries entries,
-      gutil::ParseTextProto<sai::TableEntries>(
-          R"pb(
-            entries {
-              l3_admit_table_entry {
-                match {}  # Wildcard.
-                action { admit_to_l3 {} }
-                priority: 1
-              }
-            }
-            entries {
-              vrf_table_entry {
-                match { vrf_id: "vrf" }
-                action { no_action {} }
-              }
-            }
-            entries {
-              acl_pre_ingress_table_entry {
-                match {}  # Wildcard.
-                action { set_vrf { vrf_id: "vrf" } }
-                priority: 1
-              }
-            }
-            entries {
-              ipv4_table_entry {
-                match { vrf_id: "vrf" }  # Default route.
-                action { set_nexthop_id { nexthop_id: "nexthop" } }
-              }
-            }
-            entries {
-              ipv6_table_entry {
-                match { vrf_id: "vrf" }  # Default route.
-                action { set_nexthop_id { nexthop_id: "nexthop" } }
-              }
-            }
-            entries {
-              neighbor_table_entry {
-                match {
-                  router_interface_id: "rif"
-                  neighbor_id: "fe80::2:2ff:fe02:202"
-                }
-                action { set_dst_mac { dst_mac: "02:03:04:05:06:07" } }
-              }
-            }
-          )pb"));
-  // Create Nexthop entry based on `nexthop_rewrite_options`
-  sai::TableEntry& nexthop_table_entry = *entries.add_entries();
-  nexthop_table_entry.mutable_nexthop_table_entry()
-      ->mutable_match()
-      ->set_nexthop_id("nexthop");
-  if (AllRewritesEnabled(nexthop_rewrite_options)) {
-    SetIpNexthopAction* action =
-        nexthop_table_entry.mutable_nexthop_table_entry()
-            ->mutable_action()
-            ->mutable_set_ip_nexthop();
-    action->set_router_interface_id("rif");
-    action->set_neighbor_id("fe80::2:2ff:fe02:202");
-  } else {
-    SetIpNexthopAndDisableRewritesAction* action =
-        nexthop_table_entry.mutable_nexthop_table_entry()
-            ->mutable_action()
-            ->mutable_set_ip_nexthop_and_disable_rewrites();
-    action->set_router_interface_id("rif");
-    action->set_neighbor_id("fe80::2:2ff:fe02:202");
-    action->set_disable_decrement_ttl(
-        BoolToHexString(nexthop_rewrite_options.disable_decrement_ttl));
-    action->set_disable_src_mac_rewrite(
-        BoolToHexString(nexthop_rewrite_options.disable_src_mac_rewrite));
-    action->set_disable_dst_mac_rewrite(
-        BoolToHexString(nexthop_rewrite_options.disable_dst_mac_rewrite));
-    action->set_disable_vlan_rewrite(
-        BoolToHexString(nexthop_rewrite_options.disable_vlan_rewrite));
-  }
-
-  sai::TableEntry& router_interface_table_entry = *entries.add_entries();
-  router_interface_table_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
-      R"pb(
-        router_interface_table_entry {
-          match { router_interface_id: "rif" }
-          action { set_port_and_src_mac { src_mac: "00:01:02:03:04:05" } }
-        }
-      )pb");
-  router_interface_table_entry.mutable_router_interface_table_entry()
-      ->mutable_action()
-      ->mutable_set_port_and_src_mac()
-      // TODO: Pass string_view directly once proto supports it.
-      ->set_port(std::string(egress_port));
-  return entries;
-}
-
 }  // namespace
-
-absl::StatusOr<sai::TableEntry> MakePdEntryPuntingAllPackets(
-    PuntAction action) {
-  ASSIGN_OR_RETURN(sai::TableEntry entry,
-                   gutil::ParseTextProto<sai::TableEntry>(
-                       R"pb(
-                         acl_ingress_table_entry {
-                           match {}  # Wildcard match
-                           priority: 1
-                         }
-                       )pb"));
-  auto& acl_action = *entry.mutable_acl_ingress_table_entry()->mutable_action();
-  switch (action) {
-    case PuntAction::kTrap:
-      acl_action.mutable_acl_trap()->set_qos_queue("0x7");
-      return entry;
-    case PuntAction::kCopy:
-      acl_action.mutable_acl_copy()->set_qos_queue("0x7");
-      return entry;
-  }
-  return gutil::InvalidArgumentErrorBuilder()
-         << "invalid punt action: " << static_cast<int>(action);
-}
-
-absl::StatusOr<std::vector<p4::v1::TableEntry>>
-MakePiEntriesForwardingIpPacketsToGivenPort(
-    absl::string_view egress_port,
-    const NexthopRewriteOptions& nexthop_rewrite_options,
-    const pdpi::IrP4Info& ir_p4info) {
-  ASSIGN_OR_RETURN(sai::TableEntries pd_entries,
-                   MakePdEntriesForwardingIpPacketsToGivenPort(
-                       egress_port, nexthop_rewrite_options));
-  return pdpi::PartialPdTableEntriesToPiTableEntries(
-      ir_p4info, pd_entries,
-      // TODO: Remove once `@unsupported` annotation is removed
-      // from set_ip_nexthop_and_disable_rewrites.
-      pdpi::TranslationOptions{.allow_unsupported = true});
-}
-
-absl::StatusOr<pdpi::IrTableEntries>
-MakeIrEntriesForwardingIpPacketsToGivenPort(
-    absl::string_view egress_port,
-    const NexthopRewriteOptions& nexthop_rewrite_options,
-    const pdpi::IrP4Info& ir_p4info) {
-  ASSIGN_OR_RETURN(sai::TableEntries pd_entries,
-                   MakePdEntriesForwardingIpPacketsToGivenPort(
-                       egress_port, nexthop_rewrite_options));
-  return pdpi::PartialPdTableEntriesToIrTableEntries(
-      ir_p4info, pd_entries,
-      // TODO: Remove once `@unsupported` annotation is removed
-      // from set_ip_nexthop_and_disable_rewrites.
-      pdpi::TranslationOptions{.allow_unsupported = true});
-}
-
-absl::StatusOr<p4::v1::TableEntry> MakePiEntryPuntingAllPackets(
-    PuntAction action, const pdpi::IrP4Info& ir_p4info) {
-  ASSIGN_OR_RETURN(sai::TableEntry pd, MakePdEntryPuntingAllPackets(action));
-  return pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd);
-}
-absl::StatusOr<pdpi::IrTableEntry> MakeIrEntryPuntingAllPackets(
-    PuntAction action, const pdpi::IrP4Info& ir_p4info) {
-  ASSIGN_OR_RETURN(sai::TableEntry pd, MakePdEntryPuntingAllPackets(action));
-  return pdpi::PartialPdTableEntryToIrTableEntry(ir_p4info, pd);
-}
 
 // -- EntryBuilder --------------------------------------------------------
 
@@ -269,10 +113,24 @@ EntryBuilder& EntryBuilder::AddEntryAdmittingAllPacketsToL3() {
 }
 
 EntryBuilder& EntryBuilder::AddEntryPuntingAllPackets(PuntAction action) {
-  absl::StatusOr<sai::TableEntry> entry = MakePdEntryPuntingAllPackets(action);
-  CHECK_OK(entry.status());  // Crash ok: test-only library.
-  *entries_.add_entries() = std::move(*entry);
-  return *this;
+  sai::TableEntry& entry = *entries_.add_entries();
+  entry = gutil::ParseProtoOrDie<sai::TableEntry>(
+      R"pb(
+        acl_ingress_table_entry {
+          match {}  # Wildcard match
+          priority: 1
+        }
+      )pb");
+  auto& acl_action = *entry.mutable_acl_ingress_table_entry()->mutable_action();
+  switch (action) {
+    case PuntAction::kTrap:
+      acl_action.mutable_acl_trap()->set_qos_queue("0x7");
+      return *this;
+    case PuntAction::kCopy:
+      acl_action.mutable_acl_copy()->set_qos_queue("0x7");
+      return *this;
+  }
+  LOG(FATAL) << "invalid punt action: " << static_cast<int>(action);
 }
 
 EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
@@ -333,10 +191,10 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
       action.set_neighbor_id("fe80::2");
       action.set_disable_decrement_ttl(
           BoolToHexString(nexthop_rewrite_options.disable_decrement_ttl));
-      action.set_disable_src_mac_rewrite(
-          BoolToHexString(nexthop_rewrite_options.disable_src_mac_rewrite));
-      action.set_disable_dst_mac_rewrite(
-          BoolToHexString(nexthop_rewrite_options.disable_dst_mac_rewrite));
+      action.set_disable_src_mac_rewrite(BoolToHexString(
+          !nexthop_rewrite_options.src_mac_rewrite.has_value()));
+      action.set_disable_dst_mac_rewrite(BoolToHexString(
+          !nexthop_rewrite_options.dst_mac_rewrite.has_value()));
       action.set_disable_vlan_rewrite(
           BoolToHexString(nexthop_rewrite_options.disable_vlan_rewrite));
     }
@@ -373,23 +231,84 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
 }
 
 EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
-    absl::string_view egress_port) {
-  AddEntriesForwardingIpPacketsToGivenPort(egress_port,
-                                           NexthopRewriteOptions{});
-  return *this;
-}
+    absl::string_view egress_port, IpVersion ip_version,
+    NexthopRewriteOptions rewrite_options) {
+  // Create router interface entry.
+  sai::RouterInterfaceTableEntry& rif_entry =
+      *entries_.add_entries()->mutable_router_interface_table_entry();
+  const netaddr::MacAddress src_mac =
+      rewrite_options.src_mac_rewrite.value_or(netaddr::MacAddress::AllZeros());
+  const std::string rif_id = absl::StrCat(egress_port, "/", src_mac.ToString());
+  rif_entry.mutable_match()->set_router_interface_id(rif_id);
+  auto& rif_action =
+      *rif_entry.mutable_action()->mutable_set_port_and_src_mac();
+  // TODO: Pass string_view directly once proto supports it.
+  rif_action.set_port(std::string(egress_port));
+  rif_action.set_src_mac(src_mac.ToString());
 
-EntryBuilder& EntryBuilder::AddEntriesForwardingIpPacketsToGivenPort(
-    absl::string_view egress_port,
-    const NexthopRewriteOptions& rewrite_options) {
-  absl::StatusOr<sai::TableEntries> entries =
-      MakePdEntriesForwardingIpPacketsToGivenPort(egress_port, rewrite_options);
-  CHECK_OK(entries.status());  // Crash ok: test-only library.
+  // Create neighbor table entry.
+  sai::NeighborTableEntry& neighbor_entry =
+      *entries_.add_entries()->mutable_neighbor_table_entry();
+  const netaddr::MacAddress dst_mac =
+      rewrite_options.dst_mac_rewrite.value_or(netaddr::MacAddress::AllZeros());
+  const std::string neighbor_id = dst_mac.ToLinkLocalIpv6Address().ToString();
+  neighbor_entry.mutable_match()->set_router_interface_id(rif_id);
+  neighbor_entry.mutable_match()->set_neighbor_id(neighbor_id);
+  rif_entry.mutable_match()->set_router_interface_id(rif_id);
+  neighbor_entry.mutable_action()->mutable_set_dst_mac()->set_dst_mac(
+      dst_mac.ToString());
 
-  for (auto& entry : *entries->mutable_entries()) {
-    *entries_.add_entries() = std::move(entry);
+  // Create Nexthop entry based on `rewrite_options`
+  sai::NexthopTableEntry& nexthop_entry =
+      *entries_.add_entries()->mutable_nexthop_table_entry();
+  // Ideally we would use an ID that is unique for the RIF & neighbor, but
+  // the ID ends up being longer than BMv2 can support.
+  const std::string nexthop_id = rif_id;
+  // const std::string nexthop_id = absl::StrCat(rif_id, "/", neighbor_id);
+  nexthop_entry.mutable_match()->set_nexthop_id(nexthop_id);
+
+  if (AllRewritesEnabled(rewrite_options)) {
+    SetIpNexthopAction& action =
+        *nexthop_entry.mutable_action()->mutable_set_ip_nexthop();
+    action.set_router_interface_id(rif_id);
+    action.set_neighbor_id(neighbor_id);
+  } else {
+    SetIpNexthopAndDisableRewritesAction& action =
+        *nexthop_entry.mutable_action()
+             ->mutable_set_ip_nexthop_and_disable_rewrites();
+    action.set_router_interface_id(rif_id);
+    action.set_neighbor_id(neighbor_id);
+    action.set_disable_decrement_ttl(
+        BoolToHexString(rewrite_options.disable_decrement_ttl));
+    action.set_disable_src_mac_rewrite(
+        BoolToHexString(!rewrite_options.src_mac_rewrite.has_value()));
+    action.set_disable_dst_mac_rewrite(
+        BoolToHexString(!rewrite_options.dst_mac_rewrite.has_value()));
+    action.set_disable_vlan_rewrite(
+        BoolToHexString(rewrite_options.disable_vlan_rewrite));
   }
-  return *this;
+
+  const std::string vrf_id = "vrf";
+
+  // Add IPv4 default route.
+  if (ip_version == IpVersion::kIpv4 || ip_version == IpVersion::kIpv4And6) {
+    auto& ipv4_entry = *entries_.add_entries()->mutable_ipv4_table_entry();
+    ipv4_entry.mutable_match()->set_vrf_id(vrf_id);
+    ipv4_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+        nexthop_id);
+  }
+
+  // Add IPv6 default route.
+  if (ip_version == IpVersion::kIpv6 || ip_version == IpVersion::kIpv4And6) {
+    auto& ipv6_entry = *entries_.add_entries()->mutable_ipv6_table_entry();
+    ipv6_entry.mutable_match()->set_vrf_id(vrf_id);
+    ipv6_entry.mutable_action()->mutable_set_nexthop_id()->set_nexthop_id(
+        nexthop_id);
+  }
+
+  return AddEntryAdmittingAllPacketsToL3()
+      .AddVrfEntry(vrf_id)
+      .AddPreIngressAclEntryAssigningVrfForGivenIpType(vrf_id, ip_version);
 }
 
 EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithTtlZeroAndOne() {
@@ -404,25 +323,6 @@ EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithTtlZeroAndOne() {
     }
   )pb"));
   return *this;
-}
-
-absl::StatusOr<std::vector<p4::v1::TableEntry>>
-MakePiEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
-                                            const pdpi::IrP4Info& ir_p4info) {
-  return MakePiEntriesForwardingIpPacketsToGivenPort(
-      egress_port, sai::NexthopRewriteOptions(), ir_p4info);
-}
-
-absl::StatusOr<pdpi::IrTableEntries>
-MakeIrEntriesForwardingIpPacketsToGivenPort(absl::string_view egress_port,
-                                            const pdpi::IrP4Info& ir_p4info) {
-  return MakeIrEntriesForwardingIpPacketsToGivenPort(
-      egress_port, sai::NexthopRewriteOptions(), ir_p4info);
-}
-absl::StatusOr<sai::TableEntries> MakePdEntriesForwardingIpPacketsToGivenPort(
-    absl::string_view egress_port) {
-  return MakePdEntriesForwardingIpPacketsToGivenPort(
-      egress_port, sai::NexthopRewriteOptions());
 }
 
 EntryBuilder& EntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
