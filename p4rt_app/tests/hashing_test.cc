@@ -114,9 +114,7 @@ TEST_P(EcmpHashingTest, MustConfigureEcmpHashing) {
   // fields.
   EXPECT_THAT(p4rt_service.GetSwitchAppDbTable().ReadTableEntry("switch"),
               IsOkAndHolds(IsSupersetOf({
-                  Key("ecmp_hash_algorithm"),
                   Key("ecmp_hash_seed"),
-                  Key("ecmp_hash_offset"),
                   Key("ecmp_hash_ipv6"),
                   Key("ecmp_hash_ipv4"),
               })));

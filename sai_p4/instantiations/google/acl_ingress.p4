@@ -196,7 +196,11 @@ control acl_ingress(in headers_t headers,
     ether_type != 0x0800 && ether_type != 0x86dd;
     // Only allow IP field matches for IP packets.
     dst_ip::mask != 0 -> is_ipv4 == 1;
+#if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
+    src_ip::mask != 0 -> is_ipv4 == 1;
+#endif
     dst_ipv6::mask != 0 -> is_ipv6 == 1;
+    src_ipv6::mask != 0 -> is_ipv6 == 1;
     ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK) || defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
