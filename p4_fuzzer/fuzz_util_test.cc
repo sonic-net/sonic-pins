@@ -17,6 +17,7 @@
 #include <string>
 
 #include "absl/random/distributions.h"
+#include "absl/random/random.h"
 #include "absl/random/seed_sequences.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -163,8 +164,9 @@ TEST(FuzzActionProfileActionSetTest,
       GetActionProfileImplementingTable(fuzzer_state.config.info,
                                         table_definition));
   for (int i = 0; i < 1000; ++i) {
-    // Tests a broad enough band of max weights to give us interesting coverage
-    // while being narrow enough to likely catch issues when they happen.
+    // Tests a broad enough band of max weights to give us interesting
+    // coverage while being narrow enough to likely catch issues when they
+    // happen.
     int max_group_size = absl::Uniform<int>(
         fuzzer_state.gen, kActionProfileActionSetMaxCardinality,
         kGroupSizeArbitraryUpperBound);
@@ -225,8 +227,8 @@ TEST(FuzzActionProfileActionSetTest, HandlesZeroMaxGroupSizeCorrectly) {
   }
 }
 
-// Test that FuzzActionProfileActionSet correctly handles a request with low max
-// group size (in particular, lower than the max number of actions).
+// Test that FuzzActionProfileActionSet correctly handles a request with low
+// max group size (in particular, lower than the max number of actions).
 TEST(FuzzActionProfileActionSetTest, HandlesLowMaxGroupSizeCorrectly) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
   ASSERT_OK_AND_ASSIGN(const pdpi::IrTableDefinition& table_definition,
@@ -265,8 +267,8 @@ TEST(FuzzUtilTest, FuzzWriteRequestRespectMaxBatchSize) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
 
   // Create 200 instances of, in expectation, ~50 updates each without the
-  // max_batch_size parameter and verify that they all have batches smaller than
-  // max_batch_size.
+  // max_batch_size parameter and verify that they all have batches smaller
+  // than max_batch_size.
   for (int i = 0; i < 200; ++i) {
     int max_batch_size = absl::Uniform<int>(fuzzer_state.gen, 0, 50);
     EXPECT_LE(FuzzWriteRequest(&fuzzer_state.gen, fuzzer_state.config,

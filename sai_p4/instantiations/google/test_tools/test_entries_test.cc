@@ -15,6 +15,7 @@
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -39,35 +40,6 @@ using ::testing::_;
 using ::testing::IsEmpty;
 using ::testing::Pointwise;
 using ::testing::SizeIs;
-
-using TestEntriesTest = ::testing::TestWithParam<sai::Instantiation>;
-
-TEST_P(TestEntriesTest, MakePiEntryPuntingAllPacketsDoesNotError) {
-  ASSERT_THAT(MakePiEntryPuntingAllPackets(PuntAction::kCopy,
-                                           sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
-  ASSERT_THAT(MakePiEntryPuntingAllPackets(PuntAction::kTrap,
-                                           sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
-}
-TEST_P(TestEntriesTest, MakeIrEntryPuntingAllPacketsDoesNotError) {
-  ASSERT_THAT(MakeIrEntryPuntingAllPackets(PuntAction::kCopy,
-                                           sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
-  ASSERT_THAT(MakeIrEntryPuntingAllPackets(PuntAction::kTrap,
-                                           sai::GetIrP4Info(GetParam())),
-              IsOkAndHolds(_));
-}
-TEST_P(TestEntriesTest, MakePdEntryPuntingAllPacketsDoesNotError) {
-  ASSERT_THAT(MakePdEntryPuntingAllPackets(PuntAction::kCopy), IsOkAndHolds(_));
-  ASSERT_THAT(MakePdEntryPuntingAllPackets(PuntAction::kTrap), IsOkAndHolds(_));
-}
-
-INSTANTIATE_TEST_SUITE_P(, TestEntriesTest,
-                         testing::ValuesIn(sai::AllSaiInstantiations()),
-                         [](const auto& info) -> std::string {
-                           return sai::InstantiationToString(info.param);
-                         });
 
 // -- EntryBuilder tests --------------------------------------------------
 
@@ -173,32 +145,6 @@ TEST(EntryBuilder, AddEntriesForwardingIpPacketsToGivenPortAddsEntries) {
   EXPECT_THAT(entities.entities(), SizeIs(8));
 }
 
-// When all rewrites are enabled, entities from
-// AddEntriesForwardingIpPacketsToGivenPort(with rewrite options) equal to
-// entities from AddEntriesForwardingIpPacketsToGivenPort(without rewrite
-// options).
-TEST(EntryBuilder,
-     AddEntriesForwardingIpPacketsToGivenPortOverloadsGenerateSameEntries) {
-  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities expected_entities,
-      EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenPort("egress port")
-          .LogPdEntries()
-          .GetDedupedIrEntities(kIrP4Info));
-  EXPECT_THAT(EntryBuilder()
-                  .AddEntriesForwardingIpPacketsToGivenPort(
-                      "egress port",
-                      NexthopRewriteOptions{
-                          .disable_decrement_ttl = false,
-                          .disable_src_mac_rewrite = false,
-                          .disable_dst_mac_rewrite = false,
-                      })
-                  .LogPdEntries()
-                  .GetDedupedIrEntities(kIrP4Info),
-              IsOkAndHolds(EqualsProto(expected_entities)));
-}
-
 TEST(EntryBuilder,
      AddEntriesForwardingIpPacketsToGivenPortRespectsRewriteOptions) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
@@ -206,11 +152,11 @@ TEST(EntryBuilder,
       pdpi::IrEntities entities,
       EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
-              "egress port",
+              "egress port", IpVersion::kIpv4And6,
               NexthopRewriteOptions{
                   .disable_decrement_ttl = true,
-                  .disable_src_mac_rewrite = false,
-                  .disable_dst_mac_rewrite = true,
+                  .src_mac_rewrite = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+                  .dst_mac_rewrite = std::nullopt,
               })
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
@@ -241,36 +187,6 @@ void EraseNexthop(pdpi::IrEntities& entities) {
       [](const pdpi::IrEntity& entity) {
         return entity.table_entry().table_name() == "nexthop_table";
       }));
-}
-// AddEntriesForwardingIpPacketsToGivenPort with rewrite_options disabling
-// rewrites returns the same non-nexthop entities that
-// AddEntriesForwardingIpPacketsToGivenPort with all rewrite enabled returns.
-TEST(EntryBuilder,
-     AddEntriesForwardingIpPacketsToGivenPortDoNotChangeNonNexthopEntries) {
-  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities_to_forward_ip_with_rewrites,
-      EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenPort("egress port")
-          .LogPdEntries()
-          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
-  ASSERT_OK_AND_ASSIGN(
-      pdpi::IrEntities entities_to_forward_ip_without_rewrites,
-      EntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenPort(
-              "egress port",
-              NexthopRewriteOptions{
-                  .disable_decrement_ttl = true,
-                  .disable_src_mac_rewrite = true,
-                  .disable_dst_mac_rewrite = true,
-              })
-          .LogPdEntries()
-          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
-  // Non-Nexthop entities are all equal.
-  EraseNexthop(entities_to_forward_ip_without_rewrites);
-  EraseNexthop(entities_to_forward_ip_with_rewrites);
-  EXPECT_THAT(entities_to_forward_ip_with_rewrites,
-              EqualsProto(entities_to_forward_ip_without_rewrites));
 }
 
 TEST(EntryBuilder, AddVrfEntryAddsEntry) {

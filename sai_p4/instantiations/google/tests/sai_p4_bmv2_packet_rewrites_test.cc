@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/log/check.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
@@ -24,6 +26,7 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_matchers.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
@@ -156,22 +159,20 @@ void VerifyOutputPacketIsRewritten(
   ASSERT_TRUE(input_packet.headers(0).has_ethernet_header());
   ASSERT_TRUE(output_packet.headers(0).has_ethernet_header());
 
-  if (rewrite_options.disable_src_mac_rewrite) {
-    EXPECT_EQ(input_packet.headers(0).ethernet_header().ethernet_source(),
-              output_packet.headers(0).ethernet_header().ethernet_source());
+  if (rewrite_options.src_mac_rewrite.has_value()) {
+    EXPECT_EQ(output_packet.headers(0).ethernet_header().ethernet_source(),
+              rewrite_options.src_mac_rewrite->ToString());
   } else {
-    EXPECT_NE(input_packet.headers(0).ethernet_header().ethernet_source(),
-              output_packet.headers(0).ethernet_header().ethernet_source());
+    EXPECT_EQ(output_packet.headers(0).ethernet_header().ethernet_source(),
+              input_packet.headers(0).ethernet_header().ethernet_source());
   }
 
-  if (rewrite_options.disable_dst_mac_rewrite) {
-    EXPECT_EQ(
-        input_packet.headers(0).ethernet_header().ethernet_destination(),
-        output_packet.headers(0).ethernet_header().ethernet_destination());
+  if (rewrite_options.dst_mac_rewrite.has_value()) {
+    EXPECT_EQ(output_packet.headers(0).ethernet_header().ethernet_destination(),
+              rewrite_options.dst_mac_rewrite->ToString());
   } else {
-    EXPECT_NE(
-        input_packet.headers(0).ethernet_header().ethernet_destination(),
-        output_packet.headers(0).ethernet_header().ethernet_destination());
+    EXPECT_EQ(output_packet.headers(0).ethernet_header().ethernet_destination(),
+              input_packet.headers(0).ethernet_header().ethernet_destination());
   }
   switch (ip_version) {
     case sai::IpVersion::kIpv4: {
@@ -213,13 +214,17 @@ struct PacketRewritesTestParams {
 
 template <typename Sink>
 void AbslStringify(Sink& sink, const PacketRewritesTestParams& param) {
+  const std::optional<netaddr::MacAddress>& src_rewrite =
+      param.nexthop_rewrite_options.src_mac_rewrite;
+  const std::optional<netaddr::MacAddress>& dst_rewrite =
+      param.nexthop_rewrite_options.dst_mac_rewrite;
   absl::Format(&sink,
-               "[disable_decrement_ttl: %v, disable_src_mac_rewrite: %v, "
-               "disable_dst_mac_rewrite: %v, ip_version: %v, instantiation: "
+               "[disable_decrement_ttl: %v, src_mac_rewrite: %s, "
+               "dst_mac_rewrite: %s, ip_version: %v, instantiation: "
                "%v]",
                param.nexthop_rewrite_options.disable_decrement_ttl,
-               param.nexthop_rewrite_options.disable_src_mac_rewrite,
-               param.nexthop_rewrite_options.disable_dst_mac_rewrite,
+               src_rewrite.has_value() ? src_rewrite->ToString() : "disabled",
+               dst_rewrite.has_value() ? dst_rewrite->ToString() : "disabled",
                param.ip_version,
                sai::InstantiationToString(param.instantiation));
 }
@@ -234,8 +239,14 @@ CartesianProductOfNexthopRewriteOptions() {
       for (bool disable_dst_mac_rewrite : {false, true}) {
         options.push_back(sai::NexthopRewriteOptions{
             .disable_decrement_ttl = disable_decrement_ttl,
-            .disable_src_mac_rewrite = disable_src_mac_rewrite,
-            .disable_dst_mac_rewrite = disable_dst_mac_rewrite,
+            .src_mac_rewrite =
+                disable_src_mac_rewrite
+                    ? std::nullopt
+                    : std::make_optional(netaddr::MacAddress(1, 2, 3, 4, 5, 6)),
+            .dst_mac_rewrite =
+                disable_dst_mac_rewrite
+                    ? std::nullopt
+                    : std::make_optional(netaddr::MacAddress(4, 4, 4, 4, 4, 4)),
         });
       }
     }
@@ -286,7 +297,7 @@ TEST_P(PacketRewritesTest, PacketsAreForwardedWithCorrectRewrites) {
       sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort),
-              rewrite_options)
+              ip_version, rewrite_options)
           .LogPdEntries()
           .GetDedupedPiEntities(
               sai::GetIrP4Info(instantiation),
@@ -339,7 +350,7 @@ TEST_P(TtlRewriteTest, PacketWithZeroOrOneTtlTest) {
       sai::EntryBuilder()
           .AddEntriesForwardingIpPacketsToGivenPort(
               pdpi::BitsetToP4RuntimeByteString<kBmv2PortBitwidth>(kEgressPort),
-              rewrite_options)
+              ip_version, rewrite_options)
           .LogPdEntries()
           .GetDedupedPiEntities(
               sai::GetIrP4Info(instantiation),
