@@ -122,6 +122,7 @@ cc_library(
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//sai_p4/instantiations/google/test_tools:test_entries",
         "//tests/forwarding:util",
+        "//tests/gnmi:util",
         "//tests/lib:switch_test_setup_helpers",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
