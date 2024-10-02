@@ -247,5 +247,17 @@ conditionals {
     else_branch: "tbl_hardcoded57"
   }
 }
-initial_control: "node_2"
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "node_2"
+  }
+}
 

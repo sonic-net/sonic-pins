@@ -18,26 +18,27 @@
 #include <string>
 #include <unordered_map>
 
+#include "absl/container/btree_map.h"
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_fuzzer/table_entry_key.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
 
 // Only a subset of the fields of TableEntry are used for equality in P4Runtime
 // (as part of the class TableEntryKey). We use an instance of TableEntryKey
-// generated from a TableEntry as the key in an absl::node_hash_map.
+// generated from a TableEntry as the key in an absl::btree_map.
 // Therefore, the class SwitchState must preserve the invariant that:
 //   forall t1, t2. table_[t1] = t2  ==> t1 = TableEntryKey(t2)
 //   TableEntryKey() here is the constructor for the class TableEntryKey.
-using TableEntries = absl::node_hash_map<TableEntryKey, p4::v1::TableEntry>;
+using TableEntries = absl::btree_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
 
 // Tracks the state of a switch, with methods to apply updates or query the
 // current state. The class assumes all calls are valid (e.g table_ids must all
@@ -86,8 +87,23 @@ class SwitchState {
   // cannot already be present, and returns an error otherwise.
   absl::Status ApplyUpdate(const p4::v1::Update& update);
 
+  // Updates all tables to match the given set of table entries.
+  absl::Status SetTableEntries(
+      absl::Span<const p4::v1::TableEntry> table_entries);
+
+  // Clears all table entries. Equivalent to constructing a new `SwitchState`
+  // object.
+  void ClearTableEntries();
+
   // Returns a summary of the state.
   std::string SwitchStateSummary() const;
+
+  // Returns the set of used IDs for a given IrMatchFieldReference.
+  absl::btree_set<std::string> GetIdsForMatchField(
+      const pdpi::IrMatchFieldReference& field) const;
+
+  pdpi::IrP4Info GetIrP4Info() const { return ir_p4info_; }
+
  private:
   // A map from table ids to the entries they store.
   absl::flat_hash_map<int, TableEntries> tables_;

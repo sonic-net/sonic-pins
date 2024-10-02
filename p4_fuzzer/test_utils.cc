@@ -48,9 +48,39 @@ FuzzerTestState ConstructFuzzerTestState(const pdpi::IrP4Info& ir_info,
   };
 }
 
+absl::StatusOr<pdpi::IrMatchFieldDefinition>
+GetAMatchFieldDefinitionWithMatchType(
+    const pdpi::IrTableDefinition& table_definition,
+    p4::config::v1::MatchField::MatchType match_type) {
+  for (const auto& [unused, match_field] :
+       Ordered(table_definition.match_fields_by_id())) {
+    if (match_field.match_field().match_type() == match_type) {
+      return match_field;
+    }
+  }
+  return absl::InvalidArgumentError(absl::Substitute(
+      "The $0 table does not contain a match field of type $1.",
+      table_definition.preamble().alias(),
+      p4::config::v1::MatchField::MatchType_Name(match_type)));
+}
+
+absl::StatusOr<pdpi::IrTableDefinition> GetATableDefinitionWithMatchType(
+    const FuzzerTestState& fuzzer_state,
+    p4::config::v1::MatchField::MatchType match_type) {
+  for (const auto& [unused, table] :
+       Ordered(fuzzer_state.config.info.tables_by_id())) {
+    if (GetAMatchFieldDefinitionWithMatchType(table, match_type).ok()) {
+      return table;
+    }
+  }
+  return absl::InvalidArgumentError(absl::StrCat(
+      "The p4info does not contain a table that with a match of type ",
+      p4::config::v1::MatchField::MatchType_Name(match_type)));
+}
+
 absl::StatusOr<pdpi::IrTableDefinition> GetAOneShotTableDefinition(
     const pdpi::IrP4Info& info) {
-  for (const auto& [_, table] : Ordered(info.tables_by_id())) {
+  for (const auto& [unused, table] : Ordered(info.tables_by_id())) {
     if (table.uses_oneshot()) {
       return table;
     }

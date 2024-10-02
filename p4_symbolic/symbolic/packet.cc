@@ -41,19 +41,19 @@ SymbolicPacket ExtractSymbolicPacket(SymbolicPerPacketState state) {
   z3::expr ipv6_src = GetOrDefault(state, "ipv6.src_addr", 128);
   z3::expr ipv6_dst = GetOrDefault(state, "ipv6.dst_addr", 128);
 
-  return {GetOrDefault(state, "ethernet.src_addr", 48),
-          GetOrDefault(state, "ethernet.dst_addr", 48),
-          GetOrDefault(state, "ethernet.ether_type", 16),
+  return SymbolicPacket{GetOrDefault(state, "ethernet.src_addr", 48),
+                        GetOrDefault(state, "ethernet.dst_addr", 48),
+                        GetOrDefault(state, "ethernet.ether_type", 16),
 
-          GetOrDefault(state, "ipv4.src_addr", 32),
-          GetOrDefault(state, "ipv4.dst_addr", 32),
-          ipv6_dst.extract(127, 64),
-          ipv6_dst.extract(63, 0),
-          GetOrDefault(state, "ipv4.protocol", 8),
-          GetOrDefault(state, "ipv4.dscp", 6),
-          GetOrDefault(state, "ipv4.ttl", 8),
+                        GetOrDefault(state, "ipv4.src_addr", 32),
+                        GetOrDefault(state, "ipv4.dst_addr", 32),
+                        ipv6_dst.extract(127, 64),
+                        ipv6_dst.extract(63, 0),
+                        GetOrDefault(state, "ipv4.protocol", 8),
+                        GetOrDefault(state, "ipv4.dscp", 6),
+                        GetOrDefault(state, "ipv4.ttl", 8),
 
-          GetOrDefault(state, "icmp.type", 8)};
+                        GetOrDefault(state, "icmp.type", 8)};
 }
 
 ConcretePacket ExtractConcretePacket(SymbolicPacket packet, z3::model model) {
