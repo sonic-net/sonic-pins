@@ -29,28 +29,35 @@ TEST(AuxilaryEntriesForV1ModelTarget, V1ModelAuxTableEntries) {
         "interface": [
           {
             "name":"EthernetEnabled0",
-            "config":{
+             "state":{
               "loopback-mode":"ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 2
             }
           },
           {
             "name":"EthernetEnabled1",
-            "config":{
+             "state":{
               "loopback-mode":"NOT_ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 4
             }
           },
           {
             "name":"EthernetEnabled2",
-            "config":{
+             "state":{
               "loopback-mode":"ASIC_MAC_LOCAL",
               "openconfig-p4rt:id": 5
             }
           },
           {
             "name":"EthernetEnabled3",
-            "config":{
+            "state":{
+              "loopback-mode":"NONE",
+              "openconfig-p4rt:id": 6
+            }
+          },
+          {
+            "name":"EthernetEnabled4",
+            "state":{
               "openconfig-p4rt:id": 7
             }
           }
