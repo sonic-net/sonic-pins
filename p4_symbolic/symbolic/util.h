@@ -17,8 +17,8 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_UTIL_H_
 #define P4_SYMBOLIC_SYMBOLIC_UTIL_H_
 
+#include <map>
 #include <string>
-#include <unordered_map>
 
 #include "google/protobuf/map.h"
 #include "gutil/status.h"
@@ -34,7 +34,7 @@ namespace util {
 
 // Free (unconstrained) symbolic headers consisting of free symbolic variables
 // for every field in every header instance defined in the P4 program.
-absl::StatusOr<std::unordered_map<std::string, z3::expr>> FreeSymbolicHeaders(
+absl::StatusOr<std::map<std::string, z3::expr>> FreeSymbolicHeaders(
     const google::protobuf::Map<std::string, ir::HeaderType> &headers);
 
 // Returns an symbolic table match containing default values.
