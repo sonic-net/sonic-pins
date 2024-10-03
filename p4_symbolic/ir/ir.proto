@@ -46,15 +46,12 @@ message P4Program {
   map<string, Table> tables = 3;
   // Conditionals, keyed by their name.
   map<string, Conditional> conditionals = 4;
+  // Pipelines, keyed by their name.
+  map<string, Pipeline> pipeline = 5;
 
   // TODO: If needed in the future, action calls can be added here, for
   // action calls that are not wrapped in other control constructs.
   // https://github.com/p4lang/behavioral-model/blob/master/docs/JSON_format.md#pipelines
-
-  // The name of the initial control construct, typically
-  // this is a table, but it might be a conditional (or an action call if
-  // action_calls mentioned above get supported).
-  string initial_control = 6;
 }
 
 // A header type definition.
@@ -139,6 +136,12 @@ message Conditional {
   // If a branch does not exist or is empty, this will be the empty string.
   string if_branch = 3;
   string else_branch = 4;
+}
+
+message Pipeline {
+  string name = 1;
+  // The name of the initial control construct.
+  string initial_control = 2;
 }
 
 // An abstract p4 statement corresponding to a top level operation within
