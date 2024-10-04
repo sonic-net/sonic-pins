@@ -13,6 +13,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
 #include "p4_symbolic/parser.h"
+#include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
