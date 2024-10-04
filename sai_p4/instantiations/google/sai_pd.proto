@@ -694,7 +694,10 @@ message AclIngressMirrorAndRedirectTableEntry {
   }
   Match match = 1;
   message Action {
-    AclMirrorAction acl_mirror = 1;
+    oneof action {
+      AclMirrorAction acl_mirror = 1;
+      RedirectToNexthopAction redirect_to_nexthop = 2;
+    }
   }
   Action action = 2;
   int32 priority = 3;
@@ -884,6 +887,10 @@ message SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction {
   string cpu_queue = 1;                       // Format::STRING
   string green_multicast_queue = 2;           // Format::STRING
   string red_and_yellow_multicast_queue = 3;  // Format::STRING
+}
+
+message RedirectToNexthopAction {
+  string nexthop_id = 1;  // Format::STRING
 }
 
 message NoAction {}
