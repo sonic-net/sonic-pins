@@ -40,8 +40,13 @@ absl::StatusOr<TableEntries> ParseTableEntries(
     const std::string &action_alias = pdpi_entry.action().name();
 
     // Make sure both table and action referred to by entry exist.
-    RET_CHECK(p4info.tables_by_name().count(table_alias) == 1);
-    RET_CHECK(p4info.actions_by_name().count(action_alias) == 1);
+    RET_CHECK(p4info.tables_by_name().count(table_alias) == 1)
+        << "where table_alias = '" << table_alias << "' and PI table entry =\n"
+        << pi_entry.DebugString();
+    RET_CHECK(p4info.actions_by_name().count(action_alias) == 1)
+        << "where action_alias = '" << action_alias
+        << "' and PI table entry =\n"
+        << pi_entry.DebugString();
 
     const std::string &table_name =
         p4info.tables_by_name().at(table_alias).preamble().name();

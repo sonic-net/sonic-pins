@@ -426,18 +426,78 @@ control acl_ingress(in headers_t headers,
     size = ACL_INGRESS_COUNTING_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
+  action redirect_to_nexthop(
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    nexthop_id_t nexthop_id) {
+
+    // Set nexthop id.
+    local_metadata.nexthop_id_valid = true;
+    local_metadata.nexthop_id_value = nexthop_id;
+
+    // Cancel other forwarding decisions (if any).
+    local_metadata.wcmp_group_id_valid = false;
+    standard_metadata.mcast_grp = 0;
+  }
+
   // ACL table that mirrors and redirects packets.
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @entry_restriction("
+    // Forbid illegal combinations of IP_TYPE fields.
+    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+    // Forbid unsupported combinations of IP_TYPE fields.
+    is_ipv4::mask != 0 -> (is_ipv4 == 1);
+    is_ipv6::mask != 0 -> (is_ipv6 == 1);
+  ")
   table acl_ingress_mirror_and_redirect_table {
     key = {
       local_metadata.ingress_port : optional
-          @id(1) @name("in_port")  @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT);
-      // TODO: Add keys needed for redirect.
+        @name("in_port")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)
+        @id(1);
+
+      headers.ipv4.isValid() || headers.ipv6.isValid() : optional
+        @name("is_ip")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IP)
+        @id(2);
+
+      headers.ipv4.isValid() : optional
+        @name("is_ipv4")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV4ANY)
+        @id(3);
+
+      headers.ipv6.isValid() : optional
+        @name("is_ipv6")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY)
+        @id(4);
+
+      headers.ipv6.dst_addr[127:64] : ternary
+        @name("dst_ipv6")
+        @composite_field(
+            @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3),
+            @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2))
+        @format(IPV6_ADDRESS)
+        @id(5);
+
+      local_metadata.acl_metadata : ternary
+        @name("acl_metadata")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)
+        @id(6);
+
+      local_metadata.vlan_id : ternary
+        @name("vlan_id")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
+        @id(7);
+
+      // TODO: Add match on vrf_id and l3_host_table_hit.
     }
     actions = {
       @proto_id(1) acl_mirror();
+      @proto_id(2) redirect_to_nexthop();
       @defaultonly NoAction;
     }
     const default_action = NoAction;

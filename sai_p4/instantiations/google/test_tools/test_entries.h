@@ -143,6 +143,13 @@ class EntryBuilder {
   EntryBuilder& AddEntrySettingVlanIdInPreIngress(
       absl::string_view set_vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt);
+  EntryBuilder& AddNexthopRifNeighborEntries(
+      absl::string_view nexthop_id, absl::string_view egress_port,
+      const NexthopRewriteOptions& nexthop_rewrite_options = {},
+      std::optional<absl::string_view> vlan_hexstr = std::nullopt);
+  EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
+      absl::string_view nexthop_id,
+      std::optional<absl::string_view> in_port_match = std::nullopt);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
   EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
 
