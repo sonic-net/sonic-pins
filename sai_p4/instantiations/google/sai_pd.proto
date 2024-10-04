@@ -674,13 +674,30 @@ message AclIngressSecurityTableEntry {
   bytes controller_metadata = 8;
 }
 
+// Table entry restrictions:
+// ## Forbid illegal combinations of IP_TYPE fields.
+//   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+// ## Forbid unsupported combinations of IP_TYPE fields.
+//   is_ipv4::mask != 0 -> (is_ipv4 == 1);
+//   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclIngressMirrorAndRedirectTableEntry {
   message Match {
-    Optional in_port = 1;  // optional match / Format::STRING
+    Optional in_port = 1;      // optional match / Format::STRING
+    Optional is_ip = 2;        // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 3;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 4;      // optional match / Format::HEX_STRING / 1 bits
+    Ternary dst_ipv6 = 5;      // ternary match / Format::IPV6 / upper 64 bits
+    Ternary acl_metadata = 6;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary vlan_id = 7;       // ternary match / Format::HEX_STRING / 12 bits
   }
   Match match = 1;
   message Action {
-    AclMirrorAction acl_mirror = 1;
+    oneof action {
+      AclMirrorAction acl_mirror = 1;
+      RedirectToNexthopAction redirect_to_nexthop = 2;
+    }
   }
   Action action = 2;
   int32 priority = 3;
@@ -870,6 +887,10 @@ message SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction {
   string cpu_queue = 1;                       // Format::STRING
   string green_multicast_queue = 2;           // Format::STRING
   string red_and_yellow_multicast_queue = 3;  // Format::STRING
+}
+
+message RedirectToNexthopAction {
+  string nexthop_id = 1;  // Format::STRING
 }
 
 message NoAction {}

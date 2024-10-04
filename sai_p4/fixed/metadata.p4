@@ -262,6 +262,15 @@ struct local_metadata_t {
   // TODO: Clean up this workaround after 'exit' is supported in
   // p4-symbolic.
   bool bypass_ingress;
+
+  // Metadata shared between routing, acl_ingress, and routing_resolution
+  // control blocks.
+  bool wcmp_group_id_valid;
+  // Wcmp group id, only valid if `wcmp_group_id_valid` is true.
+  wcmp_group_id_t wcmp_group_id_value;
+  bool nexthop_id_valid;
+  // Nexthop id, only valid if `nexthop_id_valid` is true.
+  nexthop_id_t nexthop_id_value;
 }
 
 #endif  // SAI_METADATA_P4_
