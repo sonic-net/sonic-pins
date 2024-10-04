@@ -36,6 +36,8 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/pd.h"
@@ -491,7 +493,7 @@ ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
   ASSERT_OK(pins_test::PushGnmiConfig(testbed.Sut(), sut_gnmi_config));
 }
 
-TEST_P(SmokeTestFixture, DeleteReferencedEntryNotOk) {
+TEST_P(SmokeTestFixture, DeleteReferencedNeighborNotOk) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
 
@@ -553,6 +555,76 @@ ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
                        pdpi::ReadIrTableEntries(*sut_p4rt_session));
   ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
   EXPECT_OK(pdpi::InstallIrTableEntries(*sut_p4rt_session, read_entries));
+}
+
+TEST_P(SmokeTestFixture, DeleteReferencedMulticastRifNotOk) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+
+  // Initialize the connection, clear table entries, and push GNMI
+  // configuration (if given) for the SUT and Control switch.
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+
+  constexpr absl::string_view kVrf = "vrf";
+  constexpr int kMulticastGroupId = 1;
+  const sai::Replica kReplica = sai::Replica{
+      .egress_port = "1",
+      .instance = 0,
+  };
+
+  // Install a multicast route with:
+  // - A multicast RIF
+  // - A multicast group referring to that RIF.
+  // - An Ipv6 multicast table entry referring to that group.
+  // - Other auxiliary entries
+  ASSERT_OK(sai::EntryBuilder()
+                .AddVrfEntry(kVrf)
+                // Makes the ipv6_dst "ff05::".
+                .AddMulticastRoute(kVrf, netaddr::Ipv6Address(0xff05),
+                                   kMulticastGroupId)
+                .AddMulticastGroupEntry(kMulticastGroupId, {kReplica})
+                .AddMrifEntryRewritingSrcMac(
+                    kReplica.egress_port, kReplica.instance,
+                    netaddr::MacAddress(0x22, 0x22, 0x22, 0x22, 0x22, 0x22))
+                .InstallDedupedEntities(*sut_p4rt_session));
+
+  // Try to delete entities that are referenced by other entities.
+  pdpi::IrEntity multicast_rif_entity;
+  pdpi::IrEntity multicast_group_entity;
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrEntities entities,
+                       pdpi::ReadIrEntities(*sut_p4rt_session));
+  for (const pdpi::IrEntity& entity : entities.entities()) {
+    if (entity.has_packet_replication_engine_entry()) {
+      multicast_group_entity = entity;
+    } else if (entity.has_table_entry() &&
+               entity.table_entry().table_name() ==
+                   "multicast_router_interface_table") {
+      multicast_rif_entity = entity;
+    }
+  }
+  ASSERT_TRUE(multicast_rif_entity.has_table_entry())
+      << "Could not find multicast RIF on switch after successfully installing "
+         "it.";
+  ASSERT_TRUE(multicast_group_entity.has_packet_replication_engine_entry())
+      << "Could not find multicast group on switch after successfully "
+         "installing it.";
+
+  // Cannot delete the multicast RIF because it is used by the multicast group.
+  EXPECT_THAT(pdpi::DeleteIrEntity(*sut_p4rt_session, multicast_rif_entity),
+              Not(IsOk()));
+  // Cannot delete the multicast group because it is used by the IPv6 route.
+  EXPECT_THAT(pdpi::DeleteIrEntity(*sut_p4rt_session, multicast_group_entity),
+              Not(IsOk()));
+
+  // We should always be able to delete and re-install entities read from the
+  // switch. Otherwise, the switch is in a corrupted state.
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrEntities read_entities,
+                       pdpi::ReadIrEntities(*sut_p4rt_session));
+  ASSERT_OK(pdpi::ClearEntities(*sut_p4rt_session));
+  EXPECT_OK(pdpi::InstallIrEntities(*sut_p4rt_session, read_entities));
 }
 
 }  // namespace

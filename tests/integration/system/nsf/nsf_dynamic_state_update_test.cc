@@ -85,17 +85,20 @@ TEST_P(NsfDynamicStateUpdateTestFixture, NsfDynamicStateUpdateTest) {
                                ssh_client));
   EXPECT_OK(
       SetAdminStatus(control_switch_gnmi_stub.get(), intf_to_check, "DOWN"));
-  if (!WaitForNsfReboot(&mirror_testbed, ssh_client,
-                        /*image_config_param=*/nullptr,
-                        /*check_interfaces_up =*/false)
-           .ok()) {
+
+  absl::Status reboot_status = WaitForNsfReboot(&mirror_testbed, ssh_client,
+                                                /*image_config_param=*/nullptr,
+                                                /*check_interfaces_up =*/false);
+  if (!reboot_status.ok()) {
     // Cold reboot the testbed as the failed NSF reboot could leave the testbed
     // in unhealthy state
-    LOG(INFO) << "NSF reboot failed. Cold rebooting the switch.";
+    LOG(INFO) << "NSF reboot failed. " << reboot_status.message()
+              << "Cold rebooting the switch.";
     EXPECT_OK(Reboot(RebootMethod::COLD, sut, mirror_testbed.Environment()));
     EXPECT_OK(WaitForReboot(&mirror_testbed, ssh_client, false));
     FAIL() << "Failure in NSF reboot.";
   }
+
   EXPECT_THAT(GetInterfaceOperStatusOverGnmi(*control_switch_gnmi_stub.get(),
                                              intf_to_check),
               gutil::IsOkAndHolds(OperStatus::kDown));

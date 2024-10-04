@@ -26,6 +26,15 @@ namespace pins_test {
 class OtgHelper : public TrafficHelper {
  public:
   OtgHelper(bool enable_linerate = false) : enable_linerate_(enable_linerate) {}
+  // Configures the base settings for the flow:
+  // - Packet size
+  // - Transmission duration
+  // - Transmission rate
+  // - Capture metrics
+  void ConfigureFlowBaseSettings(::otg::Flow* flow, absl::string_view src_port,
+                                 absl::string_view dst_port);
+  void ConfigureFlowEthernetHeader(::otg::Flow* flow, absl::string_view src_mac,
+                                   absl::string_view dst_mac);
   absl::Status StartTraffic(const Testbed &testbed,
                             absl::string_view config_label) override;
   absl::Status StopTraffic(const Testbed &testbed) override;

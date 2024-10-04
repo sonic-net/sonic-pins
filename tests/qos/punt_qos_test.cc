@@ -521,6 +521,8 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
 
       LOG(INFO) << "Mirror-To-Port packets post: " << mirror_packets_post;
 
+      absl::SleepFor(kMaxQueueCounterUpdateTime);
+
       ASSERT_OK_AND_ASSIGN(
           QueueCounters final_mirror_green_queue_counters,
           GetGnmiQueueCounters(ixia_sut_link_.sut_mirror_interface,
@@ -584,8 +586,7 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
   receiver.Destroy();
 }
 
-// TODO: Disabled till failover is fixed.
-TEST_P(PuntQoSTestWithIxia, DISABLED_MirrorFailover) {
+TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
   // Flow details.
   const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
   const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
@@ -680,7 +681,7 @@ TEST_P(PuntQoSTestWithIxia, DISABLED_MirrorFailover) {
   LOG(INFO) << "Toggle interface started";
   ASSERT_OK(SetAdminStatus(sut_gnmi_stub_.get(),
                            ixia_sut_link_.sut_mirror_interface, "DOWN",
-                           absl::Minutes(2)));
+                           absl::Seconds(0)));
   LOG(INFO) << "Toggle interface ended";
   LOG(INFO) << "Total Traffic duration: " << kTrafficDurationLowTrafficRate;
   // Wait for Traffic to be sent.
@@ -721,7 +722,7 @@ TEST_P(PuntQoSTestWithIxia, DISABLED_MirrorFailover) {
   EXPECT_LE(drop_duration_ms, 500) << "Drop duration exceeds 500ms";
   EXPECT_OK(SetAdminStatus(sut_gnmi_stub_.get(),
                            ixia_sut_link_.sut_mirror_interface, "UP",
-                           absl::Minutes(2)));
+                           absl::Seconds(0)));
 }
 }  // namespace
 }  // namespace pins_test
