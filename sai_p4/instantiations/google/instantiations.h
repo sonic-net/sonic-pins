@@ -92,7 +92,7 @@ inline std::ostream& operator<<(std::ostream& os, Instantiation instantiation) {
 }
 
 template <typename Sink>
-inline void AbslStringify(Sink& sink, Instantiation instantiation) {
+void AbslStringify(Sink& sink, Instantiation instantiation) {
   absl::Format(&sink, "%s", InstantiationToString(instantiation));
 }
 

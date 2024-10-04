@@ -61,6 +61,11 @@ absl::StatusOr<std::string> ProtoDiff(
     google::protobuf::util::MessageDifferencer differ =
         google::protobuf::util::MessageDifferencer());
 
+// Similar to `ProtoDiff`, execpt returns boolean result of equality comparison.
+bool ProtoEqual(const google::protobuf::Message &message1,
+                const google::protobuf::Message &message2,
+                google::protobuf::util::MessageDifferencer &differ);
+
 // Get the name of the oneof enum that is set.
 // Eg:
 // message IrValue {

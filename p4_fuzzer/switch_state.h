@@ -15,8 +15,11 @@
 #define P4_FUZZER_SWITCH_STATE_H_
 
 #include <cstdio>
+#include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "absl/container/btree_map.h"
 #include "absl/container/btree_set.h"
@@ -39,6 +42,14 @@ namespace p4_fuzzer {
 //   forall t1, t2. table_[t1] = t2  ==> t1 = TableEntryKey(t2)
 //   TableEntryKey() here is the constructor for the class TableEntryKey.
 using TableEntries = absl::btree_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
+
+// Returns the canonical form of `entry` according to the P4 Runtime Spec
+// https://s3-us-west-2.amazonaws.com/p4runtime/ci/main/P4Runtime-Spec.html#sec-bytestrings.
+// TODO: Canonical form is achieved by performing an IR roundtrip
+// translation. This ties correctness to IR functionality. Local
+// canonicalization would be preferred.
+absl::StatusOr<p4::v1::TableEntry> CanonicalizeTableEntry(
+    const pdpi::IrP4Info& info, const p4::v1::TableEntry& entry, bool key_only);
 
 // Tracks the state of a switch, with methods to apply updates or query the
 // current state. The class assumes all calls are valid (e.g table_ids must all
@@ -68,6 +79,10 @@ class SwitchState {
   std::vector<p4::v1::TableEntry> GetTableEntries(
       const uint32_t table_id) const;
 
+  // Returns all table entries in a given canonical table.
+  std::vector<p4::v1::TableEntry> GetCanonicalTableEntries(
+      const uint32_t table_id) const;
+
   // Returns the number of table entries in a given table.
   int64_t GetNumTableEntries(const uint32_t table_id) const;
 
@@ -76,8 +91,13 @@ class SwitchState {
 
   // Returns the current state of a table entry (or nullopt if it is not
   // present).  Only the uniquely identifying fields of entry are considered.
-  absl::optional<p4::v1::TableEntry> GetTableEntry(
-      p4::v1::TableEntry entry) const;
+  std::optional<p4::v1::TableEntry> GetTableEntry(
+      const p4::v1::TableEntry& entry) const;
+
+  // Returns the current state of a canonical table entry (or nullopt if it is
+  // not present). Only the uniquely identifying fields of entry are considered.
+  std::optional<p4::v1::TableEntry> GetCanonicalTableEntry(
+      const p4::v1::TableEntry& entry) const;
 
   // Returns the list of all non-const table IDs in the underlying P4 program.
   const std::vector<uint32_t> AllTableIds() const;
@@ -104,9 +124,33 @@ class SwitchState {
 
   pdpi::IrP4Info GetIrP4Info() const { return ir_p4info_; }
 
+  // Used in testing to check that SwitchState is always consistent by:
+  // - Ensuring that the standard and canonical table states are in sync.
+  absl::Status CheckConsistency() const;
+
+  // Returns OK if the set of elements in `switch_entries` is equal to
+  // the set of all canonical entries in SwitchState. Returns
+  // FailedPreconditionError if there are differences. Status message records 3
+  // types of differences:
+  //   1. Entry is in `switch_entries`, but not in fuzzer state.
+  //   2. Entry key is present in both, but value is different.
+  //   3. Entry is not in `switch_entries`, but in fuzzer state.
+  // Returns InvalidArgumentError if any difference cannot be translated to an
+  // IR representation.
+  // An optional functor `TreatAsEqualDueToKnownBug` can be used to mask known
+  // bugs when comparing entries with the same `TableEntryKey`.
+  absl::Status AssertEntriesAreEqualToState(
+      const std::vector<p4::v1::TableEntry>& switch_entries,
+      std::optional<std::function<bool(const pdpi::IrTableEntry&,
+                                       const pdpi::IrTableEntry&)>>
+          TreatAsEqualDueToKnownBug = std::nullopt) const;
+
  private:
   // A map from table ids to the entries they store.
+  // Invariant: An entry, `e`, is represented in `tables_` <=> canonical(e) is
+  // represented in `canonical_tables_`.
   absl::flat_hash_map<int, TableEntries> tables_;
+  absl::flat_hash_map<int, TableEntries> canonical_tables_;
 
   pdpi::IrP4Info ir_p4info_;
 };

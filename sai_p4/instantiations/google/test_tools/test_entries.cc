@@ -14,21 +14,18 @@
 
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 
-#include <algorithm>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
-#include "google/protobuf/message.h"
-#include "google/protobuf/message_lite.h"
-#include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/proto.h"
 #include "gutil/proto_ordering.h"
 #include "gutil/status.h"
@@ -38,6 +35,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/pd.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_pdpi/translation_options.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
@@ -139,7 +137,7 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
     std::optional<absl::string_view> vlan_hexstr) {
   const std::string kNexthopId =
       absl::StrFormat("nexthop(%s, %s)", egress_port, vrf);
-  const std::string kRifId = absl::StrFormat("rif(port = %s)", egress_port);
+
   if (ip_version == IpVersion::kIpv4 || ip_version == IpVersion::kIpv4And6) {
     sai::TableEntry& entry = *entries_.add_entries();
     entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
@@ -174,58 +172,33 @@ EntryBuilder& EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenPort(
         ->mutable_set_nexthop_id()
         ->set_nexthop_id(kNexthopId);
   }
-  {
-    sai::NexthopTableEntry& nexthop_entry =
-        *entries_.add_entries()->mutable_nexthop_table_entry();
-    nexthop_entry.mutable_match()->set_nexthop_id(kNexthopId);
-    if (AllRewritesEnabled(nexthop_rewrite_options)) {
-      sai::SetIpNexthopAction& action =
-          *nexthop_entry.mutable_action()->mutable_set_ip_nexthop();
-      action.set_router_interface_id(kRifId);
-      action.set_neighbor_id("fe80::2");
-    } else {
-      sai::SetIpNexthopAndDisableRewritesAction& action =
-          *nexthop_entry.mutable_action()
-               ->mutable_set_ip_nexthop_and_disable_rewrites();
-      action.set_router_interface_id(kRifId);
-      action.set_neighbor_id("fe80::2");
-      action.set_disable_decrement_ttl(
-          BoolToHexString(nexthop_rewrite_options.disable_decrement_ttl));
-      action.set_disable_src_mac_rewrite(BoolToHexString(
-          !nexthop_rewrite_options.src_mac_rewrite.has_value()));
-      action.set_disable_dst_mac_rewrite(BoolToHexString(
-          !nexthop_rewrite_options.dst_mac_rewrite.has_value()));
-      action.set_disable_vlan_rewrite(
-          BoolToHexString(nexthop_rewrite_options.disable_vlan_rewrite));
-    }
+
+  return AddNexthopRifNeighborEntries(kNexthopId, egress_port,
+                                      nexthop_rewrite_options, vlan_hexstr);
+}
+
+EntryBuilder&
+EntryBuilder::AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
+    int multicast_group_id, IpVersion ip_version, absl::string_view vrf) {
+  if (ip_version == IpVersion::kIpv4 || ip_version == IpVersion::kIpv4And6) {
+    sai::Ipv4TableEntry& entry =
+        *entries_.add_entries()->mutable_ipv4_table_entry();
+    // TODO: Pass string_view directly once proto supports it.
+    entry.mutable_match()->set_vrf_id(std::string(vrf));
+    entry.mutable_action()
+        ->mutable_set_multicast_group_id()
+        ->set_multicast_group_id(
+            pdpi::BitsetToHexString<16>(multicast_group_id));
   }
-  {
-    sai::TableEntry& entry = *entries_.add_entries();
-    entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
-      neighbor_table_entry {
-        match { router_interface_id: "rif" neighbor_id: "fe80::2" }
-        action { set_dst_mac { dst_mac: "02:03:04:05:06:07" } }
-      }
-    )pb");
-    entry.mutable_neighbor_table_entry()
-        ->mutable_match()
-        ->set_router_interface_id(kRifId);
-  }
-  {
-    sai::RouterInterfaceTableEntry& entry =
-        *entries_.add_entries()->mutable_router_interface_table_entry();
-    entry.mutable_match()->set_router_interface_id(kRifId);
-    if (vlan_hexstr.has_value()) {
-      auto& action =
-          *entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
-      action.set_vlan_id(*vlan_hexstr);
-      action.set_src_mac("00:01:02:03:04:05");
-      action.set_port(egress_port);
-    } else {
-      auto& action = *entry.mutable_action()->mutable_set_port_and_src_mac();
-      action.set_src_mac("00:01:02:03:04:05");
-      action.set_port(egress_port);
-    }
+  if (ip_version == IpVersion::kIpv6 || ip_version == IpVersion::kIpv4And6) {
+    sai::Ipv6TableEntry& entry =
+        *entries_.add_entries()->mutable_ipv6_table_entry();
+    // TODO: Pass string_view directly once proto supports it.
+    entry.mutable_match()->set_vrf_id(std::string(vrf));
+    entry.mutable_action()
+        ->mutable_set_multicast_group_id()
+        ->set_multicast_group_id(
+            pdpi::BitsetToHexString<16>(multicast_group_id));
   }
   return *this;
 }
@@ -325,6 +298,19 @@ EntryBuilder& EntryBuilder::AddEntryPuntingPacketsWithTtlZeroAndOne() {
   return *this;
 }
 
+EntryBuilder&
+EntryBuilder::AddEntriesForwardingIpPacketsToGivenMulticastGroup(
+    int multicast_group_id) {
+  AddEntryAdmittingAllPacketsToL3();
+  const std::string kVrf =
+      absl::StrFormat("vrf-for-multicast-group-%d", multicast_group_id);
+  AddVrfEntry(kVrf);
+  AddPreIngressAclEntryAssigningVrfForGivenIpType(kVrf, IpVersion::kIpv4And6);
+  AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
+      multicast_group_id, IpVersion::kIpv4And6, kVrf);
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddPreIngressAclEntryAssigningVrfForGivenIpType(
     absl::string_view vrf, IpVersion ip_version) {
   sai::TableEntry& entry = *entries_.add_entries();
@@ -374,6 +360,57 @@ EntryBuilder& EntryBuilder::AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddMulticastGroupEntry(
+    int multicast_group_id, absl::Span<const Replica> replicas) {
+  sai::MulticastGroupTableEntry& entry =
+      *entries_.add_entries()->mutable_multicast_group_table_entry();
+  entry.mutable_match()->set_multicast_group_id(
+      pdpi::BitsetToHexString<16>(multicast_group_id));
+  for (const Replica& replica : replicas) {
+    sai::ReplicateAction::Replica& pd_replica =
+        *entry.mutable_action()->mutable_replicate()->add_replicas();
+    pd_replica.set_port(replica.egress_port);
+    pd_replica.set_instance(pdpi::BitsetToHexString<16>(replica.instance));
+  }
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddMulticastGroupEntry(
+    int multicast_group_id, absl::Span<const std::string> egress_ports) {
+  std::vector<Replica> replicas;
+  absl::flat_hash_map<std::string, int> next_instance_by_port;
+  for (const std::string& egress_port : egress_ports) {
+    replicas.push_back(Replica{
+        .egress_port = egress_port,
+        .instance = next_instance_by_port[egress_port]++,
+    });
+  }
+  return AddMulticastGroupEntry(multicast_group_id, replicas);
+}
+
+EntryBuilder& EntryBuilder::AddMulticastRouterInterfaceEntry(
+    const MulticastRouterInterfaceTableEntry& entry) {
+  sai::MulticastRouterInterfaceTableEntry& pd_entry =
+      *entries_.add_entries()->mutable_multicast_router_interface_table_entry();
+  auto& match = *pd_entry.mutable_match();
+  match.set_multicast_replica_port(entry.multicast_replica_port);
+  match.set_multicast_replica_instance(
+      pdpi::BitsetToHexString<16>(entry.multicast_replica_instance));
+  auto& action = *pd_entry.mutable_action()->mutable_set_multicast_src_mac();
+  action.set_src_mac(entry.src_mac.ToString());
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddIngressAclDroppingAllPackets() {
+  *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
+    acl_ingress_table_entry {
+      match {}  # Wildcard match.
+      action { acl_drop {} }
+      priority: 1  # Maximum priority.
+    }
+  )pb");
+  return *this;
+}
 EntryBuilder& EntryBuilder::AddDisableVlanChecksEntry() {
   *entries_.add_entries() = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
     disable_vlan_checks_table_entry {
@@ -415,6 +452,85 @@ EntryBuilder& EntryBuilder::AddEntrySettingVlanIdInPreIngress(
   }
   entry.mutable_action()->mutable_set_outer_vlan_id()->set_vlan_id(
       set_vlan_id_hexstr);
+  entry.set_priority(1);
+
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddNexthopRifNeighborEntries(
+    absl::string_view nexthop_id, absl::string_view egress_port,
+    const NexthopRewriteOptions& nexthop_rewrite_options,
+    std::optional<absl::string_view> vlan_hexstr) {
+  const std::string kRifId = absl::StrFormat(
+      "rif(port=%s, vlan=%s)", egress_port, vlan_hexstr.value_or("none"));
+  {
+    sai::NexthopTableEntry& nexthop_entry =
+        *entries_.add_entries()->mutable_nexthop_table_entry();
+    nexthop_entry.mutable_match()->set_nexthop_id(nexthop_id);
+    if (AllRewritesEnabled(nexthop_rewrite_options)) {
+      sai::SetIpNexthopAction& action =
+          *nexthop_entry.mutable_action()->mutable_set_ip_nexthop();
+      action.set_router_interface_id(kRifId);
+      action.set_neighbor_id("fe80::2");
+    } else {
+      sai::SetIpNexthopAndDisableRewritesAction& action =
+          *nexthop_entry.mutable_action()
+               ->mutable_set_ip_nexthop_and_disable_rewrites();
+      action.set_router_interface_id(kRifId);
+      action.set_neighbor_id("fe80::2");
+      action.set_disable_decrement_ttl(
+          BoolToHexString(nexthop_rewrite_options.disable_decrement_ttl));
+      action.set_disable_src_mac_rewrite(BoolToHexString(
+          !nexthop_rewrite_options.src_mac_rewrite.has_value()));
+      action.set_disable_dst_mac_rewrite(BoolToHexString(
+          !nexthop_rewrite_options.dst_mac_rewrite.has_value()));
+      action.set_disable_vlan_rewrite(
+          BoolToHexString(nexthop_rewrite_options.disable_vlan_rewrite));
+    }
+  }
+  {
+    sai::TableEntry& entry = *entries_.add_entries();
+    entry = gutil::ParseProtoOrDie<sai::TableEntry>(R"pb(
+      neighbor_table_entry {
+        match { router_interface_id: "rif" neighbor_id: "fe80::2" }
+        action { set_dst_mac { dst_mac: "02:03:04:05:06:07" } }
+      }
+    )pb");
+    entry.mutable_neighbor_table_entry()
+        ->mutable_match()
+        ->set_router_interface_id(kRifId);
+  }
+  {
+    sai::RouterInterfaceTableEntry& entry =
+        *entries_.add_entries()->mutable_router_interface_table_entry();
+    entry.mutable_match()->set_router_interface_id(kRifId);
+    if (vlan_hexstr.has_value()) {
+      auto& action =
+          *entry.mutable_action()->mutable_set_port_and_src_mac_and_vlan_id();
+      action.set_vlan_id(*vlan_hexstr);
+      action.set_src_mac("00:01:02:03:04:05");
+      action.set_port(egress_port);
+    } else {
+      auto& action = *entry.mutable_action()->mutable_set_port_and_src_mac();
+      action.set_src_mac("00:01:02:03:04:05");
+      action.set_port(egress_port);
+    }
+  }
+
+  return *this;
+}
+
+EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
+    absl::string_view nexthop_id,
+    std::optional<absl::string_view> in_port_match) {
+  sai::AclIngressMirrorAndRedirectTableEntry& entry =
+      *entries_.add_entries()
+           ->mutable_acl_ingress_mirror_and_redirect_table_entry();
+  if (in_port_match.has_value()) {
+    entry.mutable_match()->mutable_in_port()->set_value(*in_port_match);
+  }
+  entry.mutable_action()->mutable_redirect_to_nexthop()->set_nexthop_id(
+      nexthop_id);
   entry.set_priority(1);
 
   return *this;

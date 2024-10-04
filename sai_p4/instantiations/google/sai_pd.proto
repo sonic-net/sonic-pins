@@ -126,6 +126,8 @@ message Ipv4TableEntry {
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
+      // CAUTION: This action is not (yet) supported.
+      SetMulticastGroupIdAction set_multicast_group_id = 8;
     }
   }
   Action action = 2;
@@ -147,6 +149,8 @@ message Ipv6TableEntry {
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
+      // CAUTION: This action is not (yet) supported.
+      SetMulticastGroupIdAction set_multicast_group_id = 8;
     }
   }
   Action action = 2;
@@ -213,6 +217,21 @@ message Ipv6TunnelTerminationTableEntry {
   }
   Action action = 2;
   int32 priority = 3;
+  bytes controller_metadata = 8;
+}
+
+// CAUTION: This table is not (yet) supported.
+message MulticastRouterInterfaceTableEntry {
+  message Match {
+    string multicast_replica_port = 1;  // exact match / Format::STRING
+    string multicast_replica_instance =
+        2;  // exact match / Format::HEX_STRING / 16 bits
+  }
+  Match match = 1;
+  message Action {
+    SetMulticastSrcMacAction set_multicast_src_mac = 1;
+  }
+  Action action = 2;
   bytes controller_metadata = 8;
 }
 
@@ -674,13 +693,30 @@ message AclIngressSecurityTableEntry {
   bytes controller_metadata = 8;
 }
 
+// Table entry restrictions:
+// ## Forbid illegal combinations of IP_TYPE fields.
+//   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
+//   is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);
+// ## Forbid unsupported combinations of IP_TYPE fields.
+//   is_ipv4::mask != 0 -> (is_ipv4 == 1);
+//   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 message AclIngressMirrorAndRedirectTableEntry {
   message Match {
-    Optional in_port = 1;  // optional match / Format::STRING
+    Optional in_port = 1;      // optional match / Format::STRING
+    Optional is_ip = 2;        // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv4 = 3;      // optional match / Format::HEX_STRING / 1 bits
+    Optional is_ipv6 = 4;      // optional match / Format::HEX_STRING / 1 bits
+    Ternary dst_ipv6 = 5;      // ternary match / Format::IPV6 / upper 64 bits
+    Ternary acl_metadata = 6;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary vlan_id = 7;       // ternary match / Format::HEX_STRING / 12 bits
   }
   Match match = 1;
   message Action {
-    AclMirrorAction acl_mirror = 1;
+    oneof action {
+      AclMirrorAction acl_mirror = 1;
+      RedirectToNexthopAction redirect_to_nexthop = 2;
+    }
   }
   Action action = 2;
   int32 priority = 3;
@@ -799,6 +835,14 @@ message SetIpNexthopAndDisableRewritesAction {
   string disable_vlan_rewrite = 6;     // Format::HEX_STRING / 1 bits
 }
 
+// CAUTION: This action is not (yet) supported.
+message SetMulticastGroupIdAction {
+  string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
+}
+message SetMulticastSrcMacAction {
+  string src_mac = 1;  // Format::MAC
+}
+
 message DisableVlanChecksAction {}
 
 // CAUTION: This action is not (yet) supported.
@@ -872,6 +916,10 @@ message SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction {
   string red_and_yellow_multicast_queue = 3;  // Format::STRING
 }
 
+message RedirectToNexthopAction {
+  string nexthop_id = 1;  // Format::STRING
+}
+
 message NoAction {}
 
 // This action is unique to `MulticastGroupTableEntry` and is not explicitly
@@ -902,6 +950,9 @@ message TableEntry {
     VrfTableEntry vrf_table_entry = 74;
     // CAUTION: This table is not (yet) supported.
     Ipv6TunnelTerminationTableEntry ipv6_tunnel_termination_table_entry = 75;
+    // CAUTION: This table is not (yet) supported.
+    MulticastRouterInterfaceTableEntry multicast_router_interface_table_entry =
+        76;
     // CAUTION: This table is not (yet) supported.
     DisableVlanChecksTableEntry disable_vlan_checks_table_entry = 77;
     TunnelTableEntry tunnel_table_entry = 80;

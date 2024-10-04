@@ -50,12 +50,14 @@
   0x0100010E                                            // 16777486
 #define ACL_INGRESS_SET_CPU_QUEUE_ACTION_ID 0x01000110  // 16777488
 #define ACL_INGRESS_SET_CPU_AND_MULTICAST_QUEUES_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID \
-  0x01000111                                       // 16777489
-#define ACL_INGRESS_DENY_ACTION_ID 0x0100010F      // 16777487
-#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D    // 16777485
-#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107  // 16777479
-#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108  // 16777480
-#define ACL_DROP_ACTION_ID 0x01000109              // 16777481
+  0x01000111                                                  // 16777489
+#define ACL_INGRESS_DENY_ACTION_ID 0x0100010F                 // 16777487
+#define ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID 0x01000112  // 16777490
+#define ACL_EGRESS_FORWARD_ACTION_ID 0x0100010D               // 16777485
+#define ACL_WBB_INGRESS_COPY_ACTION_ID 0x01000107             // 16777479
+#define ACL_WBB_INGRESS_TRAP_ACTION_ID 0x01000108             // 16777480
+#define ACL_DROP_ACTION_ID 0x01000109                         // 16777481
+// Next available action id: 0x01000113 (16777491)
 
 
 // NOLINTEND
@@ -75,13 +77,5 @@
 #define ACL_WBB_INGRESS_COUNTER_ID 0x13000103           // 318767363
 #define ACL_EGRESS_COUNTER_ID 0x13000104                // 318767364
 #define ACL_EGRESS_DHCP_TO_HOST_COUNTER_ID 0x13000108   // 318767368
-
-// --- PkgInfo versions --------------------------------------------------------
-// For use in `@pkginfo(..., version = VERSION)` annotations.
-
-// Indicates that the program has packet out support.
-#define SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT "1.0.0"
-#define SAI_P4_PKGINFO_VERSION_LATEST \
-  SAI_P4_PKGINFO_VERSION_HAS_PACKET_OUT_SUPPORT
 
 #endif  // PINS_SAI_IDS_H_
