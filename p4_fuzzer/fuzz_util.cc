@@ -25,9 +25,11 @@
 #include "absl/base/internal/endian.h"
 #include "absl/container/btree_set.h"
 #include "absl/random/distributions.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "google/protobuf/repeated_field.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
@@ -39,9 +41,7 @@
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
-#include "p4_pdpi/pd.h"
 #include "p4_pdpi/utils/ir.h"
-#include "sai_p4/fixed/ids.h"
 
 namespace p4_fuzzer {
 
@@ -98,16 +98,21 @@ bool IsReferring(
 
 namespace {
 
+inline bool IsDisabledForFuzzing(const FuzzerConfig& config,
+                                 absl::string_view name) {
+  return config.disabled_fully_qualified_names.contains(name);
+}
+
+std::string FuzzPort(absl::BitGen* gen, const FuzzerConfig& config) {
+  return UniformFromSpan(gen, config.ports);
+}
+
 inline int DivideRoundedUp(const unsigned int n, const unsigned int d) {
   if (n == 0 || d == 0) {
     return 0;
   }
 
   return (n - 1) / d + 1;
-}
-
-std::string FuzzPort(absl::BitGen* gen, const FuzzerConfig& config) {
-  return UniformFromSpan(gen, config.ports);
 }
 
 absl::StatusOr<p4::v1::ActionProfileAction> FuzzActionProfileAction(
@@ -118,9 +123,9 @@ absl::StatusOr<p4::v1::ActionProfileAction> FuzzActionProfileAction(
 
   ASSIGN_OR_RETURN(
       *action.mutable_action(),
-      FuzzAction(
-          gen, config, switch_state,
-          ChooseNonDefaultActionRef(gen, config, ir_table_info).action()));
+      FuzzAction(gen, config, switch_state,
+                 UniformFromSpan(gen, AllValidActions(config, ir_table_info))
+                     .action()));
 
   action.set_weight(Uniform<int32_t>(*gen, 1, max_weight));
   action.set_watch_port(FuzzPort(gen, config));
@@ -136,6 +141,8 @@ std::vector<uint32_t> TablesUsedByFuzzer(const FuzzerConfig& config) {
     if (table.role() != config.role) continue;
     // Tables without actions cannot have valid table entries.
     if (table.entry_actions().empty()) continue;
+    // Tables on the disallow list should not be fuzzed.
+    if (IsDisabledForFuzzing(config, table.preamble().name())) continue;
     table_ids.push_back(key);
   }
   return table_ids;
@@ -422,41 +429,57 @@ absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
          << "No action profile corresponds to table with id " << table_id;
 }
 
-// Returns the list of all table IDs in the underlying P4 program.
-const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config) {
-  std::vector<uint32_t> table_ids;
+/*const std::vector<pdpi::IrActionReference> AllValidActions(
+    const FuzzerConfig& config, const pdpi::IrTableDefinition& table) {
+  std::vector<pdpi::IrActionReference> actions;
 
-  for (auto& [table_id, table_def] : Ordered(config.info.tables_by_id())) {
-    table_ids.push_back(table_id);
+  for (const auto& action : table.entry_actions()) {
+    // Skip deprecated, unused, and disallowed actions.
+    if (pdpi::IsElementDeprecated(action.action().preamble().annotations()) ||
+        pdpi::IsElementUnused(action.action().preamble().annotations()) ||
+        IsDisabledForFuzzing(config, action.action().preamble().name()))
+      continue;
+    actions.push_back(action);
   }
 
-  return table_ids;
+  return actions;
+}*/
+
+const std::vector<pdpi::IrActionReference> AllValidActions(
+    const FuzzerConfig& config, const pdpi::IrTableDefinition& table) {
+  std::vector<pdpi::IrActionReference> actions;
+
+  for (const auto& action : table.entry_actions()) {
+    // Skip deprecated, unused, and disallowed actions.
+    if (pdpi::IsElementDeprecated(action.action().preamble().annotations()) ||
+        action.action().is_unsupported() ||
+        IsDisabledForFuzzing(config, action.action().preamble().name()))
+      continue;
+    actions.push_back(action);
+  }
+
+  return actions;
 }
 
-// Returns the list of all action IDs in the underlying P4 program.
-const std::vector<uint32_t> AllActionIds(const FuzzerConfig& config) {
-  std::vector<uint32_t> action_ids;
+const std::vector<pdpi::IrMatchFieldDefinition> AllValidMatchFields(
+    const FuzzerConfig& config, const pdpi::IrTableDefinition& table) {
+  std::vector<pdpi::IrMatchFieldDefinition> match_fields;
 
-  for (auto& [action_id, action_def] : Ordered(config.info.actions_by_id())) {
-    action_ids.push_back(action_id);
+  for (const auto& [_, match_field_info] :
+       Ordered(table.match_fields_by_id())) {
+    // Skip deprecated, unused, and disallowed fields.
+    const std::string fully_qualified_match_field = absl::StrCat(
+        table.preamble().name(), ".", match_field_info.match_field().name());
+    if (pdpi::IsElementDeprecated(
+            match_field_info.match_field().annotations()) ||
+        //pdpi::IsElementUnused(match_field_info.match_field().annotations()) ||
+        IsDisabledForFuzzing(config, fully_qualified_match_field))
+      continue;
+
+    match_fields.push_back(match_field_info);
   }
 
-  return action_ids;
-}
-
-// Returns the list of all match field IDs in the underlying P4 program for
-// table with id table_id.
-const std::vector<uint32_t> AllMatchFieldIds(const FuzzerConfig& config,
-                                             const uint32_t table_id) {
-  std::vector<uint32_t> match_ids;
-
-  for (auto& [match_id, match_def] :
-       Ordered(gutil::FindOrDie(config.info.tables_by_id(), table_id)
-                   .match_fields_by_id())) {
-    match_ids.push_back(match_id);
-  }
-
-  return match_ids;
+  return match_fields;
 }
 
 std::string FuzzRandomId(absl::BitGen* gen, int min_chars, int max_chars) {
@@ -489,18 +512,6 @@ Mutation FuzzMutation(absl::BitGen* gen, const FuzzerConfig& config) {
   }
 
   return static_cast<Mutation>(UniformFromSpan(gen, valid_indexes));
-}
-
-pdpi::IrActionReference ChooseNonDefaultActionRef(
-    absl::BitGen* gen, const FuzzerConfig& config,
-    const pdpi::IrTableDefinition& ir_table_info) {
-  std::vector<pdpi::IrActionReference> refs;
-
-  for (const auto& action_ref : ir_table_info.entry_actions()) {
-    refs.push_back(action_ref);
-  }
-
-  return UniformFromSpan(gen, refs);
 }
 
 std::string SetUnusedBitsToZero(int used_bits, std::string data) {
@@ -760,7 +771,10 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
         std::string value,
         FuzzValue(gen, config, switch_state, ir_param.param().type_name(),
                   ir_param.param().bitwidth(), ir_param.references(),
-                  /*non_zero=*/true));
+                  /*non_zero=*/true),
+        _.SetPrepend() << "while fuzzing parameter '" << ir_param.param().name()
+                       << "' of action '" << ir_action_info.preamble().name()
+                       << "': ");
     param->set_value(value);
   }
 
@@ -776,6 +790,99 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
 // However, uniform sampling gives us highly clustered weights almost all the
 // time and we prefer to generate skewed weights more often. Therefore, this
 // simpler approach, should serve us well.
+/*absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    const pdpi::IrTableDefinition& ir_table_info) {
+  p4::v1::ActionProfileActionSet action_set;
+
+  ASSIGN_OR_RETURN(
+      auto action_profile,
+      GetActionProfile(config.info, ir_table_info.preamble().id()));
+
+  switch (action_profile.selector_size_semantics()) {
+    case p4::config::v1::ActionProfile::SUM_OF_MEMBERS: {
+      int max_number_of_actions = action_profile.max_group_size() != 0
+                                      ? action_profile.max_group_size()
+                                      : kActionProfileActionSetMaxCardinality;
+      int number_of_actions = Uniform<int>(absl::IntervalClosedClosed, *gen, 0,
+                                           max_number_of_actions);
+
+      for (int i = 0; i < number_of_actions; i++) {
+        ASSIGN_OR_RETURN(
+            auto action,
+            FuzzActionProfileAction(gen, config, switch_state, ir_table_info,
+                                    kActionProfileMaxMemberWeight));
+        *action_set.add_action_profile_actions() = action;
+      }
+
+      return action_set;
+    }
+    case p4::config::v1::ActionProfile::SUM_OF_WEIGHTS: {
+      // The max_group_size specifies the maximum total weight of a group of
+      // actions in an Action Selector (described by an ActionProfileActionSet).
+      // If max_group_size is 0, then any weights less than size are allowed by
+      // the server.
+      int unallocated_weight = action_profile.max_group_size() == 0
+                                   ? action_profile.size()
+                                   : action_profile.max_group_size();
+
+      // Note that the semantics of `size` in an action selector is the maximum
+      // sum of all member weights across ALL selector groups. The
+      // `max_group_size` is the maximum sum of all member weights within a
+      // single group. Thus, the maximum total weight of a single group should
+      // be no larger than either the max_group_size or the size.
+      // TODO: When https://github.com/p4lang/p4runtime/issues/355
+      // is fixed, `max_group_size` will never be greater than `size`, rendering
+      // this assignment unnecessary.
+      unallocated_weight = static_cast<int>(
+          std::min(int64_t{unallocated_weight}, action_profile.size()));
+
+      // It is entirely unclear what should happen if max_group_size or size is
+      // negative or if size is 0. Since these values are nonsensical, we will
+      // return an InvalidArgumentError until the specification changes.
+      // TODO: This if-statement can also disappear if
+      // https://github.com/p4lang/p4runtime/issues/355 is resolved, ruling out
+      // these cases.
+      if (unallocated_weight <= 0) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "non-positive size '" << action_profile.size()
+               << "' or negative max_group_size '"
+               << action_profile.max_group_size() << "' in action profile '"
+               << action_profile.preamble().alias() << "'";
+      }
+
+      // We want to randomly select some number of actions up to our max
+      // cardinality; however, we can't have more actions than the amount of
+      // weight we support since every action must have weight >= 1.
+      int number_of_actions = Uniform<int>(
+          absl::IntervalClosedClosed, *gen, 0,
+          std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
+
+      for (int i = 0; i < number_of_actions; i++) {
+        // Since each action must have at least weight 1, we need to take the
+        // number of remaining actions into account to determine the acceptable
+        // max weight.
+        int remaining_actions = number_of_actions - i - 1;
+        int max_weight = unallocated_weight - remaining_actions;
+
+        ASSIGN_OR_RETURN(auto action,
+                         FuzzActionProfileAction(gen, config, switch_state,
+                                                 ir_table_info, max_weight));
+        *action_set.add_action_profile_actions() = action;
+        unallocated_weight -= action.weight();
+      }
+
+      return action_set;
+    }
+    default:
+      return absl::InvalidArgumentError(absl::Substitute(
+          "action profile '$0' uses invalid selector size semantics '$1'",
+          action_profile.preamble().alias(),
+          action_profile.selector_size_semantics()));
+  }
+}*/
+
 absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
@@ -786,60 +893,89 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
       auto action_profile,
       GetActionProfile(config.info, ir_table_info.preamble().id()));
 
-  // The max_group_size specifies the maximum total weight of a group of actions
-  // in an Action Selector (described by an ActionProfileActionSet).
-  // If max_group_size is 0, then any weights less than size are allowed by the
-  // server.
-  int unallocated_weight = action_profile.max_group_size() == 0
-                               ? action_profile.size()
-                               : action_profile.max_group_size();
+  if (action_profile.has_sum_of_members()) {
+    int max_number_of_actions = action_profile.max_group_size() != 0
+                                    ? action_profile.max_group_size()
+                                    : kActionProfileActionSetMaxCardinality;
+    int number_of_actions = Uniform<int>(
+        absl::IntervalClosedClosed, *gen,
+        config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
 
-  // Note that the semantics of `size` in an action selector is the maximum
-  // sum of all member weights across ALL selector groups. The `max_group_size`
-  // is the maximum sum of all member weights within a single group.
-  // Thus, the maximum total weight of a single group should be
-  // no larger than either the max_group_size or the size.
-  // TODO: When https://github.com/p4lang/p4runtime/issues/355 is fixed,
-  // `max_group_size` will never be greater than `size`, rendering this
-  // assignment unnecessary.
-  unallocated_weight = static_cast<int>(
-      std::min(int64_t{unallocated_weight}, action_profile.size()));
+    // Get the max member weight from the P4Info if it is set.
+    int max_member_weight =
+        action_profile.sum_of_members().max_member_weight() != 0
+            ? action_profile.sum_of_members().max_member_weight()
+            : kActionProfileMaxMemberWeight;
 
-  // It is entirely unclear what should happen if max_group_size or size is
-  // negative or if size is 0. Since these values are nonsensical, we will
-  // return an InvalidArgumentError until the specification changes.
-  // TODO: This if-statement can also disappear if
-  // https://github.com/p4lang/p4runtime/issues/355 is resolved, ruling out
-  // these cases.
-  if (unallocated_weight <= 0) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "non-positive size '" << action_profile.size()
-           << "' or negative max_group_size '"
-           << action_profile.max_group_size() << "' in action profile '"
-           << action_profile.preamble().alias() << "'";
+    for (int i = 0; i < number_of_actions; i++) {
+      ASSIGN_OR_RETURN(auto action, FuzzActionProfileAction(
+                                        gen, config, switch_state,
+                                        ir_table_info, max_member_weight));
+      *action_set.add_action_profile_actions() = action;
+    }
+
+    return action_set;
+  } else {
+    // If the action profile does not use SumOfMembers semantics, then it must
+    // be SumOfWeights since that is both the default and the only other option.
+
+    // The max_group_size specifies the maximum total weight of a group of
+    // actions in an Action Selector (described by an ActionProfileActionSet).
+    // If max_group_size is 0, then any weights less than size are allowed by
+    // the server.
+    int unallocated_weight = action_profile.max_group_size() == 0
+                                 ? action_profile.size()
+                                 : action_profile.max_group_size();
+
+    // Note that the semantics of `size` in an action selector is the maximum
+    // sum of all member weights across ALL selector groups. The
+    // `max_group_size` is the maximum sum of all member weights within a
+    // single group. Thus, the maximum total weight of a single group should
+    // be no larger than either the max_group_size or the size.
+    // TODO: When https://github.com/p4lang/p4runtime/issues/355
+    // is fixed, `max_group_size` will never be greater than `size`, rendering
+    // this assignment unnecessary.
+    unallocated_weight = static_cast<int>(
+        std::min(int64_t{unallocated_weight}, action_profile.size()));
+
+    // It is entirely unclear what should happen if max_group_size or size is
+    // negative or if size is 0. Since these values are nonsensical, we will
+    // return an InvalidArgumentError until the specification changes.
+    // TODO: This if-statement can also disappear if
+    // https://github.com/p4lang/p4runtime/issues/355 is resolved, ruling out
+    // these cases.
+    if (unallocated_weight <= 0) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "non-positive size '" << action_profile.size()
+             << "' or negative max_group_size '"
+             << action_profile.max_group_size() << "' in action profile '"
+             << action_profile.preamble().alias() << "'";
+    }
+
+    // We want to randomly select some number of actions up to our max
+    // cardinality; however, we can't have more actions than the amount of
+    // weight we support since every action must have weight >= 1.
+    int number_of_actions = Uniform<int>(
+        absl::IntervalClosedClosed, *gen,
+        config.no_empty_action_profile_groups ? 1 : 0,
+        std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
+
+    for (int i = 0; i < number_of_actions; i++) {
+      // Since each action must have at least weight 1, we need to take the
+      // number of remaining actions into account to determine the acceptable
+      // max weight.
+      int remaining_actions = number_of_actions - i - 1;
+      int max_weight = unallocated_weight - remaining_actions;
+
+      ASSIGN_OR_RETURN(auto action,
+                       FuzzActionProfileAction(gen, config, switch_state,
+                                               ir_table_info, max_weight));
+      *action_set.add_action_profile_actions() = action;
+      unallocated_weight -= action.weight();
+    }
+
+    return action_set;
   }
-
-  // We want to randomly select some number of actions up to our max
-  // cardinality; however, we can't have more actions than the amount of weight
-  // we support since every action must have weight >= 1.
-  int number_of_actions = Uniform<int>(
-      absl::IntervalClosedClosed, *gen, 0,
-      std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
-
-  for (int i = 0; i < number_of_actions; i++) {
-    // Since each action must have at least weight 1, we need to take the number
-    // of remaining actions into account to determine the acceptable max weight.
-    int remaining_actions = number_of_actions - i - 1;
-    int max_weight = unallocated_weight - remaining_actions;
-
-    ASSIGN_OR_RETURN(auto action,
-                     FuzzActionProfileAction(gen, config, switch_state,
-                                             ir_table_info, max_weight));
-    *action_set.add_action_profile_actions() = action;
-    unallocated_weight -= action.weight();
-  }
-
-  return action_set;
 }
 
 void EnforceTableConstraints(absl::BitGen* gen, const FuzzerConfig& config,
@@ -861,7 +997,8 @@ absl::StatusOr<p4::v1::TableAction> FuzzAction(
         *result.mutable_action(),
         FuzzAction(
             gen, config, switch_state,
-            ChooseNonDefaultActionRef(gen, config, table_definition).action()));
+            UniformFromSpan(gen, AllValidActions(config, table_definition))
+                .action()));
   } else {
     ASSIGN_OR_RETURN(*result.mutable_action_profile_action_set(),
                      FuzzActionProfileActionSet(gen, config, switch_state,
@@ -878,15 +1015,8 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
   table_entry.set_table_id(ir_table_info.preamble().id());
 
   // Generate the matches.
-  for (auto& [key, match_field_info] : ir_table_info.match_fields_by_id()) {
-    // Skip deprecated fields
-    bool deprecated =
-        absl::c_any_of(match_field_info.match_field().annotations(),
-                       [](const std::string annotation) {
-                         return absl::StartsWith(annotation, "@deprecated(");
-                       });
-    if (deprecated) continue;
-
+  for (const pdpi::IrMatchFieldDefinition& match_field_info :
+       AllValidMatchFields(config, ir_table_info)) {
     // If the field can have wildcards, we generate a wildcard match with
     // probability `kFieldMatchWildcardProbability`.
     // In the P4RT spec, wildcards are represented as the absence of a match
@@ -915,7 +1045,8 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
 
   // Generate the action.
   ASSIGN_OR_RETURN(*table_entry.mutable_action(),
-                   FuzzAction(gen, config, switch_state, ir_table_info));
+                   FuzzAction(gen, config, switch_state, ir_table_info),
+                   _.SetPrepend() << "while fuzzing action: ");
 
   // Set cookie and priority.
   table_entry.set_metadata(

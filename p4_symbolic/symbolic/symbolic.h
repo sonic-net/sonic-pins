@@ -269,8 +269,7 @@ using Assertion = std::function<z3::expr(const SymbolicContext &)>;
 // entries for every table in that program, and the available physical ports
 // on the switch.
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
-    const Dataplane &data_plane, const std::vector<int> &physical_ports,
-    bool hardcoded_parser);
+    const Dataplane &data_plane, const std::vector<int> &physical_ports);
 
 // Finds a concrete packet and flow in the program that satisfies the given
 // assertion and meets the structure constrained by solver_state.

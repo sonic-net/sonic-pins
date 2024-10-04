@@ -31,22 +31,23 @@
 #include <vector>
 
 #include "absl/random/random.h"
-#include "absl/strings/match.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
-#include "p4/config/v1/p4info.pb.h"
-#include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
-#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
 
 // Upper bound on the number of actions in an ActionProfileActionSet for tables
 // that support one-shot action selector programming.
 constexpr int kActionProfileActionSetMaxCardinality = 32;
+
+// Max member weight for action profiles that use SumOfMembers size semantics.
+// TODO: Get this information from the P4Info when possible.
+constexpr int kActionProfileMaxMemberWeight = 4095;
 
 // A predicate over P4 values (match field or action parameter).
 using P4ValuePredicate =
@@ -86,16 +87,17 @@ const T& UniformFromSpan(absl::BitGen* gen, const std::vector<T>& vec) {
 absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
     const pdpi::IrP4Info& ir_info, int table_id);
 
-// Returns the list of all table IDs in the underlying P4 program.
-const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config);
+// Returns the list of all "valid" actions in the underlying P4 program for
+// `table`. Valid actions are those that are legal for use in table entries and
+// not @deprecated, @unused, or disabled.
+const std::vector<pdpi::IrActionReference> AllValidActions(
+    const FuzzerConfig& config, const pdpi::IrTableDefinition& table);
 
-// Returns the list of all action IDs in the underlying P4 program.
-const std::vector<uint32_t> AllActionIds(const FuzzerConfig& config);
-
-// Returns the list of all match field IDs in the underlying P4 program for
-// table with id table_id.
-const std::vector<uint32_t> AllMatchFieldIds(const FuzzerConfig& config,
-                                             const uint32_t table_id);
+// Returns the list of all "valid" match fields in the underlying P4 program for
+// `table`. Valid match fields are those that are not @deprecated, @unused, or
+// disabled.
+const std::vector<pdpi::IrMatchFieldDefinition> AllValidMatchFields(
+    const FuzzerConfig& config, const pdpi::IrTableDefinition& table);
 
 // Takes a string `data` that represents a number in network byte
 // order (big-endian), and masks off all but the least significant `used_bits`
@@ -220,12 +222,6 @@ AnnotatedWriteRequest FuzzWriteRequest(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
     absl::optional<int> max_batch_size = absl::nullopt);
-
-// Takes a P4 Runtime table and returns randomly chosen action ref from the
-// action refs that are not in default only scope.
-pdpi::IrActionReference ChooseNonDefaultActionRef(
-    absl::BitGen* gen, const FuzzerConfig& config,
-    const pdpi::IrTableDefinition& ir_table_info);
 
 }  // namespace p4_fuzzer
 

@@ -13,36 +13,36 @@
 // limitations under the License.
 #include "p4_fuzzer/fuzz_util.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/random/seed_sequences.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
-#include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
-#include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
-#include "p4_fuzzer/mutation.h"
 #include "p4_fuzzer/test_utils.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_pdpi/pd.h"
-#include "sai_p4/instantiations/google/instantiations.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace p4_fuzzer {
 namespace {
 
 using ::gutil::EqualsProto;
+using ::testing::AnyOfArray;
+using ::testing::Not;
 
 TEST(FuzzUtilTest, SetUnusedBitsToZeroInThreeBytes) {
   std::string data("\xff\xff\xff", 3);
@@ -276,6 +276,90 @@ TEST(FuzzUtilTest, FuzzWriteRequestRespectMaxBatchSize) {
                   .updates_size(),
               max_batch_size)
         << absl::StrCat(" using max_batch_size=", max_batch_size);
+  }
+}
+
+TEST(FuzzUtilTest, FuzzWriteRequestRespectsDisallowList) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  fuzzer_state.config.disabled_fully_qualified_names = {
+      "ingress.id_test_table", "ingress.exact_table", "ingress.ternary_table"};
+
+  absl::flat_hash_set<uint32_t> disallowed_ids;
+  for (const auto& path : fuzzer_state.config.disabled_fully_qualified_names) {
+    std::vector<std::string> parts = absl::StrSplit(path, '.');
+    ASSERT_OK_AND_ASSIGN(
+        const pdpi::IrTableDefinition& table,
+        gutil::FindOrStatus(fuzzer_state.config.info.tables_by_name(),
+                            parts[parts.size() - 1]));
+    disallowed_ids.insert(table.preamble().id());
+  }
+
+  for (int i = 0; i < 1000; i++) {
+    AnnotatedWriteRequest request =
+        FuzzWriteRequest(&fuzzer_state.gen, fuzzer_state.config,
+                         fuzzer_state.switch_state, /*max_batch_size=*/1);
+    if (request.updates_size() > 0) {
+      EXPECT_THAT(request.updates(0).pi().entity().table_entry().table_id(),
+                  Not(AnyOfArray(disallowed_ids)));
+    }
+  }
+}
+
+TEST(FuzzUtilTest, FuzzValidTableEntryRespectsDisallowList) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  fuzzer_state.config.disabled_fully_qualified_names = {
+      "ingress.ternary_table.ipv6_upper_64_bits",
+      "ingress.ternary_table.normal",
+      "ingress.ternary_table.mac",
+      "ingress.ternary_table.unsupported_field",
+  };
+
+  ASSERT_OK_AND_ASSIGN(
+      const pdpi::IrTableDefinition& ternary_table,
+      gutil::FindOrStatus(fuzzer_state.config.info.tables_by_name(),
+                          "ternary_table"));
+
+  absl::flat_hash_set<uint32_t> disallowed_ids;
+  for (const auto& path : fuzzer_state.config.disabled_fully_qualified_names) {
+    std::vector<std::string> parts = absl::StrSplit(path, '.');
+    ASSERT_OK_AND_ASSIGN(
+        const pdpi::IrMatchFieldDefinition& match,
+        gutil::FindOrStatus(ternary_table.match_fields_by_name(),
+                            parts[parts.size() - 1]));
+    disallowed_ids.insert(match.match_field().id());
+  }
+
+  for (int i = 0; i < 1000; i++) {
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::TableEntry entry,
+        FuzzValidTableEntry(&fuzzer_state.gen, fuzzer_state.config,
+                            fuzzer_state.switch_state,
+                            ternary_table.preamble().id()));
+    for (const auto& match : entry.match()) {
+      EXPECT_THAT(match.field_id(), Not(AnyOfArray(disallowed_ids)));
+    }
+  }
+}
+
+TEST(FuzzUtilTest, FuzzActionRespectsDisallowList) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrActionDefinition do_thing_action,
+      gutil::FindOrStatus(fuzzer_state.config.info.actions_by_name(),
+                          "do_thing_1"));
+  fuzzer_state.config.disabled_fully_qualified_names = {
+      do_thing_action.preamble().name()};
+
+  ASSERT_OK_AND_ASSIGN(
+      const pdpi::IrTableDefinition& id_test_table,
+      gutil::FindOrStatus(fuzzer_state.config.info.tables_by_name(),
+                          "id_test_table"));
+
+  for (int i = 0; i < 1000; i++) {
+    ASSERT_OK_AND_ASSIGN(p4::v1::TableAction action,
+                         FuzzAction(&fuzzer_state.gen, fuzzer_state.config,
+                                    fuzzer_state.switch_state, id_test_table));
+    EXPECT_NE(action.action().action_id(), do_thing_action.preamble().id());
   }
 }
 
