@@ -52,7 +52,7 @@ using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::Eq;
 using ::testing::IsEmpty;
-using ::testing::Pair;
+using ::testing::Key;
 
 using PacketsByPort = absl::flat_hash_map<int, packetlib::Packets>;
 using VlanTest = testing::TestWithParam<sai::Instantiation>;
@@ -186,7 +186,7 @@ TEST_P(VlanTest, VlanPacketWithVid4095GetsForwardedWithoutVlanTagByDefault) {
                                         /*vid_hexstr=*/"0xFFF")));
 
   // The packet must be forwarded with no VLAN tag.
-  ASSERT_EQ(output_by_port.size(), 1);
+  ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
   ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
               ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                           HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -208,7 +208,7 @@ TEST_P(VlanTest, NonVlanPacketGetsForwardedByDefault) {
                        bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
 
   // The packet must be forwarded with no VLAN tag.
-  ASSERT_EQ(output_by_port.size(), 1);
+  ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
   ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
               ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                           HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -234,7 +234,7 @@ TEST_P(VlanTest,
                                         /*vid_hexstr=*/"0x002")));
 
   // The packet must be forwarded.
-  ASSERT_EQ(output_by_port.size(), 1);
+  ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
   ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
               ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                           HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -257,7 +257,7 @@ TEST_P(VlanTest, NonVlanPacketGetsForwardedWhenVlanChecksDisabled) {
                        bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
 
   // The packet must be forwarded with no VLAN tag.
-  ASSERT_EQ(output_by_port.size(), 1);
+  ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
   ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
               ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                           HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -313,7 +313,7 @@ TEST_P(VlanTest,
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
                          bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
     // The packet must be forwarded with VLAN kEgressVlan.
-    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort)
                     .packets()
                     .at(0)
@@ -330,7 +330,7 @@ TEST_P(VlanTest,
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0x00b")));
     // The packet must be forwarded with VLAN kEgressVlan.
-    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort)
                     .packets()
                     .at(0)
@@ -347,7 +347,7 @@ TEST_P(VlanTest,
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0xfff")));
     // The packet must be forwarded with VLAN kEgressVlan.
-    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort)
                     .packets()
                     .at(0)
@@ -411,7 +411,7 @@ TEST_P(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
                          bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -423,7 +423,7 @@ TEST_P(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0x00b")));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -435,7 +435,7 @@ TEST_P(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0xfff")));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -454,7 +454,7 @@ TEST_P(VlanTest, IngressVidGetCarriedOverToEgressWhenVlanRewriteIsDisabled) {
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
                          bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -466,7 +466,7 @@ TEST_P(VlanTest, IngressVidGetCarriedOverToEgressWhenVlanRewriteIsDisabled) {
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0x00b")));
     // The packet must be forwarded with VLAN 0x00b.
-    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort)
                     .packets()
                     .at(0)
@@ -483,7 +483,7 @@ TEST_P(VlanTest, IngressVidGetCarriedOverToEgressWhenVlanRewriteIsDisabled) {
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0xfff")));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -505,7 +505,7 @@ TEST_P(VlanTest,
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
                          bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -517,7 +517,7 @@ TEST_P(VlanTest,
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0x00b")));
     // The packet must be forwarded with VLAN 0x00b.
-    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort)
                     .packets()
                     .at(0)
@@ -534,7 +534,7 @@ TEST_P(VlanTest,
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0xfff")));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -577,7 +577,7 @@ TEST(VlanTest,
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
                          bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
     // The packet must be forwarded with VLAN kEgressVlan.
-    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort)
                     .packets()
                     .at(0)
@@ -594,7 +594,7 @@ TEST(VlanTest,
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0x00b")));
     // The packet must be forwarded with VLAN kEgressVlan.
-    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort)
                     .packets()
                     .at(0)
@@ -611,7 +611,7 @@ TEST(VlanTest,
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0xfff")));
     // The packet must be forwarded with VLAN kEgressVlan.
-    ASSERT_THAT(output_by_port, ElementsAre(Pair(kEgressPort, _)));
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort)
                     .packets()
                     .at(0)
@@ -675,7 +675,7 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
                          bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -687,7 +687,7 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0x00b")));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
@@ -699,7 +699,7 @@ TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
         bmv2.SendPacket(kIngressPort, GetVlanIpv4PacketOrDie(
                                           /*vid_hexstr=*/"0xfff")));
     // The packet must be forwarded with no VLAN tag.
-    ASSERT_EQ(output_by_port.size(), 1);
+    ASSERT_THAT(output_by_port, ElementsAre(Key(kEgressPort)));
     ASSERT_THAT(output_by_port.at(kEgressPort).packets().at(0).headers(),
                 ElementsAre(HasHeaderCase(packetlib::Header::kEthernetHeader),
                             HasHeaderCase(packetlib::Header::kIpv4Header)));
