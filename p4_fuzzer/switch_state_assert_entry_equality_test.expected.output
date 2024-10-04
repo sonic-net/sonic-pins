@@ -1,0 +1,169 @@
+#########################################################
+### Test Case: Switch Has Unique Entry
+#########################################################
+
+=== Switch Entries ===
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+
+=== Fuzzer Entries ===
+
+=== Mask Function ===
+No mask function was used
+
+=== Test Output ===
+FAILED_PRECONDITION: Number of entries on switch does not match number of entries in Fuzzer
+Entries on switch: 1
+Entries in Fuzzer: 0
+The following entry exists on switch but not in Fuzzer:
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+
+
+#########################################################
+### Test Case: Fuzzer Has Unique Entry
+#########################################################
+
+=== Switch Entries ===
+
+=== Fuzzer Entries ===
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+
+=== Mask Function ===
+No mask function was used
+
+=== Test Output ===
+FAILED_PRECONDITION: Number of entries on switch does not match number of entries in Fuzzer
+Entries on switch: 0
+Entries in Fuzzer: 1
+The following entry exists in Fuzzer but not on switch:
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+
+
+#########################################################
+### Test Case: Switch and Fuzzer entry have same key but different value
+#########################################################
+
+=== Switch Entries ===
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+
+=== Fuzzer Entries ===
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+controller_metadata: "Am cookie, much wow"
+
+=== Mask Function ===
+No mask function was used
+
+=== Test Output ===
+FAILED_PRECONDITION: Entry exists in both switch and Fuzzer, but is different:
+deleted: controller_metadata: "Am cookie, much wow"
+
+Entry on switch:
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+Entry in Fuzzer:
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+controller_metadata: "Am cookie, much wow"
+
+
+#########################################################
+### Test Case: Switch and Fuzzer have same entries
+#########################################################
+
+=== Switch Entries ===
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+
+=== Fuzzer Entries ===
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+
+=== Mask Function ===
+No mask function was used
+
+=== Test Output ===
+OK: 
+
+#########################################################
+### Test Case: Missing metadata is ignored due to mask function
+#########################################################
+
+=== Switch Entries ===
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+
+=== Fuzzer Entries ===
+table_name: "golden_table"
+matches {
+  name: "field1"
+  exact {
+    hex_str: "0xbe0a0bed"
+  }
+}
+controller_metadata: "Am cookie, much wow"
+
+=== Mask Function ===
+Mask ignores metadata field
+
+=== Test Output ===
+OK: 

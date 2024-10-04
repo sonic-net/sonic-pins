@@ -14,36 +14,76 @@
 #include "p4_fuzzer/switch_state.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <functional>
 #include <iterator>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "glog/logging.h"
+#include "google/protobuf/util/message_differencer.h"
 #include "gutil/collections.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
+#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
 
 using ::gutil::FindOrDie;
+using ::gutil::PrintTextProto;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::IrP4Info;
 using ::pdpi::IrTableEntry;
 
+/*absl::StatusOr<TableEntry> CanonicalizeTableEntry(const IrP4Info& info,
+                                                  const TableEntry& entry,
+                                                  bool key_only) {
+  ASSIGN_OR_RETURN(IrTableEntry ir_entry,
+                   pdpi::PiTableEntryToIr(info, entry, key_only),
+                   _ << "Could not canonicalize: PiToIr Error\n"
+                     << entry.DebugString());
+  ASSIGN_OR_RETURN(TableEntry canonical_entry,
+                   IrTableEntryToPi(info, ir_entry, key_only),
+                   _ << "Could not canonicalize: IrToPi Error\n"
+                     << entry.DebugString());
+  return canonical_entry;
+}*/
+
+absl::StatusOr<TableEntry> CanonicalizeTableEntry(const IrP4Info& info,
+                                                  const TableEntry& entry,
+                                                  bool key_only) {
+  auto pdpi_options = pdpi::TranslationOptions{
+      .key_only = key_only,
+  };
+  ASSIGN_OR_RETURN(IrTableEntry ir_entry,
+                   pdpi::PiTableEntryToIr(info, entry, pdpi_options),
+                   _ << "Could not canonicalize: PiToIr Error\n"
+                     << entry.DebugString());
+  ASSIGN_OR_RETURN(TableEntry canonical_entry,
+                   IrTableEntryToPi(info, ir_entry, pdpi_options),
+                   _ << "Could not canonicalize: IrToPi Error\n"
+                     << entry.DebugString());
+  return canonical_entry;
+}
+
 SwitchState::SwitchState(IrP4Info ir_p4info)
     : ir_p4info_(std::move(ir_p4info)) {
   for (auto& [table_id, table] : ir_p4info_.tables_by_id()) {
     tables_[table_id] = TableEntries();
+    canonical_tables_[table_id] = TableEntries();
   }
 }
 
@@ -108,8 +148,33 @@ std::vector<TableEntry> SwitchState::GetTableEntries(
   return result;
 }
 
-absl::optional<TableEntry> SwitchState::GetTableEntry(TableEntry entry) const {
-  auto table = FindOrDie(tables_, entry.table_id());
+std::vector<TableEntry> SwitchState::GetCanonicalTableEntries(
+    const uint32_t table_id) const {
+  std::vector<TableEntry> result;
+
+  for (const auto& [key, entry] : FindOrDie(canonical_tables_, table_id)) {
+    result.push_back(entry);
+  }
+
+  return result;
+}
+
+std::optional<TableEntry> SwitchState::GetTableEntry(
+    const TableEntry& entry) const {
+  const TableEntries& table = FindOrDie(tables_, entry.table_id());
+
+  if (auto table_iter = table.find(pdpi::TableEntryKey(entry));
+      table_iter != table.end()) {
+    auto [table_key, table_entry] = *table_iter;
+    return table_entry;
+  }
+
+  return absl::nullopt;
+}
+
+std::optional<TableEntry> SwitchState::GetCanonicalTableEntry(
+    const TableEntry& entry) const {
+  const TableEntries& table = FindOrDie(canonical_tables_, entry.table_id());
 
   if (auto table_iter = table.find(pdpi::TableEntryKey(entry));
       table_iter != table.end()) {
@@ -124,40 +189,97 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
   const int table_id = update.entity().table_entry().table_id();
 
   auto& table = FindOrDie(tables_, table_id);
+  auto& canonical_table = FindOrDie(canonical_tables_, table_id);
 
   const TableEntry& table_entry = update.entity().table_entry();
+  // TODO: PDPI IR Update translation currently does not properly
+  // ignore non-key fields on DELETE updates. Therefore, information to ignore
+  // non-key fields is explitcitly passed for canonicalization.
+  ASSIGN_OR_RETURN(
+      const TableEntry& canonical_table_entry,
+      CanonicalizeTableEntry(ir_p4info_, table_entry,
+                             /*key_only=*/update.type() == Update::DELETE));
 
   switch (update.type()) {
     case Update::INSERT: {
       auto [iter, not_present] =
           table.insert(/*value=*/{pdpi::TableEntryKey(table_entry), table_entry});
 
+      auto [canonical_iter, canonical_not_present] =
+          canonical_table.insert(/*value=*/{
+              pdpi::TableEntryKey(canonical_table_entry), canonical_table_entry});
+
+      if (not_present != canonical_not_present) {
+        return gutil::InternalErrorBuilder()
+               << "Standard Table and Canonical Table out of sync. Entry "
+               << (not_present ? "not present" : "present")
+               << " in Standard Table but "
+               << (canonical_not_present ? "not present" : "present")
+               << " in Canonical Table.\n"
+               << "Offending Entry Update\n"
+               << update.DebugString();
+      }
+
       if (!not_present) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Cannot install the same table entry multiple times. Update: "
                << update.DebugString();
       }
+
       break;
     }
 
     case Update::DELETE: {
-      if (tables_[table_id].erase(pdpi::TableEntryKey(table_entry)) != 1) {
+      int entries_erased = tables_[table_id].erase(pdpi::TableEntryKey(table_entry));
+      int canonical_entries_erased = canonical_tables_[table_id].erase(
+          pdpi::TableEntryKey(canonical_table_entry));
+
+      if (entries_erased != canonical_entries_erased) {
+        return gutil::InternalErrorBuilder()
+               << "Standard Table and Canonical Table out of sync. Entry "
+               << (entries_erased == 0 ? "not present" : "present")
+               << " in Standard Table but "
+               << (canonical_entries_erased == 0 ? "not present" : "present")
+               << " in Canonical Table.\n"
+               << "Offending Update\n"
+               << update.DebugString();
+      }
+
+      if (entries_erased != 1) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Cannot erase non-existent table entries. Update: "
                << update.DebugString();
       }
+
       break;
     }
 
     case Update::MODIFY: {
-      auto [iter, not_present] =
-          table.insert(/*value=*/{pdpi::TableEntryKey(table_entry), table_entry});
+      auto [iter, not_present] = table.insert_or_assign(
+          /*k=*/pdpi::TableEntryKey(table_entry), /*obj=*/table_entry);
+
+      auto [canonical_iter, canonical_not_present] =
+          canonical_table.insert_or_assign(/*k=*/
+                                           pdpi::TableEntryKey(canonical_table_entry),
+                                           /*obj=*/canonical_table_entry);
+
+      if (not_present != canonical_not_present) {
+        return gutil::InternalErrorBuilder()
+               << "Standard Table and Canonical Table out of sync. Entry "
+               << (not_present ? "not present" : "present")
+               << " in Standard Table but "
+               << (canonical_not_present ? "not present" : "present")
+               << " in Canonical Table.\n"
+               << "Offending Update\n"
+               << update.DebugString();
+      }
 
       if (not_present) {
         return gutil::InvalidArgumentErrorBuilder()
                << "Cannot modify a non-existing update. Update: "
                << update.DebugString();
       }
+
       break;
     }
 
@@ -173,12 +295,22 @@ absl::Status SwitchState::SetTableEntries(
 
   for (const p4::v1::TableEntry& entry : table_entries) {
     auto table = tables_.find(entry.table_id());
+    auto canonical_table = canonical_tables_.find(entry.table_id());
     if (table == tables_.end()) {
       return gutil::InvalidArgumentErrorBuilder()
              << "table entry with unknown table ID '" << entry.table_id()
              << "'";
     }
+    if (canonical_table == canonical_tables_.end()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "canonical table entry with unknown table ID '"
+             << entry.table_id() << "'";
+    }
+    ASSIGN_OR_RETURN(TableEntry canonical_entry,
+                     CanonicalizeTableEntry(ir_p4info_, entry, false));
     table->second.insert({pdpi::TableEntryKey(entry), entry});
+    canonical_table->second.insert(
+        {pdpi::TableEntryKey(canonical_entry), canonical_entry});
   }
 
   return absl::OkStatus();
@@ -276,5 +408,178 @@ absl::btree_set<std::string> SwitchState::GetIdsForMatchField(
   return result;
 }
 
+absl::Status SwitchState::CheckConsistency() const {
+  if (tables_.size() != canonical_tables_.size()) {
+    return absl::InternalError(
+        absl::StrFormat("Size of `tables_` and `canonical_tables_` is "
+                        "different. `tables_`: '%d'  `canonical_tables_`: '%d'",
+                        tables_.size(), canonical_tables_.size()));
+  }
+
+  // Ensure that every `table_id` in `tables_` is also present in
+  // `canonical_tables_` and that the corresponding tables are the same size.
+  for (const auto& [table_id, table] : tables_) {
+    if (!canonical_tables_.contains(table_id)) {
+      return absl::InternalError(absl::StrFormat(
+          "`canonical_tables_` is missing table with id '%d'", table_id));
+    }
+
+    const TableEntries& canonical_table = canonical_tables_.at(table_id);
+
+    if (canonical_table.size() != table.size()) {
+      return absl::InternalError(absl::StrFormat(
+          "Number of standard entries differs from number of canonical entries "
+          "in table with id %d. Standard Entries: %d  Canonical Entries: %d",
+          table_id, table.size(), canonical_tables_.at(table_id).size()));
+    }
+
+    // Ensure that every `table_entry` in a standard table has a corresponding
+    // `canonical_table_entry` in a canonical table.
+    for (const auto& [table_key, table_entry] : table) {
+      ASSIGN_OR_RETURN(TableEntry canonical_table_entry,
+                       CanonicalizeTableEntry(ir_p4info_, table_entry, false));
+
+      std::optional<TableEntry> fetched_entry =
+          GetCanonicalTableEntry(canonical_table_entry);
+      if (!fetched_entry.has_value()) {
+        return absl::InternalError(absl::StrFormat(
+            "Table entry %s is missing corresponding canonical table entry",
+            table_entry.DebugString()));
+      }
+
+      google::protobuf::util::MessageDifferencer differ;
+      differ.TreatAsSet(TableEntry::descriptor()->FindFieldByName("match"));
+      if (!gutil::ProtoEqual(canonical_table_entry, *fetched_entry, differ)) {
+        return absl::InternalError(absl::StrFormat(
+            "Stored canonical entry differs from expected canonical entry\n "
+            "Stored Entry: %s Expected Entry: %s",
+            fetched_entry->DebugString(), canonical_table_entry.DebugString()));
+      }
+    }
+  }
+  return absl::OkStatus();
+}
+
+absl::Status SwitchState::AssertEntriesAreEqualToState(
+    const std::vector<p4::v1::TableEntry>& switch_entries,
+    std::optional<std::function<bool(const IrTableEntry&, const IrTableEntry&)>>
+        TreatAsEqualDueToKnownBug) const {
+  std::string status_message = "";
+
+  // Condition that requires a search for unique entries in switchstate.
+  bool entry_unique_to_switch = false;
+
+  if (switch_entries.size() != GetNumTableEntries()) {
+    absl::StrAppendFormat(&status_message,
+                          "Number of entries on switch does not match number "
+                          "of entries in Fuzzer\n"
+                          "Entries on switch: %d\n"
+                          "Entries in Fuzzer: %d\n",
+                          switch_entries.size(), GetNumTableEntries());
+  }
+
+  // Message differencer for PI Table Entries.
+  google::protobuf::util::MessageDifferencer differ;
+  differ.TreatAsSet(
+      p4::v1::TableEntry().GetDescriptor()->FindFieldByName("match"));
+
+  // Message differencer for IR Table Entries.
+  google::protobuf::util::MessageDifferencer ir_differ;
+  ir_differ.TreatAsSet(
+      IrTableEntry().GetDescriptor()->FindFieldByName("matches"));
+
+  std::optional<p4::v1::TableEntry> fuzzer_entry;
+  for (const auto& switch_entry : switch_entries) {
+    fuzzer_entry = GetCanonicalTableEntry(switch_entry);
+
+    // Is there an entry on the switch that does not exist in the Fuzzer?
+    if (!fuzzer_entry.has_value()) {
+      entry_unique_to_switch = true;
+      ASSIGN_OR_RETURN(IrTableEntry ir_entry,
+                       pdpi::PiTableEntryToIr(ir_p4info_, switch_entry));
+      absl::StrAppend(
+          &status_message,
+          "The following entry exists on switch but not in Fuzzer:\n",
+          PrintTextProto(ir_entry));
+      continue;
+    }
+
+    std::string differences = "";
+    differ.ReportDifferencesToString(&differences);
+    std::string ir_differences = "";
+    ir_differ.ReportDifferencesToString(&ir_differences);
+
+    // Is there an entry with the same key on both the switch and in the Fuzzer,
+    // but they differ in other ways?
+    if (!differ.Compare(*fuzzer_entry, switch_entry)) {
+      ASSIGN_OR_RETURN(IrTableEntry ir_switch_entry,
+                       pdpi::PiTableEntryToIr(ir_p4info_, switch_entry));
+      ASSIGN_OR_RETURN(IrTableEntry ir_fuzzer_entry,
+                       pdpi::PiTableEntryToIr(ir_p4info_, *fuzzer_entry));
+
+      if (ir_differ.Compare(ir_fuzzer_entry, ir_switch_entry)) {
+        return absl::InternalError(absl::StrFormat(
+            "PI 'entries' were not equal but IR 'entries' were\n"
+            "IR Entry\n"
+            "%s"
+            "Differences in PI 'entries'\n"
+            "%s\n"
+            "Switch PI Entry\n"
+            "%s"
+            "Fuzzer PI Entry\n"
+            "%s",
+            PrintTextProto(ir_switch_entry), differences,
+            PrintTextProto(switch_entry), PrintTextProto(*fuzzer_entry)));
+
+        // If there is a difference, are known bugs being masked and is the
+        // difference caused by a known bug?
+      } else if (!TreatAsEqualDueToKnownBug.has_value() ||
+                 !(*TreatAsEqualDueToKnownBug)(ir_fuzzer_entry,
+                                               ir_switch_entry)) {
+        absl::StrAppendFormat(
+            &status_message,
+            "Entry exists in both switch and Fuzzer, but is different:\n"
+            "%s\n"
+            "Entry on switch:\n"
+            "%s"
+            "Entry in Fuzzer:\n"
+            "%s",
+            ir_differences, PrintTextProto(ir_switch_entry),
+            PrintTextProto(ir_fuzzer_entry));
+      }
+    }
+  }
+
+  // Are there entries in the Fuzzer that do not exist on the switch?
+  if (switch_entries.size() != GetNumTableEntries() || entry_unique_to_switch) {
+    absl::flat_hash_map<int, TableEntries> fuzzer_state_copy =
+        canonical_tables_;
+
+    // Removes all entries from the `fuzzer_state_copy` that exist on the
+    // switch.
+    for (const auto& switch_entry : switch_entries) {
+      if (GetCanonicalTableEntry(switch_entry).has_value()) {
+        fuzzer_state_copy.at(switch_entry.table_id())
+            .erase(pdpi::TableEntryKey(switch_entry));
+      }
+    }
+
+    // All remaining entries exist only in the fuzzer.
+    for (const auto& [table_id, table] : fuzzer_state_copy) {
+      for (const auto& [key, fuzzer_entry] : table) {
+        ASSIGN_OR_RETURN(IrTableEntry ir_entry,
+                         pdpi::PiTableEntryToIr(ir_p4info_, fuzzer_entry));
+        absl::StrAppend(
+            &status_message,
+            "The following entry exists in Fuzzer but not on switch:\n",
+            PrintTextProto(ir_entry));
+      }
+    }
+  }
+
+  if (status_message.empty()) return absl::OkStatus();
+
+  return absl::FailedPreconditionError(status_message);
+}
 
 }  // namespace p4_fuzzer

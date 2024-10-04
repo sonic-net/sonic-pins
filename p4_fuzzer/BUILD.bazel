@@ -1,4 +1,5 @@
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
 
 package(
     licenses = ["notice"],
@@ -25,7 +26,9 @@ cc_library(
     deps = [ 
         "//p4_pdpi:entity_keys",
         "//gutil:collections",
+        "//gutil:proto",
         "//gutil:status",
+        "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi/internal:ordered_map",
         "@com_github_google_glog//:glog",
@@ -38,7 +41,9 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
-    ],  
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+    ],
 )
 
 cc_test(
@@ -48,6 +53,7 @@ cc_test(
         ":switch_state",
         ":test_utils",
         "//gutil:collections",
+        "//gutil:proto",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
         "//p4_pdpi:ir",
@@ -58,6 +64,7 @@ cc_test(
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:optional",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -93,7 +100,9 @@ cc_library(
         "fuzzer_config.h",
     ],
     deps = [
+        ":table_entry_key",
         "//p4_pdpi:ir_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_set",
     ],
@@ -338,4 +347,33 @@ p4_library(
 cc_library(
     name = "acl_table_test_ids",
     hdrs = ["p4_programs/sai-p4-google/ids.h"],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "switch_state_assert_entry_equality_test_runner",
+    srcs = ["switch_state_assert_entry_equality_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":switch_state",
+        "//gutil:collections",
+        "//gutil:testing",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi/testing:test_p4info_cc",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cmd_diff_test(
+    name = "switch_state_assert_entry_equality_test",
+    actual_cmd = "$(execpath :switch_state_assert_entry_equality_test_runner)",
+    expected = ":switch_state_assert_entry_equality_test.expected.output",
+    tools = [":switch_state_assert_entry_equality_test_runner"],
 )
