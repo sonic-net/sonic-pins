@@ -155,5 +155,47 @@ Update MakePiUpdate(const pdpi::IrP4Info& info, Update::Type type,
   return *pi;
 }
 
+TEST(SwitchStateTest, SetTableEntriesSetsTableEntries) {
+  // Initialize state.
+  SwitchState state(pdpi::GetTestIrP4Info());
+  EXPECT_TRUE(state.AllTablesEmpty());
+  constexpr uint32_t kTableId1 = 1 | kTableIdMostSignificantByte;
+  constexpr uint32_t kTableId2 = 2 | kTableIdMostSignificantByte;
+
+  // Call SetTableEntries and ensure it indeed populates the correct tables.
+  std::vector<p4::v1::TableEntry> entries;
+  entries.emplace_back().set_table_id(kTableId1);  // Entry #1 in table 1.
+  entries.emplace_back().set_table_id(kTableId2);  // Entry #1 in table 2.
+  entries.emplace_back() =                         // Entry #2 in table 1.
+      gutil::ParseProtoOrDie<p4::v1::TableEntry>(
+          absl::Substitute(R"pb(
+                             table_id: $0
+                             match {
+                               field_id: 1
+                               exact { value: "second entry in table 1" }
+                             }
+                           )pb",
+                           kTableId1));
+  ASSERT_OK(state.SetTableEntries(entries))
+      << " with the following P4Info:\n " << state.GetIrP4Info().DebugString();
+  EXPECT_EQ(state.GetNumTableEntries(kTableId1), 2);
+  EXPECT_EQ(state.GetNumTableEntries(kTableId2), 1);
+  EXPECT_EQ(state.GetNumTableEntries(), 3);
+
+  state.ClearTableEntries();
+  EXPECT_EQ(state.GetNumTableEntries(kTableId1), 0);
+  EXPECT_EQ(state.GetNumTableEntries(kTableId2), 0);
+  EXPECT_EQ(state.GetNumTableEntries(), 0);
+  EXPECT_TRUE(state.AllTablesEmpty());
+}
+
+TEST(SwitchStateTest, SetTableEntriesFailsForUnknownTableIds) {
+  SwitchState state(pdpi::GetTestIrP4Info());
+  EXPECT_THAT(
+      state.SetTableEntries(std::vector{
+          gutil::ParseProtoOrDie<p4::v1::TableEntry>("table_id: 123456789")}),
+      gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
 }  // namespace
 }  // namespace p4_fuzzer

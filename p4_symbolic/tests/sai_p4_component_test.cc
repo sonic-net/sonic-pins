@@ -13,6 +13,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
 #include "p4_symbolic/parser.h"
+#include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -30,15 +31,12 @@ using ::testing::Not;
 constexpr absl::string_view kTableEntries = R"PB(
   entries {
     acl_pre_ingress_table_entry  {
-      match {}
+      match {
+        src_mac { value: "22:22:22:11:11:11" mask: "ff:ff:ff:ff:ff:ff" }
+        dst_ip { value: "10.0.10.0" mask: "255.255.255.255" }
+      }
       action { set_vrf { vrf_id: "vrf-80" } }
       priority: 1
-    }
-  }
-  entries {
-    ipv6_table_entry {
-      match { vrf_id: "vrf-80" }
-      action { drop {} }
     }
   }
   entries {

@@ -14,6 +14,8 @@
 #ifndef GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
 #define GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
 
+#include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_set.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
@@ -25,8 +27,26 @@ struct FuzzerConfig {
   std::vector<std::string> ports;
   // The set of valid QOS queues.
   std::vector<std::string> qos_queues;
+  // The set of tables where the fuzzer should treat their resource guarantees
+  // as hard limits rather than trying to go above them. If there are
+  // limitations or bugs on the switch causing it to behave incorrectly when the
+  // resource guarantees of particular tables are exceeded, this list can be
+  // used to allow the fuzzer to produce interesting results in spite of this
+  // shortcoming.
+  // This is a btree_set to ensure a deterministic ordering.
+  absl::btree_set<std::string>
+      tables_for_which_to_not_exceed_resource_guarantees;
+  // Fully qualified names of tables, actions, or match fields to skip during
+  // fuzzing. Match field names should be prepended with the relevant table name
+  // to uniquely identify them.
+  // Users should ensure that any set that makes it impossible to generate a
+  // valid table entry for a particular table contains the table itself.
+  // TODO: Check the property above instead.
+  absl::flat_hash_set<std::string> disabled_fully_qualified_names;
   // The P4RT role the fuzzer should use.
   std::string role;
+  // Controls whether empty ActionProfile one-shots should be generated.
+  bool no_empty_action_profile_groups = false;
 };
 
 }  // namespace p4_fuzzer
