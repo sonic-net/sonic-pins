@@ -71,6 +71,8 @@ type bit<QOS_QUEUE_BITWIDTH> qos_queue_t;
 
 typedef bit<ROUTE_METADATA_BITWIDTH> route_metadata_t;
 typedef bit<ACL_METADATA_BITWIDTH> acl_metadata_t;
+typedef bit<MULTICAST_GROUP_ID_BITWIDTH> multicast_group_id_t;
+typedef bit<REPLICA_INSTANCE_BITWIDTH> replica_instance_t;
 
 // -- Meters -------------------------------------------------------------------
 

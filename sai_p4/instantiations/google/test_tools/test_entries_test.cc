@@ -24,6 +24,7 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/pd.h"
@@ -35,8 +36,9 @@ namespace sai {
 namespace {
 
 using ::gutil::EqualsProto;
+using ::gutil::HasOneofCase;
 using ::gutil::IsOkAndHolds;
-using ::testing::_;
+using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::Pointwise;
 using ::testing::SizeIs;
@@ -189,6 +191,41 @@ void EraseNexthop(pdpi::IrEntities& entities) {
       }));
 }
 
+TEST(EntryBuilder,
+     AddEntriesForwardingIpPacketsToGivenMulticastGroupAddsEntries) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(123)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), SizeIs(5));
+}
+
+TEST(EntryBuilder,
+     AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(123)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv4_table"
+                  action {
+                    name: "set_multicast_group_id"
+                    params {
+                      name: "multicast_group_id"
+                      value { hex_str: "0x007b" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
 TEST(EntryBuilder, AddVrfEntryAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
@@ -252,6 +289,80 @@ TEST(EntryBuilder, AddEntryDecappingAllIpInIpv6PacketsAndSettingVrfAddsEntry) {
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), SizeIs(3));
+}
+
+TEST(EntryBuilder, AddMulticastGroupEntryReplicaOverloadAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities replica_overload_entities,
+                       EntryBuilder()
+                           .AddMulticastGroupEntry(
+                               123,
+                               {
+                                   Replica{.egress_port = "\1", .instance = 11},
+                                   Replica{.egress_port = "\2", .instance = 22},
+                               })
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(replica_overload_entities.entities(),
+              ElementsAre(HasOneofCase<pdpi::IrEntity>(
+                  "entity", pdpi::IrEntity::kPacketReplicationEngineEntry)));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities port_overload_entities,
+                       EntryBuilder()
+                           .AddMulticastGroupEntry(123, {"1", "2"})
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(port_overload_entities.entities(),
+              ElementsAre(HasOneofCase<pdpi::IrEntity>(
+                  "entity", pdpi::IrEntity::kPacketReplicationEngineEntry)));
+}
+
+TEST(EntryBuilder, AddMulticastGroupEntryPortOverloadAddsUniqueReplicas) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddMulticastGroupEntry(123, {"1", "1", "1"})
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  ASSERT_THAT(entities.entities(), SizeIs(1));
+  const auto& replicas = entities.entities(0)
+                             .packet_replication_engine_entry()
+                             .multicast_group_entry()
+                             .replicas();
+  ASSERT_THAT(replicas, SizeIs(3));
+  EXPECT_NE(replicas[0].instance(), replicas[1].instance());
+  EXPECT_NE(replicas[0].instance(), replicas[2].instance());
+  EXPECT_NE(replicas[1].instance(), replicas[2].instance());
+}
+
+TEST(EntryBuilder, AddMulticastRouterInterfaceEntryAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+                      .AddMulticastRouterInterfaceEntry({
+                      .multicast_replica_port = "\1",
+                      .multicast_replica_instance = 15,
+                      .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
+                  })
+                  .LogPdEntries()
+                  .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry { table_name: "multicast_router_interface_table" }
+              )pb"))));
+}
+
+TEST(EntryBuilder, AddIngressAclDroppingAllPacketsAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddIngressAclDroppingAllPackets()
+                           .AddIngressAclDroppingAllPackets()
+                           .AddIngressAclDroppingAllPackets()
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+                table_entry { table_name: "acl_ingress_table" }
+              )pb"))));
 }
 
 TEST(EntryBuilder, AddMirrorSessionTableEntry) {
