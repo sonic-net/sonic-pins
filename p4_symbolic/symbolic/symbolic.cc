@@ -16,6 +16,8 @@
 
 #include <utility>
 
+#include "absl/types/optional.h"
+#include "glog/logging.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/packet.h"
@@ -114,25 +116,25 @@ absl::StatusOr<std::optional<ConcreteContext>> Solve(
 
   solver_state->solver->push();
   solver_state->solver->add(constraint);
-  switch (solver_state->solver->check()) {
+  z3::check_result check_result = solver_state->solver->check();
+  switch (check_result) {
     case z3::unsat:
-      solver_state->solver->pop();
-      return std::optional<ConcreteContext>();
-
     case z3::unknown:
       solver_state->solver->pop();
-      return std::optional<ConcreteContext>();
+      return absl::nullopt;
 
     case z3::sat:
-    default:
       z3::model packet_model = solver_state->solver->get_model();
       ASSIGN_OR_RETURN(
           ConcreteContext result,
           util::ExtractFromModel(solver_state->context, packet_model,
                                  solver_state->translator));
       solver_state->solver->pop();
-      return std::make_optional<ConcreteContext>(result);
+      return result;
   }
+  LOG(DFATAL) << "invalid Z3 check() result: "
+              << static_cast<int>(check_result);
+  return absl::nullopt;
 }
 
 std::string DebugSMT(const std::unique_ptr<SolverState> &solver_state,
