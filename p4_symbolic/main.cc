@@ -30,6 +30,7 @@
 #include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.h"
 #include "p4_symbolic/parser.h"
+#include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/util/io.h"
 
@@ -65,8 +66,17 @@ absl::Status ParseAndEvaluate() {
   // Evaluate program symbolically.
   ASSIGN_OR_RETURN(
       const std::unique_ptr<p4_symbolic::symbolic::SolverState> &solver_state,
-      p4_symbolic::symbolic::EvaluateP4Pipeline(
-          dataplane, std::vector<int>{0, 1}, hardcoded_parser));
+      p4_symbolic::symbolic::EvaluateP4Pipeline(dataplane,
+                                                std::vector<int>{0, 1}));
+  // Add constraints for parser.
+  if (hardcoded_parser) {
+    ASSIGN_OR_RETURN(
+        std::vector<z3::expr> parser_constraints,
+        p4_symbolic::EvaluateSaiParser(solver_state->context.ingress_headers));
+    for (auto &constraint : parser_constraints) {
+      solver_state->solver->add(constraint);
+    }
+  }
 
   // Find a packet matching every entry of every table.
   // Loop over tables in a deterministic order for output consistency (important

@@ -26,6 +26,9 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/types/optional.h"
+#include "absl/types/span.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "z3++.h"
@@ -71,23 +74,21 @@ int FindMatchWithName(const pdpi::IrTableEntry &entry,
 // and not the sorted array.
 std::vector<std::pair<size_t, pdpi::IrTableEntry>> SortEntries(
     const ir::Table &table, const std::vector<pdpi::IrTableEntry> &entries) {
+  if (entries.empty()) return {};
   // Find which *definition* of priority we should use by looking at the
   // table's match types.
   const pdpi::IrTableDefinition &table_definition = table.table_definition();
   bool has_ternary = false;
-  bool has_lpm = false;
-  int lpm_index = -1;
-  for (const auto &[id, match_field_definition] :
-       table_definition.match_fields_by_id()) {
+  absl::optional<std::string> lpm_key;
+  for (const auto &[name, match_field_definition] :
+       table_definition.match_fields_by_name()) {
     switch (match_field_definition.match_field().match_type()) {
       case p4::config::v1::MatchField::TERNARY: {
         has_ternary = true;
         break;
       }
       case p4::config::v1::MatchField::LPM: {
-        has_lpm = true;
-        // The match id starts from 1 (instead of zero).
-        lpm_index = id - 1;
+        lpm_key = name;
         break;
       }
       default: {
@@ -116,13 +117,23 @@ std::vector<std::pair<size_t, pdpi::IrTableEntry>> SortEntries(
                     const std::pair<size_t, pdpi::IrTableEntry> &entry2) {
       return entry1.second.priority() > entry2.second.priority();
     };
-  } else if (has_lpm) {
+  } else if (lpm_key.has_value()) {
     // Sort by prefix length.
-    comparator = [lpm_index](
+    comparator = [lpm_key](
                      const std::pair<size_t, pdpi::IrTableEntry> &entry1,
                      const std::pair<size_t, pdpi::IrTableEntry> &entry2) {
-      return entry1.second.matches(lpm_index).lpm().prefix_length() >
-             entry2.second.matches(lpm_index).lpm().prefix_length();
+      auto is_lpm_match = [=](const pdpi::IrMatch &match) -> bool {
+        return match.name() == *lpm_key;
+      };
+      auto matches1 = entry1.second.matches();
+      auto matches2 = entry2.second.matches();
+      auto it1 = std::find_if(matches1.begin(), matches1.end(), is_lpm_match);
+      auto it2 = std::find_if(matches2.begin(), matches2.end(), is_lpm_match);
+      int prefix_length1 =
+          it1 == matches1.end() ? 0 : it1->lpm().prefix_length();
+      int prefix_length2 =
+          it2 == matches2.end() ? 0 : it2->lpm().prefix_length();
+      return prefix_length1 > prefix_length2;
     };
   } else {
     return sorted_entries;
@@ -280,7 +291,7 @@ absl::Status EvaluateTableEntryAction(
 }  // namespace
 
 absl::StatusOr<SymbolicTrace> EvaluateTable(
-    const Dataplane data_plane, const ir::Table &table,
+    const Dataplane &data_plane, const ir::Table &table,
     const std::vector<pdpi::IrTableEntry> &entries,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
