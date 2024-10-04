@@ -13,7 +13,8 @@
 // limitations under the License.
 
 // Defines a wrapper around z3 c++ API operators.
-// The wrappers ensure sort compatibility, and pad bitvectors when needed.
+// The wrappers ensure sort compatibility, and pad bitvectors when needed, and
+// automatically convert between bool and bit<1>.
 // Additionally, they use absl::Status to convey sort compatibility failures
 // instead of runtime crashes.
 
