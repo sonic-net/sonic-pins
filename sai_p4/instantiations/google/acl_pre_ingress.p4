@@ -67,6 +67,7 @@ control acl_pre_ingress(in headers_t headers,
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(ACL_PRE_INGRESS_TABLE_ID)
   @sai_acl(PRE_INGRESS)
+  @sai_acl_priority(11)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
@@ -122,6 +123,7 @@ control acl_pre_ingress(in headers_t headers,
   @id(ACL_PRE_INGRESS_VLAN_TABLE_ID)
   @sai_acl(PRE_INGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @sai_acl_priority(1)
   @entry_restriction("
     // Forbid using ether_type for IP packets (by convention, use is_ip* instead).
     ether_type != 0x0800 && ether_type != 0x86dd;
@@ -164,6 +166,7 @@ control acl_pre_ingress(in headers_t headers,
   @id(ACL_PRE_INGRESS_METADATA_TABLE_ID)
   @sai_acl(PRE_INGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+  @sai_acl_priority(5)
   @entry_restriction("
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
