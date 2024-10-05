@@ -12,60 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This file contains build rules for the main binary of p4_symbolic.
-
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 
-package(
-    default_visibility = ["//visibility:public"],
-    licenses = ["notice"],
-)
+package(licenses = ["notice"])
 
-cc_binary(
-    name = "main",
-    srcs = [
-        "main.cc",
-    ],
-    # linkopts = ["-lz3"],
-    visibility = ["//p4_symbolic/symbolic:__pkg__"],
+cc_library(
+    name = "fields",
+    srcs = ["fields.cc"],
+    hdrs = ["fields.h"],
     deps = [
-        ":parser",
         "//gutil:status",
-        "//p4_symbolic/bmv2",
-        "//p4_symbolic/sai:parser",
         "//p4_symbolic/symbolic",
-        "//p4_symbolic/util",
-        "@com_google_absl//absl/flags:flag",
-        "@com_google_absl//absl/flags:parse",
-        "@com_google_absl//absl/flags:usage",
-        "@com_google_absl//absl/status",
+        "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
 cc_library(
     name = "parser",
-    srcs = [
-        "parser.cc",
-    ],
-    hdrs = [
-        "parser.h",
-    ],
-    visibility = ["//visibility:public"],
+    srcs = ["parser.cc"],
+    hdrs = ["parser.h"],
+    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [
-	 "//gutil:proto",
+        ":fields",
         "//gutil:status",
-	"//p4_pdpi:ir_cc_proto",
-        "//p4_symbolic/bmv2",
-        "//p4_symbolic/ir",
-        "//p4_symbolic/ir:ir_cc_proto",
-        "//p4_symbolic/ir:pdpi_driver",
         "//p4_symbolic/symbolic",
-	"//p4_symbolic/util",
-        "@com_google_absl//absl/types:span",
+        "@com_github_z3prover_z3//:api",
+        "@com_google_absl//absl/status",
     ],
 )

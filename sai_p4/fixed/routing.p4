@@ -439,6 +439,9 @@ control routing(in headers_t headers,
   // Calling this action will override unicast, and can itself be overriden by
   // `mark_to_drop`.
   //
+  // Using a `multicast_group_id` of 0 is not allowed.
+  // TODO: Enforce this requirement using p4-constraints.
+  //
   // TODO: Remove `@unsupported` annotation once the switch stack
   // supports multicast.
   @unsupported

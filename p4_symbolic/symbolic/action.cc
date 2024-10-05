@@ -32,19 +32,19 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
       return EvaluateAssignmentStatement(statement.assignment(), state, context,
                                          guard);
     }
+    case ir::Statement::kClone:  // TODO: Add support for cloning.
     case ir::Statement::kDrop: {
       // https://github.com/p4lang/p4c/blob/7ee76d16da63883c5092ab0c28321f04c2646759/p4include/v1model.p4#L435
-      const std::string &header_name = statement.drop().header().header_name();
+      const std::string &header_name =
+          // TODO: conditonal needed to interpret clone as drop.
+          statement.has_drop() ? statement.drop().header().header_name()
+                               : "standard_metadata";
       z3::expr dropped_value = Z3Context().bv_val(DROPPED_EGRESS_SPEC_VALUE,
                                                   DROPPED_EGRESS_SPEC_LENGTH);
       RETURN_IF_ERROR(state->Set(absl::StrFormat("%s.egress_spec", header_name),
                                  dropped_value, guard));
       RETURN_IF_ERROR(state->Set(absl::StrFormat("%s.mcast_grp", header_name),
                                  Z3Context().bv_val(0, 1), guard));
-      return absl::OkStatus();
-    }
-    case ir::Statement::kClone: {
-      // No-op.
       return absl::OkStatus();
     }
     case ir::Statement::kHash: {

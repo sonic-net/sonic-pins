@@ -117,6 +117,15 @@ absl::StatusOr<std::string> ProtoDiff(
   return diff;
 }
 
+bool ProtoEqual(const google::protobuf::Message &message1,
+                const google::protobuf::Message &message2,
+                google::protobuf::util::MessageDifferencer &differ) {
+  if (message1.GetDescriptor() != message2.GetDescriptor()) {
+    return false;
+  }
+  return differ.Compare(message1, message2);
+}
+
 absl::StatusOr<std::string> GetOneOfFieldName(
     const google::protobuf::Message &message, const std::string &oneof_name) {
   const auto *oneof_descriptor =
