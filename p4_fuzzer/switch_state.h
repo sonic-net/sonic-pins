@@ -53,6 +53,14 @@ using CanonicalTableEntries =
 absl::StatusOr<p4::v1::TableEntry> CanonicalizeTableEntry(
     const pdpi::IrP4Info& info, const p4::v1::TableEntry& entry, bool key_only);
 
+// Returns the canonical form of `entry` according to the P4 Runtime Spec
+// https://s3-us-west-2.amazonaws.com/p4runtime/ci/main/P4Runtime-Spec.html#sec-bytestrings.
+// TODO: Canonical form is achieved by performing an IR roundtrip
+// translation. This ties correctness to IR functionality. Local
+// canonicalization would be preferred.
+absl::StatusOr<p4::v1::TableEntry> CanonicalizeTableEntry(
+    const pdpi::IrP4Info& info, const p4::v1::TableEntry& entry, bool key_only);
+
 // Tracks the state of a switch, with methods to apply updates or query the
 // current state. The class assumes all calls are valid (e.g table_ids must all
 // exist). Crashes if that is not the case.

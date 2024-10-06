@@ -16,10 +16,11 @@
 
 #include <utility>
 
+#include "absl/types/optional.h"
+#include "glog/logging.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/packet.h"
-#include "p4_symbolic/symbolic/parser.h"
 #include "p4_symbolic/symbolic/util.h"
 
 namespace p4_symbolic {
@@ -31,8 +32,7 @@ z3::context &Z3Context() {
 }
 
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
-    const Dataplane &data_plane, const std::vector<int> &physical_ports,
-    bool hardcoded_parser) {
+    const Dataplane &data_plane, const std::vector<int> &physical_ports) {
   // Use global context to define a solver.
   std::unique_ptr<z3::solver> z3_solver =
       std::make_unique<z3::solver>(Z3Context());
@@ -43,13 +43,6 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
   ASSIGN_OR_RETURN(SymbolicPerPacketState ingress_headers,
                    SymbolicGuardedMap::CreateSymbolicGuardedMap(
                        data_plane.program.headers()));
-  if (hardcoded_parser) {
-    ASSIGN_OR_RETURN(std::vector<z3::expr> parser_constraints,
-                     parser::EvaluateHardcodedParser(ingress_headers));
-    for (const z3::expr &constraint : parser_constraints) {
-      z3_solver->add(constraint);
-    }
-  }
 
   // Initially, the p4runtime translator has empty state.
   values::P4RuntimeTranslator translator;
@@ -66,13 +59,10 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
   SymbolicPacket ingress_packet =
       packet::ExtractSymbolicPacket(ingress_headers);
 
-  // Evaluate the initial control, which will evaluate the next controls
-  // internally and return the full symbolic trace.
+  // Evaluate the main program.
   ASSIGN_OR_RETURN(
       SymbolicTrace trace,
-      control::EvaluateControl(data_plane, data_plane.program.initial_control(),
-                               &egress_headers, &translator,
-                               Z3Context().bool_val(true)));
+      control::EvaluateV1model(data_plane, &egress_headers, &translator));
 
   // Alias the event that the packet is dropped for ease of use in assertions.
   z3::expr dropped_value =
@@ -126,25 +116,25 @@ absl::StatusOr<std::optional<ConcreteContext>> Solve(
 
   solver_state->solver->push();
   solver_state->solver->add(constraint);
-  switch (solver_state->solver->check()) {
+  z3::check_result check_result = solver_state->solver->check();
+  switch (check_result) {
     case z3::unsat:
-      solver_state->solver->pop();
-      return std::optional<ConcreteContext>();
-
     case z3::unknown:
       solver_state->solver->pop();
-      return std::optional<ConcreteContext>();
+      return absl::nullopt;
 
     case z3::sat:
-    default:
       z3::model packet_model = solver_state->solver->get_model();
       ASSIGN_OR_RETURN(
           ConcreteContext result,
           util::ExtractFromModel(solver_state->context, packet_model,
                                  solver_state->translator));
       solver_state->solver->pop();
-      return std::make_optional<ConcreteContext>(result);
+      return result;
   }
+  LOG(DFATAL) << "invalid Z3 check() result: "
+              << static_cast<int>(check_result);
+  return absl::nullopt;
 }
 
 std::string DebugSMT(const std::unique_ptr<SolverState> &solver_state,

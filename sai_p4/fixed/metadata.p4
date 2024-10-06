@@ -71,6 +71,8 @@ type bit<QOS_QUEUE_BITWIDTH> qos_queue_t;
 
 typedef bit<ROUTE_METADATA_BITWIDTH> route_metadata_t;
 typedef bit<ACL_METADATA_BITWIDTH> acl_metadata_t;
+typedef bit<MULTICAST_GROUP_ID_BITWIDTH> multicast_group_id_t;
+typedef bit<REPLICA_INSTANCE_BITWIDTH> replica_instance_t;
 
 // -- Meters -------------------------------------------------------------------
 
@@ -262,6 +264,15 @@ struct local_metadata_t {
   // TODO: Clean up this workaround after 'exit' is supported in
   // p4-symbolic.
   bool bypass_ingress;
+
+  // Metadata shared between routing, acl_ingress, and routing_resolution
+  // control blocks.
+  bool wcmp_group_id_valid;
+  // Wcmp group id, only valid if `wcmp_group_id_valid` is true.
+  wcmp_group_id_t wcmp_group_id_value;
+  bool nexthop_id_valid;
+  // Nexthop id, only valid if `nexthop_id_valid` is true.
+  nexthop_id_t nexthop_id_value;
 }
 
 #endif  // SAI_METADATA_P4_

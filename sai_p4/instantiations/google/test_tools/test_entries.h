@@ -29,6 +29,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/mac_address.h"
@@ -94,6 +95,13 @@ struct MarkToMirrorParams {
   std::string mirror_session_id;
 };
 
+// Convenience struct corresponding to the protos `p4::v1::Replica` and
+// `sai::ReplicateAction::Replica`.
+struct Replica {
+  std::string egress_port;
+  int instance = 0;
+};
+
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
 //
@@ -120,10 +128,25 @@ class EntryBuilder {
   absl::StatusOr<pdpi::IrEntities> GetDedupedIrEntities(
       const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
 
+  // Convenience struct corresponding to the proto
+  // `MulticastRouterInterfaceTableEntry`
+  // in `sai_pd.proto`.
+  struct MulticastRouterInterfaceTableEntry {
+    std::string multicast_replica_port;
+    int multicast_replica_instance = 0;
+    netaddr::MacAddress src_mac;
+  };
+
   EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
+  // Note: Cannot be combined with other entries that forward *all* IP packets
+  // in a specific way.
   EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port,
       IpVersion ip_version = IpVersion::kIpv4And6, NexthopRewriteOptions = {});
+  // Note: Cannot be combined with other entries that forward *all* IP packets
+  // in a specific way.
+  EntryBuilder& AddEntriesForwardingIpPacketsToGivenMulticastGroup(
+      int multicast_group_id);
   EntryBuilder& AddVrfEntry(absl::string_view vrf);
   EntryBuilder& AddEntryAdmittingAllPacketsToL3();
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
@@ -131,11 +154,20 @@ class EntryBuilder {
       absl::string_view vrf,
       const NexthopRewriteOptions& nexthop_rewrite_options = {},
       std::optional<absl::string_view> vlan_hexstr = std::nullopt);
+  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
+      int multicast_group_id, IpVersion ip_version, absl::string_view vrf);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
   EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
       absl::string_view vrf);
   EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
+  EntryBuilder& AddMulticastGroupEntry(int multicast_group_id,
+                                         absl::Span<const Replica> replicas);
+  EntryBuilder& AddMulticastGroupEntry(
+      int multicast_group_id, absl::Span<const std::string> egress_ports);
+  EntryBuilder& AddMulticastRouterInterfaceEntry(
+      const MulticastRouterInterfaceTableEntry& entry);
+  EntryBuilder& AddIngressAclDroppingAllPackets();
   EntryBuilder& AddDisableVlanChecksEntry();
   EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
       absl::string_view vlan_id_hexstr, absl::string_view vrf);
@@ -143,6 +175,13 @@ class EntryBuilder {
   EntryBuilder& AddEntrySettingVlanIdInPreIngress(
       absl::string_view set_vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt);
+  EntryBuilder& AddNexthopRifNeighborEntries(
+      absl::string_view nexthop_id, absl::string_view egress_port,
+      const NexthopRewriteOptions& nexthop_rewrite_options = {},
+      std::optional<absl::string_view> vlan_hexstr = std::nullopt);
+  EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
+      absl::string_view nexthop_id,
+      std::optional<absl::string_view> in_port_match = std::nullopt);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
   EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
 

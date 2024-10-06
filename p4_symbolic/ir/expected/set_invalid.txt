@@ -310,5 +310,17 @@ conditionals {
     else_branch: "tbl_set_invalid65"
   }
 }
-initial_control: "tbl_set_invalid61"
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "tbl_set_invalid61"
+  }
+}
 

@@ -802,6 +802,9 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
 
   // Translate tables.
   for (const auto &pipeline : bmv2.pipelines()) {
+    ir::Pipeline &ir_pipeline = (*output.mutable_pipeline())[pipeline.name()];
+    ir_pipeline.set_name(pipeline.name());
+    ir_pipeline.set_initial_control(pipeline.init_table());
     for (const bmv2::Table &bmv2_table : pipeline.tables()) {
       const std::string &table_name = bmv2_table.name();
 
@@ -867,11 +870,6 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
     }
   }
 
-  // Find init_table.
-  if (bmv2.pipelines_size() < 1) {
-    return absl::InvalidArgumentError("BMV2 file contains no pipelines!");
-  }
-  output.set_initial_control(bmv2.pipelines(0).init_table());
   return output;
 }
 

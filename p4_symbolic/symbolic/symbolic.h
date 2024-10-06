@@ -23,10 +23,10 @@
 #define DROPPED_EGRESS_SPEC_VALUE "111111111"
 #define DROPPED_EGRESS_SPEC_LENGTH 9
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -46,7 +46,7 @@ namespace symbolic {
 z3::context &Z3Context();
 
 // Maps the name of a header field in the p4 program to its concrete value.
-using ConcretePerPacketState = std::unordered_map<std::string, std::string>;
+using ConcretePerPacketState = std::map<std::string, std::string>;
 
 // The symbolic counterpart of ConcretePerPacketState.
 // Maps the name of a header field in the p4 program to its symbolic value.
@@ -93,7 +93,7 @@ struct SymbolicTableMatch {
 // Specifies the expected trace in the program that the corresponding
 // concrete packet is expected to take.
 struct ConcreteTrace {
-  std::unordered_map<std::string, ConcreteTableMatch> matched_entries;
+  std::map<std::string, ConcreteTableMatch> matched_entries;
   // Can be extended more in the future to include useful
   // flags about dropping the packet, taking specific code (e.g. if)
   // branches, vrf, other interesting events, etc.
@@ -111,7 +111,7 @@ struct ConcreteTrace {
 // to take in the program.
 struct SymbolicTrace {
   // Full table name to its symbolic match.
-  std::unordered_map<std::string, SymbolicTableMatch> matched_entries;
+  std::map<std::string, SymbolicTableMatch> matched_entries;
   z3::expr dropped;
 };
 
@@ -269,8 +269,7 @@ using Assertion = std::function<z3::expr(const SymbolicContext &)>;
 // entries for every table in that program, and the available physical ports
 // on the switch.
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
-    const Dataplane &data_plane, const std::vector<int> &physical_ports,
-    bool hardcoded_parser);
+    const Dataplane &data_plane, const std::vector<int> &physical_ports);
 
 // Finds a concrete packet and flow in the program that satisfies the given
 // assertion and meets the structure constrained by solver_state.

@@ -45,4 +45,10 @@
 #define TUNNEL_ID_BITWIDTH 16
 #endif
 
+// Inherited from v1model, see `standard_metadata_t.mcast_grp`.
+#define MULTICAST_GROUP_ID_BITWIDTH 16
+
+// Inherited from v1model, see `standard_metadata_t.egress_rid`.
+#define REPLICA_INSTANCE_BITWIDTH 16
+
 #endif  // SAI_BITWIDTHS_P4_
