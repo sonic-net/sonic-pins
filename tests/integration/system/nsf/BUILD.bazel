@@ -97,6 +97,7 @@ cc_library(
         ":compare_p4flows",
         ":milestone",
         ":util",
+        "//gutil:proto",
         "//gutil:status_matchers",
         "//lib/gnmi:gnmi_helper",
         "//tests/integration/system/nsf/interfaces:component_validator",

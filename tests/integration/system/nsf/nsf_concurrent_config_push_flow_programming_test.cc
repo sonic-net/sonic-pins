@@ -67,6 +67,15 @@ void NsfConcurrentConfigPushFlowProgrammingTestFixture::SetUp() {
   ASSERT_OK_AND_ASSIGN(testbed_, GetTestbed(testbed_interface_));
 }
 void NsfConcurrentConfigPushFlowProgrammingTestFixture::TearDown() {
+  if (HasFailure()) {
+    thinkit::Switch& sut = GetSut(testbed_);
+    LOG(INFO) << "Performing cold reboot to recover the switch.";
+    thinkit::TestEnvironment& env = GetTestEnvironment(testbed_);
+    ASSERT_OK(
+        pins_test::Reboot(gnoi::system::RebootMethod::COLD, sut, env,
+                          /*collect_debug_artifacts_before_reboot=*/false));
+    ASSERT_OK(WaitForReboot(testbed_, *ssh_client_));
+  }
   if (!GetParam().image_config_params.empty()) {
     LOG(INFO) << "Restoring the original config";
     ASSERT_OK(PushConfig(GetParam().image_config_params[0], GetSut(testbed_),
