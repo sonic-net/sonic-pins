@@ -49,8 +49,8 @@ constexpr int kIsolatedLacpSystemPriority = 512;
 // 2. Config push takes ~10s to complete. Hence the maximum delay is set to 15s.
 // In future, if the config or the flows are modified, consider calculating the
 // time needed for both and set the NSF delay duration window accordingly.
-constexpr int kMinNsfDelayDuration = 1;
-constexpr int kMaxNsfDelayDuration = 15;
+constexpr int kMinNsfDelayDuration = 10;
+constexpr int kMaxNsfDelayDuration = 20;
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 constexpr int kMaxGnmiGetClients = 15;
@@ -152,6 +152,10 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   absl::Status flow_programming_status =
       absl::UnknownError("Yet to program flows");
   auto flow_programming_func = [&sut, &image_config_param]() -> absl::Status {
+    // ACL flows used in the test takes ~1s to get programmed.
+    if (kMinNsfDelayDuration > 1) {
+      absl::SleepFor(absl::Seconds(kMinNsfDelayDuration - 1));
+    }
     LOG(INFO) << "Programming ACL flows";
     RETURN_IF_ERROR(ProgramAclFlows(sut, image_config_param.p4_info));
     LOG(INFO) << "Successfully programmed ACL flows on " << sut.ChassisName();

@@ -52,13 +52,13 @@ class FuzzerConfig;
 struct ConfigParams {
   // -- Required ---------------------------------------------------------------
   // NOTE: These values are required for correct function. All of them are
-  // initialized to values that should usually work for GPINs switches.
+  // initialized to values that should usually work for PINs switches.
   // ---------------------------------------------------------------------------
-  // The set of valid port names. 1 tends to be mapped on most GPINs switches.
+  // The set of valid port names. 1 tends to be mapped on most PINs switches.
   std::vector<pins_test::P4rtPortId> ports =
       pins_test::P4rtPortId::MakeVectorFromOpenConfigEncodings({1});
   // The set of valid QOS queues. CONTROLLER_PRIORITY_5 tends to be mapped on
-  // most GPINs switches.
+  // most PINs switches.
   std::vector<std::string> qos_queues = {"CONTROLLER_PRIORITY_5"};
   // The P4RT role the fuzzer should use.
   std::string role = "sdn_controller";
@@ -68,7 +68,7 @@ struct ConfigParams {
   // field.
   float match_field_wildcard_probability = 0.05;
   // The probability of fuzzing a multicast group entry when fuzzing an update.
-  // TODO: b/316926338 - Remove once switch state transitions to entities and
+  // Remove once switch state transitions to entities and
   // fuzzer can use weighted distribution for multicast.
   float fuzz_multicast_group_entry_probability = 0;
 
@@ -214,7 +214,7 @@ private:
 
   ConfigParams params_;
 
-  // TODO: b/276461175 - Support P4RT translated types.
+  // Support P4RT translated types.
   // Checks the following assumptions made about p4 constraints that aren't
   // marked as ignored in `params_`:
   // 1) No constraint includes a match field that has a P4Runtime translated
@@ -222,7 +222,7 @@ private:
   //    on this type and EXACT fields are required, so this combination is
   //    forbidden.
   // Also logs the following information:
-  // TODO: b/324083270 - Remove once references+constraints are handled.
+  // Remove once references+constraints are handled.
   // 1) A field that is both constrained and has a reference. The fuzzer will
   //    choose to satisfy references over constraints, which means the resulting
   //    entry may not satisfy constraints. This is a current weakness of the

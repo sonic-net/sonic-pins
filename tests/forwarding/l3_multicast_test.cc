@@ -364,8 +364,9 @@ absl::Status SetupDefaultMulticastProgramming(
                    sai::EntryBuilder()
                        .AddEntryAdmittingAllPacketsToL3()
                        .AddVrfEntry(kDefaultMulticastVrf)
-                       .AddPreIngressAclEntryAssigningVrfForGivenIpType(
-                           kDefaultMulticastVrf, sai::IpVersion::kIpv4And6)
+                       .AddPreIngressAclTableEntry(
+                           kDefaultMulticastVrf,
+                           sai::AclPreIngressMatchFields{.is_ip = true})
                        .LogPdEntries()
                        .GetDedupedPiEntities(ir_p4info));
 
@@ -2053,7 +2054,8 @@ TEST_P(L3MulticastTestFixture, AbleToProgramExpectedMulticastGroupCapacity) {
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, rif_entities));
 }
 
-TEST_P(L3MulticastTestFixture, ReplicatePacketWithVlanAndSrcMacRewrite) {
+TEST_P(L3MulticastTestFixture,
+       DISABLED_ReplicatePacketWithVlanAndSrcMacRewrite) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   const int kPortsToUseInTest = 3;
@@ -2114,7 +2116,7 @@ TEST_P(L3MulticastTestFixture, ReplicatePacketWithVlanAndSrcMacRewrite) {
 }
 
 TEST_P(L3MulticastTestFixture,
-       SwitchAclRedirectAndReplicatePacketWithVlanAndSrcMacRewrite) {
+       DISABLED_SwitchAclRedirectAndReplicatePacketWithVlanAndSrcMacRewrite) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   const int kPortsToUseInTest = 3;

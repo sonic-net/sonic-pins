@@ -435,6 +435,11 @@ TEST_P(FuzzerTestFixture, P4rtWriteAndCheckNoInternalErrors) {
         << " seconds.";
   }
 
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::TableEntry> table_entries,
+                       pdpi::ReadPiTableEntries(session.get()));
+  EXPECT_OK(state.AssertEntriesAreEqualToState(
+      table_entries, config.GetTreatAsEqualDuringReadDueToKnownBug()));
+
   LOG(INFO) << "Finished " << iteration << " iterations.";
   LOG(INFO) << "  num_updates:                 " << num_updates;
   // Expected value is 50, so if it's very far from that, we probably have a
