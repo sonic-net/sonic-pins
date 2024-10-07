@@ -397,8 +397,8 @@ absl::Status InstallL3Route(pdpi::P4RuntimeSession& switch_session,
   sai::EntryBuilder entry_builder =
       sai::EntryBuilder()
           .AddVrfEntry("vrf-1")
-          .AddPreIngressAclEntryAssigningVrfForGivenIpType(
-              "vrf-1", sai::IpVersion::kIpv6)
+          .AddPreIngressAclTableEntry(
+              "vrf-1", sai::AclPreIngressMatchFields{.is_ipv6 = true})
           .AddDefaultRouteForwardingAllPacketsToGivenPort(given_port,
                                                           ip_version, "vrf-1");
   if (l3_admit) {
@@ -503,7 +503,7 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapv4Inv6) {
                              GetParam().tunnel_type));
 
   LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
-            << " to engress:" << out_port;
+            << " to egress:" << out_port;
   // Send IPv4-in-IPv6 Packet and Verify positive testcase dst-ipv6 is matching
   pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
       .in_port = in_port,
@@ -658,7 +658,7 @@ TEST_P(TunnelDecapTestFixture, BasicTunnelTermDecapNoAdmit) {
                                               GetParam().tunnel_type));
 
   LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
-            << " to engress:" << out_port;
+            << " to egress:" << out_port;
   // Send IPv4-in-IPv6 Packet and verify that packet is getting
   // dropped as l3-admit is not configured
   pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
@@ -730,7 +730,7 @@ TEST_P(TunnelDecapTestFixture, NoAdmitTableAclRedirectTunnelTermNoDecapForV4) {
                                               GetParam().tunnel_type));
 
   LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
-            << " to engress:" << out_port;
+            << " to egress:" << out_port;
   // Send IPv4-in-IPv6 Packet and Verify positive testcase dst-ipv6 is matching
   pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
       .in_port = in_port,
@@ -796,7 +796,7 @@ TEST_P(TunnelDecapTestFixture, AdmitTableAclRedirectTunnelTermDecapForV4) {
                                               GetParam().tunnel_type));
 
   LOG(INFO) << "Sending IPv4-in-IPv6 Packet from ingress:" << in_port
-            << " to engress:" << out_port;
+            << " to egress:" << out_port;
   // Send IPv4-in-IPv6 Packet and Verify positive testcase dst-ipv6 is matching
   pins_test::TunnelDecapTestVectorParams tunnel_v6_match{
       .in_port = in_port,

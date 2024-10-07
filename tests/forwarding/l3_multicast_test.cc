@@ -363,8 +363,9 @@ absl::Status SetupDefaultMulticastProgramming(
                    sai::EntryBuilder()
                        .AddEntryAdmittingAllPacketsToL3()
                        .AddVrfEntry(kDefaultMulticastVrf)
-                       .AddPreIngressAclEntryAssigningVrfForGivenIpType(
-                           kDefaultMulticastVrf, sai::IpVersion::kIpv4And6)
+                       .AddPreIngressAclTableEntry(
+                           kDefaultMulticastVrf,
+                           sai::AclPreIngressMatchFields{.is_ip = true})
                        .LogPdEntries()
                        .GetDedupedPiEntities(ir_p4info));
 
