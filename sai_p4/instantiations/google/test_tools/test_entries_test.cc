@@ -27,6 +27,9 @@
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -348,6 +351,81 @@ TEST(EntryBuilder, AddMulticastRouterInterfaceEntryAddsEntry) {
                   .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
                 table_entry { table_name: "multicast_router_interface_table" }
+              )pb"))));
+}
+
+TEST(EntryBuilder,
+     AddRouteForwardingIpv4PacketsToGivenMulticastGroupAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(auto dst_ip,
+                       netaddr::Ipv4Address::OfString("225.10.20.32"));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddRouteForwardingIpv4PacketsToGivenMulticastGroup(
+              /*multicast_group_id=*/17, /*vrf=*/"vrf-1", dst_ip, 32)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv4_table"
+                  matches {
+                    name: "vrf_id"
+                    exact { str: "vrf-1" }
+                  }
+                  matches {
+                    name: "ipv4_dst"
+                    lpm {
+                      value { ipv4: "225.10.20.32" }
+                      prefix_length: 32
+                    }
+                  }
+                  action {
+                    name: "set_multicast_group_id"
+                    params {
+                      name: "multicast_group_id"
+                      value { hex_str: "0x0011" }
+                    }
+                  }
+                }
+              )pb"))));
+}
+
+TEST(EntryBuilder,
+     AddRouteForwardingIpv6PacketsToGivenMulticastGroupAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  ASSERT_OK_AND_ASSIGN(auto dst_ip,
+                       netaddr::Ipv6Address::OfString(
+                           "ff00:8888:1111:2222:3333:4444:5555:6666"));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddRouteForwardingIpv6PacketsToGivenMulticastGroup(
+              /*multicast_group_id=*/33, /*vrf=*/"vrf-2", dst_ip, 128)
+          .LogPdEntries()
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
+                table_entry {
+                  table_name: "ipv6_table"
+                  matches {
+                    name: "vrf_id"
+                    exact { str: "vrf-2" }
+                  }
+                  matches {
+                    name: "ipv6_dst"
+                    lpm {
+                      value { ipv6: "ff00:8888:1111:2222:3333:4444:5555:6666" }
+                      prefix_length: 128
+                    }
+                  }
+                  action {
+                    name: "set_multicast_group_id"
+                    params {
+                      name: "multicast_group_id"
+                      value { hex_str: "0x0021" }
+                    }
+                  }
+                }
               )pb"))));
 }
 
