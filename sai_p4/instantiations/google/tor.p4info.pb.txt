@@ -1221,6 +1221,7 @@ actions {
     name: "ingress.routing.set_port_and_src_mac_and_vlan_id"
     alias: "set_port_and_src_mac_and_vlan_id"
     annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow reserved VLAN IDs with implementation-defined semantics.\n    vlan_id != 0 && vlan_id != 4095\")"
   }
   params {
     id: 1
@@ -1474,6 +1475,7 @@ actions {
     name: "ingress.routing.set_multicast_group_id"
     alias: "set_multicast_group_id"
     annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0\")"
   }
   params {
     id: 1
