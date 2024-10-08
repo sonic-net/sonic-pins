@@ -131,55 +131,55 @@ absl::StatusOr<z3::expr> FreeVariable(const std::string &variable_base_name,
 absl::StatusOr<z3::expr> Plus(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return a_expr + b_expr;
 }
 absl::StatusOr<z3::expr> Minus(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return a_expr - b_expr;
 }
 absl::StatusOr<z3::expr> Times(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return a_expr * b_expr;
 }
 absl::StatusOr<z3::expr> Eq(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return a_expr == b_expr;
 }
 absl::StatusOr<z3::expr> Neq(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return a_expr != b_expr;
 }
 absl::StatusOr<z3::expr> Lt(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return z3::ult(a_expr, b_expr);
 }
 absl::StatusOr<z3::expr> Lte(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return z3::ule(a_expr, b_expr);
 }
 absl::StatusOr<z3::expr> Gt(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return z3::ugt(a_expr, b_expr);
 }
 absl::StatusOr<z3::expr> Gte(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return z3::uge(a_expr, b_expr);
 }
 absl::StatusOr<z3::expr> Not(const z3::expr &a) { return !a; }
@@ -224,27 +224,31 @@ absl::StatusOr<z3::expr> BitNeg(const z3::expr &a) { return ~a; }
 absl::StatusOr<z3::expr> BitAnd(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndExtract(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return a_expr & b_expr;
 }
 
 absl::StatusOr<z3::expr> BitOr(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return a_expr | b_expr;
 }
 absl::StatusOr<z3::expr> BitXor(const z3::expr &a, const z3::expr &b) {
   ASSIGN_OR_RETURN(auto pair,
                    p4_symbolic::symbolic::operators::SortCheckAndPad(a, b));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return a_expr ^ b_expr;
 }
 absl::StatusOr<z3::expr> LShift(const z3::expr &bits, const z3::expr &shift) {
-  return z3::shl(bits, shift);
+  ASSIGN_OR_RETURN(auto pair, SortCheckAndPad(bits, shift));
+  auto &[a_expr, b_expr] = pair;
+  return z3::shl(a_expr, b_expr);
 }
 absl::StatusOr<z3::expr> RShift(const z3::expr &bits, const z3::expr &shift) {
-  return z3::lshr(bits, shift);
+  ASSIGN_OR_RETURN(auto pair, SortCheckAndPad(bits, shift));
+  auto &[a_expr, b_expr] = pair;
+  return z3::lshr(a_expr, b_expr);
 }
 
 // If then else.
@@ -260,7 +264,7 @@ absl::StatusOr<z3::expr> Ite(const z3::expr &condition,
 
   // Values in both cases must have the same sort and signedness.
   ASSIGN_OR_RETURN(auto pair, SortCheckAndPad(true_value, false_value));
-  auto [a_expr, b_expr] = pair;
+  auto &[a_expr, b_expr] = pair;
   return z3::ite(condition, a_expr, b_expr);
 }
 
