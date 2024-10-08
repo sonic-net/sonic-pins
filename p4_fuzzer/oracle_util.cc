@@ -25,7 +25,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/switch_state.h"
-#include "p4_fuzzer/table_entry_key.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.h"
 
 namespace p4_fuzzer {
@@ -177,14 +177,14 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
   // yet know what the right way to handle it is. We are hoping to change the
   // P4RT specification.
   // Group by flow key.
-  absl::flat_hash_map<TableEntryKey, std::vector<IndexUpdateStatus>>
+  absl::flat_hash_map<pdpi::TableEntryKey, std::vector<IndexUpdateStatus>>
       flowkey_to_updates;
   for (const auto& update : updates) {
     // Filter out any resource exhausted errors.
     StatusCode code = static_cast<StatusCode>(update.status.code());
     if (code == StatusCode::kResourceExhausted) continue;
 
-    flowkey_to_updates[TableEntryKey(update.update.pi().entity().table_entry())]
+    flowkey_to_updates[pdpi::TableEntryKey(update.update.pi().entity().table_entry())]
         .push_back(update);
   }
 
