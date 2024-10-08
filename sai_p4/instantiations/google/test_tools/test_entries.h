@@ -32,6 +32,8 @@
 #include "absl/types/span.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 
@@ -156,6 +158,12 @@ class EntryBuilder {
       std::optional<absl::string_view> vlan_hexstr = std::nullopt);
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
       int multicast_group_id, IpVersion ip_version, absl::string_view vrf);
+  EntryBuilder& AddRouteForwardingIpv4PacketsToGivenMulticastGroup(
+      int multicast_group_id, absl::string_view vrf,
+      netaddr::Ipv4Address& dst_ip, int prefix_length);
+  EntryBuilder& AddRouteForwardingIpv6PacketsToGivenMulticastGroup(
+      int multicast_group_id, absl::string_view vrf,
+      netaddr::Ipv6Address& dst_ip, int prefix_length);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
   EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(

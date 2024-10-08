@@ -19,7 +19,7 @@
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_set.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_fuzzer/table_entry_key.h"
+#include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {

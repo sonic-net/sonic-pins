@@ -42,6 +42,16 @@ namespace p4_fuzzer {
 //   forall t1, t2. table_[t1] = t2  ==> t1 = TableEntryKey(t2)
 //   TableEntryKey() here is the constructor for the class TableEntryKey.
 using TableEntries = absl::btree_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
+using CanonicalTableEntries =
+    absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
+
+// Returns the canonical form of `entry` according to the P4 Runtime Spec
+// https://s3-us-west-2.amazonaws.com/p4runtime/ci/main/P4Runtime-Spec.html#sec-bytestrings.
+// TODO: Canonical form is achieved by performing an IR roundtrip
+// translation. This ties correctness to IR functionality. Local
+// canonicalization would be preferred.
+absl::StatusOr<p4::v1::TableEntry> CanonicalizeTableEntry(
+    const pdpi::IrP4Info& info, const p4::v1::TableEntry& entry, bool key_only);
 
 // Returns the canonical form of `entry` according to the P4 Runtime Spec
 // https://s3-us-west-2.amazonaws.com/p4runtime/ci/main/P4Runtime-Spec.html#sec-bytestrings.
@@ -150,7 +160,7 @@ class SwitchState {
   // Invariant: An entry, `e`, is represented in `tables_` <=> canonical(e) is
   // represented in `canonical_tables_`.
   absl::flat_hash_map<int, TableEntries> tables_;
-  absl::flat_hash_map<int, TableEntries> canonical_tables_;
+  absl::flat_hash_map<int, CanonicalTableEntries> canonical_tables_;
 
   pdpi::IrP4Info ir_p4info_;
 };
