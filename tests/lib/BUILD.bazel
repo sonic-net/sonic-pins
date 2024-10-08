@@ -17,6 +17,22 @@ package(
 )
 
 cc_library(
+    name = "p4info_helper",
+    testonly = True,
+    srcs = ["p4info_helper.cc"],
+    hdrs = ["p4info_helper.h"],
+    deps = [
+        "//gutil:collections",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:p4_runtime_session",
+        "//thinkit:switch",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_library(
     name = "p4rt_fixed_table_programming_helper",
     testonly = True,
     srcs = ["p4rt_fixed_table_programming_helper.cc"],
