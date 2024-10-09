@@ -481,6 +481,7 @@ message IrTableEntries {
 message IrPacketReplicationEngineEntry {
   oneof type {
     IrMulticastGroupEntry multicast_group_entry = 1;
+    IrCloneSessionEntry clone_session_entry = 2;
   }
 }
 
@@ -492,6 +493,13 @@ message IrReplica {
 message IrMulticastGroupEntry {
   uint32 multicast_group_id = 1;
   repeated IrReplica replicas = 2;
+}
+
+message IrCloneSessionEntry {
+  uint32 session_id = 1;
+  repeated IrReplica replicas = 2;
+  uint32 class_of_service = 3;
+  int32 packet_length_bytes = 4;
 }
 
 // -- Packet IO ----------------------------------------------------------------

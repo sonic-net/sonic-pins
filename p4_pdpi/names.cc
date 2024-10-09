@@ -56,6 +56,8 @@ absl::StatusOr<std::string> EntityToTableName(const IrEntity& entity) {
       switch (entity.packet_replication_engine_entry().type_case()) {
         case IrPacketReplicationEngineEntry::kMulticastGroupEntry:
           return GetMulticastGroupTableName();
+        case IrPacketReplicationEngineEntry::kCloneSessionEntry:
+          return GetCloneSessionTableName();
         case IrPacketReplicationEngineEntry::TYPE_NOT_SET:
           break;
       }
