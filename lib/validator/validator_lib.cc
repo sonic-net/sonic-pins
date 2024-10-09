@@ -33,7 +33,7 @@
 #include "glog/logging.h"
 #include "grpcpp/client_context.h"
 #include "grpcpp/support/status.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnoi/gnoi_helper.h"
 #include "p4/v1/p4runtime.grpc.pb.h"

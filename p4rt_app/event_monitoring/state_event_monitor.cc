@@ -22,7 +22,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "swss/rediscommand.h"
 #include "swss/select.h"
 #include "swss/selectable.h"

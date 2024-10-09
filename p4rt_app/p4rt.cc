@@ -20,8 +20,6 @@
 #include <thread>  // NOLINT
 
 #include "absl/flags/parse.h"
-#include "glog/logging.h"
-#include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "absl/functional/bind_front.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -39,8 +37,8 @@
 #include "grpcpp/security/tls_credentials_options.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
-#include "gutil/status.h"
-#include "gutil/syslog_sink.h"
+#include "gutil/gutil/status.h"
+#include "gutil/gutil/syslog_sink.h"
 #include "p4rt_app/event_monitoring/app_state_db_port_table_event.h"
 #include "p4rt_app/event_monitoring/app_state_db_send_to_ingress_port_table_event.h"
 #include "p4rt_app/event_monitoring/config_db_node_cfg_table_event.h"
@@ -55,6 +53,7 @@
 #include "p4rt_app/sonic/adapters/producer_state_table_adapter.h"
 #include "p4rt_app/sonic/adapters/system_call_adapter.h"
 #include "p4rt_app/sonic/adapters/table_adapter.h"
+#include "p4rt_app/sonic/adapters/warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/packetio_impl.h"
 //TODO(PINS):
 //#include "swss/component_state_helper.h"

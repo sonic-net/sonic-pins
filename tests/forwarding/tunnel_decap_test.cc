@@ -28,8 +28,9 @@
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status.h"
-#include "gutil/status_matchers.h"
+#include "gutil/gutil/status.h"  // IWYU pragma: keep
+#include "gutil/gutil/status.h"
+#include "gutil/gutil/status_matchers.h"  // IWYU pragma: keep
 #include "lib/gnmi/gnmi_helper.h"
 #include "net/google::protobuf/contrib/fixtures/proto-fixture-repository.h"
 #include "p4/v1/p4runtime.pb.h"

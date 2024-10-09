@@ -18,7 +18,7 @@
 
 #include "dvaas/test_vector.pb.h"
 #include "gtest/gtest.h"
-#include "gutil/testing.h"
+#include "gutil/gutil/testing.h"
 
 namespace dvaas {
 namespace {

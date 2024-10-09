@@ -24,7 +24,7 @@
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/status_matchers.h"
+#include "gutil/gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "tests/gnmi/util.h"
 #include "tests/integration/system/nsf/interfaces/testbed.h"

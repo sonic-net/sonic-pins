@@ -22,14 +22,14 @@
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
-#include "gutil/proto.h"
-#include "gutil/status_matchers.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/proto.h"
+#include "gutil/gutil/status_matchers.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/symbolic/v1model.h"
 #include "z3++.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace p4_symbolic::symbolic::parser {
 namespace {

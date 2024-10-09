@@ -24,7 +24,7 @@ cc_library(
     hdrs = ["packet_listener.h"],
     deps = [
         ":p4rt_programming_context",
-        "//gutil:testing",
+        "//gutil/gutil:testing",
         "//p4_pdpi:ir_cc_proto",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:pd",
@@ -61,9 +61,9 @@ cc_test(
     srcs = ["p4rt_programming_context_test.cc"],
     deps = [
         ":p4rt_programming_context",
-        "//gutil:proto_matchers",
-        "//gutil:status_matchers",
-        "//gutil:testing",
+        "//gutil/gutil:proto_matchers",
+        "//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
         "//p4_pdpi:p4_runtime_session",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
         "@com_google_absl//absl/status",
@@ -76,7 +76,7 @@ cc_library(
     srcs = ["p4rt_port.cc"],
     hdrs = ["p4rt_port.h"],
     deps = [
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//p4_pdpi/string_encodings:byte_string",
         "//p4_pdpi/string_encodings:decimal_string",
 	"//p4_pdpi/string_encodings:hex_string",
@@ -94,7 +94,7 @@ cc_test(
     srcs = ["p4rt_port_test.cc"],
     deps = [
         ":p4rt_port",
-        "//gutil:status_matchers",
+        "//gutil/gutil:status_matchers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",

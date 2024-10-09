@@ -25,7 +25,7 @@ cc_library(
     srcs = ["otg_helper.cc"],
     hdrs = ["otg_helper.h"],
     deps = [
-        "//gutil:status",
+        "//gutil/gutil:status",
         "//lib/utils:generic_testbed_utils",
         "//lib/validator:validator_lib",
         "//tests/integration/system/nsf/interfaces:testbed",

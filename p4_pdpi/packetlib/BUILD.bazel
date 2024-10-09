@@ -30,9 +30,9 @@ cc_library(
     deps = [
         ":bit_widths",
         ":packetlib_cc_proto",
-        "//gutil:overload",
-        "//gutil:proto",
-        "//gutil:status",
+        "//gutil/gutil:overload",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
         "//p4_pdpi/netaddr:ipv4_address",
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/netaddr:mac_address",
@@ -55,7 +55,7 @@ cc_library(
     hdrs = ["packetlib_matchers.h"],
     deps = [
         ":packetlib_cc_proto",
-        "//gutil:proto_matchers",
+        "//gutil/gutil:proto_matchers",
     ],
 )
 
@@ -65,8 +65,8 @@ cc_test(
     deps = [
         ":packetlib",
         ":packetlib_cc_proto",
-        "//gutil:proto",
-        "//gutil:status_matchers",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status_matchers",
         "//p4_pdpi/string_encodings:hex_string",
         "//p4_pdpi/string_encodings:readable_byte_string",
         "@com_github_google_glog//:glog",
@@ -86,9 +86,9 @@ cc_test(
         ":bit_widths",
         ":packetlib",
         ":packetlib_cc_proto",
-	"//gutil:proto_matchers",
-        "//gutil:status_matchers",
-	"//gutil:testing",
+	"//gutil/gutil:proto_matchers",
+	"//gutil/gutil:testing",
+        "//gutil/gutil:status_matchers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -105,9 +105,9 @@ cc_test(
     deps = [
         ":packetlib",
         ":packetlib_cc_proto",
-        "//gutil:proto",
-        "//gutil:status",
-        "//gutil:testing",
+        "//gutil/gutil:proto",
+        "//gutil/gutil:status",
+        "//gutil/gutil:testing",
         "//p4_pdpi/string_encodings:readable_byte_string",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -122,7 +122,7 @@ cc_test(
     deps = [
         ":packetlib_cc_proto",
         ":packetlib_matchers",
-        "//gutil:testing",
+        "//gutil/gutil:testing",
         "@com_google_googletest//:gtest_main",
         "@com_google_protobuf//:protobuf",
     ],
@@ -134,8 +134,8 @@ cc_test(
     deps = [
         ":packetlib",
         ":packetlib_cc_proto",
-	"//gutil:status_matchers",
-        "//gutil:testing",
+	"//gutil/gutil:status_matchers",
+        "//gutil/gutil:testing",
         "//p4_pdpi/string_encodings:readable_byte_string",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
