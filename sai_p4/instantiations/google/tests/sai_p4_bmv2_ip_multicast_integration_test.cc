@@ -20,6 +20,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
@@ -29,16 +30,15 @@
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "p4_pdpi/pd.h"
-#include "p4_pdpi/translation_options.h"
 #include "platforms/networking/p4/p4_infra/bmv2/bmv2.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
-#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "sai_p4/instantiations/google/test_tools/set_up_bmv2.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
 
@@ -60,7 +60,32 @@ enum class DstIpKind {
   kMulticast,
 };
 
-absl::StatusOr<packetlib::Packet> GetIpv4TestPacket(DstIpKind dst_ip_kind) {
+netaddr::Ipv4Address GetDstIpv4(DstIpKind dst_ip_kind) {
+  switch (dst_ip_kind) {
+    case DstIpKind::kUnicast:
+      return netaddr::Ipv4Address(192, 168, 100, 1);
+    case DstIpKind::kMulticast:
+      // "Source-specific multicast" address, see
+      // https://en.wikipedia.org/wiki/Multicast_address#IPv4
+      return netaddr::Ipv4Address(232, 1, 2, 3);
+  }
+  LOG(FATAL) << "Unknown DstIpKind: " << static_cast<int>(dst_ip_kind);
+}
+
+absl::StatusOr<netaddr::Ipv6Address> GetDstIpv6(DstIpKind dst_ip_kind) {
+  switch (dst_ip_kind) {
+    case DstIpKind::kUnicast:
+      return netaddr::Ipv6Address::OfString("2001::2");
+    case DstIpKind::kMulticast:
+      // "Source-specific multicast" address, see
+      // https://en.wikipedia.org/wiki/Multicast_address#IPv6
+      return netaddr::Ipv6Address::OfString("ff30::2");
+  }
+  LOG(FATAL) << "Unknown DstIpKind: " << static_cast<int>(dst_ip_kind);
+}
+
+absl::StatusOr<packetlib::Packet> GetIpv4TestPacket(
+    const netaddr::Ipv4Address& dst_ip) {
   ASSIGN_OR_RETURN(auto packet, gutil::ParseTextProto<packetlib::Packet>(R"pb(
                      headers {
                        ethernet_header {
@@ -86,18 +111,15 @@ absl::StatusOr<packetlib::Packet> GetIpv4TestPacket(DstIpKind dst_ip_kind) {
                      }
                      payload: "A beautiful IPv4 test packet with great payload."
                    )pb"));
-  static constexpr absl::string_view kUnicastIp = "192.168.100.1";
-  // "Source-specific multicast" address, see
-  // https://en.wikipedia.org/wiki/Multicast_address#IPv4
-  static constexpr absl::string_view kMulticastIp = "232.1.2.3";
   packet.mutable_headers(1)->mutable_ipv4_header()->set_ipv4_destination(
-      dst_ip_kind == DstIpKind::kUnicast ? kUnicastIp : kMulticastIp);
+      dst_ip.ToString());
   RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
   RETURN_IF_ERROR(packetlib::ValidatePacket(packet));
   return packet;
 }
 
-absl::StatusOr<packetlib::Packet> GetIpv6TestPacket(DstIpKind dst_ip_kind) {
+absl::StatusOr<packetlib::Packet> GetIpv6TestPacket(
+    const netaddr::Ipv6Address& dst_ip) {
   ASSIGN_OR_RETURN(auto packet, gutil::ParseTextProto<packetlib::Packet>(R"pb(
                      headers {
                        ethernet_header {
@@ -120,12 +142,8 @@ absl::StatusOr<packetlib::Packet> GetIpv6TestPacket(DstIpKind dst_ip_kind) {
                      }
                      payload: "A beautiful IPv6 test packet with great payload."
                    )pb"));
-  static constexpr absl::string_view kUnicastIp = "2001::2";
-  // "Source-specific multicast" address, see
-  // https://en.wikipedia.org/wiki/Multicast_address#IPv6
-  static constexpr absl::string_view kMulticastIp = "ff30::2";
   packet.mutable_headers(1)->mutable_ipv6_header()->set_ipv6_destination(
-      dst_ip_kind == DstIpKind::kUnicast ? kUnicastIp : kMulticastIp);
+      dst_ip.ToString());
   RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
   RETURN_IF_ERROR(packetlib::ValidatePacket(packet));
   return packet;
@@ -150,10 +168,16 @@ TEST_P(IpMulticastTest, Ipv4PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
   }
 
   // Install table entries.
+  constexpr absl::string_view kVrf = "vrf";
+  const netaddr::Ipv4Address kDstIp = GetDstIpv4(kDstIpKind);
   constexpr int kMulticastGroupId = 42;
-  sai::TableEntries entries =
-      sai::PdEntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(kMulticastGroupId)
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddVrfEntry(kVrf)
+          .AddEntryAdmittingAllPacketsToL3()
+          .AddEntrySettingVrfForAllPackets(kVrf)
+          .AddMulticastRoute(kVrf, kDstIp, kMulticastGroupId)
           .AddMulticastGroupEntry(
               kMulticastGroupId,
               {
@@ -182,20 +206,16 @@ TEST_P(IpMulticastTest, Ipv4PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
               .multicast_replica_instance = 0,
               .src_mac = netaddr::MacAddress(2, 0, 0, 0, 0, 0x42),
           })
-          .GetDedupedEntries();
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
-                       pdpi::PdTableEntriesToPiEntities(
-                           kIrP4Info, entries,
-                           pdpi::TranslationOptions{
-                               // TODO: Remove once multicast
-                               // source mac table is no longer `@unsupported`.
-                               .allow_unsupported = true,
-                           }));
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info,
+                                // TODO: Remove once multicast
+                                // source mac table is no longer `@unsupported`.
+                                /*allow_unsupported=*/true));
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Send Ipv4 test packet and expect output packets on egress ports 1 and 2.
   ASSERT_OK_AND_ASSIGN(const packetlib::Packet ipv4_test_packet,
-                       GetIpv4TestPacket(kDstIpKind));
+                       GetIpv4TestPacket(kDstIp));
   constexpr int kArbitraryIngressPort = 24;
   ASSERT_OK_AND_ASSIGN(
       (absl::flat_hash_map<int, packetlib::Packets>
@@ -249,10 +269,17 @@ TEST_P(IpMulticastTest, Ipv6PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
   }
 
   // Install table entries.
+  constexpr absl::string_view kVrf = "vrf";
+  ASSERT_OK_AND_ASSIGN(const netaddr::Ipv6Address kDstIp,
+                       GetDstIpv6(kDstIpKind));
   constexpr int kMulticastGroupId = 42;
-  sai::TableEntries entries =
-      sai::PdEntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(kMulticastGroupId)
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddVrfEntry(kVrf)
+          .AddEntryAdmittingAllPacketsToL3()
+          .AddEntrySettingVrfForAllPackets(kVrf)
+          .AddMulticastRoute(kVrf, kDstIp, kMulticastGroupId)
           .AddMulticastGroupEntry(
               kMulticastGroupId,
               {
@@ -275,20 +302,16 @@ TEST_P(IpMulticastTest, Ipv6PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
               .multicast_replica_instance = 0,
               .src_mac = netaddr::MacAddress(5, 5, 5, 5, 5, 5),
           })
-          .GetDedupedEntries();
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
-                       pdpi::PdTableEntriesToPiEntities(
-                           kIrP4Info, entries,
-                           pdpi::TranslationOptions{
-                               // TODO: Remove once multicast
-                               // source mac table is no longer `@unsupported`.
-                               .allow_unsupported = true,
-                           }));
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info,
+                                // TODO: Remove once multicast
+                                // source mac table is no longer `@unsupported`.
+                                /*allow_unsupported=*/true));
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Send Ipv6 test packet and expect output packets on egress ports 7 and 5.
   ASSERT_OK_AND_ASSIGN(const packetlib::Packet ipv6_test_packet,
-                       GetIpv6TestPacket(kDstIpKind));
+                       GetIpv6TestPacket(kDstIp));
   constexpr int kArbitraryIngressPort = 24;
   ASSERT_OK_AND_ASSIGN(
       (absl::flat_hash_map<int, packetlib::Packets>
@@ -330,44 +353,52 @@ TEST_P(IpMulticastTest, AclIngressDropActionOverridesMulticastAction) {
   }
 
   // Install multicast route.
+  constexpr absl::string_view kVrf = "vrf";
+  const netaddr::Ipv4Address kDstIpv4 = GetDstIpv4(kDstIpKind);
+  ASSERT_OK_AND_ASSIGN(const netaddr::Ipv6Address kDstIpv6,
+                       GetDstIpv6(kDstIpKind));
   constexpr int kMulticastGroupId = 42;
-  sai::TableEntries entries =
-      sai::PdEntryBuilder()
-          .AddEntriesForwardingIpPacketsToGivenMulticastGroup(kMulticastGroupId)
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddVrfEntry(kVrf)
+          .AddEntryAdmittingAllPacketsToL3()
+          .AddEntrySettingVrfForAllPackets(kVrf)
+          .AddMulticastRoute(kVrf, kDstIpv4, kMulticastGroupId)
+          .AddMulticastRoute(kVrf, kDstIpv6, kMulticastGroupId)
           .AddMulticastGroupEntry(kMulticastGroupId,
                                   {sai::Replica{.egress_port = "\1"}})
           .AddMulticastRouterInterfaceEntry({
               .multicast_replica_port = "\1",
               .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
           })
-          .GetDedupedEntries();
-  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
-                       pdpi::PdTableEntriesToPiEntities(
-                           kIrP4Info, entries,
-                           pdpi::TranslationOptions{
-                               // TODO: Remove once multicast
-                               // source mac table is no longer `@unsupported`.
-                               .allow_unsupported = true,
-                           }));
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info,
+                                // TODO: Remove once multicast
+                                // source mac table is no longer `@unsupported`.
+                                /*allow_unsupported=*/true));
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Send test packets and expect output.
   constexpr int kArbitraryIngressPort1 = 24;
   constexpr int kArbitraryIngressPort2 = 42;
   ASSERT_OK_AND_ASSIGN(const packetlib::Packet ipv4_test_packet,
-                       GetIpv4TestPacket(kDstIpKind));
+                       GetIpv4TestPacket(kDstIpv4));
   ASSERT_OK_AND_ASSIGN(const packetlib::Packet ipv6_test_packet,
-                       GetIpv6TestPacket(kDstIpKind));
+                       GetIpv6TestPacket(kDstIpv6));
   EXPECT_THAT(bmv2.SendPacket(kArbitraryIngressPort1, ipv4_test_packet),
               IsOkAndHolds(Not(IsEmpty())));
   EXPECT_THAT(bmv2.SendPacket(kArbitraryIngressPort2, ipv6_test_packet),
               IsOkAndHolds(Not(IsEmpty())));
 
   // Install ACL, resend packets, and expect NO output.
-  ASSERT_OK(pdpi::InstallPdTableEntries(bmv2.P4RuntimeSession(),
-                                        sai::PdEntryBuilder()
-                                            .AddIngressAclDroppingAllPackets()
-                                            .GetDedupedEntries()));
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> drop_acl_pi_entities,
+                       sai::EntryBuilder()
+                           .AddIngressAclDroppingAllPackets()
+                           .LogPdEntries()
+                           .GetDedupedPiEntities(kIrP4Info));
+  ASSERT_OK(
+      pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), drop_acl_pi_entities));
   EXPECT_THAT(bmv2.SendPacket(kArbitraryIngressPort1, ipv4_test_packet),
               IsOkAndHolds(IsEmpty()));
   EXPECT_THAT(bmv2.SendPacket(kArbitraryIngressPort2, ipv6_test_packet),
