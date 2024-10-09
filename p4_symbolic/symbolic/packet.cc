@@ -32,7 +32,6 @@ z3::expr GetOrDefault(SymbolicPerPacketState state, const std::string &field,
   if (state.ContainsKey(field)) {
     return state.Get(field).value();
   }
-  return Z3Context().bv_val(-1, default_value_bit_size);
 }
 
 }  // namespace

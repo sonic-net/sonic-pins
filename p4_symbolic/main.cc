@@ -82,8 +82,8 @@ absl::Status ParseAndEvaluate() {
   // Loop over tables in a deterministic order for output consistency (important
   // for ci tests).
   std::string debug_smt_formula = "";
-  std::map ordered_tables(dataplane.program.tables().cbegin(),
-                          dataplane.program.tables().cend());
+  auto ordered_tables = absl::btree_map<std::string, p4_symbolic::ir::Table>(
+      dataplane.program.tables().cbegin(), dataplane.program.tables().cend());
   for (const auto &[name, table] : ordered_tables) {
     int row_count = static_cast<int>(dataplane.entries[name].size());
     for (int i = -1; i < row_count; i++) {
