@@ -26,7 +26,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/gutil/status.h"
 #include "p4_pdpi/netaddr/network_address.h"
 #include "p4_pdpi/string_encodings/hex_string.h"
 

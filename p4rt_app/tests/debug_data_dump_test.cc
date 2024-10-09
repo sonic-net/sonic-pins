@@ -18,7 +18,7 @@
 #include "gmock/gmock.h"
 #include "grpcpp/support/status.h"
 #include "gtest/gtest.h"
-#include "gutil/io.h"
+#include "gutil/gutil/io.h"
 #include "p4rt_app/p4runtime/p4runtime_impl.h"
 #include "p4rt_app/tests/lib/p4runtime_component_test_fixture.h"
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"

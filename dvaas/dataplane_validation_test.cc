@@ -11,10 +11,10 @@
 #include "dvaas/packet_trace.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "gutil/proto.h"
-#include "gutil/status_matchers.h"
-#include "gutil/test_artifact_writer.h"
-#include "gutil/testing.h"
+#include "gutil/gutil/proto.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/test_artifact_writer.h"
+#include "gutil/gutil/testing.h"
 
 namespace dvaas {
 namespace {

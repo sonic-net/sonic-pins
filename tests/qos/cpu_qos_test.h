@@ -24,8 +24,9 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"
-#include "gutil/status_matchers.h"
-#include "gutil/testing.h"
+#include "gtest/gtest.h"
+#include "gutil/gutil/status_matchers.h"
+#include "gutil/gutil/testing.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "sai_p4/instantiations/google/instantiations.h"
@@ -34,7 +35,6 @@
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/ssh_client.h"
-#include "gtest/gtest.h"
 
 namespace pins_test {
 // Structure holds packet and expected target queue passed in to test as

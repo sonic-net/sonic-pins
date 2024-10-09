@@ -20,8 +20,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/string_view.h"
-#include "gutil/collections.h"
-#include "gutil/status.h"
+#include "gutil/gutil/collections.h"
+#include "gutil/gutil/status.h"
 
 namespace p4rt_app {
 
