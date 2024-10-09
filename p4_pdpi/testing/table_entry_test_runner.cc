@@ -146,6 +146,49 @@ static void RunPiMulticastTest(const pdpi::IrP4Info& info) {
                   /*validity=*/INPUT_IS_VALID);
 }
 
+static void RunPiCloneSessionTest(const pdpi::IrP4Info& info) {
+  RunPiEntityTest(info, "valid clone session group entry",
+                  gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+                    packet_replication_engine_entry {
+                      clone_session_entry {
+                        session_id: 7
+                        replicas { port: "some_port" instance: 1 }
+                        replicas { port: "some_port" instance: 2 }
+                        replicas { port: "some_other_port" instance: 1 }
+                        class_of_service: 2
+                        packet_length_bytes: 200
+                      }
+                    }
+                  )pb"),
+                  /*validity=*/INPUT_IS_VALID);
+  RunPiEntityTest(info, "clone session group entry with duplicate replica",
+                  gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+                    packet_replication_engine_entry {
+                      clone_session_entry {
+                        session_id: 7
+                        replicas { port: "some_port" instance: 1 }
+                        replicas { port: "some_port" instance: 1 }
+                        class_of_service: 2
+                        packet_length_bytes: 200
+                      }
+                    }
+                  )pb"),
+                  /*validity=*/INPUT_IS_VALID);
+  RunPiEntityTest(info, "valid clone session entry without explicit instance",
+                  gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
+                    packet_replication_engine_entry {
+                      clone_session_entry {
+                        session_id: 7
+                        replicas { port: "some_port" }
+                        replicas { port: "some_other_port" }
+                        class_of_service: 2
+                        packet_length_bytes: 200
+                      }
+                    }
+                  )pb"),
+                  /*validity=*/INPUT_IS_VALID);
+}
+
 static void RunPiTests(const pdpi::IrP4Info info) {
   RunPiEntityTest(info, "empty PI", gutil::ParseProtoOrDie<p4::v1::Entity>(R"pb(
                   )pb"));
@@ -835,6 +878,7 @@ static void RunPiTests(const pdpi::IrP4Info info) {
                   )pb"),
                   /*validity=*/INPUT_IS_VALID);
   RunPiMulticastTest(info);
+  RunPiCloneSessionTest(info);
 }  // NOLINT(readability/fn_size)
 
 static void RunIrNoActionTableTests(const pdpi::IrP4Info& info) {
@@ -950,6 +994,58 @@ static void RunIrMulticastTest(const pdpi::IrP4Info& info) {
                   )pb"),
                   IrTestConfig{
                       .validity = INPUT_IS_VALID,
+                  });
+}
+
+static void RunIrCloneSessionTest(const pdpi::IrP4Info& info) {
+  RunIrEntityTest(info, "clone session entry with duplicate replica",
+                  gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+                    packet_replication_engine_entry {
+                      clone_session_entry {
+                        session_id: 7
+                        replicas { port: "some_port" instance: 1 }
+                        replicas { port: "some_port" instance: 1 }
+                        class_of_service: 2
+                        packet_length_bytes: 200
+                      }
+                    }
+                  )pb"),
+                  IrTestConfig{
+                      .validity = INPUT_IS_VALID,
+                      .test_ir_to_pd = false,
+                  });
+  RunIrEntityTest(info, "valid clone session group entry",
+                  gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+                    packet_replication_engine_entry {
+                      clone_session_entry {
+                        session_id: 7
+                        replicas { port: "some_port" instance: 1 }
+                        replicas { port: "some_port" instance: 2 }
+                        replicas { port: "some_other_port" instance: 1 }
+                        class_of_service: 2
+                        packet_length_bytes: 200
+                      }
+                    }
+                  )pb"),
+                  IrTestConfig{
+                      .validity = INPUT_IS_VALID,
+                      .test_ir_to_pd = false,
+                  });
+  RunIrEntityTest(info, "valid clone session entry without explicit instance",
+                  gutil::ParseProtoOrDie<pdpi::IrEntity>(R"pb(
+                    packet_replication_engine_entry {
+                      clone_session_entry {
+                        session_id: 7
+                        replicas { port: "some_port" }
+                        replicas { port: "some_other_port" }
+                        class_of_service: 2
+                        packet_length_bytes: 200
+                      }
+                    }
+                  )pb"),
+                  IrTestConfig{
+                      .validity = INPUT_IS_VALID,
+                      .test_ir_to_pd = false,
                   });
 }
 
@@ -1992,6 +2088,7 @@ static void RunIrTests(const pdpi::IrP4Info info) {
                       .validity = INPUT_IS_VALID,
                   });
   RunIrMulticastTest(info);
+  RunIrCloneSessionTest(info);
 }  // NOLINT(readability/fn_size)
 
 static void RunPdMeterCounterTableEntryTests(const pdpi::IrP4Info& info) {

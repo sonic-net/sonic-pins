@@ -1387,6 +1387,127 @@ packet_replication_engine_entry {
 
 
 =========================================================================
+valid clone session group entry
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+clone session group entry with duplicate replica
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+valid clone session entry without explicit instance
+=========================================================================
+
+--- PI (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- IR:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
 empty IR (IR -> PI)
 =========================================================================
 
@@ -3539,6 +3660,127 @@ multicast_group_table_entry {
         instance: "0x0000"
       }
     }
+  }
+}
+
+
+=========================================================================
+clone session entry with duplicate replica (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+valid clone session group entry (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+      instance: 1
+    }
+    replicas {
+      port: "some_port"
+      instance: 2
+    }
+    replicas {
+      port: "some_other_port"
+      instance: 1
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      instance: 1
+      port: "some_port"
+    }
+    replicas {
+      instance: 2
+      port: "some_port"
+    }
+    replicas {
+      instance: 1
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+
+=========================================================================
+valid clone session entry without explicit instance (IR -> PI)
+=========================================================================
+
+--- IR (Input):
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
+  }
+}
+
+--- PI:
+packet_replication_engine_entry {
+  clone_session_entry {
+    session_id: 7
+    replicas {
+      port: "some_port"
+    }
+    replicas {
+      port: "some_other_port"
+    }
+    class_of_service: 2
+    packet_length_bytes: 200
   }
 }
 

@@ -2081,6 +2081,38 @@ StatusOr<IrMulticastGroupEntry> PiMulticastGroupEntryToIr(
   return ir;
 }
 
+StatusOr<IrCloneSessionEntry> PiCloneSessionEntryToIr(
+    const IrP4Info &info, const p4::v1::CloneSessionEntry &pi,
+    const TranslationOptions &options) {
+  IrCloneSessionEntry ir;
+  ir.set_session_id(pi.session_id());
+
+  if (options.key_only) {
+    return ir;
+  }
+  ir.set_class_of_service(pi.class_of_service());
+  ir.set_packet_length_bytes(pi.packet_length_bytes());
+
+  std::vector<std::string> invalid_reasons;
+  for (const auto &replica : pi.replicas()) {
+    absl::StatusOr<IrReplica> ir_replica = PiReplicaToIr(info, replica);
+    if (!ir_replica.ok()) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet, ir_replica.status().message()));
+      continue;
+    }
+    *ir.add_replicas() = std::move(*ir_replica);
+  }
+
+  if (!invalid_reasons.empty()) {
+    return gutil::InvalidArgumentErrorBuilder() << GenerateFormattedError(
+               absl::StrCat("CloneSessionEntry with group id '",
+                            pi.session_id(), "'"),
+               absl::StrJoin(invalid_reasons, "\n"));
+  }
+  return ir;
+}
+
 StatusOr<IrPacketReplicationEngineEntry> PiPacketReplicationEngineEntryToIr(
     const IrP4Info &info, const p4::v1::PacketReplicationEngineEntry &pi,
     const TranslationOptions &options) {
@@ -2092,9 +2124,15 @@ StatusOr<IrPacketReplicationEngineEntry> PiPacketReplicationEngineEntryToIr(
           PiMulticastGroupEntryToIr(info, pi.multicast_group_entry(), options));
       break;
     }
+    case p4::v1::PacketReplicationEngineEntry::kCloneSessionEntry: {
+      ASSIGN_OR_RETURN(
+          *ir.mutable_clone_session_entry(),
+          PiCloneSessionEntryToIr(info, pi.clone_session_entry(), options));
+      break;
+    }
     default: {
       return gutil::UnimplementedErrorBuilder()
-             << "Only PRE entries of type multicast group entry are supported.";
+             << "The PRE entry type is not supported.";
     }
   }
   return ir;
@@ -2653,6 +2691,37 @@ StatusOr<p4::v1::MulticastGroupEntry> IrMulticastGroupEntryToPi(
   return pi;
 }
 
+StatusOr<p4::v1::CloneSessionEntry> IrCloneSessionEntryToPi(
+    const IrP4Info &info, const IrCloneSessionEntry &ir,
+    const TranslationOptions &options) {
+  p4::v1::CloneSessionEntry pi;
+  pi.set_session_id(ir.session_id());
+
+  if (options.key_only) {
+    return pi;
+  }
+  pi.set_class_of_service(ir.class_of_service());
+  pi.set_packet_length_bytes(ir.packet_length_bytes());
+
+  std::vector<std::string> invalid_reasons;
+  for (const auto &replica : ir.replicas()) {
+    absl::StatusOr<p4::v1::Replica> pi_replica = IrReplicaToPi(info, replica);
+    if (!pi_replica.ok()) {
+      invalid_reasons.push_back(
+          absl::StrCat(kNewBullet, pi_replica.status().message()));
+      continue;
+    }
+    *pi.add_replicas() = std::move(*pi_replica);
+  }
+  if (!invalid_reasons.empty()) {
+    return gutil::InvalidArgumentErrorBuilder() << GenerateFormattedError(
+               absl::StrCat("CloneSessionEntry with group id '",
+                            ir.session_id(), "'"),
+               absl::StrJoin(invalid_reasons, "\n"));
+  }
+  return pi;
+}
+
 StatusOr<p4::v1::PacketReplicationEngineEntry>
 IrPacketReplicationEngineEntryToPi(const IrP4Info &info,
                                    const IrPacketReplicationEngineEntry &ir,
@@ -2663,6 +2732,12 @@ IrPacketReplicationEngineEntryToPi(const IrP4Info &info,
       ASSIGN_OR_RETURN(
           *pi.mutable_multicast_group_entry(),
           IrMulticastGroupEntryToPi(info, ir.multicast_group_entry(), options));
+      break;
+    }
+    case IrPacketReplicationEngineEntry::kCloneSessionEntry: {
+      ASSIGN_OR_RETURN(
+          *pi.mutable_clone_session_entry(),
+          IrCloneSessionEntryToPi(info, ir.clone_session_entry(), options));
       break;
     }
     default:
