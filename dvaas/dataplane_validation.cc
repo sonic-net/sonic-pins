@@ -572,9 +572,15 @@ absl::Status StoreDvaasRegressionTestProto(
   ASSIGN_OR_RETURN(int test_id, dvaas::ExtractIdFromTaggedPacketInHex(
                                     packet_test_vector.input().packet().hex()));
 
+  constexpr absl::string_view kDvaasRegressionTestProtoHeader =
+      "# proto-file: "
+      "dvaas/thinkit_tests/dvaas_regression.proto\n"
+      "# proto-message: DvaasRegressionProto\n\n";
+
   return dvaas_test_artifact_writer.AppendToTestArtifact(
       absl::StrCat("packet_", test_id, ".dvaas_regression_test.txtpb"),
-      gutil::PrintTextProto(dvaas_regression_test_proto));
+      absl::StrCat(kDvaasRegressionTestProtoHeader,
+                   gutil::PrintTextProto(dvaas_regression_test_proto)));
 }
 
 absl::Status PostProcessTestVectorFailure(
