@@ -65,8 +65,9 @@ absl::StatusOr<z3::expr> Ite(const z3::expr &condition,
                              const z3::expr &true_value,
                              const z3::expr &false_value);
 
-// Converts the expression into a semantically equivalent boolean expression.
+// Converts the given expression to a boolean expression.
 absl::StatusOr<z3::expr> ToBoolSort(const z3::expr &a);
+// Converts the given expression to a bit vector expression.
 absl::StatusOr<z3::expr> ToBitVectorSort(const z3::expr &a, unsigned int size);
 
 // Prefix equality: this is the basis for evaluating LPMs.

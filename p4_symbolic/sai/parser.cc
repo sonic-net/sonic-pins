@@ -18,12 +18,12 @@
 #include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
 
 using ::p4_symbolic::symbolic::SymbolicPerPacketState;
-using ::p4_symbolic::symbolic::Z3Context;
 
 absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
     const SymbolicPerPacketState& state) {

@@ -79,7 +79,7 @@ struct P4RuntimeTranslator {
 };
 
 // Transforms a hex string literal from bmv2 json to a pdpi::IrValue
-absl::StatusOr<pdpi::IrValue> ParseIrValue(std::string value);
+absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value);
 
 // Transforms a value read from bmv2 (e.g. hardcoded in the program)
 // to a z3::expr.
