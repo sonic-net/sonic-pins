@@ -23,8 +23,6 @@ control vlan_untag(inout headers_t headers,
   // gets dropped in ingress/egress pipelines, respectively (given the
   // current switch configuration). With VLAN checks disabled, such drops do
   // not happen.
-  // TODO: Remove @unsupported when the switch supports this table.
-  @unsupported
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
   @id(DISABLE_VLAN_CHECKS_TABLE_ID)
   @entry_restriction("
