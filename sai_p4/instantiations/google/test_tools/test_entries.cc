@@ -590,4 +590,14 @@ EntryBuilder& EntryBuilder::AddMarkToMirrorAclEntry(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddEgressPortLoopbackEntry(
+    absl::string_view out_port) {
+  sai::EgressPortLoopbackTableEntry& loopback_entry =
+      *entries_.add_entries()->mutable_egress_port_loopback_table_entry();
+  loopback_entry.mutable_match()->set_out_port(out_port);
+  loopback_entry.mutable_action()->mutable_egress_loopback();
+
+  return *this;
+}
+
 }  // namespace sai

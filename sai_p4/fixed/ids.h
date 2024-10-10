@@ -30,7 +30,8 @@
 #define IPV6_TUNNEL_TERMINATION_TABLE_ID 0x0200004B     // 33554507
 #define DISABLE_VLAN_CHECKS_TABLE_ID 0x0200004D                 // 33554509
 #define INGRESS_CLONE_TABLE_ID 0x02000051                       // 33554513
-// Next available table id: 0x02000052 (33554514)
+#define EGRESS_PORT_LOOPBACK_TABLE_ID 0x02000052                // 33554514
+// Next available table id: 0x02000053 (33554515)
 
 // --- Actions -----------------------------------------------------------------
 
@@ -57,17 +58,18 @@
 #define CLONING_INGRESS_CLONE_ACTION_ID 0x0100001C                 // 16777244
 #define CLONING_MIRROR_WITH_PSAMP_ENCAPSULATION_ACTION_ID \
   0x0100001D                                                    // 16777245
-#define L3_ADMIT_ACTION_ID 0x01000008                                // 16777224
-#define MIRRORING_SET_PRE_SESSION_ACTION_ID 0x01000009               // 16777225
-#define SELECT_ECMP_HASH_ALGORITHM_ACTION_ID 0x010000A               // 16777226
-#define COMPUTE_ECMP_HASH_IPV4_ACTION_ID 0x0100000B                  // 16777227
-#define COMPUTE_ECMP_HASH_IPV6_ACTION_ID 0x0100000C                  // 16777228
-#define COMPUTE_LAG_HASH_IPV4_ACTION_ID 0x0100000D                   // 16777229
-#define COMPUTE_LAG_HASH_IPV6_ACTION_ID 0x0100000E                   // 16777230
-#define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015           // 16777237
-#define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016       // 16777238
-#define DISABLE_VLAN_CHECKS_ACTION_ID 0x0100001A                   // 16777242
-// Next available action id: 0x0100001E (16777246)
+#define L3_ADMIT_ACTION_ID 0x01000008                           // 16777224
+#define MIRRORING_SET_PRE_SESSION_ACTION_ID 0x01000009          // 16777225
+#define SELECT_ECMP_HASH_ALGORITHM_ACTION_ID 0x010000A          // 16777226
+#define COMPUTE_ECMP_HASH_IPV4_ACTION_ID 0x0100000B             // 16777227
+#define COMPUTE_ECMP_HASH_IPV6_ACTION_ID 0x0100000C             // 16777228
+#define COMPUTE_LAG_HASH_IPV4_ACTION_ID 0x0100000D              // 16777229
+#define COMPUTE_LAG_HASH_IPV6_ACTION_ID 0x0100000E              // 16777230
+#define ROUTING_SET_METADATA_AND_DROP_ACTION_ID 0x01000015      // 16777237
+#define MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID 0x01000016  // 16777238
+#define DISABLE_VLAN_CHECKS_ACTION_ID 0x0100001A                // 16777242
+#define EGRESS_LOOPBACK_ACTION_ID 0x0100001E                    // 16777246
+// Next available action id: 0x0100001F (16777247)
 
 // --- Action Profiles and Selectors (8 most significant bits = 0x11) ----------
 // This value should ideally be 0x11000001, but we currently have this value for
