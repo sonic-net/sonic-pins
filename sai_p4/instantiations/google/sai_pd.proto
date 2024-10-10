@@ -290,6 +290,19 @@ message TunnelTableEntry {
   bytes controller_metadata = 8;
 }
 
+// CAUTION: This table is not (yet) supported.
+message EgressPortLoopbackTableEntry {
+  message Match {
+    string out_port = 1;  // exact match / Format::STRING
+  }
+  Match match = 1;
+  message Action {
+    EgressLoopbackAction egress_loopback = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
 // Table entry restrictions:
 // ## Forbid using ether_type for IP packets (by convention, use is_ip*
 // instead).
@@ -894,6 +907,8 @@ message MirrorWithPsampEncapsulationAction {
   string monitor_port = 1;  // Format::STRING
 }
 
+message EgressLoopbackAction {}
+
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
   string vrf_id = 1;  // Format::STRING
@@ -1002,6 +1017,8 @@ message TableEntry {
     // CAUTION: This table is not (yet) supported.
     Ipv6MulticastTableEntry ipv6_multicast_table_entry = 79;
     TunnelTableEntry tunnel_table_entry = 80;
+    // CAUTION: This table is not (yet) supported.
+    EgressPortLoopbackTableEntry egress_port_loopback_table_entry = 82;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;
     AclWbbIngressTableEntry acl_wbb_ingress_table_entry = 259;

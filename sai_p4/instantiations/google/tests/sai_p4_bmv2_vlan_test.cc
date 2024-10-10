@@ -563,7 +563,7 @@ sai::TableEntries EntriesForwardingAndRewritingVlanInRifTable(
 
 TEST(VlanTest,
      SettingNonReservedVidInRifWithoutVlanChecksResultsInPacketWithThatId) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
@@ -624,7 +624,7 @@ TEST(VlanTest,
 }
 
 TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
@@ -661,7 +661,7 @@ TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
 }
 
 TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kExperimentalTor;
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
