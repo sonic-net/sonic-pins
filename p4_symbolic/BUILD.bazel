@@ -69,3 +69,19 @@ cc_library(
         "@com_google_absl//absl/types:span",
     ],
 )
+
+cc_library(
+    name = "z3_util",
+    srcs = ["z3_util.cc"],
+    hdrs = ["z3_util.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//gutil:status",
+        "//p4_pdpi/string_encodings:hex_string",
+        "@com_github_z3prover_z3//:api",
+        "@com_gnu_gmp//:gmp",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)

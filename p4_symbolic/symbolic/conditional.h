@@ -29,7 +29,7 @@ namespace p4_symbolic {
 namespace symbolic {
 namespace conditional {
 
-absl::StatusOr<SymbolicTrace> EvaluateConditional(
+absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
     const Dataplane &data_plane, const ir::Conditional &conditional,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard);

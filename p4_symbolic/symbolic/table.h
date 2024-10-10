@@ -36,7 +36,7 @@ namespace p4_symbolic {
 namespace symbolic {
 namespace table {
 
-absl::StatusOr<SymbolicTrace> EvaluateTable(
+absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const Dataplane &data_plane, const ir::Table &table,
     const std::vector<pdpi::IrTableEntry> &entries,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,

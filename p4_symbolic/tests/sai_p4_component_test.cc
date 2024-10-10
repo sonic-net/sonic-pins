@@ -28,7 +28,7 @@ using ::p4::config::v1::P4Info;
 using ::testing::Eq;
 using ::testing::Not;
 
-constexpr absl::string_view kTableEntries = R"PB(
+constexpr absl::string_view kTableEntries = R"pb(
   entries {
     acl_pre_ingress_table_entry  {
       match {
@@ -73,7 +73,7 @@ constexpr absl::string_view kTableEntries = R"PB(
       action { set_dst_mac { dst_mac: "cc:bb:aa:99:88:77" } }
     }
   }
-)PB";
+)pb";
 
 class P4SymbolicComponentTest : public testing::Test {
  public:

@@ -37,6 +37,7 @@
 #include "p4_pdpi/utils/ir.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -96,19 +97,9 @@ uint64_t StringToInt(std::string value) {
   return std::stoull(binary);
 }
 
-z3::expr HexStringToZ3Expr(const std::string &hex_string,
-                           absl::optional<int> bitwidth = absl::nullopt) {
-  mpz_class integer = mpz_class(hex_string, /*base=*/0);
-  std::string decimal = integer.get_str(/*base=*/10);
-  if (!bitwidth.has_value()) {
-    bitwidth = integer.get_str(/*base=*/2).size();
-  }
-  return Z3Context().bv_val(decimal.c_str(), *bitwidth);
-}
-
 }  // namespace
 
-absl::StatusOr<pdpi::IrValue> ParseIrValue(std::string value) {
+absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value) {
   // Format according to type.
   if (absl::StartsWith(value, "0x")) {
     return pdpi::FormattedStringToIrValue(value, pdpi::Format::HEX_STRING);
@@ -122,21 +113,21 @@ absl::StatusOr<pdpi::IrValue> ParseIrValue(std::string value) {
 absl::StatusOr<z3::expr> FormatBmv2Value(const pdpi::IrValue &value) {
   switch (value.format_case()) {
     case pdpi::IrValue::kHexStr:
-      return HexStringToZ3Expr(value.hex_str());
+      return HexStringToZ3Bitvector(value.hex_str());
     case pdpi::IrValue::kIpv4: {
       ASSIGN_OR_RETURN(netaddr::Ipv4Address ipv4,
                        netaddr::Ipv4Address::OfString(value.ipv4()));
-      return HexStringToZ3Expr(ipv4.ToHexString(), 32);
+      return HexStringToZ3Bitvector(ipv4.ToHexString(), 32);
     }
     case pdpi::IrValue::kIpv6: {
       ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6,
                        netaddr::Ipv6Address::OfString(value.ipv6()));
-      return HexStringToZ3Expr(ipv6.ToHexString(), 128);
+      return HexStringToZ3Bitvector(ipv6.ToHexString(), 128);
     }
     case pdpi::IrValue::kMac: {
       ASSIGN_OR_RETURN(netaddr::MacAddress mac,
                        netaddr::MacAddress::OfString(value.mac()));
-      return HexStringToZ3Expr(mac.ToHexString(), 48);
+      return HexStringToZ3Bitvector(mac.ToHexString(), 48);
     }
     default:
       return absl::UnimplementedError(

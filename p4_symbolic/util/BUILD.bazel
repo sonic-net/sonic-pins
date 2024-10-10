@@ -17,7 +17,10 @@ load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
 load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
 load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
 
 cc_library(
     name = "util",
