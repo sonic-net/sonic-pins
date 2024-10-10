@@ -199,6 +199,7 @@ class EntryBuilder {
       const MirrorAndRedirectMatchFields& match_fields = {});
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
   EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
+  EntryBuilder& AddEgressPortLoopbackEntry(absl::string_view out_port);
 
  private:
   sai::TableEntries entries_;
