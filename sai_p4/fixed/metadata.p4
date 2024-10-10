@@ -273,6 +273,18 @@ struct local_metadata_t {
   bool nexthop_id_valid;
   // Nexthop id, only valid if `nexthop_id_valid` is true.
   nexthop_id_t nexthop_id_value;
+  // After execution of the `routing_lookup` stage, Indicates if an entry in
+  // the `ipv4_multicast` or `ipv6_multicast` table was hit.
+  bool ipmc_table_hit;
+
+  // Determines if packet was dropped in ACL ingress/egress stage. If true, the
+  // actual call to mark_to_drop (that affects standard_metadata) takes place at
+  // the end of the respective pipeline.
+  // This is done this way because we want to call mark_to_drop after
+  // determining the target_egress_port through the value assigned to
+  // standard_metadata.egress_spec (which happens in routing_resolution *after*
+  // ACL ingress) for punted packets.
+  bool acl_drop;
 }
 
 #endif  // SAI_METADATA_P4_
