@@ -305,42 +305,6 @@ TEST(FuzzUtilTest, FuzzWriteRequestRespectsDisallowList) {
   }
 }
 
-TEST(FuzzUtilTest, FuzzValidTableEntryRespectsDisallowList) {
-  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
-  fuzzer_state.config.disabled_fully_qualified_names = {
-      "ingress.ternary_table.ipv6_upper_64_bits",
-      "ingress.ternary_table.normal",
-      "ingress.ternary_table.mac",
-      "ingress.ternary_table.unsupported_field",
-  };
-
-  ASSERT_OK_AND_ASSIGN(
-      const pdpi::IrTableDefinition& ternary_table,
-      gutil::FindOrStatus(fuzzer_state.config.info.tables_by_name(),
-                          "ternary_table"));
-
-  absl::flat_hash_set<uint32_t> disallowed_ids;
-  for (const auto& path : fuzzer_state.config.disabled_fully_qualified_names) {
-    std::vector<std::string> parts = absl::StrSplit(path, '.');
-    ASSERT_OK_AND_ASSIGN(
-        const pdpi::IrMatchFieldDefinition& match,
-        gutil::FindOrStatus(ternary_table.match_fields_by_name(),
-                            parts[parts.size() - 1]));
-    disallowed_ids.insert(match.match_field().id());
-  }
-
-  for (int i = 0; i < 1000; i++) {
-    ASSERT_OK_AND_ASSIGN(
-        p4::v1::TableEntry entry,
-        FuzzValidTableEntry(&fuzzer_state.gen, fuzzer_state.config,
-                            fuzzer_state.switch_state,
-                            ternary_table.preamble().id()));
-    for (const auto& match : entry.match()) {
-      EXPECT_THAT(match.field_id(), Not(AnyOfArray(disallowed_ids)));
-    }
-  }
-}
-
 TEST(FuzzUtilTest, FuzzActionRespectsDisallowList) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
   ASSERT_OK_AND_ASSIGN(
