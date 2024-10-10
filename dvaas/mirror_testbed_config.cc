@@ -14,19 +14,77 @@
 
 #include "dvaas/mirror_testbed_config.h"
 
+#include <string>
+#include <vector>
+
+#include "absl/container/btree_set.h"
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
-#include "glog/logging.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "dvaas/switch_api.h"
+#include "gutil/gutil/proto.h"
 #include "gutil/gutil/status.h"
+#include "gutil/gutil/test_artifact_writer.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/p4rt/p4rt_port.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 
 namespace dvaas {
 namespace {
+
+constexpr absl::string_view kArtifactPrefix = "configurator.";
+
+struct StoreSwitchStateParams {
+  bool store_p4info = false;
+  bool store_ir_p4info = false;
+  bool store_gnmi_config = false;
+  bool store_ir_entities = false;
+};
+absl::Status StoreSwitchStateAsArtifacts(
+    SwitchApi& switch_api, absl::string_view prefix,
+    const StoreSwitchStateParams& params = {}) {
+  gutil::BazelTestArtifactWriter writer;
+  ASSIGN_OR_RETURN(const p4::config::v1::P4Info p4info,
+                   pdpi::GetP4Info(*switch_api.p4rt));
+  if (params.store_p4info) {
+    // Store P4Info.
+    RETURN_IF_ERROR(writer.AppendToTestArtifact(
+        absl::StrCat(prefix, "p4info.txtpb"), gutil::PrintTextProto(p4info)));
+  }
+  if (params.store_ir_p4info) {
+    // Store IR P4Info.
+    ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
+                     pdpi::CreateIrP4Info(p4info));
+    RETURN_IF_ERROR(
+        writer.AppendToTestArtifact(absl::StrCat(prefix, "ir_p4info.txtpb"),
+                                    gutil::PrintTextProto(ir_p4info)));
+  }
+  if (params.store_gnmi_config) {
+    // Store gNMI config.
+    ASSIGN_OR_RETURN(const std::string gnmi_config,
+                     pins_test::GetGnmiConfig(*switch_api.gnmi));
+    RETURN_IF_ERROR(writer.AppendToTestArtifact(
+        absl::StrCat(prefix, "gnmi_config.json"), gnmi_config));
+  }
+  // Store IR entities.
+  if (params.store_ir_entities) {
+    ASSIGN_OR_RETURN(const pdpi::IrEntities ir_entities,
+                     pdpi::ReadIrEntities(*switch_api.p4rt));
+    RETURN_IF_ERROR(
+        writer.AppendToTestArtifact(absl::StrCat(prefix, "ir_entities.txtpb"),
+                                    gutil::PrintTextProto(ir_entities)));
+  }
+  return absl::OkStatus();
+};
 
 // Tries to configure a subset of SUT's interfaces to map every given P4RT port
 // ID in `p4rt_port_ids` to an enabled Ethernet interface.
@@ -66,6 +124,21 @@ absl::StatusOr<MirrorTestbedConfigurator> MirrorTestbedConfigurator::Create(
                    pdpi::P4RuntimeSession::Create(testbed->ControlSwitch()));
   ASSIGN_OR_RETURN(configured_testbed.control_switch_api_.gnmi,
                    testbed->ControlSwitch().CreateGnmiStub());
+
+  constexpr StoreSwitchStateParams kStoreOriginalSwitchStateParams = {
+      .store_p4info = true,
+      .store_ir_p4info = true,
+      .store_gnmi_config = true,
+      .store_ir_entities = true,
+  };
+  RETURN_IF_ERROR(StoreSwitchStateAsArtifacts(
+      configured_testbed.sut_api_,
+      absl::StrCat(kArtifactPrefix, "original.sut."),
+      kStoreOriginalSwitchStateParams));
+  RETURN_IF_ERROR(
+      StoreSwitchStateAsArtifacts(configured_testbed.control_switch_api_,
+                                  absl::StrCat(kArtifactPrefix, "original.cs."),
+                                  kStoreOriginalSwitchStateParams));
 
   return configured_testbed;
 }
@@ -120,6 +193,17 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
       pins_test::WaitForEnabledInterfacesToBeUp(testbed_.ControlSwitch()))
           .SetPrepend()
       << "expected enabled interfaces on control switch to be up: ";
+
+  constexpr StoreSwitchStateParams kStoreConfiguredSwitchStateParams = {
+      .store_gnmi_config = true,
+      .store_ir_entities = true,
+  };
+  RETURN_IF_ERROR(StoreSwitchStateAsArtifacts(
+      sut_api_, absl::StrCat(kArtifactPrefix, "configured.sut."),
+      kStoreConfiguredSwitchStateParams));
+  RETURN_IF_ERROR(StoreSwitchStateAsArtifacts(
+      control_switch_api_, absl::StrCat(kArtifactPrefix, "configured.cs."),
+      kStoreConfiguredSwitchStateParams));
 
   return absl::OkStatus();
 }
