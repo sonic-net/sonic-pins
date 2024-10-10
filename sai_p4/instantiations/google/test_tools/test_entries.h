@@ -158,12 +158,12 @@ class EntryBuilder {
       std::optional<absl::string_view> vlan_hexstr = std::nullopt);
   EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
       int multicast_group_id, IpVersion ip_version, absl::string_view vrf);
-  EntryBuilder& AddRouteForwardingIpv4PacketsToGivenMulticastGroup(
-      int multicast_group_id, absl::string_view vrf,
-      netaddr::Ipv4Address& dst_ip, int prefix_length);
-  EntryBuilder& AddRouteForwardingIpv6PacketsToGivenMulticastGroup(
-      int multicast_group_id, absl::string_view vrf,
-      netaddr::Ipv6Address& dst_ip, int prefix_length);
+  EntryBuilder& AddMulticastRoute(absl::string_view vrf,
+                                  const netaddr::Ipv4Address& dst_ip,
+                                  int multicast_group_id);
+  EntryBuilder& AddMulticastRoute(absl::string_view vrf,
+                                  const netaddr::Ipv6Address& dst_ip,
+                                  int multicast_group_id);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
   EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(

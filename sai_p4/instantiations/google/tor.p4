@@ -56,14 +56,15 @@ control ingress(inout headers_t headers,
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
 //    hashing.apply(headers, local_metadata, standard_metadata);
-      routing.apply(headers, local_metadata, standard_metadata);
-      drop_martians.apply(headers, local_metadata, standard_metadata);
+      routing_lookup.apply(headers, local_metadata, standard_metadata);
 
       // The INGRESS stage can redirect (e.g. drop, punt or copy) packets, apply
       // rate-limits or modify header data.
       acl_ingress.apply(headers, local_metadata, standard_metadata);
+      routing_resolution.apply(headers, local_metadata, standard_metadata);
       mirror_session_lookup.apply(headers, local_metadata, standard_metadata);
       ingress_cloning.apply(headers, local_metadata, standard_metadata);
+      drop_martians.apply(headers, local_metadata, standard_metadata);
     }
   }
 }  // control ingress
