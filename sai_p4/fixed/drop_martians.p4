@@ -65,11 +65,15 @@ control drop_martians(in headers_t headers,
     // drop multicast packets for now.
     if ((headers.ipv6.isValid() &&
             (IS_IPV6_MULTICAST(headers.ipv6.src_addr) ||
+             // TODO: Rework conditions under which IPMC packets
+             // get forwarded and remove this constraint.
              IS_IPV6_MULTICAST(headers.ipv6.dst_addr) ||
              IS_IPV6_LOOPBACK(headers.ipv6.src_addr) ||
              IS_IPV6_LOOPBACK(headers.ipv6.dst_addr))) ||
         (headers.ipv4.isValid() &&
             (IS_IPV4_MULTICAST_OR_BROADCAST(headers.ipv4.src_addr) ||
+             // TODO: Rework conditions under which IPMC packets
+             // get forwarded and update this constraint.
              IS_IPV4_MULTICAST_OR_BROADCAST(headers.ipv4.dst_addr) ||
              IS_IPV4_LOOPBACK(headers.ipv4.src_addr) ||
              IS_IPV4_LOOPBACK(headers.ipv4.dst_addr))) ||
