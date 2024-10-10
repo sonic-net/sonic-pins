@@ -10,7 +10,8 @@
 // The field list numbers used in @field_list annotations to identify the fields
 // that need to be preserved during clone/recirculation/etc. operations.
 enum bit<8> PreservedFieldList {
-  MIRROR_AND_PACKET_IN_COPY = 8w1
+  MIRROR_AND_PACKET_IN_COPY = 8w1,
+  RECIRCULATE = 8w2
 };
 
 // -- Translated Types ---------------------------------------------------------
@@ -225,6 +226,15 @@ struct local_metadata_t {
   mirror_session_id_t mirror_session_id;
   port_id_t mirror_egress_port;
 
+  // If a packet is send to a port that is designated as a loopback port,
+  // the port is stored in this field and reciculated (see loopback.p4).
+  // This field (which is preserved during recirculation) will be used to set
+  // the ingress port to the loopback port after recirculation (as opposed to
+  // our hardware targets, this does NOT happen by default in v1model targets
+  // such as BMv2).
+  @field_list(PreservedFieldList.RECIRCULATE)
+  bit<PORT_BITWIDTH> loopback_port;
+
   // Packet-in related fields, which we can't group into a struct, because BMv2
   // doesn't support passing structs in clone3.
   // We model packet-in in SAI P4 by using the replication engine to make a
@@ -273,6 +283,18 @@ struct local_metadata_t {
   bool nexthop_id_valid;
   // Nexthop id, only valid if `nexthop_id_valid` is true.
   nexthop_id_t nexthop_id_value;
+  // After execution of the `routing_lookup` stage, Indicates if an entry in
+  // the `ipv4_multicast` or `ipv6_multicast` table was hit.
+  bool ipmc_table_hit;
+
+  // Determines if packet was dropped in ACL ingress/egress stage. If true, the
+  // actual call to mark_to_drop (that affects standard_metadata) takes place at
+  // the end of the respective pipeline.
+  // This is done this way because we want to call mark_to_drop after
+  // determining the target_egress_port through the value assigned to
+  // standard_metadata.egress_spec (which happens in routing_resolution *after*
+  // ACL ingress) for punted packets.
+  bool acl_drop;
 }
 
 #endif  // SAI_METADATA_P4_

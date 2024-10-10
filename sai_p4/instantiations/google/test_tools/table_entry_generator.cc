@@ -270,8 +270,9 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "tunnel_table",
           "nexthop_table",
           "wcmp_group_table",
-          // Logical table that is not supported by the switch.
+          // Logical tables that are not supported by the switch.
           "ingress_clone_table",
+          "egress_port_loopback_table",
           // TODO: Add support for this table once the switch
           // supports it.
           "acl_ingress_mirror_and_redirect_table",
@@ -284,9 +285,11 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           // TODO: Add support for this table once the switch
           // supports it.
           "ipv6_tunnel_termination_table",
-          // TODO: Add support for this table once the switch
+          // TODO: Add support for these tables once the switch
           // supports it.
           "multicast_router_interface_table",
+          "ipv4_multicast_table",
+          "ipv6_multicast_table",
           // TODO: Add support for this table once the switch
           // supports it.
           "disable_vlan_checks_table",
