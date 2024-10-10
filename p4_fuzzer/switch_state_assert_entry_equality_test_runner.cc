@@ -57,11 +57,12 @@ struct TestCase {
   std::optional<std::function<bool(IrTableEntry, IrTableEntry)>> mask_function;
 };
 
-struct SwitchStateTestCase {
+struct SwitchStateSummaryTestCase {
   std::string description;
   std::string info;
   IrP4Info ir_info;
   std::vector<IrTableEntry> entries;
+  bool delete_entries;
 };
 
 std::vector<TestCase> TestCases() {
@@ -175,25 +176,27 @@ std::vector<TestCase> TestCases() {
   return test_cases;
 }
 
-std::vector<SwitchStateTestCase> SwitchStateTestCases() {
-  std::vector<SwitchStateTestCase> test_cases;
+std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
+  std::vector<SwitchStateSummaryTestCase> test_cases;
 
   {
-    test_cases.emplace_back(
-        SwitchStateTestCase{.description = "State Summary With No Max",
-                            .info = "A single entry added to lpm1 table.",
-                            .ir_info = pdpi::GetTestIrP4Info(),
-                            .entries = {gutil::ParseProtoOrDie<IrTableEntry>(
-                                R"pb(table_name: "lpm1_table"
-                                     matches {
-                                       name: "ipv4"
-                                       lpm {
-                                         value { ipv4: "10.43.12.0" }
-                                         prefix_length: 24
-                                       }
-                                     }
-                                     action { name: "NoAction" }
-                                )pb")}});
+    test_cases.emplace_back(SwitchStateSummaryTestCase{
+        .description = "Summary With No Resource Limits Hit",
+        .info = "A single entry added to lpm1 table.",
+        .ir_info = pdpi::GetTestIrP4Info(),
+        .entries = {gutil::ParseProtoOrDie<IrTableEntry>(
+            R"pb(table_name: "lpm1_table"
+                 matches {
+                   name: "ipv4"
+                   lpm {
+                     value { ipv4: "10.43.12.0" }
+                     prefix_length: 24
+                   }
+                 }
+                 action { name: "NoAction" }
+            )pb")},
+        .delete_entries = false,
+    });
   }
 
   // Exceeding max capacities for WCMP tables with SUM_OF_WEIGHTS and
@@ -215,7 +218,7 @@ std::vector<SwitchStateTestCase> SwitchStateTestCases() {
 
     std::vector<IrTableEntry> excessive_entries;
     excessive_entries.reserve(wcmp_table_size);
-    // Construct suffciently many unique WCMP table entries.
+    // Construct sufficiently many unique WCMP table entries.
     for (int i = 0; i < wcmp_table_size + 1; i++) {
       excessive_entries.push_back(
           gutil::ParseProtoOrDie<IrTableEntry>(absl::Substitute(
@@ -251,17 +254,42 @@ std::vector<SwitchStateTestCase> SwitchStateTestCases() {
               absl::StrCat(per_action_weight))));
     }
 
-    test_cases.emplace_back(SwitchStateTestCase{
-        .description = "State Summary With Max and Sum Of Weights Semantics",
+    test_cases.emplace_back(SwitchStateSummaryTestCase{
+        .description =
+            "Summary With Resource Limits Hit using Sum Of Weights Semantics",
         .info = "Excessive entries added to wcmp table.",
         .ir_info = ir_info_sum_of_weights,
-        .entries = excessive_entries});
+        .entries = excessive_entries,
+        .delete_entries = false,
+    });
 
-    test_cases.emplace_back(SwitchStateTestCase{
-        .description = "State Summary With Max and Sum Of Members Semantics",
+    test_cases.emplace_back(SwitchStateSummaryTestCase{
+        .description = "Summary With Resource Limits Hit using Sum Of Weights "
+                       "Semantics and all entries cleared.",
+        .info = "Excessive entries added to wcmp table then removed. Still "
+                "notes that resource limits reached.",
+        .ir_info = ir_info_sum_of_weights,
+        .entries = excessive_entries,
+        .delete_entries = true,
+    });
+
+    test_cases.emplace_back(SwitchStateSummaryTestCase{
+        .description =
+            "Summary With Resource Limits Hit using Sum Of Members Semantics",
         .info = "Excessive entries added to wcmp table.",
         .ir_info = ir_info_sum_of_members,
-        .entries = excessive_entries});
+        .entries = excessive_entries,
+        .delete_entries = false,
+    });
+
+    test_cases.emplace_back(SwitchStateSummaryTestCase{
+        .description = "Summary With Resource Limits Hit using Sum Of Members "
+                       "Semantics and all entries cleared.",
+        .info = "Excessive entries added to wcmp table.",
+        .ir_info = ir_info_sum_of_members,
+        .entries = excessive_entries,
+        .delete_entries = true,
+    });
   }
 
   return test_cases;
@@ -319,12 +347,15 @@ absl::Status main() {
               << "\n";
   }
 
-  for (const auto& test : SwitchStateTestCases()) {
+  for (const auto& test : SwitchStateSummaryTestCases()) {
     state = SwitchState(test.ir_info);
     ASSIGN_OR_RETURN(std::vector<TableEntry> pi_entries,
                      IrToPiVector(test.entries, test.ir_info));
     RETURN_IF_ERROR(state.SetTableEntries(pi_entries));
     RETURN_IF_ERROR(state.CheckConsistency());
+    if (test.delete_entries) {
+      state.ClearTableEntries();
+    }
 
     std::cout << "#########################################################\n"
               << "### Test Case: " << test.description << "\n"
