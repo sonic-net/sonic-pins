@@ -586,8 +586,7 @@ TEST_P(PuntQoSTestWithIxia, SetDscpAndQueuesAndDenyAboveRateLimit) {
   receiver.Destroy();
 }
 
-// TODO: Disabled till failover is fixed.
-TEST_P(PuntQoSTestWithIxia, DISABLED_MirrorFailover) {
+TEST_P(PuntQoSTestWithIxia, MirrorFailover) {
   // Flow details.
   const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
   const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
