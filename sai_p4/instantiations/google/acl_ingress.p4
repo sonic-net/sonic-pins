@@ -78,7 +78,9 @@ control acl_ingress(in headers_t headers,
 #endif
   action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_copy(qos_queue);
-    mark_to_drop(standard_metadata);
+    // TODO: Use `acl_drop(local_metadata)` instead when supported
+    // in P4-Symbolic.
+    local_metadata.acl_drop = true;
   }
 
   // Forward the packet normally (i.e., perform no action). This is useful as
@@ -184,7 +186,9 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_DENY)
   action acl_deny() {
     cancel_copy = true;
-    mark_to_drop(standard_metadata);
+    // TODO: Use `acl_drop(local_metadata)` instead when supported
+    // in P4-Symbolic.
+    local_metadata.acl_drop = true;
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
@@ -295,7 +299,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
       @proto_id(4) acl_mirror();
-      @proto_id(5) acl_drop(standard_metadata);
+      @proto_id(5) acl_drop(local_metadata);
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -378,7 +382,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) set_qos_queue_and_cancel_copy_above_rate_limit();
       @proto_id(2) set_cpu_queue_and_deny_above_rate_limit();
       @proto_id(3) acl_forward();
-      @proto_id(4) acl_drop(standard_metadata);
+      @proto_id(4) acl_drop(local_metadata);
       @proto_id(5) set_cpu_queue();
       @proto_id(6)
         set_cpu_and_multicast_queues_and_deny_above_rate_limit();
@@ -585,7 +589,7 @@ control acl_ingress(in headers_t headers,
     }
     actions = {
       @proto_id(1) acl_forward();
-      @proto_id(2) acl_drop(standard_metadata);
+      @proto_id(2) acl_drop(local_metadata);
       @proto_id(3) acl_deny();
       @defaultonly NoAction;
     }
@@ -606,12 +610,6 @@ control acl_ingress(in headers_t headers,
       ecn = headers.ipv6.ecn;
       ip_protocol = headers.ipv6.next_header;
     }
-
-    // If a packet gets punted, this adds relevant metadata to it. Must happen
-    // here, rather than below, since `standard_metadata` can change based on
-    // actions taken in the various tables.
-    local_metadata.packet_in_target_egress_port = standard_metadata.egress_spec;
-    local_metadata.packet_in_ingress_port = standard_metadata.ingress_port;
 
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_ingress_table.apply();
