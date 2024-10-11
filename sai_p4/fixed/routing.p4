@@ -506,6 +506,47 @@ control routing(in headers_t headers,
     size = ROUTING_IPV6_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  // Models SAI IPMC entries of type (*,G) whose destination is an IPv4 address.
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  @id(ROUTING_IPV4_MULTICAST_TABLE_ID)
+  // TODO: Remove `@unsupported` annotation once the switch stack
+  // supports multicast.
+  @unsupported
+  table ipv4_multicast_table {
+    key = {
+      // Sets `vr_id` in `sai_ipmc_entry_t`.
+      local_metadata.vrf_id : exact
+        @id(1) @name("vrf_id") @refers_to(vrf_table, vrf_id);
+      // Sets `destination` in `sai_ipmc_entry_t` to an IPv4 adress.
+      headers.ipv4.dst_addr : exact
+        @id(2) @name("ipv4_dst") @format(IPV4_ADDRESS);
+    }
+    actions = {
+      @proto_id(1) set_multicast_group_id;
+    }
+    size = ROUTING_IPV4_MULTICAST_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+  // Models SAI IPMC entries of type (*,G) whose destination is an IPv6 address.
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  @id(ROUTING_IPV6_MULTICAST_TABLE_ID)
+  // TODO: Remove `@unsupported` annotation once the switch stack
+  // supports multicast.
+  @unsupported
+  table ipv6_multicast_table {
+    key = {
+      // Sets `vr_id` in `sai_ipmc_entry_t`.
+      local_metadata.vrf_id : exact
+        @id(1) @name("vrf_id") @refers_to(vrf_table, vrf_id);
+      // Sets `destination` in `sai_ipmc_entry_t` to an IPv6 adress.
+      headers.ipv6.dst_addr : exact
+        @id(2) @name("ipv6_dst") @format(IPV6_ADDRESS);
+    }
+    actions = {
+      @proto_id(1) set_multicast_group_id;
+    }
+    size = ROUTING_IPV6_MULTICAST_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
   apply {
     // Drop packets by default, then override in the router_interface_table.
     // TODO: This should just be the default behavior of v1model:
