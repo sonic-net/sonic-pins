@@ -2,6 +2,7 @@ load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
 
 package(
+    default_visibility = ["//visibility:public"],
     licenses = ["notice"],
 )
 
@@ -112,6 +113,7 @@ cc_library(
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/base:endian",
         "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/random:distributions",
         "@com_google_absl//absl/status",

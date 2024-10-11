@@ -18,6 +18,7 @@
 #include "absl/strings/str_join.h"
 #include "gutil/status.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -25,7 +26,6 @@ namespace p4_symbolic {
 namespace {
 
 using ::p4_symbolic::symbolic::SymbolicPerPacketState;
-using ::p4_symbolic::symbolic::Z3Context;
 
 // The p4c compiler mangles field names from the local_metadata struct.
 // As a workaround, we unmangle the names, best effort.
