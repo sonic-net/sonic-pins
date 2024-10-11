@@ -258,6 +258,10 @@ tables {
     id: 16777237
     annotations: "@proto_id(7)"
   }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(8)"
+  }
   const_default_action_id: 16777222
   size: 131072
 }
@@ -307,6 +311,10 @@ tables {
   action_refs {
     id: 16777237
     annotations: "@proto_id(7)"
+  }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(8)"
   }
   const_default_action_id: 16777222
   size: 17000
