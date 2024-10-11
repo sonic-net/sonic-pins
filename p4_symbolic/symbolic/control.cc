@@ -29,39 +29,33 @@
 #include "p4_symbolic/symbolic/conditional.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
+#include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic::symbolic::control {
 
-absl::StatusOr<SymbolicTrace> EvaluateV1model(
+absl::StatusOr<SymbolicTableMatches> EvaluateV1model(
     const Dataplane &data_plane, SymbolicPerPacketState *state,
     values::P4RuntimeTranslator *translator) {
-  // Initial, empty trace.
-  auto trace = SymbolicTrace{.dropped = Z3Context().bool_val(false)};
+  SymbolicTableMatches matches;
 
-  // Extend trace by evaluating the v1model pipelines.
   std::vector<std::string> v1model_pipelines = {"ingress", "egress"};
   for (const auto &pipeline : v1model_pipelines) {
-    ASSIGN_OR_RETURN(SymbolicTrace suffix_trace,
+    // TODO: The conditional here is not needed, but without it there
+    // will be a lot of changes to the SMT golden files, making this CL hard to
+    // review. I am removing this comment and the coniditional in a separate CL.
+    ASSIGN_OR_RETURN(z3::expr dropped, pipeline == "ingress"
+                                           ? Z3Context().bool_val(false)
+                                           : IsDropped(*state));
+    ASSIGN_OR_RETURN(SymbolicTableMatches additional_matches,
                      EvaluatePipeline(data_plane, pipeline, state, translator,
-                                      !trace.dropped));
-
-    // Extend existing trace with suffix.
-    trace.dropped = suffix_trace.dropped;
-    for (auto &[table, match] : suffix_trace.matched_entries) {
-      if (trace.matched_entries.count(table) != 0) {
-        return gutil::UnimplementedErrorBuilder()
-               << "table '" << table << "' was executed in '" << pipeline
-               << "' pipeline after already being executed in an earlier "
-                  "pipeline; this is not supported by p4-symbolic";
-      }
-      trace.matched_entries.insert({table, match});
-    }
+                                      /*guard=*/!dropped));
+    matches.merge(std::move(additional_matches));
   }
 
-  return trace;
+  return matches;
 }
 
-absl::StatusOr<SymbolicTrace> EvaluatePipeline(
+absl::StatusOr<SymbolicTableMatches> EvaluatePipeline(
     const Dataplane &data_plane, const std::string &pipeline_name,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
@@ -74,14 +68,12 @@ absl::StatusOr<SymbolicTrace> EvaluatePipeline(
          << "cannot evaluate unknown pipeline: '" << pipeline_name << "'";
 }
 
-absl::StatusOr<SymbolicTrace> EvaluateControl(
+absl::StatusOr<SymbolicTableMatches> EvaluateControl(
     const Dataplane &data_plane, const std::string &control_name,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
   // Base case: we got to the end of the evaluation, no more controls!
-  if (control_name.empty()) {
-    return SymbolicTrace{{}, Z3Context().bool_val(false)};
-  }
+  if (control_name.empty()) return SymbolicTableMatches();
 
   // Find out what type of control we need to evaluate.
   if (data_plane.program.tables().count(control_name) == 1) {
