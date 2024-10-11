@@ -198,6 +198,7 @@ control routing_lookup(in headers_t headers,
       @proto_id(5) set_nexthop_id_and_metadata;
       @proto_id(6) set_wcmp_group_id_and_metadata;
       @proto_id(7) set_metadata_and_drop;
+      @proto_id(8) set_multicast_group_id;
     }
     const default_action = drop;
     size = ROUTING_IPV4_TABLE_MINIMUM_GUARANTEED_SIZE;
@@ -220,6 +221,7 @@ control routing_lookup(in headers_t headers,
       @proto_id(5) set_nexthop_id_and_metadata;
       @proto_id(6) set_wcmp_group_id_and_metadata;
       @proto_id(7) set_metadata_and_drop;
+      @proto_id(8) set_multicast_group_id;
     }
     const default_action = drop;
     size = ROUTING_IPV6_TABLE_MINIMUM_GUARANTEED_SIZE;
