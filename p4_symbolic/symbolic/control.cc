@@ -36,22 +36,18 @@ namespace p4_symbolic::symbolic::control {
 absl::StatusOr<SymbolicTableMatches> EvaluateV1model(
     const Dataplane &data_plane, SymbolicPerPacketState *state,
     values::P4RuntimeTranslator *translator) {
-  SymbolicTableMatches matches;
-
-  std::vector<std::string> v1model_pipelines = {"ingress", "egress"};
-  for (const auto &pipeline : v1model_pipelines) {
-    // TODO: The conditional here is not needed, but without it there
-    // will be a lot of changes to the SMT golden files, making this CL hard to
-    // review. I am removing this comment and the coniditional in a separate CL.
-    ASSIGN_OR_RETURN(z3::expr dropped, pipeline == "ingress"
-                                           ? Z3Context().bool_val(false)
-                                           : IsDropped(*state));
-    ASSIGN_OR_RETURN(SymbolicTableMatches additional_matches,
-                     EvaluatePipeline(data_plane, pipeline, state, translator,
-                                      /*guard=*/!dropped));
-    matches.merge(std::move(additional_matches));
-  }
-
+  // TODO: This is a simplification that omits a lot of features, e.g.
+  // cloning, digests, resubmit, and multicast. The full semantics we should
+  // implement is documented here:
+  // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#pseudocode-for-what-happens-at-the-end-of-ingress-and-egress-processing
+  ASSIGN_OR_RETURN(SymbolicTableMatches matches,
+                   EvaluatePipeline(data_plane, "ingress", state, translator,
+                                    /*guard=*/Z3Context().bool_val(true)));
+  ASSIGN_OR_RETURN(z3::expr dropped, IsDropped(*state));
+  ASSIGN_OR_RETURN(SymbolicTableMatches egress_matches,
+                   EvaluatePipeline(data_plane, "egress", state, translator,
+                                    /*guard=*/!dropped));
+  matches.merge(std::move(egress_matches));
   return matches;
 }
 
