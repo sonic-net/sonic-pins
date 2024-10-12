@@ -536,6 +536,76 @@ tables {
 }
 tables {
   preamble {
+    id: 33554510
+    name: "ingress.routing_lookup.ipv4_multicast_table"
+    alias: "ipv4_multicast_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vrf_id"
+    annotations: "@refers_to(vrf_table , vrf_id)"
+    match_type: EXACT
+    type_name {
+      name: "vrf_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "ipv4_dst"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: EXACT
+  }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1600
+}
+tables {
+  preamble {
+    id: 33554511
+    name: "ingress.routing_lookup.ipv6_multicast_table"
+    alias: "ipv6_multicast_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vrf_id"
+    annotations: "@refers_to(vrf_table , vrf_id)"
+    match_type: EXACT
+    type_name {
+      name: "vrf_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "ipv6_dst"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: EXACT
+  }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1600
+}
+tables {
+  preamble {
     id: 33554688
     name: "ingress.acl_ingress.acl_ingress_table"
     alias: "acl_ingress_table"

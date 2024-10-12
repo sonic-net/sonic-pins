@@ -24,12 +24,15 @@
 #include "absl/base/casts.h"
 #include "absl/base/internal/endian.h"
 #include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/random/discrete_distribution.h"
 #include "absl/random/distributions.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
+#include "absl/types/span.h"
 #include "google/protobuf/repeated_field.h"
 #include "gutil/collections.h"
 #include "gutil/status.h"
@@ -52,6 +55,9 @@ using ::p4::v1::Action;
 using ::p4::v1::FieldMatch;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
+using ::pdpi::EntityKey;
+using ::pdpi::IrTableDefinition;
+using ::pdpi::IrTableReference;
 
 constexpr int kBitsInByte = 8;
 
@@ -62,7 +68,7 @@ constexpr float kAddUpdateProbability = 0.98;
 // The probability of performing a mutation on a given table entry.
 constexpr float kMutateUpdateProbability = 0.1;
 // The probability of using a wildcard for a ternary or lpm match field.
-constexpr float kFieldMatchWildcardProbability = 0.1;
+constexpr float kFieldMatchWildcardProbability = 0.05;
 
 constexpr char kP4PortTypeName[] = "port_id_t";
 constexpr char kP4QosQueueTypeName[] = "qos_queue_t";
@@ -96,11 +102,37 @@ bool IsReferring(
   return !references.empty();
 }
 
+bool IsDisabledForFuzzing(const FuzzerConfig& config, absl::string_view name) {
+  return config.disabled_fully_qualified_names.contains(name);
+}
+
 namespace {
 
-inline bool IsDisabledForFuzzing(const FuzzerConfig& config,
-                                 absl::string_view name) {
-  return config.disabled_fully_qualified_names.contains(name);
+// An item and its associated weight when using a discrete distribution.
+template <typename T>
+struct WeightedItem {
+  T item;
+  int64_t weight;
+};
+
+template <typename T>
+const T& DiscreteFromSpan(absl::BitGen* gen,
+                          absl::Span<const WeightedItem<T>> span) {
+  CHECK(!span.empty());  // Crash OK
+  std::vector<int> weights;
+  weights.reserve(span.size());
+  for (const auto& item : span) weights.push_back(item.weight);
+  int index =
+      absl::discrete_distribution<>(weights.begin(), weights.end())(*gen);
+  return span[index].item;
+}
+
+// Implicit conversion to Span does not seem to work correctly for templated
+// code.
+template <typename T>
+const T& DiscreteFromSpan(absl::BitGen* gen,
+                          const std::vector<WeightedItem<T>>& vec) {
+  return DiscreteFromSpan(gen, absl::MakeConstSpan(vec));
 }
 
 std::string FuzzPort(absl::BitGen* gen, const FuzzerConfig& config) {
@@ -133,18 +165,74 @@ absl::StatusOr<p4::v1::ActionProfileAction> FuzzActionProfileAction(
   return action;
 }
 
-// Returns the set of tables the fuzzer is fuzzing.
-std::vector<uint32_t> TablesUsedByFuzzer(const FuzzerConfig& config) {
+// Checks whether an unmutated update is unacceptable with respect to the fuzzer
+// config, current switch state, and the set of updates already in this batch.
+// Currently, an unmutated update may be unacceptable by:
+// - Inserting entries into a full table, which is configured such that the
+//   fuzzer should not exceed its resource guarantees.
+// - An update with the same key already exists in the request.
+// - Inserting an existing entry.
+bool IsAccidentallyInvalidUpdate(
+    const FuzzerConfig& config, const SwitchState& switch_state,
+    const AnnotatedWriteRequest& request,
+    const absl::flat_hash_set<pdpi::TableEntryKey>& entry_keys_in_request,
+    const AnnotatedUpdate& candidate_update) {
+  // Mutated updates are never accidentally invalid (they should always be
+  // invalid) so return early if update contains any mutations.
+  if (!candidate_update.mutations().empty()) return false;
+
+  // Table entries are the only entity types used. Even if this is the case,
+  // existence of a table entry should always be checked before accessing.
+  if (candidate_update.pi().entity().has_table_entry()) {
+    const TableEntry& candidate_entry =
+        candidate_update.pi().entity().table_entry();
+    // Checks for duplicates in current write request.
+    if (entry_keys_in_request.contains(pdpi::TableEntryKey(candidate_entry))) {
+      return true;
+    }
+    // Checks that an insert does not insert an existing entry.
+    if (candidate_update.pi().type() == p4::v1::Update_Type_INSERT &&
+        switch_state.GetTableEntry(candidate_entry).has_value()) {
+      return true;
+    }
+  }
+
+  const std::string& table_name =
+      candidate_update.ir().entity().table_entry().table_name();
+  // See if the update should be discarded because it is trying to insert into a
+  // table that has a strict resource limit and cannot accommodate more inserts
+  // than is already in the write request.
+  if (candidate_update.ir().type() == p4::v1::Update_Type_INSERT &&
+      config.tables_for_which_to_not_exceed_resource_guarantees.contains(
+          table_name)) {
+    // We determine how many entries we are trying to insert in the relevant
+    // table including the candidate update.
+    int num_inserts = 1;
+    for (const auto& update : request.updates()) {
+      if (update.ir().entity().table_entry().table_name() == table_name &&
+          update.ir().type() == p4::v1::Update_Type_INSERT) {
+        num_inserts++;
+      }
+      // Because batches are handled non-deterministically, we want to be
+      // conservative and not take any deletes into account.
+    }
+    // If the table cannot accommodate sufficiently many inserts, then the
+    // candidate update is 'bad'.
+    return !switch_state.CanAccommodateInserts(
+        candidate_update.pi().entity().table_entry().table_id(), num_inserts);
+  }
+
+  return false;
+}
+
+// Returns all valid table ids.
+std::vector<uint32_t> AllValidTableIdsForP4rtRole(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
-  for (auto& [key, table] : config.info.tables_by_id()) {
-    if (table.role() != config.role) continue;
-    // Tables without actions cannot have valid table entries.
-    if (table.entry_actions().empty()) continue;
-    // Tables on the disallow list should not be fuzzed.
-    if (IsDisabledForFuzzing(config, table.preamble().name())) continue;
-    table_ids.push_back(key);
+  for (const IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
+    table_ids.push_back(table.preamble().id());
   }
+
   return table_ids;
 }
 
@@ -153,10 +241,9 @@ std::vector<uint32_t> TablesUsedByFuzzer(const FuzzerConfig& config) {
 std::vector<uint32_t> GetOneShotTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
-  for (uint32_t id : TablesUsedByFuzzer(config)) {
-    const auto& table = gutil::FindOrDie(config.info.tables_by_id(), id);
+  for (const IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
     if (table.uses_oneshot()) {
-      table_ids.push_back(id);
+      table_ids.push_back(table.preamble().id());
     }
   }
 
@@ -167,12 +254,11 @@ std::vector<uint32_t> GetOneShotTableIds(const FuzzerConfig& config) {
 std::vector<uint32_t> GetMandatoryMatchTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
-  for (uint32_t id : TablesUsedByFuzzer(config)) {
-    const auto& table = gutil::FindOrDie(config.info.tables_by_id(), id);
+  for (const IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
     for (auto& [match_id, match] : Ordered(table.match_fields_by_id())) {
       if (match.match_field().match_type() ==
           p4::config::v1::MatchField::EXACT) {
-        table_ids.push_back(id);
+        table_ids.push_back(table.preamble().id());
         break;
       }
     }
@@ -199,9 +285,8 @@ std::vector<uint32_t> GetTableIdsWithValuePredicate(
     const FuzzerConfig& config, P4ValuePredicate predicate) {
   std::vector<uint32_t> table_ids;
 
-  for (uint32_t id : TablesUsedByFuzzer(config)) {
+  for (const IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
     bool include = false;
-    const auto& table = gutil::FindOrDie(config.info.tables_by_id(), id);
     for (const auto& [match_id, match] : table.match_fields_by_id()) {
       if (predicate(match.match_field().type_name(), match.references())) {
         include = true;
@@ -216,7 +301,7 @@ std::vector<uint32_t> GetTableIdsWithValuePredicate(
         }
       }
     }
-    if (include) table_ids.push_back(id);
+    if (include) table_ids.push_back(table.preamble().id());
   }
 
   return table_ids;
@@ -296,54 +381,80 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
   // TODO: also fuzz meters
 }
 
+// Generates `WeightedItems` for all valid table_ids where weight is equal to
+// table_size.
+std::vector<WeightedItem<uint32_t>> GenerateAllValidWeightedTableIds(
+    const FuzzerConfig& config) {
+  std::vector<WeightedItem<uint32_t>> weighted_table_ids;
+  for (const pdpi::IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
+    weighted_table_ids.push_back(WeightedItem<uint32_t>{
+        .item = table.preamble().id(),
+        .weight = table.size(),
+    });
+  }
+  return weighted_table_ids;
+}
+
+std::vector<WeightedItem<uint32_t>> GenerateNonEmptyWeightedTableIds(
+    const FuzzerConfig& config, const SwitchState& switch_state) {
+  std::vector<WeightedItem<uint32_t>> non_empty_weighted_table_ids;
+  for (const auto& weighted_table_id :
+       GenerateAllValidWeightedTableIds(config)) {
+    if (switch_state.IsTableEmpty(weighted_table_id.item)) continue;
+    non_empty_weighted_table_ids.push_back(weighted_table_id);
+  }
+  return non_empty_weighted_table_ids;
+}
+
 // Randomly generates an INSERT, MODIFY or DELETE update. The update may be
 // mutated (see go/p4-fuzzer-design for mutation types).
 AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
                            const SwitchState& switch_state) {
-  std::vector<uint32_t> table_ids = TablesUsedByFuzzer(config);
-  CHECK_GT(table_ids.size(), 0)
+  CHECK_GT(AllValidTablesForP4RtRole(config).size(), 0)  // Crash OK
       << "Cannot generate updates for program with no tables";
 
   Mutation mutation;
   bool do_mutate = false;
+  std::vector<uint32_t> mutation_table_ids;
 
   if (absl::Bernoulli(*gen, kMutateUpdateProbability)) {
     do_mutate = true;
     mutation = FuzzMutation(gen, config);
     switch (mutation) {
       case Mutation::INVALID_ACTION_SELECTOR_WEIGHT:
-        table_ids = GetOneShotTableIds(config);
+        mutation_table_ids = GetOneShotTableIds(config);
         break;
 
       case Mutation::MISSING_MANDATORY_MATCH_FIELD:
-        table_ids = GetMandatoryMatchTableIds(config);
+        mutation_table_ids = GetMandatoryMatchTableIds(config);
         break;
 
       case Mutation::INVALID_PORT:
-        table_ids = GetTableIdsWithValuePredicate(config, IsPort);
+        mutation_table_ids = GetTableIdsWithValuePredicate(config, IsPort);
         break;
 
       case Mutation::INVALID_QOS_QUEUE:
-        table_ids = GetTableIdsWithValuePredicate(config, IsQosQueue);
+        mutation_table_ids = GetTableIdsWithValuePredicate(config, IsQosQueue);
         break;
 
       case Mutation::INVALID_NEIGHBOR_ID:
-        table_ids = GetTableIdsWithValuePredicate(config, IsNeighbor);
+        mutation_table_ids = GetTableIdsWithValuePredicate(config, IsNeighbor);
         break;
 
       case Mutation::INVALID_REFERRING_ID:
-        table_ids = GetTableIdsWithValuePredicate(config, IsReferring);
+        mutation_table_ids = GetTableIdsWithValuePredicate(config, IsReferring);
         break;
 
       case Mutation::DIFFERENT_ROLE:
-        table_ids = GetDifferentRoleTableIds(config);
+        mutation_table_ids = GetDifferentRoleTableIds(config);
         break;
-
+      // All other mutations can act on every valid table.
       default:
+        mutation_table_ids = AllValidTableIdsForP4rtRole(config);
         break;
     }
 
-    if (table_ids.empty()) {
+    if (mutation_table_ids.empty()) {
       // Retry.
       return FuzzUpdate(gen, config, switch_state);
     }
@@ -355,12 +466,16 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
 
   switch (type) {
     case Update::INSERT: {
-      const int table_id = UniformFromSpan(gen, table_ids);
+      int table_id;
+      if (do_mutate) {
+        table_id = UniformFromSpan(gen, mutation_table_ids);
+      } else {
+        table_id = FuzzTableId(gen, config);
+      }
 
       // This might (with low probability) generate an entry that already
-      // exists leading to a duplicate insert. This is fine, this update is just
-      // rendered invalid and the oracle incorporates this in its prediction of
-      // switch behavior.
+      // exists leading to a duplicate insert. This is fine since `IsBadUpdate`
+      // will catch it and discard the update.
       absl::StatusOr<p4::v1::TableEntry> table_entry =
           FuzzValidTableEntry(gen, config, switch_state, table_id);
       if (!table_entry.ok()) {
@@ -383,9 +498,8 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
     case Update::DELETE: {
       const int table_id = FuzzNonEmptyTableId(gen, config, switch_state);
       // Within a single call of FuzzWriteRequest, this might delete the same
-      // entry multiple times.  This is fine, all but one of the deletes are
-      // just invalid (and it is the oracle's job to know what the switch is
-      // supposed to do with this).
+      // entry multiple times. This is fine since `IsBadUpdate` will catch it
+      // and discard the update.
       TableEntry table_entry =
           UniformFromSpan(gen, switch_state.GetTableEntries(table_id));
       FuzzNonKeyFields(gen, config, switch_state, &table_entry);
@@ -429,21 +543,23 @@ absl::StatusOr<p4::config::v1::ActionProfile> GetActionProfile(
          << "No action profile corresponds to table with id " << table_id;
 }
 
-/*const std::vector<pdpi::IrActionReference> AllValidActions(
-    const FuzzerConfig& config, const pdpi::IrTableDefinition& table) {
-  std::vector<pdpi::IrActionReference> actions;
+const std::vector<IrTableDefinition> AllValidTablesForP4RtRole(
+    const FuzzerConfig& config) {
+  std::vector<IrTableDefinition> tables;
 
-  for (const auto& action : table.entry_actions()) {
-    // Skip deprecated, unused, and disallowed actions.
-    if (pdpi::IsElementDeprecated(action.action().preamble().annotations()) ||
-        pdpi::IsElementUnused(action.action().preamble().annotations()) ||
-        IsDisabledForFuzzing(config, action.action().preamble().name()))
+  for (auto& [key, table] : Ordered(config.info.tables_by_id())) {
+    // Tables with the wrong role can't be modified by the controller.
+    if (table.role() != config.role) continue;
+    // Tables without actions cannot have valid table entries.
+    if (table.entry_actions().empty()) continue;
+    // Skip deprecated, unused, and disallowed tables.
+    if (pdpi::IsElementDeprecated(table.preamble().annotations()) ||
+        IsDisabledForFuzzing(config, table.preamble().name()))
       continue;
-    actions.push_back(action);
+    tables.push_back(table);
   }
-
-  return actions;
-}*/
+  return tables;
+}
 
 const std::vector<pdpi::IrActionReference> AllValidActions(
     const FuzzerConfig& config, const pdpi::IrTableDefinition& table) {
@@ -499,7 +615,15 @@ std::string FuzzRandomId(absl::BitGen* gen, int min_chars, int max_chars) {
 
 // Randomly generates a table id.
 int FuzzTableId(absl::BitGen* gen, const FuzzerConfig& config) {
-  return UniformFromSpan(gen, TablesUsedByFuzzer(config));
+  return DiscreteFromSpan(gen, GenerateAllValidWeightedTableIds(config));
+}
+
+int FuzzNonEmptyTableId(absl::BitGen* gen, const FuzzerConfig& config,
+                        const SwitchState& switch_state) {
+  CHECK(!switch_state.AllTablesEmpty())  // Crash OK
+      << "state: " << switch_state.SwitchStateSummary();
+  return DiscreteFromSpan(
+      gen, GenerateNonEmptyWeightedTableIds(config, switch_state));
 }
 
 Mutation FuzzMutation(absl::BitGen* gen, const FuzzerConfig& config) {
@@ -790,98 +914,6 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
 // However, uniform sampling gives us highly clustered weights almost all the
 // time and we prefer to generate skewed weights more often. Therefore, this
 // simpler approach, should serve us well.
-/*absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
-    absl::BitGen* gen, const FuzzerConfig& config,
-    const SwitchState& switch_state,
-    const pdpi::IrTableDefinition& ir_table_info) {
-  p4::v1::ActionProfileActionSet action_set;
-
-  ASSIGN_OR_RETURN(
-      auto action_profile,
-      GetActionProfile(config.info, ir_table_info.preamble().id()));
-
-  switch (action_profile.selector_size_semantics()) {
-    case p4::config::v1::ActionProfile::SUM_OF_MEMBERS: {
-      int max_number_of_actions = action_profile.max_group_size() != 0
-                                      ? action_profile.max_group_size()
-                                      : kActionProfileActionSetMaxCardinality;
-      int number_of_actions = Uniform<int>(absl::IntervalClosedClosed, *gen, 0,
-                                           max_number_of_actions);
-
-      for (int i = 0; i < number_of_actions; i++) {
-        ASSIGN_OR_RETURN(
-            auto action,
-            FuzzActionProfileAction(gen, config, switch_state, ir_table_info,
-                                    kActionProfileMaxMemberWeight));
-        *action_set.add_action_profile_actions() = action;
-      }
-
-      return action_set;
-    }
-    case p4::config::v1::ActionProfile::SUM_OF_WEIGHTS: {
-      // The max_group_size specifies the maximum total weight of a group of
-      // actions in an Action Selector (described by an ActionProfileActionSet).
-      // If max_group_size is 0, then any weights less than size are allowed by
-      // the server.
-      int unallocated_weight = action_profile.max_group_size() == 0
-                                   ? action_profile.size()
-                                   : action_profile.max_group_size();
-
-      // Note that the semantics of `size` in an action selector is the maximum
-      // sum of all member weights across ALL selector groups. The
-      // `max_group_size` is the maximum sum of all member weights within a
-      // single group. Thus, the maximum total weight of a single group should
-      // be no larger than either the max_group_size or the size.
-      // TODO: When https://github.com/p4lang/p4runtime/issues/355
-      // is fixed, `max_group_size` will never be greater than `size`, rendering
-      // this assignment unnecessary.
-      unallocated_weight = static_cast<int>(
-          std::min(int64_t{unallocated_weight}, action_profile.size()));
-
-      // It is entirely unclear what should happen if max_group_size or size is
-      // negative or if size is 0. Since these values are nonsensical, we will
-      // return an InvalidArgumentError until the specification changes.
-      // TODO: This if-statement can also disappear if
-      // https://github.com/p4lang/p4runtime/issues/355 is resolved, ruling out
-      // these cases.
-      if (unallocated_weight <= 0) {
-        return gutil::InvalidArgumentErrorBuilder()
-               << "non-positive size '" << action_profile.size()
-               << "' or negative max_group_size '"
-               << action_profile.max_group_size() << "' in action profile '"
-               << action_profile.preamble().alias() << "'";
-      }
-
-      // We want to randomly select some number of actions up to our max
-      // cardinality; however, we can't have more actions than the amount of
-      // weight we support since every action must have weight >= 1.
-      int number_of_actions = Uniform<int>(
-          absl::IntervalClosedClosed, *gen, 0,
-          std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
-
-      for (int i = 0; i < number_of_actions; i++) {
-        // Since each action must have at least weight 1, we need to take the
-        // number of remaining actions into account to determine the acceptable
-        // max weight.
-        int remaining_actions = number_of_actions - i - 1;
-        int max_weight = unallocated_weight - remaining_actions;
-
-        ASSIGN_OR_RETURN(auto action,
-                         FuzzActionProfileAction(gen, config, switch_state,
-                                                 ir_table_info, max_weight));
-        *action_set.add_action_profile_actions() = action;
-        unallocated_weight -= action.weight();
-      }
-
-      return action_set;
-    }
-    default:
-      return absl::InvalidArgumentError(absl::Substitute(
-          "action profile '$0' uses invalid selector size semantics '$1'",
-          action_profile.preamble().alias(),
-          action_profile.selector_size_semantics()));
-  }
-}*/
 
 absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     absl::BitGen* gen, const FuzzerConfig& config,
@@ -1103,13 +1135,34 @@ AnnotatedWriteRequest FuzzWriteRequest(absl::BitGen* gen,
                                        const FuzzerConfig& config,
                                        const SwitchState& switch_state,absl::optional<int> max_batch_size) {
   AnnotatedWriteRequest request;
+  absl::flat_hash_set<pdpi::TableEntryKey> entry_keys_in_request;
 
   while (absl::Bernoulli(*gen, kAddUpdateProbability)) {
     if (max_batch_size.has_value() &&
         request.updates_size() >= *max_batch_size) {
       break;
     }
-    *request.add_updates() = FuzzUpdate(gen, config, switch_state);
+    AnnotatedUpdate update = FuzzUpdate(gen, config, switch_state);
+    // Discards updates that are 'bad' and tries again to maintain a simple and
+    // predictable distribution of batch sizes. To avoid infinite loops, though
+    // other logic should make them impossible, we assume that we produce good
+    // updates at least ~0.01% of the time, terminating the loop early w.h.p.
+    // only if our success rate is significantly worse than this.
+    int update_attempts = 1;
+    while (IsAccidentallyInvalidUpdate(config, switch_state, request,
+                                       entry_keys_in_request, update) &&
+           update_attempts < 10000) {
+      update = FuzzUpdate(gen, config, switch_state);
+      update_attempts++;
+    }
+    if (!IsAccidentallyInvalidUpdate(config, switch_state, request,
+                                     entry_keys_in_request, update)) {
+      *request.add_updates() = update;
+      if (update.pi().entity().has_table_entry()) {
+        entry_keys_in_request.insert(
+            pdpi::TableEntryKey(update.pi().entity().table_entry()));
+      }
+    }
   }
 
   return request;
