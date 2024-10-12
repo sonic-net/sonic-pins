@@ -20,6 +20,7 @@ limitations under the License.
 
 // Switching benchmark dependency to third_party seems to not output any
 // benchmarking information when run.
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "benchmark/benchmark.h"
 #include "gmock/gmock.h"
@@ -56,6 +57,10 @@ TEST(BazelTestArtifactWriterTest, AppendToTestArtifact) {
       artifact_writer.AppendToTestArtifact(kTestArtifact, "Hello, World!\n"));
   EXPECT_OK(
       artifact_writer.AppendToTestArtifact(kTestArtifact, GetTestProto()));
+  EXPECT_OK(artifact_writer.AppendToTestArtifact(
+      absl::StrCat("a/b/c/", kTestArtifact), GetTestProto()));
+  EXPECT_OK(artifact_writer.AppendToTestArtifact(
+      absl::StrCat("a/b/d/", kTestArtifact), GetTestProto()));
 }
 
 // Sanity check to rule out crashes and error statuses with mixed appends and
