@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GUTIL_PROTO_MATCHERS_H
-#define GUTIL_PROTO_MATCHERS_H
+#ifndef PINS_GUTIL_PROTO_MATCHERS_H_
+#define PINS_GUTIL_PROTO_MATCHERS_H_
 
 #include <memory>
 #include <ostream>
@@ -219,7 +219,8 @@ class HasOneofCaseMatcher {
   std::string GetOneofCaseName(OneofCase oneof_case) const {
     const google::protobuf::FieldDescriptor* descriptor =
         GetOneofCaseDescriptor(oneof_case);
-    return descriptor == nullptr ? "<unknown case>" : descriptor->name();
+    return descriptor == nullptr ? "<unknown case>"
+                                 : std::string(descriptor->name());
   }
 };
 
@@ -253,4 +254,4 @@ inline InnerProtoMatcher Partially(InnerProtoMatcher inner_proto_matcher) {
 
 }  // namespace gutil
 
-#endif  // GUTIL_PROTO_MATCHERS_H
+#endif  // PINS_GUTIL_PROTO_MATCHERS_H_
