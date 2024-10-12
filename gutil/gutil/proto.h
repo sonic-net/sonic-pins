@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef GUTIL_PROTO_H
-#define GUTIL_PROTO_H
+#ifndef PINS_GUTIL_GUTIL_PROTO_H_
+#define PINS_GUTIL_GUTIL_PROTO_H_
 
 #include <string>
 
@@ -124,4 +124,4 @@ absl::StatusOr<T> ParseJsonAsProto(absl::string_view raw_json_string,
 
 }  // namespace gutil
 
-#endif  // GUTIL_PROTO_H
+#endif  // PINS_GUTIL_GUTIL_PROTO_H_
