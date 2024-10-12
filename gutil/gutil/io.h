@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef P4_SYMBOLIC_UTIL_IO_H_
-#define P4_SYMBOLIC_UTIL_IO_H_
+#ifndef PINS_GUTIL_GUTIL_IO_H_
+#define PINS_GUTIL_GUTIL_IO_H_
 
 #include <string>
 
@@ -35,4 +35,4 @@ absl::Status WriteFile(const std::string& content, const std::string& path);
 
 }  // namespace gutil
 
-#endif  // P4_SYMBOLIC_UTIL_IO_H_
+#endif  // PINS_GUTIL_GUTIL_IO_H_
