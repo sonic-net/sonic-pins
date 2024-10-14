@@ -252,6 +252,38 @@ message DisableVlanChecksTableEntry {
   bytes controller_metadata = 8;
 }
 
+// CAUTION: This table is not (yet) supported.
+message Ipv4MulticastTableEntry {
+  message Match {
+    // Refers to 'vrf_table.vrf_id'.
+    string vrf_id = 1;    // exact match / Format::STRING
+    string ipv4_dst = 2;  // exact match / Format::IPV4
+  }
+  Match match = 1;
+  message Action {
+    // CAUTION: This action is not (yet) supported.
+    SetMulticastGroupIdAction set_multicast_group_id = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
+// CAUTION: This table is not (yet) supported.
+message Ipv6MulticastTableEntry {
+  message Match {
+    // Refers to 'vrf_table.vrf_id'.
+    string vrf_id = 1;    // exact match / Format::STRING
+    string ipv6_dst = 2;  // exact match / Format::IPV6 / 128 bits
+  }
+  Match match = 1;
+  message Action {
+    // CAUTION: This action is not (yet) supported.
+    SetMulticastGroupIdAction set_multicast_group_id = 1;
+  }
+  Action action = 2;
+  bytes controller_metadata = 8;
+}
+
 message TunnelTableEntry {
   message Match {
     string tunnel_id = 1;  // exact match / Format::STRING
@@ -955,6 +987,10 @@ message TableEntry {
         76;
     // CAUTION: This table is not (yet) supported.
     DisableVlanChecksTableEntry disable_vlan_checks_table_entry = 77;
+    // CAUTION: This table is not (yet) supported.
+    Ipv4MulticastTableEntry ipv4_multicast_table_entry = 78;
+    // CAUTION: This table is not (yet) supported.
+    Ipv6MulticastTableEntry ipv6_multicast_table_entry = 79;
     TunnelTableEntry tunnel_table_entry = 80;
     AclIngressTableEntry acl_ingress_table_entry = 256;
     AclPreIngressTableEntry acl_pre_ingress_table_entry = 257;
