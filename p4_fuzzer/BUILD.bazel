@@ -2,6 +2,7 @@ load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
 
 package(
+    default_visibility = ["//visibility:public"],
     licenses = ["notice"],
 )
 

@@ -12,13 +12,15 @@
 // --- Tables ------------------------------------------------------------------
 
 // IDs of fixed SAI tables (8 most significant bits = 0x02).
+#define ROUTING_VRF_TABLE_ID 0x0200004A                 // 33554506
 #define ROUTING_NEIGHBOR_TABLE_ID 0x02000040            // 33554496
 #define ROUTING_ROUTER_INTERFACE_TABLE_ID 0x02000041    // 33554497
 #define ROUTING_NEXTHOP_TABLE_ID 0x02000042             // 33554498
 #define ROUTING_WCMP_GROUP_TABLE_ID 0x02000043          // 33554499
 #define ROUTING_IPV4_TABLE_ID 0x02000044                // 33554500
 #define ROUTING_IPV6_TABLE_ID 0x02000045                // 33554501
-#define ROUTING_VRF_TABLE_ID 0x0200004A                 // 33554506
+#define ROUTING_IPV4_MULTICAST_TABLE_ID 0x0200004E              // 33554510
+#define ROUTING_IPV6_MULTICAST_TABLE_ID 0x0200004F              // 33554511
 #define ROUTING_MULTICAST_ROUTER_INTERFACE_TABLE_ID 0x0200004C  // 33554508
 #define MIRROR_SESSION_TABLE_ID 0x02000046              // 33554502
 #define L3_ADMIT_TABLE_ID 0x02000047                    // 33554503
