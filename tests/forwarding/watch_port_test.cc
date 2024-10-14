@@ -14,9 +14,11 @@
 
 #include "tests/forwarding/watch_port_test.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>  // NOLINT(build/c++11)
 #include <utility>
 #include <vector>
 
@@ -110,6 +112,12 @@ constexpr int kNumWcmpMembersForTest = 5;
 
 // Number of packets used in the test.
 constexpr int kNumTestPackets = 5000;
+
+// Number of packets used in the test for watch port pruning.
+constexpr int kNumTestPacketsForWatchPortPruning = 12000;
+
+// Rate of packets in packets per seconds.
+constexpr int kPacketRateInSecondsForPruning = 1200;
 
 // Default input port index of the group members vector, on which packets
 // arrive.
@@ -289,12 +297,14 @@ absl::Status SendNPacketsToSut(int num_packets,
                                absl::Span<const pins_test::P4rtPortId> port_ids,
                                const pdpi::IrP4Info& ir_p4info,
                                pdpi::P4RuntimeSession& p4_session,
-                               thinkit::TestEnvironment& test_environment) {
+                               thinkit::TestEnvironment& test_environment,
+                               int packets_rate = 500) {
   const absl::Time start_time = absl::Now();
   int packet_index = 0;
   for (int i = 0; i < num_packets; i++) {
     // Rate limit to 500 packets per second.
-    auto earliest_send_time = start_time + (i * absl::Seconds(1) / 500);
+    auto earliest_send_time =
+        start_time + (i * absl::Seconds(1) / packets_rate);
     absl::SleepFor(earliest_send_time - absl::Now());
 
     // Vary the port on which to send the packet if the hash field selected is
@@ -616,6 +626,158 @@ void WatchPortTestFixture::TearDown() {
 }
 
 namespace {
+
+// Measure watchport pruning duration by sending packets to a port and then
+// setting the port to down/up, and then measure the number of packets received
+// by the SUT to calculate the watch port pruning rate.
+TEST_P(WatchPortTestFixture, MeasureWatchPortPruningDuration) {
+  thinkit::TestEnvironment& environment =
+      GetParam().testbed->GetMirrorTestbed().Environment();
+
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<pins_test::P4rtPortId> controller_port_ids,
+      pins_test::GetMatchingP4rtPortIds(*sut_gnmi_stub_,
+                                        pins_test::IsEnabledEthernetInterface));
+  const int group_size = kNumWcmpMembersForTest;
+  ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
+                       CreateGroupMembers(group_size, controller_port_ids));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
+
+  // Programs the required router interfaces, nexthops for wcmp group.
+  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
+                                   members));
+  ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
+                                           ir_p4info, kGroupId, members,
+                                           p4::v1::Update::INSERT));
+
+  // Allow the destination mac address to L3.
+  ASSERT_OK(ProgramL3Admit(
+      *sut_p4_session_, ir_p4info,
+      L3AdmitOptions{
+          .priority = 2070,
+          .dst_mac = std ::make_pair(pins::GetIthDstMac(0).ToString(),
+                                     "FF:FF:FF:FF:FF:FF"),
+      }));
+
+  // Program default routing for all packets on SUT.
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, ir_p4info, kVrfId,
+                                 p4::v1::Update::INSERT));
+
+  // Generate test configuration, pick any field used by hashing to vary for
+  // every packet so that it gets sent to all the members.
+  TestConfiguration test_config = {
+      .field = PacketField::kIpDst,
+      .ipv4 = true,
+      .encapped = false,
+      .inner_ipv4 = false,
+      .decap = false,
+  };
+  ASSERT_TRUE(IsValidTestConfiguration(test_config));
+
+  // Create test data entry.
+  std::string test_config_key = TestConfigurationToPayload(test_config);
+  {
+    absl::MutexLock lock(&test_data_.mutex);
+    test_data_.input_output_per_packet[test_config_key] = TestInputOutput{
+        .config = test_config,
+    };
+  }
+
+  // Select one random member of the group to toggle.
+  absl::BitGen gen;
+  const int random_member_index =
+      absl::Uniform<int>(absl::IntervalClosedOpen, gen, 0, members.size());
+  const int selected_port_id = members[random_member_index].port;
+  // Get port_name to port id mapping for the control switch.
+  ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
+                       GetPortNamePerPortId(*control_gnmi_stub_));
+  // Get port_name for the selected port.
+  ASSERT_OK_AND_ASSIGN(const auto& port_name,
+                       gutil::FindOrStatus(port_name_per_port_id,
+                                           absl::StrCat(selected_port_id)));
+  InterfaceState current_port_state = InterfaceState::kUp;
+
+  int64_t total_packets_sent;
+  int64_t total_packets_received;
+  int64_t total_packets_lost;
+  double watchport_pruning_duration;
+
+  for (auto port_desired_state : {InterfaceState::kDown, InterfaceState::kUp}) {
+    absl::string_view port_final_state =
+        port_desired_state == InterfaceState::kDown ? "DOWN" : "UP";
+
+    // Verify the oper status is reflected on the SUT.
+    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                       GetParam().testbed->GetMirrorTestbed(),
+                                       port_name, current_port_state));
+
+    // Start a new thread to send packets to the SUT. This is to ensure that
+    // the packets are being sent to the SUT while the port changes state.
+    std::thread send_packets_thread([&]() {
+      ASSERT_OK(SendNPacketsToSut(kNumTestPacketsForWatchPortPruning,
+                                  test_config, members, controller_port_ids,
+                                  ir_p4info, *control_p4_session_, environment,
+                                  kPacketRateInSecondsForPruning));
+    });
+
+    double delay_before_watchport_pruning =
+        (kNumTestPacketsForWatchPortPruning / kPacketRateInSecondsForPruning) *
+        0.25;
+    LOG(INFO) << "Waiting for " << delay_before_watchport_pruning
+              << " seconds to change the port state to: " << port_final_state;
+    absl::SleepFor(absl::Seconds(delay_before_watchport_pruning));
+    // Set the selected port to new state.
+    ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, port_name,
+                                     port_desired_state));
+    // Verify the oper status is reflected on the SUT.
+    LOG(INFO) << "Setting port " << port_name
+              << " to state: " << port_final_state;
+    current_port_state = port_desired_state;
+    ASSERT_OK(VerifyInterfaceOperState(*sut_gnmi_stub_,
+                                       GetParam().testbed->GetMirrorTestbed(),
+                                       port_name, current_port_state));
+    // Join the thread to ensure that all packets are sent to the SUT after the
+    // port is changed to new state.
+    send_packets_thread.join();
+
+    test_data_.ClearReceivedPackets();
+    test_data_.total_packets_sent = kNumTestPacketsForWatchPortPruning;
+    // Wait for packets from the SUT to arrive. Since some packets are expected
+    // to be lost due to the port being in new state, we don't verify the number
+    // of packets received.
+    absl::Status status = control_p4_session_->HandleNextNStreamMessages(
+        [&](const p4::v1::StreamMessageResponse& message) {
+          return HandleStreamMessage(ir_p4info,
+                                     &GetParam().testbed->GetMirrorTestbed(),
+                                     message, &test_data_);
+        },
+        kNumTestPacketsForWatchPortPruning, kDurationToWaitForPackets);
+    if (!status.ok() && !absl::IsDeadlineExceeded(status)) {
+      FAIL() << "Failed to receive packets from SUT: " << status;
+    }
+
+    {
+      absl::MutexLock lock(&test_data_.mutex);
+      TestInputOutput& test =
+          test_data_.input_output_per_packet[test_config_key];
+
+      total_packets_sent = test_data_.total_packets_sent;
+      total_packets_received = test.output.size();
+      total_packets_lost = total_packets_sent - total_packets_received;
+      watchport_pruning_duration =
+          1000 * total_packets_lost / kPacketRateInSecondsForPruning;
+    }
+
+    LOG(INFO) << "Watchport packet rate(pps): "
+              << kPacketRateInSecondsForPruning << "\n"
+              << "Total Packets sent: " << total_packets_sent << "\n"
+              << "Total Packets received: " << total_packets_received << "\n"
+              << "Total Packets lost: " << total_packets_lost << "\n"
+              << "Watchport pruning duration: " << watchport_pruning_duration
+              << " msecs.";
+  }
+}
 
 // Verifies basic WCMP behavior by programming a group with multiple members
 // with random weights and ensuring that all members receive some part of
