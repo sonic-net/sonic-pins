@@ -14,6 +14,7 @@
 #ifndef P4_FUZZER_SWITCH_STATE_H_
 #define P4_FUZZER_SWITCH_STATE_H_
 
+#include <cstdint>
 #include <cstdio>
 #include <functional>
 #include <optional>
@@ -22,12 +23,14 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
-#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/types/optional.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
-#include "gutil/status.h"
+#include "gutil/collections.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/entity_keys.h"
@@ -35,23 +38,41 @@
 
 namespace p4_fuzzer {
 
+// Statistics to track current resource usage.
+struct ResourceStatistics {
+  // Statistic used by all tables.
+  int entries = 0;
+  // Statistics only used by tables with action profiles.
+  int total_weight = 0;
+  int total_members = 0;
+};
+
+// Statistics to track peak resource usage for each table.
+struct PeakResourceStatistics {
+  // Statistic used by all tables.
+  int entries = 0;
+  // Statistics only used by tables with action profiles.
+  int total_weight = 0;
+  int total_members = 0;
+  int max_group_weight = 0;
+  int max_members_per_group = 0;
+};
+
 // Only a subset of the fields of TableEntry are used for equality in P4Runtime
 // (as part of the class TableEntryKey). We use an instance of TableEntryKey
 // generated from a TableEntry as the key in an absl::btree_map.
 // Therefore, the class SwitchState must preserve the invariant that:
 //   forall t1, t2. table_[t1] = t2  ==> t1 = TableEntryKey(t2)
 //   TableEntryKey() here is the constructor for the class TableEntryKey.
-using TableEntries = absl::btree_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
-using CanonicalTableEntries =
+// Btree copy used for deterministic ordering.
+using OrderedTableEntries =
+    absl::btree_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
+// Copy of above used for fast lookups.
+using UnorderedTableEntries =
     absl::flat_hash_map<pdpi::TableEntryKey, p4::v1::TableEntry>;
-
-// Returns the canonical form of `entry` according to the P4 Runtime Spec
-// https://s3-us-west-2.amazonaws.com/p4runtime/ci/main/P4Runtime-Spec.html#sec-bytestrings.
-// TODO: Canonical form is achieved by performing an IR roundtrip
-// translation. This ties correctness to IR functionality. Local
-// canonicalization would be preferred.
-absl::StatusOr<p4::v1::TableEntry> CanonicalizeTableEntry(
-    const pdpi::IrP4Info& info, const p4::v1::TableEntry& entry, bool key_only);
+// A map from table key field names to their values in a singular entry. Used
+// to determine valid references for use with @refers_to annotations.
+using ReferableEntry = absl::flat_hash_map<std::string, std::string>;
 
 // Returns the canonical form of `entry` according to the P4 Runtime Spec
 // https://s3-us-west-2.amazonaws.com/p4runtime/ci/main/P4Runtime-Spec.html#sec-bytestrings.
@@ -76,6 +97,16 @@ class SwitchState {
   // or not a table is full, may depend on the entries in other tables as well.
   bool IsTableFull(const uint32_t table_id) const;
 
+  // Returns OK if inserting the `pi_table_entry` into its table  could cause a
+  // resource exhaustion, and a FailedPrecondition error if the entry should fit
+  // within the table's resources.
+  //
+  // Keep in mind sizes for P4 tables are minimum guarantees. So while this
+  // method may suggest seeing a ResourceExhausted is expected (i.e. return OK),
+  // an actual switch may still accept the insert.
+  absl::Status ResourceExhaustedIsAllowed(
+      const p4::v1::TableEntry& pi_table_entry) const;
+
   // Checks whether the given set of table entries is empty.
   bool AllTablesEmpty() const;
 
@@ -85,13 +116,12 @@ class SwitchState {
   // Returns true iff the given table can accommodate at least n more entries.
   bool CanAccommodateInserts(const uint32_t table_id, const int n) const;
 
-  // Returns all table entries in a given table.
-  std::vector<p4::v1::TableEntry> GetTableEntries(
-      const uint32_t table_id) const;
-
-  // Returns all table entries in a given canonical table.
-  std::vector<p4::v1::TableEntry> GetCanonicalTableEntries(
-      const uint32_t table_id) const;
+  // Returns `OrderedTableEntries` map for given `table_id`. Returns const ref
+  // to map representation to avoid copying entries. If an invalid id is
+  // provided, program will crash.
+  const OrderedTableEntries& GetTableEntries(const uint32_t table_id) const {
+    return gutil::FindOrDie(ordered_tables_, table_id);
+  }
 
   // Returns the number of table entries in a given table.
   int64_t GetNumTableEntries(const uint32_t table_id) const;
@@ -104,38 +134,48 @@ class SwitchState {
   std::optional<p4::v1::TableEntry> GetTableEntry(
       const p4::v1::TableEntry& entry) const;
 
-  // Returns the current state of a canonical table entry (or nullopt if it is
-  // not present). Only the uniquely identifying fields of entry are considered.
-  std::optional<p4::v1::TableEntry> GetCanonicalTableEntry(
-      const p4::v1::TableEntry& entry) const;
-
   // Returns the list of all non-const table IDs in the underlying P4 program.
   const std::vector<uint32_t> AllTableIds() const;
 
   // Applies the given update to the given table entries. Assumes that all
   // updates can actually be applied successfully e.g for INSERT, an entry
-  // cannot already be present, and returns an error otherwise.
+  // cannot already be present, and returns an error otherwise. If this function
+  // returns an error, switch state will be in an inconsistent state and no
+  // longer valid.
   absl::Status ApplyUpdate(const p4::v1::Update& update);
+
+  // Returns the max resource statistics for table with id `table_id`. Returns
+  // error if such a table does not exist.
+  absl::StatusOr<PeakResourceStatistics> GetPeakResourceStatistics(
+      int table_id) const;
+
+  // Returns max number of entries seen on the switch.
+  int GetMaxEntriesSeen() const { return peak_entries_seen_; }
 
   // Updates all tables to match the given set of table entries.
   absl::Status SetTableEntries(
       absl::Span<const p4::v1::TableEntry> table_entries);
 
-  // Clears all table entries. Equivalent to constructing a new `SwitchState`
-  // object.
+  // Clears all table entries.
   void ClearTableEntries();
 
   // Returns a summary of the state.
   std::string SwitchStateSummary() const;
 
-  // Returns the set of used IDs for a given IrMatchFieldReference.
-  absl::btree_set<std::string> GetIdsForMatchField(
-      const pdpi::IrMatchFieldReference& field) const;
+  // Returns a vector of `ReferableEntries` in `table`. Used when a match key or
+  // action refers to a set of `fields` in `table`. Returns an error if:
+  // 1) `table` does not exist in p4 info.
+  // 2) `fields` is empty.
+  // 3) `fields` contains a field that does not exist in `table`.
+  // 4) `fields` contains a field that is not of type exact or optional.
+  absl::StatusOr<std::vector<ReferableEntry>> GetReferableEntries(
+      absl::string_view table,
+      const absl::flat_hash_set<std::string>& fields) const;
 
   pdpi::IrP4Info GetIrP4Info() const { return ir_p4info_; }
 
   // Used in testing to check that SwitchState is always consistent by:
-  // - Ensuring that the standard and canonical table states are in sync.
+  // - Ensuring that the ordered and unordered table states are in sync.
   absl::Status CheckConsistency() const;
 
   // Returns OK if the set of elements in `switch_entries` is equal to
@@ -157,10 +197,23 @@ class SwitchState {
 
  private:
   // A map from table ids to the entries they store.
-  // Invariant: An entry, `e`, is represented in `tables_` <=> canonical(e) is
-  // represented in `canonical_tables_`.
-  absl::flat_hash_map<int, TableEntries> tables_;
-  absl::flat_hash_map<int, CanonicalTableEntries> canonical_tables_;
+  // Invariant: An entry, `e`, is represented in `ordered_tables_` <=> e is also
+  // represented in `unordered_tables_`.
+  // TODO: b/316624852 - Update underlying map structures so guarantee
+  // supporting 2^64 entries.
+  absl::flat_hash_map<int, OrderedTableEntries> ordered_tables_;
+  absl::flat_hash_map<int, UnorderedTableEntries> unordered_tables_;
+
+  absl::Status UpdateResourceStatistics(const p4::v1::TableEntry& entry,
+                                        p4::v1::Update::Type type);
+
+  // Tracks current resource usage by table.
+  absl::flat_hash_map<int, ResourceStatistics> current_resource_statistics_;
+  int current_entries_ = 0;
+  // Tracks peak resource usage by table.
+  absl::flat_hash_map<int, PeakResourceStatistics> peak_resource_statistics_;
+  // Tracks peak resource usage of entire switch.
+  int peak_entries_seen_ = 0;
 
   pdpi::IrP4Info ir_p4info_;
 };

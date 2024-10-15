@@ -194,8 +194,10 @@ void EraseNexthop(pdpi::IrEntities& entities) {
       }));
 }
 
+// TODO: Re-enable this test once prefix IPMC routes are supported
+// by SAI P4.
 TEST(EntryBuilder,
-     AddEntriesForwardingIpPacketsToGivenMulticastGroupAddsEntries) {
+     DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupAddsEntries) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
@@ -206,8 +208,10 @@ TEST(EntryBuilder,
   EXPECT_THAT(entities.entities(), SizeIs(5));
 }
 
+// TODO: Re-enable this test once prefix IPMC routes are supported
+// by SAI P4.
 TEST(EntryBuilder,
-     AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {
+     DISABLED_AddEntriesForwardingIpPacketsToGivenMulticastGroupSetsMulticastGroup) {  // NOLINT
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
@@ -354,45 +358,39 @@ TEST(EntryBuilder, AddMulticastRouterInterfaceEntryAddsEntry) {
               )pb"))));
 }
 
-TEST(EntryBuilder,
-     AddRouteForwardingIpv4PacketsToGivenMulticastGroupAddsEntry) {
+TEST(EntryBuilder, AddMulticastRouteAddsIpv4Entry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(auto dst_ip,
                        netaddr::Ipv4Address::OfString("225.10.20.32"));
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-          .AddRouteForwardingIpv4PacketsToGivenMulticastGroup(
-              /*multicast_group_id=*/17, /*vrf=*/"vrf-1", dst_ip, 32)
+          .AddMulticastRoute("vrf-1", dst_ip, 0x42)
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
                 table_entry {
-                  table_name: "ipv4_table"
+                  table_name: "ipv4_multicast_table"
                   matches {
                     name: "vrf_id"
                     exact { str: "vrf-1" }
                   }
                   matches {
                     name: "ipv4_dst"
-                    lpm {
-                      value { ipv4: "225.10.20.32" }
-                      prefix_length: 32
-                    }
+                    exact { ipv4: "225.10.20.32" }
                   }
                   action {
                     name: "set_multicast_group_id"
                     params {
                       name: "multicast_group_id"
-                      value { hex_str: "0x0011" }
+                      value { hex_str: "0x0042" }
                     }
                   }
                 }
               )pb"))));
 }
 
-TEST(EntryBuilder,
-     AddRouteForwardingIpv6PacketsToGivenMulticastGroupAddsEntry) {
+TEST(EntryBuilder, AddMulticastRouteAddsIpv6Entry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(auto dst_ip,
                        netaddr::Ipv6Address::OfString(
@@ -400,29 +398,25 @@ TEST(EntryBuilder,
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-          .AddRouteForwardingIpv6PacketsToGivenMulticastGroup(
-              /*multicast_group_id=*/33, /*vrf=*/"vrf-2", dst_ip, 128)
+          .AddMulticastRoute("vrf-2", dst_ip, 0x123)
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
   EXPECT_THAT(entities.entities(), Contains(Partially(EqualsProto(R"pb(
                 table_entry {
-                  table_name: "ipv6_table"
+                  table_name: "ipv6_multicast_table"
                   matches {
                     name: "vrf_id"
                     exact { str: "vrf-2" }
                   }
                   matches {
                     name: "ipv6_dst"
-                    lpm {
-                      value { ipv6: "ff00:8888:1111:2222:3333:4444:5555:6666" }
-                      prefix_length: 128
-                    }
+                    exact { ipv6: "ff00:8888:1111:2222:3333:4444:5555:6666" }
                   }
                   action {
                     name: "set_multicast_group_id"
                     params {
                       name: "multicast_group_id"
-                      value { hex_str: "0x0021" }
+                      value { hex_str: "0x0123" }
                     }
                   }
                 }
@@ -459,6 +453,54 @@ TEST(EntryBuilder, AddMirrorSessionTableEntry) {
   EXPECT_THAT(entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
                 table_entry { table_name: "mirror_session_table" }
               )pb"))));
+}
+
+TEST(EntryBuilder, AddMarkToMirrorAclEntryTest) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddMarkToMirrorAclEntry(MarkToMirrorParams{
+              .ingress_port = "1",
+              .mirror_session_id = "id",
+          })
+          .LogPdEntries()
+          // TODO: Remove unsupported once the
+          // switch supports mirroring-related tables.
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
+      )pb"))));
+}
+
+TEST(EntryBuilder, AddIngressAclEntryRedirectingToNexthopAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddIngressAclEntryRedirectingToNexthop("nexthop")
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
+      )pb"))));
+}
+
+TEST(EntryBuilder, AddIngressAclEntryRedirectingToMulticastGroupAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kTor);
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrEntities entities,
+      EntryBuilder()
+          .AddIngressAclEntryRedirectingToMulticastGroup(123)
+          .LogPdEntries()
+          // TODO: Remove `allow_unsupported` flag once the switch
+          // supports multicast-related entries.
+          .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
+  EXPECT_THAT(
+      entities.entities(), ElementsAre(Partially(EqualsProto(R"pb(
+        table_entry { table_name: "acl_ingress_mirror_and_redirect_table" }
+      )pb"))));
 }
 
 }  // namespace
