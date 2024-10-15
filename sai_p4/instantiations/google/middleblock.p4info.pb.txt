@@ -548,6 +548,41 @@ tables {
 }
 tables {
   preamble {
+    id: 33554699
+    name: "ingress.acl_ingress.acl_ingress_mirror_and_redirect_table"
+    alias: "acl_ingress_mirror_and_redirect_table"
+    annotations: "@sai_acl(INGRESS)"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+  }
+  match_fields {
+    id: 7
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777476
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777490
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777491
+    annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 255
+}
+tables {
+  preamble {
     id: 33554698
     name: "ingress.acl_ingress.acl_ingress_security_table"
     alias: "acl_ingress_security_table"
@@ -1052,7 +1087,7 @@ actions {
     name: "ingress.routing_lookup.set_multicast_group_id"
     alias: "set_multicast_group_id"
     annotations: "@unsupported"
-    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0\")"
+    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
     id: 1
@@ -1129,6 +1164,37 @@ actions {
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
     annotations: "@sai_action(SAI_PACKET_ACTION_DENY)"
+  }
+}
+actions {
+  preamble {
+    id: 16777490
+    name: "ingress.acl_ingress.redirect_to_nexthop"
+    alias: "redirect_to_nexthop"
+  }
+  params {
+    id: 1
+    name: "nexthop_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@refers_to(nexthop_table , nexthop_id)"
+    type_name {
+      name: "nexthop_id_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777491
+    name: "ingress.acl_ingress.redirect_to_ipmc_group"
+    alias: "redirect_to_ipmc_group"
+    annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
+  }
+  params {
+    id: 1
+    name: "multicast_group_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    bitwidth: 16
   }
 }
 actions {
