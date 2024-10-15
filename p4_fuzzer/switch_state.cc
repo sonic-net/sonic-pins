@@ -200,6 +200,7 @@ SwitchState::SwitchState(IrP4Info ir_p4info)
     unordered_tables_[table_id] = UnorderedTableEntries();
     current_resource_statistics_[table_id] = ResourceStatistics();
     peak_resource_statistics_[table_id] = PeakResourceStatistics();
+
   }
   current_entries_ = 0;
   peak_entries_seen_ = 0;
@@ -540,6 +541,7 @@ absl::Status SwitchState::SetTableEntries(
   for (const p4::v1::TableEntry& entry : table_entries) {
     *update.mutable_entity()->mutable_table_entry() = entry;
     RETURN_IF_ERROR(ApplyUpdate(update));
+
   }
 
   return absl::OkStatus();

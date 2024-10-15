@@ -35,7 +35,6 @@ tables {
     id: 33554509
     name: "ingress.vlan_untag.disable_vlan_checks_table"
     alias: "disable_vlan_checks_table"
-    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Force the dummy_match to be wildcard.\n    dummy_match::mask == 0;\n  \")"
   }
@@ -259,10 +258,6 @@ tables {
     id: 16777237
     annotations: "@proto_id(7)"
   }
-  action_refs {
-    id: 16777240
-    annotations: "@proto_id(8)"
-  }
   const_default_action_id: 16777222
   size: 131072
 }
@@ -313,12 +308,78 @@ tables {
     id: 16777237
     annotations: "@proto_id(7)"
   }
-  action_refs {
-    id: 16777240
-    annotations: "@proto_id(8)"
-  }
   const_default_action_id: 16777222
   size: 17000
+}
+tables {
+  preamble {
+    id: 33554510
+    name: "ingress.routing_lookup.ipv4_multicast_table"
+    alias: "ipv4_multicast_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vrf_id"
+    annotations: "@refers_to(vrf_table , vrf_id)"
+    match_type: EXACT
+    type_name {
+      name: "vrf_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "ipv4_dst"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: EXACT
+  }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1600
+}
+tables {
+  preamble {
+    id: 33554511
+    name: "ingress.routing_lookup.ipv6_multicast_table"
+    alias: "ipv6_multicast_table"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@unsupported"
+  }
+  match_fields {
+    id: 1
+    name: "vrf_id"
+    annotations: "@refers_to(vrf_table , vrf_id)"
+    match_type: EXACT
+    type_name {
+      name: "vrf_id_t"
+    }
+  }
+  match_fields {
+    id: 2
+    name: "ipv6_dst"
+    annotations: "@format(IPV6_ADDRESS)"
+    bitwidth: 128
+    match_type: EXACT
+  }
+  action_refs {
+    id: 16777240
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1600
 }
 tables {
   preamble {
@@ -484,6 +545,41 @@ tables {
   direct_resource_ids: 318767362
   direct_resource_ids: 352321792
   size: 256
+}
+tables {
+  preamble {
+    id: 33554699
+    name: "ingress.acl_ingress.acl_ingress_mirror_and_redirect_table"
+    alias: "acl_ingress_mirror_and_redirect_table"
+    annotations: "@sai_acl(INGRESS)"
+    annotations: "@p4runtime_role(\"sdn_controller\")"
+  }
+  match_fields {
+    id: 7
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
+    match_type: TERNARY
+  }
+  action_refs {
+    id: 16777476
+    annotations: "@proto_id(1)"
+  }
+  action_refs {
+    id: 16777490
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
+    id: 16777491
+    annotations: "@proto_id(3)"
+  }
+  action_refs {
+    id: 21257015
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  const_default_action_id: 21257015
+  size: 255
 }
 tables {
   preamble {
@@ -991,7 +1087,7 @@ actions {
     name: "ingress.routing_lookup.set_multicast_group_id"
     alias: "set_multicast_group_id"
     annotations: "@unsupported"
-    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0\")"
+    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
     id: 1
@@ -1068,6 +1164,37 @@ actions {
     name: "ingress.acl_ingress.acl_deny"
     alias: "acl_deny"
     annotations: "@sai_action(SAI_PACKET_ACTION_DENY)"
+  }
+}
+actions {
+  preamble {
+    id: 16777490
+    name: "ingress.acl_ingress.redirect_to_nexthop"
+    alias: "redirect_to_nexthop"
+  }
+  params {
+    id: 1
+    name: "nexthop_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@refers_to(nexthop_table , nexthop_id)"
+    type_name {
+      name: "nexthop_id_t"
+    }
+  }
+}
+actions {
+  preamble {
+    id: 16777491
+    name: "ingress.acl_ingress.redirect_to_ipmc_group"
+    alias: "redirect_to_ipmc_group"
+    annotations: "@unsupported"
+    annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
+  }
+  params {
+    id: 1
+    name: "multicast_group_id"
+    annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    bitwidth: 16
   }
 }
 actions {
