@@ -455,6 +455,64 @@ absl::StatusOr<std::vector<ReferableEntry>> SwitchState::GetReferableEntries(
   return result;
 }
 
+absl::StatusOr<std::vector<ReferableEntry>> SwitchState::GetReferableEntries(
+    absl::string_view table,
+    const absl::flat_hash_set<std::string>& fields) const {
+  std::vector<ReferableEntry> result;
+
+  ASSIGN_OR_RETURN(const pdpi::IrTableDefinition& table_definition,
+                   FindOrStatus(ir_p4info_.tables_by_name(), table));
+
+  if (fields.empty()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Cannot get referable entries if no fields are being referenced.";
+  }
+
+  // PI representation uses fields ids, so map ids back to names.
+  absl::flat_hash_map<uint32_t, std::string> field_id_to_field_name;
+  for (const std::string& field : fields) {
+    ASSIGN_OR_RETURN(
+        const pdpi::IrMatchFieldDefinition& field_definition,
+        FindOrStatus(table_definition.match_fields_by_name(), field));
+    p4::config::v1::MatchField match_field = field_definition.match_field();
+    // References must only be to fields of type exact or optional.
+    if (match_field.match_type() != p4::config::v1::MatchField::EXACT &&
+        match_field.match_type() != p4::config::v1::MatchField::OPTIONAL) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "References must only be to fields with type exact or "
+                "optional. Field '"
+             << field << "' in table '" << table << "' is of a different type.";
+    }
+    field_id_to_field_name.insert({match_field.id(), field});
+  }
+
+  // Loop over all table entries to construct ReferableEntries.
+  ASSIGN_OR_RETURN(
+      OrderedTableEntries ordered_entries,
+      FindOrStatus(ordered_tables_, table_definition.preamble().id()));
+  for (const auto& [key, table_entry] : ordered_entries) {
+    ReferableEntry result_entry;
+    // Fill out ReferableEntry mapping.
+    for (const auto& match : table_entry.match()) {
+      if (auto it = field_id_to_field_name.find(match.field_id());
+          it != field_id_to_field_name.end()) {
+        std::string field_name = it->second;
+        if (match.has_exact()) {
+          result_entry.insert({field_name, match.exact().value()});
+        } else if (match.has_optional()) {
+          result_entry.insert({field_name, match.optional().value()});
+        }
+      }
+    }
+    // Only include entries where all referenced fields are present.
+    if (result_entry.size() == fields.size()) {
+      result.push_back(result_entry);
+    }
+  }
+
+  return result;
+}
+
 absl::Status SwitchState::CheckConsistency() const {
   if (ordered_tables_.size() != unordered_tables_.size()) {
     return absl::InternalError(absl::StrFormat(
