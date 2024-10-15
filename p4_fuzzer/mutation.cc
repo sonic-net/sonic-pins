@@ -245,23 +245,15 @@ absl::Status MutateInvalidActionSelectorWeight(BitGen* gen,
 absl::Status MutateDuplicateInsert(absl::BitGen* gen, p4::v1::Update* update,
                                    const FuzzerConfig& config,
                                    const SwitchState& switch_state) {
-  std::vector<TableEntry> entries;
-
-  for (auto id : switch_state.AllTableIds()) {
-    std::vector<TableEntry> entries_from_table =
-        switch_state.GetTableEntries(id);
-    entries.insert(entries.end(), entries_from_table.begin(),
-                   entries_from_table.end());
-  }
-
-  if (entries.empty()) {
+  if (switch_state.AllTablesEmpty()) {
     return absl::InvalidArgumentError(
         "Cannot do a duplicate insert when there are no installed entries");
   }
 
+  const int table_id = FuzzNonEmptyTableId(gen, config, switch_state);
   update->set_type(p4::v1::Update::INSERT);
   *update->mutable_entity()->mutable_table_entry() =
-      UniformFromSpan(gen, entries);
+      UniformValueFromMap(gen, switch_state.GetTableEntries(table_id));
 
   return absl::OkStatus();
 }

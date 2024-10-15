@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,24 +40,25 @@
 #include "p4/config/v1/p4types.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/annotation_util.h"
+#include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/mutation.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/utils/ir.h"
+#include "p4_pdpi/entity_keys.h"
 
 namespace p4_fuzzer {
 
 using ::absl::gntohll;
 
 using ::absl::Uniform;
+using ::pdpi::TableEntryKey;
 using ::p4::v1::Action;
 using ::p4::v1::FieldMatch;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
-using ::pdpi::EntityKey;
 using ::pdpi::IrTableDefinition;
-using ::pdpi::IrTableReference;
 
 constexpr int kBitsInByte = 8;
 
@@ -65,8 +66,6 @@ constexpr int kBitsInByte = 8;
 // empirically determined to lead to big enough updates so that the test runs
 // fast, but also sometimes generates small updates, which increases coverage.
 constexpr float kAddUpdateProbability = 0.98;
-// The probability of performing a mutation on a given table entry.
-constexpr float kMutateUpdateProbability = 0.1;
 // The probability of using a wildcard for a ternary or lpm match field.
 constexpr float kFieldMatchWildcardProbability = 0.05;
 
@@ -271,11 +270,10 @@ std::vector<uint32_t> GetMandatoryMatchTableIds(const FuzzerConfig& config) {
 std::vector<uint32_t> GetDifferentRoleTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
-  for (auto& [key, table] : config.info.tables_by_id()) {
+  for (auto& [key, table] : Ordered(config.info.tables_by_id())) {
     if (table.role() == config.role) continue;
     table_ids.push_back(key);
   }
-
   return table_ids;
 }
 
@@ -329,18 +327,6 @@ Update::Type FuzzUpdateType(absl::BitGen* gen, const SwitchState& state) {
   }
 }
 
-// Randomly generates the table id of a non-empty table.
-int FuzzNonEmptyTableId(absl::BitGen* gen, const FuzzerConfig& config,
-                        const SwitchState& switch_state) {
-  CHECK(!switch_state.AllTablesEmpty())
-      << "state: " << switch_state.SwitchStateSummary();
-  int table_id;
-  do {
-    table_id = FuzzTableId(gen, config);
-  } while (switch_state.IsTableEmpty(table_id));
-  return table_id;
-}
-
 // Randomly changes the table_entry, without affecting the key fields.
 void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
                       const SwitchState& switch_state,
@@ -375,7 +361,11 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
     if (absl::Bernoulli(*gen, 0.5)) {
       table_entry->clear_metadata();
     } else {
-      table_entry->set_metadata(FuzzRandomId(gen));
+      // TODO: Currently, we only want to use metadata that looks
+      // similar to our expectation. Eventually, we should fuzz just a random ID
+      // with e.g. `FuzzRandomId(gen)`.
+      table_entry->set_metadata(
+          absl::StrCat("orion_cookie: ", FuzzUint64(gen, /*bits=*/64)));
     }
   }
   // TODO: also fuzz meters
@@ -386,7 +376,7 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
 std::vector<WeightedItem<uint32_t>> GenerateAllValidWeightedTableIds(
     const FuzzerConfig& config) {
   std::vector<WeightedItem<uint32_t>> weighted_table_ids;
-  for (const pdpi::IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
+  for (const IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
     weighted_table_ids.push_back(WeightedItem<uint32_t>{
         .item = table.preamble().id(),
         .weight = table.size(),
@@ -417,7 +407,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
   bool do_mutate = false;
   std::vector<uint32_t> mutation_table_ids;
 
-  if (absl::Bernoulli(*gen, kMutateUpdateProbability)) {
+  if (absl::Bernoulli(*gen, config.mutate_update_probability)) {
     do_mutate = true;
     mutation = FuzzMutation(gen, config);
     switch (mutation) {
@@ -490,7 +480,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
     case Update::MODIFY: {
       const int table_id = FuzzNonEmptyTableId(gen, config, switch_state);
       TableEntry table_entry =
-          UniformFromSpan(gen, switch_state.GetTableEntries(table_id));
+          UniformValueFromMap(gen, switch_state.GetTableEntries(table_id));
       FuzzNonKeyFields(gen, config, switch_state, &table_entry);
       *update.mutable_entity()->mutable_table_entry() = table_entry;
       break;
@@ -501,7 +491,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
       // entry multiple times. This is fine since `IsBadUpdate` will catch it
       // and discard the update.
       TableEntry table_entry =
-          UniformFromSpan(gen, switch_state.GetTableEntries(table_id));
+          UniformValueFromMap(gen, switch_state.GetTableEntries(table_id));
       FuzzNonKeyFields(gen, config, switch_state, &table_entry);
       *update.mutable_entity()->mutable_table_entry() = table_entry;
       break;
@@ -568,7 +558,6 @@ const std::vector<pdpi::IrActionReference> AllValidActions(
   for (const auto& action : table.entry_actions()) {
     // Skip deprecated, unused, and disallowed actions.
     if (pdpi::IsElementDeprecated(action.action().preamble().annotations()) ||
-        action.action().is_unsupported() ||
         IsDisabledForFuzzing(config, action.action().preamble().name()))
       continue;
     actions.push_back(action);
@@ -588,7 +577,6 @@ const std::vector<pdpi::IrMatchFieldDefinition> AllValidMatchFields(
         table.preamble().name(), ".", match_field_info.match_field().name());
     if (pdpi::IsElementDeprecated(
             match_field_info.match_field().annotations()) ||
-        //pdpi::IsElementUnused(match_field_info.match_field().annotations()) ||
         IsDisabledForFuzzing(config, fully_qualified_match_field))
       continue;
 
@@ -716,7 +704,7 @@ absl::StatusOr<std::string> FuzzValue(
     bool non_zero) {
   // A port: pick any valid port randomly.
   if (IsPort(type_name)) {
-    return UniformFromSpan(gen, config.ports);
+    return FuzzPort(gen, config);
   }
 
   // A qos queue: pick any valid qos queue randomly.
@@ -888,7 +876,7 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
   p4::v1::Action action;
   action.set_action_id(ir_action_info.preamble().id());
 
-  for (auto& [id, ir_param] : ir_action_info.params_by_id()) {
+  for (auto& [id, ir_param] : Ordered(ir_action_info.params_by_id())) {
     p4::v1::Action::Param* param = action.add_params();
     param->set_param_id(id);
     ASSIGN_OR_RETURN(
@@ -914,7 +902,6 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
 // However, uniform sampling gives us highly clustered weights almost all the
 // time and we prefer to generate skewed weights more often. Therefore, this
 // simpler approach, should serve us well.
-
 absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
@@ -930,8 +917,8 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
                                     ? action_profile.max_group_size()
                                     : kActionProfileActionSetMaxCardinality;
     int number_of_actions = Uniform<int>(
-        absl::IntervalClosedClosed, *gen,
-        config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
+          absl::IntervalClosedClosed, *gen,
+          config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
 
     // Get the max member weight from the P4Info if it is set.
     int max_member_weight =
@@ -987,10 +974,10 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     // We want to randomly select some number of actions up to our max
     // cardinality; however, we can't have more actions than the amount of
     // weight we support since every action must have weight >= 1.
-    int number_of_actions = Uniform<int>(
-        absl::IntervalClosedClosed, *gen,
-        config.no_empty_action_profile_groups ? 1 : 0,
-        std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
+    int number_of_actions =  Uniform<int>(
+          absl::IntervalClosedClosed, *gen,
+          config.no_empty_action_profile_groups ? 1 : 0,
+          std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
 
     for (int i = 0; i < number_of_actions; i++) {
       // Since each action must have at least weight 1, we need to take the
@@ -1082,7 +1069,7 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
 
   // Set cookie and priority.
   table_entry.set_metadata(
-      absl::StrCat("cookie: ", FuzzUint64(gen, /*bits=*/64)));
+      absl::StrCat("orion_cookie: ", FuzzUint64(gen, /*bits=*/64)));
   if (ir_table_info.requires_priority()) {
     table_entry.set_priority(FuzzUint64(gen, /*bits=*/16));
   }
@@ -1133,7 +1120,8 @@ std::vector<AnnotatedTableEntry> ValidForwardingEntries(
 
 AnnotatedWriteRequest FuzzWriteRequest(absl::BitGen* gen,
                                        const FuzzerConfig& config,
-                                       const SwitchState& switch_state,absl::optional<int> max_batch_size) {
+                                       const SwitchState& switch_state,
+                                       absl::optional<int> max_batch_size) {
   AnnotatedWriteRequest request;
   absl::flat_hash_set<pdpi::TableEntryKey> entry_keys_in_request;
 
