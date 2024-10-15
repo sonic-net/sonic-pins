@@ -88,6 +88,10 @@ control acl_egress(in headers_t headers,
               @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2)
           ) @format(IPV6_ADDRESS);
 #endif
+#if defined(SAI_INSTANTIATION_TOR)
+      headers.ethernet.src_addr : ternary @name("src_mac") @id(10)
+          @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
+#endif
     }
     actions = {
       @proto_id(1) acl_drop(local_metadata);
@@ -161,10 +165,8 @@ control acl_egress(in headers_t headers,
         ip_protocol = 0;
       }
 
-#if defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
       acl_egress_table.apply();
-#elif defined(SAI_INSTANTIATION_TOR)
-      acl_egress_table.apply();
+#if defined(SAI_INSTANTIATION_TOR)
       acl_egress_dhcp_to_host_table.apply();
 #endif
     // Act on ACL drop metadata.

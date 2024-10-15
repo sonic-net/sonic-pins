@@ -126,8 +126,6 @@ message Ipv4TableEntry {
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
-      // CAUTION: This action is not (yet) supported.
-      SetMulticastGroupIdAction set_multicast_group_id = 8;
     }
   }
   Action action = 2;
@@ -149,8 +147,6 @@ message Ipv6TableEntry {
       SetNexthopIdAndMetadataAction set_nexthop_id_and_metadata = 5;
       SetWcmpGroupIdAndMetadataAction set_wcmp_group_id_and_metadata = 6;
       SetMetadataAndDropAction set_metadata_and_drop = 7;
-      // CAUTION: This action is not (yet) supported.
-      SetMulticastGroupIdAction set_multicast_group_id = 8;
     }
   }
   Action action = 2;
@@ -235,7 +231,6 @@ message MulticastRouterInterfaceTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 // Table entry restrictions:
 // ## Force the dummy_match to be wildcard.
 //   dummy_match::mask == 0;
@@ -482,6 +477,8 @@ message AclEgressTableEntry {
     Optional is_ipv4 = 6;     // optional match / Format::HEX_STRING / 1 bits
     Optional is_ipv6 = 7;     // optional match / Format::HEX_STRING / 1 bits
     Ternary dscp = 8;         // ternary match / Format::HEX_STRING / 6 bits
+    Ternary dst_ipv6 = 9;     // ternary match / Format::IPV6 / upper 64 bits
+    Ternary src_mac = 10;     // ternary match / Format::MAC
   }
   Match match = 1;
   message Action {
@@ -985,7 +982,6 @@ message TableEntry {
     // CAUTION: This table is not (yet) supported.
     MulticastRouterInterfaceTableEntry multicast_router_interface_table_entry =
         76;
-    // CAUTION: This table is not (yet) supported.
     DisableVlanChecksTableEntry disable_vlan_checks_table_entry = 77;
     // CAUTION: This table is not (yet) supported.
     Ipv4MulticastTableEntry ipv4_multicast_table_entry = 78;
