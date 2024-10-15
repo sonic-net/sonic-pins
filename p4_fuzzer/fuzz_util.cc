@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,18 +18,21 @@
 #include <functional>
 #include <iterator>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/base/casts.h"
 #include "absl/base/internal/endian.h"
-#include "absl/container/btree_set.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/random/discrete_distribution.h"
 #include "absl/random/distributions.h"
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/span.h"
@@ -40,24 +43,25 @@
 #include "p4/config/v1/p4types.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/annotation_util.h"
+#include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/mutation.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/utils/ir.h"
+#include "p4_pdpi/entity_keys.h"
 
 namespace p4_fuzzer {
 
 using ::absl::gntohll;
 
 using ::absl::Uniform;
+using ::pdpi::TableEntryKey;
 using ::p4::v1::Action;
 using ::p4::v1::FieldMatch;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
-using ::pdpi::EntityKey;
 using ::pdpi::IrTableDefinition;
-using ::pdpi::IrTableReference;
 
 constexpr int kBitsInByte = 8;
 
@@ -65,8 +69,6 @@ constexpr int kBitsInByte = 8;
 // empirically determined to lead to big enough updates so that the test runs
 // fast, but also sometimes generates small updates, which increases coverage.
 constexpr float kAddUpdateProbability = 0.98;
-// The probability of performing a mutation on a given table entry.
-constexpr float kMutateUpdateProbability = 0.1;
 // The probability of using a wildcard for a ternary or lpm match field.
 constexpr float kFieldMatchWildcardProbability = 0.05;
 
@@ -271,11 +273,10 @@ std::vector<uint32_t> GetMandatoryMatchTableIds(const FuzzerConfig& config) {
 std::vector<uint32_t> GetDifferentRoleTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
-  for (auto& [key, table] : config.info.tables_by_id()) {
+  for (auto& [key, table] : Ordered(config.info.tables_by_id())) {
     if (table.role() == config.role) continue;
     table_ids.push_back(key);
   }
-
   return table_ids;
 }
 
@@ -329,18 +330,6 @@ Update::Type FuzzUpdateType(absl::BitGen* gen, const SwitchState& state) {
   }
 }
 
-// Randomly generates the table id of a non-empty table.
-int FuzzNonEmptyTableId(absl::BitGen* gen, const FuzzerConfig& config,
-                        const SwitchState& switch_state) {
-  CHECK(!switch_state.AllTablesEmpty())
-      << "state: " << switch_state.SwitchStateSummary();
-  int table_id;
-  do {
-    table_id = FuzzTableId(gen, config);
-  } while (switch_state.IsTableEmpty(table_id));
-  return table_id;
-}
-
 // Randomly changes the table_entry, without affecting the key fields.
 void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
                       const SwitchState& switch_state,
@@ -375,7 +364,11 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
     if (absl::Bernoulli(*gen, 0.5)) {
       table_entry->clear_metadata();
     } else {
-      table_entry->set_metadata(FuzzRandomId(gen));
+      // TODO: Currently, we only want to use metadata that looks
+      // similar to our expectation. Eventually, we should fuzz just a random ID
+      // with e.g. `FuzzRandomId(gen)`.
+      table_entry->set_metadata(
+          absl::StrCat("orion_cookie: ", FuzzUint64(gen, /*bits=*/64)));
     }
   }
   // TODO: also fuzz meters
@@ -386,7 +379,7 @@ void FuzzNonKeyFields(absl::BitGen* gen, const FuzzerConfig& config,
 std::vector<WeightedItem<uint32_t>> GenerateAllValidWeightedTableIds(
     const FuzzerConfig& config) {
   std::vector<WeightedItem<uint32_t>> weighted_table_ids;
-  for (const pdpi::IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
+  for (const IrTableDefinition& table : AllValidTablesForP4RtRole(config)) {
     weighted_table_ids.push_back(WeightedItem<uint32_t>{
         .item = table.preamble().id(),
         .weight = table.size(),
@@ -417,7 +410,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
   bool do_mutate = false;
   std::vector<uint32_t> mutation_table_ids;
 
-  if (absl::Bernoulli(*gen, kMutateUpdateProbability)) {
+  if (absl::Bernoulli(*gen, config.mutate_update_probability)) {
     do_mutate = true;
     mutation = FuzzMutation(gen, config);
     switch (mutation) {
@@ -490,7 +483,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
     case Update::MODIFY: {
       const int table_id = FuzzNonEmptyTableId(gen, config, switch_state);
       TableEntry table_entry =
-          UniformFromSpan(gen, switch_state.GetTableEntries(table_id));
+          UniformValueFromMap(gen, switch_state.GetTableEntries(table_id));
       FuzzNonKeyFields(gen, config, switch_state, &table_entry);
       *update.mutable_entity()->mutable_table_entry() = table_entry;
       break;
@@ -501,7 +494,7 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
       // entry multiple times. This is fine since `IsBadUpdate` will catch it
       // and discard the update.
       TableEntry table_entry =
-          UniformFromSpan(gen, switch_state.GetTableEntries(table_id));
+          UniformValueFromMap(gen, switch_state.GetTableEntries(table_id));
       FuzzNonKeyFields(gen, config, switch_state, &table_entry);
       *update.mutable_entity()->mutable_table_entry() = table_entry;
       break;
@@ -521,6 +514,81 @@ AnnotatedUpdate FuzzUpdate(absl::BitGen* gen, const FuzzerConfig& config,
   }
 
   return GetAnnotatedUpdate(config.info, update, /* mutations = */ {});
+}
+
+struct VariableWithReferences {
+  std::string variable;
+  ::google::protobuf::RepeatedPtrField<::pdpi::IrMatchFieldReference>
+      references;
+};
+
+// TODO: Given that many fuzzed entries share references, there is
+// a lot of redundant computation due to recomputing the exact same values
+// (switch state never changes while fuzzing). A good improvement would be to
+// cache results, keyed by the reference.
+absl::StatusOr<absl::flat_hash_map<std::string, std::string>>
+FuzzEntityWithReferences(
+    absl::BitGen* gen, const SwitchState& switch_state,
+    const std::vector<VariableWithReferences>& variables_with_references) {
+  absl::flat_hash_map<std::string, absl::flat_hash_set<std::string>>
+      table_to_fields_referenced;
+  absl::flat_hash_map<std::string, std::string> variable_to_assigned_value;
+
+  // STEP 1: Gather global information.
+  for (const auto& [variable, references] : variables_with_references) {
+    // TODO: Multiple @refers_to on a single param/field is not
+    // currently supported. Single existing case of such behavior is masked.
+    if (references.size() > 1) {
+      // This is the mask. Some actions contain both @refers_to
+      // (router_interface_table, router_interface_id) and @refers_to
+      // (neighbor_table, router_interface_id). Only the latter is used.
+      if (references.at(0).match_field() == "router_interface_id") {
+        table_to_fields_referenced["neighbor_table"].insert(
+            "router_interface_id");
+        continue;
+      } else {
+        return gutil::UnimplementedErrorBuilder()
+               << "Multiple @refers_to on a single variable is "
+                  "not currently supported. Variable '"
+               << variable << "' has '" << references.size() << "' @refers_to.";
+      }
+    }
+
+    // This function should not be passed variables that do not contain
+    // references.
+    if (references.empty()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Variable '" << variable << "' has no references.";
+    }
+
+    std::string table_reference = references.at(0).table();
+    std::string field_reference = references.at(0).match_field();
+    table_to_fields_referenced[table_reference].insert(field_reference);
+  }
+
+  // STEP 2: Get referenced values.
+  for (auto& [table, fields] : table_to_fields_referenced) {
+    ASSIGN_OR_RETURN(std::vector<ReferableEntry> possible_assignments,
+                     switch_state.GetReferableEntries(table, fields));
+    if (possible_assignments.empty()) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Could not fuzz entity with references: No values available "
+                "for some referenced fields among {"
+             << absl::StrJoin(fields, ",") << "} in table " << table << ".";
+    }
+    ReferableEntry field_name_to_value =
+        UniformFromSpan(gen, possible_assignments);
+    for (const auto& variable_with_references : variables_with_references) {
+      for (const auto& reference : variable_with_references.references) {
+        if (reference.table() == table) {
+          variable_to_assigned_value[variable_with_references.variable] =
+              field_name_to_value.at(reference.match_field());
+        }
+      }
+    }
+  }
+
+  return variable_to_assigned_value;
 }
 
 }  // namespace
@@ -568,7 +636,6 @@ const std::vector<pdpi::IrActionReference> AllValidActions(
   for (const auto& action : table.entry_actions()) {
     // Skip deprecated, unused, and disallowed actions.
     if (pdpi::IsElementDeprecated(action.action().preamble().annotations()) ||
-        action.action().is_unsupported() ||
         IsDisabledForFuzzing(config, action.action().preamble().name()))
       continue;
     actions.push_back(action);
@@ -588,7 +655,6 @@ const std::vector<pdpi::IrMatchFieldDefinition> AllValidMatchFields(
         table.preamble().name(), ".", match_field_info.match_field().name());
     if (pdpi::IsElementDeprecated(
             match_field_info.match_field().annotations()) ||
-        //pdpi::IsElementUnused(match_field_info.match_field().annotations()) ||
         IsDisabledForFuzzing(config, fully_qualified_match_field))
       continue;
 
@@ -710,13 +776,10 @@ std::string FuzzNonZeroBits(absl::BitGen* gen, int bits) {
 absl::StatusOr<std::string> FuzzValue(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
-    const p4::config::v1::P4NamedType& type_name, int bits,
-    const google::protobuf::RepeatedPtrField<pdpi::IrMatchFieldReference>&
-        references,
-    bool non_zero) {
+    const p4::config::v1::P4NamedType& type_name, int bits, bool non_zero) {
   // A port: pick any valid port randomly.
   if (IsPort(type_name)) {
-    return UniformFromSpan(gen, config.ports);
+    return FuzzPort(gen, config);
   }
 
   // A qos queue: pick any valid qos queue randomly.
@@ -725,7 +788,7 @@ absl::StatusOr<std::string> FuzzValue(
   }
 
   // A neighbor ID (not referring to anything): Pick a random IPv6 address.
-  if (IsNeighbor(type_name) && references.empty()) {
+  if (IsNeighbor(type_name)) {
     std::bitset<128> ipv6_bits;
     for (int i = 0; i < 128; ++i) {
       ipv6_bits.set(i, absl::Bernoulli(*gen, 0.5));
@@ -734,36 +797,8 @@ absl::StatusOr<std::string> FuzzValue(
   }
 
   // A string ID (not referring to anything): Pick a fresh random ID.
-  if (bits == 0 && references.empty()) {
+  if (bits == 0) {
     return FuzzRandomId(gen, /*min_chars=*/non_zero ? 1 : 0);
-  }
-
-  // An ID that refers to another match field: pick any ID that already exists
-  // for that match field.
-  if (!references.empty()) {
-    absl::btree_set<std::string> possible_values =
-        switch_state.GetIdsForMatchField(references[0]);
-    // Intersect the sets of possible values to ones existing in every table
-    // that this field references.
-    for (int i = 1; i < references.size(); i++) {
-      // If there are no possible IDs left, set intersections will be
-      // idempotent.
-      if (possible_values.empty()) break;
-
-      absl::btree_set<std::string> intersection;
-      absl::c_set_intersection(
-          possible_values, switch_state.GetIdsForMatchField(references[i]),
-          std::inserter(intersection, intersection.begin()));
-      possible_values = std::move(intersection);
-    }
-    if (possible_values.empty()) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Could not find value, no IDs yet for some referenced fields.";
-    }
-
-    std::vector<std::string> value_vector(possible_values.begin(),
-                                          possible_values.end());
-    return UniformFromSpan(gen, value_vector);
   }
 
   // Some other value: Normally fuzz bits randomly.
@@ -823,10 +858,9 @@ absl::StatusOr<p4::v1::FieldMatch> FuzzExactFieldMatch(
   p4::v1::FieldMatch match;
   p4::config::v1::MatchField field = ir_match_field_info.match_field();
   // Note that exact messages have to be provided, even if the value is 0.
-  ASSIGN_OR_RETURN(
-      std::string value,
-      FuzzValue(gen, config, switch_state, field.type_name(), field.bitwidth(),
-                ir_match_field_info.references(), /*non_zero=*/true));
+  ASSIGN_OR_RETURN(std::string value,
+                   FuzzValue(gen, config, switch_state, field.type_name(),
+                             field.bitwidth(), /*non_zero=*/true));
 
   match.mutable_exact()->set_value(value);
   return match;
@@ -838,10 +872,9 @@ absl::StatusOr<p4::v1::FieldMatch> FuzzOptionalFieldMatch(
     const pdpi::IrMatchFieldDefinition& ir_match_field_info) {
   p4::v1::FieldMatch match;
   p4::config::v1::MatchField field = ir_match_field_info.match_field();
-  ASSIGN_OR_RETURN(
-      std::string value,
-      FuzzValue(gen, config, switch_state, field.type_name(), field.bitwidth(),
-                ir_match_field_info.references(), /*non_zero=*/true));
+  ASSIGN_OR_RETURN(std::string value,
+                   FuzzValue(gen, config, switch_state, field.type_name(),
+                             field.bitwidth(), /*non_zero=*/true));
   match.mutable_optional()->set_value(value);
   return match;
 }
@@ -888,18 +921,43 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
   p4::v1::Action action;
   action.set_action_id(ir_action_info.preamble().id());
 
-  for (auto& [id, ir_param] : ir_action_info.params_by_id()) {
+  std::vector<VariableWithReferences> params_with_references;
+  for (const auto& [param_name, ir_param] :
+       Ordered(ir_action_info.params_by_name())) {
+    if (ir_param.references().empty()) continue;
+
+    params_with_references.push_back(VariableWithReferences{
+        .variable = param_name,
+        .references = ir_param.references(),
+    });
+  }
+
+  absl::flat_hash_map<std::string, std::string> param_to_referenced_value;
+  ASSIGN_OR_RETURN(
+      param_to_referenced_value,
+      FuzzEntityWithReferences(gen, switch_state, params_with_references),
+      _.SetPrepend() << "while fuzzing action '"
+                     << ir_action_info.preamble().name() << "': ");
+
+  for (auto& [param_name, ir_param] :
+       Ordered(ir_action_info.params_by_name())) {
     p4::v1::Action::Param* param = action.add_params();
-    param->set_param_id(id);
-    ASSIGN_OR_RETURN(
-        std::string value,
-        FuzzValue(gen, config, switch_state, ir_param.param().type_name(),
-                  ir_param.param().bitwidth(), ir_param.references(),
-                  /*non_zero=*/true),
-        _.SetPrepend() << "while fuzzing parameter '" << ir_param.param().name()
-                       << "' of action '" << ir_action_info.preamble().name()
-                       << "': ");
-    param->set_value(value);
+    param->set_param_id(ir_param.param().id());
+    // Assign referenced value for params with references. Fuzz values for
+    // params without references.
+    if (auto it = param_to_referenced_value.find(param_name);
+        it != param_to_referenced_value.end()) {
+      param->set_value(it->second);
+    } else {
+      ASSIGN_OR_RETURN(
+          std::string value,
+          FuzzValue(gen, config, switch_state, ir_param.param().type_name(),
+                    ir_param.param().bitwidth(), /*non_zero=*/true),
+          _.SetPrepend() << "while fuzzing parameter '" << param_name
+                         << "' of action '" << ir_action_info.preamble().name()
+                         << "': ");
+      param->set_value(value);
+    }
   }
 
   return action;
@@ -914,7 +972,6 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
 // However, uniform sampling gives us highly clustered weights almost all the
 // time and we prefer to generate skewed weights more often. Therefore, this
 // simpler approach, should serve us well.
-
 absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
@@ -930,8 +987,8 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
                                     ? action_profile.max_group_size()
                                     : kActionProfileActionSetMaxCardinality;
     int number_of_actions = Uniform<int>(
-        absl::IntervalClosedClosed, *gen,
-        config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
+          absl::IntervalClosedClosed, *gen,
+          config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
 
     // Get the max member weight from the P4Info if it is set.
     int max_member_weight =
@@ -987,10 +1044,10 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     // We want to randomly select some number of actions up to our max
     // cardinality; however, we can't have more actions than the amount of
     // weight we support since every action must have weight >= 1.
-    int number_of_actions = Uniform<int>(
-        absl::IntervalClosedClosed, *gen,
-        config.no_empty_action_profile_groups ? 1 : 0,
-        std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
+    int number_of_actions =  Uniform<int>(
+          absl::IntervalClosedClosed, *gen,
+          config.no_empty_action_profile_groups ? 1 : 0,
+          std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
 
     for (int i = 0; i < number_of_actions; i++) {
       // Since each action must have at least weight 1, we need to take the
@@ -1039,6 +1096,10 @@ absl::StatusOr<p4::v1::TableAction> FuzzAction(
   return result;
 }
 
+// TODO: Optional fields with @refers_to will not be properly
+// fuzzed if they refer to fields that currently have no existing entry.
+// Fuzzing fails for this, but it should simply omit the optional. Thankfully,
+// this situation is not currently in use.
 absl::StatusOr<TableEntry> FuzzValidTableEntry(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
@@ -1046,29 +1107,77 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
   TableEntry table_entry;
   table_entry.set_table_id(ir_table_info.preamble().id());
 
-  // Generate the matches.
-  for (const pdpi::IrMatchFieldDefinition& match_field_info :
-       AllValidMatchFields(config, ir_table_info)) {
-    // If the field can have wildcards, we generate a wildcard match with
-    // probability `kFieldMatchWildcardProbability`.
-    // In the P4RT spec, wildcards are represented as the absence of a match
-    // field.
-    bool can_have_wildcard = match_field_info.match_field().match_type() ==
-                                 p4::config::v1::MatchField::TERNARY ||
-                             match_field_info.match_field().match_type() ==
-                                 p4::config::v1::MatchField::OPTIONAL ||
-                             match_field_info.match_field().match_type() ==
-                                 p4::config::v1::MatchField::LPM;
-    if (can_have_wildcard &&
-        absl::Bernoulli(*gen, kFieldMatchWildcardProbability)) {
-      continue;
+  std::vector<VariableWithReferences> match_fields_with_references;
+  for (auto& [match_field_name, ir_match_field] :
+       Ordered(ir_table_info.match_fields_by_name())) {
+    if (ir_match_field.references().empty()) continue;
+
+    if (ir_match_field.match_field().match_type() !=
+            p4::config::v1::MatchField::EXACT &&
+        ir_match_field.match_field().match_type() !=
+            p4::config::v1::MatchField::OPTIONAL) {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Only match fields with type exact or optional can have "
+                "references.";
     }
 
-    auto match = FuzzFieldMatch(gen, config, switch_state, match_field_info);
-    if (match.ok()) {
-      *table_entry.add_match() = *match;
+    match_fields_with_references.push_back(VariableWithReferences{
+        .variable = match_field_name,
+        .references = ir_match_field.references(),
+    });
+  }
+
+  absl::flat_hash_map<std::string, std::string> match_field_to_referenced_value;
+  ASSIGN_OR_RETURN(
+      match_field_to_referenced_value,
+      FuzzEntityWithReferences(gen, switch_state, match_fields_with_references),
+      _.SetPrepend() << "while fuzzing entry for table '"
+                     << ir_table_info.preamble().name() << "': ");
+
+  for (const pdpi::IrMatchFieldDefinition& match_field_info :
+       AllValidMatchFields(config, ir_table_info)) {
+    std::string match_field_name = match_field_info.match_field().name();
+    uint32_t match_field_id = match_field_info.match_field().id();
+
+    // Assign referenced value for match fields with references. Fuzz values for
+    // match fields without references.
+    if (auto it = match_field_to_referenced_value.find(match_field_name);
+        it != match_field_to_referenced_value.end()) {
+      p4::v1::FieldMatch match;
+      match.set_field_id(match_field_id);
+      if (match_field_info.match_field().match_type() ==
+          p4::config::v1::MatchField::EXACT) {
+        match.mutable_exact()->set_value(it->second);
+      } else if (match_field_info.match_field().match_type() ==
+                 p4::config::v1::MatchField::OPTIONAL) {
+        // Optionals can have wildcards, so generate wildcard (omit field) with
+        // some probability, regardless of references.
+        if (absl::Bernoulli(*gen, kFieldMatchWildcardProbability)) continue;
+        match.mutable_optional()->set_value(it->second);
+      }
+      *table_entry.add_match() = match;
     } else {
-      return match.status();
+      // If the field can have wildcards, we generate a wildcard match with
+      // probability `kFieldMatchWildcardProbability`.
+      // In the P4RT spec, wildcards are represented as the absence of a match
+      // field.
+      bool can_have_wildcard = match_field_info.match_field().match_type() ==
+                                   p4::config::v1::MatchField::TERNARY ||
+                               match_field_info.match_field().match_type() ==
+                                   p4::config::v1::MatchField::OPTIONAL ||
+                               match_field_info.match_field().match_type() ==
+                                   p4::config::v1::MatchField::LPM;
+      if (can_have_wildcard &&
+          absl::Bernoulli(*gen, kFieldMatchWildcardProbability)) {
+        continue;
+      }
+
+      auto match = FuzzFieldMatch(gen, config, switch_state, match_field_info);
+      if (match.ok()) {
+        *table_entry.add_match() = *match;
+      } else {
+        return match.status();
+      }
     }
   }
 
@@ -1082,7 +1191,7 @@ absl::StatusOr<TableEntry> FuzzValidTableEntry(
 
   // Set cookie and priority.
   table_entry.set_metadata(
-      absl::StrCat("cookie: ", FuzzUint64(gen, /*bits=*/64)));
+      absl::StrCat("orion_cookie: ", FuzzUint64(gen, /*bits=*/64)));
   if (ir_table_info.requires_priority()) {
     table_entry.set_priority(FuzzUint64(gen, /*bits=*/16));
   }
@@ -1133,7 +1242,8 @@ std::vector<AnnotatedTableEntry> ValidForwardingEntries(
 
 AnnotatedWriteRequest FuzzWriteRequest(absl::BitGen* gen,
                                        const FuzzerConfig& config,
-                                       const SwitchState& switch_state,absl::optional<int> max_batch_size) {
+                                       const SwitchState& switch_state,
+                                       absl::optional<int> max_batch_size) {
   AnnotatedWriteRequest request;
   absl::flat_hash_set<pdpi::TableEntryKey> entry_keys_in_request;
 
