@@ -56,47 +56,6 @@ unsigned int FindBitsize(uint64_t value) {
   return (bitsize > 1 ? bitsize : 1);  // At least 1 bit.
 }
 
-// Turns the given z3 extracted value (as a string) to a uint64_t.
-// Z3 returns an extracted value as either a binary, hex, or int strings
-// dependening on the size of the value and the formatting flags it is
-// initialized with.
-uint64_t StringToInt(std::string value) {
-  static std::unordered_map<char, std::string> hex_to_bin = {
-      {'0', "0000"}, {'1', "0001"}, {'2', "0010"}, {'3', "0011"},
-      {'4', "0100"}, {'5', "0101"}, {'6', "0110"}, {'7', "0111"},
-      {'8', "1000"}, {'9', "1001"}, {'a', "1010"}, {'b', "1011"},
-      {'c', "1100"}, {'d', "1101"}, {'e', "1110"}, {'f', "1111"}};
-
-  bool value_is_hex = absl::StartsWith(value, "#x");
-  bool value_is_binary = absl::StartsWith(value, "#b");
-
-  // Boolean or integer values.
-  if (!value_is_hex && !value_is_binary) {
-    if (value == "true") {
-      return 1;
-    } else if (value == "false") {
-      return 0;
-    } else {
-      return std::stoull(value);
-    }
-  }
-
-  // Make sure value is a binary string without leading base prefix.
-  std::string binary;
-  if (value_is_hex) {
-    // Turn hex to binary.
-    absl::string_view stripped_value = absl::StripPrefix(value, "#x");
-    for (char c : stripped_value) {
-      absl::StrAppend(&binary, hex_to_bin.at(c));
-    }
-  } else if (value_is_binary) {
-    // Strip leading #b for binary strings.
-    binary = absl::StripPrefix(value, "#b");
-  }
-
-  return std::stoull(binary);
-}
-
 }  // namespace
 
 absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value) {
@@ -180,7 +139,7 @@ absl::StatusOr<std::string> TranslateValueToP4RT(
       translator.p4runtime_translation_allocators.at(field_type_name);
 
   // Turn the value from a string to an int.
-  uint64_t int_value = StringToInt(value);
+  uint64_t int_value = Z3ValueStringToInt(value);
   return allocator.IdToString(int_value);
 }
 
@@ -191,7 +150,6 @@ uint64_t IdAllocator::AllocateId(const std::string &string_value) {
   if (this->string_to_id_map_.count(string_value)) {
     return this->string_to_id_map_.at(string_value);
   }
-
   // Allocate new bitvector value and store it in mapping.
   uint64_t int_value = this->counter_++;
   this->string_to_id_map_.insert({string_value, int_value});

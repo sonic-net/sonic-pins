@@ -103,3 +103,26 @@ end_to_end_test(
     smt_golden_file = "expected/basic.smt2",
     table_entries = "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
 )
+
+end_to_end_test(
+    name = "string_optional_test",
+    output_golden_file = "expected/string_optional.txt",
+    p4_program = "//p4_symbolic/testdata:string-optional/program.p4",
+    port_count = 3,
+    smt_golden_file = "expected/string_optional.smt2",
+    table_entries = "//p4_symbolic/testdata:string-optional/entries.pb.txt",
+)
+
+cc_test(
+    name = "values_test",
+    srcs = ["values_test.cc"],
+    deps = [
+        ":symbolic",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
