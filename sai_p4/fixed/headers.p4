@@ -161,5 +161,22 @@ header ipfix_t {
   bit<32> observation_domain_id;
 }
 
+// PSAMP extended header, pursuant to RFC5476.
+header psamp_extended_t {
+  bit<16> template_id;
+  bit<16> length;
+  // Ingress timestamp in nanoseconds.
+  bit<64> observation_time;
+  bit<16> flowset;
+  bit<16> next_hop_index;
+  bit<16> epoch;
+  bit<16> ingress_port;
+  bit<16> egress_port;
+  bit<16> user_meta_field;
+  bit<8> dlb_id;
+  bit<8> variable_length;
+  bit<16> packet_sampled_length;
+}
+
 
 #endif  // SAI_HEADERS_P4_
