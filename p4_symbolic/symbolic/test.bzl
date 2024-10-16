@@ -31,6 +31,7 @@ def end_to_end_test(
         output_golden_file,
         smt_golden_file,
         table_entries = None,
+        port_count = 2,
         p4_deps = []):
     """Macro that defines our end to end tests.
     Given a p4 program, this macro runs our main binary
@@ -103,6 +104,7 @@ def end_to_end_test(
             ("--p4info=$(location %s)" % p4info_file),
             ("--entries=$(location %s)" % table_entries if table_entries else ""),
             ("--debug=$(location %s)" % smt_output_file),
+            ("--port_count=%d" % port_count),
             ("&> $(location %s)" % test_output_file),
         ]),
     )

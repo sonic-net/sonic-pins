@@ -30,9 +30,9 @@
 #include "absl/strings/str_format.h"
 #include "google/protobuf/text_format.h"
 #include "google/protobuf/util/json_util.h"
+#include "gutil/io.h"
 #include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.h"
-#include "p4_symbolic/util/io.h"
 
 ABSL_FLAG(std::string, bmv2, "", "The path to the bmv2 json file (required)");
 ABSL_FLAG(std::string, protobuf, "",
@@ -55,8 +55,7 @@ absl::Status Test() {
                    p4_symbolic::bmv2::ParseBmv2JsonFile(bmv2_path.c_str()));
 
   // Dumping protobuf.
-  RETURN_IF_ERROR(
-      p4_symbolic::util::WriteFile(bmv2.DebugString(), protobuf_path.c_str()));
+  RETURN_IF_ERROR(gutil::WriteFile(bmv2.DebugString(), protobuf_path.c_str()));
 
   // Dumping JSON.
   google::protobuf::util::JsonPrintOptions dumping_options;
@@ -68,8 +67,7 @@ absl::Status Test() {
   RETURN_IF_ERROR(
       gutil::ToAbslStatus(google::protobuf::util::MessageToJsonString(
           bmv2, &json_output_str, dumping_options)));
-  RETURN_IF_ERROR(
-      p4_symbolic::util::WriteFile(json_output_str, json_path.c_str()));
+  RETURN_IF_ERROR(gutil::WriteFile(json_output_str, json_path.c_str()));
 
   return absl::OkStatus();
 }

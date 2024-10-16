@@ -22,7 +22,7 @@ typedef bit<9> egress_spec_t;
 typedef bit<48> mac_addr_t;
 typedef bit<32> ipv4_addr_t;
 
-@p4runtime_translation("", string) 
+@p4runtime_translation("", string)
 type bit<10> vrf_t;
 
 header ethernet_t {

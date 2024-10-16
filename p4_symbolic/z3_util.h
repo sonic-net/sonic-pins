@@ -34,6 +34,16 @@ absl::StatusOr<z3::expr> HexStringToZ3Bitvector(
     const std::string& hex_string,
     absl::optional<int> bitwidth = absl::nullopt);
 
+// -- Misc. --------------------------------------------------------------------
+
+// Turns the given z3 extracted value (as a string) to a uint64_t.
+// Z3 returns an extracted value as either a binary, hex, or decimal strings
+// dependening on the size of the value and the formatting flags it is
+// initialized with.
+// Note: This function assumes that the input is well-formatted and the result
+// fits in uint64_t (otherwise an exception will be thrown).
+uint64_t Z3ValueStringToInt(const std::string& value);
+
 // == END OF PUBLIC INTERFACE ==================================================
 
 template <size_t num_bits>

@@ -15,9 +15,10 @@
 #include "p4_symbolic/parser.h"
 #include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/z3_util.h"
+#include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "sai_p4/instantiations/google/instantiations.h"
 #include "thinkit/bazel_test_environment.h"
 
 namespace p4_symbolic {
@@ -30,7 +31,7 @@ using ::testing::Not;
 
 constexpr absl::string_view kTableEntries = R"pb(
   entries {
-    acl_pre_ingress_table_entry  {
+    acl_pre_ingress_table_entry {
       match {
         src_mac { value: "22:22:22:11:11:11" mask: "ff:ff:ff:ff:ff:ff" }
         dst_ip { value: "10.0.10.0" mask: "255.255.255.255" }
