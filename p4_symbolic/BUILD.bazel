@@ -14,11 +14,6 @@
 
 # This file contains build rules for the main binary of p4_symbolic.
 
-load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
-
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -29,8 +24,6 @@ cc_binary(
     srcs = [
         "main.cc",
     ],
-    # linkopts = ["-lz3"],
-    visibility = ["//p4_symbolic/symbolic:__pkg__"],
     deps = [
         ":parser",
         "//gutil:status",
@@ -49,15 +42,10 @@ cc_binary(
 
 cc_library(
     name = "parser",
-    srcs = [
-        "parser.cc",
-    ],
-    hdrs = [
-        "parser.h",
-    ],
-    visibility = ["//visibility:public"],
+    srcs = ["parser.cc"],
+    hdrs = ["parser.h"],
     deps = [
-	 "//gutil:proto",
+	"//gutil:proto",
         "//gutil:status",
 	"//p4_pdpi:ir_cc_proto",
         "//p4_symbolic/bmv2",
@@ -74,7 +62,6 @@ cc_library(
     name = "z3_util",
     srcs = ["z3_util.cc"],
     hdrs = ["z3_util.h"],
-    visibility = ["//visibility:public"],
     deps = [
         "//gutil:status",
         "//p4_pdpi/string_encodings:hex_string",
