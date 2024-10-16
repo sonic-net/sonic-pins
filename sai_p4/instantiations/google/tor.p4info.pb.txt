@@ -788,7 +788,7 @@ tables {
   const_default_action_id: 21257015
   direct_resource_ids: 318767367
   direct_resource_ids: 352321794
-  size: 256
+  size: 511
 }
 tables {
   preamble {
@@ -797,7 +797,7 @@ tables {
     alias: "acl_ingress_mirror_and_redirect_table"
     annotations: "@sai_acl(INGRESS)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    is_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
+    annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
   match_fields {
     id: 1
@@ -807,6 +807,20 @@ tables {
     type_name {
       name: "port_id_t"
     }
+  }
+  match_fields {
+    id: 6
+    name: "acl_metadata"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
+    bitwidth: 8
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 7
+    name: "vlan_id"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
+    bitwidth: 12
+    match_type: TERNARY
   }
   match_fields {
     id: 2
@@ -830,25 +844,19 @@ tables {
     match_type: OPTIONAL
   }
   match_fields {
+    id: 10
+    name: "dst_ip"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP)"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
+    match_type: TERNARY
+  }
+  match_fields {
     id: 5
     name: "dst_ipv6"
     annotations: "@composite_field(@ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD3 ) , @ sai_field ( SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2 ))"
     annotations: "@format(IPV6_ADDRESS)"
     bitwidth: 64
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 6
-    name: "acl_metadata"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)"
-    bitwidth: 8
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 7
-    name: "vlan_id"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)"
-    bitwidth: 12
     match_type: TERNARY
   }
   match_fields {
@@ -1128,6 +1136,7 @@ tables {
   match_fields {
     id: 1
     name: "multicast_replica_port"
+    annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
     match_type: EXACT
     type_name {
       name: "port_id_t"
@@ -1136,6 +1145,7 @@ tables {
   match_fields {
     id: 2
     name: "multicast_replica_instance"
+    annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
     bitwidth: 16
     match_type: EXACT
   }
@@ -1477,6 +1487,7 @@ actions {
   params {
     id: 1
     name: "multicast_group_id"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
   }
 }
@@ -1543,7 +1554,6 @@ actions {
     name: "ingress.acl_ingress.set_qos_queue_and_cancel_copy_above_rate_limit"
     alias: "set_qos_queue_and_cancel_copy_above_rate_limit"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL , SAI_PACKET_COLOR_YELLOW)"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY_CANCEL , SAI_PACKET_COLOR_RED)"
   }
   params {
@@ -1561,7 +1571,6 @@ actions {
     name: "ingress.acl_ingress.set_cpu_and_multicast_queues_and_deny_above_rate_limit"
     alias: "set_cpu_and_multicast_queues_and_deny_above_rate_limit"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_YELLOW)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_RED)"
     annotations: "@unsupported"
   }
@@ -1583,8 +1592,7 @@ actions {
   }
   params {
     id: 3
-    name: "red_and_yellow_multicast_queue"
-    annotations: "@sai_action_param(MULTICAST_QOS_QUEUE , SAI_PACKET_COLOR_YELLOW)"
+    name: "red_multicast_queue"
     annotations: "@sai_action_param(MULTICAST_QOS_QUEUE , SAI_PACKET_COLOR_RED)"
     type_name {
       name: "qos_queue_t"
@@ -1597,7 +1605,6 @@ actions {
     name: "ingress.acl_ingress.set_cpu_queue_and_deny_above_rate_limit"
     alias: "set_cpu_queue_and_deny_above_rate_limit"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_YELLOW)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DENY , SAI_PACKET_COLOR_RED)"
   }
   params {
@@ -2015,6 +2022,7 @@ direct_meters {
     id: 352321794
     name: "ingress.acl_ingress.acl_ingress_qos_meter"
     alias: "acl_ingress_qos_meter"
+    annotations: "@mode(single_rate_two_color)"
   }
   spec {
     unit: BYTES
