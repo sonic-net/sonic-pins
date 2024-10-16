@@ -214,6 +214,7 @@ State(
             0               0              1024    referenced_by_multicast_replica_table
             0               0              1024    referring_by_match_field_table
             0               0              1024    golden_test_friendly_table
+            0             N/A               N/A    builtin::multicast_group_table
  * marks tables where max size >= guaranteed size.
 )
 
@@ -263,6 +264,7 @@ State(
             0               0              1024    referenced_by_multicast_replica_table
             0               0              1024    referring_by_match_field_table
             0               0              1024    golden_test_friendly_table
+            0             N/A               N/A    builtin::multicast_group_table
  * marks tables where max size >= guaranteed size.
 )
 
@@ -312,6 +314,7 @@ State(
             0               0              1024    referenced_by_multicast_replica_table
             0               0              1024    referring_by_match_field_table
             0               0              1024    golden_test_friendly_table
+            0             N/A               N/A    builtin::multicast_group_table
  * marks tables where max size >= guaranteed size.
 )
 
@@ -361,6 +364,7 @@ State(
             0               0              1024    referenced_by_multicast_replica_table
             0               0              1024    referring_by_match_field_table
             0               0              1024    golden_test_friendly_table
+            0             N/A               N/A    builtin::multicast_group_table
  * marks tables where max size >= guaranteed size.
 )
 
@@ -410,5 +414,6 @@ State(
             0               0              1024    referenced_by_multicast_replica_table
             0               0              1024    referring_by_match_field_table
             0               0              1024    golden_test_friendly_table
+            0             N/A               N/A    builtin::multicast_group_table
  * marks tables where max size >= guaranteed size.
 )

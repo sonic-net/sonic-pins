@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,36 +15,28 @@
 
 #include <string>
 
-#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/substitute.h"
-#include "gutil/collections.h"
 #include "gutil/status.h"
-#include "gutil/testing.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/internal/ordered_map.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "sai_p4/instantiations/google/sai_p4info.h"
 
 namespace p4_fuzzer {
+absl::StatusOr<FuzzerTestState> ConstructFuzzerTestState(
+    const p4::config::v1::P4Info& info, const std::string& role) {
+  ASSIGN_OR_RETURN(FuzzerConfig config, FuzzerConfig::Create(info));
+  config.role = role;
+  config.mutate_update_probability = 0.0;
 
-FuzzerTestState ConstructFuzzerTestState(const pdpi::IrP4Info& ir_info,
-                                         const std::string& role) {
-  const FuzzerConfig config{
-      .info = ir_info,
-      .ports = {"1"},
-      .qos_queues = {"0x1"},
-      .role = role,
-  };
   return FuzzerTestState{
       .config = config,
-      .switch_state = SwitchState(ir_info),
+      .switch_state = SwitchState(config.GetIrP4Info()),
   };
 }
 
@@ -68,7 +60,7 @@ absl::StatusOr<pdpi::IrTableDefinition> GetATableDefinitionWithMatchType(
     const FuzzerTestState& fuzzer_state,
     p4::config::v1::MatchField::MatchType match_type) {
   for (const auto& [unused, table] :
-       Ordered(fuzzer_state.config.info.tables_by_id())) {
+       Ordered(fuzzer_state.config.GetIrP4Info().tables_by_id())) {
     if (GetAMatchFieldDefinitionWithMatchType(table, match_type).ok()) {
       return table;
     }
@@ -111,16 +103,18 @@ GetActionProfileImplementingTable(const pdpi::IrP4Info& info,
   }
 }
 
-void SetMaxGroupSizeInActionProfile(
-    pdpi::IrP4Info& info, pdpi::IrActionProfileDefinition& action_profile,
-    const int max_group_size) {
-  action_profile.mutable_action_profile()->set_max_group_size(max_group_size);
+absl::Status SetMaxGroupSizeInActionProfile(FuzzerConfig& config,
+                                            int action_profile_id,
+                                            int max_group_size) {
+  p4::config::v1::P4Info info = config.GetP4Info();
 
-  const uint32_t id = action_profile.action_profile().preamble().id();
-  const std::string name = action_profile.action_profile().preamble().alias();
+  for (auto& action_profile : *info.mutable_action_profiles()) {
+    if (action_profile.preamble().id() == action_profile_id) {
+      action_profile.set_max_group_size(max_group_size);
+    }
+  }
 
-  (*info.mutable_action_profiles_by_id())[id] = action_profile;
-  (*info.mutable_action_profiles_by_name())[name] = action_profile;
+  return config.SetP4Info(info);
 }
 
 }  // namespace p4_fuzzer
