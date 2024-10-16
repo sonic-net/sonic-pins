@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("//p4_symbolic/bmv2:test.bzl", "bmv2_protobuf_parsing_test")
 
 package(
@@ -25,7 +21,6 @@ package(
 
 cc_proto_library(
     name = "bmv2_cc_proto",
-    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [":bmv2_proto"],
 )
 
@@ -34,7 +29,6 @@ proto_library(
     srcs = [
         "bmv2.proto",
     ],
-    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [
         "@com_google_protobuf//:struct_proto",
     ],
@@ -48,7 +42,6 @@ cc_library(
     hdrs = [
         "bmv2.h",
     ],
-    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [
         ":bmv2_cc_proto",
         "//gutil:status",
