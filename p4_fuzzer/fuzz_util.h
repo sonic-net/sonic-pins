@@ -31,9 +31,11 @@
 #include <vector>
 
 #include "absl/random/random.h"
+#include "absl/status/statusor.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "glog/logging.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
@@ -111,13 +113,13 @@ const std::vector<pdpi::IrTableDefinition> AllValidTablesForP4RtRole(
 
 // Returns the list of all "valid" actions in the underlying P4 program for
 // `table`. Valid actions are those that are legal for use in table entries and
-// not @deprecated, @unused, or disabled.
+// not @deprecated, @unsupported, or disabled.
 const std::vector<pdpi::IrActionReference> AllValidActions(
     const FuzzerConfig& config, const pdpi::IrTableDefinition& table);
 
 // Returns the list of all "valid" match fields in the underlying P4 program for
-// `table`. Valid match fields are those that are not @deprecated, @unused, or
-// disabled.
+// `table`. Valid match fields are those that are not @deprecated, @unsupported,
+// or disabled.
 const std::vector<pdpi::IrMatchFieldDefinition> AllValidMatchFields(
     const FuzzerConfig& config, const pdpi::IrTableDefinition& table);
 
@@ -158,28 +160,25 @@ uint64_t BitsToUint64(const std::string& data);
 // fuzzer.proto.
 Mutation FuzzMutation(absl::BitGen* gen, const FuzzerConfig& config);
 
-// Returns a randomly generated `bits` long number in network byte order, stored
-// in a `bytes` long string. Unused bits are set to 0.
-std::string FuzzBits(absl::BitGen* gen, int bits, int bytes);
-
-// Just like above, but the returned string is just long enough to hold the
-// randomly generated number.
-std::string FuzzBits(absl::BitGen* gen, int bits);
+// Returns a randomly generated `bits` long number in network byte order. The
+// returned string has just enough bytes to hold the randomly generated number.
+// Returns an error if `bits` is <= 0, as empty bytestrings are disallowed.
+absl::StatusOr<std::string> FuzzBits(absl::BitGen* gen, int bits);
 
 // Generates a `bits` long uint64 in host byte order.
 uint64_t FuzzUint64(absl::BitGen* gen, int bits);
 
 // Returns a random ID with a length in the closed interval
 // [`min_chars`, `max_chars`].
-std::string FuzzRandomId(absl::BitGen* gen, int min_chars = 0,
+std::string FuzzRandomId(absl::BitGen* gen, int min_chars = 1,
                          int max_chars = 10);
 
 // Randomly generates a ternary field match with a bitwidth of `bits`.
 // Does not set the match field id. See "9.1.1. Match Format" in the P4Runtime
 // specification for details about which FieldMatch values are valid.
 // Guarantees not to be a wildcard match.
-p4::v1::FieldMatch FuzzTernaryFieldMatch(absl::BitGen* gen,
-                                         const FuzzerConfig& config, int bits);
+absl::StatusOr<p4::v1::FieldMatch> FuzzTernaryFieldMatch(
+    absl::BitGen* gen, const FuzzerConfig& config, int bits);
 
 // Randomly generates a field match that conforms to the given
 // match field info. See "9.1.1. Match Format" in the P4Runtime
@@ -197,21 +196,22 @@ absl::StatusOr<p4::v1::TableAction> FuzzAction(
     const SwitchState& switch_state,
     const pdpi::IrTableDefinition& table_definition);
 
-// Randomly generates an action that conforms to the given `ir_action_info`.
-// See "9.1.2. Action Specification"  in the P4Runtime specification for details
-// about which Action values are valid.
-// May fail if a reference to another table is required.
+// Randomly generates an action that conforms to the given `ir_action_info` and
+// the reference info in `ir_table_info`. See "9.1.2. Action Specification"  in
+// the P4Runtime specification for details about which Action values are valid.
+// Will fail if a reference to an empty table is required.
 absl::StatusOr<p4::v1::Action> FuzzAction(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
-    const pdpi::IrActionDefinition& ir_action_info);
+    const pdpi::IrActionDefinition& ir_action_info,
+    const pdpi::IrTableDefinition& ir_table_info);
 
 // Randomly generates an ActionProfileActionSet that conforms to the given
 // `ir_table_info` and `ir_p4_info` for tables that support one-shot
 // action selector programming. Refer to section "9.2.3. One Shot Action
 // Selector Programming" in the P4Runtime specification for details on
 // ActionProfileActionSets.
-// May fail if a reference to another table is required.
+// Will fail if a reference to an empty table is required.
 absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,
@@ -223,6 +223,10 @@ int FuzzTableId(absl::BitGen* gen, const FuzzerConfig& config);
 // Randomly generates the table id of a non-empty table.
 int FuzzNonEmptyTableId(absl::BitGen* gen, const FuzzerConfig& config,
                         const SwitchState& switch_state);
+
+// Randomly generates the table id of a modifiable table.
+int FuzzModifiableTableId(absl::BitGen* gen, const FuzzerConfig& config,
+                          const SwitchState& switch_state);
 
 // Randomly generates a table entry that conforms to the given table info.
 // The p4 info is used to lookup action references. See go/p4-fuzzer-design for
@@ -243,7 +247,9 @@ absl::StatusOr<p4::v1::TableEntry> FuzzValidTableEntry(
 std::vector<AnnotatedTableEntry> ValidForwardingEntries(
     absl::BitGen* gen, const FuzzerConfig& config, const int num_entries);
 
-// Randomly generates a set of updates, both valid and invalid.
+// Randomly generates a set of updates, both valid and invalid. Optionally takes
+// a max_batch_size parameter determining the maximum number of updates in a
+// request.
 AnnotatedWriteRequest FuzzWriteRequest(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state,

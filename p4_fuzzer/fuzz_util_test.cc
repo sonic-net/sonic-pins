@@ -26,6 +26,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
+#include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
@@ -34,6 +35,7 @@
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
+#include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/test_utils.h"
 #include "p4_pdpi/ir.pb.h"
 
@@ -119,7 +121,7 @@ TEST(FuzzUtilTest, FuzzBitsStringSize) {
 
   absl::BitGen gen;
   for (auto test_case : test_cases) {
-    std::string data = FuzzBits(&gen, test_case.bits);
+    ASSERT_OK_AND_ASSIGN(std::string data, FuzzBits(&gen, test_case.bits));
     EXPECT_EQ(data.size(), test_case.bytes)
         << "bits: " << test_case.bits << " data: '" << data << "'";
   }
@@ -128,7 +130,7 @@ TEST(FuzzUtilTest, FuzzBitsStringSize) {
 TEST(FuzzUtilTest, FuzzBitsStringPaddingWorks) {
   absl::BitGen gen;
   for (int i = 0; i < 100; ++i) {
-    std::string data = FuzzBits(&gen, /*bits=*/3);
+    ASSERT_OK_AND_ASSIGN(std::string data, FuzzBits(&gen, /*bits=*/3));
     ASSERT_EQ(data.size(), 1);
     EXPECT_EQ(data[0] & 0xf8, 0);
   }
@@ -148,6 +150,60 @@ TEST(FuzzUtilTest, FuzzUint64LargeInRange) {
   }
 }
 
+TEST(FuzzUtilTest, FuzzWriteRequestAreReproducible) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+
+  // Use the same sequence seed for both generators.
+  absl::SeedSeq seed;
+  absl::BitGen gen_0(seed);
+  absl::BitGen gen_1(seed);
+
+  // Create 20 instances (of, in expectation, ~50 updates each), and verify that
+  // they are identical.
+  for (int i = 0; i < 20; ++i) {
+    ASSERT_THAT(FuzzWriteRequest(&gen_0, fuzzer_state.config,
+                                 fuzzer_state.switch_state),
+                EqualsProto(FuzzWriteRequest(&gen_1, fuzzer_state.config,
+                                             fuzzer_state.switch_state)));
+  }
+}
+
+TEST(FuzzUtilTest, FuzzWriteRequestAreReproducibleWithState) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+
+  absl::BitGen init_gen;
+  // Generate some random table entries:
+  for (int i = 0; i < 10; ++i) {
+    auto request = FuzzWriteRequest(&init_gen, fuzzer_state.config,
+                                    fuzzer_state.switch_state);
+    for (auto update : request.updates()) {
+      // If an update is not successfully added to the state, we ignore it.
+      fuzzer_state.switch_state.ApplyUpdate(update.pi()).IgnoreError();
+    }
+  }
+
+  LOG(INFO) << "State size = "
+            << fuzzer_state.switch_state.GetNumTableEntries();
+
+  // Use the same sequence seed for both generators.
+  absl::SeedSeq seed;
+  absl::BitGen gen_0(seed);
+  absl::BitGen gen_1(seed);
+
+  // TODO: If we could randomize the ordering of maps for the info in the
+  // second config, we could check that the fuzzer is deterministic regardless.
+  auto fuzzer_config2 = fuzzer_state.config;
+
+  // Create 20 instances (of, in expectation, ~50 updates each), and verify that
+  // they are identical.
+  for (int i = 0; i < 20; ++i) {
+    ASSERT_THAT(FuzzWriteRequest(&gen_0, fuzzer_state.config,
+                                 fuzzer_state.switch_state),
+                EqualsProto(FuzzWriteRequest(&gen_1, fuzzer_config2,
+                                             fuzzer_state.switch_state)));
+  }
+}
+
 // Test that FuzzActionProfileActionSet correctly generates an ActionProfile
 // Action Set of acceptable weights and size (derived from max_group_size and
 // kActionProfileActionSetMaxCardinality).
@@ -157,11 +213,12 @@ TEST(FuzzActionProfileActionSetTest,
   // above that would be just as good. Lower is probably worse though.
   const int kGroupSizeArbitraryUpperBound = 1000;
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
-  ASSERT_OK_AND_ASSIGN(const pdpi::IrTableDefinition& table_definition,
-                       GetAOneShotTableDefinition(fuzzer_state.config.info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrTableDefinition table_definition,
+      GetAOneShotTableDefinition(fuzzer_state.config.GetIrP4Info()));
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrActionProfileDefinition action_profile_definition,
-      GetActionProfileImplementingTable(fuzzer_state.config.info,
+      GetActionProfileImplementingTable(fuzzer_state.config.GetIrP4Info(),
                                         table_definition));
   for (int i = 0; i < 1000; ++i) {
     // Tests a broad enough band of max weights to give us interesting
@@ -171,8 +228,19 @@ TEST(FuzzActionProfileActionSetTest,
         fuzzer_state.gen, kActionProfileActionSetMaxCardinality,
         kGroupSizeArbitraryUpperBound);
 
-    SetMaxGroupSizeInActionProfile(fuzzer_state.config.info,
-                                   action_profile_definition, max_group_size);
+    // Modify action profile in config and regenerate table and action profile
+    // definitions.
+    ASSERT_OK(SetMaxGroupSizeInActionProfile(
+        fuzzer_state.config,
+        action_profile_definition.action_profile().preamble().id(),
+        max_group_size));
+    ASSERT_OK_AND_ASSIGN(
+        table_definition,
+        GetAOneShotTableDefinition(fuzzer_state.config.GetIrP4Info()));
+    ASSERT_OK_AND_ASSIGN(
+        action_profile_definition,
+        GetActionProfileImplementingTable(fuzzer_state.config.GetIrP4Info(),
+                                          table_definition));
 
     // Fuzz an ActionProfileActionSet.
     ASSERT_OK_AND_ASSIGN(auto action_profile_action_set,
@@ -197,15 +265,28 @@ TEST(FuzzActionProfileActionSetTest,
 // Action Set of acceptable weights and size when max_group_size is set to 0.
 TEST(FuzzActionProfileActionSetTest, HandlesZeroMaxGroupSizeCorrectly) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
-  ASSERT_OK_AND_ASSIGN(const pdpi::IrTableDefinition& table_definition,
-                       GetAOneShotTableDefinition(fuzzer_state.config.info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrTableDefinition table_definition,
+      GetAOneShotTableDefinition(fuzzer_state.config.GetIrP4Info()));
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrActionProfileDefinition action_profile_definition,
-      GetActionProfileImplementingTable(fuzzer_state.config.info,
+      GetActionProfileImplementingTable(fuzzer_state.config.GetIrP4Info(),
                                         table_definition));
-  SetMaxGroupSizeInActionProfile(fuzzer_state.config.info,
-                                 action_profile_definition,
-                                 /*max_group_size=*/0);
+
+  // Modify action profile in config and regenerate table and action profile
+  // definitions.
+  ASSERT_OK(SetMaxGroupSizeInActionProfile(
+      fuzzer_state.config,
+      action_profile_definition.action_profile().preamble().id(),
+      /*max_group_size=*/0));
+  ASSERT_OK_AND_ASSIGN(
+      table_definition,
+      GetAOneShotTableDefinition(fuzzer_state.config.GetIrP4Info()));
+  ASSERT_OK_AND_ASSIGN(
+      action_profile_definition,
+      GetActionProfileImplementingTable(fuzzer_state.config.GetIrP4Info(),
+                                        table_definition));
+
   for (int i = 0; i < 1000; ++i) {
     // Fuzz an ActionProfileActionSet.
     ASSERT_OK_AND_ASSIGN(auto action_profile_action_set,
@@ -231,20 +312,33 @@ TEST(FuzzActionProfileActionSetTest, HandlesZeroMaxGroupSizeCorrectly) {
 // max group size (in particular, lower than the max number of actions).
 TEST(FuzzActionProfileActionSetTest, HandlesLowMaxGroupSizeCorrectly) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
-  ASSERT_OK_AND_ASSIGN(const pdpi::IrTableDefinition& table_definition,
-                       GetAOneShotTableDefinition(fuzzer_state.config.info));
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrTableDefinition table_definition,
+      GetAOneShotTableDefinition(fuzzer_state.config.GetIrP4Info()));
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrActionProfileDefinition action_profile_definition,
-      GetActionProfileImplementingTable(fuzzer_state.config.info,
+      GetActionProfileImplementingTable(fuzzer_state.config.GetIrP4Info(),
                                         table_definition));
   for (int i = 0; i < 1000; ++i) {
     // Set up.
     const int max_group_size = absl::Uniform<int>(
         fuzzer_state.gen, 1, kActionProfileActionSetMaxCardinality);
 
-    SetMaxGroupSizeInActionProfile(fuzzer_state.config.info,
-                                   action_profile_definition, max_group_size);
+    // Modify action profile in config and regenerate table and action profile
+    // definitions.
+    ASSERT_OK(SetMaxGroupSizeInActionProfile(
+        fuzzer_state.config,
+        action_profile_definition.action_profile().preamble().id(),
+        max_group_size));
+    ASSERT_OK_AND_ASSIGN(
+        table_definition,
+        GetAOneShotTableDefinition(fuzzer_state.config.GetIrP4Info()));
+    ASSERT_OK_AND_ASSIGN(
+        action_profile_definition,
+        GetActionProfileImplementingTable(fuzzer_state.config.GetIrP4Info(),
+                                          table_definition));
 
+    // Fuzz an ActionProfileActionSet.
     ASSERT_OK_AND_ASSIGN(auto action_profile_action_set,
                          FuzzActionProfileActionSet(
                              &fuzzer_state.gen, fuzzer_state.config,
@@ -289,7 +383,7 @@ TEST(FuzzUtilTest, FuzzWriteRequestRespectsDisallowList) {
     std::vector<std::string> parts = absl::StrSplit(path, '.');
     ASSERT_OK_AND_ASSIGN(
         const pdpi::IrTableDefinition& table,
-        gutil::FindOrStatus(fuzzer_state.config.info.tables_by_name(),
+        gutil::FindOrStatus(fuzzer_state.config.GetIrP4Info().tables_by_name(),
                             parts[parts.size() - 1]));
     disallowed_ids.insert(table.preamble().id());
   }
@@ -309,14 +403,14 @@ TEST(FuzzUtilTest, FuzzActionRespectsDisallowList) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrActionDefinition do_thing_action,
-      gutil::FindOrStatus(fuzzer_state.config.info.actions_by_name(),
+      gutil::FindOrStatus(fuzzer_state.config.GetIrP4Info().actions_by_name(),
                           "do_thing_1"));
   fuzzer_state.config.disabled_fully_qualified_names = {
       do_thing_action.preamble().name()};
 
   ASSERT_OK_AND_ASSIGN(
       const pdpi::IrTableDefinition& id_test_table,
-      gutil::FindOrStatus(fuzzer_state.config.info.tables_by_name(),
+      gutil::FindOrStatus(fuzzer_state.config.GetIrP4Info().tables_by_name(),
                           "id_test_table"));
 
   for (int i = 0; i < 1000; i++) {

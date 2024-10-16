@@ -162,16 +162,6 @@ class SwitchState {
   // Returns a summary of the state.
   std::string SwitchStateSummary() const;
 
-  // Returns a vector of `ReferableEntries` in `table`. Used when a match key or
-  // action refers to a set of `fields` in `table`. Returns an error if:
-  // 1) `table` does not exist in p4 info.
-  // 2) `fields` is empty.
-  // 3) `fields` contains a field that does not exist in `table`.
-  // 4) `fields` contains a field that is not of type exact or optional.
-  absl::StatusOr<std::vector<ReferableEntry>> GetReferableEntries(
-      absl::string_view table,
-      const absl::flat_hash_set<std::string>& fields) const;
-
   pdpi::IrP4Info GetIrP4Info() const { return ir_p4info_; }
 
   // Used in testing to check that SwitchState is always consistent by:
