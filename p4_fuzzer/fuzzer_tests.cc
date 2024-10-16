@@ -151,12 +151,13 @@ TEST_P(FuzzTest, P4rtWriteAndCheckNoInternalErrors) {
           ASSERT_OK_AND_ASSIGN(
               const pdpi::IrTableDefinition& table,
               gutil::FindOrStatus(info.tables_by_id(), table_id));
-          // TODO: acl_lookup_table has a resource limit problem.
+          // TODO: acl_pre_ingress_table has a resource limit
+          // problem.
           // TODO: router_interface_table, ipv4_table and
           // ipv6_table all have resource limit problems.
           // TODO: wcmp_group_table has a resource limit problem.
           if (!(mask_known_failures &&
-                (table.preamble().alias() == "acl_lookup_table" ||
+                (table.preamble().alias() == "acl_pre_ingress_table" ||
                  table.preamble().alias() == "router_interface_table" ||
                  table.preamble().alias() == "ipv4_table" ||
                  table.preamble().alias() == "ipv6_table" ||

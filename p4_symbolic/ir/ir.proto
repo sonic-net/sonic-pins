@@ -25,7 +25,7 @@
 // Additionally, some types of expressions and statements are unsupported, these
 // are described in the relevant sections of this file.
 // See the bmv2 JSON format reference for more information:
-// https://github.com/p4lang/behavioral-model/blob/master/docs/JSON_format.md
+// https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md
 
 syntax = "proto3";
 
@@ -51,7 +51,7 @@ message P4Program {
 
   // TODO: If needed in the future, action calls can be added here, for
   // action calls that are not wrapped in other control constructs.
-  // https://github.com/p4lang/behavioral-model/blob/master/docs/JSON_format.md#pipelines
+  // https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#pipelines
 }
 
 // A header type definition.
