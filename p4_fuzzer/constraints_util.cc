@@ -13,18 +13,13 @@
 // limitations under the License.
 #include "p4_fuzzer/constraints_util.h"
 
-#include <bitset>
 #include <cstdio>
 
 #include "absl/status/status.h"
-#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
-#include "cudd.h"
 #include "cuddObj.hh"
-#include "glog/logging.h"
 #include "gmpxx.h"
 #include "p4_constraints/ast.pb.h"
-#include "p4_constraints/backend/constraint_info.h"
 
 namespace p4_fuzzer {
 namespace {
@@ -268,30 +263,32 @@ void PrintBDDAsDotFile(const BDD& bdd, Cudd* mgr) {
   mgr->DumpDot(/*nodes =*/std::vector<ADD>{bdd.Add()});
 }
 
-absl::StatusOr<BDDInfo> ConstraintToBddInfo(
-    const p4_constraints::ConstraintInfo& constraints, Cudd* mgr) {
-  BDDInfo bdd_info;
+// TODO: b/306252845 - clean up P4 Constraint API
+// absl::StatusOr<BDDInfo> ConstraintToBddInfo(
+//     const p4_constraints::ConstraintInfo& constraints, Cudd* mgr) {
+//   BDDInfo bdd_info;
 
-  for (auto& [id, table_info] : constraints) {
-    if (!table_info.constraint.has_value()) {
-      continue;
-    }
+//   for (auto& [id, table_info] : constraints) {
+//     if (!table_info.constraint.has_value()) {
+//       continue;
+//     }
 
-    const auto& expr = table_info.constraint.value();
+//     const auto& expr = table_info.constraint.value();
 
-    MatchKeyToBddVariableMapping mapping;
-    ASSIGN_OR_RETURN(BDD bdd, ExpressionToBDD(expr, mgr, &mapping));
+//     MatchKeyToBddVariableMapping mapping;
+//     ASSIGN_OR_RETURN(BDD bdd, ExpressionToBDD(expr, mgr, &mapping));
 
-    auto [_, inserted] =
-        bdd_info.insert({id, SymbolicConstraint{bdd, mapping}});
+//     auto [_, inserted] =
+//         bdd_info.insert({id, SymbolicConstraint{bdd, mapping}});
 
-    if (!inserted) {
-      return absl::InternalError(absl::StrCat(
-          "Duplicate constraint for table ID ", id, ": ", expr.DebugString()));
-    }
-  }
+//     if (!inserted) {
+//       return absl::InternalError(absl::StrCat(
+//           "Duplicate constraint for table ID ", id, ": ",
+//           expr.DebugString()));
+//     }
+//   }
 
-  return bdd_info;
-}
+//   return bdd_info;
+// }
 
 }  // namespace p4_fuzzer

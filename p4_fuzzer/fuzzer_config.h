@@ -11,25 +11,57 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
-#define GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
+#ifndef PINS_INFRA_P4_FUZZER_FUZZER_CONFIG_H_
+#define PINS_INFRA_P4_FUZZER_FUZZER_CONFIG_H_
 
+#include <functional>
 #include <optional>
+#include <string>
+#include <vector>
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "lib/p4rt/p4rt_port.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
 
-struct FuzzerConfig {
-  // The IrP4Info of the program to be fuzzed.
-  pdpi::IrP4Info info;
-  // The set of valid port names.
-  std::vector<std::string> ports;
-  // The set of valid QOS queues.
-  std::vector<std::string> qos_queues;
+class FuzzerConfig {
+ public:
+  static absl::StatusOr<FuzzerConfig> Create(
+      const p4::config::v1::P4Info& info);
+
+  absl::Status SetP4Info(const p4::config::v1::P4Info& info);
+
+  const p4::config::v1::P4Info& GetP4Info() const { return info_; }
+  const pdpi::IrP4Info& GetIrP4Info() const { return ir_info_; }
+  const p4_constraints::ConstraintInfo& GetConstraintInfo() const {
+    return constraint_info_;
+  }
+
+  // TODO: These should be taken in as parameters and populated
+  // with Create instead.
+  // -- Required ---------------------------------------------------------------
+  // NOTE: These values are required for correct function. All of them are
+  // initialized to values that should usually work for GPINs switches.
+  // ---------------------------------------------------------------------------
+  // The set of valid port names. 1 tends to be mapped on most GPINs switches.
+  std::vector<pins_test::P4rtPortId> ports =
+      pins_test::P4rtPortId::MakeVectorFromOpenConfigEncodings({1});
+  // The set of valid QOS queues. CONTROLLER_PRIORITY_5 tends to be mapped on
+  // most GPINs switches.
+  std::vector<std::string> qos_queues = {"CONTROLLER_PRIORITY_5"};
+  // The P4RT role the fuzzer should use.
+  std::string role = "sdn_controller";
+  // The probability of performing a mutation on a given table entry.
+  float mutate_update_probability = 0.1;
+
+  // -- Optional ---------------------------------------------------------------
   // The set of tables where the fuzzer should treat their resource guarantees
   // as hard limits rather than trying to go above them. If there are
   // limitations or bugs on the switch causing it to behave incorrectly when the
@@ -46,10 +78,9 @@ struct FuzzerConfig {
   // valid table entry for a particular table contains the table itself.
   // TODO: Check the property above instead.
   absl::flat_hash_set<std::string> disabled_fully_qualified_names;
-  // The P4RT role the fuzzer should use.
-  std::string role;
-  // The probability of performing a mutation on a given table entry.
-  float mutate_update_probability;
+  // TODO: Fully qualified names of tables that do not support
+  // MODIFY updates. This behaviour is not compliant with p4 runtime spec.
+  absl::flat_hash_set<std::string> non_modifiable_tables;
   // A function for masking inequalities (due to known bugs) between entries
   // with the same TableEntryKey on the switch and in the fuzzer.
   std::optional<
@@ -57,8 +88,20 @@ struct FuzzerConfig {
       TreatAsEqualDuringReadDueToKnownBug;
   // Controls whether empty ActionProfile one-shots should be generated.
   bool no_empty_action_profile_groups = false;
- };
+  // Ignores the constraints on tables listed when fuzzing entries.
+  absl::flat_hash_set<std::string> ignore_constraints_on_tables;
+
+ private:
+  explicit FuzzerConfig() {}
+
+  // The P4Info of the program to be fuzzed.
+  // Invariant: The two P4Infos and ConstraintInfo are always in sync.
+  p4::config::v1::P4Info info_;
+  pdpi::IrP4Info ir_info_;
+  // Used to fuzz table entries for tables with P4-Constraints.
+  p4_constraints::ConstraintInfo constraint_info_;
+};
 
 }  // namespace p4_fuzzer
 
-#endif  // GOOGLE_P4_FUZZER_FUZZER_CONFIG_H_
+#endif  // PINS_INFRA_P4_FUZZER_FUZZER_CONFIG_H_
