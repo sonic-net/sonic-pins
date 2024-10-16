@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("//p4_symbolic/ir:test.bzl", "ir_parsing_test")
 
 package(
@@ -23,26 +19,8 @@ package(
     licenses = ["notice"],
 )
 
-cc_library(
-    name = "pdpi_driver",
-    srcs = [
-        "pdpi_driver.cc",
-    ],
-    hdrs = [
-        "pdpi_driver.h",
-    ],
-    visibility = ["//p4_symbolic:__subpackages__"],
-    deps = [
-        "//gutil:proto",
-        "//gutil:status",
-        "//p4_pdpi:ir",
-        "//p4_pdpi:ir_cc_proto",
-    ],
-)
-
 cc_proto_library(
     name = "ir_cc_proto",
-    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [":ir_proto"],
 )
 
@@ -56,6 +34,22 @@ proto_library(
 )
 
 cc_library(
+    name = "pdpi_driver",
+    srcs = [
+        "pdpi_driver.cc",
+    ],
+    hdrs = [
+        "pdpi_driver.h",
+    ],
+    deps = [
+        "//gutil:proto",
+        "//gutil:status",
+        "//p4_pdpi:ir",
+        "//p4_pdpi:ir_cc_proto",
+    ],
+)
+
+cc_library(
     name = "table_entries",
     srcs = [
         "table_entries.cc",
@@ -63,7 +57,6 @@ cc_library(
     hdrs = [
         "table_entries.h",
     ],
-    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [
         ":ir_cc_proto",
         "//gutil:status",
@@ -85,7 +78,6 @@ cc_library(
     hdrs = [
         "ir.h",
     ],
-    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [
         ":ir_cc_proto",
         ":table_entries",
