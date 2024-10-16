@@ -78,7 +78,9 @@ control acl_ingress(in headers_t headers,
 #endif
   action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_copy(qos_queue);
-    mark_to_drop(standard_metadata);
+    // TODO: Use `acl_drop(local_metadata)` instead when supported
+    // in P4-Symbolic.
+    local_metadata.acl_drop = true;
   }
 
   // Forward the packet normally (i.e., perform no action). This is useful as
@@ -184,7 +186,9 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_DENY)
   action acl_deny() {
     cancel_copy = true;
-    mark_to_drop(standard_metadata);
+    // TODO: Use `acl_drop(local_metadata)` instead when supported
+    // in P4-Symbolic.
+    local_metadata.acl_drop = true;
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
@@ -295,7 +299,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(2) acl_trap();
       @proto_id(3) acl_forward();
       @proto_id(4) acl_mirror();
-      @proto_id(5) acl_drop(standard_metadata);
+      @proto_id(5) acl_drop(local_metadata);
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -378,7 +382,7 @@ control acl_ingress(in headers_t headers,
       @proto_id(1) set_qos_queue_and_cancel_copy_above_rate_limit();
       @proto_id(2) set_cpu_queue_and_deny_above_rate_limit();
       @proto_id(3) acl_forward();
-      @proto_id(4) acl_drop(standard_metadata);
+      @proto_id(4) acl_drop(local_metadata);
       @proto_id(5) set_cpu_queue();
       @proto_id(6)
         set_cpu_and_multicast_queues_and_deny_above_rate_limit();
@@ -394,6 +398,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_COUNTING_TABLE_ID)
   @sai_acl(INGRESS)
   @entry_restriction("
+    // Only allow IP field matches for IP packets.
     dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
@@ -429,6 +434,7 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_REDIRECT_TO_NEXTHOP_ACTION_ID)
   action redirect_to_nexthop(
     @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    @refers_to(nexthop_table, nexthop_id)
     nexthop_id_t nexthop_id) {
 
     // Set nexthop id.
@@ -440,11 +446,35 @@ control acl_ingress(in headers_t headers,
     standard_metadata.mcast_grp = 0;
   }
 
+  // TODO: Remove `@unsupported` annotation once the switch stack
+  // supports multicast.
+  @unsupported
+  @id(ACL_INGRESS_REDIRECT_TO_IPMC_GROUP_ACTION_ID)
+  @action_restriction("
+    // Disallow 0 since it encodes 'no multicast' in V1Model.
+    multicast_group_id != 0;
+  ")
+  action redirect_to_ipmc_group(
+    @sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)
+    // TODO: Add this once supported by PDPI and its customers.
+    // @refers_to(multicast_group_table, multicast_group_id)
+    multicast_group_id_t multicast_group_id) {
+    standard_metadata.mcast_grp = multicast_group_id;
+
+    // Cancel other forwarding decisions (if any).
+    local_metadata.nexthop_id_valid = false;
+    local_metadata.wcmp_group_id_valid = false;
+  }
+
+
   // ACL table that mirrors and redirects packets.
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
+#if defined(SAI_INSTANTIATION_TOR)
   @entry_restriction("
+    // Only allow IP field matches for IP packets.
+    is_ipv6::mask != 0 ->  is_ipv6 == 1;
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
     is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -453,8 +483,10 @@ control acl_ingress(in headers_t headers,
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
   ")
+#endif
   table acl_ingress_mirror_and_redirect_table {
     key = {
+#if defined(SAI_INSTANTIATION_TOR)
       local_metadata.ingress_port : optional
         @name("in_port")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)
@@ -487,17 +519,36 @@ control acl_ingress(in headers_t headers,
         @name("acl_metadata")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)
         @id(6);
+#endif
 
+      // This field is technically only needed on ToR and only included
+      // for middleblock because at least 1 match field without `@unsupported`
+      // annotation is required.
+      // TODO: Make this field TOR-only once the
+      // middleblock  match fields are no longer `@unsupported`.
       local_metadata.vlan_id : ternary
         @name("vlan_id")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
         @id(7);
 
-      // TODO: Add match on vrf_id and l3_host_table_hit.
+      local_metadata.vrf_id : optional
+        @name("vrf_id")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)
+        @id(8)
+        // TODO: Remove once the switch supports this field.
+        @unsupported;
+
+      local_metadata.ipmc_table_hit : optional
+        @name("ipmc_table_hit")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_TABLE_HIT)
+        @id(9)
+        // TODO: Remove once the switch supports this field.
+        @unsupported;
     }
     actions = {
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
+      @proto_id(3) redirect_to_ipmc_group();
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -585,7 +636,7 @@ control acl_ingress(in headers_t headers,
     }
     actions = {
       @proto_id(1) acl_forward();
-      @proto_id(2) acl_drop(standard_metadata);
+      @proto_id(2) acl_drop(local_metadata);
       @proto_id(3) acl_deny();
       @defaultonly NoAction;
     }
@@ -607,14 +658,9 @@ control acl_ingress(in headers_t headers,
       ip_protocol = headers.ipv6.next_header;
     }
 
-    // If a packet gets punted, this adds relevant metadata to it. Must happen
-    // here, rather than below, since `standard_metadata` can change based on
-    // actions taken in the various tables.
-    local_metadata.packet_in_target_egress_port = standard_metadata.egress_spec;
-    local_metadata.packet_in_ingress_port = standard_metadata.ingress_port;
-
 #if defined(SAI_INSTANTIATION_MIDDLEBLOCK)
     acl_ingress_table.apply();
+    acl_ingress_mirror_and_redirect_table.apply();
     acl_ingress_security_table.apply();
 #elif defined(SAI_INSTANTIATION_FABRIC_BORDER_ROUTER)
     acl_ingress_table.apply();
@@ -625,6 +671,7 @@ control acl_ingress(in headers_t headers,
     // additional parts of SAI in the future.
     acl_ingress_table.apply();
     acl_ingress_qos_table.apply();
+    acl_ingress_mirror_and_redirect_table.apply();
 #endif
 
     if (cancel_copy) {

@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
+package(default_visibility = ["//visibility:public"])
 
 # Make sure programs under p4-samples are visible to other
 # bazel packages.
@@ -25,5 +22,4 @@ exports_files(
         "**/*.txt",
     ]),
     licenses = ["notice"],
-    visibility = ["//p4_symbolic:__subpackages__"],
 )

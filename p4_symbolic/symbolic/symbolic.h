@@ -18,19 +18,15 @@
 #ifndef P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
 #define P4_SYMBOLIC_SYMBOLIC_SYMBOLIC_H_
 
-// A reserved special value assigned to standard_metadata.egress_spec when
-// the packet is dropped.
-#define DROPPED_EGRESS_SPEC_VALUE "111111111"
-#define DROPPED_EGRESS_SPEC_LENGTH 9
-
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "gutil/status.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/table_entries.h"
@@ -41,12 +37,12 @@
 namespace p4_symbolic {
 namespace symbolic {
 
-// Global z3::context used for creating symbolic expressions during symbolic
-// evaluation.
-z3::context &Z3Context();
+// Boolean pseudo header field that is set to true by p4-symbolic if the packet
+// gets cloned. Not an actual header field, but convenient for analysis.
+constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
 
 // Maps the name of a header field in the p4 program to its concrete value.
-using ConcretePerPacketState = std::map<std::string, std::string>;
+using ConcretePerPacketState = absl::btree_map<std::string, std::string>;
 
 // The symbolic counterpart of ConcretePerPacketState.
 // Maps the name of a header field in the p4 program to its symbolic value.
@@ -61,6 +57,13 @@ using ConcretePerPacketState = std::map<std::string, std::string>;
 // An instace of this type is passed around and mutated by the functions
 // responsible for symbolically evaluating the program.
 using SymbolicPerPacketState = SymbolicGuardedMap;
+
+// V1model's `mark_to_drop` primitive sets the `egress_spec` field to this
+// value to indicate the packet should be dropped at the end of ingress/egress
+// processing. See v1model.p4 for details.
+z3::expr EgressSpecDroppedValue();
+absl::StatusOr<z3::expr> IsDropped(const SymbolicPerPacketState &state);
+absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state);
 
 // Expresses a concrete match for a corresponding concrete packet with a
 // table in the program.
@@ -90,16 +93,22 @@ struct SymbolicTableMatch {
   z3::expr entry_index;
 };
 
+// `SymbolicTableMatch`es by table name.
+using SymbolicTableMatches = absl::btree_map<std::string, SymbolicTableMatch>;
+
 // Specifies the expected trace in the program that the corresponding
 // concrete packet is expected to take.
 struct ConcreteTrace {
-  std::map<std::string, ConcreteTableMatch> matched_entries;
+  absl::btree_map<std::string, ConcreteTableMatch> matched_entries;
   // Can be extended more in the future to include useful
   // flags about dropping the packet, taking specific code (e.g. if)
   // branches, vrf, other interesting events, etc.
-  bool dropped;  // true if the packet was dropped.
+  bool dropped;     // true if the packet was dropped.
+  bool got_cloned;  // true if the packet got cloned.
   std::string to_string() const {
-    auto result = absl::StrCat("dropped = ", dropped);
+    std::string result;
+    absl::StrAppend(&result, "dropped = ", dropped, "\n");
+    absl::StrAppend(&result, "got cloned = ", got_cloned, "\n");
     for (const auto &[table, match] : matched_entries) {
       result = absl::StrCat(result, "\n", table, " => ", match.to_string());
     }
@@ -111,8 +120,10 @@ struct ConcreteTrace {
 // to take in the program.
 struct SymbolicTrace {
   // Full table name to its symbolic match.
-  std::map<std::string, SymbolicTableMatch> matched_entries;
+  // TODO: Rename to matches_by_table_name.
+  SymbolicTableMatches matched_entries;
   z3::expr dropped;
+  z3::expr got_cloned;
 };
 
 // Specifies the concrete data inside a packet.
@@ -208,8 +219,6 @@ struct ConcreteContext {
 struct SymbolicContext {
   z3::expr ingress_port;
   z3::expr egress_port;
-  SymbolicPacket ingress_packet;
-  SymbolicPacket egress_packet;
   SymbolicPerPacketState ingress_headers;
   SymbolicPerPacketState egress_headers;
   SymbolicTrace trace;
@@ -245,16 +254,6 @@ struct SolverState {
   std::unique_ptr<z3::solver> solver;
   // Store the p4 runtime translator state for use by .Solve(...).
   values::P4RuntimeTranslator translator;
-  // Need this constructor to be defined explicity to be able to use make_unique
-  // on this struct.
-  SolverState(ir::P4Program program, ir::TableEntries entries,
-              SymbolicContext context, std::unique_ptr<z3::solver> &&solver,
-              values::P4RuntimeTranslator translator)
-      : program(program),
-        entries(entries),
-        context(context),
-        solver(std::move(solver)),
-        translator(translator) {}
 };
 
 // An assertion is a user defined function that takes a symbolic context

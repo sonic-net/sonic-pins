@@ -111,7 +111,6 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
     // If action weight is 0 or less, or if it is greater than the
     // max_member_weight (if non-zero) for SumOfMembers semantics, the server
     // MUST return an InvalidArgumentError.
-    // Ref: http://screen/6TucRSmmLEytHQK
     if (action.weight() <= 0) {
       return absl::InvalidArgumentError(absl::StrFormat(
           "The new entry attempts to program a member with weight %d, which is "
@@ -131,7 +130,6 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
   if (action_profile.has_sum_of_members()) {
     // If the table entry has too many actions then the current table resources
     // do not matter. The server must return an InvalidArgumentError.
-    // Ref: http://screen/ANhyq7q6jQHry2W
     if (needed_resources.actions > action_profile.max_group_size() &&
         action_profile.max_group_size() != 0) {
       return absl::InvalidArgumentError(absl::StrFormat(
@@ -151,7 +149,6 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
   } else {
     // If the table entry has too much weight then the current table resources
     // do not matter. The server must return an InvalidArgumentError.
-    // Ref: http://screen/axLMH8UBcGE6GQD
     if (needed_resources.total_weight > action_profile.max_group_size() &&
         action_profile.max_group_size() != 0) {
       return absl::InvalidArgumentError(absl::StrFormat(

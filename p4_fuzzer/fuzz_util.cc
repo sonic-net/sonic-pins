@@ -35,6 +35,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "absl/types/span.h"
 #include "google/protobuf/repeated_field.h"
 #include "google/protobuf/repeated_ptr_field.h"
@@ -55,12 +56,14 @@
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/references.h"
 #include "p4_pdpi/utils/ir.h"
+#include "p4_pdpi/entity_keys.h"
 
 namespace p4_fuzzer {
 
 using ::absl::gntohll;
 
 using ::absl::Uniform;
+using ::pdpi::TableEntryKey;
 using ::p4::v1::Action;
 using ::p4::v1::Entity;
 using ::p4::v1::FieldMatch;
@@ -728,7 +731,6 @@ const std::vector<pdpi::IrActionReference> AllValidActions(
   for (const auto& action : table.entry_actions()) {
     // Skip deprecated, unused, and disallowed actions.
     if (pdpi::IsElementDeprecated(action.action().preamble().annotations()) ||
-        action.action().is_unsupported() ||
         IsDisabledForFuzzing(config, action.action().preamble().name()))
       continue;
     actions.push_back(action);
@@ -1055,6 +1057,7 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
   return action;
 }
 
+
 // Gets a set of actions with a skewed distribution of weights, which add up to
 // at most the max_group_size of the action profile by repeatedly sampling a
 // uniform weight from 1 to the maximum possible weight remaining. We could
@@ -1079,8 +1082,8 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
                                     ? action_profile.max_group_size()
                                     : kActionProfileActionSetMaxCardinality;
     int number_of_actions = Uniform<int>(
-        absl::IntervalClosedClosed, *gen,
-        config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
+          absl::IntervalClosedClosed, *gen,
+          config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
 
     // Get the max member weight from the P4Info if it is set.
     int max_member_weight =
@@ -1136,10 +1139,10 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     // We want to randomly select some number of actions up to our max
     // cardinality; however, we can't have more actions than the amount of
     // weight we support since every action must have weight >= 1.
-    int number_of_actions = Uniform<int>(
-        absl::IntervalClosedClosed, *gen,
-        config.no_empty_action_profile_groups ? 1 : 0,
-        std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
+    int number_of_actions =  Uniform<int>(
+          absl::IntervalClosedClosed, *gen,
+          config.no_empty_action_profile_groups ? 1 : 0,
+          std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
 
     for (int i = 0; i < number_of_actions; i++) {
       // Since each action must have at least weight 1, we need to take the

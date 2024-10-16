@@ -22,6 +22,9 @@
 #include "absl/strings/string_view.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/proto.h"
+#include "gutil/proto_matchers.h"
+#include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
@@ -38,9 +41,14 @@
 namespace pins {
 namespace {
 
+using ::gutil::EqualsProto;
+using ::gutil::IsOkAndHolds;
+using ::gutil::ProtoDiff;
 using ::orion::p4::test::Bmv2;
 using ::testing::ElementsAre;
 using ::testing::Key;
+using ::testing::SizeIs;
+using ::testing::StrEq;
 using ::testing::UnorderedElementsAre;
 
 using PacketsByPort = absl::flat_hash_map<int, packetlib::Packets>;
@@ -51,7 +59,8 @@ void PreparePacketOrDie(packetlib::Packet& packet) {
       packetlib::UpdateMissingComputedFields(packet).status());  // Crash OK.
 }
 
-packetlib::Packet GetIpv4PacketOrDie() {
+packetlib::Packet GetIpv4PacketOrDie(
+    netaddr::Ipv4Address ipv4_dst = netaddr::Ipv4Address(192, 168, 100, 1)) {
   auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(R"pb(
     headers {
       ethernet_header {
@@ -72,11 +81,13 @@ packetlib::Packet GetIpv4PacketOrDie() {
         ttl: "0x20"
         protocol: "0xfe"
         ipv4_source: "192.168.100.2"
-        ipv4_destination: "192.168.100.1"
+        ipv4_destination: "filled in below"
       }
     }
     payload: "Untagged IPv4 packet."
   )pb");
+  packet.mutable_headers(1)->mutable_ipv4_header()->set_ipv4_destination(
+      ipv4_dst.ToString());
   PreparePacketOrDie(packet);
   return packet;
 }
@@ -189,8 +200,9 @@ TEST(RedirectTest, RedirectToNextHopOverridesIpMulticastDecision) {
 
   {
     // Inject a test packet destined to kDstIpv4 though kIngressPort.
-    ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
-                         bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie()));
+    ASSERT_OK_AND_ASSIGN(
+        PacketsByPort output_by_port,
+        bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie(kDstIpv4)));
     // The packet must be multicast replicated to kMulticastEgressPort{1,2}.
     ASSERT_THAT(output_by_port,
                 UnorderedElementsAre(Key(kMulticastEgressPort1),
@@ -200,10 +212,88 @@ TEST(RedirectTest, RedirectToNextHopOverridesIpMulticastDecision) {
     // Inject a test packet destined to kDstIpv4 though kRedirectIngressPort.
     ASSERT_OK_AND_ASSIGN(
         PacketsByPort output_by_port,
-        bmv2.SendPacket(kRedirectIngressPort, GetIpv4PacketOrDie()));
+        bmv2.SendPacket(kRedirectIngressPort, GetIpv4PacketOrDie(kDstIpv4)));
     // The packet must be forwarded to kRedirectEgressPort.
     ASSERT_THAT(output_by_port, ElementsAre(Key(kRedirectEgressPort)));
   }
+}
+
+TEST(RedirectTest, RedirectToMulticastGroupMulticastsPacket) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddIngressAclEntryRedirectingToMulticastGroup(42)
+          .AddMulticastGroupEntry(42,
+                                  {
+                                      sai::Replica{.egress_port = "\1"},
+                                      sai::Replica{.egress_port = "\2"},
+                                  })
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+
+  const packetlib::Packet input_packet = GetIpv4PacketOrDie();
+  ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
+                       bmv2.SendPacket(/*ingress_port=*/123, input_packet));
+  ASSERT_THAT(output_by_port, UnorderedElementsAre(Key(1), Key(2)));
+  ASSERT_THAT(output_by_port[1].packets(), SizeIs(1));
+  ASSERT_THAT(output_by_port[2].packets(), SizeIs(1));
+  EXPECT_THAT(output_by_port[1].packets(0),
+              EqualsProto(output_by_port[2].packets(0)));
+  EXPECT_THAT(ProtoDiff(input_packet, output_by_port[1].packets(0)),
+              IsOkAndHolds(StrEq(
+                  R"(modified: headers[1].ipv4_header.ttl: "0x20" -> "0x1f"
+modified: headers[1].ipv4_header.checksum: "0x500e" -> "0x510e"
+)")));
+}
+
+TEST(RedirectTest, RedirectToMulticastGroupOverridesMulticastTableAction) {
+  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  static constexpr int kDefaultIngressPort = 1;
+  static constexpr int kOverrideIngressPort = 2;
+  static constexpr absl::string_view kOverrideIngressPortStr = "\2";
+  static constexpr int kDefaultMulticastGroupId = 1;
+  static constexpr int kOverrideMulticastGroupId = 2;
+  static constexpr netaddr::Ipv4Address ipv4_dst =
+      netaddr::Ipv4Address(10, 0, 0, 42);
+
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddVrfEntry("vrf")
+          .AddEntrySettingVrfForAllPackets("vrf")
+          .AddEntryAdmittingAllPacketsToL3()
+          .AddMulticastRoute("vrf", ipv4_dst, kDefaultMulticastGroupId)
+          .AddIngressAclEntryRedirectingToMulticastGroup(
+              kOverrideMulticastGroupId,
+              sai::MirrorAndRedirectMatchFields{
+                  .in_port = kOverrideIngressPortStr,
+              })
+          .AddMulticastGroupEntry(kDefaultMulticastGroupId,
+                                  {
+                                      sai::Replica{.egress_port = "\1"},
+                                  })
+          .AddMulticastGroupEntry(kOverrideMulticastGroupId,
+                                  {
+                                      sai::Replica{.egress_port = "\2"},
+                                      sai::Replica{.egress_port = "\3"},
+                                  })
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+
+  const packetlib::Packet kInputPacket = GetIpv4PacketOrDie(ipv4_dst);
+  ASSERT_THAT(bmv2.SendPacket(kDefaultIngressPort, kInputPacket),
+              IsOkAndHolds(UnorderedElementsAre(Key(1))));
+  ASSERT_THAT(bmv2.SendPacket(kOverrideIngressPort, kInputPacket),
+              IsOkAndHolds(UnorderedElementsAre(Key(2), Key(3))));
 }
 
 }  // namespace

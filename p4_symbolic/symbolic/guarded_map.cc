@@ -16,8 +16,10 @@
 
 #include "p4_symbolic/symbolic/guarded_map.h"
 
+#include "absl/container/btree_map.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/util.h"
 
@@ -30,21 +32,20 @@ absl::StatusOr<SymbolicGuardedMap> SymbolicGuardedMap::CreateSymbolicGuardedMap(
   return SymbolicGuardedMap(map);
 }
 
-bool SymbolicGuardedMap::ContainsKey(const std::string &key) const {
-  return this->map_.count(key) == 1;
+bool SymbolicGuardedMap::ContainsKey(absl::string_view key) const {
+  return this->map_.contains(key);
 }
 
-absl::StatusOr<z3::expr> SymbolicGuardedMap::Get(const std::string &key) const {
-  if (this->ContainsKey(key)) {
-    return this->map_.at(key);
+absl::StatusOr<z3::expr> SymbolicGuardedMap::Get(absl::string_view key) const {
+  if (auto it = this->map_.find(key); it != this->map_.end()) {
+    return it->second;
   }
 
   return absl::InvalidArgumentError(
       absl::StrCat("Cannot find key \"", key, "\" in SymbolicGuardedMap!"));
 }
 
-absl::Status SymbolicGuardedMap::Set(const std::string &key,
-                                     const z3::expr &value,
+absl::Status SymbolicGuardedMap::Set(absl::string_view key, z3::expr value,
                                      const z3::expr &guard) {
   if (!this->ContainsKey(key)) {
     return absl::InvalidArgumentError(absl::StrCat(
@@ -53,20 +54,12 @@ absl::Status SymbolicGuardedMap::Set(const std::string &key,
 
   z3::expr &old_value = this->map_.at(key);
 
-  // operators::Ite will check for sort compatibility and pad when needed.
-  // However, Ite() does not have a notion of pre-defined size, and will padd
-  // to the maximum bitsize of the two operands. We perform that check
-  // explicitly here.
-  if (old_value.get_sort().is_bv() && value.get_sort().is_bv()) {
-    unsigned int new_size = value.get_sort().bv_size();
-    unsigned int old_size = old_value.get_sort().bv_size();
-    if (new_size > old_size) {
-      return absl::InvalidArgumentError(
-          absl::StrFormat("Cannot assign to key \"%s\" a value whose bit size "
-                          "%d is greater than the pre-defined bit size %d in "
-                          "SymbolicGuardedMap!",
-                          key, new_size, old_size));
-    }
+  // Ite will pad bitvectors to the same size, but this is not the right
+  // semantics if we assign a larger bitvector into a smaller one. Instead, the
+  // assigned value needs to be truncated to the bitsize of the asignee.
+  if (old_value.get_sort().is_bv() && value.get_sort().is_bv() &&
+      old_value.get_sort().bv_size() < value.get_sort().bv_size()) {
+    value = value.extract(old_value.get_sort().bv_size() - 1, 0);
   }
 
   // This will return an absl error if the sorts are incompatible, and will pad

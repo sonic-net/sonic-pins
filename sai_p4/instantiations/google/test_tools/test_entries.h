@@ -104,6 +104,12 @@ struct Replica {
   int instance = 0;
 };
 
+// Match fields of an ingress mirror or redirect table entry.
+struct MirrorAndRedirectMatchFields {
+  std::optional<absl::string_view> in_port;
+  std::optional<bool> ipmc_table_hit;
+};
+
 // Provides methods to conveniently build a set of SAI-P4 table entries for
 // testing.
 //
@@ -156,14 +162,12 @@ class EntryBuilder {
       absl::string_view vrf,
       const NexthopRewriteOptions& nexthop_rewrite_options = {},
       std::optional<absl::string_view> vlan_hexstr = std::nullopt);
-  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenMulticastGroup(
-      int multicast_group_id, IpVersion ip_version, absl::string_view vrf);
-  EntryBuilder& AddRouteForwardingIpv4PacketsToGivenMulticastGroup(
-      int multicast_group_id, absl::string_view vrf,
-      netaddr::Ipv4Address& dst_ip, int prefix_length);
-  EntryBuilder& AddRouteForwardingIpv6PacketsToGivenMulticastGroup(
-      int multicast_group_id, absl::string_view vrf,
-      netaddr::Ipv6Address& dst_ip, int prefix_length);
+  EntryBuilder& AddMulticastRoute(absl::string_view vrf,
+                                  const netaddr::Ipv4Address& dst_ip,
+                                  int multicast_group_id);
+  EntryBuilder& AddMulticastRoute(absl::string_view vrf,
+                                  const netaddr::Ipv6Address& dst_ip,
+                                  int multicast_group_id);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
   EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
@@ -190,6 +194,9 @@ class EntryBuilder {
   EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
       absl::string_view nexthop_id,
       std::optional<absl::string_view> in_port_match = std::nullopt);
+  EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
+      int multicast_group_id,
+      const MirrorAndRedirectMatchFields& match_fields = {});
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
   EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
 

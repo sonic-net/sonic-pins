@@ -34,7 +34,7 @@ namespace util {
 
 // Free (unconstrained) symbolic headers consisting of free symbolic variables
 // for every field in every header instance defined in the P4 program.
-absl::StatusOr<std::map<std::string, z3::expr>> FreeSymbolicHeaders(
+absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
     const google::protobuf::Map<std::string, ir::HeaderType> &headers);
 
 // Returns an symbolic table match containing default values.
@@ -48,13 +48,13 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
     SymbolicContext context, z3::model model,
     const values::P4RuntimeTranslator &translator);
 
-// Merges two symbolic traces into a single trace. A field in the new trace
-// has the value of the changed trace if the condition is true, and the value
-// of the original one otherwise.
-// Assertion: both traces must contain matches for the same set of table names.
-absl::StatusOr<SymbolicTrace> MergeTracesOnCondition(
-    const z3::expr &condition, const SymbolicTrace &true_trace,
-    const SymbolicTrace &false_trace);
+// Merges two maps of table matches into a single map. A field in the returned
+// map has the value of `true_matches` if the condition is true, and the
+// value of `false_matches` otherwise. Assertion: both maps must contain
+// matches for the same set of table names.
+absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
+    const z3::expr &condition, const SymbolicTableMatches &true_matches,
+    const SymbolicTableMatches &false_matches);
 
 }  // namespace util
 }  // namespace symbolic

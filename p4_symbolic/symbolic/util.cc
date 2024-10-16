@@ -21,7 +21,7 @@
 #include "absl/strings/str_format.h"
 #include "p4_pdpi/utils/ir.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/packet.h"
+#include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic {
 namespace symbolic {
@@ -40,12 +40,12 @@ bool Z3BooltoBool(Z3_lbool z3_bool) {
 
 }  // namespace
 
-absl::StatusOr<std::map<std::string, z3::expr>> FreeSymbolicHeaders(
+absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
     const google::protobuf::Map<std::string, ir::HeaderType> &headers) {
   // Loop over every header instance in the p4 program.
   // Find its type, and loop over every field in it, creating a symbolic free
   // variable for every field in every header instance.
-  std::map<std::string, z3::expr> symbolic_headers;
+  absl::btree_map<std::string, z3::expr> symbolic_headers;
   for (const auto &[header_name, header_type] : headers) {
     // Special validity field.
     std::string valid_field_name = absl::StrFormat("%s.$valid$", header_name);
@@ -68,9 +68,11 @@ absl::StatusOr<std::map<std::string, z3::expr>> FreeSymbolicHeaders(
     }
   }
 
-  // Finally, we have a special field marking if the packet represented by
-  // these headers was dropped.
-  symbolic_headers.insert({"$dropped$", Z3Context().bool_val(false)});
+  // Initialize pseudo header fields.
+  symbolic_headers.insert({
+      std::string(kGotClonedPseudoField),
+      Z3Context().bool_val(false),
+  });
   return symbolic_headers;
 }
 
@@ -88,12 +90,6 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
   std::string ingress_port = model.eval(context.ingress_port, true).to_string();
   std::string egress_port = model.eval(context.egress_port, true).to_string();
 
-  // Extract an input packet and its predicted output.
-  ConcretePacket ingress_packet =
-      packet::ExtractConcretePacket(context.ingress_packet, model);
-  ConcretePacket egress_packet =
-      packet::ExtractConcretePacket(context.egress_packet, model);
-
   // Extract the ingress and egress headers.
   ConcretePerPacketState ingress_headers;
   for (const auto &[name, expr] : context.ingress_headers) {
@@ -109,73 +105,74 @@ absl::StatusOr<ConcreteContext> ExtractFromModel(
   }
 
   // Extract the trace (matches on every table).
-  bool dropped =
-      Z3BooltoBool(model.eval(context.trace.dropped, true).bool_value());
-  std::map<std::string, ConcreteTableMatch> matched_entries;
+  ASSIGN_OR_RETURN(bool dropped, EvalZ3Bool(context.trace.dropped, model));
+  ASSIGN_OR_RETURN(bool got_cloned,
+                   EvalZ3Bool(context.trace.got_cloned, model));
+  absl::btree_map<std::string, ConcreteTableMatch> matched_entries;
   for (const auto &[table, match] : context.trace.matched_entries) {
-    matched_entries[table] = {
-        Z3BooltoBool(model.eval(match.matched, true).bool_value()),
-        model.eval(match.entry_index, true).get_numeral_int()};
+    ASSIGN_OR_RETURN(bool matched, EvalZ3Bool(match.matched, model));
+    ASSIGN_OR_RETURN(int entry_index, EvalZ3Int(match.entry_index, model));
+    matched_entries[table] = ConcreteTableMatch{
+        .matched = matched,
+        .entry_index = entry_index,
+    };
   }
 
   return ConcreteContext{
       .ingress_port = ingress_port,
       .egress_port = egress_port,
-      .ingress_packet = ingress_packet,
-      .egress_packet = egress_packet,
       .ingress_headers = ingress_headers,
       .egress_headers = egress_headers,
       .trace =
           ConcreteTrace{
               .matched_entries = matched_entries,
               .dropped = dropped,
+              .got_cloned = got_cloned,
           },
   };
 }
 
-absl::StatusOr<SymbolicTrace> MergeTracesOnCondition(
-    const z3::expr &condition, const SymbolicTrace &true_trace,
-    const SymbolicTrace &false_trace) {
-  ASSIGN_OR_RETURN(
-      z3::expr merged_dropped,
-      operators::Ite(condition, true_trace.dropped, false_trace.dropped));
-
-  // The merged trace is initially empty.
-  SymbolicTrace merged = {{}, merged_dropped};
+absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
+    const z3::expr &condition, const SymbolicTableMatches &true_matches,
+    const SymbolicTableMatches &false_matches) {
+  SymbolicTableMatches merged;
 
   // Merge all tables matches in true_trace (including ones in both traces).
-  for (const auto &[name, true_match] : true_trace.matched_entries) {
+  for (const auto &[name, true_match] : true_matches) {
     // Find match in other trace (or use default).
-    SymbolicTableMatch false_match = DefaultTableMatch();
-    if (false_trace.matched_entries.count(name) > 0) {
-      false_match = false_trace.matched_entries.at(name);
-    }
+    SymbolicTableMatch false_match = false_matches.contains(name)
+                                         ? false_matches.at(name)
+                                         : DefaultTableMatch();
 
     // Merge this match.
     ASSIGN_OR_RETURN(
         z3::expr matched,
         operators::Ite(condition, true_match.matched, false_match.matched));
-    ASSIGN_OR_RETURN(z3::expr index,
+    ASSIGN_OR_RETURN(z3::expr entry_index,
                      operators::Ite(condition, true_match.entry_index,
                                     false_match.entry_index));
-    merged.matched_entries.insert({name, {matched, index}});
+    merged.insert({name, SymbolicTableMatch{
+                             .matched = matched,
+                             .entry_index = entry_index,
+                         }});
   }
 
-  // Merge all tables matches in false_trace only.
-  for (const auto &[name, false_match] : false_trace.matched_entries) {
+  // Merge all tables matches in false_matches only.
+  for (const auto &[name, false_match] : false_matches) {
+    if (true_matches.contains(name)) continue;  // Already covered.
     SymbolicTableMatch true_match = DefaultTableMatch();
-    if (true_trace.matched_entries.count(name) > 0) {
-      continue;  // Already covered.
-    }
 
     // Merge this match.
     ASSIGN_OR_RETURN(
         z3::expr matched,
         operators::Ite(condition, true_match.matched, false_match.matched));
-    ASSIGN_OR_RETURN(z3::expr index,
+    ASSIGN_OR_RETURN(z3::expr entry_index,
                      operators::Ite(condition, true_match.entry_index,
                                     false_match.entry_index));
-    merged.matched_entries.insert({name, {matched, index}});
+    merged.insert({name, SymbolicTableMatch{
+                             .matched = matched,
+                             .entry_index = entry_index,
+                         }});
   }
 
   return merged;

@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
 load("//p4_symbolic/symbolic:test.bzl", "end_to_end_test")
 
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
 
 cc_library(
     name = "symbolic",
@@ -46,7 +45,6 @@ cc_library(
         "util.h",
         "values.h",
     ],
-    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
@@ -54,12 +52,17 @@ cc_library(
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/netaddr:mac_address",
         "//p4_pdpi/utils:ir",
+        "//p4_symbolic:z3_util",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/ir:table_entries",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_z3prover_z3//:api",
         "@com_gnu_gmp//:gmp",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",

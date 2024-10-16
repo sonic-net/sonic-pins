@@ -8,38 +8,298 @@
 #include "roles.h"
 #include "minimum_guaranteed_sizes.p4"
 
-// This control block models the L3 routing pipeline.
+// This file contains two control blocks that together model the L3 routing
+// pipeline: routing_lookup and routing_resolution.
 //
-// +-------+   +-------+ wcmp  +---------+       +-----------+
-// |  lpm  |-->| group |------>| nexthop |----+->| router    |--> egress_port
-// |       |   |       |------>|         |-+  |  | interface |--> src_mac
-// +-------+   +-------+       +---------+ |  |  +-----------+
-//   |   |                         ^       |  |  +-----------+
-//   |   |                         |       |  +->| neighbor  |
-//   V   +-------------------------+       +---->|           |--> dst_mac
-//  drop                                         +-----------+
+// --lookup---|A|------------------------resolution-----------------------------
+//            |C|
+// +-------+  |L|  +-------+ wcmp +---------+       +-----------+
+// |       |  | |  |       |----->|         |       |           |--> vlan_id
+// |  lpm  |--|i|->| group |----->| nexthop |----+->| router    |--> egress_port
+// |       |  |n|  |       |----->|         |-+  |  | interface |--> src_mac
+// +-------+  |g|  +-------+      +---------+ |  |  +-----------+
+//   |   |    |r|                     ^       |  |  +-----------+
+//   |   |    |e|                     |       |  +->| neighbor  |
+//   |   +----|s|---------------------+       +---->|           |--> dst_mac
+//   |        |s|                                   +-----------+
+//   +--------| |--------------------------------------------------> drop
 //
-// The pipeline first performs a longest prefix match on the packet's
-// destination IP address. The action associated with the match then either
-// drops the packet, points to a nexthop, or points to a wcmp group which uses a
-// hash of the packet to choose from a set of nexthops. The nexthop points to a
-// router interface, which determines the packet's src_mac and the egress_port
-// to forward the packet to. The nexthop also points to a neighbor which,
-// together with the router_interface, determines the packet's dst_mac.
+// For packets that are admitted for L3 routing, the routing_lookup block
+// performs a longest prefix match on the packet's destination IP address (along
+// with an exact match on VRF id). The action associated with the
+// match then either drops the packet, points to a nexthop, or points to a WCMP
+// group, or multicast.
+// After the packet goes through the ACL ingress stage (which can potentially
+// change the nexthop or group set by LPM), the routing_resolution block
+// resolves the group/nexthop as follows:
+// A WCMP group uses a hash of the packet to choose from a set of nexthops. The
+// nexthop points to a router interface, which determines the packet's vlan_id,
+// src_mac, and the egress_port to forward the packet to. The nexthop also
+// points to a neighbor which together with the router_interface, determines the
+// packet's dst_mac.
 //
-// Note that this block does not rewrite any header fields directly, but only
-// records rewrites in `local_metadata.packet_rewrites`, from where they will be
-// read and applied in the egress stage.
-control routing(in headers_t headers,
-                inout local_metadata_t local_metadata,
-                inout standard_metadata_t standard_metadata) {
-  // Wcmp group id, only valid if `wcmp_group_id_valid` is true.
-  bool wcmp_group_id_valid = false;
-  wcmp_group_id_t wcmp_group_id_value;
+// Note that routing_resolution does not rewrite any header field directly,
+// but only records rewrites in `local_metadata.packet_rewrites`, from where
+// they will be read and applied in the egress stage (dependeding on whether
+// the rewrites are disabled by the nexthop or not).
+// The following action is shared between routing_lookup and routing_resolution
+// control blocks and hence is defined in the outer scope.
+//
+// When called from a route, sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
+// SAI_PACKET_ACTION_FORWARD, and SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a
+// SAI_OBJECT_TYPE_NEXT_HOP.
+//
+// When called from a group, sets SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID.
+// When called from a group, sets SAI_NEXT_HOP_GROUP_MEMBER_ATTR_WEIGHT.
+//
+// This action can only refer to `nexthop_id`s that are programmed in the
+// `nexthop_table`.
+@id(ROUTING_SET_NEXTHOP_ID_ACTION_ID)
+action set_nexthop_id(inout local_metadata_t local_metadata,
+                      @id(1) @refers_to(nexthop_table, nexthop_id)
+                      nexthop_id_t nexthop_id) {
+  local_metadata.nexthop_id_valid = true;
+  local_metadata.nexthop_id_value = nexthop_id;
+}
 
-  // Nexthop id, only valid if `nexthop_id_valid` is true.
-  bool nexthop_id_valid = false;
-  nexthop_id_t nexthop_id_value;
+control routing_lookup(in headers_t headers,
+                       inout local_metadata_t local_metadata,
+                       inout standard_metadata_t standard_metadata) {
+  // Action that does nothing. Like `NoAction` in `core.p4`, but following
+  // Google's naming conventions.
+  // TODO: Add support for CamlCase actions to the PD generator,
+  // so we can use `NoAction` throughout.
+  @id(ROUTING_NO_ACTION_ACTION_ID)
+  action no_action() {}
+  // Programming this table does not affect packet forwarding directly -- the
+  // table performs no actions -- but results in the creation/deletion of VRFs.
+  // This is a prerequisite to using these VRFs, e.g. in the `ipv4_table` and
+  // `ipv6_table` below, as is indicated by the `@refers_to(vrf_table, vrf_id)`
+  // annotations.
+  // TODO: Currently we don't expose any `sai_virtual_router_attr_t`
+  // attributes here, but we may explore that in the future.
+  @entry_restriction("
+    // The VRF ID 0 (or '' in P4Runtime) encodes the default VRF, which cannot
+    // be read or written via this table, but is always present implicitly.
+    // TODO: This constraint should read `vrf_id != ''` (since
+    // constraints are a control plane (P4Runtime) concept), but
+    // p4-constraints does not currently support strings.
+    vrf_id != 0;
+  ")
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  @id(ROUTING_VRF_TABLE_ID)
+  table vrf_table {
+    key = {
+      local_metadata.vrf_id : exact @id(1) @name("vrf_id");
+    }
+    actions = {
+      // TODO: Add support for CamlCase actions to the PD generator
+      // so we can use `NoAction` instead of `no_action`.
+      @proto_id(1) no_action;
+    }
+    const default_action = no_action;
+    size = ROUTING_VRF_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+  // Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to SAI_PACKET_ACTION_DROP.
+  @id(ROUTING_DROP_ACTION_ID)
+  action drop() {
+    mark_to_drop(standard_metadata);
+  }
+  // Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to SAI_PACKET_ACTION_FORWARD, and
+  // SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a SAI_OBJECT_TYPE_NEXT_HOP_GROUP.
+  //
+  // This action can only refer to `wcmp_group_id`s that are programmed in the
+  // `wcmp_group_table`.
+  @id(ROUTING_SET_WCMP_GROUP_ID_ACTION_ID)
+  action set_wcmp_group_id(@id(1) @refers_to(wcmp_group_table, wcmp_group_id)
+                           wcmp_group_id_t wcmp_group_id) {
+    local_metadata.wcmp_group_id_valid = true;
+    local_metadata.wcmp_group_id_value = wcmp_group_id;
+  }
+  // Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to SAI_PACKET_ACTION_FORWARD, and
+  // SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a SAI_OBJECT_TYPE_NEXT_HOP_GROUP.
+  //
+  // This action can only refer to `wcmp_group_id`s that are programmed in the
+  // `wcmp_group_table`.
+  //
+  // Also sets the route metadata available for Ingress ACL lookup.
+  @id(ROUTING_SET_WCMP_GROUP_ID_AND_METADATA_ACTION_ID)
+  action set_wcmp_group_id_and_metadata(@id(1)
+                                        @refers_to(wcmp_group_table,
+                                        wcmp_group_id)
+                                        wcmp_group_id_t wcmp_group_id,
+                                        route_metadata_t route_metadata) {
+    set_wcmp_group_id(wcmp_group_id);
+    local_metadata.route_metadata = route_metadata;
+  }
+  // Set the metadata of the packet and mark the packet to drop at the end of
+  // the ingress pipeline.
+  @id(ROUTING_SET_METADATA_AND_DROP_ACTION_ID)
+  action set_metadata_and_drop(@id(1) route_metadata_t route_metadata) {
+    local_metadata.route_metadata = route_metadata;
+    mark_to_drop(standard_metadata);
+  }
+
+  // Can only be called form a route. Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
+  // SAI_PACKET_ACTION_FORWARD, and SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a
+  // SAI_OBJECT_TYPE_NEXT_HOP.
+  // Also sets SAI_ROUTE_ENTRY_ATTR_META_DATA.
+  //
+  // This action can only refer to `nexthop_id`s that are programmed in the
+  // `nexthop_table`.
+  @id(ROUTING_SET_NEXTHOP_ID_AND_METADATA_ACTION_ID)
+  action set_nexthop_id_and_metadata(@id(1)
+                                     @refers_to(nexthop_table, nexthop_id)
+                                     nexthop_id_t nexthop_id,
+                                     route_metadata_t route_metadata) {
+    local_metadata.nexthop_id_valid = true;
+    local_metadata.nexthop_id_value = nexthop_id;
+    local_metadata.route_metadata = route_metadata;
+  }
+
+  // Sets the multicast group ID (SAI_IPMC_ENTRY_ATTR_OUTPUT_GROUP_ID).
+  // The ID will be looked up in the multicast group table after ingress
+  // processing. The group table will then make 0 or more copies of the packet
+  // and pass them to the egress pipeline.
+  //
+  // Calling this action will override unicast, and can itself be overriden by
+  // `mark_to_drop`.
+  //
+  // TODO: Remove `@unsupported` annotation once the switch stack
+  // supports multicast.
+  @unsupported
+  @id(ROUTING_SET_MULTICAST_GROUP_ID_ACTION_ID)
+  @action_restriction("
+    // Disallow 0 since it encodes 'no multicast' in V1Model.
+    multicast_group_id != 0;
+  ")
+  action set_multicast_group_id(
+      @id(1)
+      // TODO: Add this once supported by PDPI and its customers.
+      // @refers_to(multicast_group_table, multicast_group_id)
+      multicast_group_id_t multicast_group_id) {
+    standard_metadata.mcast_grp = multicast_group_id;
+  }
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  @id(ROUTING_IPV4_TABLE_ID)
+  table ipv4_table {
+    key = {
+      // Sets `vr_id` in `sai_route_entry_t`.
+      local_metadata.vrf_id : exact
+        @id(1) @name("vrf_id") @refers_to(vrf_table, vrf_id);
+      // Sets `destination` in `sai_route_entry_t` to an IPv4 prefix.
+      headers.ipv4.dst_addr : lpm
+        @id(2) @name("ipv4_dst") @format(IPV4_ADDRESS);
+    }
+    actions = {
+      @proto_id(1) drop;
+      @proto_id(2) set_nexthop_id(local_metadata);
+      @proto_id(3) set_wcmp_group_id;
+      @proto_id(5) set_nexthop_id_and_metadata;
+      @proto_id(6) set_wcmp_group_id_and_metadata;
+      @proto_id(7) set_metadata_and_drop;
+    }
+    const default_action = drop;
+    size = ROUTING_IPV4_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  @id(ROUTING_IPV6_TABLE_ID)
+  table ipv6_table {
+    key = {
+      // Sets `vr_id` in `sai_route_entry_t`.
+      local_metadata.vrf_id : exact
+        @id(1) @name("vrf_id") @refers_to(vrf_table, vrf_id);
+      // Sets `destination` in `sai_route_entry_t` to an IPv6 prefix.
+      headers.ipv6.dst_addr : lpm
+        @id(2)  @name("ipv6_dst") @format(IPV6_ADDRESS);
+    }
+    actions = {
+      @proto_id(1) drop;
+      @proto_id(2) set_nexthop_id(local_metadata);
+      @proto_id(3) set_wcmp_group_id;
+      @proto_id(5) set_nexthop_id_and_metadata;
+      @proto_id(6) set_wcmp_group_id_and_metadata;
+      @proto_id(7) set_metadata_and_drop;
+    }
+    const default_action = drop;
+    size = ROUTING_IPV6_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+  // Models SAI IPMC entries of type (*,G) whose destination is an IPv4 address.
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  @id(ROUTING_IPV4_MULTICAST_TABLE_ID)
+  // TODO: Remove `@unsupported` annotation once the switch stack
+  // supports multicast.
+  @unsupported
+  table ipv4_multicast_table {
+    key = {
+      // Sets `vr_id` in `sai_ipmc_entry_t`.
+      local_metadata.vrf_id : exact
+        @id(1) @name("vrf_id") @refers_to(vrf_table, vrf_id);
+      // Sets `destination` in `sai_ipmc_entry_t` to an IPv4 adress.
+      headers.ipv4.dst_addr : exact
+        @id(2) @name("ipv4_dst") @format(IPV4_ADDRESS);
+    }
+    actions = {
+      @proto_id(1) set_multicast_group_id;
+    }
+    size = ROUTING_IPV4_MULTICAST_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
+  // Models SAI IPMC entries of type (*,G) whose destination is an IPv6 address.
+  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
+  @id(ROUTING_IPV6_MULTICAST_TABLE_ID)
+  // TODO: Remove `@unsupported` annotation once the switch stack
+  // supports multicast.
+  @unsupported
+  table ipv6_multicast_table {
+    key = {
+      // Sets `vr_id` in `sai_ipmc_entry_t`.
+      local_metadata.vrf_id : exact
+        @id(1) @name("vrf_id") @refers_to(vrf_table, vrf_id);
+      // Sets `destination` in `sai_ipmc_entry_t` to an IPv6 adress.
+      headers.ipv6.dst_addr : exact
+        @id(2) @name("ipv6_dst") @format(IPV6_ADDRESS);
+    }
+    actions = {
+      @proto_id(1) set_multicast_group_id;
+    }
+    size = ROUTING_IPV6_MULTICAST_TABLE_MINIMUM_GUARANTEED_SIZE;
+  }
+
+  apply {
+    // Drop packets by default, then override in the router_interface_table.
+    // TODO: This should just be the default behavior of v1model:
+    // https://github.com/p4lang/behavioral-model/issues/992
+    mark_to_drop(standard_metadata);
+    vrf_table.apply();
+    if (local_metadata.admit_to_l3) {
+      if (headers.ipv4.isValid()) {
+        // TODO: Rework conditions under which uni/multicast table
+        // lookups occur and what happens when both tables are hit.
+        ipv4_table.apply();
+
+        // TODO: Use commented out code instead, once p4-symbolic
+        // supports it.
+        // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
+        ipv4_multicast_table.apply();
+        local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+      } else if (headers.ipv6.isValid()) {
+        // TODO: Rework conditions under which uni/multicast table
+        // lookups occur and what happens when both tables are hit.
+        ipv6_table.apply();
+
+        // TODO: Use commented out code instead, once p4-symbolic
+        // supports it.
+        // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
+        ipv6_multicast_table.apply();
+        local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+      }
+    }
+  }
+}  // control routing_lookup
+control routing_resolution(in headers_t headers,
+                           inout local_metadata_t local_metadata,
+                           inout standard_metadata_t standard_metadata) {
 
   // Tunnel id, only valid if `tunnel_id_valid` is true.
   bool tunnel_id_valid = false;
@@ -133,9 +393,6 @@ control routing(in headers_t headers,
   // SAI_NEXT_HOP_ATTR_DISABLE_DST_MAC_REWRITE,
   // SAI_NEXT_HOP_ATTR_DISABLE_DECREMENT_TTL and
   // SAI_NEXT_HOP_ATTR_DISABLE_VLAN_REWRITE based on action parameters.
-  // TODO Remove unsupported annotation once the switch stack
-  // supports this action.
-  @unsupported
   @id(ROUTING_SET_IP_NEXTHOP_AND_DISABLE_REWRITES_ACTION_ID)
   action set_ip_nexthop_and_disable_rewrites(
       @id(1)
@@ -221,7 +478,7 @@ control routing(in headers_t headers,
   @id(ROUTING_NEXTHOP_TABLE_ID)
   table nexthop_table {
     key = {
-      nexthop_id_value : exact @id(1) @name("nexthop_id");
+      local_metadata.nexthop_id_value : exact @id(1) @name("nexthop_id");
     }
     actions = {
       @proto_id(1) set_ip_nexthop;
@@ -272,40 +529,6 @@ control routing(in headers_t headers,
     size = ROUTING_TUNNEL_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
-
-  // When called from a route, sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
-  // SAI_PACKET_ACTION_FORWARD, and SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a
-  // SAI_OBJECT_TYPE_NEXT_HOP.
-  //
-  // When called from a group, sets SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID.
-  // When called from a group, sets SAI_NEXT_HOP_GROUP_MEMBER_ATTR_WEIGHT.
-  //
-  // This action can only refer to `nexthop_id`s that are programmed in the
-  // `nexthop_table`.
-  @id(ROUTING_SET_NEXTHOP_ID_ACTION_ID)
-  action set_nexthop_id(@id(1) @refers_to(nexthop_table, nexthop_id)
-                        nexthop_id_t nexthop_id) {
-    nexthop_id_valid = true;
-    nexthop_id_value = nexthop_id;
-  }
-
-  // Can only be called form a route. Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to
-  // SAI_PACKET_ACTION_FORWARD, and SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a
-  // SAI_OBJECT_TYPE_NEXT_HOP.
-  // Also sets SAI_ROUTE_ENTRY_ATTR_META_DATA.
-  //
-  // This action can only refer to `nexthop_id`s that are programmed in the
-  // `nexthop_table`.
-  @id(ROUTING_SET_NEXTHOP_ID_AND_METADATA_ACTION_ID)
-  action set_nexthop_id_and_metadata(@id(1)
-                                     @refers_to(nexthop_table, nexthop_id)
-                                     nexthop_id_t nexthop_id,
-                                     route_metadata_t route_metadata) {
-    nexthop_id_valid = true;
-    nexthop_id_value = nexthop_id;
-    local_metadata.route_metadata = route_metadata;
-  }
-
   // TODO: When the P4RT compiler supports the size selector
   // annotation, this should be used to specify the semantics.
   // #if defined(SAI_INSTANTIATION_TOR)
@@ -335,11 +558,11 @@ control routing(in headers_t headers,
   @oneshot()
   table wcmp_group_table {
     key = {
-      wcmp_group_id_value : exact @id(1) @name("wcmp_group_id");
+      local_metadata.wcmp_group_id_value : exact @id(1) @name("wcmp_group_id");
       local_metadata.wcmp_selector_input : selector;
     }
     actions = {
-      @proto_id(1) set_nexthop_id;
+      @proto_id(1) set_nexthop_id(local_metadata);
       @defaultonly NoAction;
     }
     const default_action = NoAction;
@@ -351,185 +574,19 @@ control routing(in headers_t headers,
 #endif
   }
 
-  // Action that does nothing. Like `NoAction` in `core.p4`, but following
-  // Google's naming conventions.
-  // TODO: Add support for CamlCase actions to the PD generator,
-  // so we can use `NoAction` throughout.
-  @id(ROUTING_NO_ACTION_ACTION_ID)
-  action no_action() {}
-
-  // Programming this table does not affect packet forwarding directly -- the
-  // table performs no actions -- but results in the creation/deletion of VRFs.
-  // This is a prerequisite to using these VRFs, e.g. in the `ipv4_table` and
-  // `ipv6_table` below, as is indicated by the `@refers_to(vrf_table, vrf_id)`
-  // annotations.
-  // TODO: Currently we don't expose any `sai_virtual_router_attr_t`
-  // attributes here, but we may explore that in the future.
-  @entry_restriction("
-    // The VRF ID 0 (or '' in P4Runtime) encodes the default VRF, which cannot
-    // be read or written via this table, but is always present implicitly.
-    // TODO: This constraint should read `vrf_id != ''` (since
-    // constraints are a control plane (P4Runtime) concept), but
-    // p4-constraints does not currently support strings.
-    vrf_id != 0;
-  ")
-  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
-  @id(ROUTING_VRF_TABLE_ID)
-  table vrf_table {
-    key = {
-      local_metadata.vrf_id : exact @id(1) @name("vrf_id");
-    }
-    actions = {
-      // TODO: Add support for CamlCase actions to the PD generator
-      // so we can use `NoAction` instead of `no_action`.
-      @proto_id(1) no_action;
-    }
-    const default_action = no_action;
-    size = ROUTING_VRF_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
-  // Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to SAI_PACKET_ACTION_DROP.
-  @id(ROUTING_DROP_ACTION_ID)
-  action drop() {
-    mark_to_drop(standard_metadata);
-  }
-
-  // Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to SAI_PACKET_ACTION_FORWARD, and
-  // SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a SAI_OBJECT_TYPE_NEXT_HOP_GROUP.
-  //
-  // This action can only refer to `wcmp_group_id`s that are programmed in the
-  // `wcmp_group_table`.
-  @id(ROUTING_SET_WCMP_GROUP_ID_ACTION_ID)
-  action set_wcmp_group_id(@id(1) @refers_to(wcmp_group_table, wcmp_group_id)
-                           wcmp_group_id_t wcmp_group_id) {
-    wcmp_group_id_valid = true;
-    wcmp_group_id_value = wcmp_group_id;
-  }
-
-  // Sets SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION to SAI_PACKET_ACTION_FORWARD, and
-  // SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID to a SAI_OBJECT_TYPE_NEXT_HOP_GROUP.
-  //
-  // This action can only refer to `wcmp_group_id`s that are programmed in the
-  // `wcmp_group_table`.
-  //
-  // Also sets the route metadata available for Ingress ACL lookup.
-  @id(ROUTING_SET_WCMP_GROUP_ID_AND_METADATA_ACTION_ID)
-  action set_wcmp_group_id_and_metadata(@id(1)
-                                        @refers_to(wcmp_group_table,
-                                        wcmp_group_id)
-                                        wcmp_group_id_t wcmp_group_id,
-                                        route_metadata_t route_metadata) {
-    set_wcmp_group_id(wcmp_group_id);
-    local_metadata.route_metadata = route_metadata;
-  }
-
-  // Set the metadata of the packet and mark the packet to drop at the end of
-  // the ingress pipeline.
-  @id(ROUTING_SET_METADATA_AND_DROP_ACTION_ID)
-  action set_metadata_and_drop(@id(1) route_metadata_t route_metadata) {
-    local_metadata.route_metadata = route_metadata;
-    mark_to_drop(standard_metadata);
-  }
-
-  // Sets the multicast group ID (SAI_IPMC_ENTRY_ATTR_OUTPUT_GROUP_ID).
-  // The ID will be looked up in the multicast group table after ingress
-  // processing. The group table will then make 0 or more copies of the packet
-  // and pass them to the egress pipeline.
-  //
-  // Calling this action will override unicast, and can itself be overriden by
-  // `mark_to_drop`.
-  //
-  // Using a `multicast_group_id` of 0 is not allowed.
-  // TODO: Enforce this requirement using p4-constraints.
-  //
-  // TODO: Remove `@unsupported` annotation once the switch stack
-  // supports multicast.
-  @unsupported
-  @id(ROUTING_SET_MULTICAST_GROUP_ID_ACTION_ID)
-  @action_restriction("
-    // Disallow 0 since it encodes 'no multicast' in V1Model.
-    multicast_group_id != 0"
-  )
-  action set_multicast_group_id(
-      @id(1)
-      // TODO: Add this once supported by PDPI and its customers.
-      // @refers_to(multicast_group_table, multicast_group_id)
-      multicast_group_id_t multicast_group_id) {
-    standard_metadata.mcast_grp = multicast_group_id;
-  }
-
-  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
-  @id(ROUTING_IPV4_TABLE_ID)
-  table ipv4_table {
-    key = {
-      // Sets vrf_id in sai_route_entry_t.
-      local_metadata.vrf_id : exact @id(1) @name("vrf_id")
-          @refers_to(vrf_table, vrf_id);
-      // Sets destination in sai_route_entry_t to an IPv4 prefix.
-      headers.ipv4.dst_addr : lpm @format(IPV4_ADDRESS) @id(2)
-                                  @name("ipv4_dst");
-    }
-    actions = {
-      @proto_id(1) drop;
-      @proto_id(2) set_nexthop_id;
-      @proto_id(3) set_wcmp_group_id;
-      @proto_id(5) set_nexthop_id_and_metadata;
-      @proto_id(6) set_wcmp_group_id_and_metadata;
-      @proto_id(7) set_metadata_and_drop;
-      @proto_id(8) set_multicast_group_id;
-    }
-    const default_action = drop;
-    size = ROUTING_IPV4_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
-  @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
-  @id(ROUTING_IPV6_TABLE_ID)
-  table ipv6_table {
-    key = {
-      // Sets vrf_id in sai_route_entry_t.
-      local_metadata.vrf_id : exact @id(1) @name("vrf_id")
-          @refers_to(vrf_table, vrf_id);
-      // Sets destination in sai_route_entry_t to an IPv6 prefix.
-      headers.ipv6.dst_addr : lpm @format(IPV6_ADDRESS) @id(2)
-                                  @name("ipv6_dst");
-    }
-    actions = {
-      @proto_id(1) drop;
-      @proto_id(2) set_nexthop_id;
-      @proto_id(3) set_wcmp_group_id;
-      @proto_id(5) set_nexthop_id_and_metadata;
-      @proto_id(6) set_wcmp_group_id_and_metadata;
-      @proto_id(7) set_metadata_and_drop;
-      @proto_id(8) set_multicast_group_id;
-    }
-    const default_action = drop;
-    size = ROUTING_IPV6_TABLE_MINIMUM_GUARANTEED_SIZE;
-  }
-
   apply {
-    // Drop packets by default, then override in the router_interface_table.
-    // TODO: This should just be the default behavior of v1model:
-    // https://github.com/p4lang/behavioral-model/issues/992
-    mark_to_drop(standard_metadata);
-
-    vrf_table.apply();
-
+    // TODO: Properly model the effect of admit_to_l3 on redirect
+    // in acl_ingress according to SAI.
     if (local_metadata.admit_to_l3) {
 
-      if (headers.ipv4.isValid()) {
-        ipv4_table.apply();
-      } else if (headers.ipv6.isValid()) {
-        ipv6_table.apply();
-      }
-
       // The lpm tables may not set a valid `wcmp_group_id`, e.g. they may drop.
-      if (wcmp_group_id_valid) {
+      if (local_metadata.wcmp_group_id_valid) {
         wcmp_group_table.apply();
       }
 
       // The lpm tables may not set a valid `nexthop_id`, e.g. they may drop.
       // The `wcmp_group_table` should always set a valid `nexthop_id`.
-      if (nexthop_id_valid) {
+      if (local_metadata.nexthop_id_valid) {
         nexthop_table.apply();
 
         if (tunnel_id_valid) {
@@ -544,7 +601,14 @@ control routing(in headers_t headers,
         }
       }
     }
+    // Add metadata that is relevant for punted packets.
+    local_metadata.packet_in_target_egress_port = standard_metadata.egress_spec;
+    local_metadata.packet_in_ingress_port = standard_metadata.ingress_port;
+    // Act on ACL drop after routing resolution.
+    if (local_metadata.acl_drop) {
+      mark_to_drop(standard_metadata);
+    }
   }
-}  // control routing
+} // control routing_resolution.
 
 #endif  // SAI_ROUTING_P4_

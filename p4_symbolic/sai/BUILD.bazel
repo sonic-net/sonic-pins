@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test", "diff_test")
-load("//p4_pdpi:pdgen.bzl", "p4_pd_proto")
-load("@com_github_p4lang_p4c//:bazel/p4_library.bzl", "p4_library")
-
-package(licenses = ["notice"])
+package(
+    default_visibility = ["//visibility:public"],
+    licenses = ["notice"],
+)
 
 cc_library(
     name = "fields",
@@ -25,6 +23,7 @@ cc_library(
     hdrs = ["fields.h"],
     deps = [
         "//gutil:status",
+        "//p4_symbolic:z3_util",
         "//p4_symbolic/symbolic",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/strings",
@@ -35,10 +34,10 @@ cc_library(
     name = "parser",
     srcs = ["parser.cc"],
     hdrs = ["parser.h"],
-    visibility = ["//p4_symbolic:__subpackages__"],
     deps = [
         ":fields",
         "//gutil:status",
+        "//p4_symbolic:z3_util",
         "//p4_symbolic/symbolic",
         "@com_github_z3prover_z3//:api",
         "@com_google_absl//absl/status",
