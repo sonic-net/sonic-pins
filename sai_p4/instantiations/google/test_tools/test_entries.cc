@@ -541,12 +541,16 @@ EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToNexthop(
 }
 
 EntryBuilder& EntryBuilder::AddIngressAclEntryRedirectingToMulticastGroup(
-    int multicast_group_id, std::optional<absl::string_view> in_port_match) {
+    int multicast_group_id, const MirrorAndRedirectMatchFields& match_fields) {
   sai::AclIngressMirrorAndRedirectTableEntry& entry =
       *entries_.add_entries()
            ->mutable_acl_ingress_mirror_and_redirect_table_entry();
-  if (in_port_match.has_value()) {
-    entry.mutable_match()->mutable_in_port()->set_value(*in_port_match);
+  if (match_fields.in_port.has_value()) {
+    entry.mutable_match()->mutable_in_port()->set_value(*match_fields.in_port);
+  }
+  if (match_fields.ipmc_table_hit.has_value()) {
+    entry.mutable_match()->mutable_ipmc_table_hit()->set_value(
+        BoolToHexString(*match_fields.ipmc_table_hit));
   }
   entry.mutable_action()
       ->mutable_redirect_to_ipmc_group()
