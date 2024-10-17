@@ -24,9 +24,11 @@ control acl_ingress(in headers_t headers,
   bool cancel_copy = false;
 
   @id(ACL_INGRESS_METER_ID)
+  @mode(single_rate_two_color)
   direct_meter<MeterColor_t>(MeterType.bytes) acl_ingress_meter;
 
   @id(ACL_INGRESS_QOS_METER_ID)
+  @mode(single_rate_two_color)
   direct_meter<MeterColor_t>(MeterType.bytes) acl_ingress_qos_meter;
 
   @id(ACL_INGRESS_COUNTER_ID)
@@ -53,7 +55,6 @@ control acl_ingress(in headers_t headers,
   }
 #else
   @sai_action(SAI_PACKET_ACTION_COPY, SAI_PACKET_COLOR_GREEN)
-  @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_RED)
   action acl_copy(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
     acl_ingress_counter.count();
@@ -73,7 +74,6 @@ control acl_ingress(in headers_t headers,
   @sai_action(SAI_PACKET_ACTION_TRAP)
 #else
   @sai_action(SAI_PACKET_ACTION_TRAP, SAI_PACKET_COLOR_GREEN)
-  @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
 #endif
   action acl_trap(@sai_action_param(QOS_QUEUE) @id(1) qos_queue_t qos_queue) {
@@ -94,7 +94,6 @@ control acl_ingress(in headers_t headers,
   }
 #else
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
-  @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_DROP, SAI_PACKET_COLOR_RED)
   action acl_forward() {
     acl_ingress_meter.read(local_metadata.color);
@@ -124,7 +123,6 @@ control acl_ingress(in headers_t headers,
 
   @id(ACL_INGRESS_SET_QOS_QUEUE_AND_CANCEL_COPY_ABOVE_RATE_LIMIT_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
-  @sai_action(SAI_PACKET_ACTION_COPY_CANCEL, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_COPY_CANCEL, SAI_PACKET_COLOR_RED)
   // TODO: Rename qos queue to cpu queue, as per action below.
   action set_qos_queue_and_cancel_copy_above_rate_limit(
@@ -143,7 +141,6 @@ control acl_ingress(in headers_t headers,
   // set depending on packet color.
   @id(ACL_INGRESS_SET_CPU_AND_MULTICAST_QUEUES_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
-  @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_RED)
   // TODO: Remove @unsupported annotation.
   @unsupported
@@ -151,9 +148,8 @@ control acl_ingress(in headers_t headers,
       @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue,
       @id(2) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_GREEN)
         qos_queue_t green_multicast_queue,
-      @id(3) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_YELLOW)
-      @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_RED)
-        qos_queue_t red_and_yellow_multicast_queue) {
+      @id(3) @sai_action_param(MULTICAST_QOS_QUEUE, SAI_PACKET_COLOR_RED)
+        qos_queue_t red_multicast_queue) {
     acl_ingress_qos_meter.read(local_metadata.color);
     // We model the behavior for GREEN packes only here.
     // TODO: Branch on color and model behavior for all colors.
@@ -163,7 +159,6 @@ control acl_ingress(in headers_t headers,
   // they are not copied to the CPU.
   @id(ACL_INGRESS_SET_CPU_QUEUE_AND_DENY_ABOVE_RATE_LIMIT_ACTION_ID)
   @sai_action(SAI_PACKET_ACTION_FORWARD, SAI_PACKET_COLOR_GREEN)
-  @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_YELLOW)
   @sai_action(SAI_PACKET_ACTION_DENY, SAI_PACKET_COLOR_RED)
   action set_cpu_queue_and_deny_above_rate_limit(
       @id(1) @sai_action_param(QOS_QUEUE) qos_queue_t cpu_queue) {
@@ -391,7 +386,7 @@ control acl_ingress(in headers_t headers,
     const default_action = NoAction;
     meters = acl_ingress_qos_meter;
     counters = acl_ingress_qos_counter;
-    size = ACL_INGRESS_TABLE_MINIMUM_GUARANTEED_SIZE;
+    size = ACL_INGRESS_QOS_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
@@ -471,10 +466,10 @@ control acl_ingress(in headers_t headers,
   @id(ACL_INGRESS_MIRROR_AND_REDIRECT_TABLE_ID)
   @sai_acl(INGRESS)
   @p4runtime_role(P4RUNTIME_ROLE_SDN_CONTROLLER)
-#if defined(SAI_INSTANTIATION_TOR)
   @entry_restriction("
     // Only allow IP field matches for IP packets.
-    is_ipv6::mask != 0 ->  is_ipv6 == 1;
+    dst_ip::mask != 0 -> is_ipv4 == 1;
+    dst_ipv6::mask != 0 -> is_ipv6 == 1;
     // Forbid illegal combinations of IP_TYPE fields.
     is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
     is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -483,7 +478,6 @@ control acl_ingress(in headers_t headers,
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
   ")
-#endif
   table acl_ingress_mirror_and_redirect_table {
     key = {
 #if defined(SAI_INSTANTIATION_TOR)
@@ -491,6 +485,17 @@ control acl_ingress(in headers_t headers,
         @name("in_port")
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IN_PORT)
         @id(1);
+
+      local_metadata.acl_metadata : ternary
+        @name("acl_metadata")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)
+        @id(6);
+
+      local_metadata.vlan_id : ternary
+        @name("vlan_id")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
+        @id(7);
+#endif
 
       headers.ipv4.isValid() || headers.ipv6.isValid() : optional
         @name("is_ip")
@@ -507,6 +512,12 @@ control acl_ingress(in headers_t headers,
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY)
         @id(4);
 
+      headers.ipv4.dst_addr : ternary
+        @name("dst_ip")
+        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP)
+        @format(IPV4_ADDRESS)
+        @id(10);
+
       headers.ipv6.dst_addr[127:64] : ternary
         @name("dst_ipv6")
         @composite_field(
@@ -514,22 +525,6 @@ control acl_ingress(in headers_t headers,
             @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2))
         @format(IPV6_ADDRESS)
         @id(5);
-
-      local_metadata.acl_metadata : ternary
-        @name("acl_metadata")
-        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_USER_META)
-        @id(6);
-#endif
-
-      // This field is technically only needed on ToR and only included
-      // for middleblock because at least 1 match field without `@unsupported`
-      // annotation is required.
-      // TODO: Make this field TOR-only once the
-      // middleblock  match fields are no longer `@unsupported`.
-      local_metadata.vlan_id : ternary
-        @name("vlan_id")
-        @sai_field(SAI_ACL_TABLE_ATTR_FIELD_OUTER_VLAN_ID)
-        @id(7);
 
       local_metadata.vrf_id : optional
         @name("vrf_id")
