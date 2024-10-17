@@ -11,9 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <memory>
 #include <string>
 
+#include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
@@ -43,36 +43,29 @@ p4_constraints::ConstraintInfo GetConstraintInfoFromP4Info(
   return *constraints;
 }
 
-p4_constraints::ast::Expression GetFirstExpressionFromConstraintInfo(
-    const p4_constraints::ConstraintInfo& constraints) {
-  for (auto& [id, table_info] : constraints) {
-    if (table_info.constraint) {
-      return table_info.constraint.value();
-    }
-  }
-
-  LOG(FATAL) << "No expressions in constraint info";
-}
-
 TEST(ConstraintsUtilTest, BDDConversionTest) {
   Cudd mgr(0, 0);
 
   p4_constraints::ConstraintInfo constraints =
       GetConstraintInfoFromP4Info(kBinaryEqualsP4InfoFile);
 
-  p4_constraints::ast::Expression expr =
-      GetFirstExpressionFromConstraintInfo(constraints);
-  LOG(INFO) << "Binary equals constraint:\n" << expr.DebugString();
+  constexpr int kTblFuzzTableId = 49497980;
+  auto* table_info =
+      p4_constraints::GetTableInfoOrNull(constraints, kTblFuzzTableId);
+  ASSERT_NE(table_info, nullptr)
+      << "No table_info associated with table_id " << kTblFuzzTableId;
+  const absl::optional<p4_constraints::ast::Expression>& constraint1 =
+      table_info->constraint;
+  ASSERT_TRUE(constraint1.has_value());
+  LOG(INFO) << "Binary equals constraint:\n" << constraint1->DebugString();
 
   MatchKeyToBddVariableMapping equals_mapping;
 
-  auto status_or_bdd = ExpressionToBDD(expr, &mgr, &equals_mapping);
+  auto status_or_bdd = ExpressionToBDD(*constraint1, &mgr, &equals_mapping);
 
   LOG(INFO) << "Done..";
 
-  if (!status_or_bdd.ok()) {
-    LOG(ERROR) << status_or_bdd.status();
-  }
+  ASSERT_EQ(status_or_bdd.status(), absl::OkStatus());
 
   BDD bdd = status_or_bdd.value();
 
@@ -81,15 +74,21 @@ TEST(ConstraintsUtilTest, BDDConversionTest) {
 
   constraints = GetConstraintInfoFromP4Info(kBinaryNotEqualsP4InfoFile);
 
-  expr = GetFirstExpressionFromConstraintInfo(constraints);
-  LOG(INFO) << "Binary not equals constraint:\n" << expr.DebugString();
+  table_info = p4_constraints::GetTableInfoOrNull(constraints, 49497980);
+  ASSERT_NE(table_info, nullptr)
+      << "No table_info associated with table_id " << kTblFuzzTableId;
+  const absl::optional<p4_constraints::ast::Expression>& constraint2 =
+      table_info->constraint;
+  ASSERT_TRUE(constraint2.has_value());
+  LOG(INFO) << "Binary not equals constraint:\n" << constraint2->DebugString();
 
   MatchKeyToBddVariableMapping not_equals_mapping;
 
-  status_or_bdd = ExpressionToBDD(expr, &mgr, &not_equals_mapping);
-  if (!status_or_bdd.ok()) {
-    LOG(ERROR) << status_or_bdd.status();
-  }
+  status_or_bdd = ExpressionToBDD(*constraint2, &mgr, &not_equals_mapping);
+
+  LOG(INFO) << "Done..";
+
+  ASSERT_EQ(status_or_bdd.status(), absl::OkStatus());
 
   bdd = status_or_bdd.value();
 
