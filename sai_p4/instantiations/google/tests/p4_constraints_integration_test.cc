@@ -53,8 +53,9 @@ TEST(AclIngressConstraints, TernaryEqualityMustBeExact) {
   {
     ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
                          pdpi::IrTableEntryToPi(ir_info, ir_entry));
-    EXPECT_THAT(p4_constraints::EntryMeetsConstraint(pi_entry, constraint_info),
-                gutil::IsOkAndHolds(false));
+    EXPECT_THAT(p4_constraints::ReasonEntryViolatesConstraint(pi_entry,
+                                                              constraint_info),
+                gutil::IsOkAndHolds(::testing::Not("")));
     ASSERT_OK_AND_ASSIGN(std::string failure_reason,
                          p4_constraints::ReasonEntryViolatesConstraint(
                              pi_entry, constraint_info));
@@ -72,8 +73,9 @@ TEST(AclIngressConstraints, TernaryEqualityMustBeExact) {
   {
     ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
                          pdpi::IrTableEntryToPi(ir_info, ir_entry));
-    EXPECT_THAT(p4_constraints::EntryMeetsConstraint(pi_entry, constraint_info),
-                gutil::IsOkAndHolds(true));
+    EXPECT_THAT(p4_constraints::ReasonEntryViolatesConstraint(pi_entry,
+                                                              constraint_info),
+                gutil::IsOkAndHolds(""));
     ASSERT_OK_AND_ASSIGN(std::string failure_reason,
                          p4_constraints::ReasonEntryViolatesConstraint(
                              pi_entry, constraint_info));

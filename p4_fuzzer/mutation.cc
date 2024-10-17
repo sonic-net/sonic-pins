@@ -43,7 +43,8 @@ uint32_t UniformNotFromList(BitGen* gen, const std::vector<uint32_t>& list) {
 const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config) {
   std::vector<uint32_t> table_ids;
 
-  for (auto& [table_id, table_def] : Ordered(config.info.tables_by_id())) {
+  for (auto& [table_id, table_def] :
+       Ordered(config.GetIrP4Info().tables_by_id())) {
     table_ids.push_back(table_id);
   }
 
@@ -54,7 +55,8 @@ const std::vector<uint32_t> AllTableIds(const FuzzerConfig& config) {
 const std::vector<uint32_t> AllActionIds(const FuzzerConfig& config) {
   std::vector<uint32_t> action_ids;
 
-  for (auto& [action_id, action_def] : Ordered(config.info.actions_by_id())) {
+  for (auto& [action_id, action_def] :
+       Ordered(config.GetIrP4Info().actions_by_id())) {
     action_ids.push_back(action_id);
   }
 
@@ -68,7 +70,7 @@ const std::vector<uint32_t> AllMatchFieldIds(const FuzzerConfig& config,
   std::vector<uint32_t> match_ids;
 
   for (auto& [match_id, match_def] :
-       Ordered(gutil::FindOrDie(config.info.tables_by_id(), table_id)
+       Ordered(gutil::FindOrDie(config.GetIrP4Info().tables_by_id(), table_id)
                    .match_fields_by_id())) {
     match_ids.push_back(match_id);
   }
@@ -178,7 +180,7 @@ absl::Status MutateInvalidTableImplementation(BitGen* gen, TableEntry* entry,
   }
 
   pdpi::IrTableDefinition ir_table_info =
-      gutil::FindOrDie(config.info.tables_by_id(), entry->table_id());
+      gutil::FindOrDie(config.GetIrP4Info().tables_by_id(), entry->table_id());
 
   switch (entry->action().type_case()) {
     case p4::v1::TableAction::kActionProfileActionSet: {
@@ -187,7 +189,8 @@ absl::Status MutateInvalidTableImplementation(BitGen* gen, TableEntry* entry,
           FuzzAction(
               gen, config, switch_state,
               UniformFromSpan(gen, AllValidActions(config, ir_table_info))
-                  .action()));
+                  .action(),
+              ir_table_info));
       break;
     }
 
@@ -230,7 +233,7 @@ absl::Status MutateInvalidActionSelectorWeight(BitGen* gen,
       action_set->mutable_action_profile_actions(action_to_fuzz);
 
   ASSIGN_OR_RETURN(auto action_profile,
-                   GetActionProfile(config.info, entry->table_id()));
+                   GetActionProfile(config.GetIrP4Info(), entry->table_id()));
 
   if (absl::Bernoulli(*gen, 0.5)) {
     action_profile_action->set_weight(0);
@@ -285,9 +288,9 @@ absl::Status MutateInvalidValue(absl::BitGen* gen, p4::v1::Update* update,
 
   // Try to find a match field.
   auto* table_entry = update->mutable_entity()->mutable_table_entry();
-  ASSIGN_OR_RETURN(
-      auto table_definition,
-      gutil::FindOrStatus(config.info.tables_by_id(), table_entry->table_id()));
+  ASSIGN_OR_RETURN(auto table_definition,
+                   gutil::FindOrStatus(config.GetIrP4Info().tables_by_id(),
+                                       table_entry->table_id()));
   for (auto& match : *table_entry->mutable_match()) {
     ASSIGN_OR_RETURN(auto match_definition,
                      gutil::FindOrStatus(table_definition.match_fields_by_id(),
@@ -332,9 +335,9 @@ absl::Status MutateInvalidValue(absl::BitGen* gen, p4::v1::Update* update,
 
   // Try to find an action parameter.
   for (p4::v1::Action* action : actions) {
-    ASSIGN_OR_RETURN(
-        const auto& action_definition,
-        gutil::FindOrStatus(config.info.actions_by_id(), action->action_id()));
+    ASSIGN_OR_RETURN(const auto& action_definition,
+                     gutil::FindOrStatus(config.GetIrP4Info().actions_by_id(),
+                                         action->action_id()));
     for (auto& param : *action->mutable_params()) {
       ASSIGN_OR_RETURN(const auto& param_definition,
                        gutil::FindOrStatus(action_definition.params_by_id(),
