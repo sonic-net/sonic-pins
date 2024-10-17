@@ -8,8 +8,14 @@
 
 namespace p4_symbolic {
 
-z3::context& Z3Context() {
+z3::context& Z3Context(bool renew) {
   static z3::context* z3_context = new z3::context();
+
+  if (renew) {
+    delete z3_context;
+    z3_context = new z3::context();
+  }
+
   return *z3_context;
 }
 
@@ -45,6 +51,25 @@ absl::StatusOr<z3::expr> HexStringToZ3Bitvector(const std::string& hex_string,
     bitwidth = integer.get_str(/*base=*/2).size();
   }
   return Z3Context().bv_val(decimal.c_str(), *bitwidth);
+}
+
+uint64_t Z3ValueStringToInt(const std::string& value) {
+  if (absl::StartsWith(value, "#x")) {
+    return std::stoull(value.substr(2), /*idx=*/nullptr, /*base=*/16);
+  }
+  if (absl::StartsWith(value, "#b")) {
+    return std::stoull(value.substr(2), /*idx=*/nullptr, /*base=*/2);
+  }
+
+  // Boolean or integer values.
+  if (value == "true") {
+    return 1;
+  } else if (value == "false") {
+    return 0;
+  } else {
+    // Must be a base 10 number.
+    return std::stoull(value, /*idx=*/nullptr, /*base=*/10);
+  }
 }
 
 }  // namespace p4_symbolic

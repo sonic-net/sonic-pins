@@ -63,8 +63,14 @@ struct SaiLocalMetadata {
   z3::expr vrf_id;
   // TODO: add `packet_rewrites` fields.
   z3::expr mirror_session_id_valid;
-  // TODO: add `mirror*` fields.
-  // TODO: Add `color` field.
+  z3::expr ingress_port;
+  z3::expr route_metadata;
+};
+
+// Symbolic version of `struct standard_metadata_t` in v1model.p4
+// TODO: Add missing fields, as needed.
+struct V1ModelStandardMetadata {
+  z3::expr ingress_port;
 };
 
 struct SaiFields {

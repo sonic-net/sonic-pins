@@ -18,11 +18,11 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
+#include "gutil/io.h"
 #include "gutil/status.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_symbolic/util/io.h"
 
 namespace p4_symbolic {
 namespace ir {
