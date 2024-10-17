@@ -11,9 +11,11 @@
 
 namespace p4_symbolic {
 
-// Global z3::context used for creating symbolic expressions during symbolic
-// evaluation.
-z3::context& Z3Context();
+// Returns the global z3::context used for creating symbolic expressions during
+// symbolic evaluation. If parameter `renew` is set to true, it deletes the
+// older context and returns a new one.
+// TODO: `renew` is a workaround for using a global context.
+z3::context& Z3Context(bool renew = false);
 
 // -- Evaluation ---------------------------------------------------------------
 
@@ -33,6 +35,16 @@ absl::StatusOr<std::bitset<num_bits>> EvalZ3Bitvector(const z3::expr& bv_expr,
 absl::StatusOr<z3::expr> HexStringToZ3Bitvector(
     const std::string& hex_string,
     absl::optional<int> bitwidth = absl::nullopt);
+
+// -- Misc. --------------------------------------------------------------------
+
+// Turns the given z3 extracted value (as a string) to a uint64_t.
+// Z3 returns an extracted value as either a binary, hex, or decimal strings
+// dependening on the size of the value and the formatting flags it is
+// initialized with.
+// Note: This function assumes that the input is well-formatted and the result
+// fits in uint64_t (otherwise an exception will be thrown).
+uint64_t Z3ValueStringToInt(const std::string& value);
 
 // == END OF PUBLIC INTERFACE ==================================================
 

@@ -46,8 +46,13 @@ absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
 
   auto error = gutil::InternalErrorBuilder()
                << "unable to disambiguate metadata field '" << field << "': ";
-  if (mangled_candidates.empty())
-    return error << "no matching fields found in config";
+  if (mangled_candidates.empty()) {
+    return error << "no matching fields found in config: "
+                 << absl::StrJoin(state, "\n  - ",
+                                  [](std::string* out, const auto& key_value) {
+                                    absl::StrAppend(out, key_value.first);
+                                  });
+  }
   return error << "several mangled fields in the config match:\n- "
                << absl::StrJoin(mangled_candidates, "\n- ");
 }
@@ -100,6 +105,11 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
       .admit_to_l3 = get_metadata_field("admit_to_l3"),
       .vrf_id = get_metadata_field("vrf_id"),
       .mirror_session_id_valid = get_metadata_field("mirror_session_id_valid"),
+      .ingress_port = get_metadata_field("ingress_port"),
+      .route_metadata = get_metadata_field("route_metadata"),
+  };
+  auto standard_metadata = V1ModelStandardMetadata{
+      .ingress_port = get_field("standard_metadata.ingress_port"),
   };
 
   if (!errors.empty()) {

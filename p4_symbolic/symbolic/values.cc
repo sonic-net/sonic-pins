@@ -21,19 +21,24 @@
 #include "p4_symbolic/symbolic/values.h"
 
 #include <locale>
+#include <optional>
 #include <sstream>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "absl/strings/substitute.h"
 #include "gmpxx.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
+#include "p4_pdpi/string_encodings/byte_string.h"
 #include "p4_pdpi/utils/ir.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
@@ -56,47 +61,6 @@ unsigned int FindBitsize(uint64_t value) {
   return (bitsize > 1 ? bitsize : 1);  // At least 1 bit.
 }
 
-// Turns the given z3 extracted value (as a string) to a uint64_t.
-// Z3 returns an extracted value as either a binary, hex, or int strings
-// dependening on the size of the value and the formatting flags it is
-// initialized with.
-uint64_t StringToInt(std::string value) {
-  static std::unordered_map<char, std::string> hex_to_bin = {
-      {'0', "0000"}, {'1', "0001"}, {'2', "0010"}, {'3', "0011"},
-      {'4', "0100"}, {'5', "0101"}, {'6', "0110"}, {'7', "0111"},
-      {'8', "1000"}, {'9', "1001"}, {'a', "1010"}, {'b', "1011"},
-      {'c', "1100"}, {'d', "1101"}, {'e', "1110"}, {'f', "1111"}};
-
-  bool value_is_hex = absl::StartsWith(value, "#x");
-  bool value_is_binary = absl::StartsWith(value, "#b");
-
-  // Boolean or integer values.
-  if (!value_is_hex && !value_is_binary) {
-    if (value == "true") {
-      return 1;
-    } else if (value == "false") {
-      return 0;
-    } else {
-      return std::stoull(value);
-    }
-  }
-
-  // Make sure value is a binary string without leading base prefix.
-  std::string binary;
-  if (value_is_hex) {
-    // Turn hex to binary.
-    absl::string_view stripped_value = absl::StripPrefix(value, "#x");
-    for (char c : stripped_value) {
-      absl::StrAppend(&binary, hex_to_bin.at(c));
-    }
-  } else if (value_is_binary) {
-    // Strip leading #b for binary strings.
-    binary = absl::StripPrefix(value, "#b");
-  }
-
-  return std::stoull(binary);
-}
-
 }  // namespace
 
 absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value) {
@@ -110,34 +74,10 @@ absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value) {
   }
 }
 
-absl::StatusOr<z3::expr> FormatBmv2Value(const pdpi::IrValue &value) {
-  switch (value.format_case()) {
-    case pdpi::IrValue::kHexStr:
-      return HexStringToZ3Bitvector(value.hex_str());
-    case pdpi::IrValue::kIpv4: {
-      ASSIGN_OR_RETURN(netaddr::Ipv4Address ipv4,
-                       netaddr::Ipv4Address::OfString(value.ipv4()));
-      return HexStringToZ3Bitvector(ipv4.ToHexString(), 32);
-    }
-    case pdpi::IrValue::kIpv6: {
-      ASSIGN_OR_RETURN(netaddr::Ipv6Address ipv6,
-                       netaddr::Ipv6Address::OfString(value.ipv6()));
-      return HexStringToZ3Bitvector(ipv6.ToHexString(), 128);
-    }
-    case pdpi::IrValue::kMac: {
-      ASSIGN_OR_RETURN(netaddr::MacAddress mac,
-                       netaddr::MacAddress::OfString(value.mac()));
-      return HexStringToZ3Bitvector(mac.ToHexString(), 48);
-    }
-    default:
-      return absl::UnimplementedError(
-          absl::StrCat("Found unsupported value type ", value.DebugString()));
-  }
-}
-
 absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
                                          const std::string &type_name,
                                          const pdpi::IrValue &value,
+                                         int bitwidth,
                                          P4RuntimeTranslator *translator) {
   switch (value.format_case()) {
     case pdpi::IrValue::kStr: {
@@ -152,7 +92,16 @@ absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
       IdAllocator &allocator =
           translator->p4runtime_translation_allocators[type_name];
       uint64_t int_value = allocator.AllocateId(string_value);
-      return Z3Context().bv_val(int_value, FindBitsize(int_value));
+
+      if (bitwidth == 0) {
+        bitwidth = FindBitsize(int_value);
+      } else {
+        return absl::InvalidArgumentError(absl::Substitute(
+            "Translated type '$0' is expected to have bitwidth 0, got $1",
+            type_name, bitwidth));
+      }
+
+      return Z3Context().bv_val(int_value, bitwidth);
     }
     default: {
       if (translator->fields_p4runtime_type.count(field_name)) {
@@ -160,7 +109,17 @@ absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
             "A table entry provides a non-string value ", value.DebugString(),
             "to a string translated field", field_name));
       }
-      return FormatBmv2Value(value);
+
+      // Rely on PDPI to convert the value since its logic is non-trivial and
+      // may change from time to time. Specifically, use PDPI to convert to
+      // NormalizedByteString and back into IR as a pdpi::HEX_STRING.
+      ASSIGN_OR_RETURN(const std::string byte_string,
+                       pdpi::IrValueToNormalizedByteString(value, bitwidth));
+      ASSIGN_OR_RETURN(const pdpi::IrValue normalized_value,
+                       pdpi::ArbitraryByteStringToIrValue(
+                           pdpi::HEX_STRING, bitwidth, byte_string));
+      // Now convert the hex string internally.
+      return HexStringToZ3Bitvector(normalized_value.hex_str(), bitwidth);
     }
   }
 }
@@ -180,8 +139,12 @@ absl::StatusOr<std::string> TranslateValueToP4RT(
       translator.p4runtime_translation_allocators.at(field_type_name);
 
   // Turn the value from a string to an int.
-  uint64_t int_value = StringToInt(value);
-  return allocator.IdToString(int_value);
+  uint64_t int_value = Z3ValueStringToInt(value);
+  ASSIGN_OR_RETURN(std::string p4rt_value, allocator.IdToString(int_value),
+                   _.SetPrepend()
+                       << "failed to translate dataplane value of field '"
+                       << field_name << "' to P4Runtime representation: ");
+  return p4rt_value;
 }
 
 // IdAllocator Implementation.
@@ -191,7 +154,6 @@ uint64_t IdAllocator::AllocateId(const std::string &string_value) {
   if (this->string_to_id_map_.count(string_value)) {
     return this->string_to_id_map_.at(string_value);
   }
-
   // Allocate new bitvector value and store it in mapping.
   uint64_t int_value = this->counter_++;
   this->string_to_id_map_.insert({string_value, int_value});
