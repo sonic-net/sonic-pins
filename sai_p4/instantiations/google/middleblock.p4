@@ -20,6 +20,7 @@
 #include "../../fixed/drop_martians.p4"
 #include "../../fixed/packet_rewrites.p4"
 #include "../../fixed/tunnel_termination.p4"
+#include "acl_egress.p4"
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
 #include "admit_google_system_mac.p4"
@@ -62,6 +63,7 @@ control egress(inout headers_t headers,
       mirroring_encap.apply(headers, local_metadata, standard_metadata);
       egress_vlan_checks.apply(headers, local_metadata, standard_metadata);
       vlan_tag.apply(headers, local_metadata, standard_metadata);
+      acl_egress.apply(headers, local_metadata, standard_metadata);
     }
   }
 }  // control egress

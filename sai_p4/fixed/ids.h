@@ -35,7 +35,7 @@
 // --- Actions -----------------------------------------------------------------
 
 // IDs of fixed SAI actions (8 most significant bits = 0x01).
-#define ROUTING_NO_ACTION_ACTION_ID 0x01798B9E             // 24742814
+#define SHARED_NO_ACTION_ACTION_ID 0x01798B9E              // 24742814
 #define ROUTING_SET_DST_MAC_ACTION_ID 0x01000001           // 16777217
 #define ROUTING_SET_PORT_AND_SRC_MAC_ACTION_ID 0x01000002  // 16777218
 #define ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID \
@@ -55,7 +55,7 @@
 #define ROUTING_SET_MULTICAST_SRC_MAC_ACTION_ID 0x01000019         // 16777241
 #define MIRRORING_MIRROR_AS_IPV4_ERSPAN_ACTION_ID 0x01000007         // 16777223
 #define CLONING_INGRESS_CLONE_ACTION_ID 0x0100001C                 // 16777244
-#define CLONING_MIRROR_WITH_PSAMP_ENCAPSULATION_ACTION_ID \
+#define CLONING_MIRROR_WITH_VLAN_TAG_AND_IPFIX_ENCAPSULATION_ACTION_ID \
   0x0100001D                                                    // 16777245
 #define L3_ADMIT_ACTION_ID 0x01000008                                // 16777224
 #define MIRRORING_SET_PRE_SESSION_ACTION_ID 0x01000009               // 16777225
