@@ -229,11 +229,8 @@ TableEntryGenerator AclIngressQosTableGenerator(
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
       R"pb(table_name: "acl_ingress_qos_table"
            matches {
-             name: "ether_type"
-             ternary {
-               value { hex_str: "0x0806" }
-               mask { hex_str: "0xffff" }
-             }
+             name: "is_ipv4"
+             optional { value { hex_str: "0x1" } }
            }
            action {
              name: "set_qos_queue_and_cancel_copy_above_rate_limit"
@@ -244,7 +241,7 @@ TableEntryGenerator AclIngressQosTableGenerator(
            })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
   generator.generator = IrMatchFieldAndPriorityGenerator(
-      table_definition, *base_entry, "arp_tpa");
+      table_definition, *base_entry, "ip_protocol");
   return generator;
 }
 

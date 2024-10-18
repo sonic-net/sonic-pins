@@ -146,6 +146,12 @@ control packet_deparser(packet_out packet, in headers_t headers) {
 #if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
     packet.emit(headers.packet_in_header);
 #endif
+    packet.emit(headers.mirror_encap_ethernet);
+    packet.emit(headers.mirror_encap_vlan);
+    packet.emit(headers.mirror_encap_ipv6);
+    packet.emit(headers.mirror_encap_udp);
+    packet.emit(headers.ipfix);
+    packet.emit(headers.psamp_extended);
     packet.emit(headers.ethernet);
     packet.emit(headers.tunnel_encap_ipv6);
     packet.emit(headers.tunnel_encap_gre);

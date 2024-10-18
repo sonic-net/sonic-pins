@@ -567,13 +567,21 @@ EntryBuilder& EntryBuilder::AddMirrorSessionTableEntry(
       *pd_entry.mutable_mirror_session_table_entry();
   mirror_session_entry.mutable_match()->set_mirror_session_id(
       params.mirror_session_id);
-  sai::MirrorWithPsampEncapsulationAction& action =
+  sai::MirrorWithVlanTagAndIpfixEncapsulationAction& action =
       *mirror_session_entry.mutable_action()
-           ->mutable_mirror_with_psamp_encapsulation();
-  action.set_monitor_port(params.mirror_egress_port);
-  // TODO: Fill in PSAMP params in table entry's action.
+           ->mutable_mirror_with_vlan_tag_and_ipfix_encapsulation();
+  action.set_monitor_port(params.monitor_port);
+  // monitor_failover_port's effect is not modeled, so use mirror_egress_port
+  // as a dummy value to satisfy the action param requirement.
+  action.set_monitor_failover_port(params.monitor_port);
+  action.set_mirror_encap_src_mac(params.mirror_encap_src_mac);
+  action.set_mirror_encap_dst_mac(params.mirror_encap_dst_mac);
+  action.set_mirror_encap_vlan_id(params.mirror_encap_vlan_id);
+  action.set_mirror_encap_src_ip(params.mirror_encap_src_ip);
+  action.set_mirror_encap_dst_ip(params.mirror_encap_dst_ip);
+  action.set_mirror_encap_udp_src_port(params.mirror_encap_udp_src_port);
+  action.set_mirror_encap_udp_dst_port(params.mirror_encap_udp_dst_port);
   *entries_.add_entries() = std::move(pd_entry);
-
   return *this;
 }
 
