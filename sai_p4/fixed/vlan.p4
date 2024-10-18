@@ -66,6 +66,9 @@ control vlan_untag(inout headers_t headers,
   }
 }  // control vlan_untag
 
+// Apply VLAN checks for packets in ingress pipeline.
+// This control block assumes vlan_untag control block has been called
+// and VLAN-related information is stored in metadata instead of in headers.
 control ingress_vlan_checks(inout headers_t headers,
                             inout local_metadata_t local_metadata,
                             inout standard_metadata_t standard_metadata) {
@@ -77,15 +80,23 @@ control ingress_vlan_checks(inout headers_t headers,
   }
 }  // control ingress_vlan_checks
 
-// Apply VLAN checks for forwarded packets.
-// TODO: Add VLAN checks for mirrored packets.
+// Apply VLAN checks for packets in egress pipeline (except for punted packets).
+// This control block assumes vlan_tag control block has not been called and
+// VLAN-related information is stored in metadata, instead of in headers.
 control egress_vlan_checks(inout headers_t headers,
                            inout local_metadata_t local_metadata,
                            inout standard_metadata_t standard_metadata) {
   apply {
-    if (local_metadata.enable_vlan_checks &&
-        !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
-      mark_to_drop(standard_metadata);
+    if (local_metadata.enable_vlan_checks) {
+      // For mirrored-encapped packets, the encapped VLAN header's VLAN ID
+      // metadata is different from that of normal VLAN header.
+      if (IS_MIRROR_COPY(standard_metadata) &&
+          !IS_RESERVED_VLAN_ID(local_metadata.mirror_encap_vlan_id)) {
+        mark_to_drop(standard_metadata);
+      } else if (!IS_PACKET_IN_COPY(standard_metadata) &&
+                 !IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
+          mark_to_drop(standard_metadata);
+      }
     }
   }
 } // control egress_vlan_checks
@@ -95,9 +106,10 @@ control vlan_tag(inout headers_t headers,
                  inout local_metadata_t local_metadata,
                  inout standard_metadata_t standard_metadata) {
   apply {
-    // TODO: Forward and Multicast packets should be vlan tagged
-    // but not mirrored packets.
-    if (!IS_RESERVED_VLAN_ID(local_metadata.vlan_id)) {
+    if (!IS_RESERVED_VLAN_ID(local_metadata.vlan_id) &&
+        !IS_MIRROR_COPY(standard_metadata)) {
+      // Mirroring encapsulates a series of headers, including a VLAN header.
+      // To seperate concerns, vlan encapping for mirroring is skipped here.
       headers.vlan.setValid();
       headers.vlan.priority_code_point = 0;
       headers.vlan.drop_eligible_indicator = 0;
