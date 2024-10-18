@@ -29,6 +29,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -60,11 +61,12 @@ void PreparePacketOrDie(packetlib::Packet& packet) {
 }
 
 packetlib::Packet GetIpv4PacketOrDie(
-    netaddr::Ipv4Address ipv4_dst = netaddr::Ipv4Address(192, 168, 100, 1)) {
+    netaddr::Ipv4Address ipv4_dst = netaddr::Ipv4Address(192, 168, 100, 1),
+    netaddr::MacAddress mac_dst = netaddr::MacAddress(2, 3, 4, 5, 6, 7)) {
   auto packet = gutil::ParseProtoOrDie<packetlib::Packet>(R"pb(
     headers {
       ethernet_header {
-        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_destination: "filled in below"
         ethernet_source: "00:01:02:03:04:05"
         ethertype: "0x0800"  # IPv4
       }
@@ -86,6 +88,9 @@ packetlib::Packet GetIpv4PacketOrDie(
     }
     payload: "Untagged IPv4 packet."
   )pb");
+  packet.mutable_headers(0)
+      ->mutable_ethernet_header()
+      ->set_ethernet_destination(mac_dst.ToString());
   packet.mutable_headers(1)->mutable_ipv4_header()->set_ipv4_destination(
       ipv4_dst.ToString());
   PreparePacketOrDie(packet);
@@ -159,9 +164,9 @@ TEST(RedirectTest, RedirectToNextHopOverridesIpMulticastDecision) {
   constexpr absl::string_view kRedirectNexthopId = "redirect-nexthop";
   constexpr absl::string_view kVrf = "vrf";
   constexpr int kMulticastGroupId = 50;
-  // The destination IP used in the input packet.
-  ASSERT_OK_AND_ASSIGN(const netaddr::Ipv4Address kDstIpv4,
-                       netaddr::Ipv4Address::OfString("192.168.100.1"));
+  constexpr auto kDstIpv4 = netaddr::Ipv4Address(232, 1, 2, 3);
+  // IPv4 multicast MAC address.
+  constexpr auto kDstMac = netaddr::MacAddress(0x01, 0, 0x5e, 0x01, 0x02, 0x03);
 
   // Install entries to multicast packets destined to kDstIpv4 to
   // kMulticastEgressPort{1,2} and redirect the ones with in_port
@@ -202,7 +207,7 @@ TEST(RedirectTest, RedirectToNextHopOverridesIpMulticastDecision) {
     // Inject a test packet destined to kDstIpv4 though kIngressPort.
     ASSERT_OK_AND_ASSIGN(
         PacketsByPort output_by_port,
-        bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie(kDstIpv4)));
+        bmv2.SendPacket(kIngressPort, GetIpv4PacketOrDie(kDstIpv4, kDstMac)));
     // The packet must be multicast replicated to kMulticastEgressPort{1,2}.
     ASSERT_THAT(output_by_port,
                 UnorderedElementsAre(Key(kMulticastEgressPort1),
@@ -212,7 +217,8 @@ TEST(RedirectTest, RedirectToNextHopOverridesIpMulticastDecision) {
     // Inject a test packet destined to kDstIpv4 though kRedirectIngressPort.
     ASSERT_OK_AND_ASSIGN(
         PacketsByPort output_by_port,
-        bmv2.SendPacket(kRedirectIngressPort, GetIpv4PacketOrDie(kDstIpv4)));
+        bmv2.SendPacket(kRedirectIngressPort,
+                        GetIpv4PacketOrDie(kDstIpv4, kDstMac)));
     // The packet must be forwarded to kRedirectEgressPort.
     ASSERT_THAT(output_by_port, ElementsAre(Key(kRedirectEgressPort)));
   }
@@ -261,8 +267,9 @@ TEST(RedirectTest, RedirectToMulticastGroupOverridesMulticastTableAction) {
   static constexpr absl::string_view kOverrideIngressPortStr = "\2";
   static constexpr int kDefaultMulticastGroupId = 1;
   static constexpr int kOverrideMulticastGroupId = 2;
-  static constexpr netaddr::Ipv4Address ipv4_dst =
-      netaddr::Ipv4Address(10, 0, 0, 42);
+  constexpr auto kDstIpv4 = netaddr::Ipv4Address(232, 1, 2, 3);
+  // IPv4 multicast MAC address.
+  constexpr auto kDstMac = netaddr::MacAddress(0x01, 0, 0x5e, 0x01, 0x02, 0x03);
 
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> pi_entities,
@@ -270,7 +277,7 @@ TEST(RedirectTest, RedirectToMulticastGroupOverridesMulticastTableAction) {
           .AddVrfEntry("vrf")
           .AddEntrySettingVrfForAllPackets("vrf")
           .AddEntryAdmittingAllPacketsToL3()
-          .AddMulticastRoute("vrf", ipv4_dst, kDefaultMulticastGroupId)
+          .AddMulticastRoute("vrf", kDstIpv4, kDefaultMulticastGroupId)
           .AddIngressAclEntryRedirectingToMulticastGroup(
               kOverrideMulticastGroupId,
               sai::MirrorAndRedirectMatchFields{
@@ -289,7 +296,7 @@ TEST(RedirectTest, RedirectToMulticastGroupOverridesMulticastTableAction) {
           .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
-  const packetlib::Packet kInputPacket = GetIpv4PacketOrDie(ipv4_dst);
+  const packetlib::Packet kInputPacket = GetIpv4PacketOrDie(kDstIpv4, kDstMac);
   ASSERT_THAT(bmv2.SendPacket(kDefaultIngressPort, kInputPacket),
               IsOkAndHolds(UnorderedElementsAre(Key(1))));
   ASSERT_THAT(bmv2.SendPacket(kOverrideIngressPort, kInputPacket),
