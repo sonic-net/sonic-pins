@@ -17,14 +17,14 @@
 #include <string>
 
 #include "google/protobuf/util/json_util.h"
+#include "gutil/io.h"
 #include "gutil/status.h"
-#include "p4_symbolic/util/io.h"
 
 namespace p4_symbolic {
 namespace bmv2 {
 
 absl::StatusOr<P4Program> ParseBmv2JsonFile(const std::string &json_path) {
-  ASSIGN_OR_RETURN(std::string json, util::ReadFile(json_path));
+  ASSIGN_OR_RETURN(std::string json, gutil::ReadFile(json_path));
   return ParseBmv2JsonString(json);
 }
 

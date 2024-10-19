@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2021 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,10 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef GOOGLE_P4_FUZZER_TEST_UTILS_H_
-#define GOOGLE_P4_FUZZER_TEST_UTILS_H_
+#ifndef PINS_INFRA_P4_FUZZER_TEST_UTILS_H_
+#define PINS_INFRA_P4_FUZZER_TEST_UTILS_H_
 
 #include "absl/random/random.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -36,12 +37,13 @@ struct FuzzerTestState {
 
 // Constructs a FuzzerTestState from an IrP4Info, only fuzzing tables with the
 // given role.
-FuzzerTestState ConstructFuzzerTestState(const pdpi::IrP4Info& ir_info,const std::string& role);
+absl::StatusOr<FuzzerTestState> ConstructFuzzerTestState(
+    const p4::config::v1::P4Info& info, const std::string& role);
 
 // Constructs a FuzzerTestState from a standard testing P4Info.
 // By default, this test state should be used for all tests.
 inline FuzzerTestState ConstructStandardFuzzerTestState() {
-  return ConstructFuzzerTestState(pdpi::GetTestIrP4Info(), /*role=*/"");
+  return ConstructFuzzerTestState(pdpi::GetTestP4Info(), /*role=*/"").value();
 }
 
 // TODO: Deprecated. Do not use. New tests should not depend on a
@@ -49,8 +51,9 @@ inline FuzzerTestState ConstructStandardFuzzerTestState() {
 // function.
 inline FuzzerTestState ConstructFuzzerTestStateFromSaiMiddleBlock() {
   return ConstructFuzzerTestState(
-      sai::GetIrP4Info(sai::Instantiation::kMiddleblock),
-      /*role=*/"sdn_controller");
+             sai::GetP4Info(sai::Instantiation::kMiddleblock),
+             /*role=*/"sdn_controller")
+      .value();
 }
 
 // Gets a MatchField of a given type from a table definition. Deterministic for
@@ -77,10 +80,11 @@ absl::StatusOr<pdpi::IrActionProfileDefinition>
 GetActionProfileImplementingTable(const pdpi::IrP4Info& info,
                                   const pdpi::IrTableDefinition& table);
 
-// Helpers to modify specific pieces of the IrP4Info.
-void SetMaxGroupSizeInActionProfile(
-    pdpi::IrP4Info& info, pdpi::IrActionProfileDefinition& action_profile,
-    int max_group_size);
+// Helpers to modify specific pieces of the FuzzerConfig.
+absl::Status SetMaxGroupSizeInActionProfile(FuzzerConfig& config,
+                                            int action_profile_id,
+                                            int max_group_size);
+
 }  // namespace p4_fuzzer
 
-#endif  // GOOGLE_P4_FUZZER_TEST_UTILS_H_
+#endif  // PINS_INFRA_P4_FUZZER_TEST_UTILS_H_
