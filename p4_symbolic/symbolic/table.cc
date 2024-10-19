@@ -30,6 +30,7 @@
 #include "absl/types/span.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/operators.h"
@@ -77,7 +78,7 @@ int FindMatchWithName(const pdpi::IrTableEntry &entry,
 // We return the old index so that Symbolic and Concrete TableMatches are
 // set up against the indices as they appear in the input table entries array,
 // and not the sorted array.
-std::vector<std::pair<size_t, pdpi::IrTableEntry>> SortEntries(
+std::vector<std::pair<int, pdpi::IrTableEntry>> SortEntries(
     const ir::Table &table, const std::vector<pdpi::IrTableEntry> &entries) {
   if (entries.empty()) return {};
   // Find which *definition* of priority we should use by looking at the
@@ -106,27 +107,26 @@ std::vector<std::pair<size_t, pdpi::IrTableEntry>> SortEntries(
   }
 
   // The output array.
-  std::vector<std::pair<size_t, pdpi::IrTableEntry>> sorted_entries;
-  for (size_t i = 0; i < entries.size(); i++) {
+  std::vector<std::pair<int, pdpi::IrTableEntry>> sorted_entries;
+  for (int i = 0; i < entries.size(); i++) {
     const pdpi::IrTableEntry &entry = entries.at(i);
     sorted_entries.push_back(std::make_pair(i, entry));
   }
 
   // The sort comparator depends on the match types.
-  std::function<bool(const std::pair<size_t, pdpi::IrTableEntry> &,
-                     const std::pair<size_t, pdpi::IrTableEntry> &)>
+  std::function<bool(const std::pair<int, pdpi::IrTableEntry> &,
+                     const std::pair<int, pdpi::IrTableEntry> &)>
       comparator;
   if (has_ternary) {
     // Sort by explicit priority.
-    comparator = [](const std::pair<size_t, pdpi::IrTableEntry> &entry1,
-                    const std::pair<size_t, pdpi::IrTableEntry> &entry2) {
+    comparator = [](const std::pair<int, pdpi::IrTableEntry> &entry1,
+                    const std::pair<int, pdpi::IrTableEntry> &entry2) {
       return entry1.second.priority() > entry2.second.priority();
     };
   } else if (lpm_key.has_value()) {
     // Sort by prefix length.
-    comparator = [lpm_key](
-                     const std::pair<size_t, pdpi::IrTableEntry> &entry1,
-                     const std::pair<size_t, pdpi::IrTableEntry> &entry2) {
+    comparator = [lpm_key](const std::pair<int, pdpi::IrTableEntry> &entry1,
+                           const std::pair<int, pdpi::IrTableEntry> &entry2) {
       auto is_lpm_match = [=](const pdpi::IrMatch &match) -> bool {
         return match.name() == *lpm_key;
       };
@@ -235,8 +235,13 @@ absl::StatusOr<z3::expr> EvaluateTableEntryCondition(
   z3::expr condition_expression = Z3Context().bool_val(true);
   const google::protobuf::Map<std::string, ir::FieldValue> &match_to_fields =
       table.table_implementation().match_name_to_field();
-  for (const auto &[name, match_fields] :
-       table.table_definition().match_fields_by_name()) {
+
+  // It is desirable for P4Symbolic to produce deterministic outputs. Therefore,
+  // all containers need to be traversed in a deterministic order.
+  const auto sorted_match_fields_by_name =
+      Ordered(table.table_definition().match_fields_by_name());
+
+  for (const auto &[name, match_fields] : sorted_match_fields_by_name) {
     p4::config::v1::MatchField match_definition = match_fields.match_field();
 
     int match_field_index = FindMatchWithName(entry, name);
@@ -295,7 +300,7 @@ absl::Status EvaluateSingeTableEntryAction(
 // Constructs a symbolic expressions that represents the action invocation
 // corresponding to this entry.
 absl::Status EvaluateTableEntryAction(
-    const ir::Table &table, const pdpi::IrTableEntry &entry,
+    const ir::Table &table, const pdpi::IrTableEntry &entry, int entry_index,
     const google::protobuf::Map<std::string, ir::Action> &actions,
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
@@ -312,7 +317,8 @@ absl::Status EvaluateTableEntryAction(
       // whose value determines which action is executed: to a first
       // approximation, action i is executed iff `selector == i`.
       std::string selector_name =
-          absl::StrCat("action selector for ", entry.DebugString());
+          absl::StrFormat("action selector for entry #%d of table '%s'",
+                          entry_index, entry.table_name());
       z3::expr selector = Z3Context().int_const(selector_name.c_str());
       z3::expr unselected = Z3Context().bool_val(true);
       for (int i = 0; i < action_set.size(); ++i) {
@@ -345,7 +351,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const z3::expr &guard) {
   const std::string &table_name = table.table_definition().preamble().name();
   // Sort entries by priority deduced from match types.
-  std::vector<std::pair<size_t, pdpi::IrTableEntry>> sorted_entries =
+  std::vector<std::pair<int, pdpi::IrTableEntry>> sorted_entries =
       SortEntries(table, entries);
   // The table semantically is just a bunch of if conditions, one per
   // table entry, we construct this big if-elseif-...-else symbolically.
@@ -431,16 +437,17 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   }
 
   // Start with the default entry
-  z3::expr match_index = Z3Context().int_val(-1);
-  RETURN_IF_ERROR(EvaluateTableEntryAction(
-      table, default_entry, data_plane.program.actions(), state, translator,
-      default_entry_assignment_guard));
+  z3::expr match_index = Z3Context().int_val(kDefaultActionEntryIndex);
+  RETURN_IF_ERROR(
+      EvaluateTableEntryAction(table, default_entry, kDefaultActionEntryIndex,
+                               data_plane.program.actions(), state, translator,
+                               default_entry_assignment_guard));
 
   // Continue evaluating each table entry in reverse priority
   for (int row = sorted_entries.size() - 1; row >= 0; row--) {
-    size_t old_index = sorted_entries.at(row).first;
+    int old_index = sorted_entries.at(row).first;
     const pdpi::IrTableEntry &entry = sorted_entries.at(row).second;
-    z3::expr row_symbol = Z3Context().int_val(static_cast<int>(old_index));
+    z3::expr row_symbol = Z3Context().int_val(old_index);
 
     // The condition used in the big if_else_then construct.
     ASSIGN_OR_RETURN(z3::expr entry_match,
@@ -450,9 +457,9 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
 
     // Evaluate the entry's action guarded by its complete assignment guard.
     z3::expr entry_assignment_guard = assignment_guards.at(row);
-    RETURN_IF_ERROR(
-        EvaluateTableEntryAction(table, entry, data_plane.program.actions(),
-                                 state, translator, entry_assignment_guard));
+    RETURN_IF_ERROR(EvaluateTableEntryAction(
+        table, entry, old_index, data_plane.program.actions(), state,
+        translator, entry_assignment_guard));
   }
 
   // This table has been completely evaluated, the result of the evaluation
@@ -476,9 +483,8 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
        table.table_implementation().action_to_next_control()) {
     if (first) {
       next_control = control;
-      continue;
-    }
-    if (next_control != control) {
+      first = false;
+    } else if (next_control != control) {
       return absl::UnimplementedError(absl::StrCat(
           "Table \"", table_name,
           "\" invokes different control constructs based on matched actions."));
