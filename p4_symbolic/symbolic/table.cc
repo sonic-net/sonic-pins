@@ -205,8 +205,15 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
 
     case p4::config::v1::MatchField::OPTIONAL: {
       if (match.match_value_case() != pdpi::IrMatch::kOptional) return mismatch;
+      // According to the P4Runtime spec, "for don't care matches, the P4Runtime
+      // client must omit the field's entire FieldMatch entry when building the
+      // match repeated field of the TableEntry message". Therefore, if the
+      // match value is present for an optional match type, it must be a
+      // concrete value.
       ASSIGN_OR_RETURN(z3::expr value_expression,
-                       values::FormatBmv2Value(match.optional().value()));
+                       values::FormatP4RTValue(
+                           field_name, match_definition.type_name().name(),
+                           match.optional().value(), translator));
       return operators::Eq(field_expression, value_expression);
     }
 
