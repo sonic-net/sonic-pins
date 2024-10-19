@@ -42,6 +42,7 @@ ABSL_FLAG(std::string, entries, "",
           "if the input p4 program contains no (explicit) tables for which "
           "entries are needed.");
 ABSL_FLAG(std::string, debug, "", "Dump the SMT program for debugging");
+ABSL_FLAG(int, port_count, 2, "Number of used ports (numbered 0 to N-1)");
 ABSL_FLAG(bool, hardcoded_parser, true,
           "Use the hardcoded parser during symbolic evaluation");
 
@@ -53,6 +54,7 @@ absl::Status ParseAndEvaluate() {
   const std::string &bmv2_path = absl::GetFlag(FLAGS_bmv2);
   const std::string &entries_path = absl::GetFlag(FLAGS_entries);
   const std::string &debug_path = absl::GetFlag(FLAGS_debug);
+  const int port_count = absl::GetFlag(FLAGS_port_count);
   bool hardcoded_parser = absl::GetFlag(FLAGS_hardcoded_parser);
 
   RET_CHECK(!p4info_path.empty());
@@ -63,11 +65,14 @@ absl::Status ParseAndEvaluate() {
       p4_symbolic::symbolic::Dataplane dataplane,
       p4_symbolic::ParseToIr(bmv2_path, p4info_path, entries_path));
 
+  // Generate port list.
+  std::vector<int> physical_ports(port_count);
+  for (int i = 0; i < port_count; i++) physical_ports[i] = i;
+
   // Evaluate program symbolically.
   ASSIGN_OR_RETURN(
       const std::unique_ptr<p4_symbolic::symbolic::SolverState> &solver_state,
-      p4_symbolic::symbolic::EvaluateP4Pipeline(dataplane,
-                                                std::vector<int>{0, 1}));
+      p4_symbolic::symbolic::EvaluateP4Pipeline(dataplane, physical_ports));
   // Add constraints for parser.
   if (hardcoded_parser) {
     ASSIGN_OR_RETURN(
@@ -149,6 +154,14 @@ absl::Status ParseAndEvaluate() {
           std::cout << "\tscalars.userMetadata.vrf_is_valid = "
                     << packet_option.value().egress_headers.at(
                            "scalars.userMetadata.vrf_is_valid")
+                    << std::endl;
+        }
+        // Custom metadata field defined in testdata/string-optional/program.p4
+        if (packet_option.value().egress_headers.contains(
+                "scalars.userMetadata.string_field")) {
+          std::cout << "\tscalars.userMetadata.string_field = "
+                    << packet_option.value().egress_headers.at(
+                           "scalars.userMetadata.string_field")
                     << std::endl;
         }
       } else {
