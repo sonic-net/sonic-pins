@@ -111,7 +111,6 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
     // If action weight is 0 or less, or if it is greater than the
     // max_member_weight (if non-zero) for SumOfMembers semantics, the server
     // MUST return an InvalidArgumentError.
-    // Ref: http://screen/6TucRSmmLEytHQK
     if (action.weight() <= 0) {
       return absl::InvalidArgumentError(absl::StrFormat(
           "The new entry attempts to program a member with weight %d, which is "
@@ -131,7 +130,6 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
   if (action_profile.has_sum_of_members()) {
     // If the table entry has too many actions then the current table resources
     // do not matter. The server must return an InvalidArgumentError.
-    // Ref: http://screen/ANhyq7q6jQHry2W
     if (needed_resources.actions > action_profile.max_group_size() &&
         action_profile.max_group_size() != 0) {
       return absl::InvalidArgumentError(absl::StrFormat(
@@ -151,7 +149,6 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
   } else {
     // If the table entry has too much weight then the current table resources
     // do not matter. The server must return an InvalidArgumentError.
-    // Ref: http://screen/axLMH8UBcGE6GQD
     if (needed_resources.total_weight > action_profile.max_group_size() &&
         action_profile.max_group_size() != 0) {
       return absl::InvalidArgumentError(absl::StrFormat(
@@ -200,7 +197,6 @@ SwitchState::SwitchState(IrP4Info ir_p4info)
     unordered_tables_[table_id] = UnorderedTableEntries();
     current_resource_statistics_[table_id] = ResourceStatistics();
     peak_resource_statistics_[table_id] = PeakResourceStatistics();
-
   }
   current_entries_ = 0;
   peak_entries_seen_ = 0;
@@ -541,7 +537,6 @@ absl::Status SwitchState::SetTableEntries(
   for (const p4::v1::TableEntry& entry : table_entries) {
     *update.mutable_entity()->mutable_table_entry() = entry;
     RETURN_IF_ERROR(ApplyUpdate(update));
-
   }
 
   return absl::OkStatus();
@@ -635,68 +630,6 @@ std::string SwitchState::SwitchStateSummary() const {
       "guaranteed size.\n)",
       "current size", "max size seen", "guaranteed size", GetNumTableEntries(),
       peak_entries_seen_, "N/A", res);
-}
-
-absl::StatusOr<std::vector<ReferableEntry>> SwitchState::GetReferableEntries(
-    absl::string_view table,
-    const absl::flat_hash_set<std::string>& fields) const {
-  std::vector<ReferableEntry> result;
-
-  ASSIGN_OR_RETURN(const pdpi::IrTableDefinition* table_definition,
-                   FindPtrOrStatus(ir_p4info_.tables_by_name(), table),
-                   _ << "Table '" << table << "'does not exist in p4info.");
-
-  if (fields.empty()) {
-    return gutil::InvalidArgumentErrorBuilder()
-           << "Cannot get referable entries if no fields are being referenced.";
-  }
-
-  // PI representation uses fields ids, so map ids back to names.
-  absl::flat_hash_map<uint32_t, std::string> field_id_to_field_name;
-  for (const std::string& field : fields) {
-    ASSIGN_OR_RETURN(
-        const pdpi::IrMatchFieldDefinition* field_definition,
-        FindPtrOrStatus(table_definition->match_fields_by_name(), field),
-        _ << "Table '" << table << "' has no field named '" << field << "'.");
-    p4::config::v1::MatchField match_field = field_definition->match_field();
-    // References must only be to fields of type exact or optional.
-    if (match_field.match_type() != p4::config::v1::MatchField::EXACT &&
-        match_field.match_type() != p4::config::v1::MatchField::OPTIONAL) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "References must only be to fields with type exact or "
-                "optional. Field '"
-             << field << "' in table '" << table << "' is of a different type.";
-    }
-    field_id_to_field_name.insert({match_field.id(), field});
-  }
-
-  // Loop over all table entries to construct ReferableEntries.
-  ASSIGN_OR_RETURN(
-      const OrderedTableEntries* ordered_entries,
-      FindPtrOrStatus(ordered_tables_, table_definition->preamble().id()),
-      _ << "Table '" << table << "' exists in p4 info but has no ordered "
-        << "entry in switch state.");
-  for (const auto& [key, table_entry] : *ordered_entries) {
-    ReferableEntry result_entry;
-    // Fill out ReferableEntry mapping.
-    for (const auto& match : table_entry.match()) {
-      if (auto it = field_id_to_field_name.find(match.field_id());
-          it != field_id_to_field_name.end()) {
-        std::string field_name = it->second;
-        if (match.has_exact()) {
-          result_entry.insert({field_name, match.exact().value()});
-        } else if (match.has_optional()) {
-          result_entry.insert({field_name, match.optional().value()});
-        }
-      }
-    }
-    // Only include entries where all referenced fields are present.
-    if (result_entry.size() == fields.size()) {
-      result.push_back(result_entry);
-    }
-  }
-
-  return result;
 }
 
 absl::Status SwitchState::CheckConsistency() const {
