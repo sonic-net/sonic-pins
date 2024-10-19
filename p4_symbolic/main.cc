@@ -27,12 +27,12 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "gutil/io.h"
 #include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.h"
 #include "p4_symbolic/parser.h"
 #include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/symbolic/symbolic.h"
-#include "p4_symbolic/util/io.h"
 
 ABSL_FLAG(std::string, p4info, "",
           "The path to the p4info protobuf file (required)");
@@ -173,8 +173,7 @@ absl::Status ParseAndEvaluate() {
 
   // Debugging.
   if (!debug_path.empty()) {
-    RETURN_IF_ERROR(
-        p4_symbolic::util::WriteFile(debug_smt_formula, debug_path));
+    RETURN_IF_ERROR(gutil::WriteFile(debug_smt_formula, debug_path));
   }
 
   return absl::OkStatus();

@@ -44,8 +44,8 @@ cc_library(
     ],
     deps = [
         ":bmv2_cc_proto",
+        "//gutil:io",
         "//gutil:status",
-        "//p4_symbolic/util",
         "@com_google_protobuf//:protobuf",
     ],
 )
@@ -55,8 +55,8 @@ cc_binary(
     srcs = ["test.cc"],
     deps = [
         ":bmv2",
+        "//gutil:io",
         "//gutil:status",
-        "//p4_symbolic/util",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/flags:usage",

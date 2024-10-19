@@ -14,11 +14,11 @@
 
 #include "p4_symbolic/parser.h"
 
+#include "gutil/io.h"
 #include "gutil/proto.h"
 #include "p4_symbolic/bmv2/bmv2.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/pdpi_driver.h"
-#include "p4_symbolic/util/io.h"
 
 namespace p4_symbolic {
 
@@ -58,7 +58,7 @@ absl::StatusOr<symbolic::Dataplane> ParseToIr(
     const std::string &bmv2_json_path, const std::string &p4info_path,
     absl::Span<const p4::v1::TableEntry> table_entries) {
   // Parse bmv2 json file into our initial bmv2 protobuf.
-  ASSIGN_OR_RETURN(std::string bmv2_json, util::ReadFile(bmv2_json_path));
+  ASSIGN_OR_RETURN(std::string bmv2_json, gutil::ReadFile(bmv2_json_path));
 
   // Parse p4info file into pdpi format.
   ASSIGN_OR_RETURN(pdpi::IrP4Info p4info,
