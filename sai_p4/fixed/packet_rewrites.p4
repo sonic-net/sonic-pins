@@ -64,12 +64,10 @@ control multicast_rewrites(inout local_metadata_t local_metadata,
   table multicast_router_interface_table {
     key = {
       multicast_replica_port : exact
-        // TODO: Add this once supported by PDPI and its customers.
-        // @referenced_by(multicast_group_table, replica.port)
+        @referenced_by(builtin::multicast_group_table, replica.port)
         @id(1);
       multicast_replica_instance : exact
-        // TODO: Add this once supported by PDPI and its customers.
-        // @referenced_by(multicast_group_table, replica.instance)
+        @referenced_by(builtin::multicast_group_table, replica.instance)
         @id(2);
     }
     actions = {

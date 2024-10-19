@@ -857,6 +857,7 @@ tables {
   match_fields {
     id: 1
     name: "multicast_replica_port"
+    annotations: "@referenced_by(builtin : : multicast_group_table , replica . port)"
     match_type: EXACT
     type_name {
       name: "port_id_t"
@@ -865,6 +866,7 @@ tables {
   match_fields {
     id: 2
     name: "multicast_replica_instance"
+    annotations: "@referenced_by(builtin : : multicast_group_table , replica . instance)"
     bitwidth: 16
     match_type: EXACT
   }
@@ -1127,6 +1129,7 @@ actions {
   params {
     id: 1
     name: "multicast_group_id"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
   }
 }
@@ -1136,7 +1139,6 @@ actions {
     name: "ingress.acl_ingress.acl_copy"
     alias: "acl_copy"
     annotations: "@sai_action(SAI_PACKET_ACTION_COPY , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_YELLOW)"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_RED)"
   }
   params {
@@ -1154,7 +1156,6 @@ actions {
     name: "ingress.acl_ingress.acl_trap"
     alias: "acl_trap"
     annotations: "@sai_action(SAI_PACKET_ACTION_TRAP , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_YELLOW)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
   }
   params {
@@ -1172,7 +1173,6 @@ actions {
     name: "ingress.acl_ingress.acl_forward"
     alias: "acl_forward"
     annotations: "@sai_action(SAI_PACKET_ACTION_FORWARD , SAI_PACKET_COLOR_GREEN)"
-    annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_YELLOW)"
     annotations: "@sai_action(SAI_PACKET_ACTION_DROP , SAI_PACKET_COLOR_RED)"
   }
 }
@@ -1422,8 +1422,8 @@ actions {
 actions {
   preamble {
     id: 16777245
-    name: "ingress.mirror_session_lookup.mirror_with_psamp_encapsulation"
-    alias: "mirror_with_psamp_encapsulation"
+    name: "ingress.mirror_session_lookup.mirror_with_ipfix_encapsulation"
+    alias: "mirror_with_ipfix_encapsulation"
     annotations: "@unsupported"
   }
   params {
@@ -1519,6 +1519,7 @@ direct_meters {
     id: 352321792
     name: "ingress.acl_ingress.acl_ingress_meter"
     alias: "acl_ingress_meter"
+    annotations: "@mode(single_rate_two_color)"
   }
   spec {
     unit: BYTES

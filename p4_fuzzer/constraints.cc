@@ -16,9 +16,7 @@
 
 #include <functional>
 #include <string>
-#include <utility>
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -53,11 +51,10 @@ absl::StatusOr<bool> HasP4RuntimeTranslatedType(
 }  // namespace
 
 bool UsesP4Constraints(int table_id, const FuzzerConfig& config) {
-  auto it = config.GetConstraintInfo().find(table_id);
-  if (it == config.GetConstraintInfo().end()) {
-    return false;
-  }
-  return it->second.constraint.has_value();
+  auto* table_info =
+      p4_constraints::GetTableInfoOrNull(config.GetConstraintInfo(), table_id);
+
+  return table_info != nullptr && table_info->constraint.has_value();
 }
 
 bool UsesP4Constraints(const pdpi::IrTableDefinition& table,
@@ -68,14 +65,15 @@ bool UsesP4Constraints(const pdpi::IrTableDefinition& table,
 absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
     const FuzzerConfig& config, const SwitchState& switch_state,
     const pdpi::IrTableDefinition& table, absl::BitGen& gen) {
-  auto it = config.GetConstraintInfo().find(table.preamble().id());
-  if (it == config.GetConstraintInfo().end()) {
+  auto* table_info = p4_constraints::GetTableInfoOrNull(
+      config.GetConstraintInfo(), table.preamble().id());
+
+  if (table_info == nullptr) {
     return gutil::InvalidArgumentErrorBuilder()
            << "given table with ID '" << table.preamble().id()
            << "' that does not exist in P4Info: " << table.preamble().alias();
   }
-  const p4_constraints::TableInfo& table_info = it->second;
-  if (!table_info.constraint.has_value()) {
+  if (!table_info->constraint.has_value()) {
     return gutil::InvalidArgumentErrorBuilder()
            << "given table without P4-Constraints: "
            << table.preamble().alias();
@@ -112,7 +110,7 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
 
   ASSIGN_OR_RETURN(
       p4_constraints::SymbolicEnvironment environment,
-      p4_constraints::EncodeValidTableEntryInZ3(table_info, solver, skip_key));
+      p4_constraints::EncodeValidTableEntryInZ3(*table_info, solver, skip_key));
 
   // Try to add some randomness to get more unique entries by attempting to fuzz
   // priority, skipping if the initial value yields an unsatisfiable constraint.
@@ -149,7 +147,7 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
   z3::model model = solver.get_model();
 
   ASSIGN_OR_RETURN(TableEntry table_entry,
-                   p4_constraints::ConcretizeEntry(model, table_info,
+                   p4_constraints::ConcretizeEntry(model, *table_info,
                                                    environment, skip_key));
 
   // Fuzz an action.
