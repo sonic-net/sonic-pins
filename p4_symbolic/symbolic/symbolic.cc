@@ -16,15 +16,12 @@
 
 #include <utility>
 
-#include "absl/algorithm/container.h"
 #include "absl/cleanup/cleanup.h"
-#include "absl/memory/memory.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/packet.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/z3_util.h"
 
@@ -132,11 +129,11 @@ absl::StatusOr<std::optional<ConcreteContext>> Solve(
 
   solver_state->solver->push();
   solver_state->solver->add(constraint);
+  auto pop = absl::Cleanup([&] { solver_state->solver->pop(); });
   z3::check_result check_result = solver_state->solver->check();
   switch (check_result) {
     case z3::unsat:
     case z3::unknown:
-      solver_state->solver->pop();
       return absl::nullopt;
 
     case z3::sat:
@@ -145,7 +142,6 @@ absl::StatusOr<std::optional<ConcreteContext>> Solve(
           ConcreteContext result,
           util::ExtractFromModel(solver_state->context, packet_model,
                                  solver_state->translator));
-      solver_state->solver->pop();
       return result;
   }
   LOG(DFATAL) << "invalid Z3 check() result: "

@@ -36,6 +36,9 @@ namespace p4_symbolic {
 namespace symbolic {
 namespace table {
 
+// P4-Symbolic models the default action as an entry with index -1.
+constexpr int kDefaultActionEntryIndex = -1;
+
 absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     const Dataplane &data_plane, const ir::Table &table,
     const std::vector<pdpi::IrTableEntry> &entries,

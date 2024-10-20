@@ -175,8 +175,7 @@ control routing_lookup(in headers_t headers,
   ")
   action set_multicast_group_id(
       @id(1)
-      // TODO: Add this once supported by PDPI and its customers.
-      // @refers_to(multicast_group_table, multicast_group_id)
+      @refers_to(builtin::multicast_group_table, multicast_group_id)
       multicast_group_id_t multicast_group_id) {
     standard_metadata.mcast_grp = multicast_group_id;
   }

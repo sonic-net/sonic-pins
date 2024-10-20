@@ -443,8 +443,17 @@ TEST(EntryBuilder, AddMirrorSessionTableEntry) {
       pdpi::IrEntities entities,
       EntryBuilder()
           .AddMirrorSessionTableEntry(MirrorSessionParams{
-              .mirror_session_id = "id",
-              .mirror_egress_port = "0",
+              .mirror_session_id = "mirror_session_id",
+              .monitor_port = "monitor_port",
+              .mirror_encap_src_mac =
+                  netaddr::MacAddress(1, 1, 1, 1, 1, 1).ToString(),
+              .mirror_encap_dst_mac =
+                  netaddr::MacAddress(1, 2, 3, 4, 5, 6).ToString(),
+              .mirror_encap_vlan_id = "0x123",
+              .mirror_encap_src_ip = "::1",
+              .mirror_encap_dst_ip = "::2",
+              .mirror_encap_udp_src_port = "0x1234",
+              .mirror_encap_udp_dst_port = "0x1235",
           })
           .LogPdEntries()
           // TODO: Remove unsupported once the
