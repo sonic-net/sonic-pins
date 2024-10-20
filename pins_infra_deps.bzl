@@ -163,9 +163,9 @@ def pins_infra_deps():
     if not native.existing_rule("com_github_p4lang_p4_constraints"):
         http_archive(
             name = "com_github_p4lang_p4_constraints",
-            urls = ["https://github.com/p4lang/p4-constraints/archive/11a08877ae8e3cf60acfa90c0f020d65b5a91ed5.zip"],
-            strip_prefix = "p4-constraints-11a08877ae8e3cf60acfa90c0f020d65b5a91ed5",
-            sha256 = "e85039af2378264f5e980984ab95f28903baebb3f515f1097377e294e681b2b6",
+            urls = ["https://github.com/p4lang/p4-constraints/archive/3d5196a793f375ccbe1bf38ae6c49e2e65604f4b.zip"],
+            strip_prefix = "p4-constraints-3d5196a793f375ccbe1bf38ae6c49e2e65604f4b",
+            sha256 = "bd8aee6cf824797e7c82ad9183b6ef47a2bbedbcab55ddc9480ccf5a174a1b3d",
         )
     if not native.existing_rule("com_github_nlohmann_json"):
         http_archive(

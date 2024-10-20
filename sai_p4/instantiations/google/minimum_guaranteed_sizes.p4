@@ -54,7 +54,7 @@
 #define ROUTING_IPV4_MULTICAST_TABLE_MINIMUM_GUARANTEED_SIZE 1600
 #define ROUTING_IPV6_MULTICAST_TABLE_MINIMUM_GUARANTEED_SIZE 1600
 
-// TODO: b/318522225 - multicast_router_interface_table runs out of space at 110 entries, expected 128 
+// TODO: multicast_router_interface_table runs out of space at 110 entries, expected 128 
 #define ROUTING_MULTICAST_ROUTER_INTERFACE_TABLE_MINIMUM_GUARANTEED_SIZE 110
 
 // The maximum number of wcmp groups.
