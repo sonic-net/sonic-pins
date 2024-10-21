@@ -69,14 +69,6 @@ tables {
     match_type: TERNARY
   }
   match_fields {
-    id: 9
-    name: "dst_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-    match_type: TERNARY
-  }
-  match_fields {
     id: 5
     name: "dst_ip"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP)"
@@ -421,7 +413,6 @@ tables {
     name: "ingress.routing_lookup.ipv4_multicast_table"
     alias: "ipv4_multicast_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -456,7 +447,6 @@ tables {
     name: "ingress.routing_lookup.ipv6_multicast_table"
     alias: "ipv6_multicast_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -796,6 +786,7 @@ tables {
     name: "ingress.acl_ingress.acl_ingress_mirror_and_redirect_table"
     alias: "acl_ingress_mirror_and_redirect_table"
     annotations: "@sai_acl(INGRESS)"
+    annotations: "@sai_acl_priority(15)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
@@ -876,6 +867,10 @@ tables {
     annotations: "@unsupported"
     bitwidth: 1
     match_type: OPTIONAL
+  }
+  action_refs {
+    id: 16777475
+    annotations: "@proto_id(4)"
   }
   action_refs {
     id: 16777476
@@ -1130,7 +1125,6 @@ tables {
     id: 33554508
     name: "egress.packet_rewrites.multicast_rewrites.multicast_router_interface_table"
     alias: "multicast_router_interface_table"
-    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }
   match_fields {
@@ -1481,7 +1475,6 @@ actions {
     id: 16777240
     name: "ingress.routing_lookup.set_multicast_group_id"
     alias: "set_multicast_group_id"
-    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
@@ -1660,6 +1653,7 @@ actions {
     id: 1
     name: "multicast_group_id"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
   }
 }

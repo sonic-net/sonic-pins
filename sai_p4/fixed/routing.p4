@@ -165,9 +165,6 @@ control routing_lookup(in headers_t headers,
   // Calling this action will override unicast, and can itself be overriden by
   // `mark_to_drop`.
   //
-  // TODO: Remove `@unsupported` annotation once the switch stack
-  // supports multicast.
-  @unsupported
   @id(ROUTING_SET_MULTICAST_GROUP_ID_ACTION_ID)
   @action_restriction("
     // Disallow 0 since it encodes 'no multicast' in V1Model.
@@ -226,9 +223,6 @@ control routing_lookup(in headers_t headers,
   // Models SAI IPMC entries of type (*,G) whose destination is an IPv4 address.
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(ROUTING_IPV4_MULTICAST_TABLE_ID)
-  // TODO: Remove `@unsupported` annotation once the switch stack
-  // supports multicast.
-  @unsupported
   table ipv4_multicast_table {
     key = {
       // Sets `vr_id` in `sai_ipmc_entry_t`.
@@ -247,9 +241,6 @@ control routing_lookup(in headers_t headers,
   // Models SAI IPMC entries of type (*,G) whose destination is an IPv6 address.
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(ROUTING_IPV6_MULTICAST_TABLE_ID)
-  // TODO: Remove `@unsupported` annotation once the switch stack
-  // supports multicast.
-  @unsupported
   table ipv6_multicast_table {
     key = {
       // Sets `vr_id` in `sai_ipmc_entry_t`.

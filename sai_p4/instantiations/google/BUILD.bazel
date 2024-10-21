@@ -27,6 +27,7 @@ package(
 
 SHARED_DEPS = [
     "acl_common_actions.p4",
+    "acl_egress.p4",
     "acl_ingress.p4",
     "acl_pre_ingress.p4",
     "ids.h",
@@ -41,12 +42,10 @@ SHARED_DEPS = [
 MIDDLEBLOCK_DEPS = SHARED_DEPS + ["middleblock.p4"]
 
 FABRIC_BORDER_ROUTER_DEPS = SHARED_DEPS + [
-    "acl_egress.p4",
     "fabric_border_router.p4",
 ]
 
 TOR_DEPS = SHARED_DEPS + [
-    "acl_egress.p4",
     "tor.p4",
 ]
 

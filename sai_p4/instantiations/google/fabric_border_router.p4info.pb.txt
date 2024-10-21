@@ -317,7 +317,6 @@ tables {
     name: "ingress.routing_lookup.ipv4_multicast_table"
     alias: "ipv4_multicast_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -352,7 +351,6 @@ tables {
     name: "ingress.routing_lookup.ipv6_multicast_table"
     alias: "ipv6_multicast_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -567,6 +565,7 @@ tables {
     name: "ingress.acl_ingress.acl_ingress_counting_table"
     alias: "acl_ingress_counting_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
+    annotations: "@sai_acl_priority(7)"
     annotations: "@sai_acl(INGRESS)"
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dscp::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
@@ -851,7 +850,6 @@ tables {
     id: 33554508
     name: "egress.packet_rewrites.multicast_rewrites.multicast_router_interface_table"
     alias: "multicast_router_interface_table"
-    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }
   match_fields {
@@ -1123,7 +1121,6 @@ actions {
     id: 16777240
     name: "ingress.routing_lookup.set_multicast_group_id"
     alias: "set_multicast_group_id"
-    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
