@@ -210,7 +210,8 @@ message Ipv6TunnelTerminationTableEntry {
   }
   Match match = 1;
   message Action {
-    MarkForTunnelDecapAndSetVrfAction mark_for_tunnel_decap_and_set_vrf = 1;
+    // CAUTION: This action is not (yet) supported.
+    TunnelDecapAction tunnel_decap = 1;
   }
   Action action = 2;
   int32 priority = 3;
@@ -858,9 +859,8 @@ message SetMetadataAndDropAction {
   string route_metadata = 1;  // Format::HEX_STRING / 6 bits
 }
 
-message MarkForTunnelDecapAndSetVrfAction {
-  string vrf_id = 1;  // Format::STRING
-}
+// CAUTION: This action is not (yet) supported.
+message TunnelDecapAction {}
 
 message SetIpNexthopAndDisableRewritesAction {
   // Refers to 'router_interface_table.router_interface_id'.

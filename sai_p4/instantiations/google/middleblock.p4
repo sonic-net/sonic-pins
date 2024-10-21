@@ -34,11 +34,10 @@ control ingress(inout headers_t headers,
   apply {
     packet_out_decap.apply(headers, local_metadata, standard_metadata);
     if (!local_metadata.bypass_ingress) {
-      tunnel_termination_lookup.apply(headers, local_metadata);
       vlan_untag.apply(headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
       ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
-      tunnel_termination_decap.apply(headers, local_metadata);
+      tunnel_termination.apply(headers, local_metadata);
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
       routing_lookup.apply(headers, local_metadata, standard_metadata);
