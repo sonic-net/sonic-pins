@@ -20,7 +20,6 @@
 #include <string>
 #include <thread>  // NOLINT(build/c++11)
 #include <utility>
-#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
