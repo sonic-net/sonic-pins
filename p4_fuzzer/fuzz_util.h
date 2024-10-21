@@ -242,6 +242,18 @@ absl::StatusOr<p4::v1::TableEntry> FuzzValidTableEntry(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state, const uint32_t table_id);
 
+// Randomly generates a multicast group entry that conforms to the given
+// `multicast_group_table_info`. May fail if a reference to another table is
+// required.
+// ASSUMPTIONS regarding `multicast_group_table_info`:
+// 1) `IrBuiltInTableDefinition` has `built_in_table` set to
+//    `BUILT_IN_TABLE_MULTICAST_GROUP_TABLE`.
+// 2) Contains outgoing and incoming references for multicast group table.
+absl::StatusOr<p4::v1::MulticastGroupEntry> FuzzValidMulticastGroupEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    const pdpi::IrBuiltInTableDefinition& multicast_group_table_info);
+
 // Randomly generates a set of valid table entries that, when installed in order
 // to an empty switch state, all install correctly.
 std::vector<AnnotatedTableEntry> ValidForwardingEntries(

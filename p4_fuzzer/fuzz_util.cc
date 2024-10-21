@@ -35,7 +35,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
-#include "absl/strings/substitute.h"
 #include "absl/types/span.h"
 #include "google/protobuf/repeated_field.h"
 #include "google/protobuf/repeated_ptr_field.h"
@@ -50,23 +49,25 @@
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/mutation.h"
 #include "p4_fuzzer/switch_state.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/entity_keys.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
 #include "p4_pdpi/references.h"
+#include "p4_pdpi/string_encodings/byte_string.h"
 #include "p4_pdpi/utils/ir.h"
-#include "p4_pdpi/entity_keys.h"
 
 namespace p4_fuzzer {
 
 using ::absl::gntohll;
 
 using ::absl::Uniform;
-using ::pdpi::TableEntryKey;
 using ::p4::v1::Action;
 using ::p4::v1::Entity;
 using ::p4::v1::FieldMatch;
+using ::p4::v1::MulticastGroupEntry;
+using ::p4::v1::Replica;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::IrTableDefinition;
@@ -233,39 +234,66 @@ CreateReferenceMapping(
     const google::protobuf::RepeatedPtrField<IrTableReference>& references) {
   absl::flat_hash_map<std::string, std::string> reference_map;
   for (const IrTableReference& reference : references) {
-    if (reference.destination_table().has_p4_table()) {
-      if (reference.destination_table().p4_table().table_name() ==
-              "router_interface_table" &&
-          reference.source_table().p4_table().table_name() !=
-              "neighbor_table") {
-        // TODO: b/317404235 - Remove once a less "baked-in" way of masking this
-        // is found.
-        // This is a mask that is consistent with `CheckReferenceAssumptions`,
-        // which is used when creating the `FuzzerConfig`.
-        continue;
-      }
-
-      if (switch_state.IsTableEmpty(
-              reference.destination_table().p4_table().table_id())) {
-        return gutil::FailedPreconditionErrorBuilder()
-               << "Table with id "
-               << reference.destination_table().p4_table().table_id()
-               << " is empty. Cannot currently generate references to table.";
-      }
-
-      Entity referenced_entity;
-      *referenced_entity.mutable_table_entry() = UniformValueFromMap(
-          gen, switch_state.GetTableEntries(
-                   reference.destination_table().p4_table().table_id()));
-      ASSIGN_OR_RETURN(
-          absl::flat_hash_set<pdpi::ConcreteTableReference> concrete_references,
-          pdpi::PossibleIncomingConcreteTableReferences(reference,
-                                                        referenced_entity));
-      for (const pdpi::ConcreteTableReference& concrete_reference :
-           concrete_references) {
-        for (const auto& field : concrete_reference.fields) {
-          reference_map[field.source_field] = field.value;
+    Entity referenced_entity;
+    switch (reference.destination_table().table_case()) {
+      case pdpi::IrTable::kP4Table: {
+        if (reference.destination_table().p4_table().table_name() ==
+                "router_interface_table" &&
+            reference.source_table().p4_table().table_name() !=
+                "neighbor_table") {
+          // TODO: b/317404235 - Remove once a less "baked-in" way of masking
+          // this is found. This is a mask that is consistent with
+          // `CheckReferenceAssumptions`, which is used when creating the
+          // `FuzzerConfig`.
+          continue;
         }
+
+        if (switch_state.IsTableEmpty(
+                reference.destination_table().p4_table().table_id())) {
+          return gutil::FailedPreconditionErrorBuilder()
+                 << "Table with id "
+                 << reference.destination_table().p4_table().table_id()
+                 << " is empty. Cannot currently generate references to table.";
+        }
+
+        *referenced_entity.mutable_table_entry() = UniformValueFromMap(
+            gen, switch_state.GetTableEntries(
+                     reference.destination_table().p4_table().table_id()));
+        break;
+      }
+      case pdpi::IrTable::kBuiltInTable: {
+        if (reference.destination_table().built_in_table() !=
+            pdpi::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE) {
+          return gutil::UnimplementedErrorBuilder()
+                 << "Only built-in destination table of type "
+                    "BUILT_IN_TABLE_MULTICAST_GROUP_TABLE is supported, got: "
+                 << reference.DebugString();
+        }
+
+        if (switch_state.GetMulticastGroupEntries().empty()) {
+          return gutil::FailedPreconditionErrorBuilder()
+                 << "Multicast group table is empty. Cannot currently "
+                    "generate references.";
+        }
+        *referenced_entity.mutable_packet_replication_engine_entry()
+             ->mutable_multicast_group_entry() =
+            UniformValueFromMap(gen, switch_state.GetMulticastGroupEntries());
+        break;
+      }
+      default: {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Destination table type in reference info is not known: "
+               << reference.DebugString();
+      }
+    }
+    ASSIGN_OR_RETURN(
+        absl::flat_hash_set<pdpi::ConcreteTableReference> concrete_references,
+        pdpi::PossibleIncomingConcreteTableReferences(reference,
+                                                      referenced_entity));
+    for (const pdpi::ConcreteTableReference& concrete_reference :
+         concrete_references) {
+      for (const auto& field : concrete_reference.fields) {
+        reference_map[field.source_field] = field.value;
       }
     }
   }
@@ -731,6 +759,7 @@ const std::vector<pdpi::IrActionReference> AllValidActions(
   for (const auto& action : table.entry_actions()) {
     // Skip deprecated, unused, and disallowed actions.
     if (pdpi::IsElementDeprecated(action.action().preamble().annotations()) ||
+        action.action().is_unsupported() ||
         IsDisabledForFuzzing(config, action.action().preamble().name()))
       continue;
     actions.push_back(action);
@@ -1057,7 +1086,6 @@ absl::StatusOr<p4::v1::Action> FuzzAction(
   return action;
 }
 
-
 // Gets a set of actions with a skewed distribution of weights, which add up to
 // at most the max_group_size of the action profile by repeatedly sampling a
 // uniform weight from 1 to the maximum possible weight remaining. We could
@@ -1082,8 +1110,8 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
                                     ? action_profile.max_group_size()
                                     : kActionProfileActionSetMaxCardinality;
     int number_of_actions = Uniform<int>(
-          absl::IntervalClosedClosed, *gen,
-          config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
+        absl::IntervalClosedClosed, *gen,
+        config.no_empty_action_profile_groups ? 1 : 0, max_number_of_actions);
 
     // Get the max member weight from the P4Info if it is set.
     int max_member_weight =
@@ -1139,10 +1167,10 @@ absl::StatusOr<p4::v1::ActionProfileActionSet> FuzzActionProfileActionSet(
     // We want to randomly select some number of actions up to our max
     // cardinality; however, we can't have more actions than the amount of
     // weight we support since every action must have weight >= 1.
-    int number_of_actions =  Uniform<int>(
-          absl::IntervalClosedClosed, *gen,
-          config.no_empty_action_profile_groups ? 1 : 0,
-          std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
+    int number_of_actions = Uniform<int>(
+        absl::IntervalClosedClosed, *gen,
+        config.no_empty_action_profile_groups ? 1 : 0,
+        std::min(unallocated_weight, kActionProfileActionSetMaxCardinality));
 
     for (int i = 0; i < number_of_actions; i++) {
       // Since each action must have at least weight 1, we need to take the
@@ -1191,6 +1219,104 @@ absl::StatusOr<p4::v1::TableAction> FuzzAction(
   }
   return result;
 }
+
+// Fuzzes `Replica` for a packet replication engine entry (multicast
+// group/clone session). `packet_replication_engine_definition` provides
+// outgoing references.
+absl::StatusOr<Replica> FuzzReplica(absl::BitGen* gen,
+                                    const FuzzerConfig& config,
+                                    const SwitchState& switch_state,
+                                    const pdpi::IrBuiltInTableDefinition&
+                                        packet_replication_engine_definition) {
+  Replica replica;
+
+  // NOTE: The ability to fuzz references for actions and match fields
+  // independently is based on an assumption enforced in
+  // `CheckReferenceAssumptions` when constructing `FuzzerConfig`. Should that
+  // assumption ever be removed, this code should be updated.
+  absl::flat_hash_map<std::string, std::string> reference_map;
+  ASSIGN_OR_RETURN(
+      reference_map,
+      CreateReferenceMapping(
+          gen, switch_state,
+          packet_replication_engine_definition.outgoing_references()));
+
+  ASSIGN_OR_RETURN(
+      std::string port_param,
+      pdpi::IrBuiltInParameterToString(
+          pdpi::IrBuiltInParameter::BUILT_IN_PARAMETER_REPLICA_PORT));
+  if (auto it = reference_map.find(port_param); it != reference_map.end()) {
+    replica.set_port(it->second);
+  } else {
+    replica.set_port(FuzzPort(gen, config).GetP4rtEncoding());
+  }
+
+  // Inherited from v1model, see `standard_metadata_t.egress_rid`.
+  // https://github.com/p4lang/p4c/blob/main/p4include/v1model.p4
+  constexpr int kReplicaInstanceBitwidth = 16;
+
+  ASSIGN_OR_RETURN(
+      std::string instance_param,
+      pdpi::IrBuiltInParameterToString(
+          pdpi::IrBuiltInParameter::BUILT_IN_PARAMETER_REPLICA_INSTANCE));
+  if (auto it = reference_map.find(instance_param); it != reference_map.end()) {
+    ASSIGN_OR_RETURN(
+        auto instance,
+        pdpi::ByteStringToBitset<kReplicaInstanceBitwidth>(it->second));
+    replica.set_instance(instance.to_ullong());
+  } else {
+    replica.set_instance(FuzzUint64(gen, kReplicaInstanceBitwidth));
+  }
+
+  return replica;
+}
+
+absl::StatusOr<p4::v1::MulticastGroupEntry> FuzzValidMulticastGroupEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state,
+    const pdpi::IrBuiltInTableDefinition& multicast_group_table_info) {
+  if (multicast_group_table_info.built_in_table() !=
+      pdpi::BUILT_IN_TABLE_MULTICAST_GROUP_TABLE) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Built-in definition does not belong to multicast group table."
+           << multicast_group_table_info.DebugString();
+  }
+
+  MulticastGroupEntry entry;
+
+  // Inherited from v1model , see `standard_metadata_t.mcast_grp`.
+  // https://github.com/p4lang/p4c/blob/main/p4include/v1model.p4
+  constexpr int kMulticastGroupIdWidth = 16;
+
+  // NOTE: References from `multicast_group_id` are not implemented since there
+  // is no current use case, but an implementation should exist for general
+  // purposes.
+  while (entry.multicast_group_id() == 0) {
+    entry.set_multicast_group_id(FuzzUint64(gen, kMulticastGroupIdWidth));
+  }
+
+  // Fuzz 0-64 unique replicas
+  int replica_fuzz_iterations = FuzzUint64(gen, /*bits=*/6);
+  absl::flat_hash_set<std::pair<int, std::string>> unique_replicas;
+  // Depending on references, the number of unique replicas can be capped so
+  // replicas generated can be less than `replica_fuzz_iterations`.
+  for (int i = 0; i < replica_fuzz_iterations; ++i) {
+    // Generate replica.
+    ASSIGN_OR_RETURN(
+        Replica replica,
+        FuzzReplica(gen, config, switch_state, multicast_group_table_info),
+        _.SetPrepend() << "while fuzzing action: ");
+
+    // Within a given multicast entry, replicas must be unique.
+    if (unique_replicas
+            .insert(std::make_pair(replica.instance(), replica.port()))
+            .second) {
+      *entry.add_replicas() = std::move(replica);
+    }
+  }
+
+  return entry;
+};
 
 // TODO: Optional fields with @refers_to will not be properly
 // fuzzed if they refer to fields that currently have no existing entry.
