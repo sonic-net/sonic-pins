@@ -632,6 +632,10 @@ namespace {
 TEST_P(WatchPortTestFixture, MeasureWatchPortPruningDuration) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
+  if (!GetParam().check_and_export_duration.has_value()) {
+    GTEST_SKIP() << "Watchport pruning duration test skipped because threshold"
+                    "and export vector is not defined";
+  }
 
   ASSERT_OK_AND_ASSIGN(
       std::vector<pins_test::P4rtPortId> controller_port_ids,
@@ -701,6 +705,8 @@ TEST_P(WatchPortTestFixture, MeasureWatchPortPruningDuration) {
   int64_t total_packets_received;
   int64_t total_packets_lost;
   double watchport_pruning_duration;
+  absl::flat_hash_map<absl::string_view, absl::Duration>
+      port_state_to_pruning_duration;
 
   for (auto port_desired_state : {InterfaceState::kDown, InterfaceState::kUp}) {
     absl::string_view port_final_state =
@@ -775,7 +781,14 @@ TEST_P(WatchPortTestFixture, MeasureWatchPortPruningDuration) {
               << "Total Packets lost: " << total_packets_lost << "\n"
               << "Watchport pruning duration: " << watchport_pruning_duration
               << " msecs.";
+    port_state_to_pruning_duration[port_final_state] =
+        absl::Milliseconds(watchport_pruning_duration);
   }
+  LOG(INFO) << "Checking watch port pruning (Port Up/Down) duration against "
+               "threshold and exporting data to perfgate storage";
+  ASSERT_OK((*GetParam().check_and_export_duration)(
+      GetParam().testbed->GetMirrorTestbed().Sut().ChassisName(),
+      port_state_to_pruning_duration));
 }
 
 // Verifies basic WCMP behavior by programming a group with multiple members
