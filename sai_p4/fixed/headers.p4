@@ -89,6 +89,8 @@ header ipv6_t {
   ipv6_addr_t dst_addr;
 }
 
+#define UDP_HEADER_BYTES 8
+
 header udp_t {
   bit<16> src_port;
   bit<16> dst_port;
@@ -143,6 +145,8 @@ header gre_t {
   bit<16> protocol;
 }
 
+#define IPFIX_HEADER_BYTES 16
+
 // IP Flow Information Export (IPFIX) header, pursuant to RFC 7011 section 3.1.
 header ipfix_t {
   // Version of IPFIX to which this Message conforms.
@@ -161,6 +165,7 @@ header ipfix_t {
   bit<32> observation_domain_id;
 }
 
+#define PSAMP_EXTENDED_BYTES 28
 // PSAMP extended header, pursuant to RFC5476.
 header psamp_extended_t {
   bit<16> template_id;
