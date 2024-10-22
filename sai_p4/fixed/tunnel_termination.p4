@@ -42,6 +42,7 @@ control tunnel_termination(inout headers_t headers,
   @unsupported
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(IPV6_TUNNEL_TERMINATION_TABLE_ID)
+  @unsupported
   table ipv6_tunnel_termination_table {
     key = {
       // Sets `SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_DST_IP[_MASK]`.

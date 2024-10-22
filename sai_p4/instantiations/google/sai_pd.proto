@@ -249,7 +249,7 @@ message DisableVlanChecksTableEntry {
 }
 
 // Table entry restrictions:
-// ## TODO: b/322890784 - Use IPv4 address notation once it is supported.
+// ## TODO: Use IPv4 address notation once it is supported.
 // ## Only IPv4s in the multicast range 224.0.0.0/4 are supported.
 //   ipv4_dst::value >= 0xe0000000;
 //   ipv4_dst::value <= 0xefffffff;
@@ -268,7 +268,7 @@ message Ipv4MulticastTableEntry {
 }
 
 // Table entry restrictions:
-// ## TODO: b/322890784 - Use IPv4 address notation once it is supported.
+// ## TODO: Use IPv4 address notation once it is supported.
 // ## Only IPv6s in the multicast range ff00::/8 are supported.
 //   ipv6_dst::value >= 0xff000000000000000000000000000000;
 //   ipv6_dst::value <= 0xffffffffffffffffffffffffffffffff;
