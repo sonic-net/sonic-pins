@@ -69,14 +69,6 @@ tables {
     match_type: TERNARY
   }
   match_fields {
-    id: 9
-    name: "dst_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-    match_type: TERNARY
-  }
-  match_fields {
     id: 5
     name: "dst_ip"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP)"
@@ -421,7 +413,6 @@ tables {
     name: "ingress.routing_lookup.ipv4_multicast_table"
     alias: "ipv4_multicast_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -456,7 +447,6 @@ tables {
     name: "ingress.routing_lookup.ipv6_multicast_table"
     alias: "ipv6_multicast_table"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@unsupported"
   }
   match_fields {
     id: 1
@@ -666,7 +656,7 @@ tables {
     annotations: "@sai_acl(INGRESS)"
     annotations: "@sai_acl_priority(10)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
-    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Only allow IP field matches for IP packets.\n    ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n    // Only allow icmp_type matches for ICMP packets\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n    // Only allow arp_tpa matches for ARP packets.\n    arp_tpa::mask != 0 -> ether_type == 0x0806;\n  \")"
+    annotations: "@entry_restriction(\"\n    // Forbid using ether_type for IP packets (by convention, use is_ip* instead).\n    ether_type != 0x0800 && ether_type != 0x86dd;\n    // Only allow IP field matches for IP packets.\n    ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);\n    // Only allow l4_dst_port matches for TCP/UDP packets.\n    l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n    // Only allow icmp_type matches for ICMP packets\n    icmpv6_type::mask != 0 -> ip_protocol == 58;\n\n\n\n\n\n\n\n    // Only allow arp_tpa matches for ARP packets.\n    arp_tpa::mask != 0 -> ether_type == 0x0806;\n\n  \")"
   }
   match_fields {
     id: 1
@@ -697,22 +687,6 @@ tables {
     match_type: TERNARY
   }
   match_fields {
-    id: 5
-    name: "dst_mac"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC)"
-    annotations: "@format(MAC_ADDRESS)"
-    bitwidth: 48
-    match_type: TERNARY
-  }
-  match_fields {
-    id: 6
-    name: "arp_tpa"
-    annotations: "@composite_field(@ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 24 , length = 2 ) , @ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 26 , length = 2 ))"
-    annotations: "@format(IPV4_ADDRESS)"
-    bitwidth: 32
-    match_type: TERNARY
-  }
-  match_fields {
     id: 7
     name: "ttl"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_TTL)"
@@ -738,6 +712,22 @@ tables {
     name: "l4_dst_port"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_L4_DST_PORT)"
     bitwidth: 16
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 5
+    name: "dst_mac"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC)"
+    annotations: "@format(MAC_ADDRESS)"
+    bitwidth: 48
+    match_type: TERNARY
+  }
+  match_fields {
+    id: 6
+    name: "arp_tpa"
+    annotations: "@composite_field(@ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 24 , length = 2 ) , @ sai_udf ( base = SAI_UDF_BASE_L3 , offset = 26 , length = 2 ))"
+    annotations: "@format(IPV4_ADDRESS)"
+    bitwidth: 32
     match_type: TERNARY
   }
   match_fields {
@@ -788,7 +778,7 @@ tables {
   const_default_action_id: 21257015
   direct_resource_ids: 318767367
   direct_resource_ids: 352321794
-  size: 511
+  size: 255
 }
 tables {
   preamble {
@@ -796,6 +786,7 @@ tables {
     name: "ingress.acl_ingress.acl_ingress_mirror_and_redirect_table"
     alias: "acl_ingress_mirror_and_redirect_table"
     annotations: "@sai_acl(INGRESS)"
+    annotations: "@sai_acl_priority(15)"
     annotations: "@p4runtime_role(\"sdn_controller\")"
     annotations: "@entry_restriction(\"\n    // Only allow IP field matches for IP packets.\n    dst_ip::mask != 0 -> is_ipv4 == 1;\n    dst_ipv6::mask != 0 -> is_ipv6 == 1;\n    // Forbid illegal combinations of IP_TYPE fields.\n    is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);\n    is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);\n    is_ipv6::mask != 0 -> (is_ip::mask == 0 && is_ipv4::mask == 0);\n    // Forbid unsupported combinations of IP_TYPE fields.\n    is_ipv4::mask != 0 -> (is_ipv4 == 1);\n    is_ipv6::mask != 0 -> (is_ipv6 == 1);\n  \")"
   }
@@ -863,7 +854,6 @@ tables {
     id: 8
     name: "vrf_id"
     annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_VRF_ID)"
-    annotations: "@unsupported"
     match_type: OPTIONAL
     type_name {
       name: "vrf_id_t"
@@ -872,10 +862,13 @@ tables {
   match_fields {
     id: 9
     name: "ipmc_table_hit"
-    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_TABLE_HIT)"
-    annotations: "@unsupported"
+    annotations: "@sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT)"
     bitwidth: 1
     match_type: OPTIONAL
+  }
+  action_refs {
+    id: 16777475
+    annotations: "@proto_id(4)"
   }
   action_refs {
     id: 16777476
@@ -1130,7 +1123,6 @@ tables {
     id: 33554508
     name: "egress.packet_rewrites.multicast_rewrites.multicast_router_interface_table"
     alias: "multicast_router_interface_table"
-    annotations: "@unsupported"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }
   match_fields {
@@ -1315,6 +1307,13 @@ actions {
 }
 actions {
   preamble {
+    id: 24742814
+    name: "no_action"
+    alias: "no_action"
+  }
+}
+actions {
+  preamble {
     id: 16777221
     name: "set_nexthop_id"
     alias: "set_nexthop_id"
@@ -1397,13 +1396,6 @@ actions {
 }
 actions {
   preamble {
-    id: 24742814
-    name: "ingress.routing_lookup.no_action"
-    alias: "no_action"
-  }
-}
-actions {
-  preamble {
     id: 16777222
     name: "ingress.routing_lookup.drop"
     alias: "drop"
@@ -1481,7 +1473,6 @@ actions {
     id: 16777240
     name: "ingress.routing_lookup.set_multicast_group_id"
     alias: "set_multicast_group_id"
-    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
@@ -1642,6 +1633,7 @@ actions {
     id: 1
     name: "nexthop_id"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_NEXT_HOP)"
     annotations: "@refers_to(nexthop_table , nexthop_id)"
     type_name {
       name: "nexthop_id_t"
@@ -1653,13 +1645,14 @@ actions {
     id: 16777491
     name: "ingress.acl_ingress.redirect_to_ipmc_group"
     alias: "redirect_to_ipmc_group"
-    annotations: "@unsupported"
     annotations: "@action_restriction(\"\n    // Disallow 0 since it encodes \'no multicast\' in V1Model.\n    multicast_group_id != 0;\n  \")"
   }
   params {
     id: 1
     name: "multicast_group_id"
     annotations: "@sai_action_param(SAI_ACL_ENTRY_ATTR_ACTION_REDIRECT)"
+    annotations: "@sai_action_param_object_type(SAI_OBJECT_TYPE_IPMC_GROUP)"
+    annotations: "@refers_to(builtin : : multicast_group_table , multicast_group_id)"
     bitwidth: 16
   }
 }
