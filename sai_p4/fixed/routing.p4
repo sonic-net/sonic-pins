@@ -2,6 +2,8 @@
 #define SAI_ROUTING_P4_
 
 #include <v1model.p4>
+#include "common_actions.p4"
+#include "drop_martians.p4"
 #include "headers.p4"
 #include "metadata.p4"
 #include "ids.h"
@@ -65,12 +67,6 @@ action set_nexthop_id(inout local_metadata_t local_metadata,
 control routing_lookup(in headers_t headers,
                        inout local_metadata_t local_metadata,
                        inout standard_metadata_t standard_metadata) {
-  // Action that does nothing. Like `NoAction` in `core.p4`, but following
-  // Google's naming conventions.
-  // TODO: Add support for CamlCase actions to the PD generator,
-  // so we can use `NoAction` throughout.
-  @id(ROUTING_NO_ACTION_ACTION_ID)
-  action no_action() {}
   // Programming this table does not affect packet forwarding directly -- the
   // table performs no actions -- but results in the creation/deletion of VRFs.
   // This is a prerequisite to using these VRFs, e.g. in the `ipv4_table` and
@@ -165,9 +161,6 @@ control routing_lookup(in headers_t headers,
   // Calling this action will override unicast, and can itself be overriden by
   // `mark_to_drop`.
   //
-  // TODO: Remove `@unsupported` annotation once the switch stack
-  // supports multicast.
-  @unsupported
   @id(ROUTING_SET_MULTICAST_GROUP_ID_ACTION_ID)
   @action_restriction("
     // Disallow 0 since it encodes 'no multicast' in V1Model.
@@ -175,8 +168,7 @@ control routing_lookup(in headers_t headers,
   ")
   action set_multicast_group_id(
       @id(1)
-      // TODO: Add this once supported by PDPI and its customers.
-      // @refers_to(multicast_group_table, multicast_group_id)
+      @refers_to(builtin::multicast_group_table, multicast_group_id)
       multicast_group_id_t multicast_group_id) {
     standard_metadata.mcast_grp = multicast_group_id;
   }
@@ -227,9 +219,6 @@ control routing_lookup(in headers_t headers,
   // Models SAI IPMC entries of type (*,G) whose destination is an IPv4 address.
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(ROUTING_IPV4_MULTICAST_TABLE_ID)
-  // TODO: Remove `@unsupported` annotation once the switch stack
-  // supports multicast.
-  @unsupported
   table ipv4_multicast_table {
     key = {
       // Sets `vr_id` in `sai_ipmc_entry_t`.
@@ -248,9 +237,6 @@ control routing_lookup(in headers_t headers,
   // Models SAI IPMC entries of type (*,G) whose destination is an IPv6 address.
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(ROUTING_IPV6_MULTICAST_TABLE_ID)
-  // TODO: Remove `@unsupported` annotation once the switch stack
-  // supports multicast.
-  @unsupported
   table ipv6_multicast_table {
     key = {
       // Sets `vr_id` in `sai_ipmc_entry_t`.
@@ -267,32 +253,40 @@ control routing_lookup(in headers_t headers,
   }
 
   apply {
-    // Drop packets by default, then override in the router_interface_table.
-    // TODO: This should just be the default behavior of v1model:
-    // https://github.com/p4lang/behavioral-model/issues/992
     mark_to_drop(standard_metadata);
     vrf_table.apply();
-    if (local_metadata.admit_to_l3) {
-      if (headers.ipv4.isValid()) {
-        // TODO: Rework conditions under which uni/multicast table
-        // lookups occur and what happens when both tables are hit.
-        ipv4_table.apply();
 
-        // TODO: Use commented out code instead, once p4-symbolic
-        // supports it.
-        // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
-        ipv4_multicast_table.apply();
-        local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
-      } else if (headers.ipv6.isValid()) {
-        // TODO: Rework conditions under which uni/multicast table
-        // lookups occur and what happens when both tables are hit.
-        ipv6_table.apply();
-
-        // TODO: Use commented out code instead, once p4-symbolic
-        // supports it.
-        // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
-        ipv6_multicast_table.apply();
-        local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+    if (headers.ipv4.isValid()) {
+      if (IS_MULTICAST_IPV4(headers.ipv4.dst_addr)) {
+        if (IS_IPV4_MULTICAST_MAC(headers.ethernet.dst_addr)) {
+          ipv4_multicast_table.apply();
+          local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+          // TODO: Use commented out code instead, once p4-symbolic
+          // supports it.
+          // local_metadata.ipmc_table_hit = ipv4_multicast_table.apply().hit()
+        }
+      } else { // IPv4 unicast.
+        if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
+            local_metadata.admit_to_l3) {
+          ipv4_table.apply();
+        }
+      }
+    } else if (headers.ipv6.isValid()) {
+      if (IS_MULTICAST_IPV6(headers.ipv6.dst_addr)) {
+        if (local_metadata.admit_to_l3 ||
+            // Packets with multicast DMAC are always elligible for IP multicast.
+            IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
+          ipv6_multicast_table.apply();
+          local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
+          // TODO: Use commented out code instead, once p4-symbolic
+          // supports it.
+          // local_metadata.ipmc_table_hit = ipv6_multicast_table.apply().hit()
+        }
+      } else { // IPv6 unicast.
+        if (IS_UNICAST_MAC(headers.ethernet.dst_addr) &&
+            local_metadata.admit_to_l3) {
+          ipv6_table.apply();
+        }
       }
     }
   }

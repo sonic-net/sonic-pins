@@ -27,7 +27,6 @@ cc_library(
         "control.cc",
         "guarded_map.cc",
         "operators.cc",
-        "packet.cc",
         "symbolic.cc",
         "table.cc",
         "util.cc",
@@ -39,7 +38,6 @@ cc_library(
         "control.h",
         "guarded_map.h",
         "operators.h",
-        "packet.h",
         "symbolic.h",
         "table.h",
         "util.h",
@@ -48,9 +46,11 @@ cc_library(
     deps = [
         "//gutil:status",
         "//p4_pdpi:ir_cc_proto",
-	"//p4_pdpi/netaddr:ipv4_address",
+        "//p4_pdpi/internal:ordered_map",
+        "//p4_pdpi/netaddr:ipv4_address",
         "//p4_pdpi/netaddr:ipv6_address",
         "//p4_pdpi/netaddr:mac_address",
+        "//p4_pdpi/string_encodings:byte_string",
         "//p4_pdpi/utils:ir",
         "//p4_symbolic:z3_util",
         "//p4_symbolic/ir:ir_cc_proto",
@@ -59,10 +59,7 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_z3prover_z3//:api",
         "@com_gnu_gmp//:gmp",
-        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/cleanup",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
@@ -102,4 +99,28 @@ end_to_end_test(
     p4_program = "//p4_symbolic/testdata:ipv4-routing/basic.p4",
     smt_golden_file = "expected/basic.smt2",
     table_entries = "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
+)
+
+end_to_end_test(
+    name = "string_optional_test",
+    output_golden_file = "expected/string_optional.txt",
+    p4_program = "//p4_symbolic/testdata:string-optional/program.p4",
+    port_count = 3,
+    smt_golden_file = "expected/string_optional.smt2",
+    table_entries = "//p4_symbolic/testdata:string-optional/entries.pb.txt",
+)
+
+cc_test(
+    name = "values_test",
+    srcs = ["values_test.cc"],
+    deps = [
+        ":symbolic",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_symbolic:z3_util",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
