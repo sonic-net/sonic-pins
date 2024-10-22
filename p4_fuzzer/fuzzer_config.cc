@@ -1,26 +1,34 @@
 #include "p4_fuzzer/fuzzer_config.h"
 
 #include <string>
+#include <utility>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "glog/logging.h"
 #include "google/protobuf/repeated_ptr_field.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"  // IWYU pragma: keep
 #include "gutil/status.h"
+#include "p4_constraints/ast.h"
+#include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir_properties.h"
 #include "p4_pdpi/reference_annotations.h"
 
 namespace p4_fuzzer {
 namespace {
 
-// TODO: b/317402124, b/263309221 - Remove once assumptions are no longer
-// needed. Checks the following assumptions made about table references:
+// Checks the following assumptions made about table references:
+// TODO: b/317402124 - Remove when match+action references are supported.
 // 1) No reference includes both a match field and an action parameter. This
-// simplifies the implementation by allowing each to be independently fuzzed.
+//    simplifies the implementation by allowing each to be independently fuzzed.
+// TODO: b/263309221 - Remove when multiple references are supported.
 // 2) No single field contains 2 or more references. This simplifies the
-// implementation by avoiding implicit dependencies between fields.
+//    implementation by avoiding implicit dependencies between fields.
+// 3) Only EXACT match fields can have outgoing/incoming references.
 absl::Status CheckReferenceAssumptions(
     const google::protobuf::RepeatedPtrField<pdpi::IrTableReference>&
         references) {
@@ -82,10 +90,81 @@ absl::Status CheckReferenceAssumptions(
 }
 }  // namespace
 
+absl::Status FuzzerConfig::CheckConstraintAssumptions() {
+  for (const auto& [table_id, table] : ir_info_.tables_by_id()) {
+    if (GetIgnoreConstraintsOnTables().contains(table.preamble().name()))
+      continue;
+
+    auto* table_constraint_info =
+        p4_constraints::GetTableInfoOrNull(constraint_info_, table_id);
+
+    // The constraint info is generated from the p4 info, all ids should be
+    // accounted for.
+    if (table_constraint_info == nullptr) {
+      return gutil::InternalErrorBuilder()
+             << "table with ID '" << table.preamble().id()
+             << "' does not exist in constraint info: "
+             << table.preamble().alias();
+    };
+
+    // Ignore tables without constraints.
+    if (!table_constraint_info->constraint.has_value()) continue;
+    absl::flat_hash_set<std::string> constrained_fields =
+        p4_constraints::ast::GetVariables(*table_constraint_info->constraint);
+
+    for (const auto& [match_name, match_field] : table.match_fields_by_name()) {
+      // Ignore match fields without constraints.
+      if (!constrained_fields.contains(match_field.match_field().name()))
+        continue;
+      if (pdpi::HasP4RuntimeTranslatedType(match_field) &&
+          match_field.match_field().match_type() ==
+              p4::config::v1::MatchField::EXACT) {
+        return gutil::UnimplementedErrorBuilder()
+               << "Match field '" << match_name << "' in table '"
+               << table.preamble().alias()
+               << "' is a P4Runtime translated type, constrained, AND is "
+                  "EXACT. P4-Fuzzer cannot generate constrained values for "
+                  "this type and exact fields are required so this combination "
+                  "is forbidden. Table:\n"
+               << gutil::PrintTextProto(table);
+      } else if (pdpi::HasP4RuntimeTranslatedType(match_field)) {
+        LOG(WARNING) << "Match field '" << match_name << "' in table '"
+                     << table.preamble().alias()
+                     << "' is a P4Runtime translated type, constrained, and "
+                        "omittable. The fuzzer cannot satisfy constraints on "
+                        "this type, but valid entries may still be fuzzed if "
+                        "this field is omitted when fuzzing.";
+      }
+
+      for (const auto& reference : table.outgoing_references()) {
+        for (const auto& field_reference : reference.field_references()) {
+          if (field_reference.source()
+                  .match_field()
+                  .p4_match_field()
+                  .field_name() == match_name) {
+            LOG(WARNING) << "Field '" << match_name << "' in table '"
+                         << table.preamble().alias()
+                         << "' is both constrained and has a reference. The "
+                            "fuzzer will choose to satisfy references over "
+                            "constraints, which means the resulting entry may "
+                            "not satisfy constraints.";
+          }
+        }
+      }
+
+      // TODO: b/324084334 - Make similar assumptions on action constraints once
+      // they are incorporated into the fuzzer.
+    }
+  }
+
+  return absl::OkStatus();
+}
+
 absl::Status FuzzerConfig::SetP4Info(const p4::config::v1::P4Info& info) {
   ASSIGN_OR_RETURN(this->ir_info_, pdpi::CreateIrP4Info(info));
   ASSIGN_OR_RETURN(this->constraint_info_,
                    p4_constraints::P4ToConstraintInfo(info));
+  RETURN_IF_ERROR(CheckConstraintAssumptions());
   for (const auto& [unused, table_def] : this->ir_info_.tables_by_id()) {
     RETURN_IF_ERROR(CheckReferenceAssumptions(table_def.outgoing_references()));
   }
@@ -99,9 +178,12 @@ absl::Status FuzzerConfig::SetP4Info(const p4::config::v1::P4Info& info) {
 }
 
 absl::StatusOr<FuzzerConfig> FuzzerConfig::Create(
-    const p4::config::v1::P4Info& info) {
+    const p4::config::v1::P4Info& info, const ConfigParams params) {
   FuzzerConfig config;
-  RETURN_IF_ERROR(config.SetP4Info(info));
+  config.params_ = std::move(params);
+  // MUST be called after populating params.
+  RETURN_IF_ERROR(config.SetP4Info(info))
+      << "Failed to set P4Info: " << gutil::PrintTextProto(info);
   return config;
 }
 

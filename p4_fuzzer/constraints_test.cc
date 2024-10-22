@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -188,7 +188,8 @@ TEST(UsesP4ConstraintsTest, ReturnsTrueIfTableHasConstraint) {
                }
                actions { preamble { id: 1 name: "action1" } }
           )pb");
-  ASSERT_OK_AND_ASSIGN(FuzzerConfig config, FuzzerConfig::Create(p4info));
+  ASSERT_OK_AND_ASSIGN(FuzzerConfig config,
+                       FuzzerConfig::Create(p4info, ConfigParams{}));
   EXPECT_TRUE(UsesP4Constraints(/*table_id=*/1, config));
 }
 
@@ -201,7 +202,8 @@ TEST(UsesP4ConstraintsTest, ReturnsFalseIfTableDoesNotHaveConstraint) {
                }
                actions { preamble { id: 1 name: "action1" } }
           )pb");
-  ASSERT_OK_AND_ASSIGN(FuzzerConfig config, FuzzerConfig::Create(p4info));
+  ASSERT_OK_AND_ASSIGN(FuzzerConfig config,
+                       FuzzerConfig::Create(p4info, ConfigParams{}));
   EXPECT_FALSE(UsesP4Constraints(/*table_id=*/1, config));
 }
 
@@ -293,7 +295,8 @@ TEST(FuzzValidConstrainedTableEntryTest, FailsWithUnconstrainedTableTest) {
                }
                actions { preamble { id: 1 name: "action1" } }
           )pb");
-  ASSERT_OK_AND_ASSIGN(FuzzerConfig config, FuzzerConfig::Create(p4info));
+  ASSERT_OK_AND_ASSIGN(FuzzerConfig config,
+                       FuzzerConfig::Create(p4info, ConfigParams{}));
 
   // Get the unconstrained table.
   ASSERT_OK_AND_ASSIGN(
@@ -343,7 +346,8 @@ TEST(FuzzValidConstrainedTableEntryTest, FailsWithUnsatisfiableConstraint) {
                }
                actions { preamble { id: 1 name: "action1" } }
           )pb");
-  ASSERT_OK_AND_ASSIGN(FuzzerConfig config, FuzzerConfig::Create(p4info));
+  ASSERT_OK_AND_ASSIGN(FuzzerConfig config,
+                       FuzzerConfig::Create(p4info, ConfigParams{}));
 
   // Get the table with the unsatisfiable constraint.
   ASSERT_OK_AND_ASSIGN(
@@ -357,7 +361,40 @@ TEST(FuzzValidConstrainedTableEntryTest, FailsWithUnsatisfiableConstraint) {
 }
 
 TEST(FuzzValidConstrainedTableEntryTest,
-     FailsIfTableHasExactP4runtimeTranslatedMatch) {
+     SucceedsIfMatchFieldsAreUnconstrained) {
+  p4::config::v1::P4Info p4info =
+      gutil::ParseProtoOrDie<p4::config::v1::P4Info>(
+          R"pb(tables {
+                 preamble {
+                   id: 1
+                   name: "table1"
+                   annotations: "@entry_restriction(\"true\")"
+                 }
+                 match_fields {
+                   id: 1
+                   name: "exact_match_field"
+                   match_type: EXACT
+                   bitwidth: 16
+                 }
+                 action_refs { id: 1 annotations: "@proto_id(1)" }
+               }
+               actions { preamble { id: 1 name: "action1" } }
+          )pb");
+  ASSERT_OK_AND_ASSIGN(FuzzerConfig config,
+                       FuzzerConfig::Create(p4info, ConfigParams{}));
+
+  // Get the table with the P4Runtime translated match.
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrTableDefinition table1,
+      gutil::FindOrStatus(config.GetIrP4Info().tables_by_id(), 1));
+  absl::BitGen gen;
+
+  EXPECT_OK(FuzzValidConstrainedTableEntry(
+      config, SwitchState(config.GetIrP4Info()), table1, gen));
+}
+
+TEST(FuzzValidConstrainedTableEntryTest,
+     SucceedsIfTableHasUnconstrainedExactP4runtimeTranslatedMatch) {
   p4::config::v1::P4Info p4info =
       gutil::ParseProtoOrDie<p4::config::v1::P4Info>(
           R"pb(tables {
@@ -382,7 +419,8 @@ TEST(FuzzValidConstrainedTableEntryTest,
                  }
                }
           )pb");
-  ASSERT_OK_AND_ASSIGN(FuzzerConfig config, FuzzerConfig::Create(p4info));
+  ASSERT_OK_AND_ASSIGN(FuzzerConfig config,
+                       FuzzerConfig::Create(p4info, ConfigParams{}));
 
   // Get the table with the P4Runtime translated match.
   ASSERT_OK_AND_ASSIGN(
@@ -390,9 +428,47 @@ TEST(FuzzValidConstrainedTableEntryTest,
       gutil::FindOrStatus(config.GetIrP4Info().tables_by_id(), 1));
   absl::BitGen gen;
 
-  EXPECT_THAT(FuzzValidConstrainedTableEntry(
-                  config, SwitchState(config.GetIrP4Info()), table1, gen),
-              Not(IsOk()));
+  EXPECT_OK(FuzzValidConstrainedTableEntry(
+      config, SwitchState(config.GetIrP4Info()), table1, gen));
+}
+
+TEST(FuzzValidConstrainedTableEntryTest,
+     SucceedsIfTableHasConstrainedOptionalP4runtimeTranslatedMatch) {
+  p4::config::v1::P4Info p4info =
+      gutil::ParseProtoOrDie<p4::config::v1::P4Info>(
+          R"pb(tables {
+                 preamble {
+                   id: 1
+                   name: "table1"
+                   annotations: "@entry_restriction(\"true\")"
+                 }
+                 match_fields {
+                   id: 1
+                   name: "exact_p4runtime_translated"
+                   match_type: OPTIONAL
+                   type_name { name: "p4runtime_translated_type" }
+                 }
+                 action_refs { id: 1 annotations: "@proto_id(1)" }
+               }
+               actions { preamble { id: 1 name: "action1" } }
+               type_info {
+                 new_types {
+                   key: "p4runtime_translated_type"
+                   value { translated_type { sdn_string {} } }
+                 }
+               }
+          )pb");
+  ASSERT_OK_AND_ASSIGN(FuzzerConfig config,
+                       FuzzerConfig::Create(p4info, ConfigParams{}));
+
+  // Get the table with the P4Runtime translated match.
+  ASSERT_OK_AND_ASSIGN(
+      pdpi::IrTableDefinition table1,
+      gutil::FindOrStatus(config.GetIrP4Info().tables_by_id(), 1));
+  absl::BitGen gen;
+
+  EXPECT_OK(FuzzValidConstrainedTableEntry(
+      config, SwitchState(config.GetIrP4Info()), table1, gen));
 }
 
 // Generates a valid entry for a version of 'constrained_table' that is only

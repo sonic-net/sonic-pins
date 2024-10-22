@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <functional>
 #include <string>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -25,12 +26,14 @@
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
+#include "p4_constraints/ast.h"
 #include "p4_constraints/backend/constraint_info.h"
 #include "p4_constraints/backend/symbolic_interpreter.h"
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/switch_state.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/ir_properties.h"
 #include "z3++.h"
 
 namespace p4_fuzzer {
@@ -44,8 +47,7 @@ absl::StatusOr<bool> HasP4RuntimeTranslatedType(
   ASSIGN_OR_RETURN(pdpi::IrMatchFieldDefinition match_field,
                    gutil::FindOrStatus(table.match_fields_by_name(), key_name));
   // It's never a p4runtime translated type if it doesn't have a type name.
-  return match_field.match_field().has_type_name() &&
-         match_field.format() == pdpi::Format::STRING;
+  return pdpi::HasP4RuntimeTranslatedType(match_field);
 }
 
 }  // namespace
@@ -54,7 +56,8 @@ bool UsesP4Constraints(int table_id, const FuzzerConfig& config) {
   auto* table_info =
       p4_constraints::GetTableInfoOrNull(config.GetConstraintInfo(), table_id);
 
-  return table_info != nullptr && table_info->constraint.has_value();
+  return table_info != nullptr && table_info->constraint.has_value() &&
+         !config.GetIgnoreConstraintsOnTables().contains(table_info->name);
 }
 
 bool UsesP4Constraints(const pdpi::IrTableDefinition& table,
@@ -79,29 +82,18 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
            << table.preamble().alias();
   }
 
-  // Since the p4_constraints API does not yet support P4 runtime translated
-  // types (and will generate an InvalidArgumentError if it gets them). Thus, we
-  // skip those keys and ensure they were optional.
+  absl::flat_hash_set<std::string> constrained_keys =
+      p4_constraints::ast::GetVariables(*table_info->constraint);
+
+  // We skip unconstrained keys, they will be fuzzed randomly after. Also, since
+  // the p4_constraints API does not yet support P4 runtime translated types
+  // (and will generate an InvalidArgumentError if it gets them). Thus, we skip
+  // those keys and ensure they were optional.
   // TODO: Support P4RT translated types.
   auto skip_key = [&](absl::string_view key_name) -> absl::StatusOr<bool> {
-    ASSIGN_OR_RETURN(bool has_p4rt_type,
+    ASSIGN_OR_RETURN(bool has_p4rt_translated_type,
                      HasP4RuntimeTranslatedType(table, key_name));
-    if (has_p4rt_type) {
-      ASSIGN_OR_RETURN(
-          pdpi::IrMatchFieldDefinition match_field,
-          gutil::FindOrStatus(table.match_fields_by_name(), key_name));
-      if (match_field.match_field().match_type() ==
-          p4::config::v1::MatchField::EXACT) {
-        return gutil::UnimplementedErrorBuilder()
-               << "Given a P4Info where match field '" << key_name
-               << "' in table '" << table.preamble().alias()
-               << "' was a P4Runtime translated type AND exact. Currently, "
-                  "only one of those is supported simultaneously. Table:\n"
-               << table.DebugString();
-      }
-      return true;
-    }
-    return false;
+    return !constrained_keys.contains(key_name) || has_p4rt_translated_type;
   };
 
   // Construct z3 context and solver.
@@ -150,8 +142,17 @@ absl::StatusOr<TableEntry> FuzzValidConstrainedTableEntry(
                    p4_constraints::ConcretizeEntry(model, *table_info,
                                                    environment, skip_key));
 
+  // Fuzz all unconstrained keys normally.
+  for (const auto& [name, match_field_def] : table.match_fields_by_name()) {
+    if (!constrained_keys.contains(name)) {
+      ASSIGN_OR_RETURN(
+          *table_entry.add_match(),
+          FuzzFieldMatch(&gen, config, switch_state, match_field_def));
+    }
+  }
+
   // Fuzz an action.
-  // TODO: Potentially remove when ConcretizeEntry returns an
+  // TODO: b/324084334 - Potentially remove when ConcretizeEntry returns an
   // action too.
   ASSIGN_OR_RETURN(
       *table_entry.mutable_action(),

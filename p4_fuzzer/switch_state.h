@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -132,6 +132,10 @@ class SwitchState {
   int64_t GetNumMulticastEntries() const {
     return ordered_multicast_entries_.size();
   };
+
+  // Returns the current state of an entity (or nullopt if it is not
+  // present).  Only the uniquely identifying fields of `entity` are considered.
+  std::optional<p4::v1::Entity> GetEntity(const p4::v1::Entity& entity) const;
 
   // Returns the current state of a table entry (or nullopt if it is not
   // present).  Only the uniquely identifying fields of entry are considered.

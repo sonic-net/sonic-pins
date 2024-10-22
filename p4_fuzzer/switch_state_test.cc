@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ using ::p4::config::v1::P4Info;
 using ::p4::config::v1::Preamble;
 using ::p4::config::v1::Table;
 using ::p4::v1::ActionProfileAction;
+using ::p4::v1::Entity;
 using ::p4::v1::MulticastGroupEntry;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
@@ -119,6 +120,56 @@ TEST(SwitchStateTest, TableEmptyFromP4Info) {
 
   SwitchState state(ir_info);
   EXPECT_TRUE(state.AllTablesEmpty());
+}
+
+TEST(SwitchStateTest, GetEntityReturnsNullOptWhenMulticastEntryNotPresent) {
+  SwitchState state(GetIrP4Info());
+  Entity entity;
+  entity.mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->set_multicast_group_id(42);
+
+  EXPECT_EQ(state.GetEntity(entity), std::nullopt);
+}
+
+TEST(SwitchStateTest, GetEntityReturnsMulticastEntryWhenPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Update update;
+  update.set_type(Update::INSERT);
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->set_multicast_group_id(42);
+
+  Entity entity = update.entity();
+
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  EXPECT_THAT(state.GetEntity(entity), Optional(EqualsProto(update.entity())));
+}
+
+TEST(SwitchStateTest, GetEntityReturnsNullOptWhenTableEntryNotPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Entity entity;
+  entity.mutable_table_entry()->set_table_id(kBareTable1);
+
+  EXPECT_EQ(state.GetEntity(entity), std::nullopt);
+}
+
+TEST(SwitchStateTest, GetEntityReturnsTableEntryWhenPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Update update;
+  update.set_type(Update::INSERT);
+  update.mutable_entity()->mutable_table_entry()->set_table_id(kBareTable1);
+
+  Entity entity = update.entity();
+
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  EXPECT_THAT(state.GetEntity(entity), Optional(EqualsProto(update.entity())));
 }
 
 TEST(SwitchStateTest, RuleInsert) {
