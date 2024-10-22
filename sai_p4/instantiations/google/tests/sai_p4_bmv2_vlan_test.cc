@@ -30,6 +30,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_matchers.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
@@ -146,7 +147,8 @@ absl::Status InstallEntries(Bmv2& bmv2, const pdpi::IrP4Info& ir_p4info,
   ASSIGN_OR_RETURN(std::vector<p4::v1::Entity> pi_entities,
                    entry_builder.LogPdEntries().GetDedupedPiEntities(
                        ir_p4info, /*allow_unsupported=*/true));
-  return pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities);
+  return pdpi::InstallPiEntities(&bmv2.P4RuntimeSession(), ir_p4info,
+                                 pi_entities);
 }
 
 TEST_P(VlanTest, VlanPacketWithNonReservedVidGetsDroppedByDefault) {
@@ -280,17 +282,19 @@ absl::Status InstallEntriesOnlyForwardingPacketsMatchingVlanIdInAclPreIngress(
 
 absl::Status InstallEntriesForwardingAndRewritingVlanInRifTable(
     Bmv2& bmv2, const pdpi::IrP4Info& ir_p4info,
-    std::optional<absl::string_view> vlan_id_hexstr,
-    absl::string_view egress_port, bool disable_vlan_checks,
-    bool disable_vlan_rewrite) {
-  RETURN_IF_ERROR(InstallEntries(
-      bmv2, ir_p4info,
-      sai::EntryBuilder()
-          .AddEntrySettingVrfForAllPackets("vrf-forward")
-          .AddEntryAdmittingAllPacketsToL3()
-          .AddDefaultRouteForwardingAllPacketsToGivenPort(
-              egress_port, sai::IpVersion::kIpv4, "vrf-forward",
-              {.disable_vlan_rewrite = disable_vlan_rewrite}, vlan_id_hexstr)));
+    std::optional<std::string> egress_rif_vlan, absl::string_view egress_port,
+    bool disable_vlan_checks, bool disable_vlan_rewrite) {
+  RETURN_IF_ERROR(
+      InstallEntries(bmv2, ir_p4info,
+                     sai::EntryBuilder()
+                         .AddEntrySettingVrfForAllPackets("vrf-forward")
+                         .AddEntryAdmittingAllPacketsToL3()
+                         .AddDefaultRouteForwardingAllPacketsToGivenPort(
+                             egress_port, sai::IpVersion::kIpv4, "vrf-forward",
+                             sai::NexthopRewriteOptions{
+                                 .disable_vlan_rewrite = disable_vlan_rewrite,
+                                 .egress_rif_vlan = egress_rif_vlan,
+                             })));
 
   if (disable_vlan_checks) {
     return InstallEntries(bmv2, ir_p4info,
@@ -305,7 +309,7 @@ TEST_P(VlanTest,
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  constexpr absl::string_view kEgressVlan = "0x003";
+  const std::string kEgressVlan = "0x003";
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
       bmv2, kIrP4Info, kEgressVlan, kEgressPortProto,
       /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/false));
@@ -366,7 +370,7 @@ TEST_P(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  constexpr absl::string_view kEgressVlan = "0x003";
+  const std::string kEgressVlan = "0x003";
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
       bmv2, kIrP4Info, kEgressVlan, kEgressPortProto,
       /*disable_vlan_checks=*/false, /*disable_vlan_rewrite=*/false));
@@ -403,7 +407,7 @@ TEST_P(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  constexpr absl::string_view kEgressVlan = "0xfff";
+  const std::string kEgressVlan = "0xfff";
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
       bmv2, kIrP4Info, kEgressVlan, kEgressPortProto,
       /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/false));
@@ -450,7 +454,8 @@ TEST_P(VlanTest, IngressVidGetCarriedOverToEgressWhenVlanRewriteIsDisabled) {
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
-      bmv2, kIrP4Info, /*vlan_id_hexstr=*/std::nullopt, kEgressPortProto,
+      bmv2, kIrP4Info, /*egress_rif_vlan=*/std::nullopt, kEgressPortProto,
+      /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/true));
   {
     // Inject packet without a VLAN tag.
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
@@ -499,7 +504,7 @@ TEST_P(VlanTest,
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
   ASSERT_OK(InstallEntriesForwardingAndRewritingVlanInRifTable(
-      bmv2, kIrP4Info, /*vlan_id_hexstr=*/"0x00c", kEgressPortProto,
+      bmv2, kIrP4Info, /*egress_rif_vlan=*/"0x00c", kEgressPortProto,
       /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/true));
 
   {
@@ -565,7 +570,7 @@ sai::TableEntries EntriesForwardingAndRewritingVlanInRifTable(
 
 TEST(VlanTest,
      SettingNonReservedVidInRifWithoutVlanChecksResultsInPacketWithThatId) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
@@ -573,7 +578,8 @@ TEST(VlanTest,
   ASSERT_OK(InstallEntries(
       bmv2, kIrP4Info,
       EntriesForwardingAndRewritingVlanInRifTable(
-          kEgressVlan, kEgressPortProto, /*disable_vlan_checks=*/true)));
+          kEgressVlan, kEgressPortProto, 
+          /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/false)));
   {
     // Inject packet without a VLAN tag.
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
@@ -626,7 +632,7 @@ TEST(VlanTest,
 }
 
 TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
@@ -634,7 +640,8 @@ TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
   ASSERT_OK(InstallEntries(
       bmv2, kIrP4Info,
       EntriesForwardingAndRewritingVlanInRifTable(
-          kEgressVlan, kEgressPortProto, /*disable_vlan_checks=*/false)));
+          kEgressVlan, kEgressPortProto, 
+          /*disable_vlan_checks=*/false, /*disable_vlan_rewrite=*/false)));
   {
     // Inject packet without a VLAN tag.
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
@@ -663,15 +670,16 @@ TEST(VlanTest, SettingNonReservedVidInRifWithVlanChecksResultsInDrop) {
 }
 
 TEST(VlanTest, SettingVid4095InRifResultsOutputPacketWithNoVlanTag) {
-  const sai::Instantiation kInstantiation = sai::Instantiation::kTor;
+  const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  constexpr absl::string_view kEgressVlan = "0xfff";
+  const std::string kEgressVlan = "0xfff";
   ASSERT_OK(InstallEntries(
       bmv2, kIrP4Info,
       EntriesForwardingAndRewritingVlanInRifTable(
-          kEgressVlan, kEgressPortProto, /*disable_vlan_checks=*/true)));
+          kEgressVlan, kEgressPortProto,
+          /*disable_vlan_checks=*/true, /*disable_vlan_rewrite=*/false)); 
   {
     // Inject packet without a VLAN tag.
     ASSERT_OK_AND_ASSIGN(PacketsByPort output_by_port,
