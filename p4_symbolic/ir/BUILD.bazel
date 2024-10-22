@@ -137,3 +137,9 @@ ir_parsing_test(
     golden_file = "expected/set_invalid.txt",
     p4_program = "//p4_symbolic/testdata:set-invalid/set_invalid.p4",
 )
+
+ir_parsing_test(
+    name = "table_hit_1_test",
+    golden_file = "expected/table_hit_1.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/table_hit_1.p4",
+)
