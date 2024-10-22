@@ -171,13 +171,17 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
       << " according to the table definition, but got entry with match: "
       << match_definition.ShortDebugString();
 
+  auto GetZ3Value =
+      [&](const pdpi::IrValue &value) -> absl::StatusOr<z3::expr> {
+    return values::FormatP4RTValue(field_name,
+                                   match_definition.type_name().name(), value,
+                                   match_definition.bitwidth(), translator);
+  };
+
   switch (match_definition.match_type()) {
     case p4::config::v1::MatchField::EXACT: {
       if (match.match_value_case() != pdpi::IrMatch::kExact) return mismatch;
-      ASSIGN_OR_RETURN(z3::expr value_expression,
-                       values::FormatP4RTValue(
-                           field_name, match_definition.type_name().name(),
-                           match.exact(), translator));
+      ASSIGN_OR_RETURN(z3::expr value_expression, GetZ3Value(match.exact()));
       return operators::Eq(field_expression, value_expression);
     }
 
@@ -185,7 +189,7 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
       if (match.match_value_case() != pdpi::IrMatch::kLpm) return mismatch;
 
       ASSIGN_OR_RETURN(z3::expr value_expression,
-                       values::FormatBmv2Value(match.lpm().value()));
+                       GetZ3Value(match.lpm().value()));
       return operators::PrefixEq(
           field_expression, value_expression,
           static_cast<unsigned int>(match.lpm().prefix_length()));
@@ -195,9 +199,9 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
       if (match.match_value_case() != pdpi::IrMatch::kTernary) return mismatch;
 
       ASSIGN_OR_RETURN(z3::expr mask_expression,
-                       values::FormatBmv2Value(match.ternary().mask()));
+                       GetZ3Value(match.ternary().mask()));
       ASSIGN_OR_RETURN(z3::expr value_expression,
-                       values::FormatBmv2Value(match.ternary().value()));
+                       GetZ3Value(match.ternary().value()));
       ASSIGN_OR_RETURN(z3::expr masked_field,
                        operators::BitAnd(field_expression, mask_expression));
       return operators::Eq(masked_field, value_expression);
@@ -211,9 +215,7 @@ absl::StatusOr<z3::expr> EvaluateSingleMatch(
       // match value is present for an optional match type, it must be a
       // concrete value.
       ASSIGN_OR_RETURN(z3::expr value_expression,
-                       values::FormatP4RTValue(
-                           field_name, match_definition.type_name().name(),
-                           match.optional().value(), translator));
+                       GetZ3Value(match.optional().value()));
       return operators::Eq(field_expression, value_expression);
     }
 
