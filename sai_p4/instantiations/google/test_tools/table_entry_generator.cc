@@ -27,6 +27,7 @@
 #include "glog/logging.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
+#include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/test_tools/table_entry_generator_helper.h"
@@ -229,11 +230,8 @@ TableEntryGenerator AclIngressQosTableGenerator(
   auto base_entry = gutil::ParseTextProto<pdpi::IrTableEntry>(
       R"pb(table_name: "acl_ingress_qos_table"
            matches {
-             name: "ether_type"
-             ternary {
-               value { hex_str: "0x0806" }
-               mask { hex_str: "0xffff" }
-             }
+             name: "is_ipv4"
+             optional { value { hex_str: "0x1" } }
            }
            action {
              name: "set_qos_queue_and_cancel_copy_above_rate_limit"
@@ -244,7 +242,7 @@ TableEntryGenerator AclIngressQosTableGenerator(
            })pb");
   if (!base_entry.ok()) LOG(FATAL) << base_entry.status();  // Crash OK
   generator.generator = IrMatchFieldAndPriorityGenerator(
-      table_definition, *base_entry, "arp_tpa");
+      table_definition, *base_entry, "ip_protocol");
   return generator;
 }
 
@@ -259,6 +257,28 @@ TableEntryGenerator L3AdmitTableGenerator(
   generator.generator =
       IrMatchFieldGenerator(table_definition, *base_entry, "dst_mac");
   return generator;
+}
+
+TableEntryGenerator MulticastRouterInterfaceTableGenerator(
+    const pdpi::IrTableDefinition& table_definition) {
+  auto base_entry = gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+    table_name: "multicast_router_interface_table"
+    matches {
+      name: "multicast_replica_port"
+      exact { str: "1" }
+    }
+    action {
+      name: "set_multicast_src_mac"
+      params {
+        name: "src_mac"
+        value { mac: "06:05:04:03:02:01" }
+      }
+    }
+  )pb");
+  return TableEntryGenerator{
+      .generator = IrMatchFieldGenerator(table_definition, base_entry,
+                                         "multicast_replica_instance"),
+  };
 }
 
 const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
@@ -286,7 +306,6 @@ const absl::flat_hash_set<std::string>& KnownUnsupportedTables() {
           "ipv6_tunnel_termination_table",
           // TODO: Add support for these tables once the switch
           // supports it.
-          "multicast_router_interface_table",
           "ipv4_multicast_table",
           "ipv6_multicast_table",
           // TODO: Add support for this table once the switch
@@ -317,6 +336,8 @@ absl::StatusOr<TableEntryGenerator> GetGenerator(
       {"ipv4_table", Ipv4TableGenerator},
       {"ipv6_table", Ipv6TableGenerator},
       {"l3_admit_table", L3AdmitTableGenerator},
+      {"multicast_router_interface_table",
+       MulticastRouterInterfaceTableGenerator},
   });
 
   const std::string& table_name = table.preamble().alias();

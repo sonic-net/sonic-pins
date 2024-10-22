@@ -95,8 +95,10 @@ control acl_pre_ingress(in headers_t headers,
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_ACL_IP_TYPE/IPV6ANY);
       headers.ethernet.src_addr : ternary @name("src_mac") @id(4)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
+#ifdef SAI_INSTANTIATION_FABRIC_BORDER_ROUTER
       headers.ethernet.dst_addr : ternary @name("dst_mac") @id(9)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_MAC) @format(MAC_ADDRESS);
+#endif
       headers.ipv4.dst_addr : ternary @name("dst_ip") @id(5)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IP) @format(IPV4_ADDRESS);
       headers.ipv6.dst_addr[127:64] : ternary @name("dst_ipv6") @id(6)
