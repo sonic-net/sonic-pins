@@ -216,6 +216,13 @@ control routing_lookup(in headers_t headers,
     const default_action = drop;
     size = ROUTING_IPV6_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
+
+  @entry_restriction("
+    // TODO: Use IPv4 address notation once it is supported.
+    // Only IPv4s in the multicast range 224.0.0.0/4 are supported.
+    ipv4_dst::value >= 0xe0000000;
+    ipv4_dst::value <= 0xefffffff;
+  ")
   // Models SAI IPMC entries of type (*,G) whose destination is an IPv4 address.
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(ROUTING_IPV4_MULTICAST_TABLE_ID)
@@ -234,6 +241,12 @@ control routing_lookup(in headers_t headers,
     size = ROUTING_IPV4_MULTICAST_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
 
+  @entry_restriction("
+    // TODO: Use IPv4 address notation once it is supported.
+    // Only IPv6s in the multicast range ff00::/8 are supported.
+    ipv6_dst::value >= 0xff000000000000000000000000000000;
+    ipv6_dst::value <= 0xffffffffffffffffffffffffffffffff;
+  ")
   // Models SAI IPMC entries of type (*,G) whose destination is an IPv6 address.
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(ROUTING_IPV6_MULTICAST_TABLE_ID)
@@ -273,9 +286,7 @@ control routing_lookup(in headers_t headers,
       }
     } else if (headers.ipv6.isValid()) {
       if (IS_MULTICAST_IPV6(headers.ipv6.dst_addr)) {
-        if (local_metadata.admit_to_l3 ||
-            // Packets with multicast DMAC are always elligible for IP multicast.
-            IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
+        if (IS_IPV6_MULTICAST_MAC(headers.ethernet.dst_addr)) {
           ipv6_multicast_table.apply();
           local_metadata.ipmc_table_hit = standard_metadata.mcast_grp != 0;
           // TODO: Use commented out code instead, once p4-symbolic
@@ -436,21 +447,6 @@ control routing_resolution(in headers_t headers,
     set_ip_nexthop_and_disable_rewrites(router_interface_id, neighbor_id,
       /*disable_decrement_ttl*/0x0, /*disable_src_mac_rewrite*/0x0,
       /*disable_dst_mac_rewrite*/0x0, /*disable_vlan_rewrite*/0x0);
-  }
-
-  @id(ROUTING_SET_NEXTHOP_ACTION_ID)
-  @deprecated("Use set_ip_nexthop instead.")
-  // TODO: Remove this action once migration to `set_ip_nexthop`
-  // is complete & rolled out.
-  action set_nexthop(
-      @id(1)
-      @refers_to(router_interface_table, router_interface_id)
-      @refers_to(neighbor_table, router_interface_id)
-      router_interface_id_t router_interface_id,
-      @id(2)  @format(IPV6_ADDRESS)
-      @refers_to(neighbor_table, neighbor_id)
-      ipv6_addr_t neighbor_id) {
-    set_ip_nexthop(router_interface_id, neighbor_id);
   }
 
   // Sets SAI_NEXT_HOP_ATTR_TYPE to SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP, and

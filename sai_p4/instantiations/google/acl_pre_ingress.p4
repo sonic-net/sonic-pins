@@ -137,7 +137,7 @@ control acl_pre_ingress(in headers_t headers,
     is_ipv4::mask != 0 -> (is_ipv4 == 1);
     is_ipv6::mask != 0 -> (is_ipv6 == 1);
     // Disallow match on reserved VLAN IDs to rule out vendor specific behavior.
-    vlan_id::mask != 0 -> (vlan_id != 4095 && vlan_id != 0);
+    vlan_id::mask != 0 -> (vlan_id != 4095);
     // TODO: Disallow setting to reserved VLAN IDs when supported.
   ")
   table acl_pre_ingress_vlan_table {

@@ -46,6 +46,10 @@
 // after the first failed one.
 #define SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST "1.6.2"
 
+// Indicates that switch respects ingress ACL resource guarantees.
+#define SAI_P4_PKGINFO_VERSION_FIXED_INGRESS_ACL_RESOURCE \
+  SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST
+
 // Indicates that the program does not support the `set_nexthop` action.
 #define SAI_P4_PKGINFO_VERSION_HAS_NO_SET_NEXTHOP_SUPPORT "2.0.0"
 
@@ -54,6 +58,7 @@
 #define SAI_P4_PKGINFO_VERSION_USES_TERNARY_ROUTE_METADATA "3.0.0"
 
 // Macro that always points to the latest SAI P4 version.
-#define SAI_P4_PKGINFO_VERSION_LATEST SAI_P4_PKGINFO_VERSION_USES_FAIL_ON_FIRST
+#define SAI_P4_PKGINFO_VERSION_LATEST \
+  SAI_P4_PKGINFO_VERSION_HAS_NO_SET_NEXTHOP_SUPPORT
 
 #endif  // PINS_SAI_VERSIONS_H_

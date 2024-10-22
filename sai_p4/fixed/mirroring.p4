@@ -54,17 +54,14 @@ control mirror_session_lookup(inout headers_t headers,
   // * SAI_MIRROR_SESSION_ATTR_UDP_SRC_PORT
   // * SAI_MIRROR_SESSION_ATTR_UDP_DST_PORT
   @id(CLONING_MIRROR_WITH_VLAN_TAG_AND_IPFIX_ENCAPSULATION_ACTION_ID)
-  // TODO: Remove unsupported annotation once the switch stack
-  // supports this table.
-  @unsupported
   action mirror_with_vlan_tag_and_ipfix_encapsulation(
       @id(1) port_id_t monitor_port,
       @id(2) port_id_t monitor_failover_port,
       @id(3) @format(MAC_ADDRESS) ethernet_addr_t mirror_encap_src_mac,
       @id(4) @format(MAC_ADDRESS) ethernet_addr_t mirror_encap_dst_mac,
       @id(6) vlan_id_t mirror_encap_vlan_id,
-      @id(7) @format(IPV6_ADDRESS) ipv6_addr_t mirror_encap_dst_ip,
-      @id(8) @format(IPV6_ADDRESS) ipv6_addr_t mirror_encap_src_ip,
+      @id(7) @format(IPV6_ADDRESS) ipv6_addr_t mirror_encap_src_ip,
+      @id(8) @format(IPV6_ADDRESS) ipv6_addr_t mirror_encap_dst_ip,
       @id(9) bit<16> mirror_encap_udp_src_port,
       @id(10) bit<16> mirror_encap_udp_dst_port) {
     local_metadata.mirror_egress_port = monitor_port;
