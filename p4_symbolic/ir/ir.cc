@@ -562,7 +562,7 @@ absl::StatusOr<Statement> ExtractStatement(
       return statement;
     }
 
-    case bmv2::StatementOp::add_header: 
+    case bmv2::StatementOp::add_header:
     case bmv2::StatementOp::remove_header: {
       const google::protobuf::Value &params =
           action_primitive.fields().at("parameters");
