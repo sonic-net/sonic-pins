@@ -500,6 +500,33 @@ EntryBuilder& EntryBuilder::AddMirrorSessionTableEntry(
   return *this;
 }
 
+EntryBuilder& EntryBuilder::AddIpv6TunnelTerminationEntry(
+    const Ipv6TunnelTerminationParams& params) {
+  sai::TableEntry pd_entry;
+  sai::Ipv6TunnelTerminationTableEntry& tunnel_entry =
+      *pd_entry.mutable_ipv6_tunnel_termination_table_entry();
+  if (params.dst_ipv6_value.has_value()) {
+    tunnel_entry.mutable_match()->mutable_dst_ipv6()->set_value(
+        params.dst_ipv6_value->ToString());
+  }
+  if (params.dst_ipv6_mask.has_value()) {
+    tunnel_entry.mutable_match()->mutable_dst_ipv6()->set_mask(
+        params.dst_ipv6_mask->ToString());
+  }
+  if (params.src_ipv6_value.has_value()) {
+    tunnel_entry.mutable_match()->mutable_src_ipv6()->set_value(
+        params.src_ipv6_value->ToString());
+  }
+  if (params.src_ipv6_mask.has_value()) {
+    tunnel_entry.mutable_match()->mutable_src_ipv6()->set_mask(
+        params.src_ipv6_mask->ToString());
+  }
+  tunnel_entry.mutable_action()->mutable_tunnel_decap();
+  tunnel_entry.set_priority(1);
+  *entries_.add_entries() = std::move(pd_entry);
+  return *this;
+}
+
 EntryBuilder& EntryBuilder::AddMarkToMirrorAclEntry(
     const MarkToMirrorParams& params) {
   sai::TableEntry pd_entry;

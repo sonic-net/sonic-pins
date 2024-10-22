@@ -29,21 +29,16 @@ control tunnel_termination(inout headers_t headers,
   bool marked_for_ip_in_ipv6_decap = false;
 
   @id(TUNNEL_DECAP_ACTION_ID)
-  @unsupported
   action tunnel_decap() {
-    // Bmv2 does not support if statements in actions, so control metadata is 
+    // Bmv2 does not support if statements in actions, so control metadata is
     // set and decapping is performed post-action.
     marked_for_ip_in_ipv6_decap = true;
   }
 
   // Models SAI_TUNNEL_TERM_TABLE.
   // Currently, we only model IPv6 decap of IP-in-IP packets
-  // TODO: Remove `@unsupported` annotation once the table is
-  // supported by the switch stack.
-  @unsupported
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(IPV6_TUNNEL_TERMINATION_TABLE_ID)
-  @unsupported
   table ipv6_tunnel_termination_table {
     key = {
       // Sets `SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_DST_IP[_MASK]`.

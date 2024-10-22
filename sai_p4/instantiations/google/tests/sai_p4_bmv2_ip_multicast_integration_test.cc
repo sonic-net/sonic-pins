@@ -152,7 +152,7 @@ absl::StatusOr<packetlib::Packet> GetIpv6TestPacket(
                      headers {
                        ethernet_header {
                          # IPv6 Multicast MAC.
-                         ethernet_destination: "01:33:33:05:06:07"
+                         ethernet_destination: "33:33:04:05:06:07"
                          ethernet_source: "00:01:02:03:04:05"
                          ethertype: "0x86dd"  # IPv6
                        }

@@ -105,6 +105,14 @@ struct MirrorSessionParams {
   std::string mirror_encap_udp_dst_port;
 };
 
+// Parameters for generating an ipv6 tunnel termination table entry.
+struct Ipv6TunnelTerminationParams {
+  std::optional<netaddr::Ipv6Address> src_ipv6_value;
+  std::optional<netaddr::Ipv6Address> src_ipv6_mask;
+  std::optional<netaddr::Ipv6Address> dst_ipv6_value;
+  std::optional<netaddr::Ipv6Address> dst_ipv6_mask;
+};
+
 // Parameters for generating an ACL table entry to mark packets to be mirrored.
 struct MarkToMirrorParams {
   std::string ingress_port;
@@ -229,6 +237,8 @@ class EntryBuilder {
   EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
       int multicast_group_id,
       const MirrorAndRedirectMatchFields& match_fields = {});
+  EntryBuilder& AddIpv6TunnelTerminationEntry(
+      const Ipv6TunnelTerminationParams& params);
   EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
   EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
 
