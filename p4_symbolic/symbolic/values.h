@@ -22,6 +22,7 @@
 #define P4_SYMBOLIC_SYMBOLIC_VALUES_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -81,26 +82,21 @@ struct P4RuntimeTranslator {
 // Transforms a hex string literal from bmv2 json to a pdpi::IrValue
 absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value);
 
-// Transforms a value read from bmv2 (e.g. hardcoded in the program)
-// to a z3::expr.
-// Essentially, this is just a formatting function that can format ipv4, ipv6
-// hexstrings, and macs as bitvectors in z3's format.
-// This function does not perform any string translation, and instead assumes
-// the values are already in the actual domain of values in the p4 program,
-// because p4 and bmv2 both do not support string translation, it is only used
-// as a logical translation at the boundry between P4RT and bmv2.
-absl::StatusOr<z3::expr> FormatBmv2Value(const pdpi::IrValue &value);
-
 // Transforms a value read from a table entry to a z3::expr.
 // On top of formatting ipv4, ipv6, hexstrings, and macs as bitvectors,
 // this function also translates string values to unique bitvectors.
 // The mapping of strings to bitvectors is stored in the translator state,
-//  and used to map the same string to the same consistent bitvector, and to
+// and used to map the same string to the same consistent bitvector, and to
 // do a reverse-translation when extracting values for headers and fields from
 // the z3 model.
+// Parameter `bitwidth` is the width of the underlying PI value. For runtime
+// translated values (i.e. string IrValues) the bitwidth MUST be 0, in which
+// case we use the minimum number of bits to encode the resulting translated
+// value.
 absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
                                          const std::string &type_name,
                                          const pdpi::IrValue &value,
+                                         int bitwidth,
                                          P4RuntimeTranslator *translator);
 
 // Reverse translation: operates opposite to FormatP4RTValue().
