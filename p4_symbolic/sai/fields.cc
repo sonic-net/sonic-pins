@@ -14,6 +14,13 @@
 
 #include "p4_symbolic/sai/fields.h"
 
+#include <array>
+#include <string>
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_join.h"
 #include "gutil/status.h"
@@ -33,9 +40,13 @@ absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
                                          const SymbolicPerPacketState& state) {
   // Compute set of mangled field names that match the given field name.
   std::vector<std::string> mangled_candidates;
+  // p4c seems to use the following template to name metadata fields:
+  // "scalars.userMetadata._<field name><a number>". We look for names that
+  // match the template.
+  const std::string prefix = absl::StrCat("scalars.userMetadata._", field);
   for (const auto& [key, _] : state) {
-    if (absl::StartsWith(key, "scalars.userMetadata.") &&
-        absl::StrContains(key, field)) {
+    if (absl::StartsWith(key, prefix) && key.length() > prefix.length() &&
+        absl::ascii_isdigit(key.at(prefix.length()))) {
       mangled_candidates.push_back(key);
     }
   }
