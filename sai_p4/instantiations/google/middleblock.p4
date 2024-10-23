@@ -20,6 +20,7 @@
 #include "../../fixed/drop_martians.p4"
 #include "../../fixed/packet_rewrites.p4"
 #include "../../fixed/tunnel_termination.p4"
+#include "acl_egress.p4"
 #include "acl_ingress.p4"
 #include "acl_pre_ingress.p4"
 #include "admit_google_system_mac.p4"
@@ -33,11 +34,10 @@ control ingress(inout headers_t headers,
   apply {
     packet_out_decap.apply(headers, local_metadata, standard_metadata);
     if (!local_metadata.bypass_ingress) {
-      tunnel_termination_lookup.apply(headers, local_metadata);
       vlan_untag.apply(headers, local_metadata, standard_metadata);
       acl_pre_ingress.apply(headers, local_metadata, standard_metadata);
       ingress_vlan_checks.apply(headers, local_metadata, standard_metadata);
-      tunnel_termination_decap.apply(headers, local_metadata);
+      tunnel_termination.apply(headers, local_metadata);
       admit_google_system_mac.apply(headers, local_metadata);
       l3_admit.apply(headers, local_metadata, standard_metadata);
       routing_lookup.apply(headers, local_metadata, standard_metadata);
@@ -62,6 +62,7 @@ control egress(inout headers_t headers,
       mirroring_encap.apply(headers, local_metadata, standard_metadata);
       egress_vlan_checks.apply(headers, local_metadata, standard_metadata);
       vlan_tag.apply(headers, local_metadata, standard_metadata);
+      acl_egress.apply(headers, local_metadata, standard_metadata);
     }
   }
 }  // control egress

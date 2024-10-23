@@ -285,17 +285,15 @@ TEST(EntryBuilder, AddPreIngressAclEntryAssigningVrfForGivenIpTypeAddsEntry) {
   EXPECT_THAT(entities.entities(), SizeIs(3));
 }
 
-TEST(EntryBuilder, AddEntryDecappingAllIpInIpv6PacketsAndSettingVrfAddsEntry) {
+TEST(EntryBuilder, AddEntryDecappingAllIpInIpv6PacketsAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-1")
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-2")
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-3")
+          .AddEntryDecappingAllIpInIpv6Packets()
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
-  EXPECT_THAT(entities.entities(), SizeIs(3));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
 }
 
 TEST(EntryBuilder, AddMulticastGroupEntryReplicaOverloadAddsEntry) {
