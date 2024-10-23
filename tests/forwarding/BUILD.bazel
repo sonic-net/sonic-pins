@@ -81,7 +81,7 @@ cc_library(
     testonly = True,
     srcs = ["smoke_test.cc"],
     hdrs = ["smoke_test.h"],
-    visibility = ["//platforms/networking/gpins/testing/blackbox/p4:__pkg__"],
+    visibility = ["//visibility:public"],
     deps = [
         ":p4_blackbox_fixture",
         ":test_data",
@@ -93,7 +93,7 @@ cc_library(
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//thinkit:mirror_testbed_fixture",
-        "@com_google_googletest//:gtest_main",
+        "@com_google_googletest//:gtest",
     ],
     alwayslink = True,
 )
