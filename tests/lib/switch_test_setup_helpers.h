@@ -2,14 +2,19 @@
 #define PINS_TESTS_LIB_SWITCH_TEST_SETUP_HELPERS_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
+#include "lib/gnmi/openconfig.pb.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "thinkit/mirror_testbed.h"
 #include "thinkit/switch.h"
+
 namespace pins_test {
 
 // Configures the switch and sets up a P4 Runtime Session. If you don't have
@@ -42,6 +47,22 @@ ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
     std::optional<std::string> gnmi_config,
     std::optional<p4::config::v1::P4Info> p4info,
     const pdpi::P4RuntimeSessionOptionalArgs& metadata = {});
+
+// Mirrors the P4RT port IDs of the SUT onto the control switch and ensures that
+// the state of the switch is properly updated (i.e. that the IDs are reflected
+// in the gNMI state path).
+absl::Status MirrorSutP4rtPortIdConfigToControlSwitch(
+    thinkit::MirrorTestbed& testbed,
+    absl::Duration config_convergence_timeout_per_switch = absl::Minutes(5));
+
+// Reads the enabled interfaces from the switch and waits up to `timeout` until
+// they are all up. Calls `on_failure` prior to returning status if it is not
+// OK.
+absl::Status WaitForEnabledInterfacesToBeUp(
+    thinkit::Switch& thinkit_switch, absl::Duration timeout = absl::Minutes(5),
+    std::optional<
+        std::function<void(const openconfig::Interfaces& enabled_interfaces)>>
+        on_failure = std::nullopt);
 
 }  // namespace pins_test
 

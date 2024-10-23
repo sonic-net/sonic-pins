@@ -1,6 +1,7 @@
 #include "tests/lib/switch_test_setup_helpers.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -9,6 +10,8 @@
 #include "absl/types/optional.h"
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "lib/gnmi/openconfig.pb.h"
+#include "lib/validator/validator_lib.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
@@ -108,6 +111,74 @@ ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
   }
 
   return std::make_pair(std::move(session1), std::move(session2));
+}
+
+absl::Status MirrorSutP4rtPortIdConfigToControlSwitch(
+    thinkit::MirrorTestbed& testbed,
+    absl::Duration config_convergence_timeout_per_switch) {
+  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
+                   testbed.Sut().CreateGnmiStub());
+  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub,
+                   testbed.ControlSwitch().CreateGnmiStub());
+  ASSIGN_OR_RETURN(const pins_test::openconfig::Interfaces sut_interfaces,
+                   pins_test::GetInterfacesAsProto(*sut_gnmi_stub,
+                                                   gnmi::GetRequest::CONFIG));
+  RETURN_IF_ERROR(
+      pins_test::SetInterfaceP4rtIds(*control_gnmi_stub, sut_interfaces));
+
+  // Ensure that the SUT and control switch gNMI state paths have converged to
+  // match their expected configurations.
+  RETURN_IF_ERROR(pins_test::WaitForGnmiPortIdConvergence(
+                      *sut_gnmi_stub, config_convergence_timeout_per_switch))
+          .SetPrepend()
+      << "P4RT port IDs did not converge on SUT within "
+      << config_convergence_timeout_per_switch << ": ";
+  RETURN_IF_ERROR(
+      pins_test::WaitForGnmiPortIdConvergence(
+          *control_gnmi_stub, config_convergence_timeout_per_switch))
+          .SetPrepend()
+      << "P4RT port IDs did not converge on control switch within "
+      << config_convergence_timeout_per_switch << ": ";
+  return absl::OkStatus();
+}
+
+
+// Reads the enabled interfaces from the switch and waits up to `timeout` until
+// they are all up. Calls `on_failure` prior to returning status if it is not
+// OK.
+absl::Status WaitForEnabledInterfacesToBeUp(
+    thinkit::Switch& thinkit_switch, absl::Duration timeout,
+    std::optional<
+        std::function<void(const openconfig::Interfaces& enabled_interfaces)>>
+        on_failure) {
+  absl::Time start = absl::Now();
+  ASSIGN_OR_RETURN(std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub,
+                   thinkit_switch.CreateGnmiStub());
+  // Get all enabled interfaces from the config.
+  ASSIGN_OR_RETURN(const pins_test::openconfig::Interfaces enabled_interfaces,
+                   pins_test::GetMatchingInterfacesAsProto(
+                       *gnmi_stub, gnmi::GetRequest::CONFIG,
+                       /*predicate=*/
+                       [](const openconfig::Interfaces::Interface& interface) {
+                         return interface.config().enabled();
+                       },
+                       timeout));
+  std::vector<std::string> enabled_interface_names;
+  enabled_interface_names.reserve(enabled_interfaces.interfaces_size());
+  for (const auto& interface : enabled_interfaces.interfaces())
+    enabled_interface_names.push_back(interface.name());
+  // Wait for all enabled interfaces to be up.
+  timeout = timeout - (absl::Now() - start);
+  if (on_failure.has_value()) {
+    return pins_test::OnFailure(
+        pins_test::WaitForCondition(pins_test::PortsUp, timeout, thinkit_switch,
+                                    enabled_interface_names,
+                                    /*with_healthz=*/false),
+        /*on_failure=*/[&]() { (*on_failure)(enabled_interfaces); });
+  }
+  return pins_test::WaitForCondition(pins_test::PortsUp, timeout,
+                                     thinkit_switch, enabled_interface_names,
+                                     /*with_healthz=*/false);
 }
 
 }  // namespace pins_test
