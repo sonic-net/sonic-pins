@@ -53,17 +53,26 @@ struct NexthopRewriteOptions {
   // When present, source MAC will be rewritten to the given address. When
   // absent, no rewrite occurs.
   std::optional<netaddr::MacAddress> src_mac_rewrite =
-      netaddr::MacAddress(1, 2, 3, 4, 5, 6);
+      netaddr::MacAddress(6, 5, 4, 3, 2, 1);
   // When present, destination MAC will be rewritten to the given address. When
   // absent, no rewrite occurs.
   std::optional<netaddr::MacAddress> dst_mac_rewrite =
       netaddr::MacAddress(2, 2, 2, 2, 2, 2);
+  // If true, makes the nexthop use a `set_ip_nexthop_and_disable_rewrites`
+  // action with `disable_vlan_rewrite` set to true. If false, such an action
+  // may still be used based on above values (otherwise a `set_ip_nexthop`
+  // action will be used), but `disable_vlan_rewrite` will be set false.
   bool disable_vlan_rewrite = false;
+  // When present, causes the RIF to use a `set_port_and_src_mac_and_vlan_id`
+  // action with `vlan_id = egress_rif_vlan`. When absent, the RIF will instead
+  // use the `set_port_and_src_mac` action.
+  std::optional<std::string> egress_rif_vlan = std::nullopt;
 };
 
 enum class IpVersion {
   kIpv4,
   kIpv6,
+  // Targets both IPv4 and IPv6 packets.
   kIpv4And6,
 };
 
@@ -150,23 +159,46 @@ class EntryBuilder {
     netaddr::MacAddress src_mac;
   };
 
+  // Adds an entry that matches all packets and punts them according to
+  // `action`.
   EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
+
+  // Constructs all entries required to forward all `ip_version` packets to
+  // `egress_port` and modify them using `rewrite_options`.
   // Note: Cannot be combined with other entries that forward *all* IP packets
   // in a specific way.
   EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port,
-      IpVersion ip_version = IpVersion::kIpv4And6, NexthopRewriteOptions = {});
+      IpVersion ip_version = IpVersion::kIpv4And6,
+      const NexthopRewriteOptions& rewrite_options = {});
+
+  // Constructs a default IP route matching packets of `ip_version` with `vrf`
+  // and sending them to `egress_port`. Matching packets will be modified using
+  // `rewrite_options`.
+  // Note: For packets to hit this route, additional entries are required! At a
+  // minimum an L3 admit entry and entries that assign the given `vrf`.
+  // Note: Cannot be combined with other entries that forward *all* IP packets
+  // in a specific way unless they specify a different `vrf`.
+  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
+      absl::string_view egress_port, IpVersion ip_version,
+      absl::string_view vrf, const NexthopRewriteOptions& rewrite_options = {});
+
+  // Constructs an IpNexthop entry with `nexthop_id` pointing to a neighbor
+  // entry and RIF entry all characterized by `nexthop_rewrite_options`. The RIF
+  // will output packets on `egress_port`.
+  EntryBuilder& AddNexthopRifNeighborEntries(
+      absl::string_view nexthop_id, absl::string_view egress_port,
+      const NexthopRewriteOptions& rewrite_options = {});
+
+  // Warning: If you try to install the result of multiple calls to this
+  // function (with different `multicast_group_id`s), you will get a runtime
+  // error.
   // Note: Cannot be combined with other entries that forward *all* IP packets
   // in a specific way.
   EntryBuilder& AddEntriesForwardingIpPacketsToGivenMulticastGroup(
       int multicast_group_id);
   EntryBuilder& AddVrfEntry(absl::string_view vrf);
   EntryBuilder& AddEntryAdmittingAllPacketsToL3();
-  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
-      absl::string_view egress_port, IpVersion ip_version,
-      absl::string_view vrf,
-      const NexthopRewriteOptions& nexthop_rewrite_options = {},
-      std::optional<absl::string_view> vlan_hexstr = std::nullopt);
   EntryBuilder& AddMulticastRoute(absl::string_view vrf,
                                   const netaddr::Ipv4Address& dst_ip,
                                   int multicast_group_id);
@@ -175,8 +207,7 @@ class EntryBuilder {
                                   int multicast_group_id);
   EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
       absl::string_view vrf, IpVersion ip_version);
-  EntryBuilder& AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf(
-      absl::string_view vrf);
+  EntryBuilder& AddEntryDecappingAllIpInIpv6Packets();
   EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
   EntryBuilder& AddMulticastGroupEntry(int multicast_group_id,
                                          absl::Span<const Replica> replicas);
@@ -192,10 +223,6 @@ class EntryBuilder {
   EntryBuilder& AddEntrySettingVlanIdInPreIngress(
       absl::string_view set_vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt);
-  EntryBuilder& AddNexthopRifNeighborEntries(
-      absl::string_view nexthop_id, absl::string_view egress_port,
-      const NexthopRewriteOptions& nexthop_rewrite_options = {},
-      std::optional<absl::string_view> vlan_hexstr = std::nullopt);
   EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
       absl::string_view nexthop_id,
       std::optional<absl::string_view> in_port_match = std::nullopt);

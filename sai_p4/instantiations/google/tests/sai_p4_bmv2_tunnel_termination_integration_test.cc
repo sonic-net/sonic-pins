@@ -22,6 +22,7 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
@@ -30,6 +31,7 @@
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/p4_runtime_matchers.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
@@ -59,53 +61,60 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::StrEq;
 
+constexpr netaddr::MacAddress kSrcMac = netaddr::MacAddress(0, 1, 2, 3, 4, 5);
+constexpr netaddr::MacAddress kDstMac = netaddr::MacAddress(2, 3, 4, 5, 6, 7);
+;
 
-absl::StatusOr<packetlib::Packet> GetIpv4InIpv6Packet() {
-  ASSIGN_OR_RETURN(auto packet, gutil::ParseTextProto<packetlib::Packet>(R"pb(
-                     headers {
-                       ethernet_header {
-                         ethernet_destination: "02:03:04:05:06:07"
-                         ethernet_source: "00:01:02:03:04:05"
-                         ethertype: "0x86dd"  # IPv6
-                       }
-                     }
-                     headers {
-                       ipv6_header {
-                         version: "0x6"
-                         dscp: "0x00"
-                         ecn: "0x0"
-                         flow_label: "0x12345"
-                         next_header: "0x04"  # IPv4
-                         hop_limit: "0x03"
-                         ipv6_source: "2001::1"
-                         ipv6_destination: "2001::2"
-                       }
-                     }
-                     headers {
-                       ipv4_header {
-                         version: "0x4"
-                         ihl: "0x5"
-                         dscp: "0x1c"
-                         ecn: "0x0"
-                         identification: "0x0000"
-                         flags: "0x0"
-                         fragment_offset: "0x0000"
-                         ttl: "0x20"
-                         protocol: "0xfe"
-                         ipv4_source: "192.168.100.2"
-                         ipv4_destination: "192.168.100.1"
-                       }
-                     }
-                     payload: "A beautiful IPv4-in-IPv6 test packet."
-                   )pb"));
+absl::StatusOr<packetlib::Packet> GetIpv4InIpv6Packet(
+    const netaddr::MacAddress& src_mac, const netaddr::MacAddress& dst_mac) {
+  ASSIGN_OR_RETURN(auto packet,
+                   gutil::ParseTextProto<packetlib::Packet>(absl::Substitute(
+                       R"pb(
+                         headers {
+                           ethernet_header {
+                             ethernet_source: "$0"
+                             ethernet_destination: "$1"
+                             ethertype: "0x86dd"  # IPv6
+                           }
+                         }
+                         headers {
+                           ipv6_header {
+                             version: "0x6"
+                             dscp: "0x00"
+                             ecn: "0x0"
+                             flow_label: "0x12345"
+                             next_header: "0x04"  # IPv4
+                             hop_limit: "0x03"
+                             ipv6_source: "2001::1"
+                             ipv6_destination: "2001::2"
+                           }
+                         }
+                         headers {
+                           ipv4_header {
+                             version: "0x4"
+                             ihl: "0x5"
+                             dscp: "0x1c"
+                             ecn: "0x0"
+                             identification: "0x0000"
+                             flags: "0x0"
+                             fragment_offset: "0x0000"
+                             ttl: "0x20"
+                             protocol: "0xfe"
+                             ipv4_source: "192.168.100.2"
+                             ipv4_destination: "192.168.100.1"
+                           }
+                         }
+                         payload: "A beautiful IPv4-in-IPv6 test packet."
+                       )pb",
+                       src_mac.ToString(), dst_mac.ToString())));
   RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
   return packet;
 }
 
 using TunnelTerminationTest = testing::TestWithParam<sai::Instantiation>;
 
-// Checks that decapsulation and tunnel termination VRF assignment work as
-// expected for forwarded packets
+// Checks that decapsulation and VRF assignment work as expected for forwarded
+// packets.
 TEST_P(TunnelTerminationTest, PacketGetsDecapsulatedAndForwarded) {
   const sai::Instantiation kInstantiation = GetParam();
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
@@ -116,9 +125,13 @@ TEST_P(TunnelTerminationTest, PacketGetsDecapsulatedAndForwarded) {
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> pi_entities,
       sai::EntryBuilder()
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf")
+          .AddEntrySettingVrfForAllPackets("vrf")
+          .AddEntryDecappingAllIpInIpv6Packets()
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
-              /*egress_port=*/"\001", sai::IpVersion::kIpv4, "vrf")
+              /*egress_port=*/"\001", sai::IpVersion::kIpv4, "vrf",
+              // Rewrites to the same src and dst mac as the input packet.
+              sai::NexthopRewriteOptions{.src_mac_rewrite = kSrcMac,
+                                         .dst_mac_rewrite = kDstMac})
           .AddEntryAdmittingAllPacketsToL3()  // Needed for forwarding.
           .LogPdEntries()
           .GetDedupedPiEntities(kIrP4Info,
@@ -128,7 +141,8 @@ TEST_P(TunnelTerminationTest, PacketGetsDecapsulatedAndForwarded) {
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Inject Ipv4-in-IPv6 test packet and expect one output packet.
-  ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet, GetIpv4InIpv6Packet());
+  ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet,
+                       GetIpv4InIpv6Packet(kSrcMac, kDstMac));
   ASSERT_OK_AND_ASSIGN(std::string raw_input_packet,
                        packetlib::SerializePacket(input_packet));
   ASSERT_OK_AND_ASSIGN(std::vector<pins::PacketAtPort> output_packets,
@@ -164,8 +178,6 @@ modified: headers[1].ipv4_header.checksum: "0x5003" -> "0x5103"
 
 // Checks the interaction of pre ingress ACLs and tunnel termination:
 // - Pre ingress ACLs see the original packet before decap.
-// - VRF assignments in pre ingress ACLs override VRF assignments from
-//   tunnel termination.
 TEST_P(TunnelTerminationTest,
        PreIngressAclMatchesOnUndecappedPacketAndOverridesDecapVrf) {
   const sai::Instantiation kInstantiation = GetParam();
@@ -178,20 +190,17 @@ TEST_P(TunnelTerminationTest,
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> pi_entities,
       sai::EntryBuilder()
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("decap-vrf")
+          .AddEntryDecappingAllIpInIpv6Packets()
           .AddPreIngressAclEntryAssigningVrfForGivenIpType(
               "acl-ipv4-vrf", sai::IpVersion::kIpv4)
           .AddPreIngressAclEntryAssigningVrfForGivenIpType(
               "acl-ipv6-vrf", sai::IpVersion::kIpv6)
-          // Route that will apply if the decap entry determines the VRF.
-          .AddDefaultRouteForwardingAllPacketsToGivenPort(
-              /*egress_port=*/"\001", sai::IpVersion::kIpv4And6, "decap-vrf")
           // Route that will apply if the ACL entry matching the decapped packet
           // determines the VRF.
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
               /*egress_port=*/"\002", sai::IpVersion::kIpv4And6, "acl-ipv4-vrf")
           // Route that will apply if the ACL entry matching the undecapped
-          // packet determines the VRF.p
+          // packet determines the VRF.
           .AddDefaultRouteForwardingAllPacketsToGivenPort(
               /*egress_port=*/"\003", sai::IpVersion::kIpv4And6, "acl-ipv6-vrf")
           .AddEntryAdmittingAllPacketsToL3()  // Needed for forwarding.
@@ -203,7 +212,8 @@ TEST_P(TunnelTerminationTest,
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Inject Ipv4-in-IPv6 test packet and expect one output packet.
-  ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet, GetIpv4InIpv6Packet());
+  ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet,
+                       GetIpv4InIpv6Packet(kSrcMac, kDstMac));
   ASSERT_OK_AND_ASSIGN(std::string raw_input_packet,
                        packetlib::SerializePacket(input_packet));
   ASSERT_OK_AND_ASSIGN(std::vector<pins::PacketAtPort> output_packets,
@@ -226,21 +236,22 @@ TEST_P(TunnelTerminationTest, PuntedPacketIsNotDecapsulated) {
 
   // Install table entries: decap & punt to controller, so we can check that the
   // punted packet did not get decapped.
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<p4::v1::Entity> pi_entities,
-      sai::EntryBuilder()
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf")
-          .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
-          .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info,
-                                // TODO: Remove once tunnel termination table is
-                                // no longer `@unsupported`.
-                                /*allow_unsupported=*/true));
+  ASSERT_OK_AND_ASSIGN(std::vector<p4::v1::Entity> pi_entities,
+                       sai::EntryBuilder()
+                           .AddEntryDecappingAllIpInIpv6Packets()
+                           .AddEntryPuntingAllPackets(sai::PuntAction::kTrap)
+                           .LogPdEntries()
+                           .GetDedupedPiEntities(
+                               kIrP4Info,
+                               // TODO: Remove once tunnel
+                               // termination table is no longer `@unsupported`.
+                               /*allow_unsupported=*/true));
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Inject Ipv4-in-IPv6 test packet and expect 0 forwarded packets and 1
   // punted packet.
-  ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet, GetIpv4InIpv6Packet());
+  ASSERT_OK_AND_ASSIGN(packetlib::Packet input_packet,
+                       GetIpv4InIpv6Packet(kSrcMac, kDstMac));
   ASSERT_OK_AND_ASSIGN(std::string raw_input_packet,
                        packetlib::SerializePacket(input_packet));
   ASSERT_THAT(bmv2.SendPacket(pins::PacketAtPort{

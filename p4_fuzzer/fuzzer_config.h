@@ -60,6 +60,9 @@ class FuzzerConfig {
   std::string role = "sdn_controller";
   // The probability of performing a mutation on a given table entry.
   float mutate_update_probability = 0.1;
+  // The probability of fuzzing a multicast group entry when fuzzing an update.
+  // TODO: b/319260502 - Change from zero once switch supports multicast.
+  float fuzz_multicast_group_entry_probability = 0;
 
   // -- Optional ---------------------------------------------------------------
   // The set of tables where the fuzzer should treat their resource guarantees

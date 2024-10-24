@@ -112,6 +112,7 @@ cc_library(
         ":table_entry_generator_helper",
         "//gutil:proto",
         "//gutil:status",
+        "//gutil:testing",
         "//p4_pdpi:ir_cc_proto",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
@@ -125,7 +126,7 @@ cc_library(
 cc_test(
     name = "table_entry_generator_test",
     srcs = ["table_entry_generator_test.cc"],
-    shard_count = 5,
+    shard_count = 50,
     deps = [
         ":table_entry_generator",
         "//gutil:status_matchers",
