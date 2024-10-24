@@ -88,7 +88,7 @@ control acl_egress(in headers_t headers,
               @sai_field(SAI_ACL_TABLE_ATTR_FIELD_DST_IPV6_WORD2)
           ) @format(IPV6_ADDRESS);
 #endif
-#if defined(SAI_INSTANTIATION_TOR)
+#if defined(SAI_INSTANTIATION_TOR) || defined(SAI_INSTANTIATION_MIDDLEBLOCK)
       headers.ethernet.src_addr : ternary @name("src_mac") @id(10)
           @sai_field(SAI_ACL_TABLE_ATTR_FIELD_SRC_MAC) @format(MAC_ADDRESS);
 #endif

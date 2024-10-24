@@ -17,16 +17,23 @@
 #ifndef SAI_TUNNEL_TERMINATION_P4_
 #define SAI_TUNNEL_TERMINATION_P4_
 
-// Should be applied at the beginning of the pre-ingress stage.
-control tunnel_termination_lookup(in headers_t headers,
-                                  inout local_metadata_t local_metadata) {
+#include <v1model.p4>
+#include "headers.p4"
+#include "metadata.p4"
+#include "ids.h"
+#include "minimum_guaranteed_sizes.p4"
 
-  // Sets SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_VR_ID.
-  @id(MARK_FOR_TUNNEL_DECAP_AND_SET_VRF_ACTION_ID)
-  action mark_for_tunnel_decap_and_set_vrf(vrf_id_t vrf_id) {
-    // Actual decap is delayed until the end of the pre-ingress stage.
-    local_metadata.apply_tunnel_decap_at_end_of_pre_ingress = true;
-    local_metadata.vrf_id = vrf_id;
+// Should be applied at the end of the pre-ingress stage.
+control tunnel_termination(inout headers_t headers,
+                                  inout local_metadata_t local_metadata) {
+  bool marked_for_ip_in_ipv6_decap = false;
+
+  @id(TUNNEL_DECAP_ACTION_ID)
+  @unsupported
+  action tunnel_decap() {
+    // Bmv2 does not support if statements in actions, so control metadata is 
+    // set and decapping is performed post-action.
+    marked_for_ip_in_ipv6_decap = true;
   }
 
   // Models SAI_TUNNEL_TERM_TABLE.
@@ -36,14 +43,18 @@ control tunnel_termination_lookup(in headers_t headers,
   @unsupported
   @p4runtime_role(P4RUNTIME_ROLE_ROUTING)
   @id(IPV6_TUNNEL_TERMINATION_TABLE_ID)
+  @unsupported
   table ipv6_tunnel_termination_table {
     key = {
       // Sets `SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_DST_IP[_MASK]`.
       headers.ipv6.dst_addr : ternary
         @id(1) @name("dst_ipv6") @format(IPV6_ADDRESS);
+      // Sets `SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_SRC_IP[_MASK]`.
+      headers.ipv6.src_addr : ternary
+        @id(2) @name("src_ipv6") @format(IPV6_ADDRESS);
     }
     actions = {
-      @proto_id(1) mark_for_tunnel_decap_and_set_vrf;
+      @proto_id(1) tunnel_decap;
     }
     size = IPV6_TUNNEL_TERMINATION_TABLE_MINIMUM_GUARANTEED_SIZE;
   }
@@ -58,15 +69,8 @@ control tunnel_termination_lookup(in headers_t headers,
         ipv6_tunnel_termination_table.apply();
       }
     }
-  }
 
-}
-
-// Should be applied at the end of the pre-ingress stage.
-control tunnel_termination_decap(inout headers_t headers,
-                                 in local_metadata_t local_metadata) {
-  apply {
-    if (local_metadata.apply_tunnel_decap_at_end_of_pre_ingress) {
+    if (marked_for_ip_in_ipv6_decap) {
       // Currently, this should only ever be set for IP-in-IPv6 packets.
       // TODO: Remove guard once p4-symbolic suports assertions.
 #ifndef PLATFORM_P4SYMBOLIC
