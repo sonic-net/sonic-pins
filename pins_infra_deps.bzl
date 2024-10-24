@@ -36,13 +36,13 @@ def pins_infra_deps():
             # url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
             # strip_prefix = "grpc-1.46.0",
             # sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
-            url = "https://github.com/grpc/grpc/archive/v1.56.1.zip",
-            strip_prefix = "grpc-1.56.1",
-            sha256 = "04a52a313926f0f6ec2ed489ac7552aa5949693b071eaf45ae13b66e5910c32f",
+            url = "https://github.com/grpc/grpc/archive/v1.58.0.zip",
+            strip_prefix = "grpc-1.58.0",
+            sha256 = "aa329c7de707a03511c88206ef4483e9346ab6336b6be4378d294060aa7400b3",
             patch_args = ["-p1"],
             patches = [
                 "//:bazel/patches/grpc-001-fix_file_watcher_race_condition.patch",
-                "//:bazel/patches/grpc-002-change_authz_log_level.patch",
+                "//:bazel/patches/grpc-003-fix_go_gazelle_register_toolchain.patch",
             ],
         )
     if not native.existing_rule("com_google_absl"):
