@@ -30,6 +30,11 @@ namespace ir {
 
 namespace {
 
+// Turns BMv2-style names of control nodes to P4-Symbolic's IR-style names.
+std::string Bmv2ToIrControlName(const std::string &control_name) {
+  return control_name.empty() ? EndOfPipeline() : control_name;
+}
+
 // Forward declaration to enable mutual recursion with (sub) expression parsing
 // functions, e.g. ExtractBinaryExpression, ExtractUnaryExpression, etc.
 absl::StatusOr<RValue> ExtractRValue(const google::protobuf::Value &bmv2_value,
@@ -691,10 +696,8 @@ absl::StatusOr<Table> ExtractTable(
 
   // Set which controls are next for each possible action match in this table.
   for (const auto &[action_name, next_control] : bmv2_table.next_tables()) {
-    if (!next_control.empty()) {
-      table_impl->mutable_action_to_next_control()->insert(
-          {action_name, next_control});
-    }
+    table_impl->mutable_action_to_next_control()->insert(
+        {action_name, Bmv2ToIrControlName(next_control)});
   }
 
   // Build a mapping from match names to match target field.
@@ -804,7 +807,7 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
   for (const auto &pipeline : bmv2.pipelines()) {
     ir::Pipeline &ir_pipeline = (*output.mutable_pipeline())[pipeline.name()];
     ir_pipeline.set_name(pipeline.name());
-    ir_pipeline.set_initial_control(pipeline.init_table());
+    ir_pipeline.set_initial_control(Bmv2ToIrControlName(pipeline.init_table()));
     for (const bmv2::Table &bmv2_table : pipeline.tables()) {
       const std::string &table_name = bmv2_table.name();
 
@@ -856,8 +859,10 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
     for (const auto &bmv2_conditional : pipeline.conditionals()) {
       Conditional conditional;
       conditional.set_name(bmv2_conditional.name());
-      conditional.set_if_branch(bmv2_conditional.true_next());
-      conditional.set_else_branch(bmv2_conditional.false_next());
+      conditional.set_if_branch(
+          Bmv2ToIrControlName(bmv2_conditional.true_next()));
+      conditional.set_else_branch(
+          Bmv2ToIrControlName(bmv2_conditional.false_next()));
 
       // Parse condition expression.
       google::protobuf::Value expression_wrapper;

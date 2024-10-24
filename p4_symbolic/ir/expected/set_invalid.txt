@@ -268,6 +268,10 @@ tables {
     }
     table_implementation {
       default_action: "set_invalid63"
+      action_to_next_control {
+        key: "set_invalid63"
+        value: "__END_OF_PIPELINE__"
+      }
     }
   }
 }
@@ -281,6 +285,10 @@ tables {
     }
     table_implementation {
       default_action: "set_invalid65"
+      action_to_next_control {
+        key: "set_invalid65"
+        value: "__END_OF_PIPELINE__"
+      }
     }
   }
 }
@@ -314,6 +322,7 @@ pipeline {
   key: "egress"
   value {
     name: "egress"
+    initial_control: "__END_OF_PIPELINE__"
   }
 }
 pipeline {
