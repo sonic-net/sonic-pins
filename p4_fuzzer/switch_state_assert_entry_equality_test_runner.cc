@@ -2,6 +2,7 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -11,6 +12,7 @@
 #include "absl/types/span.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/collections.h"
+#include "gutil/status.h"
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -25,6 +27,7 @@ namespace {
 using ::p4::config::v1::P4Info;
 using ::p4::config::v1::Preamble;
 using ::p4::config::v1::Table;
+using ::p4::v1::Entity;
 using ::p4::v1::TableEntry;
 using ::pdpi::CreateIrP4Info;
 using ::pdpi::IrP4Info;
@@ -199,14 +202,16 @@ std::vector<SwitchStateSummaryTestCase> SwitchStateSummaryTestCases() {
     });
   }
 
-  // Exceeding max capacities for WCMP tables with SUM_OF_WEIGHTS and
-  // SUM_OF_MEMBERS size semantics.
+  // Exceeding max capacities for WCMP tables with SumOfWeights and
+  // SumOfMembers size semantics.
   {
     IrP4Info ir_info_sum_of_weights = pdpi::GetTestIrP4Info();
     IrP4Info ir_info_sum_of_members = pdpi::GetTestIrP4Info();
     for (auto& [_, action_profile] :
          *ir_info_sum_of_members.mutable_action_profiles_by_id()) {
-            action_profile.mutable_action_profile()->mutable_sum_of_members()->set_max_member_weight(4096);
+      action_profile.mutable_action_profile()
+          ->mutable_sum_of_members()
+          ->set_max_member_weight(4096);
     }
 
     // Relevant constants.
@@ -314,6 +319,18 @@ absl::StatusOr<std::vector<TableEntry>> IrToPiVector(
   return pi_entries;
 }
 
+// TODO: b/316926338 - Remove once test is refactored to use entities.
+std::vector<Entity> PiEntriesToEntities(std::vector<TableEntry> pi_entries) {
+  std::vector<Entity> pi_entities;
+  pi_entities.reserve(pi_entries.size());
+  for (const auto& pi_entry : pi_entries) {
+    Entity entity;
+    *entity.mutable_table_entry() = pi_entry;
+    pi_entities.push_back(std::move(entity));
+  }
+  return pi_entities;
+}
+
 absl::Status main() {
   IrP4Info ir_info = GetIrP4Info();
   SwitchState state(ir_info);
@@ -326,7 +343,7 @@ absl::Status main() {
     ASSIGN_OR_RETURN(std::vector<TableEntry> pi_switch_entries,
                      IrToPiVector(test.switch_entries, ir_info));
 
-    RETURN_IF_ERROR(state.SetTableEntries(pi_fuzzer_entries));
+    RETURN_IF_ERROR(state.SetEntities(PiEntriesToEntities(pi_fuzzer_entries)));
     RETURN_IF_ERROR(state.CheckConsistency());
 
     std::cout << "#########################################################\n"
@@ -351,7 +368,7 @@ absl::Status main() {
     state = SwitchState(test.ir_info);
     ASSIGN_OR_RETURN(std::vector<TableEntry> pi_entries,
                      IrToPiVector(test.entries, test.ir_info));
-    RETURN_IF_ERROR(state.SetTableEntries(pi_entries));
+    RETURN_IF_ERROR(state.SetEntities(PiEntriesToEntities(pi_entries)));
     RETURN_IF_ERROR(state.CheckConsistency());
     if (test.delete_entries) {
       state.ClearTableEntries();
