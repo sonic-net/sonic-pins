@@ -285,17 +285,15 @@ TEST(EntryBuilder, AddPreIngressAclEntryAssigningVrfForGivenIpTypeAddsEntry) {
   EXPECT_THAT(entities.entities(), SizeIs(3));
 }
 
-TEST(EntryBuilder, AddEntryDecappingAllIpInIpv6PacketsAndSettingVrfAddsEntry) {
+TEST(EntryBuilder, AddEntryDecappingAllIpInIpv6PacketsAddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrEntities entities,
       EntryBuilder()
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-1")
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-2")
-          .AddEntryDecappingAllIpInIpv6PacketsAndSettingVrf("vrf-3")
+          .AddEntryDecappingAllIpInIpv6Packets()
           .LogPdEntries()
           .GetDedupedIrEntities(kIrP4Info, /*allow_unsupported=*/true));
-  EXPECT_THAT(entities.entities(), SizeIs(3));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
 }
 
 TEST(EntryBuilder, AddMulticastGroupEntryReplicaOverloadAddsEntry) {
@@ -443,8 +441,17 @@ TEST(EntryBuilder, AddMirrorSessionTableEntry) {
       pdpi::IrEntities entities,
       EntryBuilder()
           .AddMirrorSessionTableEntry(MirrorSessionParams{
-              .mirror_session_id = "id",
-              .mirror_egress_port = "0",
+              .mirror_session_id = "mirror_session_id",
+              .monitor_port = "monitor_port",
+              .mirror_encap_src_mac =
+                  netaddr::MacAddress(1, 1, 1, 1, 1, 1).ToString(),
+              .mirror_encap_dst_mac =
+                  netaddr::MacAddress(1, 2, 3, 4, 5, 6).ToString(),
+              .mirror_encap_vlan_id = "0x123",
+              .mirror_encap_src_ip = "::1",
+              .mirror_encap_dst_ip = "::2",
+              .mirror_encap_udp_src_port = "0x1234",
+              .mirror_encap_udp_dst_port = "0x1235",
           })
           .LogPdEntries()
           // TODO: Remove unsupported once the
