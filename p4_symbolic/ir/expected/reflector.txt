@@ -173,6 +173,10 @@ tables {
     }
     table_implementation {
       default_action: "reflector54"
+      action_to_next_control {
+        key: "reflector54"
+        value: "__END_OF_PIPELINE__"
+      }
     }
   }
 }
@@ -180,6 +184,7 @@ pipeline {
   key: "egress"
   value {
     name: "egress"
+    initial_control: "__END_OF_PIPELINE__"
   }
 }
 pipeline {

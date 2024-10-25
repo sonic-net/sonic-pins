@@ -19,6 +19,7 @@
 #ifndef P4_SYMBOLIC_IR_IR_H_
 #define P4_SYMBOLIC_IR_IR_H_
 
+#include "absl/strings/string_view.h"
 #include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -26,6 +27,10 @@
 
 namespace p4_symbolic {
 namespace ir {
+
+// A special control name indicating the end of execution in a pipeline
+// in P4-Symbolic's IR.
+inline std::string EndOfPipeline() { return "__END_OF_PIPELINE__"; }
 
 // Transforms bmv2 protobuf and pdpi protobuf into our IR protobuf.
 absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program& bmv2,
