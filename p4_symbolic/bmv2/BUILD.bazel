@@ -101,4 +101,4 @@ bmv2_protobuf_parsing_test(
     name = "set_invalid",
     golden_file = "expected/set_invalid.pb.txt",
     p4_program = "//p4_symbolic/testdata:set-invalid/set_invalid.p4",
- )
+)
