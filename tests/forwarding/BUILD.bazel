@@ -98,3 +98,16 @@ cc_library(
     alwayslink = True,
 )
 
+cc_library(
+    name = "packet_test_util",
+    testonly = True,
+    srcs = ["packet_test_util.cc"],
+    hdrs = ["packet_test_util.h"],
+    deps = [
+        "//dvaas:test_vector",
+        "//p4_pdpi/netaddr:ipv4_address",
+        "//p4_pdpi/netaddr:mac_address",
+        "//p4_pdpi/packetlib",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
