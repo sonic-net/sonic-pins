@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,10 +30,12 @@
 namespace p4_fuzzer {
 absl::StatusOr<FuzzerTestState> ConstructFuzzerTestState(
     const p4::config::v1::P4Info& info, const std::string& role) {
-  ASSIGN_OR_RETURN(FuzzerConfig config, FuzzerConfig::Create(info));
-  config.role = role;
-  config.mutate_update_probability = 0.0;
-
+  ASSIGN_OR_RETURN(
+      FuzzerConfig config,
+      FuzzerConfig::Create(info, ConfigParams{
+                                     .role = role,
+                                     .mutate_update_probability = 0.0,
+                                 }));
   return FuzzerTestState{
       .config = config,
       .switch_state = SwitchState(config.GetIrP4Info()),

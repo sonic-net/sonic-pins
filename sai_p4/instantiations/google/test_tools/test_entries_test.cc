@@ -245,6 +245,21 @@ TEST(EntryBuilder, AddVrfEntryAddsEntry) {
   EXPECT_THAT(entities.entities(), SizeIs(3));
 }
 
+TEST(EntryBuilder, AddIpv6TunnelTerminationEntryAddsEntry) {
+  pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
+  sai::Ipv6TunnelTerminationParams params{
+      .src_ipv6_value = netaddr::Ipv6Address(0x77, 0x4455, 0, 0, 0, 0, 0, 0),
+      .src_ipv6_mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0),
+      .dst_ipv6_value = netaddr::Ipv6Address(0x11, 0x2233, 0, 0, 0, 0, 0, 0),
+      .dst_ipv6_mask = netaddr::Ipv6Address(0xFFFF, 0xFFFF, 0, 0, 0, 0, 0, 0)};
+  ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
+                       EntryBuilder()
+                           .AddIpv6TunnelTerminationEntry(params)
+                           .LogPdEntries()
+                           .GetDedupedIrEntities(kIrP4Info));
+  EXPECT_THAT(entities.entities(), SizeIs(1));
+}
+
 TEST(EntryBuilder, AddEntryAdmittingAllPacketsToL3AddsEntry) {
   pdpi::IrP4Info kIrP4Info = GetIrP4Info(Instantiation::kFabricBorderRouter);
   ASSERT_OK_AND_ASSIGN(pdpi::IrEntities entities,
