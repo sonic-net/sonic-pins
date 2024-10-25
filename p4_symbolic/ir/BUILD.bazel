@@ -138,3 +138,4 @@ ir_parsing_test(
     p4_program = "//p4_symbolic/testdata:set-invalid/set_invalid.p4",
 )
 
+
