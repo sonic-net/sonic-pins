@@ -36,13 +36,13 @@ def pins_infra_deps():
             # url = "https://github.com/grpc/grpc/archive/v1.46.0.zip",
             # strip_prefix = "grpc-1.46.0",
             # sha256 = "1cbd6d6dfc9b1235766fc6b1d66d4f1dbb87f877a44c2a799bc8ee6b383af0fa",
-            url = "https://github.com/grpc/grpc/archive/v1.56.1.zip",
-            strip_prefix = "grpc-1.56.1",
-            sha256 = "04a52a313926f0f6ec2ed489ac7552aa5949693b071eaf45ae13b66e5910c32f",
+            url = "https://github.com/grpc/grpc/archive/v1.58.0.zip",
+            strip_prefix = "grpc-1.58.0",
+            sha256 = "aa329c7de707a03511c88206ef4483e9346ab6336b6be4378d294060aa7400b3",
             patch_args = ["-p1"],
             patches = [
                 "//:bazel/patches/grpc-001-fix_file_watcher_race_condition.patch",
-                "//:bazel/patches/grpc-002-change_authz_log_level.patch",
+                "//:bazel/patches/grpc-003-fix_go_gazelle_register_toolchain.patch",
             ],
         )
     if not native.existing_rule("com_google_absl"):
@@ -190,14 +190,6 @@ def pins_infra_deps():
             strip_prefix = "jsoncpp-1.9.4",
             build_file = "@//:bazel/BUILD.jsoncpp.bazel",
             sha256 = "6da6cdc026fe042599d9fce7b06ff2c128e8dd6b8b751fca91eb022bce310880",
-        )
-    if not native.existing_rule("com_github_ivmai_cudd"):
-        http_archive(
-            name = "com_github_ivmai_cudd",
-            build_file = "@//:bazel/BUILD.cudd.bazel",
-            strip_prefix = "cudd-cudd-3.0.0",
-            sha256 = "5fe145041c594689e6e7cf4cd623d5f2b7c36261708be8c9a72aed72cf67acce",
-            urls = ["https://github.com/ivmai/cudd/archive/cudd-3.0.0.tar.gz"],
         )
     if not native.existing_rule("com_gnu_gmp"):
         http_archive(

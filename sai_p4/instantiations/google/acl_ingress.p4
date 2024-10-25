@@ -558,7 +558,16 @@ control acl_ingress(in headers_t headers,
         @sai_field(SAI_ACL_TABLE_ATTR_FIELD_IPMC_NPU_META_DST_HIT);
     }
     actions = {
+// We don't usually restrict actions to instantiations because they don't
+// require resources but we make an exception here because of issues with
+// metering (go/gpins-meter-consistency for details).
+// `acl_forward` in `mirror_and_redirect` is needed for `experimental_tor` and is an
+// unmetered action there. `middleblock` needs `mirror_and_redirect` but NOT
+// `acl_forward` which is a metered action there. If we include it in
+// `middleblock` we run into resource issues.
+#if defined(SAI_INSTANTIATION_EXPERIMENTAL_TOR)
       @proto_id(4) acl_forward();
+#endif
       @proto_id(1) acl_mirror();
       @proto_id(2) redirect_to_nexthop();
       @proto_id(3) redirect_to_ipmc_group();
