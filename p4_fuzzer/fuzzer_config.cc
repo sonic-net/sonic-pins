@@ -8,6 +8,7 @@
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gutil/status.h"  // IWYU pragma: keep
 #include "gutil/status.h"
+#include "p4_constraints/backend/constraint_info.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/reference_annotations.h"
