@@ -632,7 +632,7 @@ absl::Status EffectivelyDisablePuntLimitsForSwitch(
       break;
     }
   }
-  std::string switch_role_name = SwtichRoleToDisableQoSToString(role);
+  std::string switch_role_name = SwitchRoleToDisableQoSToString(role);
 
   ASSIGN_OR_RETURN(auto gnmi_config_before_qos_and_buffer_change,
                    pins_test::GetGnmiConfig(*gnmi_stub));

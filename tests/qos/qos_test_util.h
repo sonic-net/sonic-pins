@@ -23,6 +23,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
@@ -44,7 +45,7 @@ enum class SwitchRoleToDisablePuntFlowQoS {
   kSwitchUnderTest,
 };
 
-inline std::string SwtichRoleToDisableQoSToString(
+inline std::string SwitchRoleToDisableQoSToString(
     SwitchRoleToDisablePuntFlowQoS role) {
   switch (role) {
     case SwitchRoleToDisablePuntFlowQoS::kControlSwitch:
