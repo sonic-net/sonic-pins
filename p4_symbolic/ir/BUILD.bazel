@@ -139,7 +139,7 @@ ir_parsing_test(
 )
 
 ir_parsing_test(
-    name = "string_optional_test",
-    golden_file = "expected/string_optional.txt",
-    p4_program = "//p4_symbolic/testdata:string-optional/program.p4",
+    name = "conditional_test",
+    golden_file = "expected/conditional.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/conditional.p4",
 )
