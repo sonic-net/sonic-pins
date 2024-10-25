@@ -335,6 +335,29 @@ bool SwitchState::IsTableEmpty(const uint32_t table_id) const {
   return FindOrDie(ordered_tables_, table_id).empty();
 }
 
+std::optional<Entity> SwitchState::GetEntity(const Entity& entity) const {
+  std::optional<Entity> result = std::nullopt;
+  if (entity.packet_replication_engine_entry().has_multicast_group_entry()) {
+    std::optional<MulticastGroupEntry> multicast_group_entry =
+        GetMulticastGroupEntry(
+            entity.packet_replication_engine_entry().multicast_group_entry());
+    if (multicast_group_entry.has_value()) {
+      *result->mutable_packet_replication_engine_entry()
+           ->mutable_multicast_group_entry() =
+          *std::move(multicast_group_entry);
+    }
+  }
+
+  if (entity.has_table_entry()) {
+    std::optional<TableEntry> table_entry = GetTableEntry(entity.table_entry());
+    if (table_entry.has_value()) {
+      *result->mutable_table_entry() = *std::move(table_entry);
+    }
+  }
+
+  return result;
+}
+
 std::optional<TableEntry> SwitchState::GetTableEntry(
     const TableEntry& entry) const {
   const UnorderedTableEntries& table =
