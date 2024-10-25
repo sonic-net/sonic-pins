@@ -1,0 +1,571 @@
+#include "tests/forwarding/match_action_coverage_test.h"
+
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "absl/container/flat_hash_set.h"
+#include "absl/random/random.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "absl/strings/strip.h"
+#include "absl/strings/substitute.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
+#include "glog/logging.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include "gutil/collections.h"
+#include "gutil/status.h"
+#include "gutil/status_matchers.h"
+#include "gutil/version.h"
+#include "lib/gnmi/gnmi_helper.h"
+#include "p4/config/v1/p4info.pb.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_constraints/backend/constraint_info.h"
+#include "p4_fuzzer/fuzz_util.h"
+#include "p4_fuzzer/fuzzer_config.h"
+#include "p4_fuzzer/switch_state.h"
+#include "p4_pdpi/built_ins.h"
+#include "p4_pdpi/ir.h"
+#include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
+#include "sai_p4/instantiations/google/versions.h"
+#include "tests/lib/switch_test_setup_helpers.h"
+#include "thinkit/mirror_testbed.h"
+#include "thinkit/test_environment.h"
+
+namespace p4_fuzzer {
+namespace {
+
+using ::p4::v1::Entity;
+using ::p4::v1::TableEntry;
+using ::p4::v1::Update;
+
+using EntityPredicate = std::function<bool(const Entity&)>;
+
+// TODO: Factor all of this logic out of this test and into the
+// base fuzzer, parameterizing the test on these names instead.
+// Used to mask bugs where omitting a match causes issues. This function returns
+// a set of fully qualified names of omittable match fields in the P4Info. These
+// match fields will be treated as required instead.
+absl::flat_hash_set<std::string> GetRequiredFullyQualifiedNames() {
+  static const absl::flat_hash_set<std::string> required_fully_qualified_names =
+      {};
+  return required_fully_qualified_names;
+}
+
+bool IsRequiredDueToBug(
+    const pdpi::IrTableDefinition& table_definition,
+    const pdpi::IrMatchFieldDefinition& match_field_definition) {
+  const std::string fully_qualified_match_field =
+      absl::StrCat(table_definition.preamble().name(), ".",
+                   match_field_definition.match_field().name());
+  return GetRequiredFullyQualifiedNames().contains(fully_qualified_match_field);
+}
+
+bool EntryUsesMatchField(
+    const TableEntry& entry,
+    const pdpi::IrMatchFieldDefinition& match_field_definition) {
+  for (const auto& match : entry.match()) {
+    if (match.field_id() == match_field_definition.match_field().id()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool EntryUsesAction(const TableEntry& entry,
+                     const pdpi::IrActionReference& action_reference) {
+  if (entry.action().has_action()) {
+    return entry.action().action().action_id() ==
+           action_reference.action().preamble().id();
+  }
+  if (entry.action().has_action_profile_action_set()) {
+    for (const auto& action :
+         entry.action().action_profile_action_set().action_profile_actions()) {
+      if (action.action().action_id() ==
+          action_reference.action().preamble().id()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool IsOmittable(const pdpi::IrMatchFieldDefinition& match_field_definition) {
+  return match_field_definition.match_field().match_type() ==
+             p4::config::v1::MatchField::TERNARY ||
+         match_field_definition.match_field().match_type() ==
+             p4::config::v1::MatchField::OPTIONAL ||
+         match_field_definition.match_field().match_type() ==
+             p4::config::v1::MatchField::LPM;
+}
+
+// Returns the route metadata as an int if it's present in the entry and nullopt
+// otherwise.
+absl::StatusOr<std::optional<int>> ExtractRouteMetadataAsIntFromEntry(
+    const pdpi::IrTableEntry& ir_entry) {
+  if (ir_entry.table_name() == "ipv4_table" ||
+      ir_entry.table_name() == "ipv6_table") {
+    for (const auto& param : ir_entry.action().params()) {
+      if (param.name() == "route_metadata") {
+        RET_CHECK(param.value().has_hex_str())
+            << "Route metadata expected to be hex string, but got parameter: "
+            << param.DebugString();
+        return pdpi::HexStringToInt(param.value().hex_str());
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+// Used to mask bugs that affect specific entries, but not every entry of a
+// particular table, with a particular match field, or with a particular action.
+// Such bugs should be masked using the FuzzerConfig's
+// `disabled_fully_qualified_names`.
+absl::StatusOr<bool> EntityTriggersKnownBug(const pdpi::IrP4Info& info,
+                                            const Entity& entity) {
+  // Convert the entry to IR to simplify logic.
+  ASSIGN_OR_RETURN(pdpi::IrEntity ir_entity, pdpi::PiEntityToIr(info, entity));
+
+  ASSIGN_OR_RETURN(std::optional<int> route_metadata,
+                   ExtractRouteMetadataAsIntFromEntry(ir_entity.table_entry()));
+  if (route_metadata.has_value()) {
+    // Route metadata values between 56 and 63 are reserved for internal switch
+    // operations.
+    // TODO: This should be handled by P4 Constraints.
+    return *route_metadata >= 56;
+  }
+  return false;
+}
+
+absl::Status ModifyEntityToAvoidKnownBug(const pdpi::IrP4Info& info,
+                                         Entity& entity) {
+  // Convert the entry to IR to simplify logic.
+  ASSIGN_OR_RETURN(pdpi::IrEntity ir_entity, pdpi::PiEntityToIr(info, entity));
+
+  // TODO: Remove once this is covered by P4 Constraints.
+  if (ir_entity.table_entry().table_name() == "l3_admit_table") {
+    ir_entity.mutable_table_entry()->set_priority(1);
+  }
+
+  // TODO: Remove when the old version is out of use.
+  if (ir_entity.table_entry().has_action_set() &&
+      ir_entity.table_entry().action_set().actions_size() > 1) {
+    // If the version does not support duplicate WCMP members, then remove all
+    // members except the first one.
+    ASSIGN_OR_RETURN(gutil::Version p4info_version,
+                     gutil::ParseVersion(info.pkg_info().version()));
+    if (p4info_version <
+        *gutil::ParseVersion(
+            SAI_P4_PKGINFO_VERSION_HAS_DUPLICATE_WCMP_MEMBER_SUPPORT)) {
+      auto action = std::move(ir_entity.table_entry().action_set().actions(0));
+      ir_entity.mutable_table_entry()->mutable_action_set()->clear_actions();
+      *ir_entity.mutable_table_entry()->mutable_action_set()->add_actions() =
+          std::move(action);
+    }
+  }
+
+  ASSIGN_OR_RETURN(entity, pdpi::IrEntityToPi(info, ir_entity));
+  return absl::OkStatus();
+}
+
+// Generates valid entries for `table` until one meets the given
+// `predicate`. Unless an entry with the same keys already exists on the switch,
+// installs the generated entry and updates `state`.
+absl::Status GenerateAndInstallEntryThatMeetsPredicate(
+    absl::BitGen& gen, pdpi::P4RuntimeSession& session,
+    const FuzzerConfig& config, SwitchState& state,
+    thinkit::TestEnvironment& environment, absl::string_view table_name,
+    const EntityPredicate& predicate) {
+  Entity entity;
+  // As of now, we only support p4 defined tables or the multicast group table.
+  // This means that an empty optional also signals that we have the multicast
+  // group table.
+  std::optional<pdpi::IrTableDefinition> p4_table_def = std::nullopt;
+  if (table_name != pdpi::GetMulticastGroupTableName()) {
+    ASSIGN_OR_RETURN(
+        p4_table_def,
+        gutil::FindOrStatus(config.GetIrP4Info().tables_by_name(), table_name));
+  }
+  // Generate new entries until we satisfy our predicates or do not trigger
+  // known bugs (if we are masking known failures). Continue trying for at most
+  // 10 seconds.
+  const absl::Time kDeadline = absl::Now() + absl::Seconds(10);
+  bool entry_triggers_known_bug = false;
+  do {
+    if (p4_table_def.has_value()) {
+      ASSIGN_OR_RETURN(*entity.mutable_table_entry(),
+                       FuzzValidTableEntry(&gen, config, state, *p4_table_def));
+
+    } else {
+      ASSIGN_OR_RETURN(*entity.mutable_packet_replication_engine_entry()
+                            ->mutable_multicast_group_entry(),
+                       FuzzValidMulticastGroupEntry(&gen, config, state));
+    }
+    if (environment.MaskKnownFailures()) {
+      RETURN_IF_ERROR(
+          ModifyEntityToAvoidKnownBug(config.GetIrP4Info(), entity));
+    }
+    ASSIGN_OR_RETURN(entry_triggers_known_bug,
+                     EntityTriggersKnownBug(config.GetIrP4Info(), entity));
+  } while ((!predicate(entity) ||
+            (environment.MaskKnownFailures() && entry_triggers_known_bug)) &&
+           absl::Now() < kDeadline);
+  // If we timeout, we return an error.
+  if (!predicate(entity)) {
+    return gutil::DeadlineExceededErrorBuilder() << absl::Substitute(
+               "failed to generate an entry meeting the given predicate for "
+               "table '$0' within 10s",
+               table_name);
+  }
+
+  // If the generated entry is identical to one we already have installed,
+  // then we return early since we have already covered the predicate.
+  if (state.GetEntity(entity).has_value()) {
+    return absl::OkStatus();
+  }
+
+  ASSIGN_OR_RETURN(pdpi::IrEntity ir_entity,
+                   pdpi::PiEntityToIr(config.GetIrP4Info(), entity));
+  RETURN_IF_ERROR(environment.AppendToTestArtifact(
+      "requests_and_responses.txt",
+      absl::StrCat("# IR Entity:\n", ir_entity.DebugString())));
+
+  if (absl::Status status = pdpi::InstallPiEntity(&session, entity);
+      status.ok()) {
+    RETURN_IF_ERROR(environment.AppendToTestArtifact(
+        "requests_and_responses.txt", "# Successfully installed!\n"));
+  } else {
+    RETURN_IF_ERROR(environment.AppendToTestArtifact(
+        "requests_and_responses.txt",
+        absl::StrCat("# Installation failed:\n", status.ToString())));
+    RETURN_IF_ERROR(status) << "IR entity:\n" << ir_entity.DebugString();
+  }
+
+  // Update state.
+  Update update;
+  update.set_type(Update::INSERT);
+  *update.mutable_entity() = entity;
+  return state.ApplyUpdate(update);
+}
+
+// TODO: b/322007061 - Remove function once built-in multicast group table can
+// be treated like any other table.
+// Installs a multicast group entry with and without replicas.
+absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
+    absl::BitGen& gen, pdpi::P4RuntimeSession& session,
+    const FuzzerConfig& config, SwitchState& state,
+    thinkit::TestEnvironment& environment,
+    const p4::config::v1::P4Info& p4info) {
+  LOG(INFO) << "INSTALLING ENTRIES INTO BUILT-IN MULTICAST GROUP TABLE";
+
+  RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+                      gen, session, config, state, environment,
+                      pdpi::GetMulticastGroupTableName(),
+                      /*predicate=*/
+                      [&](const Entity& entity) {
+                        // Checks that the multicast entry has replicas.
+                        return entity.packet_replication_engine_entry()
+                                   .has_multicast_group_entry() &&
+                               !entity.packet_replication_engine_entry()
+                                    .multicast_group_entry()
+                                    .replicas()
+                                    .empty();
+                      }))
+          .SetPrepend()
+      << "while generating entry for '" << pdpi::GetMulticastGroupTableName()
+      << "': ";
+  LOG(INFO) << absl::Substitute("   -  With $0: Present",
+                                pdpi::GetReplicaActionName());
+
+  RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+                      gen, session, config, state, environment,
+                      pdpi::GetMulticastGroupTableName(),
+                      /*predicate=*/
+                      [&](const Entity& entity) {
+                        // Checks that the multicast entry has no replicas.
+                        return entity.packet_replication_engine_entry()
+                                   .has_multicast_group_entry() &&
+                               entity.packet_replication_engine_entry()
+                                   .multicast_group_entry()
+                                   .replicas()
+                                   .empty();
+                      }))
+          .SetPrepend()
+      << "while generating entry for '" << pdpi::GetMulticastGroupTableName()
+      << "': ";
+  LOG(INFO) << absl::Substitute("   -  With $0: Absent",
+                                pdpi::GetReplicaActionName());
+  return absl::OkStatus();
+}
+
+// For each programmable table, installs a set of table entries covering all
+// match fields and actions in the following sense:
+// - Each omittable match field is omitted and included in at least one table
+//   entry.
+// - Each action is included in at least one table entry.
+absl::Status AddTableEntryForEachMatchAndEachAction(
+    absl::BitGen& gen, pdpi::P4RuntimeSession& session,
+    const FuzzerConfig& config, SwitchState& state,
+    thinkit::TestEnvironment& environment,
+    const p4::config::v1::P4Info& p4info) {
+  ASSIGN_OR_RETURN(const p4_constraints::ConstraintInfo constraints_by_table_id,
+                   p4_constraints::P4ToConstraintInfo(p4info));
+
+  for (const pdpi::IrTableDefinition& table :
+       AllValidTablesForP4RtRole(config)) {
+    // TODO: Stop skipping tables that have constraints once the
+    // fuzzer supports them.
+    auto* table_info = p4_constraints::GetTableInfoOrNull(
+        constraints_by_table_id, table.preamble().id());
+    if (table_info == nullptr) {
+      return gutil::InternalErrorBuilder()
+             << "Table info not present for id " << table.preamble().id();
+    }
+    if (table_info->constraint.has_value()) {
+      LOG(WARNING) << absl::Substitute(
+          "No entries installed into table '$0' due to use of constraints, "
+          "which are not yet supported by the Fuzzer.",
+          table.preamble().alias());
+      continue;
+    }
+
+    LOG(INFO) << absl::Substitute("For table '$0', installing entries with:",
+                                  table.preamble().alias());
+    std::vector<std::string> required_match_descriptions;
+    std::vector<std::string> omittable_match_descriptions;
+    // For each valid match field, install a table entry with (and without
+    // if possible) that field.
+    for (const pdpi::IrMatchFieldDefinition& field :
+         AllValidMatchFields(config, table)) {
+      if (!IsOmittable(field) || (environment.MaskKnownFailures() &&
+                                  IsRequiredDueToBug(table, field))) {
+        // If the field can't be a wildcard, then any value will do:
+        RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+                            gen, session, config, state, environment,
+                            table.preamble().alias(),
+                            /*predicate=*/[](auto&) { return true; }))
+                .SetPrepend()
+            << absl::Substitute("while generating entry with field $0: ",
+                                field.match_field().name());
+        required_match_descriptions.push_back(
+            absl::Substitute("   -   $0: Present", field.match_field().name()));
+      } else {
+        // If the field can be a wildcard, install one entry with a wildcard and
+        // one without.
+        for (bool use_field : {true, false}) {
+          RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+                              gen, session, config, state, environment,
+                              table.preamble().alias(),
+                              /*predicate=*/
+                              [&](const Entity& entity) {
+                                return use_field ==
+                                       EntryUsesMatchField(entity.table_entry(),
+                                                           field);
+                              }))
+                  .SetPrepend()
+              << absl::Substitute("while generating entry $0 field $1: ",
+                                  (use_field ? "with" : "without"),
+                                  field.match_field().name());
+        }
+        omittable_match_descriptions.push_back(absl::Substitute(
+            "   -   $0: Present and Absent", field.match_field().name()));
+      }
+    }
+
+    // Log whether we hit the match fields in the table.
+    if (!required_match_descriptions.empty()) {
+      LOG(INFO) << "-  Required match fields:";
+      for (const std::string& description : required_match_descriptions) {
+        LOG(INFO) << description;
+      }
+    }
+
+    // Only omittable match fields can be disabled.
+    bool has_a_disabled_fully_qualified_name = false;
+    for (const std::string& path : config.disabled_fully_qualified_names) {
+      has_a_disabled_fully_qualified_name =
+          has_a_disabled_fully_qualified_name ||
+          absl::StartsWith(path, table.preamble().name());
+    }
+    if (!omittable_match_descriptions.empty() ||
+        has_a_disabled_fully_qualified_name) {
+      LOG(INFO) << "-  Omittable match fields:";
+      for (const std::string& description : omittable_match_descriptions) {
+        LOG(INFO) << description;
+      }
+      for (const std::string& path : config.disabled_fully_qualified_names) {
+        if (absl::StartsWith(path, table.preamble().name())) {
+          LOG(INFO) << absl::Substitute(
+              "   -  $0: Absent due to being disabled",
+              absl::StripPrefix(path, table.preamble().name()));
+        }
+      }
+      if (environment.MaskKnownFailures()) {
+        for (const std::string& path : GetRequiredFullyQualifiedNames()) {
+          if (absl::StartsWith(path, table.preamble().name())) {
+            LOG(INFO) << absl::Substitute(
+                "   -  $0: Required due to bug",
+                absl::StripPrefix(path, table.preamble().name()));
+          }
+        }
+      }
+    }
+
+    // For each valid action, install a table entry using it.
+    LOG(INFO) << "-  Actions:";
+    for (const pdpi::IrActionReference& action_reference :
+         AllValidActions(config, table)) {
+      RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+                          gen, session, config, state, environment,
+                          table.preamble().alias(),
+                          /*predicate=*/
+                          [&](const Entity& entity) {
+                            return EntryUsesAction(entity.table_entry(),
+                                                   action_reference);
+                          }))
+              .SetPrepend()
+          << absl::Substitute("while generating entry with action $0: ",
+                              action_reference.action().preamble().alias());
+      LOG(INFO) << absl::Substitute(
+          "   -  $0: Present", action_reference.action().preamble().alias());
+    }
+    // Print disabled actions.
+    for (const pdpi::IrActionReference& action_reference :
+         table.entry_actions()) {
+      if (IsDisabledForFuzzing(config,
+                               action_reference.action().preamble().name())) {
+        LOG(INFO) << absl::Substitute(
+            "   -  $0: Absent due to being disabled",
+            action_reference.action().preamble().alias());
+      }
+    }
+  }
+
+  // Print disabled tables.
+  for (const auto& [name, table] : config.GetIrP4Info().tables_by_name()) {
+    if (IsDisabledForFuzzing(config, table.preamble().name())) {
+      LOG(INFO) << absl::Substitute(
+          "No entries installed into table '$0' because it was disabled.",
+          table.preamble().alias());
+    }
+  }
+  return absl::OkStatus();
+}
+
+// Installs a table entry per supported, programmable table in a particular
+// order. This ensures that we can generate valid table entries for every table.
+// It is required due to the possibility of references between tables.
+// TODO: This currently skips tables that use constraints. Don't do
+// this once they are supported.
+// TODO: Ideally, this function would use the p4info to extract a list of
+// all tables, ordered such that every table only depends on (i.e. @refers_to)
+// those before it, instead of using our hardcoded, ordered list.
+absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
+                                      pdpi::P4RuntimeSession& session,
+                                      const FuzzerConfig& config,
+                                      SwitchState& state,
+                                      thinkit::TestEnvironment& environment) {
+  std::vector<std::string> kOrderedTablesToInsertEntriesInto = {
+      "mirror_session_table",
+      "l3_admit_table",
+      "vrf_table",
+      "router_interface_table",
+      "multicast_router_interface_table",
+      "builtin::multicast_group_table",
+      "neighbor_table",
+      "tunnel_table",
+      "nexthop_table",
+      "wcmp_group_table",
+      "ipv4_table",
+      "ipv6_table",
+  };
+
+  for (const auto& table_name : kOrderedTablesToInsertEntriesInto) {
+    std::string fully_qualified_name = table_name;
+    if (table_name != pdpi::GetMulticastGroupTableName()) {
+      ASSIGN_OR_RETURN(const pdpi::IrTableDefinition& table,
+                       gutil::FindOrStatus(
+                           config.GetIrP4Info().tables_by_name(), table_name));
+      fully_qualified_name = table.preamble().name();
+    }
+
+    if (IsDisabledForFuzzing(config, fully_qualified_name)) {
+      LOG(INFO) << absl::StrCat(table_name,
+                                " was skipped due to being disabled.");
+      continue;
+    }
+
+    LOG(INFO) << absl::StrCat("Adding auxiliary entry to ", table_name);
+    RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
+                        gen, session, config, state, environment, table_name,
+                        /*predicate=*/[](auto&) { return true; }))
+            .SetPrepend()
+        << "while trying to generate entry for '" << table_name << "': ";
+  }
+  return absl::OkStatus();
+}
+
+TEST_P(MatchActionCoverageTestFixture,
+       InsertEntriesForEveryTableAndMatchConfiguration) {
+  thinkit::MirrorTestbed& testbed =
+      GetParam().testbed_interface->GetMirrorTestbed();
+
+  // Initialize the connection and clear table entries for the SUT.
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
+      pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
+          testbed.Sut(), /*gnmi_config=*/std::nullopt, GetParam().p4info));
+
+  absl::BitGen gen;
+
+  FuzzerConfig config = GetParam().config;
+  // If the ports in the FuzzerConfig are unset, get all valid ports from the
+  // switch via gNMI.
+  if (config.ports.empty()) {
+    ASSERT_OK_AND_ASSIGN(auto stub, testbed.Sut().CreateGnmiStub());
+    ASSERT_OK_AND_ASSIGN(config.ports,
+                         pins_test::GetMatchingP4rtPortIds(
+                             *stub, pins_test::IsEnabledEthernetInterface));
+  }
+
+  ASSERT_FALSE(config.ports.empty())
+      << "ports must be specified in the gNMI config pushed to the switch, but "
+         "none were";
+
+  // For this test, mutations are undesirable.
+  config.mutate_update_probability = 0;
+
+  SwitchState state(config.GetIrP4Info());
+  // Sets up the switch such that there is a possible valid entry per table.
+  // This is required due to the possibility of references between tables.
+  ASSERT_OK(AddAuxiliaryTableEntries(gen, *p4rt_session, config, state,
+                                     testbed.Environment()));
+
+  // Generates and installs entries that use every match field and action.
+  EXPECT_OK(AddTableEntryForEachMatchAndEachAction(gen, *p4rt_session, config,
+                                                   state, testbed.Environment(),
+                                                   GetParam().p4info));
+
+  // TODO: b/322007061 - Remove function once built-in multicast group table can
+  // be treated like any other table.
+  // Generates and installs entries for the built-in multicast group table.
+  if (!config.disabled_fully_qualified_names.contains(
+          pdpi::GetMulticastGroupTableName())) {
+    EXPECT_OK(AddMulticastGroupEntryWithAndWithoutReplicas(
+        gen, *p4rt_session, config, state, testbed.Environment(),
+        GetParam().p4info));
+  }
+}
+
+}  // namespace
+}  // namespace p4_fuzzer

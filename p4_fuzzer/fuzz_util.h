@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -241,6 +241,12 @@ absl::StatusOr<p4::v1::TableEntry> FuzzValidTableEntry(
 absl::StatusOr<p4::v1::TableEntry> FuzzValidTableEntry(
     absl::BitGen* gen, const FuzzerConfig& config,
     const SwitchState& switch_state, const uint32_t table_id);
+
+// Randomly generates a multicast group entry. May fail if a reference to
+// another table is required.
+absl::StatusOr<p4::v1::MulticastGroupEntry> FuzzValidMulticastGroupEntry(
+    absl::BitGen* gen, const FuzzerConfig& config,
+    const SwitchState& switch_state);
 
 // Randomly generates a set of valid table entries that, when installed in order
 // to an empty switch state, all install correctly.

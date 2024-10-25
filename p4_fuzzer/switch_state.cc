@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "glog/logging.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gutil/collections.h"
@@ -51,8 +52,11 @@ namespace {
 using ::gutil::FindOrDie;
 using ::gutil::FindPtrOrStatus;
 using ::gutil::PrintTextProto;
+using ::p4::v1::Entity;
+using ::p4::v1::MulticastGroupEntry;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
+using ::pdpi::IrEntity;
 using ::pdpi::IrP4Info;
 using ::pdpi::IrTableEntry;
 
@@ -173,6 +177,29 @@ absl::StatusOr<std::string> ReasonActionProfileCanAccommodateTableEntry(
 
 }  // namespace
 
+// Returns the canonical form of `entity` according to the P4 Runtime Spec
+// https://s3-us-west-2.amazonaws.com/p4runtime/ci/main/P4Runtime-Spec.html#sec-bytestrings.
+// TODO: Canonical form is achieved by performing an IR roundtrip
+// translation. This ties correctness to IR functionality. Local
+// canonicalization would be preferred.
+absl::StatusOr<Entity> CanonicalizeEntity(const IrP4Info& info,
+                                          const Entity& entity, bool key_only) {
+  auto pdpi_options = pdpi::TranslationOptions{
+      .key_only = key_only,
+  };
+  // IR->PI translation includes canonicalization so a PI->IR->PI translation is
+  // performed for canonicalization.
+  ASSIGN_OR_RETURN(IrEntity ir_entity,
+                   pdpi::PiEntityToIr(info, entity, pdpi_options),
+                   _ << "Could not canonicalize: PiToIr Error\n"
+                     << entity.DebugString());
+  ASSIGN_OR_RETURN(Entity canonical_entity,
+                   pdpi::IrEntityToPi(info, ir_entity, pdpi_options),
+                   _ << "Could not canonicalize: IrToPi Error\n"
+                     << entity.DebugString());
+  return canonical_entity;
+}
+
 absl::StatusOr<TableEntry> CanonicalizeTableEntry(const IrP4Info& info,
                                                   const TableEntry& entry,
                                                   bool key_only) {
@@ -208,6 +235,8 @@ void SwitchState::ClearTableEntries() {
     unordered_tables_[table_id] = UnorderedTableEntries();
     current_resource_statistics_[table_id] = ResourceStatistics();
   }
+  ordered_multicast_entries_ = {};
+  unordered_multicast_entries_ = {};
   current_entries_ = 0;
 }
 
@@ -306,6 +335,31 @@ bool SwitchState::IsTableEmpty(const uint32_t table_id) const {
   return FindOrDie(ordered_tables_, table_id).empty();
 }
 
+std::optional<Entity> SwitchState::GetEntity(const Entity& entity) const {
+  std::optional<Entity> result = std::nullopt;
+  if (entity.packet_replication_engine_entry().has_multicast_group_entry()) {
+    std::optional<MulticastGroupEntry> multicast_group_entry =
+        GetMulticastGroupEntry(
+            entity.packet_replication_engine_entry().multicast_group_entry());
+    if (multicast_group_entry.has_value()) {
+      result = Entity();
+      *result->mutable_packet_replication_engine_entry()
+           ->mutable_multicast_group_entry() =
+          *std::move(multicast_group_entry);
+    }
+  }
+
+  if (entity.has_table_entry()) {
+    std::optional<TableEntry> table_entry = GetTableEntry(entity.table_entry());
+    if (table_entry.has_value()) {
+      result = Entity();
+      *result->mutable_table_entry() = *std::move(table_entry);
+    }
+  }
+
+  return result;
+}
+
 std::optional<TableEntry> SwitchState::GetTableEntry(
     const TableEntry& entry) const {
   const UnorderedTableEntries& table =
@@ -328,6 +382,17 @@ std::optional<TableEntry> SwitchState::GetTableEntry(
     return table_entry;
   }
 
+  return std::nullopt;
+}
+
+std::optional<p4::v1::MulticastGroupEntry> SwitchState::GetMulticastGroupEntry(
+    const MulticastGroupEntry& entry) const {
+  if (auto table_iter =
+          unordered_multicast_entries_.find(entry.multicast_group_id());
+      table_iter != unordered_multicast_entries_.end()) {
+    auto [table_key, table_entry] = *table_iter;
+    return table_entry;
+  }
   return std::nullopt;
 }
 
@@ -418,7 +483,116 @@ absl::Status SwitchState::UpdateResourceStatistics(const TableEntry& entry,
   return absl::OkStatus();
 }
 
+absl::Status SwitchState::ApplyMulticastUpdate(const Update& update) {
+  ASSIGN_OR_RETURN(
+      Entity canonical_entity,
+      CanonicalizeEntity(ir_p4info_, update.entity(),
+                         /*key_only=*/update.type() == Update::DELETE));
+  const p4::v1::MulticastGroupEntry& multicast_group_entry =
+      canonical_entity.packet_replication_engine_entry()
+          .multicast_group_entry();
+  int multicast_group_id = multicast_group_entry.multicast_group_id();
+  switch (update.type()) {
+    case Update::INSERT: {
+      auto [ordered_iter, ordered_not_present] =
+          ordered_multicast_entries_.insert(
+              /*value=*/{multicast_group_id, multicast_group_entry});
+
+      auto [unordered_iter, unordered_not_present] =
+          unordered_multicast_entries_.insert(
+              /*value=*/{multicast_group_id, multicast_group_entry});
+
+      if (ordered_not_present != unordered_not_present) {
+        return gutil::InternalErrorBuilder()
+               << "Ordered Table and Unordered Table out of sync. Entry "
+               << (ordered_not_present ? "not present" : "present")
+               << " in Ordered Table but "
+               << (unordered_not_present ? "not present" : "present")
+               << " in Unordered Table.\n"
+               << "Offending Entry Update\n"
+               << update.DebugString();
+      }
+
+      if (!ordered_not_present) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Cannot install the same table entry multiple times. Update: "
+               << update.DebugString();
+      }
+
+      break;
+    }
+    case Update::DELETE: {
+      int ordered_entries_erased =
+          ordered_multicast_entries_.erase(multicast_group_id);
+      int unordered_entries_erased =
+          unordered_multicast_entries_.erase(multicast_group_id);
+
+      if (ordered_entries_erased != unordered_entries_erased) {
+        return gutil::InternalErrorBuilder()
+               << "Ordered Table and Unordered Table out of sync. Entry "
+               << (ordered_entries_erased == 0 ? "not present" : "present")
+               << " in Ordered Table but "
+               << (unordered_entries_erased == 0 ? "not present" : "present")
+               << " in Unordered Table.\n"
+               << "Offending Update\n"
+               << update.DebugString();
+      }
+
+      if (ordered_entries_erased != 1) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Cannot erase non-existent table entries. Update: "
+               << update.DebugString();
+      }
+
+      break;
+    }
+
+    case Update::MODIFY: {
+      auto [ordered_iter, ordered_not_present] =
+          ordered_multicast_entries_.insert_or_assign(
+              /*k=*/multicast_group_id,
+              /*obj=*/multicast_group_entry);
+
+      auto [unordered_iter, unordered_not_present] =
+          unordered_multicast_entries_
+              .insert_or_assign(/*k=*/
+                                multicast_group_id,
+                                /*obj=*/multicast_group_entry);
+
+      if (ordered_not_present != unordered_not_present) {
+        return gutil::InternalErrorBuilder()
+               << "Ordered Table and Unordered Table out of sync. Entry "
+               << (ordered_not_present ? "not present" : "present")
+               << " in Ordered Table but "
+               << (unordered_not_present ? "not present" : "present")
+               << " in Unordered Table.\n"
+               << "Offending Update\n"
+               << update.DebugString();
+      }
+
+      if (ordered_not_present) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "Cannot modify a non-existing update. Update: "
+               << update.DebugString();
+      }
+
+      break;
+    }
+
+    default:
+      LOG(FATAL) << "Update of unsupported type: "  // Crash OK
+                 << update.DebugString();
+  }
+  return absl::OkStatus();
+}
+
 absl::Status SwitchState::ApplyUpdate(const Update& update) {
+  if (update.entity()
+          .packet_replication_engine_entry()
+          .has_multicast_group_entry()) {
+    return ApplyMulticastUpdate(update);
+  }
+
   const int table_id = update.entity().table_entry().table_id();
 
   auto& ordered_table = FindOrDie(ordered_tables_, table_id);
@@ -528,14 +702,14 @@ absl::Status SwitchState::ApplyUpdate(const Update& update) {
   return absl::OkStatus();
 }
 
-absl::Status SwitchState::SetTableEntries(
-    absl::Span<const p4::v1::TableEntry> table_entries) {
+absl::Status SwitchState::SetEntities(
+    absl::Span<const p4::v1::Entity> entities) {
   ClearTableEntries();
 
   p4::v1::Update update;
   update.set_type(p4::v1::Update::INSERT);
-  for (const p4::v1::TableEntry& entry : table_entries) {
-    *update.mutable_entity()->mutable_table_entry() = entry;
+  for (const Entity& entity : entities) {
+    *update.mutable_entity() = entity;
     RETURN_IF_ERROR(ApplyUpdate(update));
   }
 
@@ -624,6 +798,11 @@ std::string SwitchState::SwitchStateSummary() const {
       }
     }
   }
+
+  absl::StrAppendFormat(&res, "\n % 12d% 16s% 18s    %s",
+                        ordered_multicast_entries_.size(), "N/A", "N/A",
+                        "builtin::multicast_group_table");
+
   return absl::StrFormat(
       "State(\n % 12s% 16s% 18s    table_name\n % 12d% 16d% 18s    total "
       "number of table entries%s\n * marks tables where max size >= "
@@ -683,6 +862,39 @@ absl::Status SwitchState::CheckConsistency() const {
       }
     }
   }
+
+  if (unordered_multicast_entries_.size() !=
+      ordered_multicast_entries_.size()) {
+    return absl::InternalError(absl::StrFormat(
+        "Number of ordered multicast group entries differs from number of "
+        "unordered multicast group entries. Ordered Entries: %d  Unordered "
+        "Entries: %d",
+        ordered_multicast_entries_.size(),
+        unordered_multicast_entries_.size()));
+  }
+
+  // Ensure that every `table_entry` in an ordered table has a corresponding
+  // `table_entry` in the unordered table.
+  for (const auto& [multicast_group_id, ordered_entry] :
+       ordered_multicast_entries_) {
+    std::optional<p4::v1::MulticastGroupEntry> unordered_entry =
+        GetMulticastGroupEntry(ordered_entry);
+    if (unordered_entry == std::nullopt) {
+      return absl::InternalError(absl::StrFormat(
+          "Ordered multicast group entry %s is missing corresponding "
+          "unordered multicast group entry",
+          ordered_entry.DebugString()));
+    }
+
+    google::protobuf::util::MessageDifferencer differ;
+    if (!gutil::ProtoEqual(ordered_entry, *unordered_entry, differ)) {
+      return absl::InternalError(absl::StrFormat(
+          "Ordered entry differs from unordered entry\n "
+          "Ordered entry: %s Unordered Entry: %s",
+          ordered_entry.DebugString(), unordered_entry->DebugString()));
+    }
+  }
+
   return absl::OkStatus();
 }
 

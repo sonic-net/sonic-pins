@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 #include "p4_fuzzer/switch_state.h"
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -49,6 +50,8 @@ using ::p4::config::v1::P4Info;
 using ::p4::config::v1::Preamble;
 using ::p4::config::v1::Table;
 using ::p4::v1::ActionProfileAction;
+using ::p4::v1::Entity;
+using ::p4::v1::MulticastGroupEntry;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::CreateIrP4Info;
@@ -119,6 +122,56 @@ TEST(SwitchStateTest, TableEmptyFromP4Info) {
   EXPECT_TRUE(state.AllTablesEmpty());
 }
 
+TEST(SwitchStateTest, GetEntityReturnsNullOptWhenMulticastEntryNotPresent) {
+  SwitchState state(GetIrP4Info());
+  Entity entity;
+  entity.mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->set_multicast_group_id(42);
+
+  EXPECT_EQ(state.GetEntity(entity), std::nullopt);
+}
+
+TEST(SwitchStateTest, GetEntityReturnsMulticastEntryWhenPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Update update;
+  update.set_type(Update::INSERT);
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->set_multicast_group_id(42);
+
+  Entity entity = update.entity();
+
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  EXPECT_THAT(state.GetEntity(entity), Optional(EqualsProto(update.entity())));
+}
+
+TEST(SwitchStateTest, GetEntityReturnsNullOptWhenTableEntryNotPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Entity entity;
+  entity.mutable_table_entry()->set_table_id(kBareTable1);
+
+  EXPECT_EQ(state.GetEntity(entity), std::nullopt);
+}
+
+TEST(SwitchStateTest, GetEntityReturnsTableEntryWhenPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Update update;
+  update.set_type(Update::INSERT);
+  update.mutable_entity()->mutable_table_entry()->set_table_id(kBareTable1);
+
+  Entity entity = update.entity();
+
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  EXPECT_THAT(state.GetEntity(entity), Optional(EqualsProto(update.entity())));
+}
+
 TEST(SwitchStateTest, RuleInsert) {
   SwitchState state(GetIrP4Info());
 
@@ -139,6 +192,40 @@ TEST(SwitchStateTest, RuleInsert) {
 
   EXPECT_EQ(state.GetTableEntries(kBareTable1).size(), 1);
   EXPECT_EQ(state.GetTableEntries(kBareTable2).size(), 0);
+
+  EXPECT_OK(state.CheckConsistency());
+
+  state.ClearTableEntries();
+  EXPECT_TRUE(state.AllTablesEmpty());
+}
+
+TEST(SwitchStateTest, MulticastInsertWorks) {
+  SwitchState state(GetIrP4Info());
+
+  Update update = gutil::ParseProtoOrDie<Update>(R"pb(
+    type: INSERT
+    entity {
+      packet_replication_engine_entry {
+        multicast_group_entry {
+          multicast_group_id: 1
+          replicas { port: "some-port" }
+        }
+      }
+    }
+  )pb");
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  // TODO: b/316926338 - Uncomment once multicast is treated as just another
+  // table in switch state.
+  // EXPECT_FALSE(state.AllTablesEmpty());
+
+  EXPECT_EQ(state.GetMulticastGroupEntries().size(), 1);
+
+  MulticastGroupEntry& entry = *update.mutable_entity()
+                                    ->mutable_packet_replication_engine_entry()
+                                    ->mutable_multicast_group_entry();
+  ASSERT_TRUE(state.GetMulticastGroupEntry(entry) != std::nullopt);
+  EXPECT_THAT(*state.GetMulticastGroupEntry(entry), EqualsProto(entry));
 
   EXPECT_OK(state.CheckConsistency());
 
@@ -409,35 +496,53 @@ TEST(SwitchStateTest,
   ASSERT_OK(state.CheckConsistency());
 }
 
-TEST(SwitchStateTest, SetTableEntriesSetsTableEntries) {
+TEST(SwitchStateTest, SetEntitiesSetsEntities) {
   SwitchState state(GetIrP4Info());
 
   EXPECT_TRUE(state.AllTablesEmpty());
 
   // Call SetTableEntries and ensure it indeed populates the correct tables.
-  std::vector<p4::v1::TableEntry> entries;
-  entries.emplace_back() =  // Entry #1 in table 1.
-      gutil::ParseProtoOrDie<p4::v1::TableEntry>(
+  std::vector<p4::v1::Entity> entities;
+
+  entities.emplace_back() =  // Entry #1 in multicast table.
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
+          R"pb(
+            packet_replication_engine_entry {
+              multicast_group_entry {
+                multicast_group_id: 7
+                replicas { instance: 1 port: "some_port" }
+                replicas { instance: 2 port: "some_port" }
+                replicas { instance: 1 port: "some_other_port" }
+              }
+            }
+          )pb");
+  entities.emplace_back() =  // Entry #1 in table 1.
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
           absl::Substitute(R"pb(
-                             table_id: $0
-                             match {
-                               field_id: 1
-                               exact { value: "\378\"" }
+                             table_entry {
+                               table_id: $0
+                               match {
+                                 field_id: 1
+                                 exact { value: "\378\"" }
+                               }
                              }
                            )pb",
                            kSpamTableId));
-  entries.emplace_back().set_table_id(kEggTableId);  // Entry #1 in table 2.
-  entries.emplace_back() =                           // Entry #2 in table 1.
-      gutil::ParseProtoOrDie<p4::v1::TableEntry>(
+  entities.emplace_back().mutable_table_entry()->set_table_id(
+      kEggTableId);          // Entry #1 in table 2.
+  entities.emplace_back() =  // Entry #2 in table 1.
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
           absl::Substitute(R"pb(
-                             table_id: $0
-                             match {
-                               field_id: 1
-                               exact { value: "\377\"" }
+                             table_entry {
+                               table_id: $0
+                               match {
+                                 field_id: 1
+                                 exact { value: "\377\"" }
+                               }
                              }
                            )pb",
                            kSpamTableId));
-  ASSERT_OK(state.SetTableEntries(entries))
+  ASSERT_OK(state.SetEntities(entities))
       << " with the following P4Info:\n " << state.GetIrP4Info().DebugString();
   EXPECT_EQ(state.GetNumTableEntries(kSpamTableId), 2);
   EXPECT_EQ(state.GetNumTableEntries(kEggTableId), 1);

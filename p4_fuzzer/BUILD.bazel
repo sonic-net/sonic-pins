@@ -84,11 +84,15 @@ cc_library(
         "fuzzer_config.h",
     ],
     deps = [
+        "//gutil:proto",
         "//gutil:status",
         "//lib/p4rt:p4rt_port",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:ir_properties",
         "//p4_pdpi:reference_annotations",
+        "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4_constraints//p4_constraints:ast",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
@@ -97,6 +101,20 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "fuzzer_config_test",
+    srcs = ["fuzzer_config_test.cc"],
+    deps = [
+        ":fuzzer_config",
+        "//gutil:status_matchers",
+        "//p4_pdpi:ir_cc_proto",
+        "@com_github_p4lang_p4_constraints//gutils:parse_text_proto",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -118,15 +136,20 @@ cc_library(
         ":fuzzer_config",
         ":switch_state",
         "//gutil:collections",
+        "//gutil:proto",
         "//gutil:status",
         "//lib/p4rt:p4rt_port",
+        "//p4_pdpi:built_ins",
         "//p4_pdpi:entity_keys",
         "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:ir_properties",
         "//p4_pdpi:references",
         "//p4_pdpi/internal:ordered_map",
         "//p4_pdpi/netaddr:ipv6_address",
+        "//p4_pdpi/string_encodings:byte_string",
         "//p4_pdpi/utils:ir",
         "@com_github_google_glog//:glog",
+        "@com_github_p4lang_p4_constraints//p4_constraints:ast",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
         "@com_github_p4lang_p4_constraints//p4_constraints/backend:symbolic_interpreter",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
@@ -163,6 +186,8 @@ cc_test(
         "//gutil:collections",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:built_ins",
         "//p4_pdpi:ir_cc_proto",
         "@com_github_google_glog//:glog",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
@@ -243,44 +268,6 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googleapis//google/rpc:code_cc_proto",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "constraints_util",
-    srcs = ["constraints_util.cc"],
-    hdrs = ["constraints_util.h"],
-    deps = [
-        "//gutil:status",
-        "@com_github_ivmai_cudd//:cudd",
-        "@com_github_p4lang_p4_constraints//p4_constraints:ast_cc_proto",
-        "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
-        "@com_gnu_gmp//:gmp",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/hash",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:variant",
-    ],
-)
-
-cc_test(
-    name = "constraints_util_integration_test",
-    srcs = [
-        "constraints_util_integration_test.cc",
-    ],
-    data = [
-        "constraints_equals.p4info.pb.txt",
-        "constraints_not_equals.p4info.pb.txt",
-    ],
-    deps = [
-        ":constraints_util",
-        "//gutil:proto",
-        "@com_github_google_glog//:glog",
-        "@com_github_p4lang_p4_constraints//p4_constraints/backend:constraint_info",
-        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
-        "@com_google_absl//absl/types:optional",
         "@com_google_googletest//:gtest_main",
     ],
 )

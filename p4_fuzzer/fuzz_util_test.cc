@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,11 +32,13 @@
 #include "gutil/collections.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
+#include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzzer.pb.h"
 #include "p4_fuzzer/fuzzer_config.h"
 #include "p4_fuzzer/test_utils.h"
+#include "p4_pdpi/built_ins.h"
 #include "p4_pdpi/ir.pb.h"
 
 namespace p4_fuzzer {
@@ -201,6 +203,175 @@ TEST(FuzzUtilTest, FuzzWriteRequestAreReproducibleWithState) {
                                  fuzzer_state.switch_state),
                 EqualsProto(FuzzWriteRequest(&gen_1, fuzzer_config2,
                                              fuzzer_state.switch_state)));
+  }
+}
+
+TEST(FuzzUtilTest, FuzzWriteRequestCanFuzzMulticastGroupEntry) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  absl::BitGen gen;
+  // Ensure a multicast entity is fuzzed.
+  fuzzer_state.config.SetFuzzMulticastGroupEntryProbability(1.0);
+
+  AnnotatedWriteRequest write_request;
+  // Because there is a non-zero chance to fuzz no updates.
+  while (write_request.updates().empty()) {
+    write_request =
+        FuzzWriteRequest(&gen, fuzzer_state.config, fuzzer_state.switch_state,
+                         /*max_batch_size=*/1);
+  }
+
+  EXPECT_TRUE(write_request.updates(0)
+                  .pi()
+                  .entity()
+                  .packet_replication_engine_entry()
+                  .has_multicast_group_entry());
+}
+
+// This test uses behavior specific to the main.p4 program. In main.p4,
+// `refers_to_multicast_by_action_table` is a table that uses an action whose
+// parameter refers to multicast group id.
+TEST(FuzzUtilTest, FuzzTableFailsWhenNoMulticastReferenceIsAvailable) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+
+  // Generate entry referring to multicast and fail due to no references.
+  pdpi::IrTableDefinition multicast_dependent_definition =
+      gutil::FindOrDie(fuzzer_state.config.GetIrP4Info().tables_by_name(),
+                       "refers_to_multicast_by_action_table");
+  absl::BitGen gen;
+  EXPECT_THAT(
+      FuzzValidTableEntry(&gen, fuzzer_state.config, fuzzer_state.switch_state,
+                          multicast_dependent_definition),
+      gutil::StatusIs(absl::StatusCode::kFailedPrecondition));
+}
+
+// This test uses behavior specific to the main.p4 program. In main.p4,
+// `refers_to_multicast_by_action_table` is a table that uses an action whose
+// parameter refers to multicast group id.
+TEST(FuzzUtilTest, FuzzTableRespectsMulticastReferences) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+
+  // Store multicast group entry being referenced.
+  ASSERT_OK(fuzzer_state.switch_state.ApplyUpdate(
+      gutil::ParseProtoOrDie<p4::v1::Update>(R"pb(
+        type: INSERT
+        entity {
+          packet_replication_engine_entry {
+            multicast_group_entry { multicast_group_id: 0x86 }
+          }
+        }
+      )pb")));
+
+  // Generate entry referring to multicast and ensure the action references
+  // multicast group id.
+  pdpi::IrTableDefinition multicast_dependent_definition =
+      gutil::FindOrDie(fuzzer_state.config.GetIrP4Info().tables_by_name(),
+                       "refers_to_multicast_by_action_table");
+  absl::BitGen gen;
+  EXPECT_THAT(
+      FuzzValidTableEntry(&gen, fuzzer_state.config, fuzzer_state.switch_state,
+                          multicast_dependent_definition),
+      IsOkAndHolds(Partially(EqualsProto(R"pb(
+        action {
+          action {
+            # Action id for `refers_to_multicast_action`.
+            action_id: 18598416
+            params { param_id: 1 value: "\x86" }
+          }
+        }
+      )pb"))));
+}
+
+// This test uses behavior specific to the main.p4 program. In main.p4,
+// built-in multicast group table replicas refer to fields in
+// `referenced_by_multicast_replica_table`.
+TEST(FuzzUtilTest, FuzzMulticastRespectsReplicaReferences) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+
+  // Store table entry being referenced.
+  ASSERT_OK(fuzzer_state.switch_state.ApplyUpdate(
+      gutil::ParseProtoOrDie<p4::v1::Update>(R"pb(
+        type: INSERT
+        entity {
+          table_entry {
+            table_id: 49197097
+            # Port
+            match {
+              field_id: 1
+              exact { value: "sample_port" }
+            }
+            # Instance
+            match {
+              field_id: 2
+              exact { value: "\x86" }
+            }
+            action { action { action_id: 16777221 } }
+          }
+        }
+      )pb")));
+
+  absl::BitGen gen;
+  p4::v1::MulticastGroupEntry multicast_entry;
+  // Fuzz until multicast group entry has the one replica.
+  while (multicast_entry.replicas().empty()) {
+    ASSERT_OK_AND_ASSIGN(multicast_entry, FuzzValidMulticastGroupEntry(
+                                              &gen, fuzzer_state.config,
+                                              fuzzer_state.switch_state));
+  }
+
+  // Multicast group cannot be 0.
+  EXPECT_NE(multicast_entry.multicast_group_id(), 0);
+
+  // Ensure the one replica references values in table entry.
+  ASSERT_EQ(multicast_entry.replicas_size(), 1);
+  EXPECT_THAT(multicast_entry, Partially(EqualsProto(R"pb(
+                replicas { instance: 0x86 port: "sample_port" }
+              )pb")));
+}
+
+// This test uses behavior specific to the main.p4 program. In main.p4,
+// built-in multicast group table replicas refer to fields in
+// `referenced_by_multicast_replica_table`.
+TEST(FuzzUtilTest, FuzzMulticastAreReproducibleWithState) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+
+  pdpi::IrTableDefinition multicast_dependency_definition =
+      gutil::FindOrDie(fuzzer_state.config.GetIrP4Info().tables_by_name(),
+                       "referenced_by_multicast_replica_table");
+
+  absl::BitGen init_gen;
+
+  // Generate up to 50 random table entries that can be referenced by multicast.
+  for (int i = 0; i < 50; ++i) {
+    p4::v1::Update update;
+    update.set_type(p4::v1::Update::INSERT);
+    ASSERT_OK_AND_ASSIGN(*update.mutable_entity()->mutable_table_entry(),
+                         FuzzValidTableEntry(&init_gen, fuzzer_state.config,
+                                             fuzzer_state.switch_state,
+                                             multicast_dependency_definition));
+    ASSERT_OK(fuzzer_state.switch_state.ApplyUpdate(update));
+  }
+
+  LOG(INFO) << "State size = "
+            << fuzzer_state.switch_state.GetNumTableEntries();
+
+  // Use the same sequence seed for both generators.
+  absl::SeedSeq seed;
+  absl::BitGen gen_0(seed);
+  absl::BitGen gen_1(seed);
+
+  // Create 50 instances and verify that they are identical.
+  for (int i = 0; i < 20; ++i) {
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::MulticastGroupEntry entry0,
+        FuzzValidMulticastGroupEntry(&gen_0, fuzzer_state.config,
+                                     fuzzer_state.switch_state));
+
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::MulticastGroupEntry entry1,
+        FuzzValidMulticastGroupEntry(&gen_1, fuzzer_state.config,
+                                     fuzzer_state.switch_state));
+
+    EXPECT_THAT(entry0, EqualsProto(entry1));
   }
 }
 
@@ -375,11 +546,13 @@ TEST(FuzzUtilTest, FuzzWriteRequestRespectMaxBatchSize) {
 
 TEST(FuzzUtilTest, FuzzWriteRequestRespectsDisallowList) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
-  fuzzer_state.config.disabled_fully_qualified_names = {
-      "ingress.id_test_table", "ingress.exact_table", "ingress.ternary_table"};
+  fuzzer_state.config.SetDisabledFullyQualifiedNames({"ingress.id_test_table",
+                                                      "ingress.exact_table",
+                                                      "ingress.ternary_table"});
 
   absl::flat_hash_set<uint32_t> disallowed_ids;
-  for (const auto& path : fuzzer_state.config.disabled_fully_qualified_names) {
+  for (const auto& path :
+       fuzzer_state.config.GetDisabledFullyQualifiedNames()) {
     std::vector<std::string> parts = absl::StrSplit(path, '.');
     ASSERT_OK_AND_ASSIGN(
         const pdpi::IrTableDefinition& table,
@@ -399,14 +572,52 @@ TEST(FuzzUtilTest, FuzzWriteRequestRespectsDisallowList) {
   }
 }
 
+TEST(FuzzUtilTest, FuzzValidTableEntryRespectsDisallowList) {
+  FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
+  fuzzer_state.config.SetDisabledFullyQualifiedNames({
+      "ingress.ternary_table.ipv6_upper_64_bits",
+      "ingress.ternary_table.normal",
+      "ingress.ternary_table.mac",
+      "ingress.ternary_table.unsupported_field",
+  });
+
+  ASSERT_OK_AND_ASSIGN(
+      const pdpi::IrTableDefinition& ternary_table,
+      gutil::FindOrStatus(fuzzer_state.config.GetIrP4Info().tables_by_name(),
+                          "ternary_table"));
+
+  absl::flat_hash_set<uint32_t> disallowed_ids;
+  for (const auto& path :
+       fuzzer_state.config.GetDisabledFullyQualifiedNames()) {
+    std::vector<std::string> parts = absl::StrSplit(path, '.');
+    ASSERT_OK_AND_ASSIGN(
+        const pdpi::IrMatchFieldDefinition& match,
+        gutil::FindOrStatus(ternary_table.match_fields_by_name(),
+                            parts[parts.size() - 1]));
+    disallowed_ids.insert(match.match_field().id());
+  }
+
+  for (int i = 0; i < 1000; i++) {
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::TableEntry entry,
+        FuzzValidTableEntry(&fuzzer_state.gen, fuzzer_state.config,
+                            fuzzer_state.switch_state,
+                            ternary_table.preamble().id()));
+    for (const auto& match : entry.match()) {
+      EXPECT_THAT(match.field_id(), Not(AnyOfArray(disallowed_ids)));
+    }
+  }
+}
+
 TEST(FuzzUtilTest, FuzzActionRespectsDisallowList) {
   FuzzerTestState fuzzer_state = ConstructStandardFuzzerTestState();
   ASSERT_OK_AND_ASSIGN(
       pdpi::IrActionDefinition do_thing_action,
       gutil::FindOrStatus(fuzzer_state.config.GetIrP4Info().actions_by_name(),
                           "do_thing_1"));
-  fuzzer_state.config.disabled_fully_qualified_names = {
-      do_thing_action.preamble().name()};
+  fuzzer_state.config.SetDisabledFullyQualifiedNames({
+      do_thing_action.preamble().name(),
+  });
 
   ASSERT_OK_AND_ASSIGN(
       const pdpi::IrTableDefinition& id_test_table,

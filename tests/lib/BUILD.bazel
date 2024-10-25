@@ -56,7 +56,10 @@ cc_library(
     hdrs = ["switch_test_setup_helpers.h"],
     deps = [
         "//lib/gnmi:gnmi_helper",
+        "//lib/gnmi:openconfig_cc_proto",
+        "//lib/validator:validator_lib",
         "//p4_pdpi:p4_runtime_session",
+        "//thinkit:mirror_testbed",
         "//thinkit:switch",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
