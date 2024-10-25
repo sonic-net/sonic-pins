@@ -133,6 +133,10 @@ class SwitchState {
     return ordered_multicast_entries_.size();
   };
 
+  // Returns the current state of an entity (or nullopt if it is not
+  // present).  Only the uniquely identifying fields of `entity` are considered.
+  std::optional<p4::v1::Entity> GetEntity(const p4::v1::Entity& entity) const;
+
   // Returns the current state of a table entry (or nullopt if it is not
   // present).  Only the uniquely identifying fields of entry are considered.
   std::optional<p4::v1::TableEntry> GetTableEntry(
