@@ -26,6 +26,7 @@
 #include "absl/strings/str_cat.h"
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/symbolic/conditional.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/symbolic/table.h"
@@ -69,7 +70,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluateControl(
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard) {
   // Base case: we got to the end of the evaluation, no more controls!
-  if (control_name.empty()) return SymbolicTableMatches();
+  if (control_name == ir::EndOfPipeline()) return SymbolicTableMatches();
 
   // Find out what type of control we need to evaluate.
   if (data_plane.program.tables().count(control_name) == 1) {

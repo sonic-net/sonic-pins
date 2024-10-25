@@ -631,6 +631,14 @@ tables {
     }
     table_implementation {
       default_action: "MyIngress.drop"
+      action_to_next_control {
+        key: "MyIngress.drop"
+        value: "__END_OF_PIPELINE__"
+      }
+      action_to_next_control {
+        key: "MyIngress.forward"
+        value: "__END_OF_PIPELINE__"
+      }
       match_name_to_field {
         key: "hdr.ethernet.dst_addr"
         value {
@@ -671,6 +679,7 @@ pipeline {
   key: "egress"
   value {
     name: "egress"
+    initial_control: "__END_OF_PIPELINE__"
   }
 }
 pipeline {
