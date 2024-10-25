@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,21 +31,7 @@
 
 namespace p4_fuzzer {
 
-class FuzzerConfig {
- public:
-  static absl::StatusOr<FuzzerConfig> Create(
-      const p4::config::v1::P4Info& info);
-
-  absl::Status SetP4Info(const p4::config::v1::P4Info& info);
-
-  const p4::config::v1::P4Info& GetP4Info() const { return info_; }
-  const pdpi::IrP4Info& GetIrP4Info() const { return ir_info_; }
-  const p4_constraints::ConstraintInfo& GetConstraintInfo() const {
-    return constraint_info_;
-  }
-
-  // TODO: These should be taken in as parameters and populated
-  // with Create instead.
+struct ConfigParams {
   // -- Required ---------------------------------------------------------------
   // NOTE: These values are required for correct function. All of them are
   // initialized to values that should usually work for GPINs switches.
@@ -61,7 +47,8 @@ class FuzzerConfig {
   // The probability of performing a mutation on a given table entry.
   float mutate_update_probability = 0.1;
   // The probability of fuzzing a multicast group entry when fuzzing an update.
-  // TODO: b/319260502 - Change from zero once switch supports multicast.
+  // TODO: b/316926338 - Remove once switch state transitions to entities and
+  // fuzzer can use weighted distribution for multicast.
   float fuzz_multicast_group_entry_probability = 0;
 
   // -- Optional ---------------------------------------------------------------
@@ -93,6 +80,80 @@ class FuzzerConfig {
   bool no_empty_action_profile_groups = false;
   // Ignores the constraints on tables listed when fuzzing entries.
   absl::flat_hash_set<std::string> ignore_constraints_on_tables;
+};
+
+class FuzzerConfig {
+ public:
+  static absl::StatusOr<FuzzerConfig> Create(const p4::config::v1::P4Info& info,
+                                             ConfigParams params);
+
+  absl::Status SetP4Info(const p4::config::v1::P4Info& info);
+
+  const p4::config::v1::P4Info& GetP4Info() const { return info_; }
+  const pdpi::IrP4Info& GetIrP4Info() const { return ir_info_; }
+  const p4_constraints::ConstraintInfo& GetConstraintInfo() const {
+    return constraint_info_;
+  }
+
+  // Param Setters - implement only if needed.
+  void SetPorts(const std::vector<pins_test::P4rtPortId>& ports) {
+    params_.ports = ports;
+  }
+  void SetQosQueues(const std::vector<std::string>& qos_queues) {
+    params_.qos_queues = qos_queues;
+  }
+  void SetMutateUpdateProbability(float mutate_update_probability) {
+    params_.mutate_update_probability = mutate_update_probability;
+  }
+  void SetFuzzMulticastGroupEntryProbability(
+      float fuzz_multicast_group_entry_probability) {
+    params_.fuzz_multicast_group_entry_probability =
+        fuzz_multicast_group_entry_probability;
+  }
+  void SetDisabledFullyQualifiedNames(
+      const absl::flat_hash_set<std::string>& disabled_fully_qualified_names) {
+    params_.disabled_fully_qualified_names = disabled_fully_qualified_names;
+  }
+  void SetNoEmptyActionProfileGroups(bool no_empty_action_profile_groups) {
+    params_.no_empty_action_profile_groups = no_empty_action_profile_groups;
+  }
+
+  // Param Getters
+  const std::vector<pins_test::P4rtPortId>& GetPorts() const {
+    return params_.ports;
+  }
+  const std::vector<std::string>& GetQosQueues() const {
+    return params_.qos_queues;
+  }
+  std::string GetRole() const { return params_.role; }
+  float GetMutateUpdateProbability() const {
+    return params_.mutate_update_probability;
+  }
+  float GetFuzzMulticastGroupEntryProbability() const {
+    return params_.fuzz_multicast_group_entry_probability;
+  }
+  const absl::btree_set<std::string>&
+  GetTablesForWhichToNotExceedResourceGuarantees() const {
+    return params_.tables_for_which_to_not_exceed_resource_guarantees;
+  }
+  const absl::flat_hash_set<std::string>& GetDisabledFullyQualifiedNames()
+      const {
+    return params_.disabled_fully_qualified_names;
+  }
+  const absl::flat_hash_set<std::string>& GetNonModifiableTables() const {
+    return params_.non_modifiable_tables;
+  }
+  const std::optional<std::function<bool(const pdpi::IrTableEntry&,
+                                         const pdpi::IrTableEntry&)>>&
+  GetTreatAsEqualDuringReadDueToKnownBug() const {
+    return params_.TreatAsEqualDuringReadDueToKnownBug;
+  }
+  bool GetNoEmptyActionProfileGroups() const {
+    return params_.no_empty_action_profile_groups;
+  }
+  const absl::flat_hash_set<std::string>& GetIgnoreConstraintsOnTables() const {
+    return params_.ignore_constraints_on_tables;
+  }
 
  private:
   explicit FuzzerConfig() {}
@@ -103,6 +164,28 @@ class FuzzerConfig {
   pdpi::IrP4Info ir_info_;
   // Used to fuzz table entries for tables with P4-Constraints.
   p4_constraints::ConstraintInfo constraint_info_;
+
+  ConfigParams params_;
+
+  // TODO: b/276461175 - Support P4RT translated types.
+  // Checks the following assumptions made about p4 constraints that aren't
+  // marked as ignored in `params_`:
+  // 1) No constraint includes a match field that has a P4Runtime translated
+  //    type and is an EXACT match field. The fuzzer cannot satisfy constraints
+  //    on this type and EXACT fields are required, so this combination is
+  //    forbidden.
+  // Also logs the following information:
+  // TODO: b/324083270 - Remove once references+constraints are handled.
+  // 1) A field that is both constrained and has a reference. The fuzzer will
+  //    choose to satisfy references over constraints, which means the resulting
+  //    entry may not satisfy constraints. This is a current weakness of the
+  //    fuzzer, but does not make it impossible to fuzz valid values if
+  //    constraints are permissive or referenced values have relevant
+  //    constraints.
+  // 2) A field is constrained, a P4Runtime translated type and omittable. The
+  //    fuzzer cannot satisfy constraints on this type, but valid entries may
+  //    still be fuzzed if this field is omitted when fuzzing.
+  absl::Status CheckConstraintAssumptions();
 };
 
 }  // namespace p4_fuzzer
