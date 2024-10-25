@@ -1,6 +1,6 @@
 pkg_info {
   name: "fabric_border_router.p4"
-  version: "1.6.2"
+  version: "2.0.0"
   arch: "v1model"
   organization: "Google"
 }
@@ -324,6 +324,7 @@ tables {
     id: 33554510
     name: "ingress.routing_lookup.ipv4_multicast_table"
     alias: "ipv4_multicast_table"
+    annotations: "@entry_restriction(\"\n    // TODO: Use IPv4 address notation once it is supported.\n    // Only IPv4s in the multicast range 224.0.0.0/4 are supported.\n    ipv4_dst::value >= 0xe0000000;\n    ipv4_dst::value <= 0xefffffff;\n  \")"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }
   match_fields {
@@ -358,6 +359,7 @@ tables {
     id: 33554511
     name: "ingress.routing_lookup.ipv6_multicast_table"
     alias: "ipv6_multicast_table"
+    annotations: "@entry_restriction(\"\n    // TODO: Use IPv4 address notation once it is supported.\n    // Only IPv6s in the multicast range ff00::/8 are supported.\n    ipv6_dst::value >= 0xff000000000000000000000000000000;\n    ipv6_dst::value <= 0xffffffffffffffffffffffffffffffff;\n  \")"
     annotations: "@p4runtime_role(\"sdn_controller\")"
   }
   match_fields {
@@ -810,7 +812,7 @@ tables {
     scope: DEFAULT_ONLY
   }
   const_default_action_id: 21257015
-  size: 256
+  size: 200
 }
 tables {
   preamble {
@@ -1002,6 +1004,10 @@ tables {
     annotations: "@proto_id(1)"
   }
   action_refs {
+    id: 16777247
+    annotations: "@proto_id(2)"
+  }
+  action_refs {
     id: 21257015
     annotations: "@defaultonly"
     scope: DEFAULT_ONLY
@@ -1155,7 +1161,6 @@ actions {
     id: 16777238
     name: "ingress.tunnel_termination.tunnel_decap"
     alias: "tunnel_decap"
-    annotations: "@unsupported"
   }
 }
 actions {
@@ -1628,7 +1633,6 @@ actions {
     id: 16777245
     name: "ingress.mirror_session_lookup.mirror_with_vlan_tag_and_ipfix_encapsulation"
     alias: "mirror_with_vlan_tag_and_ipfix_encapsulation"
-    annotations: "@unsupported"
   }
   params {
     id: 1
@@ -1663,13 +1667,13 @@ actions {
   }
   params {
     id: 7
-    name: "mirror_encap_dst_ip"
+    name: "mirror_encap_src_ip"
     annotations: "@format(IPV6_ADDRESS)"
     bitwidth: 128
   }
   params {
     id: 8
-    name: "mirror_encap_src_ip"
+    name: "mirror_encap_dst_ip"
     annotations: "@format(IPV6_ADDRESS)"
     bitwidth: 128
   }
@@ -1707,6 +1711,14 @@ actions {
     name: "src_mac"
     annotations: "@format(MAC_ADDRESS)"
     bitwidth: 48
+  }
+}
+actions {
+  preamble {
+    id: 16777247
+    name: "egress.packet_rewrites.multicast_rewrites.l2_multicast_passthrough"
+    alias: "l2_multicast_passthrough"
+    annotations: "@unsupported"
   }
 }
 action_profiles {
