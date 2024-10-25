@@ -191,14 +191,6 @@ def pins_infra_deps():
             build_file = "@//:bazel/BUILD.jsoncpp.bazel",
             sha256 = "6da6cdc026fe042599d9fce7b06ff2c128e8dd6b8b751fca91eb022bce310880",
         )
-    if not native.existing_rule("com_github_ivmai_cudd"):
-        http_archive(
-            name = "com_github_ivmai_cudd",
-            build_file = "@//:bazel/BUILD.cudd.bazel",
-            strip_prefix = "cudd-cudd-3.0.0",
-            sha256 = "5fe145041c594689e6e7cf4cd623d5f2b7c36261708be8c9a72aed72cf67acce",
-            urls = ["https://github.com/ivmai/cudd/archive/cudd-3.0.0.tar.gz"],
-        )
     if not native.existing_rule("com_gnu_gmp"):
         http_archive(
             name = "com_gnu_gmp",

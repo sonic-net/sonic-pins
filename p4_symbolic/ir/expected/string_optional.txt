@@ -1,0 +1,556 @@
+headers {
+  key: "scalars"
+  value {
+    name: "scalars_0"
+    fields {
+      key: "_padding_0"
+      value {
+        name: "_padding_0"
+        bitwidth: 7
+      }
+    }
+    fields {
+      key: "metadata.string_field"
+      value {
+        name: "metadata.string_field"
+        bitwidth: 9
+      }
+    }
+  }
+}
+headers {
+  key: "standard_metadata"
+  value {
+    name: "standard_metadata"
+    id: 1
+    fields {
+      key: "_padding"
+      value {
+        name: "_padding"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "checksum_error"
+      value {
+        name: "checksum_error"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "deq_qdepth"
+      value {
+        name: "deq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "deq_timedelta"
+      value {
+        name: "deq_timedelta"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "egress_global_timestamp"
+      value {
+        name: "egress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "egress_port"
+      value {
+        name: "egress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "egress_rid"
+      value {
+        name: "egress_rid"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "egress_spec"
+      value {
+        name: "egress_spec"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "enq_qdepth"
+      value {
+        name: "enq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "enq_timestamp"
+      value {
+        name: "enq_timestamp"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ingress_global_timestamp"
+      value {
+        name: "ingress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ingress_port"
+      value {
+        name: "ingress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "instance_type"
+      value {
+        name: "instance_type"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "mcast_grp"
+      value {
+        name: "mcast_grp"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "packet_length"
+      value {
+        name: "packet_length"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "parser_error"
+      value {
+        name: "parser_error"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "priority"
+      value {
+        name: "priority"
+        bitwidth: 3
+      }
+    }
+  }
+}
+actions {
+  key: "MyIngress.set_egress_spec"
+  value {
+    action_definition {
+      preamble {
+        id: 21735938
+        name: "MyIngress.set_egress_spec"
+        alias: "set_egress_spec"
+      }
+      params_by_id {
+        key: 1
+        value {
+          param {
+            id: 1
+            name: "port"
+            bitwidth: 9
+          }
+        }
+      }
+      params_by_name {
+        key: "port"
+        value {
+          param {
+            id: 1
+            name: "port"
+            bitwidth: 9
+          }
+        }
+      }
+    }
+    action_implementation {
+      parameter_to_bitwidth {
+        key: "port"
+        value: 9
+      }
+      action_body {
+        source_info {
+          line: 60
+          column: 8
+          source_fragment: "standard_metadata.egress_spec = port"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "standard_metadata"
+              field_name: "egress_spec"
+            }
+          }
+          right {
+            variable_value {
+              name: "port"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  key: "MyIngress.set_field"
+  value {
+    action_definition {
+      preamble {
+        id: 21593668
+        name: "MyIngress.set_field"
+        alias: "set_field"
+      }
+      params_by_id {
+        key: 1
+        value {
+          param {
+            id: 1
+            name: "f"
+            type_name {
+              name: "string_field_t"
+            }
+          }
+          format: STRING
+        }
+      }
+      params_by_name {
+        key: "f"
+        value {
+          param {
+            id: 1
+            name: "f"
+            type_name {
+              name: "string_field_t"
+            }
+          }
+          format: STRING
+        }
+      }
+    }
+    action_implementation {
+      parameter_to_bitwidth {
+        key: "f"
+        value: 9
+      }
+      action_body {
+        source_info {
+          line: 64
+          column: 6
+          source_fragment: "meta.string_field = f"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "scalars"
+              field_name: "metadata.string_field"
+            }
+          }
+          right {
+            variable_value {
+              name: "f"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  key: "NoAction"
+  value {
+    action_definition {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    action_implementation {
+    }
+  }
+}
+actions {
+  key: "program92"
+  value {
+    action_definition {
+      preamble {
+        id: 4
+        name: "program92"
+      }
+    }
+    action_implementation {
+      action_body {
+        source_info {
+          line: 92
+          column: 8
+          source_fragment: "meta.string_field = (string_field_t)0"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "scalars"
+              field_name: "metadata.string_field"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x0000"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.optional_match"
+  value {
+    table_definition {
+      preamble {
+        id: 47867719
+        name: "MyIngress.optional_match"
+        alias: "optional_match"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "meta.string_field"
+            match_type: OPTIONAL
+            type_name {
+              name: "string_field_t"
+            }
+          }
+          format: STRING
+        }
+      }
+      match_fields_by_name {
+        key: "meta.string_field"
+        value {
+          match_field {
+            id: 1
+            name: "meta.string_field"
+            match_type: OPTIONAL
+            type_name {
+              name: "string_field_t"
+            }
+          }
+          format: STRING
+        }
+      }
+      entry_actions {
+        ref {
+          id: 21735938
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 21735938
+            name: "MyIngress.set_egress_spec"
+            alias: "set_egress_spec"
+          }
+          params_by_id {
+            key: 1
+            value {
+              param {
+                id: 1
+                name: "port"
+                bitwidth: 9
+              }
+            }
+          }
+          params_by_name {
+            key: "port"
+            value {
+              param {
+                id: 1
+                name: "port"
+                bitwidth: 9
+              }
+            }
+          }
+        }
+        proto_id: 1
+      }
+      entry_actions {
+        ref {
+          id: 21257015
+          annotations: "@proto_id(2)"
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+        proto_id: 2
+      }
+      size: 1024
+      requires_priority: true
+    }
+    table_implementation {
+      default_action: "NoAction"
+      match_name_to_field {
+        key: "meta.string_field"
+        value {
+          header_name: "scalars"
+          field_name: "metadata.string_field"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.set_field_table"
+  value {
+    table_definition {
+      preamble {
+        id: 44279369
+        name: "MyIngress.set_field_table"
+        alias: "set_field_table"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "standard_metadata.ingress_port"
+            bitwidth: 9
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "standard_metadata.ingress_port"
+        value {
+          match_field {
+            id: 1
+            name: "standard_metadata.ingress_port"
+            bitwidth: 9
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 21593668
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 21593668
+            name: "MyIngress.set_field"
+            alias: "set_field"
+          }
+          params_by_id {
+            key: 1
+            value {
+              param {
+                id: 1
+                name: "f"
+                type_name {
+                  name: "string_field_t"
+                }
+              }
+              format: STRING
+            }
+          }
+          params_by_name {
+            key: "f"
+            value {
+              param {
+                id: 1
+                name: "f"
+                type_name {
+                  name: "string_field_t"
+                }
+              }
+              format: STRING
+            }
+          }
+        }
+        proto_id: 1
+      }
+      entry_actions {
+        ref {
+          id: 21257015
+          annotations: "@proto_id(2)"
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+        proto_id: 2
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.set_field"
+        value: "MyIngress.optional_match"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.optional_match"
+      }
+      match_name_to_field {
+        key: "standard_metadata.ingress_port"
+        value {
+          header_name: "standard_metadata"
+          field_name: "ingress_port"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "tbl_program92"
+  value {
+    table_definition {
+      preamble {
+        name: "tbl_program92"
+      }
+    }
+    table_implementation {
+      default_action: "program92"
+      action_to_next_control {
+        key: "program92"
+        value: "MyIngress.set_field_table"
+      }
+    }
+  }
+}
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "tbl_program92"
+  }
+}
+

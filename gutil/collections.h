@@ -54,10 +54,24 @@ absl::StatusOr<const typename M::mapped_type> FindOrStatus(const M &m,
   }
 }
 
-// Returns a non-null pointer of the value associated with a given key
+// Returns a const, non-null pointer of the value associated with a given key
 // if it exists, or a status failure if it does not.
 template <typename M, typename KeyType = typename M::key_type>
 absl::StatusOr<const typename M::mapped_type *> FindPtrOrStatus(
+    const M &m, const KeyType &k) {
+  auto it = m.find(k);
+  if (it != m.end()) return &it->second;
+  if constexpr (std::is_same_v<typename M::key_type, std::string>) {
+    return absl::NotFoundError(absl::StrCat("Key not found: '", k, "'"));
+  } else {
+    return absl::NotFoundError("Key not found");
+  }
+}
+
+// Returns a mutable, non-null pointer of the value associated with a given key
+// if it exists, or a status failure if it does not.
+template <typename M, typename KeyType = typename M::key_type>
+absl::StatusOr<typename M::mapped_type *> FindMutablePtrOrStatus(
     M &m, const KeyType &k) {
   auto it = m.find(k);
   if (it != m.end()) return &it->second;
