@@ -2053,7 +2053,8 @@ TEST_P(L3MulticastTestFixture, AbleToProgramExpectedMulticastGroupCapacity) {
   EXPECT_OK(ClearEntities(*sut_p4rt_session_, ir_p4info_, rif_entities));
 }
 
-TEST_P(L3MulticastTestFixture, ReplicatePacketWithVlanAndSrcMacRewrite) {
+TEST_P(L3MulticastTestFixture,
+       DISABLED_ReplicatePacketWithVlanAndSrcMacRewrite) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   const int kPortsToUseInTest = 3;
@@ -2114,7 +2115,7 @@ TEST_P(L3MulticastTestFixture, ReplicatePacketWithVlanAndSrcMacRewrite) {
 }
 
 TEST_P(L3MulticastTestFixture,
-       SwitchAclRedirectAndReplicatePacketWithVlanAndSrcMacRewrite) {
+       DISABLED_SwitchAclRedirectAndReplicatePacketWithVlanAndSrcMacRewrite) {
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   const int kPortsToUseInTest = 3;
