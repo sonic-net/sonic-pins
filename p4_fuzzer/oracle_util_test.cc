@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
 // limitations under the License.
 #include "p4_fuzzer/oracle_util.h"
 
+#include <bitset>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -22,21 +25,18 @@
 #include "gmock/gmock.h"
 #include "google/rpc/code.pb.h"
 #include "gtest/gtest.h"
-#include "gutil/collections.h"
-#include "p4/v1/p4runtime.pb.h"
 #include "gutil/status.h"
-#include "google/rpc/code.pb.h"
-#include "gutil/status_matchers.h"
+#include "gutil/status_matchers.h"  // IWYU pragma: keep
 #include "gutil/testing.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_fuzzer/fuzz_util.h"
 #include "p4_fuzzer/fuzzer.pb.h"
+#include "p4_fuzzer/switch_state.h"
 #include "p4_fuzzer/test_utils.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
-#include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
@@ -46,7 +46,6 @@ namespace {
 
 using ::absl::StatusCode;
 using ::p4::v1::TableEntry;
-using ::p4::v1::Update;
 
 int AclIngressTableSize() {
   return sai::GetIrP4Info(sai::Instantiation::kMiddleblock)
@@ -62,8 +61,9 @@ absl::StatusOr<TableEntry> GetValidActionSelectorTableEntry(
   // If we want two or more actions, the max cardinality better be at least 2.
   CHECK_GE(kActionProfileActionSetMaxCardinality, 2);
 
-  ASSIGN_OR_RETURN(const auto table_definition,
-                   GetAOneShotTableDefinition(fuzzer_state.config.info));
+  ASSIGN_OR_RETURN(
+      const auto table_definition,
+      GetAOneShotTableDefinition(fuzzer_state.config.GetIrP4Info()));
 
   ASSIGN_OR_RETURN(
       TableEntry table_entry,
@@ -96,12 +96,13 @@ absl::StatusOr<TableEntry> GetInvalidActionSelectorExceedingMaxGroupSize(
     FuzzerTestState& fuzzer_state) {
   ASSIGN_OR_RETURN(auto table_entry,
                    GetValidActionSelectorTableEntry(fuzzer_state));
-  ASSIGN_OR_RETURN(const auto table_definition,
-                   GetAOneShotTableDefinition(fuzzer_state.config.info));
+  ASSIGN_OR_RETURN(
+      const auto table_definition,
+      GetAOneShotTableDefinition(fuzzer_state.config.GetIrP4Info()));
 
   ASSIGN_OR_RETURN(const auto action_profile,
-                   GetActionProfileImplementingTable(fuzzer_state.config.info,
-                                                     table_definition));
+                   GetActionProfileImplementingTable(
+                       fuzzer_state.config.GetIrP4Info(), table_definition));
 
   int max_group_size = action_profile.action_profile().max_group_size();
   for (auto& action : *table_entry.mutable_action()
@@ -131,7 +132,7 @@ TableEntry GetIngressAclTableEntry(int match, int action) {
         }
         priority: 10
         action {
-          name: "acl_mirror"
+          name: "mirror"
           params {
             name: "mirror_session_id"
             value { str: "session" }
@@ -170,8 +171,9 @@ absl::Status Check(const std::vector<UpdateStatus>& updates,
     ir_update_status.set_code(static_cast<google::rpc::Code>(status));
     statuses.push_back(ir_update_status);
   }
-  absl::optional<std::vector<std::string>> oracle = WriteRequestOracle(
-      fuzzer_state.config.info, request, statuses, fuzzer_state.switch_state);
+  std::optional<std::vector<std::string>> oracle =
+      WriteRequestOracle(fuzzer_state.config.GetIrP4Info(), request, statuses,
+                         fuzzer_state.switch_state);
   if (valid) {
     if (oracle.has_value()) {
       std::string explanation = absl::StrCat(
@@ -243,6 +245,110 @@ TEST(OracleUtilTest, DISABLED_SameKeyInBatch) {
       Check({MakeDelete(table_entry_1, absl::StatusCode::kInvalidArgument),
              MakeInsert(table_entry_2, absl::StatusCode::kInvalidArgument)},
             fuzzer_state, /*valid=*/true));
+}
+
+TEST(OracleUtilTest, ResourcesCanBeExhaustedInFullState) {
+  FuzzerTestState full_state = ConstructStandardFuzzerTestState();
+
+  // Get a prototype table entry.
+  ASSERT_OK_AND_ASSIGN(
+      const auto table,
+      GetATableDefinitionWithMatchType(
+          full_state, p4::config::v1::MatchField_MatchType_EXACT));
+  ASSERT_OK_AND_ASSIGN(const auto match_field,
+                       GetAMatchFieldDefinitionWithMatchType(
+                           table, p4::config::v1::MatchField_MatchType_EXACT));
+  ASSERT_OK_AND_ASSIGN(auto table_entry_prototype,
+                       FuzzValidTableEntry(&full_state.gen, full_state.config,
+                                           full_state.switch_state, table));
+
+  // Ensure that the parameter number matches up with the field id. This is a
+  // convenience and can be replaced with a loop if it ever turns out to be
+  // false.
+  const int match_field_index = match_field.match_field().id() - 1;
+  ASSERT_EQ(table_entry_prototype.mutable_match(match_field_index)->field_id(),
+            match_field.match_field().id());
+
+  // Fill up the state.
+  for (int i = 1; i <= table.size(); i++) {
+    TableEntry table_entry = table_entry_prototype;
+    table_entry.mutable_match(match_field_index)
+        ->mutable_exact()
+        ->set_value(absl::StrCat(i));
+    AddTableEntry(table_entry, &full_state.switch_state);
+  }
+
+  TableEntry next = table_entry_prototype;
+  next.mutable_match(match_field_index)
+      ->mutable_exact()
+      ->set_value(absl::StrCat(table.size() + 1));
+
+  // Inserting into full table is okay.
+  EXPECT_OK(Check({MakeInsert(next, absl::StatusCode::kOk)}, full_state,
+                  /*valid=*/true));
+
+  // Resource exhasted is okay too.
+  EXPECT_OK(Check({MakeInsert(next, absl::StatusCode::kResourceExhausted)},
+                  full_state,
+                  /*valid=*/true));
+}
+
+TEST(OracleUtilTest, ResourcesCanBeExhaustedInAlmostFullStateWithBatch) {
+  FuzzerTestState almost_full_state = ConstructStandardFuzzerTestState();
+
+  // Get a prototype table entry.
+  ASSERT_OK_AND_ASSIGN(
+      const auto table,
+      GetATableDefinitionWithMatchType(
+          almost_full_state, p4::config::v1::MatchField_MatchType_EXACT));
+  ASSERT_OK_AND_ASSIGN(const auto match_field,
+                       GetAMatchFieldDefinitionWithMatchType(
+                           table, p4::config::v1::MatchField_MatchType_EXACT));
+  ASSERT_OK_AND_ASSIGN(
+      auto table_entry_prototype,
+      FuzzValidTableEntry(&almost_full_state.gen, almost_full_state.config,
+                          almost_full_state.switch_state, table));
+
+  // Ensure that the parameter number matches up with the field id. This is a
+  // convenience and can be replaced with a loop if it ever turns out to be
+  // false.
+  const int match_field_index = match_field.match_field().id() - 1;
+  ASSERT_TRUE(
+      table_entry_prototype.mutable_match(match_field_index)->field_id() ==
+      match_field.match_field().id());
+
+  // Make the state almost full (1 entry remaining).
+  for (int i = 1; i <= table.size() - 1; i++) {
+    TableEntry table_entry = table_entry_prototype;
+    table_entry.mutable_match(match_field_index)
+        ->mutable_exact()
+        ->set_value(absl::StrCat(i));
+    AddTableEntry(table_entry, &almost_full_state.switch_state);
+  }
+
+  TableEntry next1 = table_entry_prototype;
+  TableEntry next2 = table_entry_prototype;
+  next1.mutable_match(match_field_index)
+      ->mutable_exact()
+      ->set_value(absl::StrCat(table.size() + 1));
+  next2.mutable_match(match_field_index)
+      ->mutable_exact()
+      ->set_value(absl::StrCat(table.size() + 2));
+
+  // Resource exhausted is not okay.
+  EXPECT_OK(Check({MakeInsert(next1, absl::StatusCode::kResourceExhausted)},
+                  almost_full_state, /*valid=*/false));
+
+  // Inserting two flows, one of them can fail.
+  EXPECT_OK(Check({MakeInsert(next1, absl::StatusCode::kOk),
+                   MakeInsert(next2, absl::StatusCode::kResourceExhausted)},
+                  almost_full_state, /*valid=*/true));
+  EXPECT_OK(Check({MakeInsert(next1, absl::StatusCode::kResourceExhausted),
+                   MakeInsert(next2, absl::StatusCode::kOk)},
+                  almost_full_state, /*valid=*/true));
+  EXPECT_OK(Check({MakeInsert(next1, absl::StatusCode::kOk),
+                   MakeInsert(next2, absl::StatusCode::kOk)},
+                  almost_full_state, /*valid=*/true));
 }
 
 // TODO: Enable this test once the Oracle properly rejects empty

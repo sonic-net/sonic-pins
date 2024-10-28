@@ -14,6 +14,13 @@
 
 #include "p4_symbolic/sai/fields.h"
 
+#include <array>
+#include <string>
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_join.h"
 #include "gutil/status.h"
@@ -33,9 +40,13 @@ absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
                                          const SymbolicPerPacketState& state) {
   // Compute set of mangled field names that match the given field name.
   std::vector<std::string> mangled_candidates;
+  // p4c seems to use the following template to name metadata fields:
+  // "scalars.userMetadata._<field name><a number>". We look for names that
+  // match the template.
+  const std::string prefix = absl::StrCat("scalars.userMetadata._", field);
   for (const auto& [key, _] : state) {
-    if (absl::StartsWith(key, "scalars.userMetadata.") &&
-        absl::StrContains(key, field)) {
+    if (absl::StartsWith(key, prefix) && key.length() > prefix.length() &&
+        absl::ascii_isdigit(key.at(prefix.length()))) {
       mangled_candidates.push_back(key);
     }
   }
@@ -46,8 +57,13 @@ absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
 
   auto error = gutil::InternalErrorBuilder()
                << "unable to disambiguate metadata field '" << field << "': ";
-  if (mangled_candidates.empty())
-    return error << "no matching fields found in config";
+  if (mangled_candidates.empty()) {
+    return error << "no matching fields found in config: "
+                 << absl::StrJoin(state, "\n  - ",
+                                  [](std::string* out, const auto& key_value) {
+                                    absl::StrAppend(out, key_value.first);
+                                  });
+  }
   return error << "several mangled fields in the config match:\n- "
                << absl::StrJoin(mangled_candidates, "\n- ");
 }
@@ -96,10 +112,66 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
       .src_addr = get_field("ipv4.src_addr"),
       .dst_addr = get_field("ipv4.dst_addr"),
   };
+  auto ipv6 = SaiIpv6{
+      .valid = get_field("ipv6.$valid$"),
+      .version = get_field("ipv6.version"),
+      .dscp = get_field("ipv6.dscp"),
+      .ecn = get_field("ipv6.ecn"),
+      .flow_label = get_field("ipv6.flow_label"),
+      .payload_length = get_field("ipv6.payload_length"),
+      .next_header = get_field("ipv6.next_header"),
+      .hop_limit = get_field("ipv6.hop_limit"),
+      .src_addr = get_field("ipv6.src_addr"),
+      .dst_addr = get_field("ipv6.dst_addr"),
+  };
+  auto udp = SaiUdp{
+      .valid = get_field("udp.$valid$"),
+      .src_port = get_field("udp.src_port"),
+      .dst_port = get_field("udp.dst_port"),
+      .hdr_length = get_field("udp.hdr_length"),
+      .checksum = get_field("udp.checksum"),
+  };
+  auto tcp = SaiTcp{
+      .valid = get_field("tcp.$valid$"),
+      .src_port = get_field("tcp.src_port"),
+      .dst_port = get_field("tcp.dst_port"),
+      .seq_no = get_field("tcp.seq_no"),
+      .ack_no = get_field("tcp.ack_no"),
+      .data_offset = get_field("tcp.data_offset"),
+      .res = get_field("tcp.res"),
+      .flags = get_field("tcp.flags"),
+      .window = get_field("tcp.window"),
+      .checksum = get_field("tcp.checksum"),
+      .urgent_ptr = get_field("tcp.urgent_ptr"),
+  };
+  auto icmp = SaiIcmp{
+      .valid = get_field("icmp.$valid$"),
+      .type = get_field("icmp.type"),
+      .code = get_field("icmp.code"),
+      .checksum = get_field("icmp.checksum"),
+  };
+  auto arp = SaiArp{
+      .valid = get_field("arp.$valid$"),
+      .hw_type = get_field("arp.hw_type"),
+      .proto_type = get_field("arp.proto_type"),
+      .hw_addr_len = get_field("arp.hw_addr_len"),
+      .proto_addr_len = get_field("arp.proto_addr_len"),
+      .opcode = get_field("arp.opcode"),
+      .sender_hw_addr = get_field("arp.sender_hw_addr"),
+      .sender_proto_addr = get_field("arp.sender_proto_addr"),
+      .target_hw_addr = get_field("arp.target_hw_addr"),
+      .target_proto_addr = get_field("arp.target_proto_addr"),
+  };
   auto local_metadata = SaiLocalMetadata{
       .admit_to_l3 = get_metadata_field("admit_to_l3"),
       .vrf_id = get_metadata_field("vrf_id"),
+      .l4_src_port = get_metadata_field("l4_src_port"),
+      .l4_dst_port = get_metadata_field("l4_dst_port"),
       .mirror_session_id_valid = get_metadata_field("mirror_session_id_valid"),
+      .ingress_port = get_metadata_field("ingress_port"),
+  };
+  auto standard_metadata = V1ModelStandardMetadata{
+      .ingress_port = get_field("standard_metadata.ingress_port"),
   };
 
   if (!errors.empty()) {
@@ -111,8 +183,15 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
                             });
   }
   return SaiFields{
-      .headers = SaiHeaders{.ethernet = ethernet, .ipv4 = ipv4},
+      .headers = SaiHeaders{.ethernet = ethernet,
+                            .ipv4 = ipv4,
+                            .ipv6 = ipv6,
+                            .udp = udp,
+                            .tcp = tcp,
+                            .icmp = icmp,
+                            .arp = arp},
       .local_metadata = local_metadata,
+      .standard_metadata = standard_metadata,
   };
 }
 

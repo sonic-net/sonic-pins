@@ -19,6 +19,7 @@
 #include "absl/strings/str_format.h"
 #include "glog/logging.h"
 #include "p4_symbolic/symbolic/operators.h"
+#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic {
@@ -33,17 +34,16 @@ absl::Status EvaluateStatement(const ir::Statement &statement,
       return EvaluateAssignmentStatement(statement.assignment(), state, context,
                                          guard);
     }
-    case ir::Statement::kClone:  // TODO: Add support for cloning.
+    case ir::Statement::kClone: {
+      // TODO: Add support for cloning.
+      return state->Set(std::string(kGotClonedPseudoField),
+                        Z3Context().bool_val(true), guard);
+    }
     case ir::Statement::kDrop: {
       // https://github.com/p4lang/p4c/blob/7ee76d16da63883c5092ab0c28321f04c2646759/p4include/v1model.p4#L435
-      const std::string &header_name =
-          // TODO: conditonal needed to interpret clone as drop.
-          statement.has_drop() ? statement.drop().header().header_name()
-                               : "standard_metadata";
+      const std::string &header_name = statement.drop().header().header_name();
       RETURN_IF_ERROR(state->Set(absl::StrFormat("%s.egress_spec", header_name),
                                  EgressSpecDroppedValue(), guard));
-      RETURN_IF_ERROR(state->Set(absl::StrFormat("%s.mcast_grp", header_name),
-                                 Z3Context().bv_val(0, 1), guard));
       return absl::OkStatus();
     }
     case ir::Statement::kHash: {
@@ -168,7 +168,7 @@ absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr) {
 
   ASSIGN_OR_RETURN(pdpi::IrValue parsed_value,
                    values::ParseIrValue(hexstr.value()));
-  return values::FormatBmv2Value(parsed_value);
+  return HexStringToZ3Bitvector(hexstr.value());
 }
 
 absl::StatusOr<z3::expr> EvaluateBool(const ir::BoolValue &bool_value) {
@@ -335,10 +335,11 @@ absl::Status EvaluateAction(const ir::Action &action,
     const std::string &parameter_name = parameter.param().name();
     const std::string &parameter_type_name =
         parameter.param().type_name().name();
+    const int bitwidth = parameter.param().bitwidth();
     ASSIGN_OR_RETURN(
         z3::expr parameter_value,
-        values::FormatP4RTValue("", parameter_type_name, args.at(i - 1).value(),
-                                translator));
+        values::FormatP4RTValue(/*field_name=*/"", parameter_type_name,
+                                args.at(i - 1).value(), bitwidth, translator));
     context.scope.insert({parameter_name, parameter_value});
   }
 

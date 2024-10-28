@@ -1,3 +1,19 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <string>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
@@ -53,8 +69,9 @@ TEST(AclIngressConstraints, TernaryEqualityMustBeExact) {
   {
     ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
                          pdpi::IrTableEntryToPi(ir_info, ir_entry));
-    EXPECT_THAT(p4_constraints::EntryMeetsConstraint(pi_entry, constraint_info),
-                gutil::IsOkAndHolds(false));
+    EXPECT_THAT(p4_constraints::ReasonEntryViolatesConstraint(pi_entry,
+                                                              constraint_info),
+                gutil::IsOkAndHolds(::testing::Not("")));
     ASSERT_OK_AND_ASSIGN(std::string failure_reason,
                          p4_constraints::ReasonEntryViolatesConstraint(
                              pi_entry, constraint_info));
@@ -72,8 +89,9 @@ TEST(AclIngressConstraints, TernaryEqualityMustBeExact) {
   {
     ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
                          pdpi::IrTableEntryToPi(ir_info, ir_entry));
-    EXPECT_THAT(p4_constraints::EntryMeetsConstraint(pi_entry, constraint_info),
-                gutil::IsOkAndHolds(true));
+    EXPECT_THAT(p4_constraints::ReasonEntryViolatesConstraint(pi_entry,
+                                                              constraint_info),
+                gutil::IsOkAndHolds(""));
     ASSERT_OK_AND_ASSIGN(std::string failure_reason,
                          p4_constraints::ReasonEntryViolatesConstraint(
                              pi_entry, constraint_info));

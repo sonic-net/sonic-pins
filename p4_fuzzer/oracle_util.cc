@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ absl::optional<std::string> SequenceOfUpdatesOracle(
     const pdpi::IrUpdateStatus& status = updates[i].status;
 
     const auto& update_oracle_result =
-        UpdateOracle(ir_p4_info,update,status,state);
+        UpdateOracle(ir_p4_info, update, status, state);
     if (!update_oracle_result.ok()) {
       error += absl::StrCat(
           "\n- ", "The update with id=", index,
@@ -184,7 +184,8 @@ absl::optional<std::vector<std::string>> WriteRequestOracle(
     StatusCode code = static_cast<StatusCode>(update.status.code());
     if (code == StatusCode::kResourceExhausted) continue;
 
-    flowkey_to_updates[pdpi::TableEntryKey(update.update.pi().entity().table_entry())]
+    flowkey_to_updates[pdpi::TableEntryKey(
+                           update.update.pi().entity().table_entry())]
         .push_back(update);
   }
 

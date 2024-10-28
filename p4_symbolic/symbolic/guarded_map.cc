@@ -19,6 +19,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/util.h"
 
@@ -31,20 +32,20 @@ absl::StatusOr<SymbolicGuardedMap> SymbolicGuardedMap::CreateSymbolicGuardedMap(
   return SymbolicGuardedMap(map);
 }
 
-bool SymbolicGuardedMap::ContainsKey(const std::string &key) const {
-  return this->map_.count(key) == 1;
+bool SymbolicGuardedMap::ContainsKey(absl::string_view key) const {
+  return this->map_.contains(key);
 }
 
-absl::StatusOr<z3::expr> SymbolicGuardedMap::Get(const std::string &key) const {
-  if (this->ContainsKey(key)) {
-    return this->map_.at(key);
+absl::StatusOr<z3::expr> SymbolicGuardedMap::Get(absl::string_view key) const {
+  if (auto it = this->map_.find(key); it != this->map_.end()) {
+    return it->second;
   }
 
   return absl::InvalidArgumentError(
       absl::StrCat("Cannot find key \"", key, "\" in SymbolicGuardedMap!"));
 }
 
-absl::Status SymbolicGuardedMap::Set(const std::string &key, z3::expr value,
+absl::Status SymbolicGuardedMap::Set(absl::string_view key, z3::expr value,
                                      const z3::expr &guard) {
   if (!this->ContainsKey(key)) {
     return absl::InvalidArgumentError(absl::StrCat(

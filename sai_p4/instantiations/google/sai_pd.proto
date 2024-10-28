@@ -82,12 +82,10 @@ message NexthopTableEntry {
   Match match = 1;
   message Action {
     oneof action {
-      SetNexthopAction set_nexthop = 1;
       SetP2pTunnelEncapNexthopAction set_p2p_tunnel_encap_nexthop = 2;
-      SetIpNexthopAction set_ip_nexthop = 3;
-      // CAUTION: This action is not (yet) supported.
+      SetIpNexthopAction set_ip_nexthop = 1;
       SetIpNexthopAndDisableRewritesAction set_ip_nexthop_and_disable_rewrites =
-          4;
+          3;
     }
   }
   Action action = 2;
@@ -161,8 +159,8 @@ message MirrorSessionTableEntry {
   message Action {
     oneof action {
       MirrorAsIpv4ErspanAction mirror_as_ipv4_erspan = 1;
-      // CAUTION: This action is not (yet) supported.
-      MirrorWithPsampEncapsulationAction mirror_with_psamp_encapsulation = 2;
+      MirrorWithVlanTagAndIpfixEncapsulationAction
+          mirror_with_vlan_tag_and_ipfix_encapsulation = 2;
     }
   }
   Action action = 2;
@@ -202,21 +200,20 @@ message VrfTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 message Ipv6TunnelTerminationTableEntry {
   message Match {
     Ternary dst_ipv6 = 1;  // ternary match / Format::IPV6 / 128 bits
+    Ternary src_ipv6 = 2;  // ternary match / Format::IPV6 / 128 bits
   }
   Match match = 1;
   message Action {
-    MarkForTunnelDecapAndSetVrfAction mark_for_tunnel_decap_and_set_vrf = 1;
+    TunnelDecapAction tunnel_decap = 1;
   }
   Action action = 2;
   int32 priority = 3;
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
 message MulticastRouterInterfaceTableEntry {
   message Match {
     string multicast_replica_port = 1;  // exact match / Format::STRING
@@ -225,7 +222,11 @@ message MulticastRouterInterfaceTableEntry {
   }
   Match match = 1;
   message Action {
-    SetMulticastSrcMacAction set_multicast_src_mac = 1;
+    oneof action {
+      SetMulticastSrcMacAction set_multicast_src_mac = 1;
+      // CAUTION: This action is not (yet) supported.
+      L2MulticastPassthroughAction l2_multicast_passthrough = 2;
+    }
   }
   Action action = 2;
   bytes controller_metadata = 8;
@@ -247,7 +248,11 @@ message DisableVlanChecksTableEntry {
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
+// Table entry restrictions:
+// ## TODO: Use IPv4 address notation once it is supported.
+// ## Only IPv4s in the multicast range 224.0.0.0/4 are supported.
+//   ipv4_dst::value >= 0xe0000000;
+//   ipv4_dst::value <= 0xefffffff;
 message Ipv4MulticastTableEntry {
   message Match {
     // Refers to 'vrf_table.vrf_id'.
@@ -256,14 +261,17 @@ message Ipv4MulticastTableEntry {
   }
   Match match = 1;
   message Action {
-    // CAUTION: This action is not (yet) supported.
     SetMulticastGroupIdAction set_multicast_group_id = 1;
   }
   Action action = 2;
   bytes controller_metadata = 8;
 }
 
-// CAUTION: This table is not (yet) supported.
+// Table entry restrictions:
+// ## TODO: Use IPv4 address notation once it is supported.
+// ## Only IPv6s in the multicast range ff00::/8 are supported.
+//   ipv6_dst::value >= 0xff000000000000000000000000000000;
+//   ipv6_dst::value <= 0xffffffffffffffffffffffffffffffff;
 message Ipv6MulticastTableEntry {
   message Match {
     // Refers to 'vrf_table.vrf_id'.
@@ -272,7 +280,6 @@ message Ipv6MulticastTableEntry {
   }
   Match match = 1;
   message Action {
-    // CAUTION: This action is not (yet) supported.
     SetMulticastGroupIdAction set_multicast_group_id = 1;
   }
   Action action = 2;
@@ -505,7 +512,7 @@ message AclEgressTableEntry {
 //   is_ipv4::mask != 0 -> (is_ipv4 == 1);
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 // ## Disallow match on reserved VLAN IDs to rule out vendor specific behavior.
-//   vlan_id::mask != 0 -> (vlan_id != 4095 && vlan_id != 0);
+//   vlan_id::mask != 0 -> (vlan_id != 4095);
 // ## TODO: Disallow setting to reserved VLAN IDs when supported.
 message AclPreIngressVlanTableEntry {
   message Match {
@@ -566,7 +573,7 @@ message AclPreIngressMetadataTableEntry {
 // ## Only allow IP field matches for IP packets.
 //   ttl::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
 //   ip_protocol::mask != 0 -> (is_ip == 1 || is_ipv4 == 1 || is_ipv6 == 1);
-// ## Only allow l4_dst_port and l4_src_port matches for TCP/UDP packets.
+// ## Only allow l4_dst_port matches for TCP/UDP packets.
 //   l4_dst_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
 // ## Forbid illegal combinations of IP_TYPE fields.
 //   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
@@ -577,8 +584,10 @@ message AclPreIngressMetadataTableEntry {
 //   is_ipv6::mask != 0 -> (is_ipv6 == 1);
 // ## Only allow icmp_type matches for ICMP packets
 //   icmpv6_type::mask != 0 -> ip_protocol == 58;
-// ## Only allow arp_tpa matches for ARP packets.
-//   arp_tpa::mask != 0 -> ether_type == 0x0806;
+// ## Only allow l4_dst_port matches for TCP/UDP packets.
+//   l4_src_port::mask != 0 -> (ip_protocol == 6 || ip_protocol == 17);
+// ## Only allow icmp_type matches for ICMP packets
+//   icmp_type::mask != 0 -> ip_protocol == 1;
 message AclIngressQosTableEntry {
   message Match {
     Optional is_ip = 1;         // optional match / Format::HEX_STRING / 1 bits
@@ -592,7 +601,10 @@ message AclIngressQosTableEntry {
     Ternary icmpv6_type = 9;    // ternary match / Format::HEX_STRING / 8 bits
     Ternary l4_dst_port = 10;   // ternary match / Format::HEX_STRING / 16 bits
     Optional in_port = 11;      // optional match / Format::STRING
+    Ternary l4_src_port = 12;   // ternary match / Format::HEX_STRING / 16 bits
     Ternary acl_metadata = 13;  // ternary match / Format::HEX_STRING / 8 bits
+    Ternary icmp_type = 14;     // ternary match / Format::HEX_STRING / 8 bits
+    Ternary route_metadata = 15;  // ternary match / Format::HEX_STRING / 6 bits
   }
   Match match = 1;
   message Action {
@@ -725,7 +737,8 @@ message AclIngressSecurityTableEntry {
 
 // Table entry restrictions:
 // ## Only allow IP field matches for IP packets.
-//   is_ipv6::mask != 0 -> is_ipv6 == 1;
+//   dst_ip::mask != 0 -> is_ipv4 == 1;
+//   dst_ipv6::mask != 0 -> is_ipv6 == 1;
 // ## Forbid illegal combinations of IP_TYPE fields.
 //   is_ip::mask != 0 -> (is_ipv4::mask == 0 && is_ipv6::mask == 0);
 //   is_ipv4::mask != 0 -> (is_ip::mask == 0 && is_ipv6::mask == 0);
@@ -742,13 +755,17 @@ message AclIngressMirrorAndRedirectTableEntry {
     Ternary dst_ipv6 = 5;      // ternary match / Format::IPV6 / upper 64 bits
     Ternary acl_metadata = 6;  // ternary match / Format::HEX_STRING / 8 bits
     Ternary vlan_id = 7;       // ternary match / Format::HEX_STRING / 12 bits
+    Optional vrf_id = 8;       // optional match / Format::STRING
+    Optional ipmc_table_hit =
+        9;                // optional match / Format::HEX_STRING / 1 bits
+    Ternary dst_ip = 10;  // ternary match / Format::IPV4
   }
   Match match = 1;
   message Action {
     oneof action {
+      AclForwardAction acl_forward = 4;
       AclMirrorAction acl_mirror = 1;
       RedirectToNexthopAction redirect_to_nexthop = 2;
-      // CAUTION: This action is not (yet) supported.
       RedirectToIpmcGroupAction redirect_to_ipmc_group = 3;
     }
   }
@@ -780,14 +797,6 @@ message SetDstMacAction {
 message SetPortAndSrcMacAction {
   string port = 1;     // Format::STRING
   string src_mac = 2;  // Format::MAC
-}
-
-message SetNexthopAction {
-  // Refers to 'router_interface_table.router_interface_id'.
-  // Refers to 'neighbor_table.router_interface_id'.
-  string router_interface_id = 1;  // Format::STRING
-  // Refers to 'neighbor_table.neighbor_id'.
-  string neighbor_id = 2;  // Format::IPV6 / 128 bits
 }
 
 message SetWcmpGroupIdAction {
@@ -852,11 +861,8 @@ message SetMetadataAndDropAction {
   string route_metadata = 1;  // Format::HEX_STRING / 6 bits
 }
 
-message MarkForTunnelDecapAndSetVrfAction {
-  string vrf_id = 1;  // Format::STRING
-}
+message TunnelDecapAction {}
 
-// CAUTION: This action is not (yet) supported.
 message SetIpNexthopAndDisableRewritesAction {
   // Refers to 'router_interface_table.router_interface_id'.
   // Refers to 'neighbor_table.router_interface_id'.
@@ -869,7 +875,6 @@ message SetIpNexthopAndDisableRewritesAction {
   string disable_vlan_rewrite = 6;     // Format::HEX_STRING / 1 bits
 }
 
-// CAUTION: This action is not (yet) supported.
 message SetMulticastGroupIdAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
@@ -886,10 +891,20 @@ message SetPortAndSrcMacAndVlanIdAction {
   string vlan_id = 3;  // Format::HEX_STRING / 12 bits
 }
 
-// CAUTION: This action is not (yet) supported.
-message MirrorWithPsampEncapsulationAction {
-  string monitor_port = 1;  // Format::STRING
+message MirrorWithVlanTagAndIpfixEncapsulationAction {
+  string monitor_port = 1;                // Format::STRING
+  string monitor_failover_port = 2;       // Format::STRING
+  string mirror_encap_src_mac = 3;        // Format::MAC
+  string mirror_encap_dst_mac = 4;        // Format::MAC
+  string mirror_encap_vlan_id = 6;        // Format::HEX_STRING / 12 bits
+  string mirror_encap_src_ip = 7;         // Format::IPV6 / 128 bits
+  string mirror_encap_dst_ip = 8;         // Format::IPV6 / 128 bits
+  string mirror_encap_udp_src_port = 9;   // Format::HEX_STRING / 16 bits
+  string mirror_encap_udp_dst_port = 10;  // Format::HEX_STRING / 16 bits
 }
+
+// CAUTION: This action is not (yet) supported.
+message L2MulticastPassthroughAction {}
 
 message SetVrfAction {
   // Refers to 'vrf_table.vrf_id'.
@@ -945,9 +960,9 @@ message SetCpuQueueAction {
 
 // CAUTION: This action is not (yet) supported.
 message SetCpuAndMulticastQueuesAndDenyAboveRateLimitAction {
-  string cpu_queue = 1;                       // Format::STRING
-  string green_multicast_queue = 2;           // Format::STRING
-  string red_and_yellow_multicast_queue = 3;  // Format::STRING
+  string cpu_queue = 1;              // Format::STRING
+  string green_multicast_queue = 2;  // Format::STRING
+  string red_multicast_queue = 3;    // Format::STRING
 }
 
 message RedirectToNexthopAction {
@@ -955,7 +970,6 @@ message RedirectToNexthopAction {
   string nexthop_id = 1;  // Format::STRING
 }
 
-// CAUTION: This action is not (yet) supported.
 message RedirectToIpmcGroupAction {
   string multicast_group_id = 1;  // Format::HEX_STRING / 16 bits
 }
@@ -988,15 +1002,11 @@ message TableEntry {
     MirrorSessionTableEntry mirror_session_table_entry = 70;
     L3AdmitTableEntry l3_admit_table_entry = 71;
     VrfTableEntry vrf_table_entry = 74;
-    // CAUTION: This table is not (yet) supported.
     Ipv6TunnelTerminationTableEntry ipv6_tunnel_termination_table_entry = 75;
-    // CAUTION: This table is not (yet) supported.
     MulticastRouterInterfaceTableEntry multicast_router_interface_table_entry =
         76;
     DisableVlanChecksTableEntry disable_vlan_checks_table_entry = 77;
-    // CAUTION: This table is not (yet) supported.
     Ipv4MulticastTableEntry ipv4_multicast_table_entry = 78;
-    // CAUTION: This table is not (yet) supported.
     Ipv6MulticastTableEntry ipv6_multicast_table_entry = 79;
     TunnelTableEntry tunnel_table_entry = 80;
     AclIngressTableEntry acl_ingress_table_entry = 256;

@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 
 #include "absl/container/btree_map.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/optional.h"
@@ -129,10 +128,30 @@ class SwitchState {
   // Returns the total number of table entries in all tables.
   int64_t GetNumTableEntries() const;
 
+  // Returns the number of multicast group entries.
+  int64_t GetNumMulticastEntries() const {
+    return ordered_multicast_entries_.size();
+  };
+
+  // Returns the current state of an entity (or nullopt if it is not
+  // present).  Only the uniquely identifying fields of `entity` are considered.
+  std::optional<p4::v1::Entity> GetEntity(const p4::v1::Entity& entity) const;
+
   // Returns the current state of a table entry (or nullopt if it is not
   // present).  Only the uniquely identifying fields of entry are considered.
   std::optional<p4::v1::TableEntry> GetTableEntry(
       const p4::v1::TableEntry& entry) const;
+
+  // Returns the current state of a multicast group entry (or nullopt if it is
+  // not present). Only multicast_group_id is considered when retrieving entry.
+  std::optional<p4::v1::MulticastGroupEntry> GetMulticastGroupEntry(
+      const p4::v1::MulticastGroupEntry& entry) const;
+
+  // Returns all multicast group entries.
+  const absl::btree_map<int, p4::v1::MulticastGroupEntry>&
+  GetMulticastGroupEntries() const {
+    return ordered_multicast_entries_;
+  }
 
   // Returns the list of all non-const table IDs in the underlying P4 program.
   const std::vector<uint32_t> AllTableIds() const;
@@ -152,25 +171,14 @@ class SwitchState {
   // Returns max number of entries seen on the switch.
   int GetMaxEntriesSeen() const { return peak_entries_seen_; }
 
-  // Updates all tables to match the given set of table entries.
-  absl::Status SetTableEntries(
-      absl::Span<const p4::v1::TableEntry> table_entries);
+  // Updates all tables to match the given set of entities.
+  absl::Status SetEntities(absl::Span<const p4::v1::Entity> entities);
 
   // Clears all table entries.
   void ClearTableEntries();
 
   // Returns a summary of the state.
   std::string SwitchStateSummary() const;
-
-  // Returns a vector of `ReferableEntries` in `table`. Used when a match key or
-  // action refers to a set of `fields` in `table`. Returns an error if:
-  // 1) `table` does not exist in p4 info.
-  // 2) `fields` is empty.
-  // 3) `fields` contains a field that does not exist in `table`.
-  // 4) `fields` contains a field that is not of type exact or optional.
-  absl::StatusOr<std::vector<ReferableEntry>> GetReferableEntries(
-      absl::string_view table,
-      const absl::flat_hash_set<std::string>& fields) const;
 
   pdpi::IrP4Info GetIrP4Info() const { return ir_p4info_; }
 
@@ -214,6 +222,15 @@ class SwitchState {
   absl::flat_hash_map<int, PeakResourceStatistics> peak_resource_statistics_;
   // Tracks peak resource usage of entire switch.
   int peak_entries_seen_ = 0;
+
+  // Internal overload used to apply multicast updates.
+  absl::Status ApplyMulticastUpdate(const p4::v1::Update& update);
+  // Multicast group entries are keyed by their multicast group id.
+  // Btree copy used for deterministic ordering.
+  absl::btree_map<int, p4::v1::MulticastGroupEntry> ordered_multicast_entries_;
+  // Copy of above used for fast lookups.
+  absl::flat_hash_map<int, p4::v1::MulticastGroupEntry>
+      unordered_multicast_entries_;
 
   pdpi::IrP4Info ir_p4info_;
 };

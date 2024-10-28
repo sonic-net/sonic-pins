@@ -26,6 +26,7 @@
 
 #include "absl/container/btree_map.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "gutil/status.h"
 #include "p4_symbolic/ir/ir.pb.h"
 #include "p4_symbolic/ir/table_entries.h"
@@ -35,6 +36,10 @@
 
 namespace p4_symbolic {
 namespace symbolic {
+
+// Boolean pseudo header field that is set to true by p4-symbolic if the packet
+// gets cloned. Not an actual header field, but convenient for analysis.
+constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
 
 // Maps the name of a header field in the p4 program to its concrete value.
 using ConcretePerPacketState = absl::btree_map<std::string, std::string>;
@@ -58,6 +63,7 @@ using SymbolicPerPacketState = SymbolicGuardedMap;
 // processing. See v1model.p4 for details.
 z3::expr EgressSpecDroppedValue();
 absl::StatusOr<z3::expr> IsDropped(const SymbolicPerPacketState &state);
+absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state);
 
 // Expresses a concrete match for a corresponding concrete packet with a
 // table in the program.
@@ -97,11 +103,14 @@ struct ConcreteTrace {
   // Can be extended more in the future to include useful
   // flags about dropping the packet, taking specific code (e.g. if)
   // branches, vrf, other interesting events, etc.
-  bool dropped;  // true if the packet was dropped.
+  bool dropped;     // true if the packet was dropped.
+  bool got_cloned;  // true if the packet got cloned.
   std::string to_string() const {
-    auto result = absl::StrCat("dropped = ", dropped);
+    std::string result;
+    absl::StrAppend(&result, "dropped = ", dropped, "\n");
+    absl::StrAppend(&result, "got cloned = ", got_cloned, "\n");
     for (const auto &[table, match] : matched_entries) {
-      result = absl::StrCat(result, "\n", table, " => ", match.to_string());
+      absl::StrAppend(&result, "\n", table, " => ", match.to_string());
     }
     return result;
   }
@@ -114,55 +123,7 @@ struct SymbolicTrace {
   // TODO: Rename to matches_by_table_name.
   SymbolicTableMatches matched_entries;
   z3::expr dropped;
-};
-
-// Specifies the concrete data inside a packet.
-// This is a friendly helper struct, all information in this struct
-// is extracted from ConcretePerPacketState.
-struct ConcretePacket {
-  std::string eth_src;
-  std::string eth_dst;
-  std::string eth_type;
-
-  std::string ipv4_src;
-  std::string ipv4_dst;
-  std::string ipv6_dst_upper;
-  std::string ipv6_dst_lower;
-  std::string protocol;
-  std::string dscp;
-  std::string ttl;
-
-  std::string icmp_type;
-
-  std::string to_string() const {
-    return absl::StrCat("eth_src = ", eth_src, "\n", "eth_dst = ", eth_dst,
-                        "\n", "eth_type = ", eth_type, "\n",
-                        "ipv4_src = ", ipv4_src, "\n", "ipv4_dst = ", ipv4_dst,
-                        "\n", "ipv6_dst_upper = ", ipv6_dst_upper, "\n",
-                        "ipv6_dst_lower = ", ipv6_dst_lower, "\n",
-                        "protocol = ", protocol, "\n", "dscp = ", dscp, "\n",
-                        "ttl = ", ttl, "\n", "icmp_type = ", icmp_type);
-  }
-};
-
-// A helper struct containing symbolic expressions for every field in a packet.
-// All expressions in this struct are extracted from SymbolicPerPacketState.
-// We explicitly give these fields name in this struct to simplify how the
-// client code can impose constraints on them in assertions.
-struct SymbolicPacket {
-  z3::expr eth_src;   // 48 bit.
-  z3::expr eth_dst;   // 48 bit.
-  z3::expr eth_type;  // 16 bit.
-
-  z3::expr ipv4_src;        // 32 bit, valid if eth_type = 0x0800
-  z3::expr ipv4_dst;        // 32 bit, valid if eth_type = 0x0800
-  z3::expr ipv6_dst_upper;  // 64 bit, valid if eth_type = 0x86dd
-  z3::expr ipv6_dst_lower;  // 64 bit, valid if eth_type = 0x86dd
-  z3::expr protocol;        // 8 bit, valid if eth_type is ip
-  z3::expr dscp;            // 6 bit, valid if eth_type is ip
-  z3::expr ttl;             // 8 bit, valid if eth_type is ip
-
-  z3::expr icmp_type;  // 8 bit, valid if eth_type is ip
+  z3::expr got_cloned;
 };
 
 // The result of solving with some assertion.
@@ -171,32 +132,25 @@ struct SymbolicPacket {
 struct ConcreteContext {
   std::string ingress_port;
   std::string egress_port;
-  ConcretePacket ingress_packet;  // Input packet into the program/switch.
-  ConcretePacket egress_packet;   // Expected output packet.
   ConcretePerPacketState ingress_headers;
   ConcretePerPacketState egress_headers;
   ConcreteTrace trace;  // Expected trace in the program.
 
   std::string to_string() const { return to_string(false); }
   std::string to_string(bool verbose) const {
-    auto result = absl::StrCat(
-        "ingress_port = ", ingress_port, "\n", "egress_port = ", egress_port,
-        "\n\n", "ingress_packet:\n", ingress_packet.to_string(), "\n\n",
-        "egress_packet:\n", egress_packet.to_string(), "\n\n", "trace:\n",
-        trace.to_string());
+    auto result = absl::StrCat("ingress_port = ", ingress_port, "\n",
+                               "egress_port = ", egress_port, "\n", "trace:\n",
+                               trace.to_string());
     if (verbose) {
       auto ingress_string = absl::StrCat("ingress_headers", ":");
       auto egress_string = absl::StrCat("egress_headers", ":");
       for (const auto &[name, ingress_value] : ingress_headers) {
-        ingress_string =
-            absl::StrCat(ingress_string, "\n", name, " = ", ingress_value);
+        absl::StrAppend(&ingress_string, "\n", name, " = ", ingress_value);
       }
       for (const auto &[name, egress_value] : egress_headers) {
-        egress_string =
-            absl::StrCat(egress_string, "\n", name, " = ", egress_value);
+        absl::StrAppend(&egress_string, "\n", name, " = ", egress_value);
       }
-      result =
-          absl::StrCat(result, "\n\n", ingress_string, "\n\n", egress_string);
+      absl::StrAppend(&result, "\n\n", ingress_string, "\n\n", egress_string);
     }
     return result;
   }

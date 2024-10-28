@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 #include "p4_fuzzer/switch_state.h"
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -49,6 +50,8 @@ using ::p4::config::v1::P4Info;
 using ::p4::config::v1::Preamble;
 using ::p4::config::v1::Table;
 using ::p4::v1::ActionProfileAction;
+using ::p4::v1::Entity;
+using ::p4::v1::MulticastGroupEntry;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
 using ::pdpi::CreateIrP4Info;
@@ -119,6 +122,56 @@ TEST(SwitchStateTest, TableEmptyFromP4Info) {
   EXPECT_TRUE(state.AllTablesEmpty());
 }
 
+TEST(SwitchStateTest, GetEntityReturnsNullOptWhenMulticastEntryNotPresent) {
+  SwitchState state(GetIrP4Info());
+  Entity entity;
+  entity.mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->set_multicast_group_id(42);
+
+  EXPECT_EQ(state.GetEntity(entity), std::nullopt);
+}
+
+TEST(SwitchStateTest, GetEntityReturnsMulticastEntryWhenPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Update update;
+  update.set_type(Update::INSERT);
+  update.mutable_entity()
+      ->mutable_packet_replication_engine_entry()
+      ->mutable_multicast_group_entry()
+      ->set_multicast_group_id(42);
+
+  Entity entity = update.entity();
+
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  EXPECT_THAT(state.GetEntity(entity), Optional(EqualsProto(update.entity())));
+}
+
+TEST(SwitchStateTest, GetEntityReturnsNullOptWhenTableEntryNotPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Entity entity;
+  entity.mutable_table_entry()->set_table_id(kBareTable1);
+
+  EXPECT_EQ(state.GetEntity(entity), std::nullopt);
+}
+
+TEST(SwitchStateTest, GetEntityReturnsTableEntryWhenPresent) {
+  SwitchState state(GetIrP4Info());
+
+  Update update;
+  update.set_type(Update::INSERT);
+  update.mutable_entity()->mutable_table_entry()->set_table_id(kBareTable1);
+
+  Entity entity = update.entity();
+
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  EXPECT_THAT(state.GetEntity(entity), Optional(EqualsProto(update.entity())));
+}
+
 TEST(SwitchStateTest, RuleInsert) {
   SwitchState state(GetIrP4Info());
 
@@ -139,6 +192,40 @@ TEST(SwitchStateTest, RuleInsert) {
 
   EXPECT_EQ(state.GetTableEntries(kBareTable1).size(), 1);
   EXPECT_EQ(state.GetTableEntries(kBareTable2).size(), 0);
+
+  EXPECT_OK(state.CheckConsistency());
+
+  state.ClearTableEntries();
+  EXPECT_TRUE(state.AllTablesEmpty());
+}
+
+TEST(SwitchStateTest, MulticastInsertWorks) {
+  SwitchState state(GetIrP4Info());
+
+  Update update = gutil::ParseProtoOrDie<Update>(R"pb(
+    type: INSERT
+    entity {
+      packet_replication_engine_entry {
+        multicast_group_entry {
+          multicast_group_id: 1
+          replicas { port: "some-port" }
+        }
+      }
+    }
+  )pb");
+  ASSERT_OK(state.ApplyUpdate(update));
+
+  // TODO: b/316926338 - Uncomment once multicast is treated as just another
+  // table in switch state.
+  // EXPECT_FALSE(state.AllTablesEmpty());
+
+  EXPECT_EQ(state.GetMulticastGroupEntries().size(), 1);
+
+  MulticastGroupEntry& entry = *update.mutable_entity()
+                                    ->mutable_packet_replication_engine_entry()
+                                    ->mutable_multicast_group_entry();
+  ASSERT_TRUE(state.GetMulticastGroupEntry(entry) != std::nullopt);
+  EXPECT_THAT(*state.GetMulticastGroupEntry(entry), EqualsProto(entry));
 
   EXPECT_OK(state.CheckConsistency());
 
@@ -409,401 +496,53 @@ TEST(SwitchStateTest,
   ASSERT_OK(state.CheckConsistency());
 }
 
-absl::StatusOr<ReferableEntry> MakePiReferableEntry(
-    const IrP4Info& info, const pdpi::TableEntry& entry,
-    absl::flat_hash_set<std::string> fields) {
-  ASSIGN_OR_RETURN(TableEntry pi_entry,
-                   pdpi::PartialPdTableEntryToPiTableEntry(info, entry));
-
-  ASSIGN_OR_RETURN(
-      pdpi::IrTableDefinition table_definition,
-      gutil::FindOrStatus(info.tables_by_id(), pi_entry.table_id()));
-
-  ReferableEntry result;
-  for (const auto& match : pi_entry.match()) {
-    ASSIGN_OR_RETURN(pdpi::IrMatchFieldDefinition match_field_definition,
-                     gutil::FindOrStatus(table_definition.match_fields_by_id(),
-                                         match.field_id()));
-    std::string field_name = match_field_definition.match_field().name();
-    if (fields.contains(field_name)) {
-      switch (match.field_match_type_case()) {
-        case p4::v1::FieldMatch::kExact:
-          result.insert({field_name, match.exact().value()});
-          break;
-        case p4::v1::FieldMatch::kOptional:
-          result.insert({field_name, match.optional().value()});
-          break;
-        default:
-          return gutil::InvalidArgumentErrorBuilder()
-                 << "Only match fields with type exact or optional can be "
-                    "referred to. Referenced field "
-                 << field_name << " has a different match type.";
-          break;
-      }
-    }
-  }
-
-  for (const auto& field : fields) {
-    if (!result.contains(field)) {
-      return gutil::InvalidArgumentErrorBuilder()
-             << "Could not form referable entry. Entry is missing field "
-             << field;
-    }
-  }
-
-  return result;
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithNonExistentTableIsNotFound) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "Not_A_Table";
-  const absl::flat_hash_set<std::string> kReferencedFields = {"Not_A_Field"};
-
-  // Return NotFoundError when referencing non-existent table.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              StatusIs(absl::StatusCode::kNotFound));
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithNoFieldsIsInvalid) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "id_test_table";
-
-  // Return invalid argument when referencing no fields.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, {}),
-              StatusIs(absl::StatusCode::kInvalidArgument));
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithNonExistentFieldIsNotFound) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "id_test_table";
-  const absl::flat_hash_set<std::string> kReferencedFields = {"Not_A_Field"};
-
-  // Return NotFoundError when referencing non-existent field.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              StatusIs(absl::StatusCode::kNotFound));
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithNonExactOrOptionalFieldIsInvalid) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "ternary_table";
-  const absl::flat_hash_set<std::string> kReferencedFields = {"ipv4"};
-
-  // Return invalid argument when referencing ternary field.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              StatusIs(absl::StatusCode::kInvalidArgument));
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithExactFields) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "id_test_table";
-  const absl::flat_hash_set<std::string> kReferencedFields = {"ipv4", "ipv6"};
-
-  pdpi::TableEntry entry1 = gutil::ParseProtoOrDie<pdpi::TableEntry>(
-      R"pb(
-        id_test_table_entry {
-          match { ipv6: "::1" ipv4: "0.0.0.1" }
-          action { do_thing_1 { arg2: "0x00000002" arg1: "0x00000001" } }
-        }
-      )pb");
-  ASSERT_OK_AND_ASSIGN(ReferableEntry referable_entry1,
-                       MakePiReferableEntry(info, entry1, kReferencedFields));
-  pdpi::TableEntry entry2 = gutil::ParseProtoOrDie<pdpi::TableEntry>(
-      R"pb(
-        id_test_table_entry {
-          match { ipv6: "::2" ipv4: "0.0.0.2" }
-          action { do_thing_1 { arg2: "0x00000002" arg1: "0x00000001" } }
-        }
-      )pb");
-  ASSERT_OK_AND_ASSIGN(ReferableEntry referable_entry2,
-                       MakePiReferableEntry(info, entry2, kReferencedFields));
-
-  // Return empty vector for table with no entries.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(IsEmpty()));
-
-  ASSERT_OK(state.ApplyUpdate(MakePiUpdate(info, Update::INSERT, entry1)));
-
-  // Return a single referable entry for table with one entry.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(ElementsAre(referable_entry1)));
-
-  ASSERT_OK(state.ApplyUpdate(MakePiUpdate(info, Update::INSERT, entry2)));
-
-  // Return two referable entries for table with two entries.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(ElementsAre(referable_entry1, referable_entry2)));
-
-  ASSERT_OK(state.ApplyUpdate(MakePiUpdate(info, Update::DELETE, entry1)));
-
-  // Return one referable entry after entry is deleted.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(ElementsAre(referable_entry2)));
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithOptionalFields) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "optional_table";
-  const absl::flat_hash_set<std::string> kReferencedFields = {"ipv4", "ipv6",
-                                                              "str"};
-
-  pdpi::TableEntry entry_with_2_optionals_omitted =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(
-          R"pb(
-            optional_table_entry {
-              match { ipv6 { value: "::1" } }
-              action { do_thing_1 { arg2: "0x00000002" arg1: "0x00000001" } }
-              priority: 10
-            }
-          )pb");
-
-  pdpi::TableEntry entry_with_all_optionals_present =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(
-          R"pb(
-            optional_table_entry {
-              match {
-                ipv6 { value: "::2" }
-                ipv4 { value: "0.0.0.2" }
-                str { value: "hi" }
-              }
-              action { do_thing_1 { arg2: "0x00000002" arg1: "0x00000001" } }
-              priority: 20
-            }
-          )pb");
-  ASSERT_OK_AND_ASSIGN(
-      ReferableEntry referable_entry,
-      MakePiReferableEntry(info, entry_with_all_optionals_present,
-                           kReferencedFields));
-
-  ASSERT_OK(state.ApplyUpdate(
-      MakePiUpdate(info, Update::INSERT, entry_with_2_optionals_omitted)));
-
-  // Return empty vector for table with entries where optional fields are
-  // omitted.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(IsEmpty()));
-
-  ASSERT_OK(state.ApplyUpdate(
-      MakePiUpdate(info, Update::INSERT, entry_with_all_optionals_present)));
-
-  // Return referable entry only for entries where all optionals are present.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(ElementsAre(referable_entry)));
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithOnlyOneOptionalField) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "optional_table";
-  const absl::flat_hash_set<std::string> kReferencedFields = {"str"};
-
-  pdpi::TableEntry entry_without_referenced_field =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(
-          R"pb(
-            optional_table_entry {
-              match {
-                ipv6 { value: "::1" }
-                ipv4 { value: "0.0.0.1" }
-              }
-              action { do_thing_1 { arg2: "0x00000002" arg1: "0x00000001" } }
-              priority: 10
-            }
-          )pb");
-
-  pdpi::TableEntry entry_with_only_referenced_field =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(
-          R"pb(
-            optional_table_entry {
-              match { str { value: "hi" } }
-              action { do_thing_1 { arg2: "0x00000002" arg1: "0x00000001" } }
-              priority: 20
-            }
-          )pb");
-  ASSERT_OK_AND_ASSIGN(
-      ReferableEntry referable_entry_1,
-      MakePiReferableEntry(info, entry_with_only_referenced_field,
-                           kReferencedFields));
-
-  pdpi::TableEntry entry_with_all_field_set =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(
-          R"pb(
-            optional_table_entry {
-              match {
-                ipv6 { value: "::3" }
-                ipv4 { value: "0.0.0.3" }
-                str { value: "bye" }
-              }
-              action { do_thing_1 { arg2: "0x00000002" arg1: "0x00000001" } }
-              priority: 30
-            }
-          )pb");
-  ASSERT_OK_AND_ASSIGN(
-      ReferableEntry referable_entry_2,
-      MakePiReferableEntry(info, entry_with_all_field_set, kReferencedFields));
-
-  ASSERT_OK(state.ApplyUpdate(
-      MakePiUpdate(info, Update::INSERT, entry_without_referenced_field)));
-
-  // Return empty vector for table with entries lacking referenced field.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(IsEmpty()));
-
-  ASSERT_OK(state.ApplyUpdate(
-      MakePiUpdate(info, Update::INSERT, entry_with_only_referenced_field)));
-
-  // Return referable entry only for entry with only referenced field.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(ElementsAre(referable_entry_1)));
-
-  ASSERT_OK(state.ApplyUpdate(
-      MakePiUpdate(info, Update::INSERT, entry_with_all_field_set)));
-
-  // Return referable entry only for entries with referenced field.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(ElementsAre(referable_entry_1, referable_entry_2)));
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithExactAndOptionalFields) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "exact_and_optional_table";
-  const absl::flat_hash_set<std::string> kReferencedFields = {"ipv6", "str"};
-
-  pdpi::TableEntry entry_with_optional_omitted =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(
-          R"pb(
-            exact_and_optional_table_entry {
-              match { ipv6: "::1" ipv4: "0.0.0.1" }
-              action { do_thing_4 {} }
-              priority: 10
-            }
-          )pb");
-
-  pdpi::TableEntry entry_with_optional_present =
-      gutil::ParseProtoOrDie<pdpi::TableEntry>(
-          R"pb(
-            exact_and_optional_table_entry {
-              match {
-                ipv6: "::2"
-                ipv4: "0.0.0.2"
-                str { value: "hi" }
-              }
-              action { do_thing_4 {} }
-              priority: 20
-            }
-          )pb");
-  ASSERT_OK_AND_ASSIGN(ReferableEntry referable_entry,
-                       MakePiReferableEntry(info, entry_with_optional_present,
-                                            kReferencedFields));
-
-  ASSERT_OK(state.ApplyUpdate(
-      MakePiUpdate(info, Update::INSERT, entry_with_optional_omitted)));
-
-  // Return empty vector for table with entry where optional field is missing.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(IsEmpty()));
-
-  ASSERT_OK(state.ApplyUpdate(
-      MakePiUpdate(info, Update::INSERT, entry_with_optional_present)));
-
-  // Return referable entry where optional field is present.
-  EXPECT_THAT(state.GetReferableEntries(kReferencedTable, kReferencedFields),
-              IsOkAndHolds(ElementsAre(referable_entry)));
-}
-
-TEST(SwitchStateTest, GetReferableEntriesWithIdenticalValueOnField) {
-  const IrP4Info& info = pdpi::GetTestIrP4Info();
-  SwitchState state(info);
-
-  const std::string kReferencedTable = "exact_and_optional_table";
-  const absl::flat_hash_set<std::string> kReferencedFields = {"str"};
-
-  pdpi::TableEntry entry_1 = gutil::ParseProtoOrDie<pdpi::TableEntry>(
-      R"pb(
-        exact_and_optional_table_entry {
-          match {
-            ipv6: "::1"
-            ipv4: "0.0.0.1"
-            str { value: "hi" }
-          }
-          action { do_thing_4 {} }
-          priority: 10
-        }
-      )pb");
-  ASSERT_OK_AND_ASSIGN(ReferableEntry referable_entry_1,
-                       MakePiReferableEntry(info, entry_1, kReferencedFields));
-
-  pdpi::TableEntry entry_2 = gutil::ParseProtoOrDie<pdpi::TableEntry>(
-      R"pb(
-        exact_and_optional_table_entry {
-          match {
-            ipv6: "::2"
-            ipv4: "0.0.0.2"
-            str { value: "hi" }
-          }
-          action { do_thing_4 {} }
-          priority: 20
-        }
-      )pb");
-  ASSERT_OK_AND_ASSIGN(ReferableEntry referable_entry_2,
-                       MakePiReferableEntry(info, entry_2, kReferencedFields));
-
-  ASSERT_OK(state.ApplyUpdate(MakePiUpdate(info, Update::INSERT, entry_1)));
-  ASSERT_OK(state.ApplyUpdate(MakePiUpdate(info, Update::INSERT, entry_2)));
-
-  ASSERT_OK_AND_ASSIGN(
-      std::vector<ReferableEntry> referable_entries,
-      state.GetReferableEntries(kReferencedTable, kReferencedFields));
-
-  EXPECT_THAT(referable_entries,
-              ElementsAre(referable_entry_1, referable_entry_2));
-
-  // Both entries create the same referable entry.
-  EXPECT_EQ(referable_entries[0], referable_entries[1]);
-}
-
-TEST(SwitchStateTest, SetTableEntriesSetsTableEntries) {
+TEST(SwitchStateTest, SetEntitiesSetsEntities) {
   SwitchState state(GetIrP4Info());
 
   EXPECT_TRUE(state.AllTablesEmpty());
 
   // Call SetTableEntries and ensure it indeed populates the correct tables.
-  std::vector<p4::v1::TableEntry> entries;
-  entries.emplace_back() =  // Entry #1 in table 1.
-      gutil::ParseProtoOrDie<p4::v1::TableEntry>(
+  std::vector<p4::v1::Entity> entities;
+
+  entities.emplace_back() =  // Entry #1 in multicast table.
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
+          R"pb(
+            packet_replication_engine_entry {
+              multicast_group_entry {
+                multicast_group_id: 7
+                replicas { instance: 1 port: "some_port" }
+                replicas { instance: 2 port: "some_port" }
+                replicas { instance: 1 port: "some_other_port" }
+              }
+            }
+          )pb");
+  entities.emplace_back() =  // Entry #1 in table 1.
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
           absl::Substitute(R"pb(
-                             table_id: $0
-                             match {
-                               field_id: 1
-                               exact { value: "\378\"" }
+                             table_entry {
+                               table_id: $0
+                               match {
+                                 field_id: 1
+                                 exact { value: "\378\"" }
+                               }
                              }
                            )pb",
                            kSpamTableId));
-  entries.emplace_back().set_table_id(kEggTableId);  // Entry #1 in table 2.
-  entries.emplace_back() =                           // Entry #2 in table 1.
-      gutil::ParseProtoOrDie<p4::v1::TableEntry>(
+  entities.emplace_back().mutable_table_entry()->set_table_id(
+      kEggTableId);          // Entry #1 in table 2.
+  entities.emplace_back() =  // Entry #2 in table 1.
+      gutil::ParseProtoOrDie<p4::v1::Entity>(
           absl::Substitute(R"pb(
-                             table_id: $0
-                             match {
-                               field_id: 1
-                               exact { value: "\377\"" }
+                             table_entry {
+                               table_id: $0
+                               match {
+                                 field_id: 1
+                                 exact { value: "\377\"" }
+                               }
                              }
                            )pb",
                            kSpamTableId));
-  ASSERT_OK(state.SetTableEntries(entries))
+  ASSERT_OK(state.SetEntities(entities))
       << " with the following P4Info:\n " << state.GetIrP4Info().DebugString();
   EXPECT_EQ(state.GetNumTableEntries(kSpamTableId), 2);
   EXPECT_EQ(state.GetNumTableEntries(kEggTableId), 1);

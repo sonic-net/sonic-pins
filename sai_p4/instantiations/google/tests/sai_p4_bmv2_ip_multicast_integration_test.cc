@@ -14,11 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <optional>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
@@ -36,6 +40,7 @@
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
 #include "platforms/networking/p4/p4_infra/bmv2/bmv2.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -60,36 +65,56 @@ enum class DstIpKind {
   kMulticast,
 };
 
-netaddr::Ipv4Address GetDstIpv4(DstIpKind dst_ip_kind) {
-  switch (dst_ip_kind) {
-    case DstIpKind::kUnicast:
-      return netaddr::Ipv4Address(192, 168, 100, 1);
-    case DstIpKind::kMulticast:
-      // "Source-specific multicast" address, see
-      // https://en.wikipedia.org/wiki/Multicast_address#IPv4
-      return netaddr::Ipv4Address(232, 1, 2, 3);
-  }
-  LOG(FATAL) << "Unknown DstIpKind: " << static_cast<int>(dst_ip_kind);
+// Returns a "source-specific multicast" address, see
+// https://en.wikipedia.org/wiki/Multicast_address#IPv4
+netaddr::Ipv4Address MulticastIpv4() {
+  return netaddr::Ipv4Address(232, 1, 2, 3);
 }
 
-absl::StatusOr<netaddr::Ipv6Address> GetDstIpv6(DstIpKind dst_ip_kind) {
-  switch (dst_ip_kind) {
-    case DstIpKind::kUnicast:
-      return netaddr::Ipv6Address::OfString("2001::2");
-    case DstIpKind::kMulticast:
-      // "Source-specific multicast" address, see
-      // https://en.wikipedia.org/wiki/Multicast_address#IPv6
-      return netaddr::Ipv6Address::OfString("ff30::2");
+// "Source-specific multicast" address, see
+// https://en.wikipedia.org/wiki/Multicast_address#IPv6
+netaddr::Ipv6Address MulticastIpv6() {
+  return netaddr::Ipv6Address::OfString("ff30::2").value();
+}
+
+// Adds a VLAN header with the given `vlan_id` to the given packet.
+absl::Status AddVlanHeader(int vlan_id, packetlib::Packet& packet) {
+  if (packet.headers_size() < 1 || !packet.headers(0).has_ethernet_header()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "expected packet starting with Ethernet header, but got "
+           << absl::StrCat(packet);
   }
-  LOG(FATAL) << "Unknown DstIpKind: " << static_cast<int>(dst_ip_kind);
+  packetlib::EthernetHeader& ethernet_header =
+      *packet.mutable_headers(0)->mutable_ethernet_header();
+
+  // Define VLAN header.
+  packetlib::VlanHeader vlan_header;
+  vlan_header.set_priority_code_point("0x0");
+  vlan_header.set_drop_eligible_indicator("0x0");
+  vlan_header.set_vlan_identifier(pdpi::BitsetToHexString<12>(vlan_id));
+  vlan_header.set_ethertype(ethernet_header.ethertype());
+
+  // Insert VLAN header at index 1.
+  ethernet_header.set_ethertype("0x8100");
+  {
+    packetlib::Header next_header;
+    *next_header.mutable_vlan_header() = std::move(vlan_header);
+    for (int i = 1; i < packet.headers_size(); ++i) {
+      next_header.Swap(packet.mutable_headers(i));
+    }
+    *packet.add_headers() = std::move(next_header);
+  }
+
+  return absl::OkStatus();
 }
 
 absl::StatusOr<packetlib::Packet> GetIpv4TestPacket(
-    const netaddr::Ipv4Address& dst_ip) {
+    const netaddr::Ipv4Address& dst_ip, const std::optional<int>& vlan_id) {
   ASSIGN_OR_RETURN(auto packet, gutil::ParseTextProto<packetlib::Packet>(R"pb(
                      headers {
                        ethernet_header {
-                         ethernet_destination: "02:03:04:05:06:07"
+                         # IPv4 Multicast MAC.
+                         ethernet_destination: "01:00:5e:05:06:07"
                          ethernet_source: "00:01:02:03:04:05"
                          ethertype: "0x0800"  # IPv4
                        }
@@ -113,17 +138,21 @@ absl::StatusOr<packetlib::Packet> GetIpv4TestPacket(
                    )pb"));
   packet.mutable_headers(1)->mutable_ipv4_header()->set_ipv4_destination(
       dst_ip.ToString());
+  if (vlan_id.has_value()) {
+    RETURN_IF_ERROR(AddVlanHeader(*vlan_id, packet));
+  }
   RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
   RETURN_IF_ERROR(packetlib::ValidatePacket(packet));
   return packet;
 }
 
 absl::StatusOr<packetlib::Packet> GetIpv6TestPacket(
-    const netaddr::Ipv6Address& dst_ip) {
+    const netaddr::Ipv6Address& dst_ip, const std::optional<int>& vlan_id) {
   ASSIGN_OR_RETURN(auto packet, gutil::ParseTextProto<packetlib::Packet>(R"pb(
                      headers {
                        ethernet_header {
-                         ethernet_destination: "02:03:04:05:06:07"
+                         # IPv6 Multicast MAC.
+                         ethernet_destination: "33:33:04:05:06:07"
                          ethernet_source: "00:01:02:03:04:05"
                          ethertype: "0x86dd"  # IPv6
                        }
@@ -144,6 +173,9 @@ absl::StatusOr<packetlib::Packet> GetIpv6TestPacket(
                    )pb"));
   packet.mutable_headers(1)->mutable_ipv6_header()->set_ipv6_destination(
       dst_ip.ToString());
+  if (vlan_id.has_value()) {
+    RETURN_IF_ERROR(AddVlanHeader(*vlan_id, packet));
+  }
   RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
   RETURN_IF_ERROR(packetlib::ValidatePacket(packet));
   return packet;
@@ -151,25 +183,20 @@ absl::StatusOr<packetlib::Packet> GetIpv6TestPacket(
 
 struct TestParams {
   sai::Instantiation instantiation;
-  DstIpKind dst_ip_kind;
+  // If set, test packets will include a VLAN header with the given ID.
+  std::optional<int> test_packet_vlan_id;
 };
 
 using IpMulticastTest = ::testing::TestWithParam<TestParams>;
 
 TEST_P(IpMulticastTest, Ipv4PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
   const sai::Instantiation kInstantiation = GetParam().instantiation;
-  const DstIpKind kDstIpKind = GetParam().dst_ip_kind;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  if (kDstIpKind == DstIpKind::kMulticast) {
-    GTEST_SKIP() << "TODO: Enable once SAI P4 supports forwarding "
-                    "packets with multicast destination IP";
-  }
-
   // Install table entries.
   constexpr absl::string_view kVrf = "vrf";
-  const netaddr::Ipv4Address kDstIp = GetDstIpv4(kDstIpKind);
+  const netaddr::Ipv4Address kDstIp = MulticastIpv4();
   constexpr int kMulticastGroupId = 42;
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> pi_entities,
@@ -206,16 +233,17 @@ TEST_P(IpMulticastTest, Ipv4PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
               .multicast_replica_instance = 0,
               .src_mac = netaddr::MacAddress(2, 0, 0, 0, 0, 0x42),
           })
+          // Technically only needed when `GetParam().test_packet_vlan_id` is
+          // set.
+          .AddDisableVlanChecksEntry()
           .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info,
-                                // TODO: Remove once multicast
-                                // source mac table is no longer `@unsupported`.
-                                /*allow_unsupported=*/true));
+          .GetDedupedPiEntities(kIrP4Info));
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Send Ipv4 test packet and expect output packets on egress ports 1 and 2.
-  ASSERT_OK_AND_ASSIGN(const packetlib::Packet ipv4_test_packet,
-                       GetIpv4TestPacket(kDstIp));
+  ASSERT_OK_AND_ASSIGN(
+      const packetlib::Packet ipv4_test_packet,
+      GetIpv4TestPacket(kDstIp, GetParam().test_packet_vlan_id));
   constexpr int kArbitraryIngressPort = 24;
   ASSERT_OK_AND_ASSIGN(
       (absl::flat_hash_map<int, packetlib::Packets>
@@ -232,9 +260,16 @@ TEST_P(IpMulticastTest, Ipv4PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
   EXPECT_THAT(
       gutil::ProtoDiff(ipv4_test_packet, port1_output_packets[0]),
       IsOkAndHolds(StrEq(
-          R"(modified: headers[0].ethernet_header.ethernet_source: "00:01:02:03:04:05" -> "01:00:00:00:00:00"
+          GetParam().test_packet_vlan_id.has_value()
+              ?
+              R"(modified: headers[0].ethernet_header.ethernet_source: "00:01:02:03:04:05" -> "01:00:00:00:00:00"
+modified: headers[2].ipv4_header.ttl: "0x20" -> "0x1f"
+modified: headers[2].ipv4_header.checksum: "0x8a9d" -> "0x8b9d"
+)"
+              :
+              R"(modified: headers[0].ethernet_header.ethernet_source: "00:01:02:03:04:05" -> "01:00:00:00:00:00"
 modified: headers[1].ipv4_header.ttl: "0x20" -> "0x1f"
-modified: headers[1].ipv4_header.checksum: "0x4ff8" -> "0x50f8"
+modified: headers[1].ipv4_header.checksum: "0x8a9d" -> "0x8b9d"
 )")));
   // The multicast copies should differ only in their source mac.
   EXPECT_THAT(
@@ -259,19 +294,12 @@ modified: headers[1].ipv4_header.checksum: "0x4ff8" -> "0x50f8"
 
 TEST_P(IpMulticastTest, Ipv6PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
   const sai::Instantiation kInstantiation = GetParam().instantiation;
-  const DstIpKind kDstIpKind = GetParam().dst_ip_kind;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  if (kDstIpKind == DstIpKind::kMulticast) {
-    GTEST_SKIP() << "TODO: Enable once SAI P4 supports forwarding "
-                    "packets with multicast destination IP";
-  }
-
   // Install table entries.
   constexpr absl::string_view kVrf = "vrf";
-  ASSERT_OK_AND_ASSIGN(const netaddr::Ipv6Address kDstIp,
-                       GetDstIpv6(kDstIpKind));
+  const netaddr::Ipv6Address kDstIp = MulticastIpv6();
   constexpr int kMulticastGroupId = 42;
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> pi_entities,
@@ -302,16 +330,17 @@ TEST_P(IpMulticastTest, Ipv6PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
               .multicast_replica_instance = 0,
               .src_mac = netaddr::MacAddress(5, 5, 5, 5, 5, 5),
           })
+          // Technically only needed when `GetParam().test_packet_vlan_id` is
+          // set.
+          .AddDisableVlanChecksEntry()
           .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info,
-                                // TODO: Remove once multicast
-                                // source mac table is no longer `@unsupported`.
-                                /*allow_unsupported=*/true));
+          .GetDedupedPiEntities(kIrP4Info));
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Send Ipv6 test packet and expect output packets on egress ports 7 and 5.
-  ASSERT_OK_AND_ASSIGN(const packetlib::Packet ipv6_test_packet,
-                       GetIpv6TestPacket(kDstIp));
+  ASSERT_OK_AND_ASSIGN(
+      const packetlib::Packet ipv6_test_packet,
+      GetIpv6TestPacket(kDstIp, GetParam().test_packet_vlan_id));
   constexpr int kArbitraryIngressPort = 24;
   ASSERT_OK_AND_ASSIGN(
       (absl::flat_hash_map<int, packetlib::Packets>
@@ -328,7 +357,13 @@ TEST_P(IpMulticastTest, Ipv6PacketsGetMulticastedWithRewrittenSrcMacAndTtl) {
   EXPECT_THAT(
       gutil::ProtoDiff(ipv6_test_packet, port7_output_packets[0]),
       IsOkAndHolds(StrEq(
-          R"(modified: headers[0].ethernet_header.ethernet_source: "00:01:02:03:04:05" -> "07:07:07:07:07:07"
+          GetParam().test_packet_vlan_id.has_value()
+              ?
+              R"(modified: headers[0].ethernet_header.ethernet_source: "00:01:02:03:04:05" -> "07:07:07:07:07:07"
+modified: headers[2].ipv6_header.hop_limit: "0x03" -> "0x02"
+)"
+              :
+              R"(modified: headers[0].ethernet_header.ethernet_source: "00:01:02:03:04:05" -> "07:07:07:07:07:07"
 modified: headers[1].ipv6_header.hop_limit: "0x03" -> "0x02"
 )")));
 
@@ -343,20 +378,13 @@ modified: headers[1].ipv6_header.hop_limit: "0x03" -> "0x02"
 
 TEST_P(IpMulticastTest, AclIngressDropActionOverridesMulticastAction) {
   const sai::Instantiation kInstantiation = GetParam().instantiation;
-  const DstIpKind kDstIpKind = GetParam().dst_ip_kind;
   const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
   ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
 
-  if (kDstIpKind == DstIpKind::kMulticast) {
-    GTEST_SKIP() << "TODO: Enable once SAI P4 supports forwarding "
-                    "packets with multicast destination IP";
-  }
-
   // Install multicast route.
   constexpr absl::string_view kVrf = "vrf";
-  const netaddr::Ipv4Address kDstIpv4 = GetDstIpv4(kDstIpKind);
-  ASSERT_OK_AND_ASSIGN(const netaddr::Ipv6Address kDstIpv6,
-                       GetDstIpv6(kDstIpKind));
+  const netaddr::Ipv4Address kDstIpv4 = MulticastIpv4();
+  const netaddr::Ipv6Address kDstIpv6 = MulticastIpv6();
   constexpr int kMulticastGroupId = 42;
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> pi_entities,
@@ -372,20 +400,22 @@ TEST_P(IpMulticastTest, AclIngressDropActionOverridesMulticastAction) {
               .multicast_replica_port = "\1",
               .src_mac = netaddr::MacAddress(1, 2, 3, 4, 5, 6),
           })
+          // Technically only needed when `GetParam().test_packet_vlan_id` is
+          // set.
+          .AddDisableVlanChecksEntry()
           .LogPdEntries()
-          .GetDedupedPiEntities(kIrP4Info,
-                                // TODO: Remove once multicast
-                                // source mac table is no longer `@unsupported`.
-                                /*allow_unsupported=*/true));
+          .GetDedupedPiEntities(kIrP4Info));
   ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
 
   // Send test packets and expect output.
   constexpr int kArbitraryIngressPort1 = 24;
   constexpr int kArbitraryIngressPort2 = 42;
-  ASSERT_OK_AND_ASSIGN(const packetlib::Packet ipv4_test_packet,
-                       GetIpv4TestPacket(kDstIpv4));
-  ASSERT_OK_AND_ASSIGN(const packetlib::Packet ipv6_test_packet,
-                       GetIpv6TestPacket(kDstIpv6));
+  ASSERT_OK_AND_ASSIGN(
+      const packetlib::Packet ipv4_test_packet,
+      GetIpv4TestPacket(kDstIpv4, GetParam().test_packet_vlan_id));
+  ASSERT_OK_AND_ASSIGN(
+      const packetlib::Packet ipv6_test_packet,
+      GetIpv6TestPacket(kDstIpv6, GetParam().test_packet_vlan_id));
   EXPECT_THAT(bmv2.SendPacket(kArbitraryIngressPort1, ipv4_test_packet),
               IsOkAndHolds(Not(IsEmpty())));
   EXPECT_THAT(bmv2.SendPacket(kArbitraryIngressPort2, ipv6_test_packet),
@@ -405,15 +435,83 @@ TEST_P(IpMulticastTest, AclIngressDropActionOverridesMulticastAction) {
               IsOkAndHolds(IsEmpty()));
 }
 
+// We install two multicast routes:
+// * An exact-match route in the IPMC table.
+// * A default route that only applies if there was no IPMC table hit, in the
+//   ingress ACL table.
+//
+// We then send two packets, one that should hit the IPMC table entry and one
+// that should miss it, and verify that they hit the exact route and default
+// route, respectively.
+TEST_P(IpMulticastTest, IpmcTableHitQualifierWorks) {
+  const sai::Instantiation kInstantiation = GetParam().instantiation;
+  if (kInstantiation == sai::Instantiation::kTor ||
+      kInstantiation == sai::Instantiation::kFabricBorderRouter) {
+    GTEST_SKIP() << "not supported by " << absl::StrCat(kInstantiation);
+  }
+  const pdpi::IrP4Info kIrP4Info = sai::GetIrP4Info(kInstantiation);
+  ASSERT_OK_AND_ASSIGN(Bmv2 bmv2, sai::SetUpBmv2ForSaiP4(kInstantiation));
+
+  static constexpr int kExactMatchMulticastGroupId = 1;
+  static constexpr int kDefaultMulticastGroupId = 2;
+  static constexpr netaddr::Ipv4Address kExactMatchIpv4Dst =
+      netaddr::Ipv4Address(232, 1, 2, 3);
+  static constexpr netaddr::Ipv4Address kDefaultMatchIpv4Dst =
+      netaddr::Ipv4Address(10, 0, 0, 24);
+
+  ASSERT_OK_AND_ASSIGN(
+      std::vector<p4::v1::Entity> pi_entities,
+      sai::EntryBuilder()
+          .AddVrfEntry("vrf")
+          .AddEntrySettingVrfForAllPackets("vrf")
+          .AddEntryAdmittingAllPacketsToL3()
+          .AddMulticastRoute("vrf", kExactMatchIpv4Dst,
+                             kExactMatchMulticastGroupId)
+          .AddIngressAclEntryRedirectingToMulticastGroup(
+              kDefaultMulticastGroupId,
+              sai::MirrorAndRedirectMatchFields{
+                  // This rule shall only apply if no multicast route was found.
+                  .ipmc_table_hit = false,
+              })
+          .AddMulticastGroupEntry(kExactMatchMulticastGroupId,
+                                  {
+                                      sai::Replica{.egress_port = "\1"},
+                                  })
+          .AddMulticastGroupEntry(kDefaultMulticastGroupId,
+                                  {
+                                      sai::Replica{.egress_port = "\2"},
+                                      sai::Replica{.egress_port = "\3"},
+                                  })
+          // Technically only needed when `GetParam().test_packet_vlan_id` is
+          // set.
+          .AddDisableVlanChecksEntry()
+          .LogPdEntries()
+          .GetDedupedPiEntities(kIrP4Info, /*allow_unsupported=*/true));
+  ASSERT_OK(pdpi::InstallPiEntities(bmv2.P4RuntimeSession(), pi_entities));
+
+  ASSERT_OK_AND_ASSIGN(
+      const packetlib::Packet kExactMatchInputPacket,
+      GetIpv4TestPacket(kExactMatchIpv4Dst, GetParam().test_packet_vlan_id));
+  ASSERT_OK_AND_ASSIGN(
+      const packetlib::Packet kDefaultMatchInputPacket,
+      GetIpv4TestPacket(kDefaultMatchIpv4Dst, GetParam().test_packet_vlan_id));
+  ASSERT_THAT(bmv2.SendPacket(1, kExactMatchInputPacket),
+              IsOkAndHolds(UnorderedElementsAre(Key(1))));
+  ASSERT_THAT(bmv2.SendPacket(1, kDefaultMatchInputPacket),
+              IsOkAndHolds(UnorderedElementsAre(Key(2), Key(3))));
+}
+
 std::vector<TestParams> GetAllTestInstances() {
   std::vector<TestParams> instances;
   for (sai::Instantiation instantiation : sai::AllSaiInstantiations()) {
-    for (DstIpKind dst_ip_kind : {DstIpKind::kUnicast, DstIpKind::kMulticast}) {
-      instances.push_back(TestParams{
-          .instantiation = instantiation,
-          .dst_ip_kind = dst_ip_kind,
-      });
-    }
+    instances.push_back(TestParams{
+        .instantiation = instantiation,
+        .test_packet_vlan_id = std::nullopt,
+    });
+    instances.push_back(TestParams{
+        .instantiation = instantiation,
+        .test_packet_vlan_id = 1234,
+    });
   }
   return instances;
 }
@@ -421,12 +519,11 @@ std::vector<TestParams> GetAllTestInstances() {
 INSTANTIATE_TEST_SUITE_P(IpMulticastTest, IpMulticastTest,
                          testing::ValuesIn(GetAllTestInstances()),
                          [&](const testing::TestParamInfo<TestParams>& info) {
-                           return absl::StrCat(
-                               info.param.instantiation, "_with_",
-                               info.param.dst_ip_kind == DstIpKind::kMulticast
-                                   ? "multicast"
-                                   : "unicast",
-                               "_dst_ip");
+                           return absl::StrFormat(
+                               "%v_%s", info.param.instantiation,
+                               info.param.test_packet_vlan_id.has_value()
+                                   ? "with_vlan_header"
+                                   : "");
                          });
 
 }  // namespace

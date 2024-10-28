@@ -25,7 +25,7 @@
 // Additionally, some types of expressions and statements are unsupported, these
 // are described in the relevant sections of this file.
 // See the bmv2 JSON format reference for more information:
-// https://github.com/p4lang/behavioral-model/blob/master/docs/JSON_format.md
+// https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md
 
 syntax = "proto3";
 
@@ -51,7 +51,7 @@ message P4Program {
 
   // TODO: If needed in the future, action calls can be added here, for
   // action calls that are not wrapped in other control constructs.
-  // https://github.com/p4lang/behavioral-model/blob/master/docs/JSON_format.md#pipelines
+  // https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#pipelines
 }
 
 // A header type definition.
@@ -112,8 +112,10 @@ message TableImplementation {
 
   // Maps every action used by this table (by name) to the next control
   // construct to be taken (also by name) if that action was matched.
-  // if an action is not in this map, or is mapped to the empty string, then
-  // that action is at the end of the flow.
+  // All action names must be present in the map. In case the next control is
+  // determined by whether the table is hit or not rather than by the executed
+  // action, the map must contain exactly two special actions: "__HIT__" and
+  // "__MISS__".
   map<string, string> action_to_next_control = 4;
 
   // Maps the name of a match (identical to the name used in p4 info), to
@@ -133,7 +135,8 @@ message Conditional {
   // The name is unique among conditionals AND tables.
   string name = 1;
   RValue condition = 2;
-  // If a branch does not exist or is empty, this will be the empty string.
+  // The next control points to execute for if and else branches (always
+  // present).
   string if_branch = 3;
   string else_branch = 4;
 }

@@ -40,6 +40,7 @@ parser packet_parser(packet_in packet, out headers_t headers,
     local_metadata.wcmp_group_id_value = 0;
     local_metadata.nexthop_id_valid = false;
     local_metadata.nexthop_id_value = 0;
+    local_metadata.ipmc_table_hit = false;
     local_metadata.acl_drop = false;
 
   transition select(standard_metadata.ingress_port) {
@@ -145,6 +146,12 @@ control packet_deparser(packet_out packet, in headers_t headers) {
 #if defined(PLATFORM_BMV2) || defined(PLATFORM_P4SYMBOLIC)
     packet.emit(headers.packet_in_header);
 #endif
+    packet.emit(headers.mirror_encap_ethernet);
+    packet.emit(headers.mirror_encap_vlan);
+    packet.emit(headers.mirror_encap_ipv6);
+    packet.emit(headers.mirror_encap_udp);
+    packet.emit(headers.ipfix);
+    packet.emit(headers.psamp_extended);
     packet.emit(headers.ethernet);
     packet.emit(headers.tunnel_encap_ipv6);
     packet.emit(headers.tunnel_encap_gre);

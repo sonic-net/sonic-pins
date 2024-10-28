@@ -16,15 +16,12 @@
 
 #include <utility>
 
-#include "absl/algorithm/container.h"
 #include "absl/cleanup/cleanup.h"
-#include "absl/memory/memory.h"
 #include "absl/types/optional.h"
 #include "glog/logging.h"
 #include "gutil/status.h"
 #include "p4_symbolic/symbolic/control.h"
 #include "p4_symbolic/symbolic/operators.h"
-#include "p4_symbolic/symbolic/packet.h"
 #include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/z3_util.h"
 
@@ -45,6 +42,10 @@ absl::StatusOr<z3::expr> IsDropped(const SymbolicPerPacketState &state) {
   ASSIGN_OR_RETURN(z3::expr egress_spec,
                    state.Get("standard_metadata.egress_spec"));
   return operators::Eq(egress_spec, EgressSpecDroppedValue());
+}
+
+absl::StatusOr<z3::expr> GotCloned(const SymbolicPerPacketState &state) {
+  return state.Get(std::string(kGotClonedPseudoField));
 }
 
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
@@ -72,6 +73,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
 
   // Alias the event that the packet is dropped for ease of use in assertions
   ASSIGN_OR_RETURN(z3::expr dropped, IsDropped(egress_headers));
+  ASSIGN_OR_RETURN(z3::expr got_cloned, GotCloned(egress_headers));
 
   // Restrict ports to the available physical ports.
   if (absl::c_find(physical_ports, kDropPort) != physical_ports.end()) {
@@ -102,6 +104,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
   auto trace = SymbolicTrace{
       .matched_entries = std::move(matched_entries),
       .dropped = dropped,
+      .got_cloned = got_cloned,
   };
   auto context = SymbolicContext{
       .ingress_port = ingress_port,
@@ -126,11 +129,11 @@ absl::StatusOr<std::optional<ConcreteContext>> Solve(
 
   solver_state->solver->push();
   solver_state->solver->add(constraint);
+  auto pop = absl::Cleanup([&] { solver_state->solver->pop(); });
   z3::check_result check_result = solver_state->solver->check();
   switch (check_result) {
     case z3::unsat:
     case z3::unknown:
-      solver_state->solver->pop();
       return absl::nullopt;
 
     case z3::sat:
@@ -139,7 +142,6 @@ absl::StatusOr<std::optional<ConcreteContext>> Solve(
           ConcreteContext result,
           util::ExtractFromModel(solver_state->context, packet_model,
                                  solver_state->translator));
-      solver_state->solver->pop();
       return result;
   }
   LOG(DFATAL) << "invalid Z3 check() result: "

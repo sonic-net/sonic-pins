@@ -89,6 +89,8 @@ header ipv6_t {
   ipv6_addr_t dst_addr;
 }
 
+#define UDP_HEADER_BYTES 8
+
 header udp_t {
   bit<16> src_port;
   bit<16> dst_port;
@@ -143,6 +145,8 @@ header gre_t {
   bit<16> protocol;
 }
 
+#define IPFIX_HEADER_BYTES 16
+
 // IP Flow Information Export (IPFIX) header, pursuant to RFC 7011 section 3.1.
 header ipfix_t {
   // Version of IPFIX to which this Message conforms.
@@ -159,6 +163,24 @@ header ipfix_t {
   // An identifier of the Observation Domain that is locally
   // unique to the Exporting Process.
   bit<32> observation_domain_id;
+}
+
+#define PSAMP_EXTENDED_BYTES 28
+// PSAMP extended header, pursuant to RFC5476.
+header psamp_extended_t {
+  bit<16> template_id;
+  bit<16> length;
+  // Ingress timestamp in nanoseconds.
+  bit<64> observation_time;
+  bit<16> flowset;
+  bit<16> next_hop_index;
+  bit<16> epoch;
+  bit<16> ingress_port;
+  bit<16> egress_port;
+  bit<16> user_meta_field;
+  bit<8> dlb_id;
+  bit<8> variable_length;
+  bit<16> packet_sampled_length;
 }
 
 
