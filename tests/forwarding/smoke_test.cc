@@ -129,8 +129,9 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
 
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
-                       pdpi::SetMetadataAndSendPiReadRequest(session, read_request));
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::ReadResponse read_response,
+      pdpi::SetMetadataAndSendPiReadRequest(session, read_request));
 
   for (const auto& entity : read_response.entities()) {
     ASSERT_OK(test_environment.AppendToTestArtifact(
