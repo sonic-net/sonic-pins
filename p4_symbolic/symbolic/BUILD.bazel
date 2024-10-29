@@ -111,6 +111,26 @@ end_to_end_test(
     table_entries = "//p4_symbolic/testdata:string-optional/entries.pb.txt",
 )
 
+# Checks the behavior of symbolic execution when there is a table application after a conditional.
+# Before go/optimized-symbolic-execution, p4-symbolic was executing t3 twice (once from the if
+# branch and once from the else branch). Now it executed each table exactly once, leading to
+# smaller SMT formulas, hence better constraint solving performance.
+end_to_end_test(
+    name = "condtional_test",
+    output_golden_file = "expected/conditional.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/conditional.p4",
+    smt_golden_file = "expected/conditional.smt2",
+    table_entries = "//p4_symbolic/testdata:conditional/conditional_entries.pb.txt",
+)
+
+end_to_end_test(
+    name = "conditional_sequence_test",
+    output_golden_file = "expected/conditional_sequence.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/conditional_sequence.p4",
+    smt_golden_file = "expected/conditional_sequence.smt2",
+    table_entries = "//p4_symbolic/testdata:conditional/conditional_sequence_entries.pb.txt",
+)
+
 cc_test(
     name = "values_test",
     srcs = ["values_test.cc"],
