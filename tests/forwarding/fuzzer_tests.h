@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,8 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#ifndef PINS_INFRA_P4_FUZZER_FUZZER_TESTS_H_
-#define PINS_INFRA_P4_FUZZER_FUZZER_TESTS_H_
+#ifndef PINS_TESTS_P4_FUZZER_FUZZER_TESTS_H_
+#define PINS_TESTS_P4_FUZZER_FUZZER_TESTS_H_
 
 #include <functional>
 #include <optional>
@@ -127,4 +127,4 @@ std::string AbslUnparseFlag(Milestone milestone);
 
 }  // namespace p4_fuzzer
 
-#endif  // PINS_INFRA_P4_FUZZER_FUZZER_TESTS_H_
+#endif  // PINS_TESTS_P4_FUZZER_FUZZER_TESTS_H_

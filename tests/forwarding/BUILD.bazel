@@ -66,6 +66,7 @@ cc_library(
     hdrs = ["p4_blackbox_fixture.h"],
     deps = [
         "//gutil:status_matchers",
+        "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi:pd",
         "//sai_p4/instantiations/google:sai_p4info_cc",
@@ -96,6 +97,44 @@ cc_library(
         "@com_google_googletest//:gtest",
     ],
     alwayslink = True,
+)
+cc_library(
+    name = "packet_test_util",
+    testonly = True,
+    srcs = ["packet_test_util.cc"],
+    hdrs = ["packet_test_util.h"],
+    deps = [
+        "//dvaas:test_vector",
+        "//p4_pdpi/netaddr:ipv4_address",
+        "//p4_pdpi/netaddr:mac_address",
+        "//p4_pdpi/packetlib",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+cc_library(
+    name = "group_programming_util",
+    testonly = True,
+    srcs = ["group_programming_util.cc"],
+    hdrs = ["group_programming_util.h"],
+    deps = [
+        "//gutil:collections",
+        "//gutil:status",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:p4_runtime_session",
+        "//p4_pdpi:ir_cc_proto",
+        "//p4_pdpi:pd",
+        "//sai_p4/fixed:p4_ids",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//thinkit:test_environment",
+        "@com_github_p4lang_p4runtime//:p4runtime_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
 )
 
 cc_library(
