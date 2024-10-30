@@ -32,7 +32,7 @@ std::vector<sai::TableEntry> CreateUpTo255GenericTableEntries(
   for (int i = 0; i < num_table_entries; ++i) {
     sai::TableEntry& pd_entry = pd_table_entries.emplace_back();
     pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
-        R"PB(
+        R"pb(
           acl_ingress_table_entry {
             match {
               is_ipv4 { value: "0x1" }
@@ -43,7 +43,7 @@ std::vector<sai::TableEntry> CreateUpTo255GenericTableEntries(
             action { trap { qos_queue: "0x1" } }
             priority: 2040
           }
-        )PB");
+        )pb");
     pd_entry.mutable_acl_ingress_table_entry()
         ->mutable_match()
         ->mutable_dst_ip()
