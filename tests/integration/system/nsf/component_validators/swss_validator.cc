@@ -34,7 +34,8 @@
 namespace pins_test {
 namespace {
 
-constexpr absl::string_view k31JulyRelease = "gpins_release_20240731";
+constexpr absl::string_view k31JulyRelease = "pins_release_20240731";
+constexpr absl::string_view k02SeptRelease = "pins_release_20240902";
 
 // The following objects will always be modified after APPLY_VIEW.
 const absl::flat_hash_set<absl::string_view> kAllowList =
@@ -178,8 +179,6 @@ absl::Status SwssValidator::OnImageCopy(absl::string_view version,
                         k31JulyRelease) &&
       software_info.primary_network_stack.version !=
           software_info.secondary_network_stack.version) {
-    // b/358003704 will cause CoPP related objects to be modified during
-    // APPLY_VIEW when upgrading from 31 July --> next image.
     LOG(INFO) << "Allowing additional APPLY_VIEW object operations during NSF "
                  "upgrade from "
               << k31JulyRelease << " to "
@@ -193,7 +192,18 @@ absl::Status SwssValidator::OnImageCopy(absl::string_view version,
         "SAI_OBJECT_TYPE_HOSTIF_TABLE_ENTRY",
     });
   }
-
+  if (absl::StrContains(software_info.primary_network_stack.version,
+                        k02SeptRelease) &&
+      software_info.primary_network_stack.version !=
+          software_info.secondary_network_stack.version) {
+    LOG(INFO) << "Allowing additional APPLY_VIEW object operations during NSF "
+                 "upgrade from "
+              << k02SeptRelease << " to "
+              << software_info.secondary_network_stack.version;
+    allowlist_ = absl::flat_hash_set<absl::string_view>({
+        "SAI_OBJECT_TYPE_SWITCH",
+    });
+  }
   return absl::OkStatus();
 }
 
