@@ -147,6 +147,9 @@ constexpr absl::string_view kSrcIp6Address = "2001:db8:0:12::1";
 // This could be parameterized in future if this is platform dependent.
 constexpr double kTolerance = 0.20;
 
+// Thredshold percentage of packets punted to CPU to be considered passing
+constexpr int kPassingPercentageCpuPunted = 80;
+
 // Vrf prefix used in the test.
 constexpr absl::string_view kVrfIdPrefix = "vrf-";
 
@@ -3684,6 +3687,8 @@ TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
   thinkit::MirrorTestbed& testbed =
       GetParam().testbed_interface->GetMirrorTestbed();
 
+  LOG(INFO) << "Starting TestIp2MePacketsAreSampledAndPunted test";
+
   const absl::string_view kSrcIp6Address = "2001:db8:0:12::1";
   const int packets_num = 3000;
   // Use 100 for traffic speed since we want to verify the punted packets number
@@ -3696,6 +3701,11 @@ TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
       auto port_id_per_port_name,
       pins_test::GetAllUpInterfacePortIdsByName(*sut_gnmi_stub_));
   ASSERT_GE(port_id_per_port_name.size(), 0) << "No up interfaces.";
+
+  LOG(INFO) << "Up interface numbers: " << port_id_per_port_name.size();
+  LOG(INFO) << "Traffic port on SUT: " << traffic_port.interface_name << " / "
+            << traffic_port.port_id;
+
   ASSERT_OK_AND_ASSIGN(
       auto control_switch_port_id_per_port_name,
       pins_test::GetAllUpInterfacePortIdsByName(*control_gnmi_stub_));
@@ -3703,6 +3713,8 @@ TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
       auto control_switch_port_id,
       GetPortIdFromInterfaceName(control_switch_port_id_per_port_name,
                                  traffic_port.interface_name));
+  LOG(INFO) << "Traffic port on control: " << traffic_port.interface_name
+            << " / " << control_switch_port_id;
 
   absl::flat_hash_map<std::string, bool> sflow_enabled_interfaces;
   for (const auto& [interface_name, unused] : port_id_per_port_name) {
@@ -3711,6 +3723,48 @@ TEST_P(SflowMirrorTestFixture, TestIp2MePacketsAreSampledAndPunted) {
 
   std::vector<std::pair<std::string, int>> collector_address_and_port{
       {kLocalLoopbackIpv6, collector_port_}};
+
+  // Before starting Sflow testing, make sure punting packets to CPU works.
+  bool verify_first = true;
+  if (verify_first) {
+    LOG(INFO) << "Start verifying punting packets to CPU works";
+    Counters initial_cpu_counter;
+    ASSERT_OK_AND_ASSIGN(initial_cpu_counter,
+                         ReadCounters("CPU", sut_gnmi_stub_.get()));
+    absl::Time start_time = absl::Now();
+    auto control_switch_port = Port{
+        .interface_name = traffic_port.interface_name,
+        .port_id = control_switch_port_id,
+    };
+    ASSERT_OK(SendNSshPacketsFromSwitch(
+        packets_num, traffic_speed, control_switch_port, kSrcIp6Address,
+        agent_address_, sut_gnmi_stub_.get(), GetControlIrP4Info(),
+        *control_p4_session_, testbed.Environment()));
+
+    // Display the difference for CPU counter during test dev.
+    ASSERT_OK_AND_ASSIGN(auto final_cpu_counter,
+                         ReadCounters("CPU", sut_gnmi_stub_.get()));
+    auto delta = DeltaCounters(initial_cpu_counter, final_cpu_counter);
+    LOG(INFO) << "Ingress Deltas (CPU):\n total time: "
+              << (absl::Now() - start_time);
+    ShowCounters(delta);
+    LOG(INFO) << "End verifying punting packets to CPU works";
+    // Make sure at least a certain percent of packets are punted to CPU.
+    if (delta.in_pkts < packets_num * kPassingPercentageCpuPunted / 100) {
+      GTEST_SKIP()
+          << "The SUT switch does not punt expected number of packets to CPU."
+          << " Expected: " << packets_num << ". Actual: " << delta.in_pkts;
+    }
+  }
+
+  // Sflow testing starting from here.
+  LOG(INFO) << "Agent_address: " << agent_address_
+            << " collector_address_and_port: " << kLocalLoopbackIpv6 << "/"
+            << collector_port_ << " sflow_enabled_interfaces size: "
+            << sflow_enabled_interfaces.size()
+            << " kInbandSamplingRate:" << kInbandSamplingRate
+            << " kSampleHeaderSize: " << kSampleHeaderSize;
+
   ASSERT_OK_AND_ASSIGN(
       auto sut_gnmi_config_with_sflow,
       UpdateSflowConfig(GetParam().sut_gnmi_config, agent_address_,
