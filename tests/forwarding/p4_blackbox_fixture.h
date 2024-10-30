@@ -18,6 +18,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -35,12 +36,24 @@ class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
  public:
   void SetUp() override {
     MirrorTestbedFixture::SetUp();
+    
+    thinkit::MirrorTestbed& testbed =
+      GetParam().mirror_testbed->GetMirrorTestbed();
+    
+    // Get a gNMI config from the switch to use for testing.
+    ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, testbed.Sut().CreateGnmiStub());
+    ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
+                       pins_test::GetGnmiConfig(*sut_gnmi_stub));
+    // Push the gnmi configuration.
+    ASSERT_OK(
+        pins_test::PushGnmiConfig(GetMirrorTestbed().Sut(), sut_gnmi_config));
+    ASSERT_OK(pins_test::PushGnmiConfig(GetMirrorTestbed().ControlSwitch(),
+                                        sut_gnmi_config));
+
     // Initialize the connection.
     ASSERT_OK_AND_ASSIGN(sut_p4rt_session_, pdpi::P4RuntimeSession::Create(
                                                 GetMirrorTestbed().Sut()));
 
-    //ASSERT_OK(pdpi::SetForwardingPipelineConfig(sut_p4rt_session_.get(),
-    //                                            sai::GetP4Info(sai::Instantiation::kMiddleblock)));
     ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(sut_p4rt_session_.get(),
                                                 p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
                                                 sai::GetP4Info(sai::Instantiation::kMiddleblock)));
