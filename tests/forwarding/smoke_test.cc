@@ -30,14 +30,14 @@ namespace {
 
 TEST_P(SmokeTestFixture, InsertTableEntry) {
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
-      R"PB(
+      R"pb(
         router_interface_table_entry {
           match { router_interface_id: "router-interface-1" }
           action {
             set_port_and_src_mac { port: "1" src_mac: "02:2a:10:00:00:03" }
           }
         }
-      )PB");
+      )pb");
 
   ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
                        pdpi::PartialPdTableEntryToPiTableEntry(IrP4Info(), pd_entry));
@@ -46,14 +46,14 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
 
 TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
   sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
-      R"PB(
+      R"pb(
         router_interface_table_entry {
           match { router_interface_id: "\x01\x33\x00\xff,\":'}(*{+-" }
           action {
             set_port_and_src_mac { port: "1" src_mac: "02:2a:10:00:00:03" }
           }
         }
-      )PB");
+      )pb");
 
   ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
                        pdpi::PartialPdTableEntryToPiTableEntry(IrP4Info(), pd_entry));

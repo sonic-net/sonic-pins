@@ -30,6 +30,7 @@ cc_library(
         "//gutil:status_matchers",
         "//gutil:testing",
         "//lib/gnmi:gnmi_helper",
+        "//lib/validator:validator_lib",
         "//thinkit:mirror_testbed_fixture",
         "@com_github_gnoi//diag:diag_cc_proto",
         "@com_github_google_glog//:glog",
