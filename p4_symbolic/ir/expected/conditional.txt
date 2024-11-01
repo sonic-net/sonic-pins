@@ -659,8 +659,8 @@ conditionals {
           operation: EQUALS
           left {
             field_value {
-              header_name: "ethernet"
-              field_name: "ether_type"
+              header_name: "standard_metadata"
+              field_name: "ingress_port"
             }
           }
           right {

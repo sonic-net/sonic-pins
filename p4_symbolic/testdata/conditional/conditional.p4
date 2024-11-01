@@ -96,7 +96,7 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        if (hdr.ethernet.ether_type == 0) {
+        if (standard_metadata.ingress_port == 0) {
           t_1.apply();
         } else {
           t_2.apply();
