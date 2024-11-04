@@ -14,6 +14,8 @@
 
 #include "tests/forwarding/group_programming_util.h"
 
+#include "absl/random/random.h"
+#include "absl/random/uniform_int_distribution.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/substitute.h"
@@ -277,6 +279,41 @@ absl::Status VerifyGroupMembersFromReceiveTraffic(
     }
   }
   return absl::OkStatus();
+}
+
+absl::StatusOr<std::vector<int>> GenerateNRandomWeights(int n,
+                                                        int total_weight) {
+  absl::BitGen gen;
+  if (n > total_weight || n <= 0) {
+    return absl::InvalidArgumentError("Invalid input argument");
+  }
+
+  std::vector<int> weights(n, 1);
+  for (int i = 0; i < (total_weight - n); i++) {
+    int x = absl::uniform_int_distribution<int>(0, n - 1)(gen);
+    weights[x]++;
+  }
+  return weights;
+}
+
+int RescaleWeightForTomahawk3(int weight) {
+  if (weight <= 1) {
+    return weight;
+  }
+  if (weight == 2) {
+    return 1;
+  }
+  return (weight - 1) / 2;
+}
+
+void RescaleMemberWeights(std::vector<Member>& members) {
+  for (Member& member : members) {
+    int old_weight = member.weight;
+    member.weight = RescaleWeightForTomahawk3(old_weight);
+    LOG(INFO) << "Rescaling member id: " << member.port
+              << " from weight: " << old_weight
+              << " to new weight: " << member.weight;
+  }
 }
 
 }  // namespace pins
