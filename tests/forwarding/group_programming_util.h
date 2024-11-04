@@ -72,6 +72,21 @@ absl::Status VerifyGroupMembersFromReceiveTraffic(
     const absl::flat_hash_map<int, int>& actual_packets_received_per_port,
     const absl::flat_hash_set<int>& expected_member_ports);
 
+// Generates N random weights that add up to total_weight, with at least 1 in
+// each bucket.
+absl::StatusOr<std::vector<int>> GenerateNRandomWeights(int n,
+                                                        int total_weight);
+
+// TODO: Temporary fix to rescale TH3 weights.
+// To be removed when 256 member support is available.
+int RescaleWeightForTomahawk3(int weight);
+
+// TODO: Rescales the member weights to <=128 for now to match
+// hardware behaviour, remove when hardware supports > 128 weights.
+// Halves member weights >= 2 and works only for sum of initial member weights
+// <= 256.
+void RescaleMemberWeights(std::vector<Member>& members);
+
 }  // namespace pins
 
 #endif  // PINS_TESTS_FORWARDING_GROUP_PROGRAMMING_H_
