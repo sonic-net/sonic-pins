@@ -297,6 +297,7 @@ void TestGnmiInterfaceConfigSetId(thinkit::Switch& sut,
   ASSERT_OK(SetGnmiConfigPath(sut_gnmi_stub.get(), if_id_config_path,
                               GnmiSetType::kUpdate,
                               ConstructGnmiConfigSetString("id", id)));
+  absl::SleepFor(absl::Seconds(5));
 
   // Perform state path verifications.
   // Verify /interfaces/interface[name=<port>]/state/id = <configured_value>.
