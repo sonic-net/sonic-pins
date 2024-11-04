@@ -1,0 +1,1984 @@
+headers {
+  key: "h1"
+  value {
+    name: "header_t"
+    id: 2
+    fields {
+      key: "f1"
+      value {
+        name: "f1"
+        bitwidth: 8
+      }
+    }
+  }
+}
+headers {
+  key: "scalars"
+  value {
+    name: "scalars_0"
+  }
+}
+headers {
+  key: "standard_metadata"
+  value {
+    name: "standard_metadata"
+    id: 1
+    fields {
+      key: "_padding"
+      value {
+        name: "_padding"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "checksum_error"
+      value {
+        name: "checksum_error"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "deq_qdepth"
+      value {
+        name: "deq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "deq_timedelta"
+      value {
+        name: "deq_timedelta"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "egress_global_timestamp"
+      value {
+        name: "egress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "egress_port"
+      value {
+        name: "egress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "egress_rid"
+      value {
+        name: "egress_rid"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "egress_spec"
+      value {
+        name: "egress_spec"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "enq_qdepth"
+      value {
+        name: "enq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "enq_timestamp"
+      value {
+        name: "enq_timestamp"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ingress_global_timestamp"
+      value {
+        name: "ingress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ingress_port"
+      value {
+        name: "ingress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "instance_type"
+      value {
+        name: "instance_type"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "mcast_grp"
+      value {
+        name: "mcast_grp"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "packet_length"
+      value {
+        name: "packet_length"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "parser_error"
+      value {
+        name: "parser_error"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "priority"
+      value {
+        name: "priority"
+        bitwidth: 3
+      }
+    }
+  }
+}
+actions {
+  key: "MyEgress.a1"
+  value {
+    action_definition {
+      preamble {
+        id: 31433802
+        name: "MyEgress.a1"
+        alias: "MyEgress.a1"
+      }
+    }
+    action_implementation {
+      action_body {
+        source_info {
+          line: 125
+          column: 6
+          source_fragment: "hdr.h1.f1 = 1"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x01"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  key: "MyIngress.a1"
+  value {
+    action_definition {
+      preamble {
+        id: 23754841
+        name: "MyIngress.a1"
+        alias: "MyIngress.a1"
+      }
+    }
+    action_implementation {
+      action_body {
+        source_info {
+          line: 52
+          column: 7
+          source_fragment: "hdr.h1.f1 = 1"
+        }
+        assignment {
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x01"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+actions {
+  key: "NoAction"
+  value {
+    action_definition {
+      preamble {
+        id: 21257015
+        name: "NoAction"
+        alias: "NoAction"
+        annotations: "@noWarn(\"unused\")"
+      }
+    }
+    action_implementation {
+    }
+  }
+}
+tables {
+  key: "MyEgress.n23"
+  value {
+    table_definition {
+      preamble {
+        id: 50319065
+        name: "MyEgress.n23"
+        alias: "n23"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 31433802
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 31433802
+            name: "MyEgress.a1"
+            alias: "MyEgress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyEgress.a1"
+        value: "node_27"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "node_27"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyEgress.n24"
+  value {
+    table_definition {
+      preamble {
+        id: 44395044
+        name: "MyEgress.n24"
+        alias: "n24"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 31433802
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 31433802
+            name: "MyEgress.a1"
+            alias: "MyEgress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyEgress.a1"
+        value: "MyEgress.n25"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyEgress.n25"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyEgress.n25"
+  value {
+    table_definition {
+      preamble {
+        id: 40241062
+        name: "MyEgress.n25"
+        alias: "n25"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 31433802
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 31433802
+            name: "MyEgress.a1"
+            alias: "MyEgress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyEgress.a1"
+        value: "__END_OF_PIPELINE__"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "__END_OF_PIPELINE__"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n11"
+  value {
+    table_definition {
+      preamble {
+        id: 46102848
+        name: "MyIngress.n11"
+        alias: "n11"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n13"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n13"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n12"
+  value {
+    table_definition {
+      preamble {
+        id: 41031334
+        name: "MyIngress.n12"
+        alias: "n12"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n13"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n13"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n13"
+  value {
+    table_definition {
+      preamble {
+        id: 36045325
+        name: "MyIngress.n13"
+        alias: "n13"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "node_16"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "node_16"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n14"
+  value {
+    table_definition {
+      preamble {
+        id: 50061241
+        name: "MyIngress.n14"
+        alias: "n14"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "node_16"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "node_16"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n17"
+  value {
+    table_definition {
+      preamble {
+        id: 39759999
+        name: "MyIngress.n17"
+        alias: "n17"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n18"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n18"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n18"
+  value {
+    table_definition {
+      preamble {
+        id: 38259822
+        name: "MyIngress.n18"
+        alias: "n18"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n21"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n21"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n19"
+  value {
+    table_definition {
+      preamble {
+        id: 38671484
+        name: "MyIngress.n19"
+        alias: "n19"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n21"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n21"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n2"
+  value {
+    table_definition {
+      preamble {
+        id: 46273442
+        name: "MyIngress.n2"
+        alias: "n2"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n3"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n3"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n20"
+  value {
+    table_definition {
+      preamble {
+        id: 45408596
+        name: "MyIngress.n20"
+        alias: "n20"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n21"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n21"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n21"
+  value {
+    table_definition {
+      preamble {
+        id: 38866062
+        name: "MyIngress.n21"
+        alias: "n21"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n22"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n22"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n22"
+  value {
+    table_definition {
+      preamble {
+        id: 37988467
+        name: "MyIngress.n22"
+        alias: "n22"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "__END_OF_PIPELINE__"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "__END_OF_PIPELINE__"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n3"
+  value {
+    table_definition {
+      preamble {
+        id: 44574061
+        name: "MyIngress.n3"
+        alias: "n3"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "node_6"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "node_6"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n6"
+  value {
+    table_definition {
+      preamble {
+        id: 50036756
+        name: "MyIngress.n6"
+        alias: "n6"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n9"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n9"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n7"
+  value {
+    table_definition {
+      preamble {
+        id: 35461694
+        name: "MyIngress.n7"
+        alias: "n7"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n8"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n8"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n8"
+  value {
+    table_definition {
+      preamble {
+        id: 39239345
+        name: "MyIngress.n8"
+        alias: "n8"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "MyIngress.a1"
+        value: "MyIngress.n9"
+      }
+      action_to_next_control {
+        key: "NoAction"
+        value: "MyIngress.n9"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+tables {
+  key: "MyIngress.n9"
+  value {
+    table_definition {
+      preamble {
+        id: 42554133
+        name: "MyIngress.n9"
+        alias: "n9"
+      }
+      match_fields_by_id {
+        key: 1
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      match_fields_by_name {
+        key: "hdr.h1.f1"
+        value {
+          match_field {
+            id: 1
+            name: "hdr.h1.f1"
+            bitwidth: 8
+            match_type: EXACT
+          }
+        }
+      }
+      entry_actions {
+        ref {
+          id: 23754841
+          annotations: "@proto_id(1)"
+        }
+        action {
+          preamble {
+            id: 23754841
+            name: "MyIngress.a1"
+            alias: "MyIngress.a1"
+          }
+        }
+        proto_id: 1
+      }
+      default_only_actions {
+        ref {
+          id: 21257015
+          annotations: "@defaultonly"
+          scope: DEFAULT_ONLY
+        }
+        action {
+          preamble {
+            id: 21257015
+            name: "NoAction"
+            alias: "NoAction"
+            annotations: "@noWarn(\"unused\")"
+          }
+        }
+      }
+      size: 1024
+    }
+    table_implementation {
+      default_action: "NoAction"
+      action_to_next_control {
+        key: "__HIT__"
+        value: "node_11"
+      }
+      action_to_next_control {
+        key: "__MISS__"
+        value: "MyIngress.n14"
+      }
+      match_name_to_field {
+        key: "hdr.h1.f1"
+        value {
+          header_name: "h1"
+          field_name: "f1"
+        }
+      }
+    }
+  }
+}
+conditionals {
+  key: "node_11"
+  value {
+    name: "node_11"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: NOT_EQUALS
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x03"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "MyIngress.n11"
+    else_branch: "MyIngress.n12"
+  }
+}
+conditionals {
+  key: "node_16"
+  value {
+    name: "node_16"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: NOT_EQUALS
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x04"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "node_17"
+    else_branch: "MyIngress.n17"
+  }
+}
+conditionals {
+  key: "node_17"
+  value {
+    name: "node_17"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: NOT_EQUALS
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x05"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "MyIngress.n19"
+    else_branch: "MyIngress.n20"
+  }
+}
+conditionals {
+  key: "node_2"
+  value {
+    name: "node_2"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: NOT_EQUALS
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x00"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "MyIngress.n2"
+    else_branch: "MyIngress.n2"
+  }
+}
+conditionals {
+  key: "node_27"
+  value {
+    name: "node_27"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: NOT_EQUALS
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x06"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "node_28"
+    else_branch: "MyEgress.n25"
+  }
+}
+conditionals {
+  key: "node_28"
+  value {
+    name: "node_28"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: NOT_EQUALS
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x07"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "MyEgress.n24"
+    else_branch: "MyEgress.n25"
+  }
+}
+conditionals {
+  key: "node_6"
+  value {
+    name: "node_6"
+    condition {
+      expression_value {
+        binary_expression {
+          operation: NOT_EQUALS
+          left {
+            field_value {
+              header_name: "h1"
+              field_name: "f1"
+            }
+          }
+          right {
+            hexstr_value {
+              value: "0x01"
+            }
+          }
+        }
+      }
+    }
+    if_branch: "MyIngress.n6"
+    else_branch: "MyIngress.n7"
+  }
+}
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+    initial_control: "MyEgress.n23"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "node_2"
+  }
+}
+

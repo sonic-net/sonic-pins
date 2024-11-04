@@ -139,6 +139,18 @@ ir_parsing_test(
 )
 
 ir_parsing_test(
+    name = "conditional_sequence_test",
+    golden_file = "expected/conditional_sequence.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/conditional_sequence.p4",
+)
+
+ir_parsing_test(
+    name = "complex_conditional_test",
+    golden_file = "expected/complex_conditional.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/complex_conditional.p4",
+)
+
+ir_parsing_test(
     name = "table_hit_1_test",
     golden_file = "expected/table_hit_1.txt",
     p4_program = "//p4_symbolic/testdata:conditional/table_hit_1.p4",
