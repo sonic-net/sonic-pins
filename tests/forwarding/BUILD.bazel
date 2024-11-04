@@ -82,7 +82,6 @@ cc_library(
     testonly = True,
     srcs = ["smoke_test.cc"],
     hdrs = ["smoke_test.h"],
-    visibility = ["//visibility:public"],
     deps = [
         ":p4_blackbox_fixture",
         ":test_data",
