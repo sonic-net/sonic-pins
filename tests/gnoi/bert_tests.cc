@@ -32,6 +32,7 @@
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
+#include "thinkit/test_environment.h"
 
 ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
           "Seed to randomly generate interface index.");
@@ -314,6 +315,8 @@ void GetAndVerifyBertResultsWithAdminDownInterfaces(
 
 // Test StartBERT with invalid request parameters.
 TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "c1dcb1cc-4806-45cc-8f8a-676beafde103");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   // TODO (b/176913347): Enable the all ports UP check.
   // ASSERT_OK(pins_test::PortsUp(sut));
@@ -401,6 +404,8 @@ TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
 // 2) If StopBERT RPC is requested on a port that is not running BERT, RPC
 // should fail.
 TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "224db9cf-c709-486d-a0d3-6ab64c1a1e1f");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   // TODO (b/176913347): Enable the all ports UP check.
   // ASSERT_OK(pins_test::PortsUp(sut));
@@ -458,6 +463,8 @@ TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
 // 2) If GetBERTResult RPC is requested on a port that never ran BERT before,
 // RPC should fail.
 TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "4f837d7a-ab44-4694-9ca9-399d576757f4");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   // TODO (b/176913347): Enable the all ports UP check.
   // ASSERT_OK(pins_test::PortsUp(sut));
@@ -514,6 +521,8 @@ TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
 
 // Test StartBERT fails if peer port is not running BERT.
 TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "37e48922-0616-4d16-8fd3-975897491956");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
                        sut.CreateGnmiStub());
@@ -586,6 +595,8 @@ TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
 // 3) Operation id that was used earlier to start the BERT test will fail to
 // start BERT if used again.
 TEST_P(BertTest, StartBertSucceeds) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "b31a796a-d078-4d45-b785-f09ec598e05a");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
                        sut.CreateGnmiStub());
@@ -791,6 +802,8 @@ TEST_P(BertTest, StartBertSucceeds) {
 // This helps us verify a mix of operation during BERT - unexpected software or
 // hardware errors.
 TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "ce526e97-2a62-4044-9dce-8fc74b232e4b");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
                        sut.CreateGnmiStub());
