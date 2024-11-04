@@ -14,6 +14,10 @@
 
 #include "tests/gnoi/bert_tests.h"
 
+#include <random>
+#include "absl/container/flat_hash_set.h"
+#include "absl/flags/flag.h"
+
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/substitute.h"
@@ -28,6 +32,9 @@
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
+
+ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
+          "Seed to randomly generate interface index.");
 
 namespace bert {
 
@@ -47,6 +54,11 @@ constexpr absl::Duration kPollInterval = absl::Seconds(30);
 // Minimum wait time after the BERT request to read the BERT result.
 constexpr absl::Duration kWaitTime = absl::Seconds(30);
 
+constexpr uint8_t kMaxAllowedInterfacesToRunBert = 96;
+
+constexpr char kEnabledFalse[] = "{\"enabled\":false}";
+constexpr char kEnabledTrue[] = "{\"enabled\":true}";
+
 const std::string BuildPerPortStartBertRequest(
     absl::string_view interface_name) {
   return absl::Substitute(R"pb(
@@ -62,6 +74,77 @@ const std::string BuildPerPortStartBertRequest(
                             test_duration_in_secs: $1
                           )pb",
                           interface_name, ToInt64Seconds(kTestDuration));
+}
+
+const std::string BuildOpenConfigInterface(absl::string_view interface_name) {
+  return absl::Substitute(R"pb(
+                            origin: "openconfig"
+                            elem { name: "interfaces" }
+                            elem {
+                              name: "interface"
+                              key { key: "name" value: '$0' }
+                            }
+                          )pb",
+                          interface_name);
+}
+
+absl::StatusOr<std::string> GetInterfaceNameFromOcInterfacePath(
+    const gnoi::types::Path& interface) {
+  // Validate if interface is in valid format(either in OpenConfig format or
+  // SONiC format).
+  // Example: openconfig/interfaces/interface[name=Ethernet0] or
+  // openconfig-interfaces/interfaces/interface[name=Ethernet0].
+  std::stringstream error_stream;
+  if ((interface.origin() != "openconfig") &&
+      (interface.origin() != "openconfig-interfaces")) {
+    error_stream << "Invalid interface origin. Expected: openconfig or "
+                    "openconfig-interfaces but received: "
+                 << interface.origin() << " in: " << interface.DebugString();
+    return absl::InvalidArgumentError(error_stream.str());
+  }
+  auto elems = interface.elem();
+  if (elems.size() != 2) {
+    error_stream << "Invalid element path count. Expected: 2 but received: "
+                 << elems.size() << " in: " << interface.DebugString();
+    return absl::InvalidArgumentError(error_stream.str());
+  }
+  if ((elems[0].name() != "interfaces") || (elems[0].key_size() > 0)) {
+    error_stream << "First interface path element is malformed. Expected "
+                    "element name: interfaces but received: "
+                 << elems[0].name()
+                 << " and expected 0 key but received: " << elems[0].key_size()
+                 << " in: " << interface.DebugString();
+    return absl::InvalidArgumentError(error_stream.str());
+  }
+  if ((elems[1].name() != "interface")) {
+    error_stream << "Second interface path element is malformed. Expected "
+                    "element name: interface but received: "
+                 << elems[1].name() << " in: " << interface.DebugString();
+    return absl::InvalidArgumentError(error_stream.str());
+  }
+  auto it = elems[1].key().find("name");
+  if (it != elems[1].key().end()) {
+    return it->second;
+  }
+  return absl::InvalidArgumentError(
+      absl::StrCat("Interface name is missing in: ", interface.DebugString()));
+}
+
+void SetAdminStateOnInterfaceList(gnmi::gNMI::Stub& gnmi_stub,
+                                  std::vector<std::string>& interfaces,
+                                  absl::string_view value) {
+  for (const std::string& interface : interfaces) {
+    const std::string if_enabled_config_path = absl::StrCat(
+        "interfaces/interface[name=", interface, "]/config/enabled");
+    ASSERT_OK(SetGnmiConfigPath(&gnmi_stub, if_enabled_config_path,
+                                pins_test::GnmiSetType::kUpdate, value));
+  }
+}
+
+bool IsInterfaceInList(absl::string_view interface,
+                       std::vector<std::string>& interfaces) {
+  return std::find(interfaces.begin(), interfaces.end(), interface) !=
+         interfaces.end();
 }
 
 void VerifyBertResultForSuccess(
@@ -91,6 +174,143 @@ void VerifyBertResultForSuccess(
   }
   EXPECT_EQ(bert_result.total_errors(), total_errors);
 }
+
+// Helps in getting the BERT result on a set of ports and if BERT is running on
+// the port, forces admin status down by disabling it. It also modifies the
+// list of ports in request by removing the port that was running BERT.
+void CheckRunningBertAndForceAdminDownHelper(
+    gnoi::diag::Diag::Stub& gnoi_diag_stub, gnmi::gNMI::Stub& gnmi_stub,
+    gnoi::diag::GetBERTResultRequest* request) {
+  gnoi::diag::GetBERTResultResponse response;
+  grpc::ClientContext context;
+  ASSERT_OK(gnoi_diag_stub.GetBERTResult(&context, *request, &response));
+
+    ASSERT_THAT(response.per_port_responses(),
+              SizeIs(request->per_port_requests_size()));
+  request->clear_per_port_requests();
+  for (const auto& result : response.per_port_responses()) {
+    // Check if BERT is running.
+    if ((result.status() == gnoi::diag::BERT_STATUS_OK) &&
+        (result.peer_lock_established())) {
+      ASSERT_OK_AND_ASSIGN(
+          const std::string interface,
+          GetInterfaceNameFromOcInterfacePath(result.interface()));
+      // Disable the admin status.
+      const std::string if_enabled_config_path = absl::StrCat(
+          "interfaces/interface[name=", interface, "]/config/enabled");
+      ASSERT_OK(SetGnmiConfigPath(&gnmi_stub, if_enabled_config_path,
+                                  pins_test::GnmiSetType::kUpdate,
+                                  kEnabledFalse));
+    } else {
+      // Get result for interfaces again that didn't start BERT in last poll.
+      *(request->add_per_port_requests()->mutable_interface()) =
+          result.interface();
+    }
+  }
+}
+
+// Checks if BERT is running on the ports where we are supposed to force admin
+// status DOWN. If BERT is running, force admin status to DOWN on port.
+void CheckRunningBertAndForceAdminDown(
+    gnoi::diag::Diag::Stub& sut_gnoi_diag_stub,
+    gnoi::diag::Diag::Stub& control_switch_gnoi_diag_stub,
+    gnmi::gNMI::Stub& sut_gnmi_stub, gnmi::gNMI::Stub& control_switch_gnmi_stub,
+    absl::string_view op_id, std::vector<std::string>& sut_interfaces,
+    std::vector<std::string>& control_switch_interfaces) {
+  gnoi::diag::GetBERTResultRequest sut_request;
+  sut_request.set_bert_operation_id(std::string(op_id));
+  for (const std::string& interface : sut_interfaces) {
+    *(sut_request.add_per_port_requests()->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface(interface));
+  }
+
+  gnoi::diag::GetBERTResultRequest control_switch_request;
+  control_switch_request.set_bert_operation_id(std::string(op_id));
+  for (const std::string& interface : control_switch_interfaces) {
+    *(control_switch_request.add_per_port_requests()->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface(interface));
+  }
+
+  int max_poll_count =
+      1 + (absl::ToInt64Seconds(kSyncDuration - absl::Seconds(1)) /
+           absl::ToInt64Seconds(kPollInterval));
+
+  while (max_poll_count > 0) {
+    absl::SleepFor(kPollInterval);
+    if (sut_request.per_port_requests_size() > 0) {
+      // Check BERT status on SUT and force admin status down.
+      ASSERT_NO_FATAL_FAILURE(CheckRunningBertAndForceAdminDownHelper(
+          sut_gnoi_diag_stub, sut_gnmi_stub, &sut_request));
+    }
+
+    if (control_switch_request.per_port_requests_size() > 0) {
+      // Check BERT status on control switch and force admin status down.
+      ASSERT_NO_FATAL_FAILURE(CheckRunningBertAndForceAdminDownHelper(
+          control_switch_gnoi_diag_stub, control_switch_gnmi_stub,
+          &control_switch_request));
+    }
+    if (sut_request.per_port_requests().empty() &&
+        control_switch_request.per_port_requests().empty()) {
+      break;
+    }
+    --max_poll_count;
+  }
+
+   EXPECT_THAT(sut_request.per_port_requests(), testing::IsEmpty());
+  EXPECT_THAT(control_switch_request.per_port_requests(), testing::IsEmpty());
+}
+
+// Gets the BERT result on all the ports that are running BERT. Verifies BERT
+// failure result on ports where admin status was forced to DOWN. Other ports
+// are expected to have successful BERT results.
+void GetAndVerifyBertResultsWithAdminDownInterfaces(
+    gnoi::diag::Diag::Stub& gnoi_diag_stub,
+    gnoi::diag::StartBERTRequest& bert_request,
+    std::vector<std::string>& sut_admin_down_interfaces,
+    std::vector<std::string>& control_switch_admin_down_interfaces) {
+  gnoi::diag::GetBERTResultRequest result_request;
+  result_request.set_bert_operation_id(bert_request.bert_operation_id());
+  for (unsigned idx = 0; idx < bert_request.per_port_requests_size(); ++idx) {
+    *(result_request.add_per_port_requests()->mutable_interface()) =
+        bert_request.per_port_requests(idx).interface();
+  }
+  gnoi::diag::GetBERTResultResponse result_response;
+  grpc::ClientContext result_context;
+  ASSERT_OK(gnoi_diag_stub.GetBERTResult(&result_context, result_request,
+                                         &result_response));
+  ASSERT_THAT(result_response.per_port_responses(),
+              SizeIs(bert_request.per_port_requests_size()));
+  for (unsigned idx = 0; idx < result_response.per_port_responses_size();
+       ++idx) {
+    // Extract interface name from OC interface path.
+    ASSERT_OK_AND_ASSIGN(
+        const std::string interface_name,
+        GetInterfaceNameFromOcInterfacePath(
+            result_response.per_port_responses(idx).interface()));
+    // Check if interface is part of list where admin state was disabled.
+    if (IsInterfaceInList(interface_name, sut_admin_down_interfaces) ||
+        IsInterfaceInList(interface_name,
+                          control_switch_admin_down_interfaces)) {
+      // Verify BERT failure.
+      EXPECT_EQ(result_response.per_port_responses(idx).status(),
+                gnoi::diag::BERT_STATUS_PEER_LOCK_LOST);
+      EXPECT_TRUE(
+          result_response.per_port_responses(idx).peer_lock_established());
+      EXPECT_TRUE(result_response.per_port_responses(idx).peer_lock_lost());
+      continue;
+    }
+    // If it is normal BERT running port, verify normal SUCCESS result.
+    VerifyBertResultForSuccess(
+        result_response.per_port_responses(idx),
+        bert_request.bert_operation_id(),
+        bert_request.per_port_requests(idx).interface(),
+        bert_request.per_port_requests(idx).prbs_polynomial());
+  }
+}
+
+
 
 // Test StartBERT with invalid request parameters.
 TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
@@ -159,18 +379,10 @@ TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
   // Case 4: Invalid interface.
   {
     gnoi::diag::StartBERTRequest invalid_interface_request = valid_request;
-    gnoi::types::Path invalid_interface =
-        gutil::ParseProtoOrDie<gnoi::types::Path>(
-            R"pb(
-              origin: "openconfig"
-              elem { name: "interfaces" }
-              elem {
-                name: "interface"
-                key { key: "name" value: "InvalidPort" }
-              }
-            )pb");
     *(invalid_interface_request.mutable_per_port_requests(0)
-          ->mutable_interface()) = invalid_interface;
+          ->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface("InvalidPort"));
     response.Clear();
     grpc::ClientContext context;
     LOG(INFO) << "Sending StartBERT request: "
@@ -183,6 +395,122 @@ TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
   // TODO (b/176913347): Enable the all ports UP check.
   // ASSERT_OK(pins_test::PortsUp(sut));
 }
+
+// Test StopBERT RPC with invalid argument in the request.
+// 1) If StopBERT RPC is requested on an invalid port, RPC should fail.
+// 2) If StopBERT RPC is requested on a port that is not running BERT, RPC
+// should fail.
+TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
+  thinkit::Switch& sut = GetMirrorTestbed().Sut();
+  // TODO (b/176913347): Enable the all ports UP check.
+  // ASSERT_OK(pins_test::PortsUp(sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<gnoi::diag::Diag::StubInterface> sut_gnoi_diag_stub,
+      sut.CreateGnoiDiagStub());
+
+  // Request StopBERT RPC on an invalid port, RPC should fail.
+  {
+    gnoi::diag::StopBERTRequest request;
+    request.set_bert_operation_id(
+        absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now())));
+    *(request.add_per_port_requests()->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface("invalidPort"));
+
+    gnoi::diag::StopBERTResponse response;
+    grpc::ClientContext context;
+    LOG(INFO) << "Sending StopBERT request: " << request.ShortDebugString();
+    EXPECT_THAT(
+        gutil::GrpcStatusToAbslStatus(
+            sut_gnoi_diag_stub->StopBERT(&context, request, &response)),
+        gutil::StatusIs(
+            absl::StatusCode::kInvalidArgument,
+            AllOf(HasSubstr("Interface is invalid"),
+                  HasSubstr("Operation ID is not found on interface"))));
+  }
+
+  // Request StopBERT RPC on a port that is not running BERT, RPC should fail.
+  {
+    // TODO (b/182417612) : Select one operational state "up" port.
+    constexpr char kInterface[] = "Ethernet0";
+    gnoi::diag::StopBERTRequest request;
+    request.set_bert_operation_id(
+        absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now())));
+    *(request.add_per_port_requests()->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface(kInterface));
+    gnoi::diag::StopBERTResponse response;
+    grpc::ClientContext context;
+    LOG(INFO) << "Sending StopBERT request: " << request.ShortDebugString();
+    EXPECT_THAT(
+        gutil::GrpcStatusToAbslStatus(
+            sut_gnoi_diag_stub->StopBERT(&context, request, &response)),
+        gutil::StatusIs(absl::StatusCode::kInvalidArgument,
+                        HasSubstr("Operation ID is not found on interface")));
+  }
+
+  // TODO (b/176913347): Enable the all ports UP check.
+  // ASSERT_OK(pins_test::PortsUp(sut));
+}
+
+// Test GetBERTResult RPC with invalid argument in the request.
+// 1) If GetBERTResult RPC is requested on an invalid port, RPC should fail.
+// 2) If GetBERTResult RPC is requested on a port that never ran BERT before,
+// RPC should fail.
+TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
+  thinkit::Switch& sut = GetMirrorTestbed().Sut();
+  // TODO (b/176913347): Enable the all ports UP check.
+  // ASSERT_OK(pins_test::PortsUp(sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<gnoi::diag::Diag::StubInterface> sut_gnoi_diag_stub,
+      sut.CreateGnoiDiagStub());
+
+  // Request GetBERTResult RPC on an invalid port, RPC should fail.
+  {
+    gnoi::diag::GetBERTResultRequest result_request;
+    result_request.set_bert_operation_id(
+        absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now())));
+    *(result_request.add_per_port_requests()->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface("InvalidPort"));
+
+    gnoi::diag::GetBERTResultResponse result_response;
+    grpc::ClientContext context;
+    LOG(INFO) << "Sending GetBERTResult request: "
+              << result_request.ShortDebugString();
+    EXPECT_THAT(gutil::GrpcStatusToAbslStatus(sut_gnoi_diag_stub->GetBERTResult(
+                    &context, result_request, &result_response)),
+                gutil::StatusIs(
+                    absl::StatusCode::kInvalidArgument,
+                    AllOf(HasSubstr("Interface"), HasSubstr("is not valid"))));
+  }
+  // Request GetBERTResult RPC on a port that never ran BERT before, RPC should
+  // fail.
+  {
+    // TODO (b/182417612) : Select one operational state "up" port.
+    constexpr char kInterface[] = "Ethernet0";
+    gnoi::diag::GetBERTResultRequest result_request;
+    result_request.set_bert_operation_id(
+        absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now())));
+    *(result_request.add_per_port_requests()->mutable_interface()) =
+        gutil::ParseProtoOrDie<gnoi::types::Path>(
+            BuildOpenConfigInterface(kInterface));
+
+    gnoi::diag::GetBERTResultResponse result_response;
+    grpc::ClientContext context;
+    LOG(INFO) << "Sending GetBERTResult request: "
+              << result_request.ShortDebugString();
+    EXPECT_THAT(gutil::GrpcStatusToAbslStatus(sut_gnoi_diag_stub->GetBERTResult(
+                    &context, result_request, &result_response)),
+                gutil::StatusIs(absl::StatusCode::kInvalidArgument,
+                                AllOf(HasSubstr("Result is not found for intf"),
+                                      HasSubstr(kInterface))));
+  }
+
+  // TODO (b/176913347): Enable the all ports UP check.
+  // ASSERT_OK(pins_test::PortsUp(sut));
+}
+
 
 // Test StartBERT fails if peer port is not running BERT.
 TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
