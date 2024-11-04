@@ -28,6 +28,46 @@
 namespace gpins {
 namespace {
 
+TEST_P(SmokeTestFixture, ModifyWorks) {
+  const sai::WriteRequest pd_insert = gutil::ParseProtoOrDie<sai::WriteRequest>(
+      R"pb(
+        updates {
+          type: INSERT
+          table_entry {
+            acl_ingress_table_entry {
+              match { is_ip { value: "0x1" } }
+              priority: 10
+              action { copy { qos_queue: "0x1" } }
+            }
+          }
+        }
+      )pb");
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest pi_insert,
+                       pdpi::PdWriteRequestToPi(IrP4Info(), pd_insert));
+  ASSERT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(SutP4RuntimeSession(), pi_insert));
+
+  const sai::WriteRequest pd_modify = gutil::ParseProtoOrDie<sai::WriteRequest>(
+      R"pb(
+        updates {
+          type: MODIFY
+          table_entry {
+            acl_ingress_table_entry {
+              match { is_ip { value: "0x1" } }
+              priority: 10
+              action { forward {} }
+            }
+          }
+        }
+      )pb");
+  ASSERT_OK_AND_ASSIGN(p4::v1::WriteRequest pi_modify,
+                       pdpi::PdWriteRequestToPi(IrP4Info(), pd_modify));
+  ASSERT_OK(
+      pdpi::SetMetadataAndSendPiWriteRequest(SutP4RuntimeSession(), pi_modify));
+  // This used to fail with a read error, see b/185508142.
+  ASSERT_OK(pdpi::ClearTableEntries(SutP4RuntimeSession()));
+}
+
 TEST_P(SmokeTestFixture, InsertTableEntry) {
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -89,8 +129,9 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
 
   p4::v1::ReadRequest read_request;
   read_request.add_entities()->mutable_table_entry();
-  ASSERT_OK_AND_ASSIGN(p4::v1::ReadResponse read_response,
-                       pdpi::SetMetadataAndSendPiReadRequest(session, read_request));
+  ASSERT_OK_AND_ASSIGN(
+      p4::v1::ReadResponse read_response,
+      pdpi::SetMetadataAndSendPiReadRequest(session, read_request));
 
   for (const auto& entity : read_response.entities()) {
     ASSERT_OK(test_environment.AppendToTestArtifact(
