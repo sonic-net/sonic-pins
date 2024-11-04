@@ -68,7 +68,7 @@ class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
   }
 
   void TearDown() override {
-    if (SutP4RuntimeSession() != nullptr) {
+    if (SutP4RuntimeSession() != nullptr && clear_table_entries_on_teardown_) {
       // Clear all table entries to leave the switch in a clean state.
       EXPECT_OK(pdpi::ClearTableEntries(SutP4RuntimeSession()));
     }
@@ -82,7 +82,13 @@ class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
 
   const pdpi::IrP4Info& IrP4Info() const { return ir_p4info_; }
 
+ protected:
+  void DisableClearingTableEntriesOnTearDown() {
+    clear_table_entries_on_teardown_ = false;
+  }
+
  private:
+  bool clear_table_entries_on_teardown_ = true;
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
   pdpi::IrP4Info ir_p4info_ = 
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock);

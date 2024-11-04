@@ -37,6 +37,9 @@
 ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
           "Seed to randomly generate interface index.");
 
+ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
+          "Seed to randomly generate interface index.");
+
 namespace bert {
 
 using ::google::protobuf::util::MessageDifferencer;
