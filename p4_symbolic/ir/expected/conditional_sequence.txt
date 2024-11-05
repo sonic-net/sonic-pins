@@ -399,6 +399,9 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_5"
+      }
     }
   }
 }
@@ -500,6 +503,9 @@ tables {
           header_name: "h1"
           field_name: "fr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "node_8"
       }
     }
   }
@@ -603,6 +609,9 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_11"
+      }
     }
   }
 }
@@ -704,6 +713,9 @@ tables {
           header_name: "h1"
           field_name: "fr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "node_14"
       }
     }
   }
@@ -807,6 +819,9 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_17"
+      }
     }
   }
 }
@@ -908,6 +923,9 @@ tables {
           header_name: "h1"
           field_name: "fr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "node_20"
       }
     }
   }
@@ -1011,6 +1029,9 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_23"
+      }
     }
   }
 }
@@ -1112,6 +1133,9 @@ tables {
           header_name: "h1"
           field_name: "fr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "MyIngress.t"
       }
     }
   }
@@ -1215,6 +1239,9 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_5"
+      }
     }
   }
 }
@@ -1316,6 +1343,9 @@ tables {
           header_name: "h1"
           field_name: "fr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "node_8"
       }
     }
   }
@@ -1419,6 +1449,9 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_11"
+      }
     }
   }
 }
@@ -1520,6 +1553,9 @@ tables {
           header_name: "h1"
           field_name: "fr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "node_14"
       }
     }
   }
@@ -1623,6 +1659,9 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_17"
+      }
     }
   }
 }
@@ -1724,6 +1763,9 @@ tables {
           header_name: "h1"
           field_name: "fr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "node_20"
       }
     }
   }
@@ -1827,6 +1869,9 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_23"
+      }
     }
   }
 }
@@ -1928,6 +1973,9 @@ tables {
           header_name: "h1"
           field_name: "fr"
         }
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "MyIngress.t"
       }
     }
   }
@@ -2031,6 +2079,10 @@ tables {
           field_name: "fr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
+        continue_to_merge_point: true
+      }
     }
   }
 }
@@ -2058,6 +2110,10 @@ conditionals {
     }
     if_branch: "MyIngress.i4"
     else_branch: "MyIngress.e4"
+    optimized_symbolic_execution_info {
+      merge_point: "node_14"
+      continue_to_merge_point: true
+    }
   }
 }
 conditionals {
@@ -2084,6 +2140,10 @@ conditionals {
     }
     if_branch: "MyIngress.i5"
     else_branch: "MyIngress.e5"
+    optimized_symbolic_execution_info {
+      merge_point: "node_17"
+      continue_to_merge_point: true
+    }
   }
 }
 conditionals {
@@ -2110,6 +2170,10 @@ conditionals {
     }
     if_branch: "MyIngress.i6"
     else_branch: "MyIngress.e6"
+    optimized_symbolic_execution_info {
+      merge_point: "node_20"
+      continue_to_merge_point: true
+    }
   }
 }
 conditionals {
@@ -2136,6 +2200,10 @@ conditionals {
     }
     if_branch: "MyIngress.i1"
     else_branch: "MyIngress.e1"
+    optimized_symbolic_execution_info {
+      merge_point: "node_5"
+      continue_to_merge_point: true
+    }
   }
 }
 conditionals {
@@ -2162,6 +2230,10 @@ conditionals {
     }
     if_branch: "MyIngress.i7"
     else_branch: "MyIngress.e7"
+    optimized_symbolic_execution_info {
+      merge_point: "node_23"
+      continue_to_merge_point: true
+    }
   }
 }
 conditionals {
@@ -2188,6 +2260,10 @@ conditionals {
     }
     if_branch: "MyIngress.i8"
     else_branch: "MyIngress.e8"
+    optimized_symbolic_execution_info {
+      merge_point: "MyIngress.t"
+      continue_to_merge_point: true
+    }
   }
 }
 conditionals {
@@ -2214,6 +2290,10 @@ conditionals {
     }
     if_branch: "MyIngress.i2"
     else_branch: "MyIngress.e2"
+    optimized_symbolic_execution_info {
+      merge_point: "node_8"
+      continue_to_merge_point: true
+    }
   }
 }
 conditionals {
@@ -2240,6 +2320,10 @@ conditionals {
     }
     if_branch: "MyIngress.i3"
     else_branch: "MyIngress.e3"
+    optimized_symbolic_execution_info {
+      merge_point: "node_11"
+      continue_to_merge_point: true
+    }
   }
 }
 pipeline {

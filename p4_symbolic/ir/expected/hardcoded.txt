@@ -209,6 +209,9 @@ tables {
         key: "hardcoded55"
         value: "__END_OF_PIPELINE__"
       }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
+      }
     }
   }
 }
@@ -225,6 +228,9 @@ tables {
       action_to_next_control {
         key: "hardcoded57"
         value: "__END_OF_PIPELINE__"
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
       }
     }
   }
@@ -253,6 +259,10 @@ conditionals {
     }
     if_branch: "tbl_hardcoded55"
     else_branch: "tbl_hardcoded57"
+    optimized_symbolic_execution_info {
+      merge_point: "__END_OF_PIPELINE__"
+      continue_to_merge_point: true
+    }
   }
 }
 pipeline {
