@@ -32,6 +32,7 @@
 #include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/validator/validator_lib.h"
+#include "thinkit/test_environment.h"
 
 ABSL_FLAG(uint32_t, idx_seed, static_cast<uint32_t>(std::time(nullptr)),
           "Seed to randomly generate interface index.");
@@ -314,6 +315,8 @@ void GetAndVerifyBertResultsWithAdminDownInterfaces(
 
 // Test StartBERT with invalid request parameters.
 TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "c1dcb1cc-4806-45cc-8f8a-676beafde103");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   // TODO (b/176913347): Enable the all ports UP check.
   // ASSERT_OK(pins_test::PortsUp(sut));
@@ -401,6 +404,8 @@ TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
 // 2) If StopBERT RPC is requested on a port that is not running BERT, RPC
 // should fail.
 TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "224db9cf-c709-486d-a0d3-6ab64c1a1e1f");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   // TODO (b/176913347): Enable the all ports UP check.
   // ASSERT_OK(pins_test::PortsUp(sut));
@@ -458,6 +463,8 @@ TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
 // 2) If GetBERTResult RPC is requested on a port that never ran BERT before,
 // RPC should fail.
 TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "4f837d7a-ab44-4694-9ca9-399d576757f4");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   // TODO (b/176913347): Enable the all ports UP check.
   // ASSERT_OK(pins_test::PortsUp(sut));
@@ -514,6 +521,8 @@ TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
 
 // Test StartBERT fails if peer port is not running BERT.
 TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "37e48922-0616-4d16-8fd3-975897491956");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
                        sut.CreateGnmiStub());
@@ -586,6 +595,8 @@ TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
 // 3) Operation id that was used earlier to start the BERT test will fail to
 // start BERT if used again.
 TEST_P(BertTest, StartBertSucceeds) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "b31a796a-d078-4d45-b785-f09ec598e05a");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
                        sut.CreateGnmiStub());
@@ -782,6 +793,133 @@ TEST_P(BertTest, StartBertSucceeds) {
   // TODO (b/176913347): Enable the all ports UP check.
   // ASSERT_OK(pins_test::PortsUp(sut));
   // ASSERT_OK(pins_test::PortsUp(control_switch));
+}
+
+// Runs the BERT test on current maximum allowed number of interfaces. During
+// the BERT run:
+// 1) Disable admin state of few ports on SUT,
+// 2) Disable admin state of few ports on control switch,
+// This helps us verify a mix of operation during BERT - unexpected software or
+// hardware errors.
+TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "ce526e97-2a62-4044-9dce-8fc74b232e4b");
+  thinkit::Switch& sut = GetMirrorTestbed().Sut();
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub,
+                       sut.CreateGnmiStub());
+  ASSERT_OK(pins_test::PortsUp(sut));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<gnoi::diag::Diag::StubInterface> sut_gnoi_diag_stub,
+      sut.CreateGnoiDiagStub());
+
+  thinkit::Switch& control_switch = GetMirrorTestbed().ControlSwitch();
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<gnmi::gNMI::StubInterface> control_switch_gnmi_stub,
+      control_switch.CreateGnmiStub());
+  ASSERT_OK(pins_test::PortsUp(control_switch));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<gnoi::diag::Diag::StubInterface> control_switch_gnoi_diag_stub,
+      control_switch.CreateGnoiDiagStub());
+
+  // Get all the interfaces that are operational status "UP".
+  ASSERT_OK_AND_ASSIGN(std::vector<std::string> interfaces,
+                       pins_test::GetUpInterfacesOverGnmi(*sut_gnmi_stub));
+  // For this test, we need at least 5 UP interfaces.
+  ASSERT_GE(interfaces.size(), 5);
+  // Resize the interface list if UP ports are more than max number of allowed
+  // ports.
+  if (interfaces.size() > kMaxAllowedInterfacesToRunBert) {
+    interfaces.resize(kMaxAllowedInterfacesToRunBert);
+  }
+
+  // Select 'N' ports on control switch and 'N' ports on SUT for admin down.
+  int num_interfaces_to_disable = 1 + (interfaces.size() / 16);
+  // Seed the std::rand().
+  LOG(INFO) << "Seeding pseudo-random number generator with seed: "
+            << absl::GetFlag(FLAGS_idx_seed);
+  // Select SUT interfaces in the range [0..interfaces/2).
+  std::vector<std::string> sut_interfaces_for_admin_down;
+  std::sample(interfaces.begin(), interfaces.begin() + interfaces.size() / 2,
+              std::back_inserter(sut_interfaces_for_admin_down),
+              num_interfaces_to_disable,
+              std::mt19937(absl::GetFlag(FLAGS_idx_seed)));
+  // Select control switch interfaces in the range [interfaces/2..interfaces].
+  std::vector<std::string> control_switch_interfaces_for_admin_down;
+  std::sample(interfaces.begin() + interfaces.size() / 2, interfaces.end(),
+              std::back_inserter(control_switch_interfaces_for_admin_down),
+              num_interfaces_to_disable,
+              std::mt19937(absl::GetFlag(FLAGS_idx_seed)));
+
+  LOG(INFO) << "Starting BERT on " << interfaces.size() << " interfaces.";
+
+    gnoi::diag::StartBERTRequest bert_request;
+  // Create the BERT request.
+  bert_request.set_bert_operation_id(
+      absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now())));
+  for (const std::string& interface : interfaces) {
+    *(bert_request.add_per_port_requests()) =
+        gutil::ParseProtoOrDie<gnoi::diag::StartBERTRequest::PerPortRequest>(
+            BuildPerPortStartBertRequest(interface));
+  }
+
+  // Request StartBert on the SUT switch.
+  {
+    gnoi::diag::StartBERTResponse bert_response;
+    grpc::ClientContext context;
+    EXPECT_OK(
+        sut_gnoi_diag_stub->StartBERT(&context, bert_request, &bert_response));
+  }
+
+  // Request StartBert on the control switch.
+  {
+    gnoi::diag::StartBERTResponse bert_response;
+    grpc::ClientContext context;
+    EXPECT_OK(control_switch_gnoi_diag_stub->StartBERT(&context, bert_request,
+                                                       &bert_response));
+  }
+
+  absl::Time start_time = absl::Now();
+  // Give some time to BERT to move in SYNC state.
+  absl::SleepFor(absl::Seconds(90));
+  
+  absl::Time end_time = absl::Now();
+ 
+  // Poll for remaining BERT duration.
+  int max_poll_count =
+      1 + (absl::ToInt64Seconds(kDelayDuration + kWaitTime + kSyncDuration +
+                                kTestDuration - (end_time - start_time) -
+                                absl::Seconds(1)) /
+           ToInt64Seconds(kPollInterval));
+  std::vector<std::string> interfaces_not_up = interfaces;
+  for (int count = 0; count < max_poll_count; ++count) {
+    absl::SleepFor(kPollInterval);
+    // If port is "UP" and no longer in "TESTING" oper state on both sides of
+    // link, BERT has completed on the link and full BERT result is ready.
+    for (auto it = interfaces_not_up.begin(); it != interfaces_not_up.end();) {
+      ASSERT_OK_AND_ASSIGN(
+          pins_test::OperStatus oper_status,
+          pins_test::GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub, *it));
+      if (oper_status == pins_test::OperStatus::kUp) {
+        ASSERT_OK_AND_ASSIGN(oper_status,
+                             pins_test::GetInterfaceOperStatusOverGnmi(
+                                 *control_switch_gnmi_stub, *it));
+        if (oper_status == pins_test::OperStatus::kUp) {
+          it = interfaces_not_up.erase(it);
+          continue;
+        }
+      }
+      ++it;
+    }
+    if (interfaces_not_up.empty()) break;
+  }
+
+  EXPECT_THAT(interfaces_not_up, testing::IsEmpty()); 
+
+  // Wait for some time before checking the port status.
+  absl::SleepFor(absl::Seconds(10));
+
+  ASSERT_OK(pins_test::PortsUp(sut));
+  ASSERT_OK(pins_test::PortsUp(control_switch));
 }
 
 }  // namespace bert
