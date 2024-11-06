@@ -50,6 +50,8 @@ constexpr absl::Duration kSyncDuration = absl::Minutes(5);
 // Maximum allowed BERT delay duration due to setup, sync and recovery
 // operations.
 constexpr absl::Duration kDelayDuration = absl::Minutes(10);
+// Wait duration after requesting BERT to read the oper status of the port.
+constexpr absl::Duration kWaitToReadOperStatus = absl::Seconds(30);
 // Polling interval.
 constexpr absl::Duration kPollInterval = absl::Seconds(30);
 // Minimum wait time after the BERT request to read the BERT result.
@@ -290,6 +292,7 @@ void GetAndVerifyBertResultsWithAdminDownInterfaces(
         const std::string interface_name,
         GetInterfaceNameFromOcInterfacePath(
             result_response.per_port_responses(idx).interface()));
+    LOG(INFO) << "Verifying result for interface: " << interface_name;
     // Check if interface is part of list where admin state was disabled.
     if (IsInterfaceInList(interface_name, sut_admin_down_interfaces) ||
         IsInterfaceInList(interface_name,
@@ -648,8 +651,11 @@ TEST_P(BertTest, StartBertSucceeds) {
                                                        &bert_response));
   }
  
-  // Wait for sync duration.
-  absl::SleepFor(kSyncDuration);
+  // Get start timestamp.
+  absl::Time start_time = absl::Now();
+  // Wait before reading the oper status.
+  absl::SleepFor(kWaitToReadOperStatus);
+
   // Verify that ports should be in TESTING mode now.
   for (const std::string& interface : interfaces) {
     SCOPED_TRACE(
@@ -657,11 +663,11 @@ TEST_P(BertTest, StartBertSucceeds) {
     ASSERT_OK_AND_ASSIGN(
         pins_test::OperStatus oper_status,
         pins_test::GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub, interface));
-    ASSERT_TRUE(oper_status == pins_test::OperStatus::kTesting);
+    ASSERT_EQ(oper_status, pins_test::OperStatus::kTesting);
     ASSERT_OK_AND_ASSIGN(oper_status,
                          pins_test::GetInterfaceOperStatusOverGnmi(
                              *control_switch_gnmi_stub, interface));
-    ASSERT_TRUE(oper_status == pins_test::OperStatus::kTesting);
+    ASSERT_EQ(oper_status, pins_test::OperStatus::kTesting);
   }
 
   // Request another StartBert on the same ports on SUT and it should fail.
@@ -703,33 +709,34 @@ TEST_P(BertTest, StartBertSucceeds) {
 
   // Poll for remaining BERT duration.
   int max_poll_count =
-      1 + (absl::ToInt64Seconds(kDelayDuration + kTestDuration - kSyncDuration -
-                                kWaitTime - absl::Seconds(1)) /
+      1 + (absl::ToInt64Seconds(kDelayDuration + kTestDuration -
+                                (absl::Now() - start_time) - absl::Seconds(1)) /
            ToInt64Seconds(kPollInterval));
-  std::vector<std::string> interfaces_not_up = interfaces;
+  std::vector<std::string> interfaces_in_testing = interfaces;
   for (int count = 0; count < max_poll_count; ++count) {
     absl::SleepFor(kPollInterval);
-    // If port is "UP" and no longer in "TESTING" oper state on both sides of
-    // link, BERT has completed on the link and full BERT result is ready.
-    for (auto it = interfaces_not_up.begin(); it != interfaces_not_up.end();) {
+    // If port is no longer in "TESTING" oper state on both sides of the link,
+    // linkqual has completed on the link and full result is ready.
+    for (auto it = interfaces_in_testing.begin();
+         it != interfaces_in_testing.end();) {
       ASSERT_OK_AND_ASSIGN(
           pins_test::OperStatus oper_status,
           pins_test::GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub, *it));
-      if (oper_status == pins_test::OperStatus::kUp) {
+      if (oper_status != pins_test::OperStatus::kTesting) {
         ASSERT_OK_AND_ASSIGN(oper_status,
                             pins_test::GetInterfaceOperStatusOverGnmi(
                                  *control_switch_gnmi_stub, *it));
-        if (oper_status == pins_test::OperStatus::kUp) {
-          it = interfaces_not_up.erase(it);
+        if (oper_status != pins_test::OperStatus::kTesting) {
+          it = interfaces_in_testing.erase(it);
           continue;
         }
       }
       ++it;
     }
-    if (interfaces_not_up.empty()) break;
+    if (interfaces_in_testing.empty()) break;
   }
 
-  EXPECT_THAT(interfaces_not_up, testing::IsEmpty());
+  EXPECT_THAT(interfaces_in_testing, testing::IsEmpty());
 
   gnoi::diag::GetBERTResultRequest result_request;
   result_request.set_bert_operation_id(bert_request.bert_operation_id());
@@ -850,7 +857,12 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
               num_interfaces_to_disable,
               std::mt19937(absl::GetFlag(FLAGS_idx_seed)));
 
-  LOG(INFO) << "Starting BERT on " << interfaces.size() << " interfaces.";
+  LOG(INFO) << "Starting BERT on " << interfaces.size()
+            << " interfaces: " << absl::StrJoin(interfaces, ",");
+  LOG(INFO) << "Interfaces selected on SUT for admin down: "
+            << absl::StrJoin(sut_interfaces_for_admin_down, ",");
+  LOG(INFO) << "Interfaces selected on control switch for admin down: "
+            << absl::StrJoin(control_switch_interfaces_for_admin_down, ",");
 
     gnoi::diag::StartBERTRequest bert_request;
   // Create the BERT request.
