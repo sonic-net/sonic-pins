@@ -54,6 +54,7 @@ cc_library(
         "//p4_pdpi/utils:ir",
         "//p4_symbolic:z3_util",
         "//p4_symbolic/ir",
+        "//p4_symbolic/ir:cfg",
         "//p4_symbolic/ir:ir_cc_proto",
         "//p4_symbolic/ir:table_entries",
         "@com_github_google_glog//:glog",
