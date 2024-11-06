@@ -162,7 +162,7 @@ absl::Status PinsControlDevice::SendPacket(
         "No P4RuntimeSession exists; Likely failed to establish another "
         "P4RuntimeSession.");
   }
-  return gpins::InjectEgressPacket(interface_name_to_port_id_[interface],
+  return pins::InjectEgressPacket(interface_name_to_port_id_[interface],
                                    std::string(packet), ir_p4_info_,
                                    control_session_.get(), packet_delay);
 }
