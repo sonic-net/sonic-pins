@@ -255,6 +255,10 @@ tables {
         key: "set_invalid61"
         value: "node_3"
       }
+      optimized_symbolic_execution_info {
+        merge_point: "node_3"
+        continue_to_merge_point: true
+      }
     }
   }
 }
@@ -272,6 +276,9 @@ tables {
         key: "set_invalid63"
         value: "__END_OF_PIPELINE__"
       }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
+      }
     }
   }
 }
@@ -288,6 +295,9 @@ tables {
       action_to_next_control {
         key: "set_invalid65"
         value: "__END_OF_PIPELINE__"
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
       }
     }
   }
@@ -316,6 +326,10 @@ conditionals {
     }
     if_branch: "tbl_set_invalid63"
     else_branch: "tbl_set_invalid65"
+    optimized_symbolic_execution_info {
+      merge_point: "__END_OF_PIPELINE__"
+      continue_to_merge_point: true
+    }
   }
 }
 pipeline {

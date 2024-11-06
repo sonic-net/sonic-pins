@@ -17,7 +17,11 @@
 
 #include "p4_symbolic/symbolic/conditional.h"
 
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "gutil/status.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/util.h"
@@ -43,20 +47,61 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
   ASSIGN_OR_RETURN(z3::expr else_guard,
                    operators::And(guard, negated_condition));
 
+  auto get_next_control_for_branch = [&](const std::string &branch) {
+    return branch ==
+                   conditional.optimized_symbolic_execution_info().merge_point()
+               ? ir::EndOfPipeline()  // Do not jump to the merge point (yet).
+               : branch;
+  };
+
   // Evaluate both branches.
-  ASSIGN_OR_RETURN(SymbolicTableMatches if_matches,
-                   control::EvaluateControl(data_plane, conditional.if_branch(),
-                                            state, translator, if_guard));
+  ASSIGN_OR_RETURN(
+      SymbolicTableMatches if_matches,
+      control::EvaluateControl(
+          data_plane, get_next_control_for_branch(conditional.if_branch()),
+          state, translator, if_guard));
   ASSIGN_OR_RETURN(
       SymbolicTableMatches else_matches,
-      control::EvaluateControl(data_plane, conditional.else_branch(), state,
-                               translator, else_guard));
+      control::EvaluateControl(
+          data_plane, get_next_control_for_branch(conditional.else_branch()),
+          state, translator, else_guard));
 
   // Now we have two traces that need merging.
   // We should merge in a way such that the value of a field in the trace is
   // the one from the if branch if the condition is true, and the else branch
   // otherwise.
-  return util::MergeMatchesOnCondition(condition, if_matches, else_matches);
+  ASSIGN_OR_RETURN(
+      SymbolicTableMatches merged_matches,
+      util::MergeMatchesOnCondition(condition, if_matches, else_matches));
+
+  if (!conditional.optimized_symbolic_execution_info()
+           .continue_to_merge_point()) {
+    // The merge point is guaranteed to be evaluated through a different path
+    // (see go/optimized-symbolic-execution).
+    return merged_matches;
+  } else {
+    // Jump to the merge point and continue the execution from there.
+    ASSIGN_OR_RETURN(
+        SymbolicTableMatches result,
+        control::EvaluateControl(
+            data_plane,
+            conditional.optimized_symbolic_execution_info().merge_point(),
+            state, translator, guard));
+
+    // Merge the result of execution from the merge point with the result of
+    // merged if/else branches.
+    for (const auto &[table_name, match] : merged_matches) {
+      auto [_, inserted] = result.insert({table_name, std::move(match)});
+      if (!inserted) {
+        return absl::InternalError(
+            absl::Substitute("Table '$0' is encountered in branches and after "
+                             "the merge point of '$1'",
+                             table_name, conditional.name()));
+      }
+    }
+
+    return result;
+  }
 }
 
 }  // namespace conditional

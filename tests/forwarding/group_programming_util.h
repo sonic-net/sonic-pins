@@ -76,7 +76,6 @@ absl::Status VerifyGroupMembersFromReceiveTraffic(
 // each bucket.
 absl::StatusOr<std::vector<int>> GenerateNRandomWeights(int n,
                                                         int total_weight);
-
 // Returns a human-readable description of the actual vs expected
 // distribution of packets on the group member ports.
 // expect_single_port specifies whether all packets are expected on a single
