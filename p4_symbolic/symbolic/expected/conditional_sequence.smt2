@@ -353,4 +353,3 @@
  (let ((?x78 (ite $x74 0 (- 1))))
  (and (and (not (= standard_metadata.egress_spec (_ bv511 9))) true) (= ?x78 0)))))
 (check-sat)
-

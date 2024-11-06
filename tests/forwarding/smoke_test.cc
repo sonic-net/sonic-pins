@@ -14,11 +14,14 @@
 
 #include "tests/forwarding/smoke_test.h"
 
+#include "absl/strings/str_cat.h"
 #include "gmock/gmock.h"
+#include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -140,8 +143,16 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
   }
 
   // Compare the result in proto format since the fields being compared are
-  // nested and out of order.
-  EXPECT_THAT(read_response, gutil::EqualsProto(expected_read_response));
+  // nested and out of order. Also ignore any dynamic fields (e.g. counters).
+  google::protobuf::util::MessageDifferencer diff;
+  diff.set_repeated_field_comparison(
+      google::protobuf::util::MessageDifferencer::RepeatedFieldComparison::
+           AS_SET);
+  diff.IgnoreField(
+      p4::v1::TableEntry::descriptor()->FindFieldByName("counter_data"));
+  EXPECT_TRUE(diff.Compare(read_response, expected_read_response))
+      << "Expected: " << expected_read_response.DebugString()
+      << "\nActual: " << read_response.DebugString();
 }
 
 }  // namespace

@@ -134,7 +134,7 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
       const Packet& packet = packet_test_vector.input().packet();
 
       // Inject to egress of control switch.
-      RETURN_IF_ERROR(gpins::InjectEgressPacket(
+      RETURN_IF_ERROR(pins::InjectEgressPacket(
           packet.port(), absl::HexStringToBytes(packet.hex()),
           control_ir_p4info, &control_switch, injection_delay));
     } else {
