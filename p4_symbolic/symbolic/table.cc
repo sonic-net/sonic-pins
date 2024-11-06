@@ -26,12 +26,14 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
@@ -464,13 +466,12 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
         translator, entry_assignment_guard));
   }
 
-  // This table has been completely evaluated, the result of the evaluation
-  // is now in "state" and "match_index".
-  // Time to evaluate the next control construct.
-  std::string next_control;
+  const std::string &merge_point = table.table_implementation()
+                                       .optimized_symbolic_execution_info()
+                                       .merge_point();
 
-  // We only support tables that always have the same next control construct
-  // regardless of the table's matches.
+  // We currenlt only support tables that always have the same next control
+  // construct regardless of the table's matches.
   //
   // This can be supported by calling EvaluateControl(...)
   // inside the above for loop for control found at
@@ -480,29 +481,31 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   // As an optimization, the loop should not call EvaluateControl
   // when all actions have the same next_control, and should instead
   // execute the call once outside the loop as below.
-  bool first = true;
-  for (const auto &[_, control] :
+  for (const auto &[_, next_control] :
        table.table_implementation().action_to_next_control()) {
-    if (first) {
-      next_control = control;
-      first = false;
-    } else if (next_control != control) {
-      return absl::UnimplementedError(absl::StrCat(
-          "Table \"", table_name,
-          "\" invokes different control constructs based on matched actions."));
+    if (next_control != merge_point) {
+      return absl::UnimplementedError(absl::Substitute(
+          "Table '$0' invokes different control constructs based on matched",
+          table_name));
     }
   }
 
+  const std::string continuation = table.table_implementation()
+                                           .optimized_symbolic_execution_info()
+                                           .continue_to_merge_point()
+                                       ? merge_point
+                                       : ir::EndOfPipeline();
+
   // Evaluate the next control.
   ASSIGN_OR_RETURN(SymbolicTableMatches result,
-                   control::EvaluateControl(data_plane, next_control, state,
+                   control::EvaluateControl(data_plane, continuation, state,
                                             translator, guard));
 
   // The trace should not contain information for this table, otherwise, it
   // means we visited the table twice in the same execution path!
   if (result.contains(table_name)) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Table \"", table_name, "\" was executed twice in the same path."));
+    return absl::InternalError(absl::Substitute(
+        "Table '$0' was executed twice in the same path.", table_name));
   }
 
   // Add this table's match to the trace, and return it.
