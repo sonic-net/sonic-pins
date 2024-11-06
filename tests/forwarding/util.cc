@@ -23,7 +23,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "sai_p4/tools/packetio_tools.h"
 
-namespace gpins {
+namespace pins {
 
 absl::Status TryUpToNTimes(int n, absl::Duration delay,
                            std::function<absl::Status(int)> callback) {
@@ -91,4 +91,4 @@ absl::Status InjectIngressPacket(const std::string& packet,
                    << request.ShortDebugString();
 }
 
-}  // namespace gpins
+}  // namespace pins

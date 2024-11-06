@@ -14,16 +14,27 @@
 
 #include "p4_symbolic/ir/ir.h"
 
+#include <fstream>
+#include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/container/node_hash_map.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
-#include "google/protobuf/struct.pb.h"
+#include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4_symbolic/ir/cfg.h"
+#include "p4_symbolic/ir/ir.pb.h"
 
 namespace p4_symbolic {
 namespace ir {
@@ -452,10 +463,10 @@ absl::StatusOr<RValue> ExtractRValue(
       // where an expression may have its value be a single other expression
       // which value may also be another single expression, etc, until
       // finally the actual value of the expression is reached.
-      // This is the bmv2 format analogous case to having an expression wrapped
-      // in many useless paranthesis.
-      // An example of this can be found at //p4-samples/ipv4-routing/basic.json
-      // after `make build` is run in that directory.
+      // This is the bmv2 format analogous case to having an expression
+      // wrapped in many useless paranthesis. An example of this can be found
+      // at //p4-samples/ipv4-routing/basic.json after `make build` is run in
+      // that directory.
       while (expression->fields().count("op") != 1) {
         if (expression->fields().count("type") != 1 ||
             expression->fields().at("type").string_value() != "expression" ||
@@ -873,6 +884,22 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
 
       (*output.mutable_conditionals())[conditional.name()] = conditional;
     }
+  }
+
+  // Create the Control Flow Graph (CFG) of the program and perform analysis for
+  // optimized symbolic execution.
+  ASSIGN_OR_RETURN(std::unique_ptr<ControlFlowGraph> cfg,
+                   ControlFlowGraph::Create(output));
+  // Set the optimized symbolic execution information in the IR program using
+  // the result of CFG analysis.
+  for (auto &[name, conditional] : *output.mutable_conditionals()) {
+    ASSIGN_OR_RETURN(*conditional.mutable_optimized_symbolic_execution_info(),
+                     cfg->GetOptimizedSymbolicExecutionInfo(name));
+  }
+  for (auto &[name, table] : *output.mutable_tables()) {
+    ASSIGN_OR_RETURN(*table.mutable_table_implementation()
+                          ->mutable_optimized_symbolic_execution_info(),
+                     cfg->GetOptimizedSymbolicExecutionInfo(name));
   }
 
   return output;

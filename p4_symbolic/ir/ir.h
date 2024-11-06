@@ -19,11 +19,10 @@
 #ifndef P4_SYMBOLIC_IR_IR_H_
 #define P4_SYMBOLIC_IR_IR_H_
 
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
-#include "p4_symbolic/ir/table_entries.h"
 
 namespace p4_symbolic {
 namespace ir {
