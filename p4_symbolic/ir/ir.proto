@@ -84,6 +84,19 @@ message ActionImplementation {
   repeated Statement action_body = 3;
 }
 
+// Control flow information used during optimized symbolic execution
+// (go/optimized-symbolic-execution) for each control point.
+message OptimizedSymbolicExecutionInfo {
+  // The name of the first control point where all execution paths branched
+  // from the current control point will converge (refer to the respective field
+  // in `CfgNode` for precise definition).
+  string merge_point = 1;
+  // Whether symbolic execution must continue (to the merge point) after
+  // traversing the subgraph of the current control point (refer to the
+  // respective field in `CfgNode` for details).
+  bool continue_to_merge_point = 2;
+}
+
 // Overall table structure, combining definition with implementation.
 message Table {
   // This contains the name, id, action list, field matches, and max size.
@@ -121,6 +134,9 @@ message TableImplementation {
   // Maps the name of a match (identical to the name used in p4 info), to
   // that match's target field.
   map<string, FieldValue> match_name_to_field = 5;
+
+  // Control flow information for optimized symbolic execution.
+  OptimizedSymbolicExecutionInfo optimized_symbolic_execution_info = 6;
 }
 
 // A conditional statement.
@@ -139,6 +155,8 @@ message Conditional {
   // present).
   string if_branch = 3;
   string else_branch = 4;
+  // Control flow information for optimized symbolic execution.
+  OptimizedSymbolicExecutionInfo optimized_symbolic_execution_info = 5;
 }
 
 message Pipeline {

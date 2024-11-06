@@ -302,6 +302,10 @@ tables {
           field_name: "ingress_port"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
+        continue_to_merge_point: true
+      }
     }
   }
 }

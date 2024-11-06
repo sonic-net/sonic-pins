@@ -23,7 +23,7 @@
 #include "gutil/status.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
-#include "single_include/nlohmann/json.hpp"
+#include "include/nlohmann/json.hpp"
 #include "tests/thinkit_util.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
