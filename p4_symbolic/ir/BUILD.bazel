@@ -79,13 +79,53 @@ cc_library(
         "ir.h",
     ],
     deps = [
+        ":cfg",
         ":ir_cc_proto",
-        ":table_entries",
         "//gutil:status",
         "//p4_symbolic/bmv2:bmv2_cc_proto",
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
+    name = "cfg",
+    srcs = [
+        "cfg.cc",
+        "ir.h",  # needed for the definition of EndOfPipeline
+    ],
+    hdrs = ["cfg.h"],
+    deps = [
+        ":ir_cc_proto",
+        "//gutil:status",
+        "//p4_symbolic/bmv2:bmv2_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "cfg_test",
+    srcs = ["cfg_test.cc"],
+    deps = [
+        ":cfg",
+        ":ir",
+        ":ir_cc_proto",
+        "//gutil:proto",
+        "//gutil:status_matchers",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
