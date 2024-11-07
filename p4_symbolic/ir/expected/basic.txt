@@ -598,6 +598,9 @@ tables {
           field_name: "dstAddr"
         }
       }
+      optimized_symbolic_execution_info {
+        merge_point: "__END_OF_PIPELINE__"
+      }
     }
   }
 }
@@ -620,6 +623,10 @@ conditionals {
     }
     if_branch: "MyIngress.ipv4_lpm"
     else_branch: "__END_OF_PIPELINE__"
+    optimized_symbolic_execution_info {
+      merge_point: "__END_OF_PIPELINE__"
+      continue_to_merge_point: true
+    }
   }
 }
 pipeline {

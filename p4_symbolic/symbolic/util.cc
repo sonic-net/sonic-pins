@@ -18,7 +18,9 @@
 
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/substitute.h"
 #include "p4_pdpi/utils/ir.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/z3_util.h"
@@ -137,12 +139,18 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
     const SymbolicTableMatches &false_matches) {
   SymbolicTableMatches merged;
 
-  // Merge all tables matches in true_trace (including ones in both traces).
+  // Add all tables matches in true_trace.
   for (const auto &[name, true_match] : true_matches) {
-    // Find match in other trace (or use default).
-    SymbolicTableMatch false_match = false_matches.contains(name)
-                                         ? false_matches.at(name)
-                                         : DefaultTableMatch();
+    // The table should not be applied in the other branch.
+    if (false_matches.contains(name)) {
+      return absl::InternalError(
+          absl::Substitute("Table '$0' was symbolically executed both in true "
+                           "and false branches, this is not expected",
+                           name));
+    }
+
+    // Get the default match for the false branch.
+    const SymbolicTableMatch false_match = DefaultTableMatch();
 
     // Merge this match.
     ASSIGN_OR_RETURN(
@@ -157,10 +165,18 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
                          }});
   }
 
-  // Merge all tables matches in false_matches only.
+  // Add all tables matches in false_matches.
   for (const auto &[name, false_match] : false_matches) {
-    if (true_matches.contains(name)) continue;  // Already covered.
-    SymbolicTableMatch true_match = DefaultTableMatch();
+    // The table should not be applied in the other branch.
+    if (true_matches.contains(name)) {
+      return absl::InternalError(
+          absl::Substitute("Table '$0' was symbolically executed both in true "
+                           "and false branches, this is not expected",
+                           name));
+    }
+
+    // Get the default match for the true branch.
+    const SymbolicTableMatch true_match = DefaultTableMatch();
 
     // Merge this match.
     ASSIGN_OR_RETURN(
@@ -175,6 +191,20 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
                          }});
   }
 
+  return merged;
+}
+
+absl::StatusOr<SymbolicTableMatches> MergeDisjointTableMatches(
+    const SymbolicTableMatches &lhs, const SymbolicTableMatches &rhs) {
+  SymbolicTableMatches merged = lhs;
+  for (const auto &[table_name, match] : rhs) {
+    auto [_, inserted] = merged.insert({table_name, match});
+    if (!inserted) {
+      return absl::InvalidArgumentError(absl::Substitute(
+          "Expected disjoint keys. Table '$0' encountered in both maps",
+          table_name));
+    }
+  }
   return merged;
 }
 
