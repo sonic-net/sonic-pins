@@ -66,13 +66,10 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
           data_plane, get_next_control_for_branch(conditional.else_branch()),
           state, translator, else_guard));
 
-  // Now we have two traces that need merging.
-  // We should merge in a way such that the value of a field in the trace is
-  // the one from the if branch if the condition is true, and the else branch
-  // otherwise.
-  ASSIGN_OR_RETURN(
-      SymbolicTableMatches merged_matches,
-      util::MergeMatchesOnCondition(condition, if_matches, else_matches));
+  // Now we have two traces that need merging. The two traces are guaranteed to
+  // contain different table matches (see go/optimized-symbolic-execution).
+  ASSIGN_OR_RETURN(SymbolicTableMatches merged_matches,
+                   util::MergeDisjointTableMatches(if_matches, else_matches));
 
   if (!conditional.optimized_symbolic_execution_info()
            .continue_to_merge_point()) {
@@ -90,17 +87,7 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
 
     // Merge the result of execution from the merge point with the result of
     // merged if/else branches.
-    for (const auto &[table_name, match] : merged_matches) {
-      auto [_, inserted] = result.insert({table_name, std::move(match)});
-      if (!inserted) {
-        return absl::InternalError(
-            absl::Substitute("Table '$0' is encountered in branches and after "
-                             "the merge point of '$1'",
-                             table_name, conditional.name()));
-      }
-    }
-
-    return result;
+    return util::MergeDisjointTableMatches(merged_matches, result);
   }
 }
 

@@ -5,8 +5,8 @@
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (declare-fun ipv4.$valid$ () Bool)
 (assert
- (let (($x124 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x124))))
+ (let (($x123 (= standard_metadata.ingress_port (_ bv1 9))))
+ (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x123))))
 (assert
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
@@ -34,8 +34,7 @@
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
  (let (($x60 (and $x42 $x46)))
- (let ((?x120 (ite ipv4.$valid$ (ite $x60 1 ?x102) (- 1))))
- (let (($x119 (ite ipv4.$valid$ $x42 false)))
+ (let ((?x112 (ite $x60 1 ?x102)))
  (let (($x61 (not $x46)))
  (let (($x65 (and $x61 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv168427520 32))))))))
  (let (($x69 (and $x65 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv336855040 32))))))))
@@ -47,7 +46,7 @@
  (let (($x63 (and (and $x42 $x61) $x50)))
  (let ((?x113 (ite $x60 (_ bv1 9) (ite $x63 (_ bv0 9) (ite $x67 (_ bv1 9) (ite $x71 (_ bv1 9) ?x77))))))
  (let (($x41 (= ?x113 (_ bv511 9))))
- (and (and (not $x41) $x119) (= ?x120 (- 1))))))))))))))))))))))))
+ (and (and (not $x41) $x42) (= ?x112 (- 1)))))))))))))))))))))))
 (check-sat)
 
 ; 
@@ -57,8 +56,8 @@
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (declare-fun ipv4.$valid$ () Bool)
 (assert
- (let (($x124 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x124))))
+ (let (($x123 (= standard_metadata.ingress_port (_ bv1 9))))
+ (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x123))))
 (assert
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
@@ -86,8 +85,7 @@
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
  (let (($x60 (and $x42 $x46)))
- (let ((?x120 (ite ipv4.$valid$ (ite $x60 1 ?x102) (- 1))))
- (let (($x119 (ite ipv4.$valid$ $x42 false)))
+ (let ((?x112 (ite $x60 1 ?x102)))
  (let (($x61 (not $x46)))
  (let (($x65 (and $x61 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv168427520 32))))))))
  (let (($x69 (and $x65 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv336855040 32))))))))
@@ -99,8 +97,8 @@
  (let (($x63 (and (and $x42 $x61) $x50)))
  (let ((?x113 (ite $x60 (_ bv1 9) (ite $x63 (_ bv0 9) (ite $x67 (_ bv1 9) (ite $x71 (_ bv1 9) ?x77))))))
  (let (($x41 (= ?x113 (_ bv511 9))))
- (let (($x244 (and (not $x41) $x119)))
- (and $x244 (= ?x120 0))))))))))))))))))))))))
+ (let (($x243 (and (not $x41) $x42)))
+ (and $x243 (= ?x112 0)))))))))))))))))))))))
 (check-sat)
 
 ; 
@@ -110,8 +108,8 @@
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (declare-fun ipv4.$valid$ () Bool)
 (assert
- (let (($x124 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x124))))
+ (let (($x123 (= standard_metadata.ingress_port (_ bv1 9))))
+ (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x123))))
 (assert
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
@@ -139,8 +137,7 @@
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
  (let (($x60 (and $x42 $x46)))
- (let ((?x120 (ite ipv4.$valid$ (ite $x60 1 ?x102) (- 1))))
- (let (($x119 (ite ipv4.$valid$ $x42 false)))
+ (let ((?x112 (ite $x60 1 ?x102)))
  (let (($x61 (not $x46)))
  (let (($x65 (and $x61 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv168427520 32))))))))
  (let (($x69 (and $x65 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv336855040 32))))))))
@@ -152,7 +149,7 @@
  (let (($x63 (and (and $x42 $x61) $x50)))
  (let ((?x113 (ite $x60 (_ bv1 9) (ite $x63 (_ bv0 9) (ite $x67 (_ bv1 9) (ite $x71 (_ bv1 9) ?x77))))))
  (let (($x41 (= ?x113 (_ bv511 9))))
- (and (and (not $x41) $x119) (= ?x120 1)))))))))))))))))))))))
+ (and (and (not $x41) $x42) (= ?x112 1))))))))))))))))))))))
 (check-sat)
 
 ; 
@@ -162,8 +159,8 @@
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (declare-fun ipv4.$valid$ () Bool)
 (assert
- (let (($x124 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x124))))
+ (let (($x123 (= standard_metadata.ingress_port (_ bv1 9))))
+ (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x123))))
 (assert
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
@@ -191,8 +188,7 @@
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
  (let (($x60 (and $x42 $x46)))
- (let ((?x120 (ite ipv4.$valid$ (ite $x60 1 ?x102) (- 1))))
- (let (($x119 (ite ipv4.$valid$ $x42 false)))
+ (let ((?x112 (ite $x60 1 ?x102)))
  (let (($x61 (not $x46)))
  (let (($x65 (and $x61 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv168427520 32))))))))
  (let (($x69 (and $x65 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv336855040 32))))))))
@@ -204,7 +200,7 @@
  (let (($x63 (and (and $x42 $x61) $x50)))
  (let ((?x113 (ite $x60 (_ bv1 9) (ite $x63 (_ bv0 9) (ite $x67 (_ bv1 9) (ite $x71 (_ bv1 9) ?x77))))))
  (let (($x41 (= ?x113 (_ bv511 9))))
- (and (and (not $x41) $x119) (= ?x120 2)))))))))))))))))))))))
+ (and (and (not $x41) $x42) (= ?x112 2))))))))))))))))))))))
 (check-sat)
 
 ; 
@@ -214,8 +210,8 @@
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (declare-fun ipv4.$valid$ () Bool)
 (assert
- (let (($x124 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x124))))
+ (let (($x123 (= standard_metadata.ingress_port (_ bv1 9))))
+ (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x123))))
 (assert
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
@@ -243,8 +239,7 @@
  (let (($x45 (= ipv4.dstAddr (_ bv168427520 32))))
  (let (($x46 (and true $x45)))
  (let (($x60 (and $x42 $x46)))
- (let ((?x120 (ite ipv4.$valid$ (ite $x60 1 ?x102) (- 1))))
- (let (($x119 (ite ipv4.$valid$ $x42 false)))
+ (let ((?x112 (ite $x60 1 ?x102)))
  (let (($x61 (not $x46)))
  (let (($x65 (and $x61 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv168427520 32))))))))
  (let (($x69 (and $x65 (not (and true (= ((_ extract 31 16) ipv4.dstAddr) ((_ extract 31 16) (_ bv336855040 32))))))))
@@ -256,6 +251,6 @@
  (let (($x63 (and (and $x42 $x61) $x50)))
  (let ((?x113 (ite $x60 (_ bv1 9) (ite $x63 (_ bv0 9) (ite $x67 (_ bv1 9) (ite $x71 (_ bv1 9) ?x77))))))
  (let (($x41 (= ?x113 (_ bv511 9))))
- (and (and (not $x41) $x119) (= ?x120 3)))))))))))))))))))))))
+ (and (and (not $x41) $x42) (= ?x112 3))))))))))))))))))))))
 (check-sat)
 
