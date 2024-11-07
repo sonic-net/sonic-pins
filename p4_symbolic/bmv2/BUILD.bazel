@@ -98,6 +98,12 @@ bmv2_protobuf_parsing_test(
 )
 
 bmv2_protobuf_parsing_test(
+    name = "table_hit_1",
+    golden_file = "expected/table_hit_1.pb.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/table_hit_1.p4",
+)
+
+bmv2_protobuf_parsing_test(
     name = "set_invalid",
     golden_file = "expected/set_invalid.pb.txt",
     p4_program = "//p4_symbolic/testdata:set-invalid/set_invalid.p4",
