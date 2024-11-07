@@ -56,6 +56,11 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
     const z3::expr &condition, const SymbolicTableMatches &true_matches,
     const SymbolicTableMatches &false_matches);
 
+// Merges two maps of table matches into a single map. The two maps must contain
+// disjoint keys, otherwise an error is returned.
+absl::StatusOr<SymbolicTableMatches> MergeDisjointTableMatches(
+    const SymbolicTableMatches &lhs, const SymbolicTableMatches &rhs);
+
 }  // namespace util
 }  // namespace symbolic
 }  // namespace p4_symbolic
