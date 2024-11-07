@@ -1,0 +1,55 @@
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 41698643  # MyIngress.t_1
+      match {
+        field_id: 1  # hdr.ethernet.ether_type
+        exact {
+          value: "\x00\x10"
+        }
+      }
+      action {
+        action {
+          action_id: 29683729  # MyIngress.forward
+          params {
+            param_id: 1  # dst_addr
+            value: "\x00\x00\x00\x00\x00\x02"
+          }
+          params {
+            param_id: 2  # port
+            value: "\x02"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 45015480  # MyIngress.t_2
+      match {
+        field_id: 1  # src_addr
+        exact {
+          value: "\x00\x00\x00\x00\x01\x00"
+        }
+      }
+      action {
+        action {
+          action_id: 29683729  # MyIngress.forward
+          params {
+            param_id: 1  # dst_addr
+            value: "\x00\x00\x00\x00\x00\x03"
+          }
+          params {
+            param_id: 2  # port
+            value: "\x03"
+          }
+        }
+      }
+    }
+  }
+}
+

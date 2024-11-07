@@ -117,7 +117,6 @@ absl::Status ParseAndEvaluate() {
         // Whether packet was dropped or not!
         std::cout << "\tDropped = " << packet_option.value().trace.dropped
                   << std::endl;
-
         // Ports
         std::cout << "\tstandard_metadata.ingress_port = "
                   << packet_option.value().ingress_port << std::endl;
@@ -143,25 +142,25 @@ absl::Status ParseAndEvaluate() {
         }
         // VRF
         if (packet_option.value().egress_headers.count(
-                "scalars.userMetadata.vrf")) {
-          std::cout << "\tscalars.userMetadata.vrf = "
+                "scalars.local_metadata_t.vrf")) {
+          std::cout << "\tscalars.local_metadata_t.vrf = "
                     << packet_option.value().egress_headers.at(
-                           "scalars.userMetadata.vrf")
+                           "scalars.local_metadata_t.vrf")
                     << std::endl;
         }
         if (packet_option.value().egress_headers.count(
-                "scalars.userMetadata.vrf_is_valid")) {
-          std::cout << "\tscalars.userMetadata.vrf_is_valid = "
+                "scalars.local_metadata_t.vrf_is_valid")) {
+          std::cout << "\tscalars.local_metadata_t.vrf_is_valid = "
                     << packet_option.value().egress_headers.at(
-                           "scalars.userMetadata.vrf_is_valid")
+                           "scalars.local_metadata_t.vrf_is_valid")
                     << std::endl;
         }
         // Custom metadata field defined in testdata/string-optional/program.p4
         if (packet_option.value().egress_headers.contains(
-                "scalars.userMetadata.string_field")) {
-          std::cout << "\tscalars.userMetadata.string_field = "
+                "scalars.metadata.string_field")) {
+          std::cout << "\tscalars.metadata.string_field = "
                     << packet_option.value().egress_headers.at(
-                           "scalars.userMetadata.string_field")
+                           "scalars.metadata.string_field")
                     << std::endl;
         }
       } else {

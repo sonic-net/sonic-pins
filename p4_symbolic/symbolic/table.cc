@@ -484,9 +484,10 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   for (const auto &[_, next_control] :
        table.table_implementation().action_to_next_control()) {
     if (next_control != merge_point) {
-      return absl::UnimplementedError(absl::Substitute(
-          "Table '$0' invokes different control constructs based on matched",
-          table_name));
+      return absl::UnimplementedError(
+          absl::Substitute("Table '$0' invokes different control constructs "
+                           "based on match results",
+                           table_name));
     }
   }
 

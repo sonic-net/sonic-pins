@@ -23,6 +23,7 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "gutil/status.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
@@ -40,14 +41,28 @@ absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
                                          const SymbolicPerPacketState& state) {
   // Compute set of mangled field names that match the given field name.
   std::vector<std::string> mangled_candidates;
-  // p4c seems to use the following template to name metadata fields:
-  // "scalars.userMetadata._<field name><a number>". We look for names that
-  // match the template.
-  const std::string prefix = absl::StrCat("scalars.userMetadata._", field);
+
+  // p4c seems to use the following template to name user metadata fields:
+  //
+  // - Until ~ 2022-11-01:
+  //   "scalars.userMetadata._<field name><a number>"
+  //
+  // - After ~ 2022-11-01:
+  //  "scalars.<user metadata typename>._<field name><a number>", where
+  //  <user metadata typename> is "local_metadata_t" in SAI P4.
+  //
+  // We look for names that match these templates.
+  // TODO: Remove `old_prefix` eventually when we no longer
+  // need backward compatability.
+  const std::string old_prefix = absl::StrCat("scalars.userMetadata._", field);
+  const std::string new_prefix =
+      absl::StrCat("scalars.local_metadata_t._", field);
   for (const auto& [key, _] : state) {
-    if (absl::StartsWith(key, prefix) && key.length() > prefix.length() &&
-        absl::ascii_isdigit(key.at(prefix.length()))) {
-      mangled_candidates.push_back(key);
+    for (absl::string_view prefix : {old_prefix, new_prefix}) {
+      if (absl::StartsWith(key, prefix) && key.length() > prefix.length() &&
+          absl::ascii_isdigit(key.at(prefix.length()))) {
+        mangled_candidates.push_back(key);
+      }
     }
   }
 

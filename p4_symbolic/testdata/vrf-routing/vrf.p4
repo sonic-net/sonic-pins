@@ -131,6 +131,7 @@ control packet_ingress(inout headers hdr,
   apply {
     // vrf is not valid by default.
     local_metadata.vrf_is_valid = false;
+    local_metadata.vrf = 0;
 
     // Check that the packet is an ipv4 packet.
     if (hdr.ipv4.isValid()) {
