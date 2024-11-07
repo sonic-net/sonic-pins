@@ -218,6 +218,7 @@ absl::Status ModifyDeleteAndReinstallEntity(
   p4::v1::Update update;
   update.set_type(p4::v1::Update::MODIFY);
   *update.mutable_entity() = initial_entity;
+  pdpi::IrEntity entity_to_modify_to;
 
   if (!skip_modify) {
     const absl::Time kDeadline = absl::Now() + absl::Seconds(10);
@@ -243,16 +244,20 @@ absl::Status ModifyDeleteAndReinstallEntity(
     }
 
     // Perform the modification if it was correctly generated.
+    ASSIGN_OR_RETURN(entity_to_modify_to,
+                     pdpi::PiEntityToIr(config.GetIrP4Info(), update.entity()));
     RETURN_IF_ERROR(pdpi::SendPiUpdates(&session, {update}))
-        << "With update:\n"
-        << update.DebugString();
+        << "during modification from original entity to new entity:\n"
+        << entity_to_modify_to.DebugString();
   }
 
   // TODO: b/367743919 - Add deletion and then re-insertion instead of modifying
   // again.
   if (!skip_modify) {
     *update.mutable_entity() = initial_entity;
-    return pdpi::SendPiUpdates(&session, {update});
+    RETURN_IF_ERROR(pdpi::SendPiUpdates(&session, {update}))
+        << "during modification back to original entity from new entity:\n"
+        << entity_to_modify_to.DebugString();
   }
   return absl::OkStatus();
 }
