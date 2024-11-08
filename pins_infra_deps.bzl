@@ -148,7 +148,7 @@ def pins_infra_deps():
             # Newest commit on main on 2022-11-23.
             url = "https://github.com/p4lang/p4c/archive/bc1798bb8529c9f71f2794dbc690b29f040549c4.zip",
             strip_prefix = "p4c-bc1798bb8529c9f71f2794dbc690b29f040549c4",
-            sha256 = "21fece70b3fc2d1430ccc3e023b038ce0ca74e1682e6249fb350809d1c61215f",            
+            sha256 = "21fece70b3fc2d1430ccc3e023b038ce0ca74e1682e6249fb350809d1c61215f",
         )
     if not native.existing_rule("com_github_p4lang_p4runtime"):
         # We frequently need bleeding-edge, unreleased version of P4Runtime, so we use a commit

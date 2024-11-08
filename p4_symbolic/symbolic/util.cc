@@ -194,6 +194,20 @@ absl::StatusOr<SymbolicTableMatches> MergeMatchesOnCondition(
   return merged;
 }
 
+absl::StatusOr<SymbolicTableMatches> MergeDisjointTableMatches(
+    const SymbolicTableMatches &lhs, const SymbolicTableMatches &rhs) {
+  SymbolicTableMatches merged = lhs;
+  for (const auto &[table_name, match] : rhs) {
+    auto [_, inserted] = merged.insert({table_name, match});
+    if (!inserted) {
+      return absl::InvalidArgumentError(absl::Substitute(
+          "Expected disjoint keys. Table '$0' encountered in both maps",
+          table_name));
+    }
+  }
+  return merged;
+}
+
 }  // namespace util
 }  // namespace symbolic
 }  // namespace p4_symbolic
