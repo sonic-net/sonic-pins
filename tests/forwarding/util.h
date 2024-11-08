@@ -24,7 +24,7 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 
-namespace gpins {
+namespace pins {
 
 // Calls given callback up to the given number of times with the given delay in
 // between successive attempts, returning ok status as soon as the callback
@@ -68,6 +68,6 @@ absl::StatusOr<T> TryStatusOrUpToNTimes(
   return result;
 }
 
-}  // namespace gpins
+}  // namespace pins
 
 #endif  // PINS_TESTS_FORWARDING_UTIL_H_

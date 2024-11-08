@@ -995,7 +995,7 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
     if (interfaces_in_testing.empty()) break;
   }
 
-  EXPECT_THAT(interfaces_not_up, testing::IsEmpty()); 
+  EXPECT_THAT(interfaces_in_testing, testing::IsEmpty()); 
 
   // Wait for some time before checking the port status.
   absl::SleepFor(absl::Seconds(10));

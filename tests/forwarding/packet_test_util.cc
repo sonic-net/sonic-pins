@@ -110,6 +110,17 @@ uint32_t GetIthL4Port(int i, uint32_t base) {
 
 }  // namespace
 
+// Clears the received packet output vector and the packet statistics counters.
+void TestData::ClearReceivedPackets() {
+  absl::MutexLock lock(&mutex);
+  for (auto& [packet, input_output] : input_output_per_packet) {
+    input_output.output.clear();
+  }
+  total_packets_sent = 0;
+  total_packets_received = 0;
+  total_invalid_packets_received = 0;
+}
+
 // Is this a valid test configuration?  Not all configurations are valid, e.g.
 // you can't modify the flow label in an IPv4 packet (because there is no flow
 // label there).

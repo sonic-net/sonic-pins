@@ -1,0 +1,69 @@
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44659798  # MyIngress.t1
+      match {
+        field_id: 1  # hdr.h1.f1
+        exact {
+          value: "\xff"
+        }
+      }
+      action {
+        action {
+          action_id: 29683729  # MyIngress.forward
+          params {
+            param_id: 1  # port
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 40554969  # MyIngress.t2
+      match {
+        field_id: 1  # hdr.h1.f2
+        exact {
+          value: "\xff"
+        }
+      }
+      action {
+        action {
+          action_id: 29683729  # MyIngress.forward
+          params {
+            param_id: 1  # port
+            value: "\02"
+          }
+        }
+      }
+    }
+  }
+}
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 36319071  # MyIngress.t3
+      match {
+        field_id: 1  # hdr.h1.f3
+        exact {
+          value: "\xff"
+        }
+      }
+      action {
+        action {
+          action_id: 29683729  # MyIngress.forward
+          params {
+            param_id: 1  # port
+            value: "\03"
+          }
+        }
+      }
+    }
+  }
+}
