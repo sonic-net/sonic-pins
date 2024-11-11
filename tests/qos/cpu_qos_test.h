@@ -26,6 +26,7 @@ struct QosTestArguments {
   thinkit::GenericTestbedInterface* testbed_interface;
   std::vector<sai::TableEntry> table_entries;
   std::string gnmi_config;
+  p4::config::v1::P4Info p4info;
   absl::optional<std::string> test_case_id;
 };
 
