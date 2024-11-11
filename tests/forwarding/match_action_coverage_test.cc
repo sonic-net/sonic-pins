@@ -1,5 +1,6 @@
 #include "tests/forwarding/match_action_coverage_test.h"
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -53,6 +54,7 @@ namespace {
 using ::p4::v1::Entity;
 using ::p4::v1::TableEntry;
 using ::p4::v1::Update;
+using ::pdpi::GetMulticastGroupTableName;
 
 using EntityPredicate = std::function<bool(const Entity&)>;
 
@@ -142,7 +144,7 @@ absl::StatusOr<bool> EntityTriggersKnownBug(const pdpi::IrP4Info& info,
     return true;
   }
 
-  // TODO: b/342047704 - Remove once tunnel encap entries can refer to RIFs with
+  // Remove once tunnel encap entries can refer to RIFs with
   // the `set_port_and_src_mac_and_vlan_id` action.
   if (entity.table_entry().table_id() == ROUTING_TUNNEL_TABLE_ID &&
       entity.table_entry().action().action().action_id() ==
@@ -171,7 +173,7 @@ absl::StatusOr<bool> EntityTriggersKnownBug(const pdpi::IrP4Info& info,
              << gutil::PrintTextProto(ir_entity.table_entry());
     }
 
-    // According to b/342047704, tunnel encap entries cannot refer to RIFs with
+    // tunnel encap entries cannot refer to RIFs with
     // the `set_port_and_src_mac_and_vlan_id` action.
     if (stored_rif_entry->action().action().action_id() ==
         ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID)
@@ -251,8 +253,6 @@ absl::Status ModifyDeleteAndReinstallEntity(
         << entity_to_modify_to.DebugString();
   }
 
-  // TODO: b/367743919 - Add deletion and then re-insertion instead of modifying
-  // again.
   if (!skip_modify) {
     *update.mutable_entity() = initial_entity;
     RETURN_IF_ERROR(pdpi::SendPiUpdates(&session, {update}))
@@ -279,7 +279,7 @@ absl::Status GenerateAndInstallEntryThatMeetsPredicate(
   // This means that an empty optional also signals that we have the multicast
   // group table.
   std::optional<pdpi::IrTableDefinition> p4_table_def = std::nullopt;
-  if (table_name != pdpi::GetMulticastGroupTableName()) {
+  if (table_name != GetMulticastGroupTableName()) {
     ASSIGN_OR_RETURN(
         p4_table_def,
         gutil::FindOrStatus(config.GetIrP4Info().tables_by_name(), table_name));
@@ -370,9 +370,11 @@ absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
     const p4::config::v1::P4Info& p4info) {
   LOG(INFO) << "INSTALLING ENTRIES INTO BUILT-IN MULTICAST GROUP TABLE";
 
+  // Ensure both a L2 and L3 multicast entry are
+  // installed. L2 groups are currently disabled, so all groups are L3.
   RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
                       gen, session, config, state, environment,
-                      pdpi::GetMulticastGroupTableName(),
+                      GetMulticastGroupTableName(),
                       /*predicate=*/
                       [&](const Entity& entity) {
                         // Checks that the multicast entry has replicas.
@@ -384,7 +386,7 @@ absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
                                     .empty();
                       }))
           .SetPrepend()
-      << "while generating entry for '" << pdpi::GetMulticastGroupTableName()
+      << "while generating entry for '" << GetMulticastGroupTableName()
       << "': ";
   LOG(INFO) << absl::Substitute("   -  With $0: Present",
                                 pdpi::GetReplicaActionName());
@@ -392,7 +394,7 @@ absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
   // Uncomment once empty multicast groups are supported.
   // RETURN_IF_ERROR(GenerateAndInstallEntryThatMeetsPredicate(
   //                     gen, session, config, state, environment,
-  //                     pdpi::GetMulticastGroupTableName(),
+  //                     GetMulticastGroupTableName(),
   //                     /*predicate=*/
   //                     [&](const Entity& entity) {
   //                       // Checks that the multicast entry has no replicas.
@@ -404,7 +406,7 @@ absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
   //                                  .empty();
   //                     }))
   //         .SetPrepend()
-  //     << "while generating entry for '" << pdpi::GetMulticastGroupTableName()
+  //     << "while generating entry for '" << GetMulticastGroupTableName()
   //     << "': ";
   // LOG(INFO) << absl::Substitute("   -  With $0: Absent",
   //                               pdpi::GetReplicaActionName());
@@ -438,6 +440,10 @@ absl::StatusOr<std::string> FieldPresenceConstraintString(
 // - Each omittable match field is omitted and included in at least one table
 //   entry.
 // - Each action is included in at least one table entry.
+// Tables are installed in the order of their dependency rank so that all
+// references can be satisfied. In other words, if Table A refers to Table B,
+// then Table B will be installed first.
+// Remove p4info param and use config to get P4Info.
 absl::Status AddTableEntryForEachMatchAndEachAction(
     absl::BitGen& gen, pdpi::P4RuntimeSession& session,
     const FuzzerConfig& config, SwitchState& state,
@@ -446,8 +452,44 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
   ASSIGN_OR_RETURN(const p4_constraints::ConstraintInfo constraints_by_table_id,
                    p4_constraints::P4ToConstraintInfo(p4info));
 
-  for (const pdpi::IrTableDefinition& table :
-       AllValidTablesForP4RtRole(config)) {
+  // Order tables so that tables being referenced have valid entries.
+  std::vector<std::string> table_names_by_dependency_rank;
+  for (const auto& table_def : AllValidTablesForP4RtRole(config)) {
+    table_names_by_dependency_rank.push_back(table_def.preamble().alias());
+  }
+
+  // Remove once built-in tables can be treated like any
+  // other table.
+  // Add built-in tables that are not disabled.
+  for (const auto& [name, unused] : config.GetIrP4Info().built_in_tables()) {
+    if (!config.GetDisabledFullyQualifiedNames().contains(name)) {
+      table_names_by_dependency_rank.push_back(name);
+    }
+  }
+
+  // Move function to sequencing library.
+  std::sort(
+      table_names_by_dependency_rank.begin(),
+      table_names_by_dependency_rank.end(),
+      [&](absl::string_view a, absl::string_view b) -> bool {
+        int rank_a = config.GetIrP4Info().dependency_rank_by_table_name().at(a);
+        int rank_b = config.GetIrP4Info().dependency_rank_by_table_name().at(b);
+        // If the ranks are the same, sort alphabetically. Otherwise,
+        // larger rank (i.e. table w/ smaller dependency chain) comes first.
+        return rank_a == rank_b ? a < b : rank_a > rank_b;
+      });
+
+  for (absl::string_view table_name : table_names_by_dependency_rank) {
+    // Built-in multicast group table is handled separately.
+    if (table_name == GetMulticastGroupTableName()) {
+      RETURN_IF_ERROR(AddMulticastGroupEntryWithAndWithoutReplicas(
+          gen, session, config, state, environment, p4info));
+      continue;
+    }
+
+    ASSIGN_OR_RETURN(
+        const pdpi::IrTableDefinition& table,
+        gutil::FindOrStatus(config.GetIrP4Info().tables_by_name(), table_name));
     LOG(INFO) << absl::Substitute("For table '$0', installing entries with:",
                                   table.preamble().alias());
     std::vector<std::string> required_match_descriptions;
@@ -499,7 +541,7 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
 
             // If appending the additional constraint makes the constraint
             // unsatisfiable, then we cannot enforce this field presence.
-            // TODO: b/356774621 - Add parameter that fails test if unsat.
+            // Add parameter that fails test if unsat.
             if (!is_sat) {
               LOG(INFO) << "Forcing match field" << field.match_field().name()
                         << " to be " << (use_field ? "present" : "absent")
@@ -609,96 +651,6 @@ absl::Status AddTableEntryForEachMatchAndEachAction(
   return absl::OkStatus();
 }
 
-// Installs a table entry per supported, programmable table in a particular
-// order. This ensures that we can generate valid table entries for every table.
-// It is required due to the possibility of references between tables.
-// Remove this function once auxiliary entries are installed
-// via dependency rank in P4Info.
-absl::Status AddAuxiliaryTableEntries(absl::BitGen& gen,
-                                      pdpi::P4RuntimeSession& session,
-                                      const FuzzerConfig& config,
-                                      SwitchState& state,
-                                      thinkit::TestEnvironment& environment) {
-  std::vector<std::string> kOrderedTablesToInsertEntriesInto = {
-      "mirror_session_table",
-      "l3_admit_table",
-      "vrf_table",
-      "router_interface_table",
-      "multicast_router_interface_table",
-      "builtin::multicast_group_table",
-      "neighbor_table",
-      "tunnel_table",
-      "nexthop_table",
-      "wcmp_group_table",
-      "ipv4_table",
-      "ipv6_table",
-  };
-
-  for (const auto& table_name : kOrderedTablesToInsertEntriesInto) {
-    // mirror_session_table is only present in a few instantiations, so the test
-    // needs to skip it if it is not present.
-    if (table_name == "mirror_session_table" &&
-        !config.GetIrP4Info().tables_by_name().contains(table_name)) {
-      continue;
-    }
-    std::string fully_qualified_name = table_name;
-    if (table_name != pdpi::GetMulticastGroupTableName()) {
-      ASSIGN_OR_RETURN(const pdpi::IrTableDefinition& table,
-                       gutil::FindOrStatus(
-                           config.GetIrP4Info().tables_by_name(), table_name));
-      fully_qualified_name = table.preamble().name();
-
-      if (table.is_unsupported()) {
-        LOG(WARNING)
-            << table_name
-            << " is currently unsupported and will not be fuzzed. DO NOT add "
-               "aux entries until the table is supported. If the table was "
-               "previously supported and will not be supported in the near "
-               "future, consider removing the aux entry. If support will be "
-               "added again soon disregard this message.";
-        continue;
-      }
-    }
-
-    if (IsDisabledForFuzzing(config, fully_qualified_name)) {
-      LOG(INFO) << absl::StrCat(table_name,
-                                " was skipped due to being disabled.");
-      continue;
-    }
-
-    LOG(INFO) << absl::StrCat("Adding auxiliary entry to ", table_name);
-    RETURN_IF_ERROR(
-        GenerateAndInstallEntryThatMeetsPredicate(
-            gen, session, config, state, environment, table_name,
-            /*predicate=*/
-            [](const Entity& entity) {
-              // Checks that the multicast entry has replicas.
-              bool multicast_has_no_replicas =
-                  entity.has_packet_replication_engine_entry() &&
-                  entity.packet_replication_engine_entry()
-                      .has_multicast_group_entry() &&
-                  entity.packet_replication_engine_entry()
-                      .multicast_group_entry()
-                      .replicas()
-                      .empty();
-
-              // Check that the RIF entry does not have VLAN.
-              // Remove once tunnel encap entries can refer
-              // to RIFs with the `set_port_and_src_mac_and_vlan_id` action.
-              bool rif_has_vlan =
-                  entity.table_entry().table_id() ==
-                      ROUTING_ROUTER_INTERFACE_TABLE_ID &&
-                  entity.table_entry().action().action().action_id() ==
-                      ROUTING_SET_PORT_AND_SRC_MAC_AND_VLAN_ID_ACTION_ID;
-
-              return !rif_has_vlan && !multicast_has_no_replicas;
-            }))
-            .SetPrepend()
-        << "while trying to generate entry for '" << table_name << "': ";
-  }
-  return absl::OkStatus();
-}
-
 TEST_P(MatchActionCoverageTestFixture,
        InsertEntriesForEveryTableAndMatchConfiguration) {
   thinkit::MirrorTestbed& testbed =
@@ -731,25 +683,11 @@ TEST_P(MatchActionCoverageTestFixture,
   config.SetMutateUpdateProbability(0);
 
   SwitchState state(config.GetIrP4Info());
-  // Sets up the switch such that there is a possible valid entry per table.
-  // This is required due to the possibility of references between tables.
-  ASSERT_OK(AddAuxiliaryTableEntries(gen, *p4rt_session, config, state,
-                                     testbed.Environment()));
 
   // Generates and installs entries that use every match field and action.
   EXPECT_OK(AddTableEntryForEachMatchAndEachAction(gen, *p4rt_session, config,
                                                    state, testbed.Environment(),
                                                    GetParam().p4info));
-
-  // Remove function once built-in multicast group table can
-  // be treated like any other table.
-  // Generates and installs entries for the built-in multicast group table.
-  if (!config.GetDisabledFullyQualifiedNames().contains(
-          pdpi::GetMulticastGroupTableName())) {
-    EXPECT_OK(AddMulticastGroupEntryWithAndWithoutReplicas(
-        gen, *p4rt_session, config, state, testbed.Environment(),
-        GetParam().p4info));
-  }
 }
 
 }  // namespace
