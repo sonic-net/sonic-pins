@@ -1,0 +1,63 @@
+-- INPUT -----------------------------------------------------------------------
+{
+   "openconfig-interfaces:interfaces" : {
+      "interface" : [
+          {
+            "config" : {
+               "name" : "Loopback0",
+               "type" : "iana-if-type:softwareLoopback"
+            },
+            "name" : "Loopback0",
+            "subinterfaces" : {
+               "subinterface" : [
+                  {
+                     "config" : {
+                        "index" : 0
+                     },
+                     "index" : 0,
+                     "openconfig-if-ip:ipv4" : {
+                        "addresses" : {
+                           "address" : [
+                              {
+                                 "config" : {
+                                    "ip" : "192.168.0.1",
+                                    "prefix-length" : 27
+                                 },
+                                 "ip" : "192.168.0.1"
+                              }
+                           ]
+                        }
+                     },
+                     "openconfig-if-ip:ipv6" : {
+                        "addresses" : {
+                           "address" : [
+                              {
+                                 "config" : {
+                                    "ip" : "2607:f8b0:8096:3125::",
+                                    "prefix-length" : 64
+                                 },
+                                 "ip" : "2607:f8b0:8096:3125::"
+                              },
+                              {
+                                 "config" : {
+                                    "ip" : "2607:f8b0:1234:5678::",
+                                    "prefix-length" : 64
+                                 },
+                                 "ip" : "2607:f8b0:1234:5678::"
+                              }
+                           ]
+                        }
+                     }
+                  }
+               ]
+            }
+         }
+      ]
+   }
+}
+-- OUTPUT: ParseLoopbackIps --
+192.168.0.1, 2607:f8b0:8096:3125::, 2607:f8b0:1234:5678::
+-- OUTPUT: ParseLoopbackIpv4s --
+192.168.0.1
+-- OUTPUT: ParseLoopbackIpv6s --
+2607:f8b0:8096:3125::, 2607:f8b0:1234:5678::
