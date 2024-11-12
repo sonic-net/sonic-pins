@@ -297,26 +297,6 @@ absl::StatusOr<std::vector<int>> GenerateNRandomWeights(int n,
   return weights;
 }
 
-int RescaleWeightForTomahawk3(int weight) {
-  if (weight <= 1) {
-    return weight;
-  }
-  if (weight == 2) {
-    return 1;
-  }
-  return (weight - 1) / 2;
-}
-
-void RescaleMemberWeights(std::vector<GroupMember>& members) {
-  for (GroupMember& member : members) {
-    int old_weight = member.weight;
-    member.weight = RescaleWeightForTomahawk3(old_weight);
-    LOG(INFO) << "Rescaling member id: " << member.port
-              << " from weight: " << old_weight
-              << " to new weight: " << member.weight;
-  }
-}
-
 std::string DescribeDistribution(
     int expected_total_test_packets,
     absl::Span<const pins::GroupMember> members,
