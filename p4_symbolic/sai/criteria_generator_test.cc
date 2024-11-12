@@ -324,5 +324,340 @@ TEST(GenerateSynthesisCriteriaTest, CoverageGoalsYieldsCorrectResults) {
       });
 }
 
+TEST(GenerateSynthesisCriteriaTest,
+     HeaderCoverageGoalYieldsCorrectCriteriaList) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(
+              R"pb(
+                coverage_goals {
+                  header_coverage { headers { patterns: [ "ipv4", "ipv6" ] } }
+                }
+              )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list,
+                          {
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv4.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv6.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                          });
+}
+
+TEST(GenerateSynthesisCriteriaTest,
+     HeaderCoverageGoalDoesNotYieldMetadataValidtyCriteria) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(
+              R"pb(
+                coverage_goals {
+                  header_coverage {
+                    headers { patterns: [ "standard_metadata", "scalars" ] }
+                  }
+                }
+              )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list, {});
+}
+
+TEST(GenerateSynthesisCriteriaTest,
+     HeaderCoverageGoalWithWildcardExcludeYieldsEmptyCriteriaList) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(auto criteria_list,
+                       GenerateSynthesisCriteriaFor(
+                           ParseProtoOrDie<CoverageGoals>(
+                               R"pb(
+                                 coverage_goals {
+                                   header_coverage {
+                                     headers { patterns: [ "ipv4", "ipv6" ] }
+                                     header_exclusions { patterns: [ "*" ] }
+                                   }
+                                 }
+                               )pb"),
+                           synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list, {});
+}
+
+TEST(GenerateSynthesisCriteriaTest,
+     HeaderCoverageGoalWithHeaderExcludeYieldsCorrectCriteriaList) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(auto criteria_list,
+                       GenerateSynthesisCriteriaFor(
+                           ParseProtoOrDie<CoverageGoals>(
+                               R"pb(
+                                 coverage_goals {
+                                   header_coverage {
+                                     headers { patterns: [ "ipv4", "ipv6" ] }
+                                     header_exclusions { patterns: [ "ipv4" ] }
+                                   }
+                                 }
+                               )pb"),
+                           synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list,
+                          {
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv6.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                          });
+}
+
+TEST(GenerateSynthesisCriteriaTest,
+     HeaderCoverageGoalWithHeaderPreventationYieldCorrectResults) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(
+              R"pb(
+                coverage_goals {
+                  header_coverage {
+                    headers { patterns: [ "ipv4", "vlan" ] }
+                    headers_to_prevent_unless_explicitly_covered {
+                      patterns: [ "vlan" ]
+                    }
+                  }
+                }
+              )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list,
+                          {
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv4.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                      field_criteria {
+                                        field_match {
+                                          name: "vlan.$valid$"
+                                          exact { hex_str: "0x0" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "vlan.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                          });
+}
+
+TEST(GenerateSynthesisCriteriaTest,
+     HeaderCoverageGoalWithIncludeWildcardHeaderYieldCorrectCriteriaList) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(
+              R"pb(
+                coverage_goals {
+                  header_coverage {
+                    headers { patterns: [ "ipv4" ] }
+                    headers_to_prevent_unless_explicitly_covered {
+                      patterns: [ "vlan" ]
+                    }
+                    include_wildcard_header: true
+                  }
+                }
+              )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(criteria_list,
+                          {
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "vlan.$valid$"
+                                          exact { hex_str: "0x0" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                              ParseProtoOrDie<PacketSynthesisCriteria>(
+                                  R"pb(
+                                    input_packet_header_criteria {
+                                      field_criteria {
+                                        field_match {
+                                          name: "ipv4.$valid$"
+                                          exact { hex_str: "0x1" }
+                                        }
+                                      }
+                                      field_criteria {
+                                        field_match {
+                                          name: "vlan.$valid$"
+                                          exact { hex_str: "0x0" }
+                                        }
+                                      }
+                                    }
+                                  )pb"),
+                          });
+}
+
+TEST(GenerateSynthesisCriteriaTest,
+     CoverageGoalWithHeaderAndEntryAndFateCoverageYieldsCorrectResults) {
+  // Get a packet synthesizer object.
+  ASSERT_OK_AND_ASSIGN(auto synthesizer,
+                       PacketSynthesizer::Create(GetParams()));
+
+  ASSERT_OK_AND_ASSIGN(
+      auto criteria_list,
+      GenerateSynthesisCriteriaFor(
+          ParseProtoOrDie<CoverageGoals>(
+              R"pb(
+                coverage_goals {
+                  header_coverage { headers { patterns: [ "ipv4", "ipv6" ] } }
+                  packet_fate_coverage { fates: [ DROP, NOT_DROP ] }
+                  entry_coverage { tables { patterns: [ "*" ] } }
+                }
+              )pb"),
+          synthesizer->SolverState()));
+
+  ExpectEqualCriteriaList(
+      criteria_list,
+      {
+          ParseProtoOrDie<PacketSynthesisCriteria>(
+              R"pb(
+                input_packet_header_criteria {
+                  field_criteria {
+                    field_match {
+                      name: "ipv4.$valid$"
+                      exact { hex_str: "0x1" }
+                    }
+                  }
+                }
+                output_criteria { drop_expected: true }
+                table_reachability_criteria {
+                  table_name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
+                }
+                table_entry_reachability_criteria {
+                  table_name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
+                  match_index: 0
+                }
+              )pb"),
+          ParseProtoOrDie<PacketSynthesisCriteria>(
+              R"pb(
+                input_packet_header_criteria {
+                  field_criteria {
+                    field_match {
+                      name: "ipv4.$valid$"
+                      exact { hex_str: "0x1" }
+                    }
+                  }
+                }
+                output_criteria { drop_expected: false }
+                table_reachability_criteria {
+                  table_name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
+                }
+                table_entry_reachability_criteria {
+                  table_name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
+                  match_index: 0
+                }
+              )pb"),
+          ParseProtoOrDie<PacketSynthesisCriteria>(
+              R"pb(
+                input_packet_header_criteria {
+                  field_criteria {
+                    field_match {
+                      name: "ipv6.$valid$"
+                      exact { hex_str: "0x1" }
+                    }
+                  }
+                }
+                output_criteria { drop_expected: true }
+                table_reachability_criteria {
+                  table_name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
+                }
+                table_entry_reachability_criteria {
+                  table_name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
+                  match_index: 0
+                }
+              )pb"),
+          ParseProtoOrDie<PacketSynthesisCriteria>(
+              R"pb(
+                input_packet_header_criteria {
+                  field_criteria {
+                    field_match {
+                      name: "ipv6.$valid$"
+                      exact { hex_str: "0x1" }
+                    }
+                  }
+                }
+                output_criteria { drop_expected: false }
+                table_reachability_criteria {
+                  table_name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
+                }
+                table_entry_reachability_criteria {
+                  table_name: "ingress.acl_pre_ingress.acl_pre_ingress_table"
+                  match_index: 0
+                }
+              )pb"),
+      });
+}
+
 }  // namespace
 }  // namespace p4_symbolic::packet_synthesizer
