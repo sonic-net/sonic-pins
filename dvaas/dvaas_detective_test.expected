@@ -1,0 +1,115 @@
+================================================================================
+DVaaS DetectiveExplanationToString Test
+================================================================================
+-- Input: DetectiveExplanation proto -----------------------------
+clusters {
+  defining_property: "input ttl < 2"
+  predicted_outcome: true
+  passing_tests: 50
+  failing_tests: 50
+  accuracy_of_predicted_outcome: 0.5
+  coverage_for_predicted_outcome: 1
+}
+-- Output: DVAAS Detective String --------------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* input ttl < 2 -> pass
+  * accuracy: 50%, with 50 exceptions that fail instead
+  * coverage: 100%, accounting for 50/50 passing test vectors
+* All passing test vectors accounted for
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* 50 failing test vectors unaccounted for (100%)
+
+================================================================================
+DVaaS DetectiveExplanationToString Test
+================================================================================
+-- Input: DetectiveExplanation proto -----------------------------
+clusters {
+  defining_property: "input ttl < 2"
+  passing_tests: 50
+  failing_tests: 50
+  accuracy_of_predicted_outcome: 0.5
+  coverage_for_predicted_outcome: 1
+}
+-- Output: DVAAS Detective String --------------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* 50 passing test vectors unaccounted for (100%)
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* input ttl < 2 -> fail
+  * accuracy: 50%, with 50 exceptions that pass instead
+  * coverage: 100%, accounting for 50/50 failing test vectors
+* All failing test vectors accounted for
+
+================================================================================
+DVaaS DetectiveExplanationToString Test
+================================================================================
+-- Input: DetectiveExplanation proto -----------------------------
+clusters {
+  defining_property: "input ttl < 2"
+  predicted_outcome: true
+  passing_tests: 25
+  failing_tests: 25
+  accuracy_of_predicted_outcome: 0.5
+  coverage_for_predicted_outcome: 0.5
+}
+clusters {
+  defining_property: "input ttl >= 2"
+  passing_tests: 25
+  failing_tests: 25
+  accuracy_of_predicted_outcome: 0.5
+  coverage_for_predicted_outcome: 0.5
+}
+-- Output: DVAAS Detective String --------------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* input ttl < 2 -> pass
+  * accuracy: 50%, with 25 exceptions that fail instead
+  * coverage: 50%, accounting for 25/50 passing test vectors
+* 25 passing test vectors unaccounted for (50%)
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* input ttl >= 2 -> fail
+  * accuracy: 50%, with 25 exceptions that pass instead
+  * coverage: 50%, accounting for 25/50 failing test vectors
+* 25 failing test vectors unaccounted for (50%)
+
+================================================================================
+DVaaS DetectiveExplanationToString Test
+================================================================================
+-- Input: DetectiveExplanation proto -----------------------------
+clusters {
+  defining_property: "expected(output packets) < 2"
+  predicted_outcome: true
+  passing_tests: 1220
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 0.82
+}
+clusters {
+  defining_property: "expected(packet-ins) < 1"
+  predicted_outcome: true
+  passing_tests: 256
+  accuracy_of_predicted_outcome: 1
+  coverage_for_predicted_outcome: 0.17
+}
+clusters {
+  defining_property: "expected(output packets) >= 2 && expected(packet-ins) >= 1"
+  passing_tests: 12
+  failing_tests: 30
+  accuracy_of_predicted_outcome: 0.6
+  coverage_for_predicted_outcome: 1
+}
+-- Output: DVAAS Detective String --------------------------------
+DVaaS Detective: Found the following pattern(s) among passing test vectors:
+* expected(output packets) < 2 -> pass
+  * accuracy: 100%, with 0 exceptions that fail instead
+  * coverage: 82%, accounting for 1220/1488 passing test vectors
+* expected(packet-ins) < 1 -> pass
+  * accuracy: 100%, with 0 exceptions that fail instead
+  * coverage: 17%, accounting for 256/1488 passing test vectors
+* 12 passing test vectors unaccounted for (1%)
+
+DVaaS Detective: Found the following pattern(s) among failing test vectors:
+* expected(output packets) >= 2 && expected(packet-ins) >= 1 -> fail
+  * accuracy: 60%, with 12 exceptions that pass instead
+  * coverage: 100%, accounting for 30/30 failing test vectors
+* All failing test vectors accounted for
