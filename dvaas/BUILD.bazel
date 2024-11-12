@@ -91,6 +91,32 @@ cc_library(
     ],
 )
 
+# go/golden-test-with-coverage
+cc_test(
+    name = "dvaas_detective_test",
+    srcs = ["dvaas_detective_test.cc"],
+    linkstatic = True,
+    deps = [
+        ":dvaas_detective",
+        ":dvaas_detective_cc_proto",
+        "//gutil:proto",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cmd_diff_test(
+    name = "dvaas_detective_diff_test",
+    actual_cmd = " | ".join([
+        "$(execpath :dvaas_detective_test)",
+        # Strip unnecessary lines for golden testing.
+        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
+        "sed '/^\\[/d'",  # Strip every line beginning with '['.
+    ]),
+    expected = "dvaas_detective_test.expected",
+    tools = [":dvaas_detective_test"],
+)
+
 cc_test(
     name = "dataplane_validation_test",
     srcs = ["dataplane_validation_test.cc"],
