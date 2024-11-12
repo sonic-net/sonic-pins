@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -49,4 +52,48 @@ cc_library(
         "@com_google_googletest//:gtest",
     ],
     alwayslink = True,
+)
+
+cc_library(
+    name = "gnmi_parsers",
+    srcs = ["gnmi_parsers.cc"],
+    hdrs = ["gnmi_parsers.h"],
+    deps = [
+        ":openconfig_cc_proto",
+        "//gutil:overload",
+        "//p4_pdpi/netaddr:ipv4_address",
+        "//p4_pdpi/netaddr:ipv6_address",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "gnmi_parsers_test_runner",
+    srcs = ["gnmi_parsers_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":gnmi_parsers",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "gnmi_parsers_test",
+    actual_cmd = "$(execpath :gnmi_parsers_test_runner)",
+    expected = ":gnmi_parsers_test.expected.output",
+    tools = [":gnmi_parsers_test_runner"],
+)
+
+proto_library(
+    name = "openconfig_proto",
+    srcs = ["openconfig.proto"],
+)
+
+cc_proto_library(
+    name = "openconfig_cc_proto",
+    deps = [":openconfig_proto"],
 )
