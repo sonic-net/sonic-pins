@@ -49,6 +49,17 @@ cc_test(
 )
 
 proto_library(
+    name = "packet_synthesis_criteria_proto",
+    srcs = ["packet_synthesis_criteria.proto"],
+    deps = ["//p4_pdpi:ir_proto"],
+)
+
+cc_proto_library(
+    name = "packet_synthesis_criteria_cc_proto",
+    deps = [":packet_synthesis_criteria_proto"],
+)
+
+proto_library(
     name = "packet_synthesizer_proto",
     srcs = ["packet_synthesizer.proto"],
     deps = [
@@ -62,3 +73,27 @@ cc_proto_library(
     deps = [":packet_synthesizer_proto"],
 )
 
+cc_library(
+    name = "packet_synthesis_criteria",
+    srcs = ["packet_synthesis_criteria.cc"],
+    hdrs = ["packet_synthesis_criteria.h"],
+    deps = [
+        ":packet_synthesis_criteria_cc_proto",
+        "//gutil:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "packet_synthesis_criteria_test",
+    srcs = ["packet_synthesis_criteria_test.cc"],
+    deps = [
+        ":packet_synthesis_criteria",
+        ":packet_synthesis_criteria_cc_proto",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
