@@ -41,6 +41,12 @@ struct WatchPortTestParams {
   std::string gnmi_config;
   // TODO: Remove port ids from here and derive from gNMI config.
   std::vector<int> port_ids;
+  // Optional function that raises critical alarm in the system.
+  // Sets the system in critical state so that watch port down action can be
+  // verified to work as expected. If this function is not provided, the
+  // critical state related tests will be skipped.
+  absl::optional<std::function<absl::Status(thinkit::Switch& test_switch)>>
+      set_critical_alarm;
 };
 
 // WatchPortTestFixture for testing watch port action.
@@ -58,6 +64,7 @@ class WatchPortTestFixture
   TestData test_data_;
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;
   std::unique_ptr<pdpi::P4RuntimeSession> control_p4_session_;
+  std::unique_ptr<gnmi::gNMI::StubInterface> sut_gnmi_stub_;
   std::unique_ptr<gnmi::gNMI::StubInterface> control_gnmi_stub_;
   // Stores the receive thread that is created in SetUp() and joined in
   // TearDown(). Accesses control_p4_session_->StreamChannelRead to read
