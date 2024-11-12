@@ -21,6 +21,24 @@ package(
 )
 
 cc_library(
+    name = "validation_result",
+    srcs = ["validation_result.cc"],
+    hdrs = ["validation_result.h"],
+    deps = [
+        ":test_run_validation",
+        ":test_vector_cc_proto",
+        ":test_vector_stats",
+        "//gutil:status",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
     name = "output_writer",
     hdrs = ["output_writer.h"],
     deps = [
