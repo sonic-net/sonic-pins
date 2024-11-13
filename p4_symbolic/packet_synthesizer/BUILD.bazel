@@ -18,6 +18,47 @@ package(
     licenses = ["notice"],
 )
 
+cc_library(
+    name = "util",
+    srcs = ["util.cc"],
+    hdrs = ["util.h"],
+    deps = [
+        "//gutil:status",
+        "//p4_pdpi/netaddr:ipv6_address",
+        "//p4_pdpi/string_encodings:decimal_string",
+        "//p4_pdpi/utils:ir",
+        "//p4_symbolic:z3_util",
+        "//p4_symbolic/sai:fields",
+        "//p4_symbolic/symbolic",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "util_test",
+    srcs = ["util_test.cc"],
+    deps = [
+        ":util",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_symbolic/ir:ir_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+proto_library(
+    name = "packet_synthesis_criteria_proto",
+    srcs = ["packet_synthesis_criteria.proto"],
+    deps = ["//p4_pdpi:ir_proto"],
+)
+
+cc_proto_library(
+    name = "packet_synthesis_criteria_cc_proto",
+    deps = [":packet_synthesis_criteria_proto"],
+)
+
 proto_library(
     name = "packet_synthesizer_proto",
     srcs = ["packet_synthesizer.proto"],
@@ -32,3 +73,27 @@ cc_proto_library(
     deps = [":packet_synthesizer_proto"],
 )
 
+cc_library(
+    name = "packet_synthesis_criteria",
+    srcs = ["packet_synthesis_criteria.cc"],
+    hdrs = ["packet_synthesis_criteria.h"],
+    deps = [
+        ":packet_synthesis_criteria_cc_proto",
+        "//gutil:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_test(
+    name = "packet_synthesis_criteria_test",
+    srcs = ["packet_synthesis_criteria_test.cc"],
+    deps = [
+        ":packet_synthesis_criteria",
+        ":packet_synthesis_criteria_cc_proto",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
