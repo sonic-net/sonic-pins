@@ -94,5 +94,59 @@ TEST(FormatP4RTValue, FailsForStringWithNonZeroBitwidth) {
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
+constexpr char kDummyString1[] = "a";
+constexpr char kDummyString2[] = "b";
+constexpr int kDummyId1 = 10;
+
+TEST(IdAllocatorTest, AssignedIdsAreUnique) {
+  IdAllocator allocator(TranslationData{.dynamic_translation = true});
+  ASSERT_OK_AND_ASSIGN(const uint64_t id_1,
+                       allocator.AllocateId(kDummyString1));
+  ASSERT_OK_AND_ASSIGN(const uint64_t id_2,
+                       allocator.AllocateId(kDummyString2));
+  ASSERT_NE(id_1, id_2);
+}
+
+TEST(IdAllocatorTest, ReverseTranslationYieldsOriginalString) {
+  IdAllocator allocator(TranslationData{.dynamic_translation = true});
+  ASSERT_OK_AND_ASSIGN(const uint64_t id_1,
+                       allocator.AllocateId(kDummyString1));
+  ASSERT_OK_AND_ASSIGN(const std::string string_1, allocator.IdToString(id_1));
+  ASSERT_EQ(string_1, kDummyString1);
+}
+
+TEST(IdAllocatorTest, StaticMappingWorksForExistingString) {
+  IdAllocator allocator(TranslationData{
+      .static_mapping = {{kDummyString1, kDummyId1}},
+      .dynamic_translation = true,
+  });
+  ASSERT_OK_AND_ASSIGN(const std::string string_1,
+                       allocator.IdToString(kDummyId1));
+  ASSERT_EQ(string_1, kDummyString1);
+  ASSERT_OK_AND_ASSIGN(const uint64_t id, allocator.AllocateId(kDummyString1));
+  ASSERT_EQ(id, kDummyId1);
+}
+
+TEST(IdAllocatorTest, StaticMappingWithDynamicAllocationWorksForNewString) {
+  IdAllocator allocator(TranslationData{
+      .static_mapping = {{kDummyString1, kDummyId1}},
+      .dynamic_translation = true,
+  });
+  ASSERT_OK_AND_ASSIGN(const uint64_t id_2,
+                       allocator.AllocateId(kDummyString2));
+  ASSERT_NE(id_2, kDummyId1);
+  ASSERT_OK_AND_ASSIGN(const std::string string_2, allocator.IdToString(id_2));
+  ASSERT_EQ(string_2, kDummyString2);
+}
+
+TEST(IdAllocatorTest, StaticMappingWithoutDynamicAllocationFailForNewString) {
+  IdAllocator allocator(TranslationData{
+      .static_mapping = {{kDummyString1, kDummyId1}},
+      .dynamic_translation = false,
+  });
+  ASSERT_THAT(allocator.AllocateId(kDummyString2),
+              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
 }  // namespace
 }  // namespace p4_symbolic::symbolic::values
