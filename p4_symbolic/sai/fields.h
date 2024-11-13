@@ -148,6 +148,13 @@ struct SaiFields {
 absl::StatusOr<SaiFields> GetSaiFields(
     const symbolic::SymbolicPerPacketState& state);
 
+// The p4c compiler "mangles" field names of user defined metadata and the
+// mangled name is used in some places in p4-symbolic. This function returns
+// the mangled name of a given user defined metadata field. Note that this is a
+// workaround and done in a best effort fashion.
+absl::StatusOr<std::string> GetUserMetadataFieldName(
+    const std::string& field, const symbolic::SymbolicPerPacketState& state);
+
 }  // namespace p4_symbolic
 
 #endif  // PINS_P4_SYMBOLIC_SAI_FIELDS_H_
