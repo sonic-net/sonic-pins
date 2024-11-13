@@ -1,0 +1,84 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package p4_symbolic.packet_synthesizer;
+
+import "p4_pdpi/ir.proto";
+
+// Criteria stating the synthesized packet must reach and match a certain table
+// entry.
+message TableEntryReachabilityCriteria {
+  // The table containing the entry that must be matched.
+  string table_name = 1;
+  // The index of the entry (in descending order of priority, starting from 0)
+  // that must match the packet. -1 indicates default action (i.e. no match).
+  int32 match_index = 2;
+}
+
+// Criteria stateing the synthesized packet must reach a certain table.
+message TableReachabilityCriteria {
+  // The table that must be reachable.
+  string table_name = 1;
+}
+
+// Criteria for the output behavior for the synthesized packet.
+message OutputCriteria {
+  // Whether the packet must get dropped.
+  bool drop_expected = 1;
+}
+
+// Criteria on fields of a packet's header.
+message HeaderCriteria {
+  // Constraint for a single header field.
+  message FieldCriterion {
+    // Constraint in form of a match on a header field.
+    pdpi.IrMatch field_match = 1;
+    // Whether the constraint should be negated.
+    bool negated = 2;
+  }
+  // List of constraints on header fields. They must all be satisfied (i.e. the
+  // resulting criteria is the conjunction of individual constraints).
+  repeated FieldCriterion field_criteria = 1;
+}
+
+// Criteria on the paypload of the synthesized packet.
+// TODO: Set the payload in the client side.
+message PayloadCriteria {
+  // The payload to be attached to the synthesized packet.
+  string payload = 1;
+}
+
+// The coverage criteria for (single) packet synthesis. All fields are optional.
+// If a criterion is not provided, no constraints for that criterion will be
+// added.
+message PacketSynthesisCriteria {
+  OutputCriteria output_criteria = 1;
+  HeaderCriteria input_packet_header_criteria = 2;
+  TableReachabilityCriteria table_reachability_criteria = 3;
+  TableEntryReachabilityCriteria table_entry_reachability_criteria = 4;
+  PayloadCriteria payload_criteria = 5;
+}
+
+// Contains a single (type of) criteria.
+message CriteriaVariant {
+  oneof criteria {
+    OutputCriteria output_criteria = 1;
+    HeaderCriteria input_packet_header_criteria = 2;
+    TableReachabilityCriteria table_reachability_criteria = 3;
+    TableEntryReachabilityCriteria table_entry_reachability_criteria = 4;
+    PayloadCriteria payload_criteria = 5;
+  }
+}
