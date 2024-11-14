@@ -16,11 +16,14 @@
 #define PINS_DVAAS_MIRROR_TESTBED_CONFIG_H_
 
 #include <memory>
+#include <optional>
 
+#include "absl/container/btree_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "dvaas/switch_api.h"
 #include "lib/gnmi/openconfig.pb.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
@@ -33,24 +36,16 @@ namespace dvaas {
 class MirrorTestbedConfigurator {
  public:
   struct Params {
-    // If true, configures interfaces on SUT to make sure
-    // for any P4RT port id in `sut_entries_to_expect_after_configuration` there
-    // is exactly one enabled ethernet interface with that id. Existing SUT
-    // table entries get wiped out during the process.
-    bool configure_sut_port_ids_for_expected_entries = false;
-    // Entries that are expected to be installed on SUT after configuration by
-    // the client of the configurator. Only used for determining interface port
-    // ids during configuration. Must have a value if
-    // `configure_sut_port_ids_for_expected_entries` is true.
-    // NOTE: The configurator won't install these entries on SUT. It is expected
-    // that the client will install the entries after calling
-    // `ConfigureForForwardingTest`.
-    std::optional<pdpi::IrTableEntries>
-        sut_entries_to_expect_after_configuration;
+    // If not nullopt, configures the interfaces on SUT to make sure for any
+    // P4RT port id in `used_p4rt_port_ids`, there is exactly one enabled
+    // ethernet interface with that id. Existing SUT table entries get wiped out
+    // during the process.
+    std::optional<absl::btree_set<pins_test::P4rtPortId>>
+        p4rt_port_ids_to_configure = std::nullopt;
 
     // If true, sets up control switch ports to be a mirror of SUT
-    // Must be true if `configure_sut_port_ids_for_expected_entries` is true.
-    // Existing control switch table entries get wiped out during the process.
+    // Must be true if `used_p4rt_port_ids` is non-nullopt. Existing control
+    // switch table entries get wiped out during the process.
     bool mirror_sut_ports_ids_to_control_switch = false;
   };
 
@@ -108,10 +103,11 @@ private:
   SwitchApi sut_api_;
   SwitchApi control_switch_api_;
 
-  // Keeps the original interfaces configured on the control switch before call
-  // to `ConfigureForForwardingTest`. Successful call to
-  // `ConfigureForForwardingTest` sets its value. Successful call to
-  // `RestoreToOriginalConfiguration` resets it to nullopt.
+  // Keeps the original interfaces configured on the SUT and control switch
+  // before call to `ConfigureForForwardingTest`. Successful call to
+  // `ConfigureForForwardingTest` sets their value. Successful call to
+  // `RestoreToOriginalConfiguration` resets them to nullopt.
+  std::optional<pins_test::openconfig::Interfaces> original_sut_interfaces_;
   std::optional<pins_test::openconfig::Interfaces> original_control_interfaces_;
 };
 
