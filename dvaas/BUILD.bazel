@@ -244,3 +244,15 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+
+cc_test(
+    name = "test_vector_test",
+    srcs = ["test_vector_test.cc"],
+    deps = [
+        ":test_vector",
+        "//gutil:status_matchers",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
