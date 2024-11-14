@@ -32,7 +32,7 @@ namespace {
 // ID in `p4rt_port_ids` to an enabled Ethernet interface.
 absl::Status ConfigureSutInterfacesWithGivenP4RtPortIds(
     gnmi::gNMI::StubInterface& sut_gnmi_stub,
-    absl::btree_set<pins_test::P4rtPortId>& p4rt_port_ids) {
+    const absl::btree_set<pins_test::P4rtPortId>& p4rt_port_ids) {
   // Only map to enabled Ethernet interfaces.
   auto is_enabled_ethernet_interface =
       [](const pins_test::openconfig::Interfaces::Interface& interface) {
@@ -77,16 +77,11 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
     return absl::FailedPreconditionError(
         "Configure function called on an already configured testbed.");
   }
-  if (params.configure_sut_port_ids_for_expected_entries) {
-    if (!params.sut_entries_to_expect_after_configuration.has_value()) {
-      return absl::InvalidArgumentError(
-          "`expected_sut_entries` must have a value when "
-          "`configure_sut_ports_for_expected_entries` is true.");
-    }
+  if (params.p4rt_port_ids_to_configure.has_value()) {
     if (!params.mirror_sut_ports_ids_to_control_switch) {
       return absl::InvalidArgumentError(
           "`mirror_sut_ports_to_control_switch` must be true when "
-          "configure_sut_ports_for_expected_entries` is true.");
+          "`used_p4rt_port_ids` is non-nullopt.");
     }
   }
 
@@ -96,29 +91,14 @@ absl::Status MirrorTestbedConfigurator::ConfigureForForwardingTest(
                    pins_test::GetInterfacesAsProto(*control_switch_api_.gnmi,
                                                    gnmi::GetRequest::CONFIG));
 
-  if (params.configure_sut_port_ids_for_expected_entries) {
-    // Get P4RT port ids in `used_entries`.
-    ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
-                     GetForwardingPipelineConfig(sut_api_.p4rt.get()));
-    ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info,
-                     pdpi::CreateIrP4Info(response.config().p4info()));
-    std::vector<pdpi::IrTableEntry> used_entries_list(
-        params.sut_entries_to_expect_after_configuration.value()
-            .entries()
-            .begin(),
-        params.sut_entries_to_expect_after_configuration.value()
-            .entries()
-            .end());
-    ASSIGN_OR_RETURN(absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
-                     pins_test::GetPortsUsed(ir_info, used_entries_list));
-
+  if (params.p4rt_port_ids_to_configure.has_value()) {
     // Clear entities on SUT. This is needed to ensure we can modify the
     // interface configurations.
     RETURN_IF_ERROR(pdpi::ClearEntities(*sut_api_.p4rt));
 
     // Change interface configurations on SUT to match `used_p4rt_port_ids`.
     RETURN_IF_ERROR(ConfigureSutInterfacesWithGivenP4RtPortIds(
-        *sut_api_.gnmi, used_p4rt_port_ids));
+        *sut_api_.gnmi, *params.p4rt_port_ids_to_configure));
   }
 
   if (params.mirror_sut_ports_ids_to_control_switch) {
