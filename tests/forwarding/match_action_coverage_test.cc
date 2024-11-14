@@ -145,6 +145,17 @@ absl::StatusOr<bool> EntityTriggersKnownBug(const pdpi::IrP4Info& info,
   }
 
   // Remove once tunnel encap entries can refer to RIFs with
+  // Condition on NON-DELETE once we cover deletion.
+  // Empty multicast group entries are not supported by the switch.
+  if (ir_entity.packet_replication_engine_entry().has_multicast_group_entry() &&
+      ir_entity.packet_replication_engine_entry()
+          .multicast_group_entry()
+          .replicas()
+          .empty()) {
+    return true;
+  }
+
+  // Remove once tunnel encap entries can refer to RIFs with
   // the `set_port_and_src_mac_and_vlan_id` action.
   if (entity.table_entry().table_id() == ROUTING_TUNNEL_TABLE_ID &&
       entity.table_entry().action().action().action_id() ==
@@ -376,15 +387,7 @@ absl::Status AddMulticastGroupEntryWithAndWithoutReplicas(
                       gen, session, config, state, environment,
                       GetMulticastGroupTableName(),
                       /*predicate=*/
-                      [&](const Entity& entity) {
-                        // Checks that the multicast entry has replicas.
-                        return entity.packet_replication_engine_entry()
-                                   .has_multicast_group_entry() &&
-                               !entity.packet_replication_engine_entry()
-                                    .multicast_group_entry()
-                                    .replicas()
-                                    .empty();
-                      }))
+                      [&](const Entity& entity) { return true; }))
           .SetPrepend()
       << "while generating entry for '" << GetMulticastGroupTableName()
       << "': ";
