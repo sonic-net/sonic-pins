@@ -18,6 +18,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_set.h"
+#include "absl/log/log.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/packet_injection.h"
@@ -31,14 +33,33 @@
 #include "gutil/proto.h"
 #include "gutil/status.h"
 #include "gutil/test_artifact_writer.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
 #include "sai_p4/instantiations/google/test_tools/test_entries.h"
+#include "tests/lib/switch_test_setup_helpers.h"
 
 namespace dvaas {
+
+absl::StatusOr<absl::btree_set<pins_test::P4rtPortId>> GetUsedP4rtPortIds(
+    const ArribaTestVector& arriba_test_vector,
+    const std::vector<pdpi::IrTableEntry>& used_entries_list,
+    const pdpi::IrP4Info& ir_p4_info) {
+  ASSIGN_OR_RETURN(absl::btree_set<pins_test::P4rtPortId> used_p4rt_port_ids,
+                   pins_test::GetPortsUsed(ir_p4_info, used_entries_list));
+
+  for (const auto& [_, packet_test_vector] :
+       arriba_test_vector.packet_test_vector_by_id()) {
+    ASSIGN_OR_RETURN(pins_test::P4rtPortId p4rt_port_id,
+                     pins_test::P4rtPortId::MakeFromP4rtEncoding(
+                         packet_test_vector.input().packet().port()));
+    used_p4rt_port_ids.insert(p4rt_port_id);
+  }
+  return used_p4rt_port_ids;
+}
 
 absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
@@ -75,12 +96,6 @@ absl::StatusOr<ValidationResult> ValidateAgainstArribaTestVector(
 
   PacketStatistics packet_statistics;
   gutil::BazelTestArtifactWriter artifact_writer;
-
-  // Store test vector insights.
-  ASSIGN_OR_RETURN(const std::string insights_csv,
-                   GetTestInsightsTableAsCsv(packet_test_vectors, ir_p4info));
-  RETURN_IF_ERROR(
-      artifact_writer.AppendToTestArtifact("test_insights.csv", insights_csv));
 
   // Send tests to switch and collect results.
   ASSIGN_OR_RETURN(PacketTestRuns test_runs,

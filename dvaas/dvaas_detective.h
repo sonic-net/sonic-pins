@@ -19,8 +19,11 @@
 #define PINS_DVAAS_DVAAS_DETECTIVE_H_
 
 #include <string>
+#include <variant>
 
+#include "absl/container/flat_hash_map.h"
 #include "dvaas/dvaas_detective.pb.h"
+#include "dvaas/test_vector.pb.h"
 
 namespace dvaas {
 namespace dvaas_internal {
@@ -28,6 +31,26 @@ namespace dvaas_internal {
 // Pretty printer for `DetectiveExplanation`.
 std::string DetectiveExplanationToString(
     const DetectiveExplanation& explanation);
+
+// Semantics for numerical features:
+// https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticnumerical
+using NumericalValue = float;
+
+// Semantics for categorical features:
+// https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticcategorical
+using CategoricalValue = std::string;
+
+// Feature values can have different types, each having it's own semantics.
+// https://ydf.readthedocs.io/en/latest/guide_feature_semantics
+using FeatureValue = std::variant<NumericalValue, CategoricalValue>;
+
+// Returns `value` as a printable string.
+std::string FeatureValueToString(const FeatureValue& value);
+
+// Returns map from feature names to feature values extracted from
+// `test_outcome`.
+absl::flat_hash_map<std::string, FeatureValue> TestOutcomeToFeatureMap(
+    const PacketTestOutcome& test_outcome);
 
 }  // namespace dvaas_internal
 }  // namespace dvaas
