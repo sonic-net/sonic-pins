@@ -3,17 +3,17 @@ Cannot find solution!
 
 Finding packet for table packet_ingress.ipv4_lpm_table and row 0
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000000
 	ipv4.srcAddr = #x29210000
-	ipv4.dstAddr = #x0a0a0001
+	ipv4.dstAddr = #x0a0a0002
 	ethernet.dstAddr = #x000000000000
 	scalars.local_metadata_t.vrf = VRF1
 	scalars.local_metadata_t.vrf_is_valid = #b1
 
 Finding packet for table packet_ingress.ipv4_lpm_table and row 1
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000001
 	ipv4.srcAddr = #x29210000
 	ipv4.dstAddr = #x0a0a0000
@@ -23,17 +23,17 @@ Finding packet for table packet_ingress.ipv4_lpm_table and row 1
 
 Finding packet for table packet_ingress.ipv4_lpm_table and row 2
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000001
 	ipv4.srcAddr = #x29210000
-	ipv4.dstAddr = #x0a080000
+	ipv4.dstAddr = #x0a0e0000
 	ethernet.dstAddr = #x00000000000a
 	scalars.local_metadata_t.vrf = VRF1
 	scalars.local_metadata_t.vrf_is_valid = #b1
 
 Finding packet for table packet_ingress.ipv4_lpm_table and row 3
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000001
 	ipv4.srcAddr = #x20210100
 	ipv4.dstAddr = #x14140000
@@ -43,17 +43,17 @@ Finding packet for table packet_ingress.ipv4_lpm_table and row 3
 
 Finding packet for table packet_ingress.set_vrf_table and row -1
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000001
 	ipv4.srcAddr = #x08000909
-	ipv4.dstAddr = #x00000000
+	ipv4.dstAddr = #x14140000
 	ethernet.dstAddr = #x000000000000
 	scalars.local_metadata_t.vrf = VRF1
 	scalars.local_metadata_t.vrf_is_valid = #b0
 
 Finding packet for table packet_ingress.set_vrf_table and row 0
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000001
 	ipv4.srcAddr = #x20210100
 	ipv4.dstAddr = #x14140000
@@ -63,7 +63,7 @@ Finding packet for table packet_ingress.set_vrf_table and row 0
 
 Finding packet for table packet_ingress.set_vrf_table and row 1
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000001
 	ipv4.srcAddr = #x21210000
 	ipv4.dstAddr = #x0a140000
@@ -73,7 +73,7 @@ Finding packet for table packet_ingress.set_vrf_table and row 1
 
 Finding packet for table tbl_vrf133 and row -1
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000001
 	ipv4.srcAddr = #x21210000
 	ipv4.dstAddr = #x0a140000

@@ -17,12 +17,12 @@
 #include <v1model.p4>
 
 typedef bit<9>  egress_spec_t;
-typedef bit<48> mac_addr_t;
 
-header ethernet_t {
-    mac_addr_t dst_addr;
-    mac_addr_t src_addr;
-    bit<16>   ether_type;
+header header_t {
+    bit<8> f1;
+    bit<8> f2;
+    bit<8> f3;
+    bit<8> f4;
 }
 
 struct metadata {
@@ -30,7 +30,7 @@ struct metadata {
 }
 
 struct headers {
-    ethernet_t   ethernet;
+    header_t   h1;
 }
 
 parser MyParser(packet_in packet,
@@ -39,11 +39,11 @@ parser MyParser(packet_in packet,
                 inout standard_metadata_t standard_metadata) {
 
     state start {
-        transition parse_ethernet;
+        transition parse_h1;
     }
 
-    state parse_ethernet {
-        packet.extract(hdr.ethernet);
+    state parse_h1 {
+        packet.extract(hdr.h1);
         transition accept;
     }
 }
@@ -52,71 +52,43 @@ parser MyParser(packet_in packet,
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
-    action drop() {
-        mark_to_drop(standard_metadata);
+    action forward(egress_spec_t port) {
+       standard_metadata.egress_spec = port;
+    }
+    action nothing() {}
+
+    table t1 {
+      key = {hdr.h1.f1: exact;}
+      actions = {@proto_id(1) forward; @proto_id(2) nothing;}
+      default_action = nothing();
+    }
+    table t2 {
+      key = {hdr.h1.f2: exact;}
+      actions = {@proto_id(1) forward; @proto_id(2) nothing;}
+      default_action = nothing();
+    }
+    table t3 {
+      key = {hdr.h1.f3: exact;}
+      actions = {@proto_id(1) forward; @proto_id(2) nothing;}
+      default_action = nothing();
+    }
+    table t4 {
+      key = {hdr.h1.f4: exact;}
+      actions = {@proto_id(1) forward; @proto_id(2) nothing;}
+      default_action = nothing();
     }
 
-    action forward(mac_addr_t dst_addr, egress_spec_t port) {
-        standard_metadata.egress_spec = port;
-        hdr.ethernet.dst_addr = dst_addr;
-    }
-
-    table t_0 {
-        key = {
-            hdr.ethernet.ether_type: exact;
-        }
-        actions = {
-            @proto_id(1) drop;
-            @proto_id(2) forward;
-        }
-        size = 1024;
-        default_action = drop();
-    }
-
-    table t_1 {
-        key = {
-            hdr.ethernet.ether_type: exact;
-        }
-        actions = {
-            @proto_id(1) drop;
-            @proto_id(2) forward;
-        }
-        size = 1024;
-        default_action = drop();
-    }
-    table t_2 {
-        key = {
-            hdr.ethernet.src_addr: exact;
-        }
-        actions = {
-            @proto_id(1) drop;
-            @proto_id(2) forward;
-        }
-        size = 1024;
-        default_action = drop();
-    }
-    table t_3 {
-        key = {
-            hdr.ethernet.dst_addr: exact;
-        }
-        actions = {
-            @proto_id(1) drop;
-            @proto_id(2) forward;
-        }
-        size = 1024;
-        default_action = drop();
-    }
 
     apply {
-        if (t_0.apply().hit) {
-          t_1.apply();
+        standard_metadata.egress_spec = 0;
+        if (t1.apply().hit) {
+          t2.apply();
         } else {
-          t_2.apply();
+          t3.apply();
         }
-        t_3.apply();
+        t4.apply();
     }
 }
-
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
@@ -127,7 +99,7 @@ control MyEgress(inout headers hdr,
 
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
-        packet.emit(hdr.ethernet);
+        packet.emit(hdr.h1);
     }
 }
 
