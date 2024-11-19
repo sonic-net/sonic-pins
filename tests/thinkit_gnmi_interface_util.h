@@ -21,11 +21,11 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "gutil/testing.h"
+#include "include/nlohmann/json.hpp"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4_pdpi/pd.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
-#include "include/nlohmann/json.hpp"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
