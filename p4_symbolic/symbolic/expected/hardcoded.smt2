@@ -4,7 +4,7 @@
 (declare-fun standard_metadata.egress_spec () (_ BitVec 9))
 (assert
  (let (($x45 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x45))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x45)))
 (assert
  (let ((?x26 (concat (_ bv0 8) (_ bv0 1))))
  (let (($x27 (= standard_metadata.ingress_port ?x26)))
@@ -29,7 +29,7 @@
 (declare-fun standard_metadata.egress_spec () (_ BitVec 9))
 (assert
  (let (($x45 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x45))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x45)))
 (assert
  (let ((?x26 (concat (_ bv0 8) (_ bv0 1))))
  (let (($x27 (= standard_metadata.ingress_port ?x26)))

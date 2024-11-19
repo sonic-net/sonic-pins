@@ -22,7 +22,7 @@
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 
-namespace gpins {
+namespace pins {
 
 namespace {
 
@@ -392,4 +392,4 @@ absl::StatusOr<p4::v1::Update> WcmpGroupTableUpdate(
   return pdpi::IrUpdateToPi(ir_p4_info, ir_update);
 }
 
-}  // namespace gpins
+}  // namespace pins

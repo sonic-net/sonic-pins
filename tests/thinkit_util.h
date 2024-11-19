@@ -15,6 +15,7 @@
 #ifndef GOOGLE_TESTS_THINKIT_UTIL_H_
 #define GOOGLE_TESTS_THINKIT_UTIL_H_
 
+#include "absl/time/time.h"
 namespace pins_test {
 
 constexpr char kEnabledFalse[] = "{\"enabled\":false}";
