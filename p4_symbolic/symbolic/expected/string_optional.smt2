@@ -6,8 +6,7 @@
 (assert
  (let (($x38 (= standard_metadata.ingress_port (_ bv2 9))))
  (let (($x35 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x83 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38)))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) $x83)))))
+ (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38))))
 (assert
  (let ((?x65 (concat (_ bv0 7) (_ bv2 2))))
  (let ((?x29 (concat (_ bv0 8) (_ bv0 1))))
@@ -59,8 +58,7 @@
 (assert
  (let (($x38 (= standard_metadata.ingress_port (_ bv2 9))))
  (let (($x35 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x83 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38)))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) $x83)))))
+ (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38))))
 (assert
  (let ((?x65 (concat (_ bv0 7) (_ bv2 2))))
  (let ((?x29 (concat (_ bv0 8) (_ bv0 1))))
@@ -101,8 +99,8 @@
  (let ((?x78 (ite (and (and true (not $x68)) true) (_ bv1 9) standard_metadata.egress_spec)))
  (let ((?x80 (ite $x69 (_ bv0 9) ?x78)))
  (let (($x49 (= ?x80 (_ bv511 9))))
- (let (($x141 (and (not $x49) true)))
- (and $x141 (= ?x79 0)))))))))))))))))))))))
+ (let (($x132 (and (not $x49) true)))
+ (and $x132 (= ?x79 0)))))))))))))))))))))))
 (check-sat)
 
 ; 
@@ -113,8 +111,7 @@
 (assert
  (let (($x38 (= standard_metadata.ingress_port (_ bv2 9))))
  (let (($x35 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x83 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38)))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) $x83)))))
+ (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38))))
 (assert
  (let ((?x65 (concat (_ bv0 7) (_ bv2 2))))
  (let ((?x29 (concat (_ bv0 8) (_ bv0 1))))
@@ -166,8 +163,7 @@
 (assert
  (let (($x38 (= standard_metadata.ingress_port (_ bv2 9))))
  (let (($x35 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x83 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38)))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) $x83)))))
+ (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38))))
 (assert
  (let ((?x65 (concat (_ bv0 7) (_ bv2 2))))
  (let ((?x29 (concat (_ bv0 8) (_ bv0 1))))
@@ -221,8 +217,7 @@
 (assert
  (let (($x38 (= standard_metadata.ingress_port (_ bv2 9))))
  (let (($x35 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x83 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38)))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) $x83)))))
+ (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38))))
 (assert
  (let ((?x65 (concat (_ bv0 7) (_ bv2 2))))
  (let ((?x29 (concat (_ bv0 8) (_ bv0 1))))
@@ -265,8 +260,8 @@
  (let (($x69 (and true $x68)))
  (let ((?x80 (ite $x69 (_ bv0 9) ?x78)))
  (let (($x49 (= ?x80 (_ bv511 9))))
- (let (($x141 (and (not $x49) true)))
- (and $x141 (= ?x62 0)))))))))))))))))))))))))
+ (let (($x132 (and (not $x49) true)))
+ (and $x132 (= ?x62 0)))))))))))))))))))))))))
 (check-sat)
 
 ; 
@@ -277,8 +272,7 @@
 (assert
  (let (($x38 (= standard_metadata.ingress_port (_ bv2 9))))
  (let (($x35 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x83 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38)))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) $x83)))))
+ (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38))))
 (assert
  (let ((?x65 (concat (_ bv0 7) (_ bv2 2))))
  (let ((?x29 (concat (_ bv0 8) (_ bv0 1))))
@@ -332,8 +326,7 @@
 (assert
  (let (($x38 (= standard_metadata.ingress_port (_ bv2 9))))
  (let (($x35 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x83 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38)))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) $x83)))))
+ (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38))))
 (assert
  (let ((?x65 (concat (_ bv0 7) (_ bv2 2))))
  (let ((?x29 (concat (_ bv0 8) (_ bv0 1))))
@@ -387,8 +380,7 @@
 (assert
  (let (($x38 (= standard_metadata.ingress_port (_ bv2 9))))
  (let (($x35 (= standard_metadata.ingress_port (_ bv1 9))))
- (let (($x83 (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38)))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) $x83)))))
+ (or (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x35) $x38))))
 (assert
  (let ((?x65 (concat (_ bv0 7) (_ bv2 2))))
  (let ((?x29 (concat (_ bv0 8) (_ bv0 1))))

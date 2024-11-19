@@ -26,7 +26,7 @@
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
-namespace gpins {
+namespace pins {
 
 // Fixture for P4 blackbox testing. It performs test specific setup and
 // teardown: Creates an initializes a P4RT channel, to get the switch ready to
@@ -94,6 +94,6 @@ class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
 };
 
-}  // namespace gpins
+}  // namespace pins
 
 #endif  // PINS_TESTS_FORWARDING_P4_BLACKBOX_FIXTURE_H_

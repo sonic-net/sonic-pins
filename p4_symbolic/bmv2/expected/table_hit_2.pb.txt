@@ -193,25 +193,14 @@ header_types {
   }
 }
 header_types {
-  name: "ethernet_t"
+  name: "header_t"
   id: 2
   fields {
     values {
-      string_value: "dst_addr"
+      string_value: "f1"
     }
     values {
-      number_value: 48
-    }
-    values {
-      bool_value: false
-    }
-  }
-  fields {
-    values {
-      string_value: "src_addr"
-    }
-    values {
-      number_value: 48
+      number_value: 8
     }
     values {
       bool_value: false
@@ -219,10 +208,32 @@ header_types {
   }
   fields {
     values {
-      string_value: "ether_type"
+      string_value: "f2"
     }
     values {
-      number_value: 16
+      number_value: 8
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "f3"
+    }
+    values {
+      number_value: 8
+    }
+    values {
+      bool_value: false
+    }
+  }
+  fields {
+    values {
+      string_value: "f4"
+    }
+    values {
+      number_value: 8
     }
     values {
       bool_value: false
@@ -242,8 +253,8 @@ headers {
 }
 headers {
   id: 2
-  name: "ethernet"
-  header_type: "ethernet_t"
+  name: "h1"
+  header_type: "header_t"
 }
 parsers {
   name: "parser"
@@ -257,18 +268,22 @@ parsers {
 deparsers {
   name: "deparser"
   source_info {
-    line: 128
+    line: 100
     column: 8
     source_fragment: "MyDeparser"
   }
 }
 actions {
-  name: "MyIngress.drop"
+  name: "MyIngress.forward"
+  runtime_data {
+    name: "port"
+    bitwidth: 9
+  }
   primitives {
     fields {
       key: "op"
       value {
-        string_value: "mark_to_drop"
+        string_value: "assign"
       }
     }
     fields {
@@ -280,13 +295,36 @@ actions {
               fields {
                 key: "type"
                 value {
-                  string_value: "header"
+                  string_value: "field"
                 }
               }
               fields {
                 key: "value"
                 value {
-                  string_value: "standard_metadata"
+                  list_value {
+                    values {
+                      string_value: "standard_metadata"
+                    }
+                    values {
+                      string_value: "egress_spec"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "runtime_data"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  number_value: 0
                 }
               }
             }
@@ -301,7 +339,7 @@ actions {
           fields {
             key: "column"
             value {
-              number_value: 8
+              number_value: 7
             }
           }
           fields {
@@ -319,7 +357,7 @@ actions {
           fields {
             key: "source_fragment"
             value {
-              string_value: "mark_to_drop(standard_metadata)"
+              string_value: "standard_metadata.egress_spec = port"
             }
           }
         }
@@ -328,13 +366,17 @@ actions {
   }
 }
 actions {
-  name: "MyIngress.drop"
+  name: "MyIngress.forward"
   id: 1
+  runtime_data {
+    name: "port"
+    bitwidth: 9
+  }
   primitives {
     fields {
       key: "op"
       value {
-        string_value: "mark_to_drop"
+        string_value: "assign"
       }
     }
     fields {
@@ -346,13 +388,36 @@ actions {
               fields {
                 key: "type"
                 value {
-                  string_value: "header"
+                  string_value: "field"
                 }
               }
               fields {
                 key: "value"
                 value {
-                  string_value: "standard_metadata"
+                  list_value {
+                    values {
+                      string_value: "standard_metadata"
+                    }
+                    values {
+                      string_value: "egress_spec"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "runtime_data"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  number_value: 0
                 }
               }
             }
@@ -367,7 +432,7 @@ actions {
           fields {
             key: "column"
             value {
-              number_value: 8
+              number_value: 7
             }
           }
           fields {
@@ -385,7 +450,7 @@ actions {
           fields {
             key: "source_fragment"
             value {
-              string_value: "mark_to_drop(standard_metadata)"
+              string_value: "standard_metadata.egress_spec = port"
             }
           }
         }
@@ -394,13 +459,17 @@ actions {
   }
 }
 actions {
-  name: "MyIngress.drop"
+  name: "MyIngress.forward"
   id: 2
+  runtime_data {
+    name: "port"
+    bitwidth: 9
+  }
   primitives {
     fields {
       key: "op"
       value {
-        string_value: "mark_to_drop"
+        string_value: "assign"
       }
     }
     fields {
@@ -412,13 +481,36 @@ actions {
               fields {
                 key: "type"
                 value {
-                  string_value: "header"
+                  string_value: "field"
                 }
               }
               fields {
                 key: "value"
                 value {
-                  string_value: "standard_metadata"
+                  list_value {
+                    values {
+                      string_value: "standard_metadata"
+                    }
+                    values {
+                      string_value: "egress_spec"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "runtime_data"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  number_value: 0
                 }
               }
             }
@@ -433,7 +525,7 @@ actions {
           fields {
             key: "column"
             value {
-              number_value: 8
+              number_value: 7
             }
           }
           fields {
@@ -451,7 +543,7 @@ actions {
           fields {
             key: "source_fragment"
             value {
-              string_value: "mark_to_drop(standard_metadata)"
+              string_value: "standard_metadata.egress_spec = port"
             }
           }
         }
@@ -460,13 +552,17 @@ actions {
   }
 }
 actions {
-  name: "MyIngress.drop"
+  name: "MyIngress.forward"
   id: 3
+  runtime_data {
+    name: "port"
+    bitwidth: 9
+  }
   primitives {
     fields {
       key: "op"
       value {
-        string_value: "mark_to_drop"
+        string_value: "assign"
       }
     }
     fields {
@@ -478,13 +574,36 @@ actions {
               fields {
                 key: "type"
                 value {
-                  string_value: "header"
+                  string_value: "field"
                 }
               }
               fields {
                 key: "value"
                 value {
-                  string_value: "standard_metadata"
+                  list_value {
+                    values {
+                      string_value: "standard_metadata"
+                    }
+                    values {
+                      string_value: "egress_spec"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          values {
+            struct_value {
+              fields {
+                key: "type"
+                value {
+                  string_value: "runtime_data"
+                }
+              }
+              fields {
+                key: "value"
+                value {
+                  number_value: 0
                 }
               }
             }
@@ -499,7 +618,7 @@ actions {
           fields {
             key: "column"
             value {
-              number_value: 8
+              number_value: 7
             }
           }
           fields {
@@ -517,7 +636,7 @@ actions {
           fields {
             key: "source_fragment"
             value {
-              string_value: "mark_to_drop(standard_metadata)"
+              string_value: "standard_metadata.egress_spec = port"
             }
           }
         }
@@ -526,562 +645,24 @@ actions {
   }
 }
 actions {
-  name: "MyIngress.forward"
+  name: "MyIngress.nothing"
   id: 4
-  runtime_data {
-    name: "dst_addr"
-    bitwidth: 48
-  }
-  runtime_data {
-    name: "port"
-    bitwidth: 9
-  }
-  primitives {
-    fields {
-      key: "op"
-      value {
-        string_value: "assign"
-      }
-    }
-    fields {
-      key: "parameters"
-      value {
-        list_value {
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "field"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  list_value {
-                    values {
-                      string_value: "standard_metadata"
-                    }
-                    values {
-                      string_value: "egress_spec"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "runtime_data"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  number_value: 1
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    fields {
-      key: "source_info"
-      value {
-        struct_value {
-          fields {
-            key: "column"
-            value {
-              number_value: 8
-            }
-          }
-          fields {
-            key: "filename"
-            value {
-              string_value: ""
-            }
-          }
-          fields {
-            key: "line"
-            value {
-              number_value: 60
-            }
-          }
-          fields {
-            key: "source_fragment"
-            value {
-              string_value: "standard_metadata.egress_spec = port"
-            }
-          }
-        }
-      }
-    }
-  }
-  primitives {
-    fields {
-      key: "op"
-      value {
-        string_value: "assign"
-      }
-    }
-    fields {
-      key: "parameters"
-      value {
-        list_value {
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "field"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  list_value {
-                    values {
-                      string_value: "ethernet"
-                    }
-                    values {
-                      string_value: "dst_addr"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "runtime_data"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  number_value: 0
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    fields {
-      key: "source_info"
-      value {
-        struct_value {
-          fields {
-            key: "column"
-            value {
-              number_value: 8
-            }
-          }
-          fields {
-            key: "filename"
-            value {
-              string_value: ""
-            }
-          }
-          fields {
-            key: "line"
-            value {
-              number_value: 61
-            }
-          }
-          fields {
-            key: "source_fragment"
-            value {
-              string_value: "hdr.ethernet.dst_addr = dst_addr"
-            }
-          }
-        }
-      }
-    }
-  }
 }
 actions {
-  name: "MyIngress.forward"
+  name: "MyIngress.nothing"
   id: 5
-  runtime_data {
-    name: "dst_addr"
-    bitwidth: 48
-  }
-  runtime_data {
-    name: "port"
-    bitwidth: 9
-  }
-  primitives {
-    fields {
-      key: "op"
-      value {
-        string_value: "assign"
-      }
-    }
-    fields {
-      key: "parameters"
-      value {
-        list_value {
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "field"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  list_value {
-                    values {
-                      string_value: "standard_metadata"
-                    }
-                    values {
-                      string_value: "egress_spec"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "runtime_data"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  number_value: 1
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    fields {
-      key: "source_info"
-      value {
-        struct_value {
-          fields {
-            key: "column"
-            value {
-              number_value: 8
-            }
-          }
-          fields {
-            key: "filename"
-            value {
-              string_value: ""
-            }
-          }
-          fields {
-            key: "line"
-            value {
-              number_value: 60
-            }
-          }
-          fields {
-            key: "source_fragment"
-            value {
-              string_value: "standard_metadata.egress_spec = port"
-            }
-          }
-        }
-      }
-    }
-  }
-  primitives {
-    fields {
-      key: "op"
-      value {
-        string_value: "assign"
-      }
-    }
-    fields {
-      key: "parameters"
-      value {
-        list_value {
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "field"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  list_value {
-                    values {
-                      string_value: "ethernet"
-                    }
-                    values {
-                      string_value: "dst_addr"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "runtime_data"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  number_value: 0
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    fields {
-      key: "source_info"
-      value {
-        struct_value {
-          fields {
-            key: "column"
-            value {
-              number_value: 8
-            }
-          }
-          fields {
-            key: "filename"
-            value {
-              string_value: ""
-            }
-          }
-          fields {
-            key: "line"
-            value {
-              number_value: 61
-            }
-          }
-          fields {
-            key: "source_fragment"
-            value {
-              string_value: "hdr.ethernet.dst_addr = dst_addr"
-            }
-          }
-        }
-      }
-    }
-  }
 }
 actions {
-  name: "MyIngress.forward"
+  name: "MyIngress.nothing"
   id: 6
-  runtime_data {
-    name: "dst_addr"
-    bitwidth: 48
-  }
-  runtime_data {
-    name: "port"
-    bitwidth: 9
-  }
-  primitives {
-    fields {
-      key: "op"
-      value {
-        string_value: "assign"
-      }
-    }
-    fields {
-      key: "parameters"
-      value {
-        list_value {
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "field"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  list_value {
-                    values {
-                      string_value: "standard_metadata"
-                    }
-                    values {
-                      string_value: "egress_spec"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "runtime_data"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  number_value: 1
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    fields {
-      key: "source_info"
-      value {
-        struct_value {
-          fields {
-            key: "column"
-            value {
-              number_value: 8
-            }
-          }
-          fields {
-            key: "filename"
-            value {
-              string_value: ""
-            }
-          }
-          fields {
-            key: "line"
-            value {
-              number_value: 60
-            }
-          }
-          fields {
-            key: "source_fragment"
-            value {
-              string_value: "standard_metadata.egress_spec = port"
-            }
-          }
-        }
-      }
-    }
-  }
-  primitives {
-    fields {
-      key: "op"
-      value {
-        string_value: "assign"
-      }
-    }
-    fields {
-      key: "parameters"
-      value {
-        list_value {
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "field"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  list_value {
-                    values {
-                      string_value: "ethernet"
-                    }
-                    values {
-                      string_value: "dst_addr"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "runtime_data"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  number_value: 0
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    fields {
-      key: "source_info"
-      value {
-        struct_value {
-          fields {
-            key: "column"
-            value {
-              number_value: 8
-            }
-          }
-          fields {
-            key: "filename"
-            value {
-              string_value: ""
-            }
-          }
-          fields {
-            key: "line"
-            value {
-              number_value: 61
-            }
-          }
-          fields {
-            key: "source_fragment"
-            value {
-              string_value: "hdr.ethernet.dst_addr = dst_addr"
-            }
-          }
-        }
-      }
-    }
-  }
 }
 actions {
-  name: "MyIngress.forward"
+  name: "MyIngress.nothing"
   id: 7
-  runtime_data {
-    name: "dst_addr"
-    bitwidth: 48
-  }
-  runtime_data {
-    name: "port"
-    bitwidth: 9
-  }
+}
+actions {
+  name: "table_hit_2l83"
+  id: 8
   primitives {
     fields {
       key: "op"
@@ -1121,13 +702,13 @@ actions {
               fields {
                 key: "type"
                 value {
-                  string_value: "runtime_data"
+                  string_value: "hexstr"
                 }
               }
               fields {
                 key: "value"
                 value {
-                  number_value: 1
+                  string_value: "0x0000"
                 }
               }
             }
@@ -1154,98 +735,13 @@ actions {
           fields {
             key: "line"
             value {
-              number_value: 60
+              number_value: 83
             }
           }
           fields {
             key: "source_fragment"
             value {
-              string_value: "standard_metadata.egress_spec = port"
-            }
-          }
-        }
-      }
-    }
-  }
-  primitives {
-    fields {
-      key: "op"
-      value {
-        string_value: "assign"
-      }
-    }
-    fields {
-      key: "parameters"
-      value {
-        list_value {
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "field"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  list_value {
-                    values {
-                      string_value: "ethernet"
-                    }
-                    values {
-                      string_value: "dst_addr"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          values {
-            struct_value {
-              fields {
-                key: "type"
-                value {
-                  string_value: "runtime_data"
-                }
-              }
-              fields {
-                key: "value"
-                value {
-                  number_value: 0
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    fields {
-      key: "source_info"
-      value {
-        struct_value {
-          fields {
-            key: "column"
-            value {
-              number_value: 8
-            }
-          }
-          fields {
-            key: "filename"
-            value {
-              string_value: ""
-            }
-          }
-          fields {
-            key: "line"
-            value {
-              number_value: 61
-            }
-          }
-          fields {
-            key: "source_fragment"
-            value {
-              string_value: "hdr.ethernet.dst_addr = dst_addr"
+              string_value: "standard_metadata.egress_spec = 0"
             }
           }
         }
@@ -1260,122 +756,142 @@ pipelines {
     column: 8
     source_fragment: "MyIngress"
   }
-  init_table: "MyIngress.t_0"
+  init_table: "tbl_table_hit_2l83"
   tables {
-    name: "MyIngress.t_0"
+    name: "tbl_table_hit_2l83"
     source_info {
-      line: 64
+      line: 83
+      column: 38
+      source_fragment: "="
+    }
+    max_size: 1024
+    action_ids: 8
+    actions: "table_hit_2l83"
+    default_entry {
+      action_id: 8
+    }
+    next_tables {
+      key: "table_hit_2l83"
+      value: "MyIngress.t1"
+    }
+  }
+  tables {
+    name: "MyIngress.t1"
+    id: 1
+    source_info {
+      line: 60
       column: 10
-      source_fragment: "t_0"
+      source_fragment: "t1"
     }
     key {
-      name: "hdr.ethernet.ether_type"
-      target: "ethernet"
-      target: "ether_type"
+      name: "hdr.h1.f1"
+      target: "h1"
+      target: "f1"
     }
     max_size: 1024
     action_ids: 0
     action_ids: 4
-    actions: "MyIngress.drop"
     actions: "MyIngress.forward"
+    actions: "MyIngress.nothing"
     default_entry {
+      action_id: 4
     }
     next_tables {
       key: "__HIT__"
-      value: "MyIngress.t_1"
+      value: "MyIngress.t2"
     }
     next_tables {
       key: "__MISS__"
-      value: "MyIngress.t_2"
+      value: "MyIngress.t3"
     }
   }
   tables {
-    name: "MyIngress.t_1"
-    id: 1
+    name: "MyIngress.t2"
+    id: 2
     source_info {
-      line: 76
+      line: 65
       column: 10
-      source_fragment: "t_1"
+      source_fragment: "t2"
     }
     key {
-      name: "hdr.ethernet.ether_type"
-      target: "ethernet"
-      target: "ether_type"
+      name: "hdr.h1.f2"
+      target: "h1"
+      target: "f2"
     }
     max_size: 1024
     action_ids: 1
     action_ids: 5
-    actions: "MyIngress.drop"
     actions: "MyIngress.forward"
+    actions: "MyIngress.nothing"
     default_entry {
-      action_id: 1
-    }
-    next_tables {
-      key: "MyIngress.drop"
-      value: "MyIngress.t_3"
+      action_id: 5
     }
     next_tables {
       key: "MyIngress.forward"
-      value: "MyIngress.t_3"
+      value: "MyIngress.t4"
+    }
+    next_tables {
+      key: "MyIngress.nothing"
+      value: "MyIngress.t4"
     }
   }
   tables {
-    name: "MyIngress.t_2"
-    id: 2
+    name: "MyIngress.t3"
+    id: 3
     source_info {
-      line: 87
+      line: 70
       column: 10
-      source_fragment: "t_2"
+      source_fragment: "t3"
     }
     key {
-      name: "hdr.ethernet.src_addr"
-      target: "ethernet"
-      target: "src_addr"
+      name: "hdr.h1.f3"
+      target: "h1"
+      target: "f3"
     }
     max_size: 1024
     action_ids: 2
     action_ids: 6
-    actions: "MyIngress.drop"
     actions: "MyIngress.forward"
+    actions: "MyIngress.nothing"
     default_entry {
-      action_id: 2
-    }
-    next_tables {
-      key: "MyIngress.drop"
-      value: "MyIngress.t_3"
+      action_id: 6
     }
     next_tables {
       key: "MyIngress.forward"
-      value: "MyIngress.t_3"
+      value: "MyIngress.t4"
+    }
+    next_tables {
+      key: "MyIngress.nothing"
+      value: "MyIngress.t4"
     }
   }
   tables {
-    name: "MyIngress.t_3"
-    id: 3
+    name: "MyIngress.t4"
+    id: 4
     source_info {
-      line: 98
+      line: 75
       column: 10
-      source_fragment: "t_3"
+      source_fragment: "t4"
     }
     key {
-      name: "hdr.ethernet.dst_addr"
-      target: "ethernet"
-      target: "dst_addr"
+      name: "hdr.h1.f4"
+      target: "h1"
+      target: "f4"
     }
     max_size: 1024
     action_ids: 3
     action_ids: 7
-    actions: "MyIngress.drop"
     actions: "MyIngress.forward"
+    actions: "MyIngress.nothing"
     default_entry {
-      action_id: 3
-    }
-    next_tables {
-      key: "MyIngress.drop"
-      value: ""
+      action_id: 7
     }
     next_tables {
       key: "MyIngress.forward"
+      value: ""
+    }
+    next_tables {
+      key: "MyIngress.nothing"
       value: ""
     }
   }
@@ -1384,7 +900,7 @@ pipelines {
   name: "egress"
   id: 1
   source_info {
-    line: 120
+    line: 92
     column: 8
     source_fragment: "MyEgress"
   }
