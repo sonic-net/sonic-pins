@@ -111,8 +111,27 @@ struct SaiArp {
   z3::expr target_proto_addr;
 };
 
+// Symbolic version of `struct gre_t` in headers.p4.
+struct SaiGre {
+  z3::expr valid;
+  z3::expr checksum_present;
+  z3::expr routing_present;
+  z3::expr key_present;
+  z3::expr sequence_present;
+  z3::expr strict_source_route;
+  z3::expr recursion_control;
+  z3::expr acknowledgement_present;
+  z3::expr flags;
+  z3::expr version;
+  z3::expr protocol;
+};
+
 // Symbolic version of `struct headers_t` in metadata.p4.
 struct SaiHeaders {
+  SaiEthernet erspan_ethernet;
+  SaiIpv4 erspan_ipv4;
+  SaiGre erspan_gre;
+
   SaiEthernet ethernet;
   SaiIpv4 ipv4;
   SaiIpv6 ipv6;
@@ -147,6 +166,13 @@ struct SaiFields {
 
 absl::StatusOr<SaiFields> GetSaiFields(
     const symbolic::SymbolicPerPacketState& state);
+
+// The p4c compiler "mangles" field names of user defined metadata and the
+// mangled name is used in some places in p4-symbolic. This function returns
+// the mangled name of a given user defined metadata field. Note that this is a
+// workaround and done in a best effort fashion.
+absl::StatusOr<std::string> GetUserMetadataFieldName(
+    const std::string& field, const symbolic::SymbolicPerPacketState& state);
 
 }  // namespace p4_symbolic
 

@@ -1,0 +1,85 @@
+// This file contains proto definitions mirroring OpenConfig YANG models,
+// allowing us to parse JSON values following these YANG models automatically
+// using proto2's json_util.
+//
+// We only model the fields we're interested in, since we can ignore other
+// fields during parsing using json_util's `ignore_unknown_fields` option.
+//
+// This file also contains proto messages that do not mirror YANG models
+// directly, but are more convenient representations, e.g. for diffing.
+
+syntax = "proto3";
+
+package pins_test.openconfig;
+
+// -- Proto messages mirroring YANG models -------------------------------------
+
+// Mirrors `container queues` in `openconfig-qos-elements.yang`.
+message Queues {
+  repeated Queue queues = 1 [json_name = "queue"];
+
+  // Mirrors `queues/queue` in `openconfig-qos-elements.yang`.
+  message Queue {
+    string name = 1;
+    State state = 2;
+
+    // Mirrors `queues/queue/state` in `openconfig-qos-elements.yang`.
+    message State {
+      string dropped_pkts = 1 [json_name = "dropped-pkts"];
+      string transmit_pkts = 2 [json_name = "transmit-pkts"];
+    }
+  }
+}
+
+// Mirrors `container interfaces` in `openconfig-interfaces.yang`.
+message Interfaces {
+  repeated Interface interfaces = 1 [json_name = "interface"];
+
+  // Mirrors `interfaces/interface` in `openconfig-interfaces.yang`.
+  message Interface {
+    string name = 1;
+    Config config = 2;
+    Subinterfaces subinterfaces = 3;
+
+    message Config {
+      string name = 1;
+      string type = 2;
+    }
+  }
+}
+
+// Mirrors `container subinterfaces` in `openconfig-interfaces.yang`.
+message Subinterfaces {
+  repeated Subinterface subinterfaces = 1 [json_name = "subinterface"];
+
+  // Mirrors `subinterfaces/subinterface` in `openconfig-interfaces.yang`.
+  message Subinterface {
+    Ip ipv4 = 1 [json_name = "openconfig-if-ip:ipv4"];
+    Ip ipv6 = 2 [json_name = "openconfig-if-ip:ipv6"];
+
+    message Ip {
+      Addresses addresses = 1;
+    }
+  }
+}
+
+// Mirror `container addreses` in `openconfig-if-ip.yang`
+message Addresses {
+  repeated Address addresses = 1 [json_name = "address"];
+
+  message Address {
+    string ip = 1;
+  }
+}
+
+// Mirrors the root of the config tree.
+message Config {
+  Interfaces interfaces = 1 [json_name = "openconfig-interfaces:interfaces"];
+}
+
+// -- Proto messages defined for convenience -----------------------------------
+
+// Equivalent to `Queues`, but results in more readable diffs.
+message QueuesByName {
+  map<string, Queues.Queue.State> queues = 1;
+}

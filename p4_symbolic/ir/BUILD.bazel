@@ -135,6 +135,7 @@ cc_binary(
         "test.cc",
     ],
     deps = [
+        "//gutil:proto",
         "//gutil:status",
         "//p4_symbolic:parser",
         "@com_google_absl//absl/flags:flag",

@@ -36,7 +36,6 @@ absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
                              pdpi::P4RuntimeSession& p4_session,
                              const pdpi::IrP4Info& ir_p4info,
                              std::vector<pins::GroupMember>& members) {
-  int index = 0;
   std::vector<std::string> nexthops;
   std::vector<p4::v1::TableEntry> pi_entries;
   std::vector<sai::TableEntry> pd_entries;
@@ -61,7 +60,7 @@ absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
     pd_entries.push_back(router_interface);
 
     // Create neighbor entry.
-    std::string neighbor_id = absl::StrCat("10.0.0.", index++);
+    std::string neighbor_id = "fe80::2";
     auto neighbor_entry =
         gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
             R"pb(
@@ -87,7 +86,7 @@ absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
               nexthop_table_entry {
                 match { nexthop_id: "$0" }
                 action {
-                  set_nexthop { router_interface_id: "$1" neighbor_id: "$2" }
+                  set_ip_nexthop { router_interface_id: "$1" neighbor_id: "$2" }
                 }
               })pb",
             nexthop_id, absl::StrCat("rif-", member.port), neighbor_id));
@@ -267,21 +266,6 @@ absl::Status VerifyGroupMembersFromP4Read(
   return absl::OkStatus();
 }
 
-// Verifies the actual members inferred from receive traffic match the
-// expected members.
-absl::Status VerifyGroupMembersFromReceiveTraffic(
-    const absl::flat_hash_map<int, int>& actual_packets_received_per_port,
-    const absl::flat_hash_set<int>& expected_member_ports) {
-  // Check we only saw expected ports.
-  for (const auto& [port, packets] : actual_packets_received_per_port) {
-    bool is_member_port = expected_member_ports.contains(port);
-    if (!is_member_port) {
-      return gutil::UnknownErrorBuilder() << "Unexpected port: " << port;
-    }
-  }
-  return absl::OkStatus();
-}
-
 absl::StatusOr<std::vector<int>> GenerateNRandomWeights(int n,
                                                         int total_weight) {
   absl::BitGen gen;
@@ -295,26 +279,6 @@ absl::StatusOr<std::vector<int>> GenerateNRandomWeights(int n,
     weights[x]++;
   }
   return weights;
-}
-
-int RescaleWeightForTomahawk3(int weight) {
-  if (weight <= 1) {
-    return weight;
-  }
-  if (weight == 2) {
-    return 1;
-  }
-  return (weight - 1) / 2;
-}
-
-void RescaleMemberWeights(std::vector<GroupMember>& members) {
-  for (GroupMember& member : members) {
-    int old_weight = member.weight;
-    member.weight = RescaleWeightForTomahawk3(old_weight);
-    LOG(INFO) << "Rescaling member id: " << member.port
-              << " from weight: " << old_weight
-              << " to new weight: " << member.weight;
-  }
 }
 
 std::string DescribeDistribution(

@@ -60,6 +60,8 @@ control MyIngress(inout headers hdr,
         standard_metadata.egress_spec = port;
         hdr.ethernet.dst_addr = dst_addr;
     }
+    action nothing() {
+    }
 
     table t_1 {
         key = {
@@ -79,9 +81,10 @@ control MyIngress(inout headers hdr,
         actions = {
             @proto_id(1) drop;
             @proto_id(2) forward;
+            @proto_id(3) nothing;
         }
         size = 1024;
-        default_action = drop();
+        default_action = nothing();
     }
 
     apply {
