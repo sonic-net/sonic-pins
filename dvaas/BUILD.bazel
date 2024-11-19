@@ -21,6 +21,24 @@ package(
 )
 
 cc_library(
+    name = "validation_result",
+    srcs = ["validation_result.cc"],
+    hdrs = ["validation_result.h"],
+    deps = [
+        ":test_run_validation",
+        ":test_vector_cc_proto",
+        ":test_vector_stats",
+        "//gutil:status",
+        "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
     name = "output_writer",
     hdrs = ["output_writer.h"],
     deps = [
@@ -140,6 +158,43 @@ cc_library(
 )
 
 cc_library(
+    name = "test_vector_stats",
+    srcs = ["test_vector_stats.cc"],
+    hdrs = ["test_vector_stats.h"],
+    deps = [
+        ":test_vector_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "test_vector_stats_test",
+    srcs = ["test_vector_stats_test.cc"],
+    linkstatic = True,
+    deps = [
+        ":test_vector_cc_proto",
+        ":test_vector_stats",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cmd_diff_test(
+    name = "test_vector_stats_diff_test",
+    actual_cmd = " | ".join([
+        "$(execpath :test_vector_stats_test)",
+        # Strip unnecessary lines for golden testing.
+        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
+        "sed '/^\\[/d'",  # Strip every line beginning with '['.
+    ]),
+    expected = "test_vector_stats_test.expected",
+    tools = [":test_vector_stats_test"],
+)
+
+cc_library(
     name = "mirror_testbed_config",
     testonly = True,
     srcs = ["mirror_testbed_config.cc"],
@@ -159,4 +214,45 @@ cc_library(
     name = "switch_api",
     hdrs = ["switch_api.h"],
     deps = ["//p4_pdpi:p4_runtime_session"],
+)
+
+cc_library(
+    name = "port_id_map",
+    srcs = ["port_id_map.cc"],
+    hdrs = ["port_id_map.h"],
+    deps = [
+        "//gutil:status",
+        "//lib/p4rt:p4rt_port",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "port_id_map_test",
+    srcs = ["port_id_map_test.cc"],
+    deps = [
+        ":port_id_map",
+        "//gutil:status_matchers",
+        "//lib/p4rt:p4rt_port",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+
+cc_test(
+    name = "test_vector_test",
+    srcs = ["test_vector_test.cc"],
+    deps = [
+        ":test_vector",
+        "//gutil:status_matchers",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_googletest//:gtest_main",
+    ],
 )
