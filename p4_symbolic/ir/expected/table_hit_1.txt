@@ -286,6 +286,20 @@ actions {
     }
   }
 }
+actions {
+  key: "MyIngress.nothing"
+  value {
+    action_definition {
+      preamble {
+        id: 27514245
+        name: "MyIngress.nothing"
+        alias: "nothing"
+      }
+    }
+    action_implementation {
+    }
+  }
+}
 tables {
   key: "MyIngress.t_1"
   value {
@@ -510,16 +524,34 @@ tables {
         }
         proto_id: 2
       }
+      entry_actions {
+        ref {
+          id: 27514245
+          annotations: "@proto_id(3)"
+        }
+        action {
+          preamble {
+            id: 27514245
+            name: "MyIngress.nothing"
+            alias: "nothing"
+          }
+        }
+        proto_id: 3
+      }
       size: 1024
     }
     table_implementation {
-      default_action: "MyIngress.drop"
+      default_action: "MyIngress.nothing"
       action_to_next_control {
         key: "MyIngress.drop"
         value: "__END_OF_PIPELINE__"
       }
       action_to_next_control {
         key: "MyIngress.forward"
+        value: "__END_OF_PIPELINE__"
+      }
+      action_to_next_control {
+        key: "MyIngress.nothing"
         value: "__END_OF_PIPELINE__"
       }
       match_name_to_field {
