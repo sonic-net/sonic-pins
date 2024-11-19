@@ -61,6 +61,7 @@ cc_library(
         "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_github_z3prover_z3//:api",
         "@com_gnu_gmp//:gmp",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
