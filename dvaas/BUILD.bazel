@@ -140,6 +140,43 @@ cc_library(
 )
 
 cc_library(
+    name = "test_vector_stats",
+    srcs = ["test_vector_stats.cc"],
+    hdrs = ["test_vector_stats.h"],
+    deps = [
+        ":test_vector_cc_proto",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "test_vector_stats_test",
+    srcs = ["test_vector_stats_test.cc"],
+    linkstatic = True,
+    deps = [
+        ":test_vector_cc_proto",
+        ":test_vector_stats",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cmd_diff_test(
+    name = "test_vector_stats_diff_test",
+    actual_cmd = " | ".join([
+        "$(execpath :test_vector_stats_test)",
+        # Strip unnecessary lines for golden testing.
+        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
+        "sed '/^\\[/d'",  # Strip every line beginning with '['.
+    ]),
+    expected = "test_vector_stats_test.expected",
+    tools = [":test_vector_stats_test"],
+)
+
+cc_library(
     name = "mirror_testbed_config",
     testonly = True,
     srcs = ["mirror_testbed_config.cc"],
