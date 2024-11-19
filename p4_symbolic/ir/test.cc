@@ -22,6 +22,7 @@
 #include "absl/flags/usage.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4_symbolic/parser.h"
 
@@ -34,6 +35,8 @@ ABSL_FLAG(std::string, entries, "",
           "entries are needed.");
 
 namespace {
+
+using ::gutil::PrintTextProto;
 
 absl::Status Test() {
   const std::string &p4info_path = absl::GetFlag(FLAGS_p4info);
@@ -49,12 +52,12 @@ absl::Status Test() {
       p4_symbolic::ParseToIr(bmv2_path, p4info_path, entries_path));
 
   // Dump string representation to stdout.
-  std::cout << dataplane.program.DebugString() << std::endl;
+  std::cout << PrintTextProto(dataplane.program) << std::endl;
   for (const auto &[name, entries] : dataplane.entries) {
     std::cout << "=====" << name << " Entries=====" << std::endl;
     std::cout << std::endl;
     for (const pdpi::IrTableEntry &entry : entries) {
-      std::cout << entry.DebugString() << std::endl;
+      std::cout << PrintTextProto(entry) << std::endl;
     }
   }
 

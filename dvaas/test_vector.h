@@ -26,47 +26,28 @@
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
 #include "p4_pdpi/ir.pb.h"
+#include "re2/re2.h"
 
 namespace dvaas {
 
-// Given a tagged packet, extracts the tag in its payload. Returns an
-// error if the payload has an unexpected format, e.g. for untagged packets.
+// Returns a string that must be included in the payload of test packets.
+// This "tag" encodes the given test packet ID, which must be:
+// * Uniform across all packets within a packet test vector, incl. input &
+//   output packets.
+// * Unique across different packet test vectors.
+std::string MakeTestPacketTagFromUniqueId(int unique_test_packet_id);
+
+// Given a tagged packet (according to `MakeTestPacketTag`), extracts the ID
+// from the tag in its payload. Returns an error if the payload has an
+// unexpected format, e.g. for untagged packets.
 // TODO: Implement and use a unified (open-source) API for test
 // packet tag embedding and extraction.
 absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet);
 
 // Needed to make gUnit produce human-readable output in open source.
-inline std::ostream& operator<<(std::ostream& os, const SwitchOutput& output) {
-  return os << output.DebugString();
-}
+std::ostream& operator<<(std::ostream& os, const SwitchOutput& output);
 
 using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
-
-// Holds a PacketTestVector along with the actual SUT output generated in
-// response to the test vector's input. The actual output may be empty, if the
-// switch drops the input packet. The test vector may be empty, if the switch
-// generates packets that do not correspond to an input, or if the output cannot
-// be mapped to a test input.
-struct PacketTestVectorAndActualOutput {
-  PacketTestVector packet_test_vector;
-  SwitchOutput actual_output;
-};
-
-// Gets 'ingress_port' value from metadata in `packet_in`. Returns
-// InvalidArgumentError if 'ingress_port' metadata is missing.
-absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
-    const pdpi::IrPacketIn& packet_in);
-
-// Checks if the `actual_output` conforms to the `packet_test_vector`
-// when ignoring the given `ignored_fields` and 'ignored_packet_in_metadata', if
-// any. All `ignored_fields` should belong to packetlib::Packet. Returns a
-// failure description in case of a mismatch, or `absl::nullopt` otherwise.
-absl::optional<std::string> CheckForPacketTestVectorFailure(
-    const PacketTestVector& packet_test_vector,
-    const SwitchOutput& actual_output,
-    const absl::flat_hash_set<std::string>& ignored_packet_in_metadata = {},
-    const std::vector<const google::protobuf::FieldDescriptor*>&
-        ignored_fields = {});
 
 }  // namespace dvaas
 
