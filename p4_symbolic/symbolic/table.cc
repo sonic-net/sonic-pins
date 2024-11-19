@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "absl/container/btree_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -37,6 +38,7 @@
 #include "p4_symbolic/symbolic/action.h"
 #include "p4_symbolic/symbolic/operators.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/symbolic/util.h"
 #include "p4_symbolic/symbolic/values.h"
 #include "p4_symbolic/z3_util.h"
 #include "z3++.h"
@@ -470,24 +472,35 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
                                        .optimized_symbolic_execution_info()
                                        .merge_point();
 
-  // We currenlt only support tables that always have the same next control
-  // construct regardless of the table's matches.
-  //
-  // This can be supported by calling EvaluateControl(...)
-  // inside the above for loop for control found at
-  //   <action_to_next_control>(<action of entry>)
-  // and passing it the complete entry guard.
-  //
-  // As an optimization, the loop should not call EvaluateControl
-  // when all actions have the same next_control, and should instead
-  // execute the call once outside the loop as below.
-  for (const auto &[_, next_control] :
-       table.table_implementation().action_to_next_control()) {
+  SymbolicTableMatches merged_matches;
+
+  // We use a sorted map to keep the result (i.e. the SMT formula)
+  // deterministic.
+  absl::btree_map<std::string, std::string> sorted_action_to_next_control(
+      table.table_implementation().action_to_next_control().begin(),
+      table.table_implementation().action_to_next_control().end());
+
+  // We currently do not support conditionals on which action was executed as
+  // a result of table application. We do support conditional on table
+  // hit/miss though.
+  for (const auto &[action, next_control] : sorted_action_to_next_control) {
     if (next_control != merge_point) {
-      return absl::UnimplementedError(
-          absl::Substitute("Table '$0' invokes different control constructs "
-                           "based on match results",
-                           table_name));
+      if (action == ir::TableHitAction() || action == ir::TableMissAction()) {
+        z3::expr branch_guard = action == ir::TableHitAction()
+                                    ? (match_index != kDefaultActionEntryIndex)
+                                    : (match_index == kDefaultActionEntryIndex);
+        ASSIGN_OR_RETURN(
+            SymbolicTableMatches branch_matches,
+            control::EvaluateControl(data_plane, next_control, state,
+                                     translator, guard && branch_guard));
+        ASSIGN_OR_RETURN(merged_matches, util::MergeDisjointTableMatches(
+                                             merged_matches, branch_matches));
+      } else {
+        return absl::UnimplementedError(
+            absl::Substitute("Conditional on executed table action is not "
+                             "supported (table '$0', action '$1')",
+                             table_name, action));
+      }
     }
   }
 
@@ -501,19 +514,23 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   ASSIGN_OR_RETURN(SymbolicTableMatches result,
                    control::EvaluateControl(data_plane, continuation, state,
                                             translator, guard));
-
+  // Merge the result of execution from the merge point with the result of
+  // execution from action_to_next_control (up to the merge point).
+  ASSIGN_OR_RETURN(result,
+                   util::MergeDisjointTableMatches(result, merged_matches));
+  // Add the table match for the current table to the result.
+  auto [_, inserted] =
+      result.insert({table_name, SymbolicTableMatch{
+                                     .matched = guard,
+                                     .entry_index = match_index,
+                                 }});
   // The trace should not contain information for this table, otherwise, it
   // means we visited the table twice in the same execution path!
-  if (result.contains(table_name)) {
+  if (!inserted) {
     return absl::InternalError(absl::Substitute(
         "Table '$0' was executed twice in the same path.", table_name));
   }
 
-  // Add this table's match to the trace, and return it.
-  result.insert({table_name, SymbolicTableMatch{
-                                 .matched = guard,
-                                 .entry_index = match_index,
-                             }});
   return result;
 }
 

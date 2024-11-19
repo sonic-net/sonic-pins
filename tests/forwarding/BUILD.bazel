@@ -130,7 +130,10 @@ cc_library(
         "//p4_pdpi/netaddr:ipv4_address",
         "//p4_pdpi/netaddr:mac_address",
         "//p4_pdpi/packetlib",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/synchronization",
     ],
 )
 cc_library(
@@ -156,7 +159,9 @@ cc_library(
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/random:distributions",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
         "@com_google_protobuf//:protobuf",
     ],
 )
