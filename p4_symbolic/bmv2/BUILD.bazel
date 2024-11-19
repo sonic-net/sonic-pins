@@ -56,6 +56,7 @@ cc_binary(
     deps = [
         ":bmv2",
         "//gutil:io",
+        "//gutil:proto",
         "//gutil:status",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",

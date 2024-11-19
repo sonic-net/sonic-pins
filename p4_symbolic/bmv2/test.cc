@@ -31,6 +31,7 @@
 #include "google/protobuf/text_format.h"
 #include "google/protobuf/util/json_util.h"
 #include "gutil/io.h"
+#include "gutil/proto.h"
 #include "gutil/status.h"
 #include "p4_symbolic/bmv2/bmv2.h"
 
@@ -40,6 +41,8 @@ ABSL_FLAG(std::string, protobuf, "",
 ABSL_FLAG(std::string, json, "", "The path to the output json file (required)");
 
 namespace {
+
+using ::gutil::PrintTextProto;
 
 absl::Status Test() {
   const std::string &bmv2_path = absl::GetFlag(FLAGS_bmv2);
@@ -55,7 +58,8 @@ absl::Status Test() {
                    p4_symbolic::bmv2::ParseBmv2JsonFile(bmv2_path.c_str()));
 
   // Dumping protobuf.
-  RETURN_IF_ERROR(gutil::WriteFile(bmv2.DebugString(), protobuf_path.c_str()));
+  RETURN_IF_ERROR(
+      gutil::WriteFile(PrintTextProto(bmv2), protobuf_path.c_str()));
 
   // Dumping JSON.
   google::protobuf::util::JsonPrintOptions dumping_options;
