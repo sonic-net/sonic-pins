@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
+load("//p4_pdpi/testing:diff_test.bzl", "cmd_diff_test")
+
 package(
     default_visibility = ["//visibility:public"],
     licenses = ["notice"],
@@ -20,33 +23,115 @@ package(
 cc_library(
     name = "cpu_qos_test",
     testonly = True,
-    srcs = ["cpu_qos_test.cc"],
-    hdrs = ["cpu_qos_test.h"],
+    srcs = [
+        "cpu_qos_test.cc",
+    ],
+    hdrs = [
+        "cpu_qos_test.h",
+    ],
     deps = [
+        "//gutil:collections",
         "//gutil:status",
         "//gutil:status_matchers",
         "//gutil:testing",
+        "//lib:ixia_helper",
         "//lib/gnmi:gnmi_helper",
         "//lib/p4rt:packet_listener",
         "//lib/validator:validator_lib",
         "//p4_pdpi:ir",
         "//p4_pdpi:pd",
+        "//p4_pdpi/netaddr:ipv4_address",
+        "//p4_pdpi/netaddr:ipv6_address",
+        "//p4_pdpi/netaddr:mac_address",
         "//p4_pdpi/packetlib",
         "//p4_pdpi:p4_runtime_session",
         "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "//p4_pdpi/string_encodings:decimal_string",
         "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//tests/forwarding:util",
+        "//thinkit:control_device",
         "//thinkit:generic_testbed",
         "//thinkit:generic_testbed_fixture",
+        "//thinkit:mirror_testbed",
+        "//thinkit:mirror_testbed_fixture",
         "//thinkit:switch",
         "//thinkit/proto:generic_testbed_cc_proto",
         "@com_github_google_glog//:glog",
         "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:optional",
         "@com_google_googletest//:gtest",
     ],
     alwayslink = True,
+)
+
+cc_library(
+    name = "frontpanel_qos_test",
+    testonly = True,
+    srcs = ["frontpanel_qos_test.cc"],
+    hdrs = ["frontpanel_qos_test.h"],
+    deps = [
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi:p4_runtime_session",
+        "//tests/lib:switch_test_setup_helpers",
+        "//thinkit:generic_testbed",
+        "//thinkit:generic_testbed_fixture",
+        "@com_github_p4lang_p4runtime//:p4info_cc_proto",
+        "@com_google_googletest//:gtest",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
+    name = "gnmi_parsers",
+    srcs = ["gnmi_parsers.cc"],
+    hdrs = ["gnmi_parsers.h"],
+    deps = [
+        ":openconfig_cc_proto",
+        "//gutil:overload",
+        "//p4_pdpi/netaddr:ipv4_address",
+        "//p4_pdpi/netaddr:ipv6_address",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "gnmi_parsers_test_runner",
+    srcs = ["gnmi_parsers_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":gnmi_parsers",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cmd_diff_test(
+    name = "gnmi_parsers_test",
+    actual_cmd = "$(execpath :gnmi_parsers_test_runner)",
+    expected = ":gnmi_parsers_test.expected.output",
+    tools = [":gnmi_parsers_test_runner"],
+)
+
+proto_library(
+    name = "openconfig_proto",
+    srcs = ["openconfig.proto"],
+)
+
+cc_proto_library(
+    name = "openconfig_cc_proto",
+    deps = [":openconfig_proto"],
 )

@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,6 +72,13 @@
 namespace pins {
 
 namespace {
+
+using ::testing::UnorderedPointwise;
+
+MATCHER(KeyEq, "") {
+  return ::testing::get<0>(arg).first == ::testing::get<1>(arg);
+}
+
 // Admin down/up state used for interfaces.
 enum class AdminState {
   kDown,
@@ -176,9 +183,35 @@ absl::Status ProgramDefaultRoutes(pdpi::P4RuntimeSession& p4_session,
 absl::Status SetUpSut(pdpi::P4RuntimeSession& p4_session,
                       const pdpi::IrP4Info& ir_p4info,
                       absl::string_view default_vrf) {
-  // Set default VRF for all packets.
+  // Create default VRF for test.
   ASSIGN_OR_RETURN(
       p4::v1::TableEntry pi_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(
+          ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+                         R"pb(
+                           vrf_table_entry {
+                             match { vrf_id: "$0" }
+                             action { no_action {} }
+                           })pb",
+                         default_vrf))));
+  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_entry));
+
+  // Set default VRF for all packets.
+  ASSIGN_OR_RETURN(
+      pi_entry,
+      pdpi::PartialPdTableEntryToPiTableEntry(
+          ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+                         R"pb(
+                           vrf_table_entry {
+                             match { vrf_id: "$0" }
+                             action { no_action {} }
+                           })pb",
+                         default_vrf))));
+  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_entry));
+
+  // Set default VRF for all packets.
+  ASSIGN_OR_RETURN(
+      pi_entry,
       pdpi::PartialPdTableEntryToPiTableEntry(
           ir_p4info, gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
                          R"pb(
@@ -274,7 +307,14 @@ absl::Status SendNPacketsToSut(int num_packets,
   const absl::Time start_time = absl::Now();
   for (int i = 0; i < num_packets; i++) {
     // Rate limit to 500 packets per second.
-    auto earliest_send_time = start_time + (i * absl::Seconds(1) / 500.0);
+    // TODO: Limit to 100 pps until the cpu queue
+    // assignment issue is fixed.
+    int punt_rate_limit_pps = 500;
+    if (test_environment.MaskKnownFailures()) {
+      punt_rate_limit_pps = 100;
+    }
+    auto earliest_send_time =
+        start_time + (i * absl::Seconds(1) / punt_rate_limit_pps);
     absl::SleepFor(earliest_send_time - absl::Now());
 
     // Vary the port on which to send the packet if the hash field selected is
@@ -371,6 +411,15 @@ absl::Status SetInterfaceAdminState(gnmi::gNMI::StubInterface& gnmi_stub,
   return absl::OkStatus();
 }
 
+// Checks if the switch is in critical state.
+bool IsSwitchInCriticalState(gnmi::gNMI::StubInterface& gnmi_stub) {
+  auto alarms = pins_test::GetAlarms(gnmi_stub);
+  if (!alarms.ok() || !alarms->empty()) {
+    return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 void WatchPortTestFixture::SetUp() {
@@ -383,6 +432,14 @@ void WatchPortTestFixture::SetUp() {
       testbed.Environment().StoreTestArtifact("gnmi_config.txt", gnmi_config));
   ASSERT_OK(pins_test::PushGnmiConfig(testbed.Sut(), gnmi_config));
   ASSERT_OK(pins_test::PushGnmiConfig(testbed.ControlSwitch(), gnmi_config));
+
+  // Wait for the gnmi port config to converge.
+  ASSERT_OK(
+      pins_test::WaitForGnmiPortIdConvergence(testbed.Sut(), gnmi_config,
+                                              /*timeout=*/absl::Minutes(3)));
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      testbed.ControlSwitch(), gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
 
   ASSERT_OK(testbed.Environment().StoreTestArtifact("p4info.pb.txt",
                                                     GetP4Info().DebugString()));
@@ -399,6 +456,7 @@ void WatchPortTestFixture::SetUp() {
   ASSERT_OK(SetUpControlSwitch(*control_p4_session_, GetIrP4Info()));
 
   // Create GNMI stub for admin operations.
+  ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_, testbed.Sut().CreateGnmiStub());
   ASSERT_OK_AND_ASSIGN(control_gnmi_stub_,
                        testbed.ControlSwitch().CreateGnmiStub());
 
@@ -436,6 +494,21 @@ void WatchPortTestFixture::SetUp() {
 
 void WatchPortTestFixture::TearDown() {
   thinkit::MirrorTestbedInterface& testbed = *GetParam().testbed;
+
+  // Reboot the switch, if Sut is in critical state.
+  if (sut_gnmi_stub_ && IsSwitchInCriticalState(*sut_gnmi_stub_)) {
+    // Grab logs on the switches before the reboot.
+    ASSERT_OK(testbed.SaveSwitchLogs("before_reboot_"));
+    LOG(INFO) << "Switch is in critical state, rebooting the switch.";
+    pins_test::TestGnoiSystemColdReboot(testbed.GetMirrorTestbed().Sut());
+    pins_test::TestGnoiSystemColdReboot(
+        testbed.GetMirrorTestbed().ControlSwitch());
+    if (receive_packet_thread_.joinable()) {
+      receive_packet_thread_.join();
+    }
+    testbed.TearDown();
+    return;
+  }
 
   // Clear table entries.
   if (sut_p4_session_ != nullptr) {
@@ -480,6 +553,7 @@ namespace {
 TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
+  environment.SetTestCaseID("9a4c3dac-44bd-489e-9237-d396b66c85f5");
 
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = kNumWcmpMembersForTest;
@@ -501,11 +575,6 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   // Program default routing for all packets on SUT.
   ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
                                  p4::v1::Update::INSERT));
-
-  // TODO: Revisit for newer chipsets.
-  // Rescale the member weights (temp workaround) to what would have been
-  // programmed by the hardware.
-  RescaleMemberWeights(members);
 
   // Generate test configuration, pick any field (IP_SRC) used by hashing to
   // vary for every packet so that it gets sent to all the members.
@@ -553,8 +622,11 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
 
     ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
                                            kGroupId, members));
-    ASSERT_OK(VerifyGroupMembersFromReceiveTraffic(num_packets_per_port,
-                                                   expected_member_ports));
+
+    // Verifies the actual members inferred from receive traffic matches the
+    // expected members.
+    ASSERT_THAT(num_packets_per_port,
+                UnorderedPointwise(KeyEq(), expected_member_ports));
     PrettyPrintDistribution(test_config, test, test_data_, members,
                             num_packets_per_port);
   }
@@ -565,6 +637,8 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
 TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
+  environment.SetTestCaseID("992725de-2051-49bb-928f-7b089643a9bd");
+
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
@@ -583,11 +657,6 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   // Program default routing for all packets on SUT.
   ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
                                  p4::v1::Update::INSERT));
-
-  // TODO: Revisit for newer chipsets.
-  // Rescale the member weights to what would have been programmed by the
-  // hardware.
-  RescaleMemberWeights(members);
 
   // Generate test configuration, pick any field used by hashing to vary for
   // every packet so that it gets sent to all the members.
@@ -665,8 +734,10 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
 
       ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
                                              kGroupId, members));
-      ASSERT_OK(VerifyGroupMembersFromReceiveTraffic(num_packets_per_port,
-                                                     expected_member_ports));
+      // Verifies the actual members inferred from receive traffic matches the
+      // expected members.
+      ASSERT_THAT(num_packets_per_port,
+                  UnorderedPointwise(KeyEq(), expected_member_ports));
       PrettyPrintDistribution(test_config, test, test_data_, members,
                               num_packets_per_port);
     }
@@ -675,13 +746,126 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
 
 // TODO: Bring down APG member (when in critical state) and verify traffic is
 // distributed only to the up ports.
-TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState){};
+TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
+  // Validate that the function to raise critical state exists to run this test.
+  if (!GetParam().set_critical_alarm.has_value()) {
+    GTEST_SKIP() << "Critical state related test skipped because set critical "
+                    "state function is not defined.";
+  }
+  thinkit::MirrorTestbed& testbed = GetParam().testbed->GetMirrorTestbed();
+  thinkit::TestEnvironment& environment = testbed.Environment();
+  environment.SetTestCaseID("964c7a38-b073-4296-85be-2bba1e33c6f9");
+
+  absl::Span<const int> controller_port_ids = GetParam().port_ids;
+  const int group_size = kNumWcmpMembersForTest;
+  ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
+                       CreateGroupMembers(group_size, controller_port_ids));
+
+  const int input_port = controller_port_ids[kDefaultInputPortIndex];
+  ASSERT_OK(SetUpInputPortForPacketReceive(*sut_p4_session_, GetIrP4Info(),
+                                           input_port));
+
+  // Program the required router interfaces, nexthops for wcmp group.
+  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, GetIrP4Info(),
+                                   members));
+  ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
+                                           GetIrP4Info(), kGroupId, members,
+                                           p4::v1::Update::INSERT));
+  // Program default routing for all packets on SUT.
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
+                                 p4::v1::Update::INSERT));
+
+  // Generate test configuration, pick any field used by hashing to vary for
+  // every packet so that it gets sent to all the members.
+  TestConfiguration test_config = {
+      .field = PacketField::kIpDst,
+      .ipv4 = true,
+      .encapped = false,
+      .inner_ipv4 = false,
+      .decap = false,
+  };
+  ASSERT_TRUE(IsValidTestConfiguration(test_config));
+
+  // Create test data entry.
+  std::string test_config_key = TestConfigurationToPayload(test_config);
+  {
+    absl::MutexLock lock(&test_data_.mutex);
+    test_data_.input_output_per_packet[test_config_key] = TestInputOutput{
+        .config = test_config,
+    };
+  }
+
+  // Select one random member of the group to bring down.
+  absl::BitGen gen;
+  const int random_member_index =
+      absl::Uniform<int>(absl::IntervalClosedOpen, gen, 0, members.size());
+  const int selected_port_id = members[random_member_index].port;
+  ASSERT_OK_AND_ASSIGN(const auto port_name_per_port_id,
+                       GetPortNamePerPortId(*control_gnmi_stub_));
+  ASSERT_OK_AND_ASSIGN(const std::string port_name,
+                       gutil::FindOrStatus(port_name_per_port_id,
+                                           absl::StrCat(selected_port_id)));
+
+  // Set the system in critical state by triggering a fake alarm in P4RT.
+  ASSERT_TRUE(GetParam().set_critical_alarm.has_value());
+  ASSERT_OK((*GetParam().set_critical_alarm)(testbed.Sut()));
+
+  // Set admin down from control switch side (since sut is in critical state and
+  // write operations are disabled) and verify watch port action kicks in.
+  ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, port_name,
+                                   AdminState::kDown));
+
+  // TODO: Adding watch port action causes unexpected traffic
+  // loss. Remove after the bug in OrchAgent is fixed.
+  absl::SleepFor(absl::Seconds(5));
+
+  // Clear the counters before the test.
+  test_data_.ClearReceivedPackets();
+
+  // Send 5000 packets and check for packet distribution.
+  ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
+                              controller_port_ids, GetIrP4Info(),
+                              *control_p4_session_, environment));
+  test_data_.total_packets_sent = kNumTestPackets;
+
+  // Wait for packets from the SUT to arrive.
+  absl::SleepFor(kDurationToWaitForPackets);
+
+  // For the test configuration, check the output distribution.
+  {
+    absl::MutexLock lock(&test_data_.mutex);
+    TestInputOutput& test = test_data_.input_output_per_packet[test_config_key];
+    EXPECT_EQ(test.output.size(), test_data_.total_packets_sent)
+        << "Mismatch in expected: " << test_data_.total_packets_sent
+        << " and actual: " << test.output.size() << "packets received for "
+        << DescribeTestConfig(test_config);
+
+    ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
+                                           kGroupId, members));
+
+    // Count the received packets and create the expected_member_ports for admin
+    // down case to verify received packets.
+    ASSERT_OK_AND_ASSIGN(auto num_packets_per_port,
+                         CountNumPacketsPerPort(test.output));
+    absl::flat_hash_set<int> expected_member_ports =
+        CreateExpectedMemberPorts(members);
+    expected_member_ports.erase(selected_port_id);
+
+    // Verifies the actual members inferred from receive traffic matches the
+    // expected members.
+    ASSERT_THAT(num_packets_per_port,
+                UnorderedPointwise(KeyEq(), expected_member_ports));
+    PrettyPrintDistribution(test_config, test, test_data_, members,
+                            num_packets_per_port);
+  }
+};
 
 // Bring up/down the only ActionProfileGroup member and verify traffic is
 // forwarded/dropped.
 TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
+  environment.SetTestCaseID("60da7a07-1217-4d63-9716-1219d62065ff");
 
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = 1;
@@ -701,11 +885,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
   // Program default routing for all packets on SUT.
   ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
                                  p4::v1::Update::INSERT));
-
-  // TODO: Revisit for newer chipsets.
-  // Rescale the member weights to what would have been programmed by the
-  // hardware.
-  RescaleMemberWeights(members);
 
   // Generate test configuration, pick any field used by hashing to vary for
   // every packet so that it gets sent to all the members.
@@ -773,6 +952,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
             << "Expected all packets to be lost for single member group watch "
                "port down action, but received "
             << test.output.size() << " actual packets";
+        expected_member_ports.erase(single_member_port_id);
       } else {
         expected_member_ports.insert(single_member_port_id);
         EXPECT_EQ(test.output.size(), test_data_.total_packets_sent)
@@ -785,8 +965,11 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
 
       ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
                                              kGroupId, members));
-      ASSERT_OK(VerifyGroupMembersFromReceiveTraffic(num_packets_per_port,
-                                                     expected_member_ports));
+
+      // Verifies the actual members inferred from receive traffic matches the
+      // expected members.
+      ASSERT_THAT(num_packets_per_port,
+                  UnorderedPointwise(KeyEq(), expected_member_ports));
       PrettyPrintDistribution(test_config, test, test_data_, members,
                               num_packets_per_port);
     }
@@ -798,6 +981,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
 TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
+  environment.SetTestCaseID("e93160fb-be64-495b-bb4d-f06a92c51e76");
 
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = kNumWcmpMembersForTest;
@@ -817,11 +1001,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   // Program default routing for all packets on SUT.
   ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
                                  p4::v1::Update::INSERT));
-
-  // TODO: Revisit for newer chipsets.
-  // Rescale the member weights to what would have been programmed by the
-  // hardware.
-  RescaleMemberWeights(members);
 
   // Generate test configuration, pick any field used by hashing to vary for
   // every packet so that it gets sent to all the members.
@@ -895,8 +1074,11 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
 
     ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
                                            kGroupId, members));
-    ASSERT_OK(VerifyGroupMembersFromReceiveTraffic(num_packets_per_port,
-                                                   expected_member_ports));
+
+    // Verifies the actual members inferred from receive traffic matches the
+    // expected members.
+    ASSERT_THAT(num_packets_per_port,
+                UnorderedPointwise(KeyEq(), expected_member_ports));
     PrettyPrintDistribution(test_config, test, test_data_, members,
                             num_packets_per_port);
   }
@@ -1010,8 +1192,10 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
 
       ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
                                              kGroupId, members));
-      ASSERT_OK(VerifyGroupMembersFromReceiveTraffic(num_packets_per_port,
-                                                     expected_member_ports));
+      // Verifies the actual members inferred from receive traffic matches the
+      // expected members.
+      ASSERT_THAT(num_packets_per_port,
+                  UnorderedPointwise(KeyEq(), expected_member_ports));
       PrettyPrintDistribution(test_config, test, test_data_, members,
                               num_packets_per_port);
     }

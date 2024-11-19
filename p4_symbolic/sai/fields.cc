@@ -31,14 +31,10 @@
 
 namespace p4_symbolic {
 
-namespace {
-
 using ::p4_symbolic::symbolic::SymbolicPerPacketState;
 
-// The p4c compiler mangles field names from the local_metadata struct.
-// As a workaround, we unmangle the names, best effort.
-absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
-                                         const SymbolicPerPacketState& state) {
+absl::StatusOr<std::string> GetUserMetadataFieldName(
+    const std::string& field, const symbolic::SymbolicPerPacketState& state) {
   // Compute set of mangled field names that match the given field name.
   std::vector<std::string> mangled_candidates;
 
@@ -67,7 +63,7 @@ absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
   }
 
   if (mangled_candidates.size() == 1) {
-    return state.Get(mangled_candidates[0]);
+    return mangled_candidates.back();
   }
 
   auto error = gutil::InternalErrorBuilder()
@@ -81,6 +77,17 @@ absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
   }
   return error << "several mangled fields in the config match:\n- "
                << absl::StrJoin(mangled_candidates, "\n- ");
+}
+
+namespace {
+
+// The p4c compiler mangles field names from the local_metadata struct.
+// As a workaround, we unmangle the names, best effort.
+absl::StatusOr<z3::expr> GetUserMetadata(const std::string& field,
+                                         const SymbolicPerPacketState& state) {
+  ASSIGN_OR_RETURN(const std::string mangled_name,
+                   GetUserMetadataFieldName(field, state));
+  return state.Get(mangled_name);
 }
 
 }  // namespace
