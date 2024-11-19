@@ -36,7 +36,7 @@ namespace {
 
 TEST(EvaluateSaiPipeline,
      SatisfiableForAllInstantiationsWithEmptyEntriesAndPorts) {
-  for (auto instantiation : sai::AllInstantiations()) {
+  for (auto instantiation : sai::AllSaiInstantiations()) {
     const auto config = sai::GetNonstandardForwardingPipelineConfig(
         instantiation, sai::NonstandardPlatform::kP4Symbolic);
     ASSERT_OK_AND_ASSIGN(
@@ -49,7 +49,7 @@ TEST(EvaluateSaiPipeline, FailsForInconsistentPortAndPortIdTypeTranslation) {
   const auto config = sai::GetNonstandardForwardingPipelineConfig(
       sai::Instantiation::kFabricBorderRouter,
       sai::NonstandardPlatform::kP4Symbolic);
-  symbolic::StaticTranslationPerType translations;
+  symbolic::TranslationPerType translations;
   translations[kPortIdTypeName] = symbolic::values::TranslationData{
       .static_mapping = {{"a", 1}, {"b", 2}},
       .dynamic_translation = false,
@@ -65,7 +65,7 @@ TEST(EvaluateSaiPipeline, PassForConsistentPortAndPortIdTypeTranslation) {
   const auto config = sai::GetNonstandardForwardingPipelineConfig(
       sai::Instantiation::kFabricBorderRouter,
       sai::NonstandardPlatform::kP4Symbolic);
-  symbolic::StaticTranslationPerType translations;
+  symbolic::TranslationPerType translations;
   translations[kPortIdTypeName] = symbolic::values::TranslationData{
       .static_mapping = {{"a", 1}, {"b", 2}},
       .dynamic_translation = false,
@@ -75,6 +75,18 @@ TEST(EvaluateSaiPipeline, PassForConsistentPortAndPortIdTypeTranslation) {
                           translations);
   ASSERT_OK(state.status());
   EXPECT_EQ((*state)->solver->check(), z3::check_result::sat);
+}
+
+TEST(EvaluateSaiPipeline, FailsIfInputContainsTranslationForVrfIdType) {
+  const auto config = sai::GetNonstandardForwardingPipelineConfig(
+      sai::Instantiation::kFabricBorderRouter,
+      sai::NonstandardPlatform::kP4Symbolic);
+  symbolic::TranslationPerType translations;
+  translations[kVrfIdTypeName] = symbolic::values::TranslationData{};
+  absl::StatusOr<std::unique_ptr<symbolic::SolverState>> state =
+      EvaluateSaiPipeline(config, /*entries=*/{}, /*ports=*/{}, translations);
+  ASSERT_THAT(state.status(),
+              gutil::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(EvaluateSaiPipeline, IngressPortIsAmongPassedValues) {
@@ -103,7 +115,7 @@ TEST(EvaluateSaiPipeline, IngressPortIsAmongPassedValues) {
   }
 
   // Evaluate the SAI pipeline.
-  symbolic::StaticTranslationPerType translations;
+  symbolic::TranslationPerType translations;
   translations[kPortIdTypeName] = symbolic::values::TranslationData{
       .static_mapping = {{"a", 1}, {"b", 2}},
       .dynamic_translation = false,

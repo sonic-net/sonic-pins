@@ -1,3 +1,16 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include <memory>
 
 #include "absl/strings/string_view.h"
@@ -44,6 +57,16 @@ constexpr absl::string_view kTableEntries = R"pb(
     ipv4_table_entry {
       match { vrf_id: "vrf-80" }
       action { set_nexthop_id { nexthop_id: "nexthop-1" } }
+    }
+  }
+  entries {
+    l3_admit_table_entry {
+      match {
+        dst_mac { value: "66:55:44:33:22:10" mask: "ff:ff:ff:ff:ff:ff" }
+        in_port { value: "0x005" }
+      }
+      action { admit_to_l3 {} }
+      priority: 1
     }
   }
   entries {

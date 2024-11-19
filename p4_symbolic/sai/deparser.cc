@@ -1,3 +1,16 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "p4_symbolic/sai/deparser.h"
 
 #include <stddef.h>
@@ -180,6 +193,24 @@ absl::Status Deparse(const SaiArp& header, const z3::model& model,
   return absl::OkStatus();
 }
 
+absl::Status Deparse(const SaiGre& header, const z3::model& model,
+                     pdpi::BitString& result) {
+  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  if (valid) {
+    RETURN_IF_ERROR(Deparse<1>(header.checksum_present, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.routing_present, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.key_present, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.sequence_present, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.strict_source_route, model, result));
+    RETURN_IF_ERROR(Deparse<3>(header.recursion_control, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.acknowledgement_present, model, result));
+    RETURN_IF_ERROR(Deparse<4>(header.flags, model, result));
+    RETURN_IF_ERROR(Deparse<3>(header.version, model, result));
+    RETURN_IF_ERROR(Deparse<16>(header.protocol, model, result));
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<std::string> SaiDeparser(
@@ -191,7 +222,12 @@ absl::StatusOr<std::string> SaiDeparser(
 absl::StatusOr<std::string> SaiDeparser(const SaiFields& packet,
                                         const z3::model& model) {
   pdpi::BitString result;
+  RETURN_IF_ERROR(Deparse(packet.headers.erspan_ethernet, model, result));
+  RETURN_IF_ERROR(Deparse(packet.headers.erspan_ipv4, model, result));
+  RETURN_IF_ERROR(Deparse(packet.headers.erspan_gre, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ethernet, model, result));
+  RETURN_IF_ERROR(Deparse(packet.headers.tunnel_encap_ipv6, model, result));
+  RETURN_IF_ERROR(Deparse(packet.headers.tunnel_encap_gre, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ipv4, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ipv6, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.udp, model, result));
