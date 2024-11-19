@@ -192,7 +192,7 @@ TEST_P(SaiDeparserTest, IcmpPacketParserIntegrationTest) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Instantiation, SaiDeparserTest,
-                         testing::ValuesIn(sai::AllInstantiations()));
+                         testing::ValuesIn(sai::AllSaiInstantiations()));
 
 }  // namespace
 }  // namespace p4_symbolic

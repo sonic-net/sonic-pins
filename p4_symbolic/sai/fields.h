@@ -131,8 +131,12 @@ struct SaiHeaders {
   SaiEthernet erspan_ethernet;
   SaiIpv4 erspan_ipv4;
   SaiGre erspan_gre;
-
   SaiEthernet ethernet;
+
+  // Not extracted during parsing.
+  SaiIpv6 tunnel_encap_ipv6;
+  SaiGre tunnel_encap_gre;
+
   SaiIpv4 ipv4;
   SaiIpv6 ipv6;
   SaiUdp udp;
@@ -150,6 +154,7 @@ struct SaiLocalMetadata {
   z3::expr l4_dst_port;
   z3::expr mirror_session_id_valid;
   z3::expr ingress_port;
+  z3::expr route_metadata;
 };
 
 // Symbolic version of `struct standard_metadata_t` in v1model.p4

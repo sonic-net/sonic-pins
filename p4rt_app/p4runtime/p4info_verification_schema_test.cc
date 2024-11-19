@@ -895,7 +895,7 @@ TEST_P(GoogleInstantiationTest, SchemaSupportsInstantiation) {
 
 INSTANTIATE_TEST_SUITE_P(
     IsSupportedBySchemaTest, GoogleInstantiationTest,
-    ValuesIn(sai::AllInstantiations()),
+    ValuesIn(sai::AllSaiInstantiations()),
     [](const testing::TestParamInfo<sai::Instantiation>& info) {
       return sai::InstantiationToString(info.param);
     });

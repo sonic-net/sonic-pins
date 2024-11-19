@@ -141,7 +141,7 @@ TEST_P(P4ProgramsTest, CompositeUdfFieldsShouldAlwaysUseHexStrings) {
 
 INSTANTIATE_TEST_SUITE_P(
     P4ProgramsTestInstance, P4ProgramsTest,
-    testing::ValuesIn(sai::AllInstantiations()),
+    testing::ValuesIn(sai::AllSaiInstantiations()),
     [](const testing::TestParamInfo<P4ProgramsTest::ParamType>& param) {
       return sai::InstantiationToString(param.param);
     });
