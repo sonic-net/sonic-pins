@@ -1,4 +1,126 @@
 ================================================================================
+TestOutcomeToFeatureMap Test
+================================================================================
+-- Input: PacketTestOutcome proto --------------------------------
+test_run {
+  test_vector {
+    input {
+    }
+    acceptable_outputs {
+      packets {
+      }
+      packet_ins {
+      }
+    }
+  }
+  actual_output {
+  }
+}
+test_result {
+}
+-- Output: Feature Map -------------------------------------------
+# acceptable behaviors according to P4 simulation: 1
+# expected output packets: 1
+# expected punted packets: 1
+test result: pass
+================================================================================
+TestOutcomeToFeatureMap Test
+================================================================================
+-- Input: PacketTestOutcome proto --------------------------------
+test_run {
+  test_vector {
+    input {
+    }
+    acceptable_outputs {
+      packets {
+      }
+      packets {
+      }
+      packets {
+      }
+      packets {
+      }
+    }
+  }
+  actual_output {
+  }
+}
+test_result {
+  failure {
+  }
+}
+-- Output: Feature Map -------------------------------------------
+# acceptable behaviors according to P4 simulation: 1
+# expected output packets: 4
+# expected punted packets: 0
+test result: fail
+================================================================================
+TestOutcomeToFeatureMap Test
+================================================================================
+-- Input: PacketTestOutcome proto --------------------------------
+test_run {
+  test_vector {
+    input {
+    }
+    acceptable_outputs {
+    }
+    acceptable_outputs {
+    }
+    acceptable_outputs {
+    }
+    acceptable_outputs {
+    }
+    acceptable_outputs {
+    }
+  }
+  actual_output {
+  }
+}
+test_result {
+}
+-- Output: Feature Map -------------------------------------------
+# acceptable behaviors according to P4 simulation: 5
+# expected output packets: 0
+# expected punted packets: 0
+test result: pass
+================================================================================
+TestOutcomeToFeatureMap Test
+================================================================================
+-- Input: PacketTestOutcome proto --------------------------------
+test_run {
+  test_vector {
+    input {
+    }
+    acceptable_outputs {
+      packets {
+      }
+      packet_ins {
+      }
+      packet_ins {
+      }
+    }
+    acceptable_outputs {
+      packets {
+      }
+      packets {
+      }
+      packets {
+      }
+      packet_ins {
+      }
+    }
+  }
+  actual_output {
+  }
+}
+test_result {
+}
+-- Output: Feature Map -------------------------------------------
+# acceptable behaviors according to P4 simulation: 2
+# expected output packets: 3
+# expected punted packets: 2
+test result: pass
+================================================================================
 DVaaS DetectiveExplanationToString Test
 ================================================================================
 -- Input: DetectiveExplanation proto -----------------------------

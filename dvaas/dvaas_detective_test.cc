@@ -25,12 +25,17 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "dvaas/dvaas_detective.pb.h"
+#include "dvaas/test_vector.pb.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
 #include "gutil/testing.h"
+#include "p4_pdpi/internal/ordered_map.h"
+#include "p4_pdpi/packetlib/packetlib.pb.h"
 
 namespace dvaas {
+namespace dvaas_internal {
 namespace {
 
 void DetectiveExplanationToStringTest() {
@@ -118,8 +123,100 @@ void DetectiveExplanationToStringTest() {
     // Print output.
     std::cout << "-- Output: DVAAS Detective String "
                  "--------------------------------\n";
-    std::cout << dvaas_internal::DetectiveExplanationToString(explanation)
-              << "\n";
+    std::cout << DetectiveExplanationToString(explanation) << "\n";
+  }
+}
+
+PacketTestOutcomes TestOutcomeToFeatureMapTestCases() {
+  return gutil::ParseProtoOrDie<PacketTestOutcomes>(R"pb(
+    # Passing with 1 punt and 1 output packet
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          acceptable_outputs {
+            packets {}
+            packet_ins {}
+          }
+        }
+        actual_output {}
+      }
+      test_result {}
+    }
+    # Failing multicast
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          acceptable_outputs {
+            packets {}
+            packets {}
+            packets {}
+            packets {}
+          }
+        }
+        actual_output {}
+      }
+      test_result { failure {} }
+    }
+    # Pasing WCMP
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          acceptable_outputs {}
+          acceptable_outputs {}
+          acceptable_outputs {}
+          acceptable_outputs {}
+          acceptable_outputs {}
+        }
+        actual_output {}
+      }
+      test_result {}
+    }
+    # Pasing WCMP with varying number packets and packet-ins.
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          acceptable_outputs {
+            packets {}
+            packet_ins {}
+            packet_ins {}
+          }
+          acceptable_outputs {
+            packets {}
+            packets {}
+            packets {}
+            packet_ins {}
+          }
+        }
+        actual_output {}
+      }
+      test_result {}
+    }
+  )pb");
+}
+
+void TestOutcomeToFeatureMapTest(const PacketTestOutcome& test_outcome) {
+  // Print header.
+  std::cout << std::string(80, '=') << "\n"
+            << "TestOutcomeToFeatureMap Test\n"
+            << std::string(80, '=') << "\n";
+
+  // Print input.
+  std::cout
+      << "-- Input: PacketTestOutcome proto --------------------------------\n";
+  std::cout << gutil::PrintTextProto(test_outcome);
+
+  // Print output.
+  std::cout
+      << "-- Output: Feature Map -------------------------------------------\n";
+  // Sort map for determinism.
+  absl::flat_hash_map<std::string, FeatureValue> feature_map =
+      TestOutcomeToFeatureMap(test_outcome);
+  for (const auto& [key, value] : Ordered(feature_map)) {
+    std::cout << key << ": " << FeatureValueToString(value) << "\n";
   }
 }
 
@@ -128,7 +225,15 @@ void DetectiveExplanationToStringTest() {
 // functions produce different portions of the golden output. All golden
 // functions are called from a single TEST unit to avoid non-determinism in the
 // output.
-TEST(DvaasDetectiveTest, GoldenTest) { DetectiveExplanationToStringTest(); }
+TEST(DvaasDetectiveTest, GoldenTest) {
+  PacketTestOutcomes test_outcomes = TestOutcomeToFeatureMapTestCases();
+  for (const auto& test_outcome : test_outcomes.outcomes()) {
+    TestOutcomeToFeatureMapTest(test_outcome);
+  }
+
+  DetectiveExplanationToStringTest();
+}
 
 }  // namespace
+}  // namespace dvaas_internal
 }  // namespace dvaas
