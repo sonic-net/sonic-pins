@@ -41,10 +41,19 @@ absl::StatusOr<SymbolicTableMatches> EvaluateV1model(
   // cloning, digests, resubmit, and multicast. The full semantics we should
   // implement is documented here:
   // https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#pseudocode-for-what-happens-at-the-end-of-ingress-and-egress-processing
+  // Evaluate the ingress pipeline.
   ASSIGN_OR_RETURN(SymbolicTableMatches matches,
                    EvaluatePipeline(data_plane, "ingress", state, translator,
                                     /*guard=*/Z3Context().bool_val(true)));
   ASSIGN_OR_RETURN(z3::expr dropped, IsDropped(*state));
+
+  // Constrain egress_port to be equal to egress_spec.
+  ASSIGN_OR_RETURN(z3::expr egress_spec,
+                   state->Get("standard_metadata.egress_spec"));
+  RETURN_IF_ERROR(state->Set("standard_metadata.egress_port", egress_spec,
+                             /*guard=*/Z3Context().bool_val(true)));
+
+  // Evaluate the egress pipeline.
   ASSIGN_OR_RETURN(SymbolicTableMatches egress_matches,
                    EvaluatePipeline(data_plane, "egress", state, translator,
                                     /*guard=*/!dropped));
