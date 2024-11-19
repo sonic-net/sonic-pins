@@ -18,6 +18,7 @@
 #include <optional>
 #include <tuple>
 
+#include "gmock/gmock.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/gnmi/openconfig.pb.h"
@@ -25,10 +26,11 @@
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
+#include "proto/gnmi/gnmi.pb.h"
 #include "tests/lib/switch_test_setup_helpers.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
-#include "gmock/gmock.h"
 
 namespace pins {
 
