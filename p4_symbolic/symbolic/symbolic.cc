@@ -150,7 +150,9 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
                    ingress_headers.Get("standard_metadata.ingress_port"));
   ASSIGN_OR_RETURN(z3::expr egress_port,
                    egress_headers.Get("standard_metadata.egress_spec"));
+  // TODO: Support generating packet-out packets from the CPU port.
   if (physical_ports.empty()) {
+    z3_solver->add(ingress_port != kCpuPort);
     z3_solver->add(ingress_port != kDropPort);
   } else {
     z3::expr ingress_port_is_physical = Z3Context().bool_val(false);
@@ -160,7 +162,9 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
           ingress_port_is_physical || ingress_port == port;
       egress_port_is_physical = egress_port_is_physical || egress_port == port;
     }
-    z3_solver->add(ingress_port != kDropPort && ingress_port_is_physical);
+    z3_solver->add(ingress_port_is_physical);
+    // TODO: Lift this constraint, it should not be necessary and
+    // prevents generation of packet-ins.
     z3_solver->add(dropped || egress_port_is_physical);
   }
 

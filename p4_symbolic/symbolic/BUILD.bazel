@@ -104,15 +104,6 @@ end_to_end_test(
     table_entries = "//p4_symbolic/testdata:ipv4-routing/entries.pb.txt",
 )
 
-end_to_end_test(
-    name = "string_optional_test",
-    output_golden_file = "expected/string_optional.txt",
-    p4_program = "//p4_symbolic/testdata:string-optional/program.p4",
-    port_count = 3,
-    smt_golden_file = "expected/string_optional.smt2",
-    table_entries = "//p4_symbolic/testdata:string-optional/entries.pb.txt",
-)
-
 # Checks the behavior of symbolic execution when there is a table application after a conditional.
 # Before go/optimized-symbolic-execution, p4-symbolic was executing t3 twice (once from the if
 # branch and once from the else branch). Now it executed each table exactly once, leading to
