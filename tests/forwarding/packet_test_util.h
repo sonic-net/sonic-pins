@@ -18,8 +18,14 @@
 #include <net/ethernet.h>
 #include <netinet/in.h>
 
+#include <string>
+#include <vector>
+
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "dvaas/test_vector.h"
+#include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/packetlib/packetlib.h"
