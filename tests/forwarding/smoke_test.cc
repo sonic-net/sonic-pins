@@ -73,9 +73,7 @@ TEST_P(SmokeTestFixture, ModifyWorks) {
   ASSERT_OK(pdpi::ClearTableEntries(SutP4RuntimeSession()));
 }
 
-// TODO: Enable once the bug is fixed.
-TEST_P(SmokeTestFixture,
-       DISABLED_InstallDefaultRouteForEmptyStringVrfShouldSucceed) {
+TEST_P(SmokeTestFixture, InstallDefaultRouteForEmptyStringVrfShouldSucceed) {
   GetMirrorTestbed().Environment().SetTestCaseID(
       "2d67413c-9b6e-4187-84d4-c9313b84cab3");
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
