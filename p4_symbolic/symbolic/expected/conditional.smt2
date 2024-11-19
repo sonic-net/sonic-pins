@@ -5,7 +5,7 @@
 (declare-fun ethernet.dst_addr () (_ BitVec 48))
 (assert
  (let (($x59 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x59))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x59)))
 (assert
  (let (($x31 (= standard_metadata.ingress_port (concat (_ bv0 8) (_ bv0 1)))))
  (let (($x33 (and true $x31)))
@@ -37,7 +37,7 @@
 (declare-fun ethernet.dst_addr () (_ BitVec 48))
 (assert
  (let (($x59 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x59))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x59)))
 (assert
  (let (($x31 (= standard_metadata.ingress_port (concat (_ bv0 8) (_ bv0 1)))))
  (let (($x33 (and true $x31)))
@@ -69,7 +69,7 @@
 (declare-fun ethernet.dst_addr () (_ BitVec 48))
 (assert
  (let (($x59 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x59))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x59)))
 (assert
  (let (($x31 (= standard_metadata.ingress_port (concat (_ bv0 8) (_ bv0 1)))))
  (let (($x33 (and true $x31)))
@@ -102,7 +102,7 @@
 (declare-fun ethernet.dst_addr () (_ BitVec 48))
 (assert
  (let (($x59 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x59))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x59)))
 (assert
  (let (($x31 (= standard_metadata.ingress_port (concat (_ bv0 8) (_ bv0 1)))))
  (let (($x33 (and true $x31)))
@@ -125,7 +125,7 @@
  (let ((?x45 (ite (and true (not $x41)) (_ bv511 9) (ite $x34 (_ bv511 9) (ite $x33 (_ bv511 9) standard_metadata.egress_spec)))))
  (let ((?x50 (ite $x42 (_ bv1 9) ?x45)))
  (let (($x52 (= ?x50 (_ bv511 9))))
- (let (($x157 (and (not $x52) true)))
- (and $x157 (= ?x47 0))))))))))))))
+ (let (($x147 (and (not $x52) true)))
+ (and $x147 (= ?x47 0))))))))))))))
 (check-sat)
 
