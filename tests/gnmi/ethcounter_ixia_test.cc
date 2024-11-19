@@ -152,6 +152,14 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
 
   if (is_ipv6) nborid = kNborIdv6;
 
+  auto vrf_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+      R"pb(
+        vrf_table_entry {
+          match { vrf_id: "$0" }
+          action { no_action {} }
+        })pb",
+      kVrfId));
+
   auto rif_out_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
         router_interface_table_entry {
@@ -255,7 +263,7 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
   LOG(INFO) << "for loop";
   std::vector<p4::v1::TableEntry> pi_entries;
   for (const auto &pd_entry :
-       {rif_out_entry, rif_in_entry, nbor_entry, nhop_entry,
+       {vrf_entry, rif_out_entry, rif_in_entry, nbor_entry, nhop_entry,
         is_ipv6 ? ipv6_entry : ipv4_entry, acl_entry}) {
     LOG(INFO) << "loop";
     ASSIGN_OR_RETURN(

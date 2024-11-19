@@ -1,27 +1,34 @@
 headers {
-  key: "ethernet"
+  key: "h1"
   value {
-    name: "ethernet_t"
+    name: "header_t"
     id: 2
     fields {
-      key: "dst_addr"
+      key: "f1"
       value {
-        name: "dst_addr"
-        bitwidth: 48
+        name: "f1"
+        bitwidth: 8
       }
     }
     fields {
-      key: "ether_type"
+      key: "f2"
       value {
-        name: "ether_type"
-        bitwidth: 16
+        name: "f2"
+        bitwidth: 8
       }
     }
     fields {
-      key: "src_addr"
+      key: "f3"
       value {
-        name: "src_addr"
-        bitwidth: 48
+        name: "f3"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "f4"
+      value {
+        name: "f4"
+        bitwidth: 8
       }
     }
   }
@@ -159,32 +166,6 @@ headers {
   }
 }
 actions {
-  key: "MyIngress.drop"
-  value {
-    action_definition {
-      preamble {
-        id: 25652968
-        name: "MyIngress.drop"
-        alias: "drop"
-      }
-    }
-    action_implementation {
-      action_body {
-        source_info {
-          line: 56
-          column: 8
-          source_fragment: "mark_to_drop(standard_metadata)"
-        }
-        drop {
-          header {
-            header_name: "standard_metadata"
-          }
-        }
-      }
-    }
-  }
-}
-actions {
   key: "MyIngress.forward"
   value {
     action_definition {
@@ -198,28 +179,8 @@ actions {
         value {
           param {
             id: 1
-            name: "dst_addr"
-            bitwidth: 48
-          }
-        }
-      }
-      params_by_id {
-        key: 2
-        value {
-          param {
-            id: 2
             name: "port"
             bitwidth: 9
-          }
-        }
-      }
-      params_by_name {
-        key: "dst_addr"
-        value {
-          param {
-            id: 1
-            name: "dst_addr"
-            bitwidth: 48
           }
         }
       }
@@ -227,7 +188,7 @@ actions {
         key: "port"
         value {
           param {
-            id: 2
+            id: 1
             name: "port"
             bitwidth: 9
           }
@@ -236,17 +197,13 @@ actions {
     }
     action_implementation {
       parameter_to_bitwidth {
-        key: "dst_addr"
-        value: 48
-      }
-      parameter_to_bitwidth {
         key: "port"
         value: 9
       }
       action_body {
         source_info {
-          line: 60
-          column: 8
+          line: 56
+          column: 7
           source_fragment: "standard_metadata.egress_spec = port"
         }
         assignment {
@@ -263,22 +220,49 @@ actions {
           }
         }
       }
+    }
+  }
+}
+actions {
+  key: "MyIngress.nothing"
+  value {
+    action_definition {
+      preamble {
+        id: 27514245
+        name: "MyIngress.nothing"
+        alias: "nothing"
+      }
+    }
+    action_implementation {
+    }
+  }
+}
+actions {
+  key: "table_hit_2l83"
+  value {
+    action_definition {
+      preamble {
+        id: 8
+        name: "table_hit_2l83"
+      }
+    }
+    action_implementation {
       action_body {
         source_info {
-          line: 61
+          line: 83
           column: 8
-          source_fragment: "hdr.ethernet.dst_addr = dst_addr"
+          source_fragment: "standard_metadata.egress_spec = 0"
         }
         assignment {
           left {
             field_value {
-              header_name: "ethernet"
-              field_name: "dst_addr"
+              header_name: "standard_metadata"
+              field_name: "egress_spec"
             }
           }
           right {
-            variable_value {
-              name: "dst_addr"
+            hexstr_value {
+              value: "0x0000"
             }
           }
         }
@@ -287,54 +271,40 @@ actions {
   }
 }
 tables {
-  key: "MyIngress.t_0"
+  key: "MyIngress.t1"
   value {
     table_definition {
       preamble {
-        id: 33597527
-        name: "MyIngress.t_0"
-        alias: "t_0"
+        id: 44659798
+        name: "MyIngress.t1"
+        alias: "t1"
       }
       match_fields_by_id {
         key: 1
         value {
           match_field {
             id: 1
-            name: "hdr.ethernet.ether_type"
-            bitwidth: 16
+            name: "hdr.h1.f1"
+            bitwidth: 8
             match_type: EXACT
           }
         }
       }
       match_fields_by_name {
-        key: "hdr.ethernet.ether_type"
+        key: "hdr.h1.f1"
         value {
           match_field {
             id: 1
-            name: "hdr.ethernet.ether_type"
-            bitwidth: 16
+            name: "hdr.h1.f1"
+            bitwidth: 8
             match_type: EXACT
           }
         }
       }
       entry_actions {
         ref {
-          id: 25652968
-          annotations: "@proto_id(1)"
-        }
-        action {
-          preamble {
-            id: 25652968
-            name: "MyIngress.drop"
-            alias: "drop"
-          }
-        }
-        proto_id: 1
-      }
-      entry_actions {
-        ref {
           id: 29683729
-          annotations: "@proto_id(2)"
+          annotations: "@proto_id(1)"
         }
         action {
           preamble {
@@ -347,28 +317,8 @@ tables {
             value {
               param {
                 id: 1
-                name: "dst_addr"
-                bitwidth: 48
-              }
-            }
-          }
-          params_by_id {
-            key: 2
-            value {
-              param {
-                id: 2
                 name: "port"
                 bitwidth: 9
-              }
-            }
-          }
-          params_by_name {
-            key: "dst_addr"
-            value {
-              param {
-                id: 1
-                name: "dst_addr"
-                bitwidth: 48
               }
             }
           }
@@ -376,11 +326,25 @@ tables {
             key: "port"
             value {
               param {
-                id: 2
+                id: 1
                 name: "port"
                 bitwidth: 9
               }
             }
+          }
+        }
+        proto_id: 1
+      }
+      entry_actions {
+        ref {
+          id: 27514245
+          annotations: "@proto_id(2)"
+        }
+        action {
+          preamble {
+            id: 27514245
+            name: "MyIngress.nothing"
+            alias: "nothing"
           }
         }
         proto_id: 2
@@ -388,78 +352,64 @@ tables {
       size: 1024
     }
     table_implementation {
-      default_action: "MyIngress.drop"
+      default_action: "MyIngress.nothing"
       action_to_next_control {
         key: "__HIT__"
-        value: "MyIngress.t_1"
+        value: "MyIngress.t2"
       }
       action_to_next_control {
         key: "__MISS__"
-        value: "MyIngress.t_2"
+        value: "MyIngress.t3"
       }
       match_name_to_field {
-        key: "hdr.ethernet.ether_type"
+        key: "hdr.h1.f1"
         value {
-          header_name: "ethernet"
-          field_name: "ether_type"
+          header_name: "h1"
+          field_name: "f1"
         }
       }
       optimized_symbolic_execution_info {
-        merge_point: "MyIngress.t_3"
+        merge_point: "MyIngress.t4"
         continue_to_merge_point: true
       }
     }
   }
 }
 tables {
-  key: "MyIngress.t_1"
+  key: "MyIngress.t2"
   value {
     table_definition {
       preamble {
-        id: 41698643
-        name: "MyIngress.t_1"
-        alias: "t_1"
+        id: 40554969
+        name: "MyIngress.t2"
+        alias: "t2"
       }
       match_fields_by_id {
         key: 1
         value {
           match_field {
             id: 1
-            name: "hdr.ethernet.ether_type"
-            bitwidth: 16
+            name: "hdr.h1.f2"
+            bitwidth: 8
             match_type: EXACT
           }
         }
       }
       match_fields_by_name {
-        key: "hdr.ethernet.ether_type"
+        key: "hdr.h1.f2"
         value {
           match_field {
             id: 1
-            name: "hdr.ethernet.ether_type"
-            bitwidth: 16
+            name: "hdr.h1.f2"
+            bitwidth: 8
             match_type: EXACT
           }
         }
       }
       entry_actions {
         ref {
-          id: 25652968
-          annotations: "@proto_id(1)"
-        }
-        action {
-          preamble {
-            id: 25652968
-            name: "MyIngress.drop"
-            alias: "drop"
-          }
-        }
-        proto_id: 1
-      }
-      entry_actions {
-        ref {
           id: 29683729
-          annotations: "@proto_id(2)"
+          annotations: "@proto_id(1)"
         }
         action {
           preamble {
@@ -472,28 +422,8 @@ tables {
             value {
               param {
                 id: 1
-                name: "dst_addr"
-                bitwidth: 48
-              }
-            }
-          }
-          params_by_id {
-            key: 2
-            value {
-              param {
-                id: 2
                 name: "port"
                 bitwidth: 9
-              }
-            }
-          }
-          params_by_name {
-            key: "dst_addr"
-            value {
-              param {
-                id: 1
-                name: "dst_addr"
-                bitwidth: 48
               }
             }
           }
@@ -501,11 +431,25 @@ tables {
             key: "port"
             value {
               param {
-                id: 2
+                id: 1
                 name: "port"
                 bitwidth: 9
               }
             }
+          }
+        }
+        proto_id: 1
+      }
+      entry_actions {
+        ref {
+          id: 27514245
+          annotations: "@proto_id(2)"
+        }
+        action {
+          preamble {
+            id: 27514245
+            name: "MyIngress.nothing"
+            alias: "nothing"
           }
         }
         proto_id: 2
@@ -513,77 +457,63 @@ tables {
       size: 1024
     }
     table_implementation {
-      default_action: "MyIngress.drop"
-      action_to_next_control {
-        key: "MyIngress.drop"
-        value: "MyIngress.t_3"
-      }
+      default_action: "MyIngress.nothing"
       action_to_next_control {
         key: "MyIngress.forward"
-        value: "MyIngress.t_3"
+        value: "MyIngress.t4"
+      }
+      action_to_next_control {
+        key: "MyIngress.nothing"
+        value: "MyIngress.t4"
       }
       match_name_to_field {
-        key: "hdr.ethernet.ether_type"
+        key: "hdr.h1.f2"
         value {
-          header_name: "ethernet"
-          field_name: "ether_type"
+          header_name: "h1"
+          field_name: "f2"
         }
       }
       optimized_symbolic_execution_info {
-        merge_point: "MyIngress.t_3"
+        merge_point: "MyIngress.t4"
       }
     }
   }
 }
 tables {
-  key: "MyIngress.t_2"
+  key: "MyIngress.t3"
   value {
     table_definition {
       preamble {
-        id: 45015480
-        name: "MyIngress.t_2"
-        alias: "t_2"
+        id: 36319071
+        name: "MyIngress.t3"
+        alias: "t3"
       }
       match_fields_by_id {
         key: 1
         value {
           match_field {
             id: 1
-            name: "hdr.ethernet.src_addr"
-            bitwidth: 48
+            name: "hdr.h1.f3"
+            bitwidth: 8
             match_type: EXACT
           }
         }
       }
       match_fields_by_name {
-        key: "hdr.ethernet.src_addr"
+        key: "hdr.h1.f3"
         value {
           match_field {
             id: 1
-            name: "hdr.ethernet.src_addr"
-            bitwidth: 48
+            name: "hdr.h1.f3"
+            bitwidth: 8
             match_type: EXACT
           }
         }
       }
       entry_actions {
         ref {
-          id: 25652968
-          annotations: "@proto_id(1)"
-        }
-        action {
-          preamble {
-            id: 25652968
-            name: "MyIngress.drop"
-            alias: "drop"
-          }
-        }
-        proto_id: 1
-      }
-      entry_actions {
-        ref {
           id: 29683729
-          annotations: "@proto_id(2)"
+          annotations: "@proto_id(1)"
         }
         action {
           preamble {
@@ -596,28 +526,8 @@ tables {
             value {
               param {
                 id: 1
-                name: "dst_addr"
-                bitwidth: 48
-              }
-            }
-          }
-          params_by_id {
-            key: 2
-            value {
-              param {
-                id: 2
                 name: "port"
                 bitwidth: 9
-              }
-            }
-          }
-          params_by_name {
-            key: "dst_addr"
-            value {
-              param {
-                id: 1
-                name: "dst_addr"
-                bitwidth: 48
               }
             }
           }
@@ -625,11 +535,25 @@ tables {
             key: "port"
             value {
               param {
-                id: 2
+                id: 1
                 name: "port"
                 bitwidth: 9
               }
             }
+          }
+        }
+        proto_id: 1
+      }
+      entry_actions {
+        ref {
+          id: 27514245
+          annotations: "@proto_id(2)"
+        }
+        action {
+          preamble {
+            id: 27514245
+            name: "MyIngress.nothing"
+            alias: "nothing"
           }
         }
         proto_id: 2
@@ -637,77 +561,63 @@ tables {
       size: 1024
     }
     table_implementation {
-      default_action: "MyIngress.drop"
-      action_to_next_control {
-        key: "MyIngress.drop"
-        value: "MyIngress.t_3"
-      }
+      default_action: "MyIngress.nothing"
       action_to_next_control {
         key: "MyIngress.forward"
-        value: "MyIngress.t_3"
+        value: "MyIngress.t4"
+      }
+      action_to_next_control {
+        key: "MyIngress.nothing"
+        value: "MyIngress.t4"
       }
       match_name_to_field {
-        key: "hdr.ethernet.src_addr"
+        key: "hdr.h1.f3"
         value {
-          header_name: "ethernet"
-          field_name: "src_addr"
+          header_name: "h1"
+          field_name: "f3"
         }
       }
       optimized_symbolic_execution_info {
-        merge_point: "MyIngress.t_3"
+        merge_point: "MyIngress.t4"
       }
     }
   }
 }
 tables {
-  key: "MyIngress.t_3"
+  key: "MyIngress.t4"
   value {
     table_definition {
       preamble {
-        id: 44506558
-        name: "MyIngress.t_3"
-        alias: "t_3"
+        id: 38046612
+        name: "MyIngress.t4"
+        alias: "t4"
       }
       match_fields_by_id {
         key: 1
         value {
           match_field {
             id: 1
-            name: "hdr.ethernet.dst_addr"
-            bitwidth: 48
+            name: "hdr.h1.f4"
+            bitwidth: 8
             match_type: EXACT
           }
         }
       }
       match_fields_by_name {
-        key: "hdr.ethernet.dst_addr"
+        key: "hdr.h1.f4"
         value {
           match_field {
             id: 1
-            name: "hdr.ethernet.dst_addr"
-            bitwidth: 48
+            name: "hdr.h1.f4"
+            bitwidth: 8
             match_type: EXACT
           }
         }
       }
       entry_actions {
         ref {
-          id: 25652968
-          annotations: "@proto_id(1)"
-        }
-        action {
-          preamble {
-            id: 25652968
-            name: "MyIngress.drop"
-            alias: "drop"
-          }
-        }
-        proto_id: 1
-      }
-      entry_actions {
-        ref {
           id: 29683729
-          annotations: "@proto_id(2)"
+          annotations: "@proto_id(1)"
         }
         action {
           preamble {
@@ -720,28 +630,8 @@ tables {
             value {
               param {
                 id: 1
-                name: "dst_addr"
-                bitwidth: 48
-              }
-            }
-          }
-          params_by_id {
-            key: 2
-            value {
-              param {
-                id: 2
                 name: "port"
                 bitwidth: 9
-              }
-            }
-          }
-          params_by_name {
-            key: "dst_addr"
-            value {
-              param {
-                id: 1
-                name: "dst_addr"
-                bitwidth: 48
               }
             }
           }
@@ -749,11 +639,25 @@ tables {
             key: "port"
             value {
               param {
-                id: 2
+                id: 1
                 name: "port"
                 bitwidth: 9
               }
             }
+          }
+        }
+        proto_id: 1
+      }
+      entry_actions {
+        ref {
+          id: 27514245
+          annotations: "@proto_id(2)"
+        }
+        action {
+          preamble {
+            id: 27514245
+            name: "MyIngress.nothing"
+            alias: "nothing"
           }
         }
         proto_id: 2
@@ -761,24 +665,45 @@ tables {
       size: 1024
     }
     table_implementation {
-      default_action: "MyIngress.drop"
-      action_to_next_control {
-        key: "MyIngress.drop"
-        value: "__END_OF_PIPELINE__"
-      }
+      default_action: "MyIngress.nothing"
       action_to_next_control {
         key: "MyIngress.forward"
         value: "__END_OF_PIPELINE__"
       }
+      action_to_next_control {
+        key: "MyIngress.nothing"
+        value: "__END_OF_PIPELINE__"
+      }
       match_name_to_field {
-        key: "hdr.ethernet.dst_addr"
+        key: "hdr.h1.f4"
         value {
-          header_name: "ethernet"
-          field_name: "dst_addr"
+          header_name: "h1"
+          field_name: "f4"
         }
       }
       optimized_symbolic_execution_info {
         merge_point: "__END_OF_PIPELINE__"
+        continue_to_merge_point: true
+      }
+    }
+  }
+}
+tables {
+  key: "tbl_table_hit_2l83"
+  value {
+    table_definition {
+      preamble {
+        name: "tbl_table_hit_2l83"
+      }
+    }
+    table_implementation {
+      default_action: "table_hit_2l83"
+      action_to_next_control {
+        key: "table_hit_2l83"
+        value: "MyIngress.t1"
+      }
+      optimized_symbolic_execution_info {
+        merge_point: "MyIngress.t1"
         continue_to_merge_point: true
       }
     }
@@ -795,7 +720,7 @@ pipeline {
   key: "ingress"
   value {
     name: "ingress"
-    initial_control: "MyIngress.t_0"
+    initial_control: "tbl_table_hit_2l83"
   }
 }
 

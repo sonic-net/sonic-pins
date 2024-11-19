@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
+#include "absl/base/macros.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "gutil/status.h"
@@ -35,6 +37,14 @@
 
 namespace p4_symbolic {
 namespace symbolic {
+
+// A port reserved to encode dropping packets.
+// The value is arbitrary; we choose the same value as BMv2:
+// https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#standard-metadata
+constexpr int kDropPort = 511;  // 2^9 - 1.
+// An arbitrary port we reserve for the CPU port (for PacketIO packets).
+constexpr int kCpuPort = 510;  // 2^9 - 2.
+constexpr int kPortBitwidth = 9;
 
 // Boolean pseudo header field that is set to true by p4-symbolic if the packet
 // gets cloned. Not an actual header field, but convenient for analysis.
@@ -212,7 +222,7 @@ using Assertion = std::function<z3::expr(const SymbolicContext &)>;
 // TranslationData is used. For other types, if runtime translated (i.e. have
 // @p4runtime_translation("", string) annotation),
 // TranslationData{.static_mapping = {}, .dynamic_translation = true} is used.
-using StaticTranslationPerType =
+using TranslationPerType =
     absl::btree_map<std::string, values::TranslationData>;
 
 // Symbolically evaluates/interprets the given program against the given
@@ -223,10 +233,17 @@ using StaticTranslationPerType =
 // inferred dynamically for such types.
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
     const Dataplane &data_plane, const std::vector<int> &physical_ports = {},
-    const StaticTranslationPerType &translation_per_type = {});
+    const TranslationPerType &translation_per_type = {});
 
 // Finds a concrete packet and flow in the program that satisfies the given
 // assertion and meets the structure constrained by solver_state.
+absl::StatusOr<std::optional<ConcreteContext>> Solve(
+    SolverState &solver_state, const Assertion &assertion);
+absl::StatusOr<std::optional<ConcreteContext>> Solve(
+    const SolverState &solver_state);
+
+ABSL_DEPRECATED(
+    "Use the overload Solve(SolverState&, const Assertion&) instead.")
 absl::StatusOr<std::optional<ConcreteContext>> Solve(
     const std::unique_ptr<SolverState> &solver_state,
     const Assertion &assertion);

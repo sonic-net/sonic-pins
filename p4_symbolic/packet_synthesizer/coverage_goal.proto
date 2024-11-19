@@ -1,0 +1,113 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package p4_symbolic.packet_synthesizer;
+
+// A list of patterns for string matching.
+// A string s matches pattern p iff s == p or p == "*" (we can expand this in
+// the future if needed).
+// A string s matches Patterns ps, if it matches at least one of patterns in it.
+message Patterns {
+  repeated string patterns = 1;
+}
+
+// A goal corresponding to generating various input packets hitting each
+// individual entry in a select set of tables in the target P4 program.
+// Roughly results in [EntryCoverageCriteria(e) for e in t.entries
+// for t in selected tables]. See the parameters for more precise semantics.
+message EntryCoverageGoal {
+  // String matching patterns for the fully qualified name of tables to be
+  // included.
+  Patterns tables = 1;
+  // String matching patterns for the fully qualified name of tables to be
+  // excluded. If a table name matches `table_exclusions` the table will be
+  // excluded even if included in `tables.
+  Patterns table_exclusions = 2;
+  // Whether to generate a packet covering the default action of the table.
+  bool cover_default_actions = 3;
+}
+
+// A goal corresponding to generating various input packets each containing a
+// header (more precisely, resulting in the corresponding P4 header being valid
+// after parsing the input packets) from a select set of headers in the target
+// P4 program.
+// Roughly results in [InputPacketHeaderValidityCriteria(h) for h
+// in selected headers]. See the parameters for more precise semantics.
+message HeaderCoverageGoal {
+  // String matching patterns for the P4 name of the headers to be included.
+  Patterns headers = 1;
+  // String matching patterns for the P4 name of the headers to be excluded. If
+  // a header names matches `header_exclusions` it gets excluded even if it
+  // matches `headers`.
+  Patterns header_exclusions = 2;
+  // If a header named "h" is matched by the following patterns, all synthesis
+  // criteria generated for this goal for other headers (not "h" itself) get
+  // constrained to prevent header "h" from being valid.
+  // For example, if we have "ipv4", "ipv6", and "vlan" among selected headers
+  // and "vlan" matches `headers_to_prevent_unless_explicitly_covered`, the
+  // criteria generated for this goal are:
+  // Criteria 1: Input packet must contain "ipv4" and NOT contain "vlan".
+  // Criteria 2: Input packet must contain "ipv6" and NOT contain "vlan".
+  // Criteria 3: Input packet must contain "vlan".
+  // This feature is particularly useful for things such as VLAN header. We
+  // generally prefer our generated test packets to not include a VLAN header
+  // unless we explicitly want to generate test packets that contain the VLAN
+  // header.
+  Patterns headers_to_prevent_unless_explicitly_covered = 3;
+  // If true, the result will include an additional synthesis criteria with no
+  // particular header targeted (the headers in
+  // `headers_to_prevent_unless_explicitly_covered` are still prevented).
+  bool include_wildcard_header = 4;
+}
+
+// A goal corresponding to generating various input packets that exercise
+// certain output behavior.
+// Results in [(OutputCriteria(f) f in selected fates].
+message PacketFateCoverageGoal {
+  enum PacketFate {
+    // No constraints on the packet fate.
+    UNSPECIFIED = 0;
+    // The input packet must be marked to drop.
+    // Note: In the current implementation of SAI-P4, a punted packet may also
+    // be marked to be dropped (e.g. in trap).
+    DROP = 1;
+    // The input packet must not be marked to drop.
+    NOT_DROP = 2;
+  }
+
+  // Packet fates to be exercised.
+  repeated PacketFate fates = 1;
+}
+
+// A composite coverage goal.
+// Results in [GenerateCriteria(header_goal) x GenerateCriteria(entry_goal) x
+// GenerateCriteria(fate_goal)] where `x` corresponds to cartesian product
+// conjunction of lists of synthesis criteria (see packet_synthesis_criteria.h).
+// If a certain field is missing, a list containing only a single synthesis
+// criteria with no constraints (i.e. [WildcardCriteria()]) is used as its
+// criteria list.
+message CoverageGoal {
+  HeaderCoverageGoal header_coverage = 2;
+  PacketFateCoverageGoal packet_fate_coverage = 3;
+  EntryCoverageGoal entry_coverage = 1;
+}
+
+// A list of coverage goals.
+// GenerateCriteria([g1, g2, ...]) = GenerateCriteria(g1) + GenerateCriteria(g2)
+// + ...
+message CoverageGoals {
+  repeated CoverageGoal coverage_goals = 1;
+}
