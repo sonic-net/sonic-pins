@@ -30,6 +30,9 @@ absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
   std::vector<z3::expr> constraints;
 
   ASSIGN_OR_RETURN(SaiFields fields, GetSaiFields(state));
+  SaiEthernet& erspan_ethernet = fields.headers.erspan_ethernet;
+  SaiIpv4& erspan_ipv4 = fields.headers.erspan_ipv4;
+  SaiGre& erspan_gre = fields.headers.erspan_gre;
   SaiEthernet& ethernet = fields.headers.ethernet;
   SaiIpv4& ipv4 = fields.headers.ipv4;
   SaiIpv6& ipv6 = fields.headers.ipv6;
@@ -43,6 +46,9 @@ absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
   z3::expr bv_false = Z3Context().bv_val(0, 1);
 
   // `start` state.
+  constraints.push_back(!erspan_ethernet.valid);
+  constraints.push_back(!erspan_ipv4.valid);
+  constraints.push_back(!erspan_gre.valid);
   constraints.push_back(local_metadata.admit_to_l3 == bv_true);
   constraints.push_back(local_metadata.vrf_id == 0);
   constraints.push_back(local_metadata.mirror_session_id_valid == bv_false);

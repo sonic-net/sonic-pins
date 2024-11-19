@@ -193,6 +193,24 @@ absl::Status Deparse(const SaiArp& header, const z3::model& model,
   return absl::OkStatus();
 }
 
+absl::Status Deparse(const SaiGre& header, const z3::model& model,
+                     pdpi::BitString& result) {
+  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  if (valid) {
+    RETURN_IF_ERROR(Deparse<1>(header.checksum_present, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.routing_present, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.key_present, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.sequence_present, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.strict_source_route, model, result));
+    RETURN_IF_ERROR(Deparse<3>(header.recursion_control, model, result));
+    RETURN_IF_ERROR(Deparse<1>(header.acknowledgement_present, model, result));
+    RETURN_IF_ERROR(Deparse<4>(header.flags, model, result));
+    RETURN_IF_ERROR(Deparse<3>(header.version, model, result));
+    RETURN_IF_ERROR(Deparse<16>(header.protocol, model, result));
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<std::string> SaiDeparser(
@@ -204,6 +222,9 @@ absl::StatusOr<std::string> SaiDeparser(
 absl::StatusOr<std::string> SaiDeparser(const SaiFields& packet,
                                         const z3::model& model) {
   pdpi::BitString result;
+  RETURN_IF_ERROR(Deparse(packet.headers.erspan_ethernet, model, result));
+  RETURN_IF_ERROR(Deparse(packet.headers.erspan_ipv4, model, result));
+  RETURN_IF_ERROR(Deparse(packet.headers.erspan_gre, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ethernet, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ipv4, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ipv6, model, result));
