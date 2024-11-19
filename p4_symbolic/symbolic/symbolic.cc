@@ -32,12 +32,6 @@
 namespace p4_symbolic {
 namespace symbolic {
 
-// A port reserved to encode dropping packets.
-// The value is arbitrary; we choose the same value as BMv2:
-// https://github.com/p4lang/behavioral-model/blob/main/docs/simple_switch.md#standard-metadata
-constexpr int kDropPort = 511;  // 2^9 - 1.
-constexpr int kPortBitwidth = 9;
-
 z3::expr EgressSpecDroppedValue() {
   return Z3Context().bv_val(kDropPort, kPortBitwidth);
 }
@@ -65,8 +59,20 @@ absl::Status CheckPhysicalPortsConformanceToV1Model(
       return absl::InvalidArgumentError(absl::Substitute(
           "Cannot use the value $0 as a physical port as the value does not "
           "fit into PortId_t (bit<9>), the type of "
-          "standard_metadata.{ingress/egress}_port in v1model.p4",
+          "standard_metadata.{ingress/egress}_port in v1model.p4.",
           port));
+    }
+    if (port == kDropPort) {
+      return absl::InvalidArgumentError(
+          absl::Substitute("Cannot use the value $0 as a physical port as the "
+                           "value is reserved for dropping packets.",
+                           port));
+    }
+    if (port == kCpuPort) {
+      return absl::InvalidArgumentError(
+          absl::Substitute("Cannot use the value $0 as a physical port as the "
+                           "value is reserved for the CPU port.",
+                           port));
     }
   }
 
@@ -75,7 +81,7 @@ absl::Status CheckPhysicalPortsConformanceToV1Model(
 
 absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
     const Dataplane &data_plane, const std::vector<int> &physical_ports,
-    const StaticTranslationPerType &translation_per_type) {
+    const TranslationPerType &translation_per_type) {
   // Check input physical ports.
   if (absl::Status status =
           CheckPhysicalPortsConformanceToV1Model(physical_ports);
@@ -112,7 +118,7 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
 
   // Restrict the value of all fields with (purely static, i.e.
   // dynamic_translation = false) P4RT translated types to what has been used in
-  // StaticTranslationPerType. This should be done after the symbolic execution
+  // TranslationPerType. This should be done after the symbolic execution
   // since P4Symbolic does not initially know which fields have translated
   // types.
   for (const auto &[field, type] : translator.fields_p4runtime_type) {
@@ -181,30 +187,39 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
 }
 
 absl::StatusOr<std::optional<ConcreteContext>> Solve(
-    const std::unique_ptr<SolverState> &solver_state,
-    const Assertion &assertion) {
-  z3::expr constraint = assertion(solver_state->context);
-
-  solver_state->solver->push();
-  solver_state->solver->add(constraint);
-  auto pop = absl::Cleanup([&] { solver_state->solver->pop(); });
-  z3::check_result check_result = solver_state->solver->check();
+    const SolverState &solver_state) {
+  z3::check_result check_result = solver_state.solver->check();
   switch (check_result) {
     case z3::unsat:
     case z3::unknown:
       return absl::nullopt;
 
     case z3::sat:
-      z3::model packet_model = solver_state->solver->get_model();
+      z3::model packet_model = solver_state.solver->get_model();
       ASSIGN_OR_RETURN(
           ConcreteContext result,
-          util::ExtractFromModel(solver_state->context, packet_model,
-                                 solver_state->translator));
+          util::ExtractFromModel(solver_state.context, packet_model,
+                                 solver_state.translator));
       return result;
   }
   LOG(DFATAL) << "invalid Z3 check() result: "
               << static_cast<int>(check_result);
   return absl::nullopt;
+}
+
+absl::StatusOr<std::optional<ConcreteContext>> Solve(
+    SolverState &solver_state, const Assertion &assertion) {
+  z3::expr constraint = assertion(solver_state.context);
+  solver_state.solver->push();
+  solver_state.solver->add(constraint);
+  auto pop = absl::Cleanup([&] { solver_state.solver->pop(); });
+  return Solve(solver_state);
+}
+
+absl::StatusOr<std::optional<ConcreteContext>> Solve(
+    const std::unique_ptr<SolverState> &solver_state,
+    const Assertion &assertion) {
+  return Solve(*solver_state, assertion);
 }
 
 std::string DebugSMT(const std::unique_ptr<SolverState> &solver_state,
