@@ -133,6 +133,24 @@ end_to_end_test(
     table_entries = "//p4_symbolic/testdata:conditional/conditional_sequence_entries.pb.txt",
 )
 
+end_to_end_test(
+    name = "table_hit_1_test",
+    output_golden_file = "expected/table_hit_1.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/table_hit_1.p4",
+    port_count = 8,
+    smt_golden_file = "expected/table_hit_1.smt2",
+    table_entries = "//p4_symbolic/testdata:conditional/table_hit_1_entries.pb.txt",
+)
+
+end_to_end_test(
+    name = "table_hit_2_test",
+    output_golden_file = "expected/table_hit_2.txt",
+    p4_program = "//p4_symbolic/testdata:conditional/table_hit_2.p4",
+    port_count = 8,
+    smt_golden_file = "expected/table_hit_2.smt2",
+    table_entries = "//p4_symbolic/testdata:conditional/table_hit_2_entries.pb.txt",
+)
+
 cc_test(
     name = "values_test",
     srcs = ["values_test.cc"],

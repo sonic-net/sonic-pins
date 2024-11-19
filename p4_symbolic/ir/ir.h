@@ -31,6 +31,16 @@ namespace ir {
 // in P4-Symbolic's IR.
 inline std::string EndOfPipeline() { return "__END_OF_PIPELINE__"; }
 
+// For any table application, BMv2 JSON (and P4-Symbolic IR) use a map from
+// actions that may be executed as a result of table application to the next
+// table/control that must be evaluated if the corresponding action is executed.
+// This encodes conditionals on the result of table applications in P4 code.
+// There are also two special action names that refer to whether any table
+// entry was hit (table hit) or no table entry was hit (table miss). The
+// following two functions return those special action names.
+inline std::string TableHitAction() { return "__HIT__"; }
+inline std::string TableMissAction() { return "__MISS__"; }
+
 // Transforms bmv2 protobuf and pdpi protobuf into our IR protobuf.
 absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program& bmv2,
                                             const pdpi::IrP4Info& pdpi);
