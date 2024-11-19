@@ -9,7 +9,7 @@
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
  (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -81,7 +81,7 @@
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
  (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -139,8 +139,8 @@
  (let (($x112 (and (and $x85 (not $x91)) $x96)))
  (let ((?x158 (ite $x109 (_ bv1 9) (ite $x112 (_ bv0 9) ?x142))))
  (let (($x52 (= ?x158 (_ bv511 9))))
- (let (($x318 (and (not $x52) $x85)))
- (and $x318 (= ?x157 0)))))))))))))))))))))))))))))))
+ (let (($x308 (and (not $x52) $x85)))
+ (and $x308 (= ?x157 0)))))))))))))))))))))))))))))))
 (check-sat)
 
 ; 
@@ -154,7 +154,7 @@
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
  (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -226,7 +226,7 @@
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
  (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -298,7 +298,7 @@
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
  (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -370,7 +370,7 @@
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
  (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -443,7 +443,7 @@
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
  (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -516,7 +516,7 @@
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
  (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
@@ -588,7 +588,8 @@
 (declare-fun ipv4.dstAddr () (_ BitVec 32))
 (declare-fun scalars.local_metadata_t.vrf_is_valid () (_ BitVec 1))
 (assert
- (and (and (distinct standard_metadata.ingress_port (_ bv511 9)) true) (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86))))
+ (let (($x86 (= standard_metadata.ingress_port (_ bv1 9))))
+ (or (or false (= standard_metadata.ingress_port (_ bv0 9))) $x86)))
 (assert
  (let ((?x50 (concat (_ bv0 9) (_ bv0 1))))
  (let (($x64 (and true (= (bvand ipv4.srcAddr (_ bv555813129 32)) (_ bv555810816 32)))))
