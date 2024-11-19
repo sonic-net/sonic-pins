@@ -65,6 +65,8 @@ constexpr absl::Duration kWaitToReadOperStatus = absl::Seconds(30);
 constexpr absl::Duration kPollInterval = absl::Seconds(30);
 // Minimum wait time after the BERT request to read the BERT result.
 constexpr absl::Duration kWaitTime = absl::Seconds(30);
+// Wait time for ports to be up after re-enabling admin down ports.
+constexpr absl::Duration kPortsUpWaitTime = absl::Seconds(30);
 
 constexpr uint8_t kMaxAllowedInterfacesToRunBert = 96;
 
@@ -98,6 +100,30 @@ const std::string BuildOpenConfigInterface(absl::string_view interface_name) {
                             }
                           )pb",
                           interface_name);
+}
+
+void SendStartBertRequestSuccessfully(
+    gnoi::diag::StartBERTRequest& request,
+    gnoi::diag::Diag::StubInterface& gnoi_diag_stub) {
+  gnoi::diag::StartBERTResponse response;
+  grpc::ClientContext context;
+  LOG(INFO) << "StartBERT request: " << request.ShortDebugString();
+  ASSERT_OK(gnoi_diag_stub.StartBERT(&context, request, &response));
+
+  // Verify response.
+  ASSERT_THAT(response.per_port_responses(),
+              SizeIs(request.per_port_requests_size()));
+  EXPECT_EQ(response.bert_operation_id(), request.bert_operation_id());
+
+  for (int idx = 0; idx < response.per_port_responses_size(); ++idx) {
+    auto per_port_response = response.per_port_responses(idx);
+    SCOPED_TRACE(absl::StrCat("Verifying StartBERT port response: ",
+                              per_port_response.ShortDebugString()));
+    EXPECT_EQ(per_port_response.status(), gnoi::diag::BERT_STATUS_OK);
+    EXPECT_TRUE(
+        MessageDifferencer::Equals(per_port_response.interface(),
+                                   request.per_port_requests(idx).interface()));
+  }
 }
 
 absl::StatusOr<std::string> GetInterfaceNameFromOcInterfacePath(
@@ -157,6 +183,35 @@ bool IsInterfaceInList(absl::string_view interface,
                        std::vector<std::string>& interfaces) {
   return std::find(interfaces.begin(), interfaces.end(), interface) !=
          interfaces.end();
+}
+
+void WaitForBertToCompleteOnInterfaces(
+    gnmi::gNMI::StubInterface& sut_gnmi_stub,
+    gnmi::gNMI::StubInterface& control_switch_gnmi_stub,
+    std::vector<std::string>& interfaces, int max_poll_count) {
+  for (int count = 0; count < max_poll_count; ++count) {
+    absl::SleepFor(kPollInterval);
+    // If port is no longer in "TESTING" oper state on both sides of the link,
+    // linkqual has completed on the link and full result is ready.
+    for (auto it = interfaces.begin(); it != interfaces.end();) {
+      ASSERT_OK_AND_ASSIGN(
+          pins_test::OperStatus oper_status,
+          pins_test::GetInterfaceOperStatusOverGnmi(sut_gnmi_stub, *it));
+      if (oper_status != pins_test::OperStatus::kTesting) {
+        ASSERT_OK_AND_ASSIGN(oper_status,
+                             pins_test::GetInterfaceOperStatusOverGnmi(
+                                 control_switch_gnmi_stub, *it));
+        if (oper_status != pins_test::OperStatus::kTesting) {
+          it = interfaces.erase(it);
+          continue;
+        }
+      }
+      ++it;
+    }
+    if (interfaces.empty()) break;
+  }
+
+  EXPECT_THAT(interfaces, testing::IsEmpty());
 }
 
 void VerifyBertResultForSuccess(
@@ -442,6 +497,7 @@ TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
   GetMirrorTestbed().Environment().SetTestCaseID(
       "224db9cf-c709-486d-a0d3-6ab64c1a1e1f");
   thinkit::Switch& sut = GetMirrorTestbed().Sut();
+
   ASSERT_OK(pins_test::PortsUp(sut));
   ASSERT_OK_AND_ASSIGN(auto sut_gnoi_diag_stub, sut.CreateGnoiDiagStub());
 
@@ -603,8 +659,6 @@ TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
   grpc::ClientContext context;
   LOG(INFO) << "Sending StartBERT request: " << bert_request.ShortDebugString();
 
-  EXPECT_OK(
-      sut_gnoi_diag_stub->StartBERT(&context, bert_request, &bert_response));
   // Poll for allowed BERT delay duration.
   int max_poll_count =
       ceil(ToInt64Seconds(kDelayDuration) / ToInt64Seconds(kPollInterval));
@@ -691,26 +745,16 @@ TEST_P(BertTest, StartBertSucceeds) {
             BuildPerPortStartBertRequest(interface));
   }
 
-   // Request StartBert on the SUT switch.
-  {
-    gnoi::diag::StartBERTResponse bert_response;
-    grpc::ClientContext context;
-    LOG(INFO) << "Sending StartBERT request: "
-              << bert_request.ShortDebugString();
-    EXPECT_OK(
-        sut_gnoi_diag_stub->StartBERT(&context, bert_request, &bert_response));
-  }
+  // Request StartBert on the SUT switch.
+  LOG(INFO) << "Sending StartBERT request on SUT:";
+  ASSERT_NO_FATAL_FAILURE(
+      SendStartBertRequestSuccessfully(bert_request, *sut_gnoi_diag_stub));
 
   // Request StartBert on the control switch.
-  {
-    gnoi::diag::StartBERTResponse bert_response;
-    grpc::ClientContext context;
-    LOG(INFO) << "Sending StartBERT request: "
-              << bert_request.ShortDebugString();
-    EXPECT_OK(control_switch_gnoi_diag_stub->StartBERT(&context, bert_request,
-                                                       &bert_response));
-  }
- 
+  LOG(INFO) << "Sending StartBERT request on control switch:";
+  ASSERT_NO_FATAL_FAILURE(SendStartBertRequestSuccessfully(
+      bert_request, *control_switch_gnoi_diag_stub));
+
   // Get start timestamp.
   absl::Time start_time = absl::Now();
   // Wait before reading the oper status.
@@ -735,12 +779,10 @@ TEST_P(BertTest, StartBertSucceeds) {
     gnoi::diag::StartBERTRequest second_bert_request = bert_request;
     second_bert_request.set_bert_operation_id(
         absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now())));
-    gnoi::diag::StartBERTResponse bert_response;
-    grpc::ClientContext context;
-    LOG(INFO) << "Sending second StartBERT request: "
-              << second_bert_request.ShortDebugString();
-    EXPECT_OK(sut_gnoi_diag_stub->StartBERT(&context, second_bert_request,
-                                            &bert_response));
+    // Request StartBert on the SUT switch.
+    LOG(INFO) << "Sending second StartBERT request on SUT:";
+    ASSERT_NO_FATAL_FAILURE(SendStartBertRequestSuccessfully(
+        second_bert_request, *sut_gnoi_diag_stub));
 
     // Wait some time before querying the result.
     absl::SleepFor(kWaitTime);
@@ -766,37 +808,15 @@ TEST_P(BertTest, StartBertSucceeds) {
     }
   }
 
+  // Wait for BERT to finish on test interfaces.
+  int max_poll_count = 1 + (kDelayDuration + kWaitTime + kTestDuration -
+                            (absl::Now() - start_time) - absl::Seconds(1)) /
+                               kPollInterval;
 
-  // Poll for remaining BERT duration.
-  int max_poll_count =
-      1 + (absl::ToInt64Seconds(kDelayDuration + kTestDuration -
-                                (absl::Now() - start_time) - absl::Seconds(1)) /
-           ToInt64Seconds(kPollInterval));
-  std::vector<std::string> interfaces_in_testing = interfaces;
-  for (int count = 0; count < max_poll_count; ++count) {
-    absl::SleepFor(kPollInterval);
-    // If port is no longer in "TESTING" oper state on both sides of the link,
-    // linkqual has completed on the link and full result is ready.
-    for (auto it = interfaces_in_testing.begin();
-         it != interfaces_in_testing.end();) {
-      ASSERT_OK_AND_ASSIGN(
-          pins_test::OperStatus oper_status,
-          pins_test::GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub, *it));
-      if (oper_status != pins_test::OperStatus::kTesting) {
-        ASSERT_OK_AND_ASSIGN(oper_status,
-                            pins_test::GetInterfaceOperStatusOverGnmi(
-                                 *control_switch_gnmi_stub, *it));
-        if (oper_status != pins_test::OperStatus::kTesting) {
-          it = interfaces_in_testing.erase(it);
-          continue;
-        }
-      }
-      ++it;
-    }
-    if (interfaces_in_testing.empty()) break;
-  }
-
-  EXPECT_THAT(interfaces_in_testing, testing::IsEmpty());
+  std::vector<std::string> interfaces_running_bert = interfaces;
+  ASSERT_NO_FATAL_FAILURE(WaitForBertToCompleteOnInterfaces(
+      *sut_gnmi_stub, *control_switch_gnmi_stub, interfaces_running_bert,
+      max_poll_count));
 
   gnoi::diag::GetBERTResultRequest result_request;
   result_request.set_bert_operation_id(bert_request.bert_operation_id());
@@ -930,60 +950,197 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
   }
 
   // Request StartBert on the SUT switch.
-  {
-    gnoi::diag::StartBERTResponse bert_response;
-    grpc::ClientContext context;
-    EXPECT_OK(
-        sut_gnoi_diag_stub->StartBERT(&context, bert_request, &bert_response));
-  }
+  LOG(INFO) << "Sending StartBERT request on SUT:";
+  ASSERT_NO_FATAL_FAILURE(
+      SendStartBertRequestSuccessfully(bert_request, *sut_gnoi_diag_stub));
 
   // Request StartBert on the control switch.
-  {
-    gnoi::diag::StartBERTResponse bert_response;
-    grpc::ClientContext context;
-    EXPECT_OK(control_switch_gnoi_diag_stub->StartBERT(&context, bert_request,
-                                                       &bert_response));
-  }
+  LOG(INFO) << "Sending StartBERT request on control switch:";
+  ASSERT_NO_FATAL_FAILURE(SendStartBertRequestSuccessfully(
+      bert_request, *control_switch_gnoi_diag_stub));
 
   absl::Time start_time = absl::Now();
   // Give some time to BERT to move in SYNC state.
   absl::SleepFor(absl::Seconds(90));
   
   absl::Time end_time = absl::Now();
- 
-  // Poll for remaining BERT duration.
-  int max_poll_count =
-      1 + (absl::ToInt64Seconds(kDelayDuration + kWaitTime + kSyncDuration +
-                                kTestDuration - (end_time - start_time) -
-                                absl::Seconds(1)) /
-           ToInt64Seconds(kPollInterval));
-  std::vector<std::string> interfaces_not_up = interfaces;
-  for (int count = 0; count < max_poll_count; ++count) {
-    absl::SleepFor(kPollInterval);
-    // If port is "UP" and no longer in "TESTING" oper state on both sides of
-    // link, BERT has completed on the link and full BERT result is ready.
-    for (auto it = interfaces_not_up.begin(); it != interfaces_not_up.end();) {
-      ASSERT_OK_AND_ASSIGN(
-          pins_test::OperStatus oper_status,
-          pins_test::GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub, *it));
-      if (oper_status == pins_test::OperStatus::kUp) {
-        ASSERT_OK_AND_ASSIGN(oper_status,
-                             pins_test::GetInterfaceOperStatusOverGnmi(
-                                 *control_switch_gnmi_stub, *it));
-        if (oper_status == pins_test::OperStatus::kUp) {
-          it = interfaces_not_up.erase(it);
-          continue;
-        }
-      }
-      ++it;
-    }
-    if (interfaces_not_up.empty()) break;
-  }
 
-  EXPECT_THAT(interfaces_not_up, testing::IsEmpty()); 
+  // Wait for BERT to finish on test interfaces.
+  int max_poll_count = 1 + (kDelayDuration + kWaitTime + kTestDuration -
+                            (end_time - start_time) - absl::Seconds(1)) /
+                               kPollInterval;
+
+  std::vector<std::string> interfaces_running_bert = interfaces;
+  ASSERT_NO_FATAL_FAILURE(WaitForBertToCompleteOnInterfaces(
+      *sut_gnmi_stub, *control_switch_gnmi_stub, interfaces_running_bert,
+      max_poll_count));
 
   // Wait for some time before checking the port status.
-  absl::SleepFor(absl::Seconds(10));
+  absl::SleepFor(kPortsUpWaitTime);
+
+  ASSERT_OK(pins_test::PortsUp(sut));
+  ASSERT_OK(pins_test::PortsUp(control_switch));
+}
+
+// Run BERT on a port. Issue StopBERT on the SUT port, this causes BERT to
+// stop on SUT and this will cause BERT failure on control switch as control
+// switch side port will lose lock with its peer port on SUT side.
+TEST_P(BertTest, StopBertSucceeds) {
+  GetMirrorTestbed().Environment().SetTestCaseID(
+      "be7b6653-51b9-4231-a438-d9589bbcb677");
+  thinkit::Switch& sut = GetMirrorTestbed().Sut();
+  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
+  ASSERT_OK(pins_test::PortsUp(sut));
+  ASSERT_OK_AND_ASSIGN(auto sut_gnoi_diag_stub, sut.CreateGnoiDiagStub());
+
+  thinkit::Switch& control_switch = GetMirrorTestbed().ControlSwitch();
+  ASSERT_OK_AND_ASSIGN(auto control_switch_gnmi_stub,
+                       control_switch.CreateGnmiStub());
+  ASSERT_OK(pins_test::PortsUp(control_switch));
+  ASSERT_OK_AND_ASSIGN(auto control_switch_gnoi_diag_stub,
+                       control_switch.CreateGnoiDiagStub());
+
+  // Select one operational state "up" port.
+  std::string interface = absl::GetFlag(FLAGS_interface);
+  if (interface.empty()) {
+    std::vector<std::string> interfaces;
+    ASSERT_NO_FATAL_FAILURE(SelectNUpInterfaces(/*port_count_to_select=*/1,
+                                                *sut_gnmi_stub, &interfaces));
+    interface = interfaces[0];
+  }
+  LOG(INFO) << "Selected interface: "
+            << interface << ". To repeat the test with same interface, use "
+            << "--test_arg=--interface=" << interface << " in test arguments.";
+
+  gnoi::diag::StartBERTRequest bert_request;
+  // Create the BERT request.
+  bert_request.set_bert_operation_id(
+      absl::StrCat("OpId-", absl::ToUnixMillis(absl::Now())));
+  *(bert_request.add_per_port_requests()) =
+      gutil::ParseProtoOrDie<gnoi::diag::StartBERTRequest::PerPortRequest>(
+          BuildPerPortStartBertRequest(interface));
+
+  // Request StartBert on the SUT switch.
+  LOG(INFO) << "Sending StartBERT request on SUT:";
+  ASSERT_NO_FATAL_FAILURE(
+      SendStartBertRequestSuccessfully(bert_request, *sut_gnoi_diag_stub));
+
+  // Request StartBert on the control switch.
+  LOG(INFO) << "Sending StartBERT request on control switch:";
+  ASSERT_NO_FATAL_FAILURE(SendStartBertRequestSuccessfully(
+      bert_request, *control_switch_gnoi_diag_stub));
+
+  absl::Time start_time = absl::Now();
+  // Wait before reading the oper status.
+  absl::SleepFor(kWaitToReadOperStatus);
+
+  // Verify that port should be in TESTING mode now.
+  {
+    ASSERT_OK_AND_ASSIGN(
+        pins_test::OperStatus oper_status,
+        pins_test::GetInterfaceOperStatusOverGnmi(*sut_gnmi_stub, interface));
+    ASSERT_EQ(oper_status, pins_test::OperStatus::kTesting);
+    ASSERT_OK_AND_ASSIGN(oper_status,
+                         pins_test::GetInterfaceOperStatusOverGnmi(
+                             *control_switch_gnmi_stub, interface));
+    ASSERT_EQ(oper_status, pins_test::OperStatus::kTesting);
+  }
+
+  gnoi::diag::GetBERTResultRequest result_request;
+  result_request.set_bert_operation_id(bert_request.bert_operation_id());
+  *(result_request.add_per_port_requests()->mutable_interface()) =
+      bert_request.per_port_requests(0).interface();
+
+  // Verify control switch side BERT has acquired the lock and is running now.
+  {
+    int remaining_poll_count =
+        1 + (kDelayDuration - absl::Seconds(1)) / kPollInterval;
+
+    while (remaining_poll_count > 0) {
+      absl::SleepFor(kPollInterval);
+      gnoi::diag::GetBERTResultResponse response;
+      grpc::ClientContext context;
+      EXPECT_OK(control_switch_gnoi_diag_stub->GetBERTResult(
+          &context, result_request, &response));
+      ASSERT_THAT(response.per_port_responses(),
+                  SizeIs(bert_request.per_port_requests_size()));
+      ASSERT_EQ(response.per_port_responses(0).status(),
+                gnoi::diag::BERT_STATUS_OK);
+      if (response.per_port_responses(0).peer_lock_established()) {
+        break;
+      }
+      --remaining_poll_count;
+    }
+    // Assert if timed out to get the lock.
+    ASSERT_GT(remaining_poll_count, 0);
+  }
+
+  // Request StopBERT on SUT.
+  {
+    gnoi::diag::StopBERTRequest stop_request;
+    stop_request.set_bert_operation_id(bert_request.bert_operation_id());
+    *(stop_request.add_per_port_requests()->mutable_interface()) =
+        bert_request.per_port_requests(0).interface();
+    gnoi::diag::StopBERTResponse response;
+    grpc::ClientContext context;
+    LOG(INFO) << "Sending StopBERT request on SUT: "
+              << stop_request.ShortDebugString();
+    EXPECT_OK(sut_gnoi_diag_stub->StopBERT(&context, stop_request, &response));
+
+    // Verify response.
+    ASSERT_THAT(response.per_port_responses(),
+                SizeIs(stop_request.per_port_requests_size()));
+    EXPECT_EQ(response.bert_operation_id(), stop_request.bert_operation_id());
+
+    for (int idx = 0; idx < response.per_port_responses_size(); ++idx) {
+      auto per_port_response = response.per_port_responses(idx);
+      SCOPED_TRACE(absl::StrCat("Verifying StopBERT port response: ",
+                                per_port_response.ShortDebugString()));
+      EXPECT_EQ(per_port_response.status(), gnoi::diag::BERT_STATUS_OK);
+      EXPECT_TRUE(MessageDifferencer::Equals(
+          per_port_response.interface(),
+          stop_request.per_port_requests(idx).interface()));
+    }
+  }
+
+  // Wait for BERT to finish on test interfaces.
+  int max_poll_count = 1 + (kDelayDuration + kWaitTime + kTestDuration -
+                            (absl::Now() - start_time) - absl::Seconds(1)) /
+                               kPollInterval;
+
+  std::vector<std::string> interfaces_running_bert = {interface};
+  ASSERT_NO_FATAL_FAILURE(WaitForBertToCompleteOnInterfaces(
+      *sut_gnmi_stub, *control_switch_gnmi_stub, interfaces_running_bert,
+      max_poll_count));
+
+  // Get the BERT result from the SUT. BERT status should be OK.
+  {
+    gnoi::diag::GetBERTResultResponse response;
+    grpc::ClientContext context;
+    EXPECT_OK(
+        sut_gnoi_diag_stub->GetBERTResult(&context, result_request, &response));
+    LOG(INFO) << "SUT BERT Result: " << response.ShortDebugString();
+    ASSERT_THAT(response.per_port_responses(),
+                SizeIs(bert_request.per_port_requests_size()));
+    EXPECT_EQ(response.per_port_responses(0).status(),
+              gnoi::diag::BERT_STATUS_OK);
+  }
+
+  // Get the BERT result from the control switch. It should have failed due to
+  // peer lock loss.
+  {
+    gnoi::diag::GetBERTResultResponse response;
+    grpc::ClientContext context;
+    EXPECT_OK(control_switch_gnoi_diag_stub->GetBERTResult(
+        &context, result_request, &response));
+    LOG(INFO) << "Control switch BERT Result: " << response.ShortDebugString();
+    ASSERT_THAT(response.per_port_responses(),
+                SizeIs(bert_request.per_port_requests_size()));
+    EXPECT_EQ(response.per_port_responses(0).status(),
+              gnoi::diag::BERT_STATUS_PEER_LOCK_LOST);
+    EXPECT_TRUE(response.per_port_responses(0).peer_lock_established());
+    EXPECT_TRUE(response.per_port_responses(0).peer_lock_lost());
+  }
 
   ASSERT_OK(pins_test::PortsUp(sut));
   ASSERT_OK(pins_test::PortsUp(control_switch));
