@@ -17,6 +17,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
+#include "tests/thinkit_gnmi_interface_util.h"
 #include "thinkit/ssh_client.h"
 #include "thinkit/switch.h"
 
@@ -40,6 +41,21 @@ void TestGnmiInterfaceConfigSetPortSpeed(
 // Test port Id GNMI config and state paths.
 void TestGnmiInterfaceConfigSetId(thinkit::Switch& sut,
                                   absl::string_view if_name, const int id);
-}  // namespace pins_test
 
+// Test port breakout during parent port in use.
+void TestGNMIParentPortInUseDuringBreakout(thinkit::Switch& sut,
+                                           std::string& platform_json_contents);
+
+// Test port breakout during child port in use.
+void TestGNMIChildPortInUseDuringBreakout(thinkit::Switch& sut,
+                                          std::string& platform_json_contents);
+
+// Helper function to test port in use.
+void BreakoutDuringPortInUse(thinkit::Switch& sut,
+                             gnmi::gNMI::StubInterface* sut_gnmi_stub,
+                             RandomPortBreakoutInfo port_info,
+                             const std::string& platform_json_contents,
+                             bool test_child_port_in_use);
+
+}  // namespace pins_test
 #endif  // GOOGLE_TESTS_THINKIT_GNMI_INTERFACE_TESTS_H_
