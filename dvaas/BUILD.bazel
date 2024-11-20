@@ -274,3 +274,24 @@ cc_library(
         "@com_google_absl//absl/types:span",
     ],
 )
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "user_provided_packet_test_vector_test",
+    srcs = ["user_provided_packet_test_vector_test.cc"],
+    linkstatic = True,
+    deps = [
+        ":test_vector",
+        ":test_vector_cc_proto",
+        ":user_provided_packet_test_vector",
+        "//gutil:collections",
+        "//gutil:proto",
+        "//gutil:status_matchers",
+        "//gutil:testing",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
