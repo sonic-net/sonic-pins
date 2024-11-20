@@ -1,0 +1,533 @@
+================================================================================
+InternalizeUserProvidedTestVectors Test: empty list of vectors
+================================================================================
+-- Input ---------------------------------------------------
+
+-- Output --------------------------------------------------
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: single Ethernet packet expected to be dropped
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
+
+-- Output --------------------------------------------------
+-- Internalized Packet Test Vector #1 --
+test packet ID extracted from payload: 42
+diff of internalized vector vs input vector:
+added: input.packet.hex: "ffeeddccbbaa554433221100000f74657374207061636b657420233432"
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: single IPv6 packet expected to be forwarded
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x86dd"
+        }
+      }
+      headers {
+        ipv6_header {
+          version: "0x6"
+          dscp: "0x1b"
+          ecn: "0x1"
+          flow_label: "0x12345"
+          next_header: "0xfd"
+          hop_limit: "0xf2"
+          ipv6_source: "2001::2"
+          ipv6_destination: "2001::4"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+  packets {
+    port: "8"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "1:2:3:4:5:6"
+          ethernet_source: "6:5:4:3:2:1"
+          ethertype: "0x86dd"
+        }
+      }
+      headers {
+        ipv6_header {
+          version: "0x6"
+          dscp: "0x1b"
+          ecn: "0x1"
+          flow_label: "0x12345"
+          next_header: "0xfd"
+          hop_limit: "0xf1"
+          ipv6_source: "2001::2"
+          ipv6_destination: "2001::4"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+
+-- Output --------------------------------------------------
+-- Internalized Packet Test Vector #1 --
+test packet ID extracted from payload: 42
+diff of internalized vector vs input vector:
+added: input.packet.parsed.headers[1].ipv6_header.payload_length: "0x000f"
+added: input.packet.hex: "ffeeddccbbaa55443322110086dd66d12345000ffdf2200100000000000000000000000000022001000000000000000000000000000474657374207061636b657420233432"
+added: acceptable_outputs[0].packets[0].parsed.headers[1].ipv6_header.payload_length: "0x000f"
+added: acceptable_outputs[0].packets[0].hex: "01020304050606050403020186dd66d12345000ffdf1200100000000000000000000000000022001000000000000000000000000000474657374207061636b657420233432"
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: several packets with different IDs
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
+-- Input Packet Test Vector #2 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000e"
+        }
+      }
+      payload: "test packet #5"
+    }
+  }
+}
+acceptable_outputs {
+}
+
+-- Output --------------------------------------------------
+-- Internalized Packet Test Vector #1 --
+test packet ID extracted from payload: 42
+diff of internalized vector vs input vector:
+added: input.packet.hex: "424242424242424242424242000f74657374207061636b657420233432"
+
+-- Internalized Packet Test Vector #2 --
+test packet ID extracted from payload: 5
+diff of internalized vector vs input vector:
+added: input.packet.hex: "050505050505050505050505000e74657374207061636b6574202335"
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: input type != DATAPLANE
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: SUBMIT_TO_INGRESS
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
+
+-- Output --------------------------------------------------
+ERROR: UNIMPLEMENTED: problem in user-provided packet test vector: only supported input type is DATAPLANE; found SUBMIT_TO_INGRESS
+Dumping offending test vector:
+input {
+  type: SUBMIT_TO_INGRESS
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: missing expectation
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+
+-- Output --------------------------------------------------
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: must specify at least 1 acceptable output, but 0 were found
+Dumping offending test vector:
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: missing test packet ID
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x0002"
+        }
+      }
+      payload: "Hi"
+    }
+  }
+}
+
+-- Output --------------------------------------------------
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: invalid input packet: test packets must contain a tag of the form 'test packet #([0-9]+)' in their payload, but the given packet with payload 'Hi' does not:
+headers {
+  ethernet_header {
+    ethernet_destination: "42:42:42:42:42:42"
+    ethernet_source: "42:42:42:42:42:42"
+    ethertype: "0x0002"
+  }
+}
+payload: "Hi"
+
+Dumping offending test vector:
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x0002"
+        }
+      }
+      payload: "Hi"
+    }
+  }
+}
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: inconsistent test packet ID in input vs output
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+  packets {
+    port: "8"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #24"
+    }
+  }
+}
+
+-- Output --------------------------------------------------
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: mismatch of input packet tag vs output packet tag for output packet #1: 42 vs 24
+Dumping offending test vector:
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+  packets {
+    port: "8"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #24"
+    }
+  }
+}
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: several packets with same test packet ID
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
+-- Input Packet Test Vector #2 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
+
+-- Output --------------------------------------------------
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: user-provided packet test vectors must be tagged with unique IDs in their payload, but found multiple test vectors with ID 42. Dumping offending test vectors:
+<input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "42:42:42:42:42:42"
+          ethernet_source: "42:42:42:42:42:42"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+    hex: "424242424242424242424242000f74657374207061636b657420233432"
+  }
+}
+acceptable_outputs {
+}
+>
+<input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+    hex: "050505050505050505050505000f74657374207061636b657420233432"
+  }
+}
+acceptable_outputs {
+}
+>
+
+Dumping offending test vector:
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: invalid input packet
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x86dd"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
+
+-- Output --------------------------------------------------
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: invalid input packet: Packet invalid for the following reasons:
+- in EthernetHeader headers[0]: expected at least 46 bytes of Ethernet payload, but got only 15
+- headers[1]: header missing - expected Ipv6Header
+Dumping offending test vector:
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x86dd"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+}
