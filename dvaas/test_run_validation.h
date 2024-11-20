@@ -16,6 +16,7 @@
 #define PINS_test_run_validation_H_
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,6 +24,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_vector.pb.h"
 #include "google/protobuf/descriptor.h"
@@ -66,6 +68,16 @@ struct SwitchOutputDiffParams {
       const SwitchApi& sut,
       google::protobuf::RepeatedPtrField<SwitchOutput>& acceptable_outputs)>
       ModifyExpectedOutputPreDiffing;
+
+  // Used to override the default MessageDifferencer handling for only the
+  // `payload` field. When enabled this override will be applied to both Packet
+  // and PacketIn checks.
+  //
+  // On success returns std::nullopt, and on failure will return an error
+  // message.
+  std::function<std::optional<std::string>(absl::string_view actual_payload,
+                                           absl::string_view expected_payload)>
+      ManualPayloadCheck;
 };
 
 // Validates the given `test_run` using the parameters in `diff_params`. The

@@ -1,10 +1,13 @@
 #include "dvaas/test_run_validation.h"
 
+#include <optional>
 #include <string>
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "dvaas/switch_api.h"
 #include "dvaas/test_vector.pb.h"
+#include "gmock/gmock.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/repeated_ptr_field.h"
 #include "gtest/gtest.h"
@@ -12,8 +15,6 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 namespace dvaas {
 namespace {
@@ -493,6 +494,116 @@ TEST(TestRunValidationTest, ModifyExpectedOutputPreDiffingTest) {
           /*sut=*/&sut));
 
   ASSERT_FALSE(result_with_modify.has_failure());
+}
+
+std::optional<std::string> FailCustomPayloadCheck(
+    absl::string_view /*actual_payload*/,
+    absl::string_view /*expected_payload*/) {
+  return "failed payload check";
+}
+
+std::optional<std::string> PassCustomPayloadCheck(
+    absl::string_view /*actual_payload*/,
+    absl::string_view /*expected_payload*/) {
+  return std::nullopt;
+}
+
+TEST(TestRunValidationTest, CustomPayloadCheckForPacket) {
+  PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packets {
+          port: "1"
+          parsed { payload: "original-payload" }
+        }
+      }
+    }
+    actual_output {
+      packets {
+        port: "1"
+        parsed { payload: "new-payload" }
+      }
+    }
+  )pb");
+
+  // Sanity check to confirm that we would fail without the ManualPayloadCheck.
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result_without_modify,
+                       ValidateTestRun(test_run));
+  EXPECT_TRUE(result_without_modify.has_failure());
+
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result_with_modify,
+                       ValidateTestRun(test_run, SwitchOutputDiffParams{
+                                                     .ManualPayloadCheck =
+                                                         PassCustomPayloadCheck,
+                                                 }));
+  EXPECT_FALSE(result_with_modify.has_failure());
+}
+
+TEST(TestRunValidationTest, CustomPayloadCheckForPacketIn) {
+  PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packet_ins { parsed { payload: "original-payload" } }
+      }
+    }
+    actual_output { packet_ins { parsed { payload: "new-payload" } } }
+  )pb");
+
+  // Sanity check to confirm that we would fail without the ManualPayloadCheck.
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result_without_modify,
+                       ValidateTestRun(test_run));
+  EXPECT_TRUE(result_without_modify.has_failure());
+
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result_with_modify,
+                       ValidateTestRun(test_run, SwitchOutputDiffParams{
+                                                     .ManualPayloadCheck =
+                                                         PassCustomPayloadCheck,
+                                                 }));
+  EXPECT_FALSE(result_with_modify.has_failure());
+}
+
+TEST(TestRunValidationTest, CustomPayloadCheckFailsForPacket) {
+  PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packets {
+          port: "1"
+          parsed { payload: "original-payload" }
+        }
+      }
+    }
+    actual_output {
+      packets {
+        port: "1"
+        parsed { payload: "new-payload" }
+      }
+    }
+  )pb");
+
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result_with_modify,
+                       ValidateTestRun(test_run, SwitchOutputDiffParams{
+                                                     .ManualPayloadCheck =
+                                                         FailCustomPayloadCheck,
+                                                 }));
+  EXPECT_TRUE(result_with_modify.has_failure());
+}
+
+TEST(TestRunValidationTest, CustomPayloadCheckFailsForPacketIn) {
+  PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packet_ins { parsed { payload: "original-payload" } }
+      }
+    }
+    actual_output { packet_ins { parsed { payload: "new-payload" } } }
+  )pb");
+
+  ASSERT_OK_AND_ASSIGN(PacketTestValidationResult result_with_modify,
+                       ValidateTestRun(test_run, SwitchOutputDiffParams{
+                                                     .ManualPayloadCheck =
+                                                         FailCustomPayloadCheck,
+                                                 }));
+  EXPECT_TRUE(result_with_modify.has_failure());
 }
 
 }  // namespace
