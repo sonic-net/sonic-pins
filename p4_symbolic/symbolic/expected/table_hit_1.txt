@@ -8,11 +8,11 @@ Finding packet for table MyIngress.t_1 and row 0
 
 Finding packet for table MyIngress.t_2 and row -1
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000010
 
 Finding packet for table MyIngress.t_2 and row 0
 	Dropped = 0
-	standard_metadata.ingress_port = #b000000000
+	standard_metadata.ingress_port = #b000000001
 	standard_metadata.egress_spec = #b000000011
 

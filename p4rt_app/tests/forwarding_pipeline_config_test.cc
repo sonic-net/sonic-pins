@@ -766,7 +766,7 @@ std::string PerConfigTestCaseName(
 
 INSTANTIATE_TEST_SUITE_P(
     ForwardingPipelineConfig, PerConfigTest,
-    testing::Combine(testing::ValuesIn(sai::AllInstantiations()),
+    testing::Combine(testing::ValuesIn(sai::AllSaiInstantiations()),
                      testing::ValuesIn(sai::AllStages())),
     PerConfigTestCaseName);
 

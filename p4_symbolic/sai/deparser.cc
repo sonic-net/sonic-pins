@@ -226,6 +226,8 @@ absl::StatusOr<std::string> SaiDeparser(const SaiFields& packet,
   RETURN_IF_ERROR(Deparse(packet.headers.erspan_ipv4, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.erspan_gre, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ethernet, model, result));
+  RETURN_IF_ERROR(Deparse(packet.headers.tunnel_encap_ipv6, model, result));
+  RETURN_IF_ERROR(Deparse(packet.headers.tunnel_encap_gre, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ipv4, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.ipv6, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.udp, model, result));
