@@ -77,8 +77,8 @@
  (let (($x48 (and $x44 (and true (= ethernet.src_addr (_ bv256 48))))))
  (let ((?x54 (ite $x48 (_ bv3 9) ?x41)))
  (let (($x49 (= ?x54 (_ bv511 9))))
- (let (($x207 (and (not $x49) true)))
- (and $x207 (= ?x38 0)))))))))))))
+ (let (($x206 (and (not $x49) true)))
+ (and $x206 (= ?x38 0)))))))))))))
 (check-sat)
 
 ; 
