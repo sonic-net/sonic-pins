@@ -20,7 +20,6 @@
 #define P4_SYMBOLIC_IR_IR_H_
 
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/ir.pb.h"
 
@@ -30,6 +29,11 @@ namespace ir {
 // A special control name indicating the end of execution in a pipeline
 // in P4-Symbolic's IR.
 inline std::string EndOfPipeline() { return "__END_OF_PIPELINE__"; }
+
+// A special parse state name indicating the end of execution in a parser in
+// P4-Symbolic's IR. We decided to keep the parser CFG separated from the
+// pipeline CFG for the symbolic evaluation.
+inline std::string EndOfParser() { return "__END_OF_PARSER__"; }
 
 // For any table application, BMv2 JSON (and P4-Symbolic IR) use a map from
 // actions that may be executed as a result of table application to the next
