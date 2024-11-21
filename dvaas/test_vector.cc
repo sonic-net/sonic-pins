@@ -17,10 +17,14 @@
 #include <ostream>
 #include <string>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
+#include "dvaas/test_vector.pb.h"
 #include "gutil/proto.h"
 #include "gutil/status.h"
+#include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "re2/re2.h"
 
@@ -51,6 +55,66 @@ absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet) {
 
 std::ostream& operator<<(std::ostream& os, const SwitchOutput& output) {
   return os << output.DebugString();
+}
+
+absl::Status UpdateTestTag(packetlib::Packet& packet, int new_tag) {
+  // Make a new input packet with updated payload.
+  std::string new_payload = packet.payload();
+  if (!RE2::Replace(&new_payload, *kTestPacketIdRegexp,
+                    MakeTestPacketTagFromUniqueId(new_tag))) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Test packets must contain a tag of the form '"
+           << kTestPacketIdRegexp->pattern()
+           << "' in their payload, but the given packet with payload '"
+           << packet.payload() << "' does not:\n"
+           << gutil::PrintTextProto(packet);
+  }
+  packet.set_payload(new_payload);
+  bool status;
+  ASSIGN_OR_RETURN(status, PadPacketToMinimumSize(packet),
+                   _.LogError() << "Failed to pad packet for tag: " << new_tag);
+  ASSIGN_OR_RETURN(status, UpdateAllComputedFields(packet),
+                   _.LogError()
+                       << "Failed to update payload for tag: " << new_tag);
+
+  return absl::OkStatus();
+}
+
+// Returns a serialization of the given `packet` as a hexstring.
+absl::StatusOr<std::string> SerializeAsHexString(
+    const packetlib::Packet& packet) {
+  ASSIGN_OR_RETURN(std::string serialized_packet,
+                   packetlib::RawSerializePacket(packet),
+                   _ << " where packet = " << packet.DebugString());
+  return absl::BytesToHexString(serialized_packet);
+}
+
+absl::Status UpdateTestTag(PacketTestVector& packet_test_vector, int new_tag) {
+  // Updates the payload of the SwitchInput.
+  dvaas::Packet& input_packet =
+      *packet_test_vector.mutable_input()->mutable_packet();
+  RETURN_IF_ERROR(UpdateTestTag(*input_packet.mutable_parsed(), new_tag));
+  ASSIGN_OR_RETURN(const std::string input_packet_updated_hexstr,
+                   SerializeAsHexString(input_packet.parsed()));
+  input_packet.set_hex(input_packet_updated_hexstr);
+
+  // Update the payload of the SwitchOutput.
+  for (SwitchOutput& output_packet :
+       *packet_test_vector.mutable_acceptable_outputs()) {
+    for (dvaas::Packet& packet_out : *output_packet.mutable_packets()) {
+      RETURN_IF_ERROR(UpdateTestTag(*packet_out.mutable_parsed(), new_tag));
+      ASSIGN_OR_RETURN(const std::string packet_out_updated_hexstr,
+                       SerializeAsHexString(packet_out.parsed()));
+      packet_out.set_hex(packet_out_updated_hexstr);
+    }
+    for (dvaas::PacketIn& packet_in : *output_packet.mutable_packet_ins()) {
+      RETURN_IF_ERROR(UpdateTestTag(*packet_in.mutable_parsed(), new_tag));
+      ASSIGN_OR_RETURN(const std::string packet_in_updated_hexstr,
+                       SerializeAsHexString(packet_in.parsed()));
+      packet_in.set_hex(packet_in_updated_hexstr);
+    }
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace dvaas

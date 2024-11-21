@@ -24,6 +24,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
+#include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
 #include "google/protobuf/descriptor.h"
@@ -60,10 +61,8 @@ class [[nodiscard]] ValidationResult {
   // Constructs a `ValidationResult` from the given `test_vectors`. Ignores
   // `ignored_fields` and `ignored_metadata` during validation, see
   // `test_run_validation.h` for details.
-  ValidationResult(
-      const PacketTestRuns& test_runs,
-      std::vector<const google::protobuf::FieldDescriptor*> ignored_fields,
-      const absl::flat_hash_set<std::string>& ignored_metadata);
+  ValidationResult(const PacketTestRuns& test_runs,
+                   const SwitchOutputDiffParams& diff_params);
 
  private:
   PacketTestOutcomes test_outcomes_;
