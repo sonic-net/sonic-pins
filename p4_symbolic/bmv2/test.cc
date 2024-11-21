@@ -19,7 +19,6 @@
 // objects using protobuf text format and json format to two output files.
 // The output files paths are provided as command line flags.
 
-#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -28,7 +27,6 @@
 #include "absl/flags/usage.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
-#include "google/protobuf/text_format.h"
 #include "google/protobuf/util/json_util.h"
 #include "gutil/io.h"
 #include "gutil/proto.h"
@@ -82,7 +80,7 @@ int main(int argc, char *argv[]) {
   // Verify link and compile versions are the same.
   // GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-  // Command line arugments and help message.
+  // Command line arguments and help message.
   absl::SetProgramUsageMessage(
       absl::StrFormat("usage: %s %s", argv[0],
                       "--bmv2=path/to/bmv2.json "
