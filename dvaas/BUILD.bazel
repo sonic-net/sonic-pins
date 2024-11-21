@@ -256,3 +256,21 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "user_provided_packet_test_vector",
+    testonly = True,
+    srcs = ["user_provided_packet_test_vector.cc"],
+    hdrs = ["user_provided_packet_test_vector.h"],
+    deps = [
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil:proto",
+        "//gutil:status",
+        "//p4_pdpi/packetlib",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
