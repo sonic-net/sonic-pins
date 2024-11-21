@@ -75,7 +75,8 @@ absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value) {
   }
 }
 
-absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
+absl::StatusOr<z3::expr> FormatP4RTValue(z3::context &context,
+                                         const std::string &field_name,
                                          const std::string &type_name,
                                          const pdpi::IrValue &value,
                                          int bitwidth,
@@ -110,7 +111,7 @@ absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
             type_name, bitwidth));
       }
 
-      return Z3Context().bv_val(int_value, bitwidth);
+      return context.bv_val(int_value, bitwidth);
     }
     default: {
       if (translator->fields_p4runtime_type.count(field_name)) {
@@ -128,7 +129,8 @@ absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
                        pdpi::ArbitraryByteStringToIrValue(
                            pdpi::HEX_STRING, bitwidth, byte_string));
       // Now convert the hex string internally.
-      return HexStringToZ3Bitvector(normalized_value.hex_str(), bitwidth);
+      return HexStringToZ3Bitvector(context, normalized_value.hex_str(),
+                                    bitwidth);
     }
   }
 }
