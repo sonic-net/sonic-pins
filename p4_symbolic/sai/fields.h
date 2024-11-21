@@ -18,10 +18,29 @@
 #ifndef PINS_P4_SYMBOLIC_SAI_FIELDS_H_
 #define PINS_P4_SYMBOLIC_SAI_FIELDS_H_
 
+#include <optional>
+
+#include "absl/status/statusor.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
+
+// Symbolic version of `packet_in_header_t` in metadata.p4.
+struct SaiPacketIn {
+  z3::expr valid;
+  z3::expr ingress_port;
+  z3::expr target_egress_port;
+  z3::expr unused_pad;
+};
+
+// Symbolic version of `packet_out_header_t` in metadata.p4.
+struct SaiPacketOut {
+  z3::expr valid;
+  z3::expr egress_port;
+  z3::expr submit_to_ingress;
+  z3::expr unused_pad;
+};
 
 // Symbolic version of `struct ethernet_t` in headers.p4.
 struct SaiEthernet {
@@ -128,6 +147,11 @@ struct SaiGre {
 
 // Symbolic version of `struct headers_t` in metadata.p4.
 struct SaiHeaders {
+  // TODO: Make non-optional when we no longer need
+  // backwards-compatability.
+  std::optional<SaiPacketIn> packet_in;
+  std::optional<SaiPacketOut> packet_out;
+
   SaiEthernet erspan_ethernet;
   SaiIpv4 erspan_ipv4;
   SaiGre erspan_gre;
@@ -155,6 +179,9 @@ struct SaiLocalMetadata {
   z3::expr mirror_session_id_valid;
   z3::expr ingress_port;
   z3::expr route_metadata;
+  // TODO: Make non-optional when we no longer need
+  // backwards-compatability.
+  std::optional<z3::expr> bypass_ingress;
 };
 
 // Symbolic version of `struct standard_metadata_t` in v1model.p4
@@ -178,6 +205,13 @@ absl::StatusOr<SaiFields> GetSaiFields(
 // workaround and done in a best effort fashion.
 absl::StatusOr<std::string> GetUserMetadataFieldName(
     const std::string& field, const symbolic::SymbolicPerPacketState& state);
+
+// The p4c compiler adds a special field ("$valid$") to each header
+// corresponding to its validity. This function returns a field reference (in
+// form of <header>.<field>) to the p4c generated validity field of the given
+// `header`.
+// Note: This function does NOT check if the given header exists.
+std::string GetHeaderValidityFieldRef(absl::string_view header);
 
 }  // namespace p4_symbolic
 

@@ -88,11 +88,10 @@ std::optional<pdpi::IrPacketMetadata> GetPacketInMetadataByName(
   return std::nullopt;
 }
 
-bool CompareSwitchOutputs(
-    SwitchOutput actual_output, SwitchOutput expected_output,
-    const absl::flat_hash_set<std::string>& ignored_metadata,
-    const std::vector<const google::protobuf::FieldDescriptor*>& ignored_fields,
-    MatchResultListener* listener) {
+bool CompareSwitchOutputs(SwitchOutput actual_output,
+                          SwitchOutput expected_output,
+                          const SwitchOutputDiffParams& params,
+                          MatchResultListener* listener) {
   if (actual_output.packets_size() != expected_output.packets_size()) {
     *listener << "has mismatched number of packets (actual: "
               << actual_output.packets_size()
@@ -122,7 +121,7 @@ bool CompareSwitchOutputs(
     const Packet& actual_packet = actual_output.packets(i);
     const Packet& expected_packet = expected_output.packets(i);
     MessageDifferencer differ;
-    for (auto* field : ignored_fields) differ.IgnoreField(field);
+    for (auto* field : params.ignored_fields) differ.IgnoreField(field);
     std::string diff;
     differ.ReportDifferencesToString(&diff);
     if (!differ.Compare(expected_packet.parsed(), actual_packet.parsed())) {
@@ -137,7 +136,7 @@ bool CompareSwitchOutputs(
     const PacketIn& expected_packet_in = expected_output.packet_ins(i);
 
     MessageDifferencer differ;
-    for (auto* field : ignored_fields) differ.IgnoreField(field);
+    for (auto* field : params.ignored_fields) differ.IgnoreField(field);
     std::string diff;
     differ.ReportDifferencesToString(&diff);
     if (!differ.Compare(expected_packet_in.parsed(),
@@ -150,7 +149,8 @@ bool CompareSwitchOutputs(
     // Check that received packet in has desired metadata (except for ignored
     // metadata).
     for (const auto& expected_metadata : expected_packet_in.metadata()) {
-      if (ignored_metadata.contains(expected_metadata.name())) continue;
+      if (params.ignored_packet_in_metadata.contains(expected_metadata.name()))
+        continue;
 
       std::optional<pdpi::IrPacketMetadata> actual_metadata =
           GetPacketInMetadataByName(actual_packet_in, expected_metadata.name());
@@ -172,7 +172,8 @@ bool CompareSwitchOutputs(
     // Check that received packet in does not have additional metadata (except
     // for ignored metadata).
     for (const auto& actual_metadata : actual_packet_in.metadata()) {
-      if (ignored_metadata.contains(actual_metadata.name())) continue;
+      if (params.ignored_packet_in_metadata.contains(actual_metadata.name()))
+        continue;
 
       std::optional<pdpi::IrPacketMetadata> expected_metadata =
           GetPacketInMetadataByName(expected_packet_in, actual_metadata.name());
@@ -194,17 +195,14 @@ bool CompareSwitchOutputs(
 // is acceptable, or an explanation of why it is not otherwise.
 absl::optional<std::string> CompareSwitchOutputs(
     const PacketTestVector packet_test_vector,
-    const SwitchOutput& actual_output,
-    const absl::flat_hash_set<std::string>& ignored_metadata,
-    const std::vector<const google::protobuf::FieldDescriptor*>&
-        ignored_fields) {
+    const SwitchOutput& actual_output, const SwitchOutputDiffParams& params) {
   testing::StringMatchResultListener listener;
   for (int i = 0; i < packet_test_vector.acceptable_outputs_size(); ++i) {
     const SwitchOutput& expected_output =
         packet_test_vector.acceptable_outputs(i);
     listener << "- acceptable output #" << (i + 1) << " ";
-    if (CompareSwitchOutputs(actual_output, expected_output, ignored_metadata,
-                             ignored_fields, &listener)) {
+    if (CompareSwitchOutputs(actual_output, expected_output, params,
+                             &listener)) {
       return absl::nullopt;
     }
   }
@@ -330,15 +328,11 @@ absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet) {
 }
 
 PacketTestValidationResult ValidateTestRun(
-    const PacketTestRun& test_run,
-    const absl::flat_hash_set<std::string>& ignored_packet_in_metadata,
-    const std::vector<const google::protobuf::FieldDescriptor*>&
-        ignored_fields) {
+    const PacketTestRun& test_run, const SwitchOutputDiffParams& diff_params) {
   PacketTestValidationResult result;
 
-  const absl::optional<std::string> diff =
-      CompareSwitchOutputs(test_run.test_vector(), test_run.actual_output(),
-                           ignored_packet_in_metadata, ignored_fields);
+  const absl::optional<std::string> diff = CompareSwitchOutputs(
+      test_run.test_vector(), test_run.actual_output(), diff_params);
   if (!diff.has_value()) return result;
 
   // To make the diff more digestible, we first give an abstract
@@ -357,10 +351,10 @@ PacketTestValidationResult ValidateTestRun(
 
   std::string expectation = DescribeExpectation(
       test_run.test_vector().input(), acceptable_output_characterizations);
-  if (!ignored_fields.empty()) {
+  if (!diff_params.ignored_fields.empty()) {
     absl::StrAppend(
         &expectation, "\n          (ignoring the field(s) ",
-        absl::StrJoin(ignored_fields, ",",
+        absl::StrJoin(diff_params.ignored_fields, ",",
                       [](std::string* out,
                          const google::protobuf::FieldDescriptor* field) {
                         absl::StrAppend(out, "'", field->name(), "'");
@@ -400,17 +394,14 @@ PacketTestValidationResult ValidateTestRun(
   return result;
 }
 
-absl::Status ValidateTestRuns(
-    const PacketTestRuns& test_runs,
-    std::vector<const google::protobuf::FieldDescriptor*> ignored_fields,
-    const absl::flat_hash_set<std::string>& ignored_metadata,
-    const OutputWriterFunctionType& write_failures) {
+absl::Status ValidateTestRuns(const PacketTestRuns& test_runs,
+                              const SwitchOutputDiffParams& diff_params,
+                              const OutputWriterFunctionType& write_failures) {
   LOG(INFO) << "Validating test runs";
 
   std::vector<std::string> failures;
   for (const PacketTestRun& test_run : test_runs.test_runs()) {
-    PacketTestValidationResult result =
-        ValidateTestRun(test_run, ignored_metadata, ignored_fields);
+    PacketTestValidationResult result = ValidateTestRun(test_run, diff_params);
     if (result.has_failure()) {
       failures.push_back(result.failure().description());
     }
