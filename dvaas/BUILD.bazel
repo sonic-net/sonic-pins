@@ -296,20 +296,14 @@ cc_test(
     ],
 )
 
-cc_library(
-    name = "user_provided_packet_test_vector",
-    testonly = True,
-    srcs = ["user_provided_packet_test_vector.cc"],
-    hdrs = ["user_provided_packet_test_vector.h"],
-    deps = [
-        ":test_vector",
-        ":test_vector_cc_proto",
-        "//gutil:proto",
-        "//gutil:status",
-        "//p4_pdpi/packetlib",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:span",
-    ],
+cmd_diff_test(
+    name = "user_provided_packet_test_vector_diff_test",
+    actual_cmd = " | ".join([
+        "$(execpath :user_provided_packet_test_vector_test)",
+        # Strip unnecessary lines for golden testing.
+        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
+        "sed '/^\\[/d'",  # Strip every line beginning with '['.
+    ]),
+    expected = "user_provided_packet_test_vector_test.expected",
+    tools = [":user_provided_packet_test_vector_test"],
 )
