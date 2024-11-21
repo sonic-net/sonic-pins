@@ -44,9 +44,10 @@ absl::StatusOr<std::bitset<num_bits>> EvalZ3Bitvector(const z3::expr& bv_expr,
 // -- Constructing Z3 expressions ----------------------------------------------
 
 // Returns Z3 bitvector of the given `hex_string` value.
-// If no bitwidth is
+// If no bitwidth is given, the size of the bitvector is derived from
+// `hex_string`.
 absl::StatusOr<z3::expr> HexStringToZ3Bitvector(
-    const std::string& hex_string,
+    z3::context& context, const std::string& hex_string,
     absl::optional<int> bitwidth = absl::nullopt);
 
 // -- Misc. --------------------------------------------------------------------
