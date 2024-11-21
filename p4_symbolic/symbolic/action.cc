@@ -168,7 +168,7 @@ absl::StatusOr<z3::expr> EvaluateHexStr(const ir::HexstrValue &hexstr) {
 
   ASSIGN_OR_RETURN(pdpi::IrValue parsed_value,
                    values::ParseIrValue(hexstr.value()));
-  return HexStringToZ3Bitvector(hexstr.value());
+  return HexStringToZ3Bitvector(Z3Context(), hexstr.value());
 }
 
 absl::StatusOr<z3::expr> EvaluateBool(const ir::BoolValue &bool_value) {
@@ -336,10 +336,10 @@ absl::Status EvaluateAction(const ir::Action &action,
     const std::string &parameter_type_name =
         parameter.param().type_name().name();
     const int bitwidth = parameter.param().bitwidth();
-    ASSIGN_OR_RETURN(
-        z3::expr parameter_value,
-        values::FormatP4RTValue(/*field_name=*/"", parameter_type_name,
-                                args.at(i - 1).value(), bitwidth, translator));
+    ASSIGN_OR_RETURN(z3::expr parameter_value,
+                     values::FormatP4RTValue(
+                         Z3Context(), /*field_name=*/"", parameter_type_name,
+                         args.at(i - 1).value(), bitwidth, translator));
     context.scope.insert({parameter_name, parameter_value});
   }
 

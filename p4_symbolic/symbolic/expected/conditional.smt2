@@ -125,7 +125,7 @@
  (let ((?x45 (ite (and true (not $x41)) (_ bv511 9) (ite $x34 (_ bv511 9) (ite $x33 (_ bv511 9) standard_metadata.egress_spec)))))
  (let ((?x50 (ite $x42 (_ bv1 9) ?x45)))
  (let (($x52 (= ?x50 (_ bv511 9))))
- (let (($x147 (and (not $x52) true)))
- (and $x147 (= ?x47 0))))))))))))))
+ (let (($x95 (and (not $x52) true)))
+ (and $x95 (= ?x47 0))))))))))))))
 (check-sat)
 

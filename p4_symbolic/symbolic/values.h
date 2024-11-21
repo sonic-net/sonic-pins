@@ -113,7 +113,8 @@ absl::StatusOr<pdpi::IrValue> ParseIrValue(const std::string &value);
 // translated values (i.e. string IrValues) the bitwidth MUST be 0, in which
 // case we use the minimum number of bits to encode the resulting translated
 // value.
-absl::StatusOr<z3::expr> FormatP4RTValue(const std::string &field_name,
+absl::StatusOr<z3::expr> FormatP4RTValue(z3::context &context,
+                                         const std::string &field_name,
                                          const std::string &type_name,
                                          const pdpi::IrValue &value,
                                          int bitwidth,
