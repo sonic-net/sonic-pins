@@ -27,24 +27,33 @@
 
 namespace dvaas {
 
-// Validates the given `test_vector` and returns the result.
-// Validation compares the actual output packets against the expected output
-// packets modulo `ignored_fields` and `ignored_metadata, where:
-// * `ignored_fields` must belong to packetlib::Packet, and
-// * `ignored_metadata` must be the names of Packet In metadata fields.
+// Parameters to control the comparison between the actual switch output and the
+// expected switch output per input packet.
+struct SwitchOutputDiffParams {
+  // Used to skip packet fields where model and switch are known to have
+  // different behavior, which we don't want to test. All FieldDescriptors
+  // should belong to packetlib::Packet.
+  std::vector<const google::protobuf::FieldDescriptor*> ignored_fields;
+
+  // Used to skip packet-in metadata where model and switch are known to have
+  // different behavior, which we don't want to test. If a packet-in metadata
+  // field name in the actual or expected packets is equal to one of the entries
+  // in `ignored_metadata_for_validation`, the field is ignored during
+  // comparison.
+  absl::flat_hash_set<std::string> ignored_packet_in_metadata;
+};
+
+// Validates the given `test_vector` using the parameters in `params` and
+// returns the result.
 PacketTestValidationResult ValidateTestRun(
     const PacketTestRun& test_run,
-    const absl::flat_hash_set<std::string>& ignored_packet_in_metadata = {},
-    const std::vector<const google::protobuf::FieldDescriptor*>&
-        ignored_fields = {});
+    const SwitchOutputDiffParams& diff_params = {});
 
 // Like `ValidateTestRun`, but for a collection of `test_runs`. Also
 // writes the results to a test artifact using `write_failures`.
-absl::Status ValidateTestRuns(
-    const PacketTestRuns& test_runs,
-    std::vector<const google::protobuf::FieldDescriptor*> ignored_fields,
-    const absl::flat_hash_set<std::string>& ignored_metadata,
-    const OutputWriterFunctionType& write_failures);
+absl::Status ValidateTestRuns(const PacketTestRuns& test_runs,
+                              const SwitchOutputDiffParams& diff_params,
+                              const OutputWriterFunctionType& write_failures);
 
 }  // namespace dvaas
 

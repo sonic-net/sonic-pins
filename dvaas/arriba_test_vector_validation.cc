@@ -73,8 +73,7 @@ absl::Status ValidateAgaistArribaTestVector(
                                        params.max_packets_to_send_per_second));
 
   // Compare the switch output with expected output for each test vector.
-  return ValidateTestRuns(test_runs, params.ignored_fields_for_validation,
-                          params.ignored_metadata_for_validation,
+  return ValidateTestRuns(test_runs, params.switch_output_diff_params,
                           /*write_failures=*/[&](absl::string_view failures) {
                             return artifact_writer.AppendToTestArtifact(
                                 "test_failures.txt", failures);
