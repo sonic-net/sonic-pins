@@ -1415,4 +1415,5 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       pins_test::ConstructSupportedBreakoutMode(num_breakouts, breakout_speed),
       expected_breakout_mode);
 }
+
 }  // namespace pins_test
