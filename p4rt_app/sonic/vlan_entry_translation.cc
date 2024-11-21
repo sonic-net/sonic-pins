@@ -201,6 +201,9 @@ absl::StatusOr<swss::KeyOpFieldsValuesTuple> CreateAppDbVlanMemberUpdate(
 
 absl::StatusOr<pdpi::IrUpdateStatus> PerformAppDbVlanUpdate(
     const VlanTable& vlan_table, const swss::KeyOpFieldsValuesTuple& update) {
+  // Drain the notification consumer of any pending notifications.
+  vlan_table.notification_consumer->DrainNotifications();
+
   if (kfvOp(update) == SET_COMMAND) {
     vlan_table.producer_state->set(kfvKey(update), kfvFieldsValues(update));
   } else if (kfvOp(update) == DEL_COMMAND) {
@@ -218,6 +221,9 @@ absl::StatusOr<pdpi::IrUpdateStatus> PerformAppDbVlanUpdate(
 absl::StatusOr<pdpi::IrUpdateStatus> PerformAppDbVlanMemberUpdate(
     const VlanMemberTable& vlan_member_table,
     const swss::KeyOpFieldsValuesTuple& update) {
+  // Drain the notification consumer of any pending notifications.
+  vlan_member_table.notification_consumer->DrainNotifications();
+
   if (kfvOp(update) == SET_COMMAND) {
     vlan_member_table.producer_state->set(kfvKey(update),
                                           kfvFieldsValues(update));
