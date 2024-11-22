@@ -185,7 +185,7 @@ absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue& value,
   ASSIGN_OR_RETURN(const std::string bytes,
                    pdpi::IrValueToNormalizedByteString(value, bitwidth));
   const std::string hex_string = pdpi::ByteStringToHexString(bytes);
-  return HexStringToZ3Bitvector(hex_string, bitwidth);
+  return HexStringToZ3Bitvector(Z3Context(), hex_string, bitwidth);
 }
 
 // The following functions return Z3 constraints corresponding to `field`

@@ -29,16 +29,13 @@
 
 namespace dvaas {
 
-ValidationResult::ValidationResult(
-    const PacketTestRuns& test_runs,
-    std::vector<const google::protobuf::FieldDescriptor*> ignored_fields,
-    const absl::flat_hash_set<std::string>& ignored_metadata) {
+ValidationResult::ValidationResult(const PacketTestRuns& test_runs,
+                                   const SwitchOutputDiffParams& diff_params) {
   test_outcomes_.mutable_outcomes()->Reserve(test_runs.test_runs_size());
   for (const auto& test_run : test_runs.test_runs()) {
     PacketTestOutcome& outcome = *test_outcomes_.add_outcomes();
     *outcome.mutable_test_run() = test_run;
-    *outcome.mutable_test_result() =
-        ValidateTestRun(test_run, ignored_metadata, ignored_fields);
+    *outcome.mutable_test_result() = ValidateTestRun(test_run, diff_params);
   }
 
   test_vector_stats_ = ComputeTestVectorStats(test_outcomes_);

@@ -228,6 +228,23 @@ parsers {
   init_state: "start"
   parse_states {
     name: "start"
+    parser_ops {
+      op: extract
+      parameters {
+        fields {
+          key: "type"
+          value {
+            string_value: "regular"
+          }
+        }
+        fields {
+          key: "value"
+          value {
+            string_value: "h"
+          }
+        }
+      }
+    }
     transitions {
     }
   }

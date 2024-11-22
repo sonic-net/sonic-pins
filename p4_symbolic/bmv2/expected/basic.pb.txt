@@ -391,6 +391,23 @@ parsers {
   init_state: "start"
   parse_states {
     name: "start"
+    parser_ops {
+      op: extract
+      parameters {
+        fields {
+          key: "type"
+          value {
+            string_value: "regular"
+          }
+        }
+        fields {
+          key: "value"
+          value {
+            string_value: "ethernet"
+          }
+        }
+      }
+    }
     transitions {
       value: "0x0800"
       type: hexstr
@@ -398,10 +415,38 @@ parsers {
     }
     transitions {
     }
+    transition_key {
+      type: field
+      value {
+        values {
+          string_value: "ethernet"
+        }
+        values {
+          string_value: "etherType"
+        }
+      }
+    }
   }
   parse_states {
     name: "parse_ipv4"
     id: 1
+    parser_ops {
+      op: extract
+      parameters {
+        fields {
+          key: "type"
+          value {
+            string_value: "regular"
+          }
+        }
+        fields {
+          key: "value"
+          value {
+            string_value: "ipv4"
+          }
+        }
+      }
+    }
     transitions {
     }
   }

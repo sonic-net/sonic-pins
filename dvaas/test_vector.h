@@ -17,16 +17,12 @@
 
 #include <ostream>
 #include <string>
-#include <vector>
 
 #include "absl/container/btree_map.h"
-#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/types/optional.h"
 #include "dvaas/test_vector.pb.h"
-#include "google/protobuf/descriptor.h"
 #include "p4_pdpi/ir.pb.h"
-#include "re2/re2.h"
 
 namespace dvaas {
 
@@ -46,6 +42,11 @@ absl::StatusOr<int> ExtractTestPacketTag(const packetlib::Packet& packet);
 
 // Needed to make gUnit produce human-readable output in open source.
 std::ostream& operator<<(std::ostream& os, const SwitchOutput& output);
+
+// Updates the test tag (to `new_tag`) and all computed fields of all packets
+// (input, acceptable outputs) in the given `packet_test_vectr`. Returns an
+// error if the packets are not already tagged.
+absl::Status UpdateTestTag(PacketTestVector& packet_test_vector, int new_tag);
 
 using PacketTestVectorById = absl::btree_map<int, PacketTestVector>;
 

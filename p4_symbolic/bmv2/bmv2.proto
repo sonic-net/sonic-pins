@@ -13,7 +13,9 @@
 // limitations under the License.
 
 // This file contains protobuf definitions for parsing bmv2 json
-// files (outputs of p4c).
+// files (outputs of p4c). The JSON format reference can be found at
+// https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md
+// or third_party/p4lang_behavioral_model/docs/JSON_format.md
 // Some attributes here are intentionally un-constrained (e.g.
 // struct). This allows parsing of radically different possibilities
 // or types of constructs that may appear interchangably in that
@@ -130,34 +132,104 @@ message Parser {
   int32 id = 2;
   // The name of the start state of the parser.
   string init_state = 3;
-  // A list of all parser states.
-  repeated ParserState parse_states = 4;
+  // A list of all parse states.
+  repeated ParseState parse_states = 4;
 }
 
-// Defines a parser state.
-message ParserState {
-  // The user defined name of the state (not qualified).
+// Defines a parse state.
+// The body of a parse state consists of a series of parser statements (which
+// p4c compiles into a list of parser operations), such as assignments,
+// variable/constant declarations, conditionals, etc., followed by a transition
+// statement.
+message ParseState {
+  // The user-defined name of the state (not qualified).
   // It does not include the name of the parser.
   string name = 1;
-  // Auto generated ID unique among all parser states including those
+  // Auto-generated ID unique among all parse states including those
   // belonging to a different parser.
   int32 id = 2;
-  // All the possible transitions from this state to different states.
+  // Ordered list of operations performed in the current parse state.
+  repeated ParserOperation parser_ops = 3;
+  // All the possible transitions from this state to other states.
   repeated ParserTransition transitions = 4;
+  // Optionally the transition statement contains a "select" expression which
+  // acts similarly to the switch-case expression in C.  The condition of the
+  // select expression is a list of expressions, which usually contains only one
+  // element in typical cases.  This transition_key represents exactly the
+  // condition of the select expression as a list of key fields.  It will be an
+  // empty list if the parse state contains only one default transition.
+  // Reference: https://p4.org/p4-spec/docs/P4-16-v-1.2.3.html#sec-select
+  repeated ParserTransitionKeyField transition_key = 5;
 }
 
-// Defines a transition between two parser states.
+// Defines a parser operation corresponding to a single statement in a parse
+// state.  For instance, a parser operation can be a "set" operation
+// (corresponding to an assignment statement), an "extract" operation
+// (corresponding to an "extract" method call), or other primitives supported by
+// the target implementation. Reference:
+// https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#parser-operations.
+message ParserOperation {
+  // Parser operation types.
+  enum ParserOpType {
+    unspecified = 0;
+    // Performs extraction for a fixed-width header.
+    extract = 1;
+    // Performs extraction for a variable-width header.
+    extract_VL = 2;
+    // Sets a field with the given value.
+    set = 3;
+    // Verifies if the given condition holds true. If not, sets
+    // standard_metadata.parser_error with the specified error code.
+    verify = 4;
+    // Shifts the current read position by the given number of bytes.
+    // Deprecated in favor of advance.
+    shift = 5;
+    // Advances the current read position by the given number of bits.
+    // BMv2 currently requires the number of bits to be a multiple of 8.
+    advance = 6;
+    // An invocation of an extern method (must be supported by the target).
+    primitive = 7;
+  }
+
+  // The type of parser operation.
+  ParserOpType op = 1;
+  // Parameters of the operation.
+  // The semantics of parameters depend on the type of operation.
+  // https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#parser-operations
+  repeated google.protobuf.Struct parameters = 2;
+}
+
+// One field of a transition key.
+message ParserTransitionKeyField {
+  enum ParserTransKeyFieldType {
+    unspecified = 0;
+    // Specifies a normal header field.
+    field = 1;
+    // Specifies a header field of the last extracted instance in a stack.
+    stack_field = 2;
+    // Specifies a header field of the last extracted instance in a union stack.
+    union_stack_field = 3;
+    // Evaluates to a set of bits from the input packet without advancing the
+    // current read position.
+    lookahead = 4;
+  }
+
+  ParserTransKeyFieldType type = 1;
+  google.protobuf.ListValue value = 2;
+}
+
+// Defines a transition between two parse states.
 message ParserTransition {
-  // The value of the condition/match dictating whether
-  // this transition is applied or not.
-  // A hexstring or a parser value set depending on the type.
+  // The value of the condition/match dictating whether this transition is
+  // applied or not.  It can be an empty string (a default transition), a
+  // hexstring, or a parser value set depending on the type.
   string value = 1;
-  // The type of the value above, usually a hex string.
+  // The type of the transition value, usually a hex string.
   ParserTransitionType type = 2;
   // Any mask applied by the transition, if no mask is applied,
   // protobuf will parse this as "".
   string mask = 3;
-  // The name of the state this transition points to.
+  // The name of the next parse state, or "" if this is the last state.
   string next_state = 4;
 }
 
