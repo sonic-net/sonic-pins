@@ -99,8 +99,8 @@
  (let ((?x78 (ite (and (and true (not $x68)) true) (_ bv1 9) standard_metadata.egress_spec)))
  (let ((?x80 (ite $x69 (_ bv0 9) ?x78)))
  (let (($x49 (= ?x80 (_ bv511 9))))
- (let (($x132 (and (not $x49) true)))
- (and $x132 (= ?x79 0)))))))))))))))))))))))
+ (let (($x117 (and (not $x49) true)))
+ (and $x117 (= ?x79 0)))))))))))))))))))))))
 (check-sat)
 
 ; 
@@ -260,8 +260,8 @@
  (let (($x69 (and true $x68)))
  (let ((?x80 (ite $x69 (_ bv0 9) ?x78)))
  (let (($x49 (= ?x80 (_ bv511 9))))
- (let (($x132 (and (not $x49) true)))
- (and $x132 (= ?x62 0)))))))))))))))))))))))))
+ (let (($x117 (and (not $x49) true)))
+ (and $x117 (= ?x62 0)))))))))))))))))))))))))
 (check-sat)
 
 ; 

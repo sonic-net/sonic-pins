@@ -211,6 +211,17 @@ absl::Status Deparse(const SaiGre& header, const z3::model& model,
   return absl::OkStatus();
 }
 
+absl::Status Deparse(const SaiPacketIn& header, const z3::model& model,
+                     pdpi::BitString& result) {
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
+  if (valid) {
+    RETURN_IF_ERROR(Deparse<9>(header.ingress_port, model, result));
+    RETURN_IF_ERROR(Deparse<9>(header.target_egress_port, model, result));
+    RETURN_IF_ERROR(Deparse<6>(header.unused_pad, model, result));
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<std::string> SaiDeparser(
@@ -222,6 +233,11 @@ absl::StatusOr<std::string> SaiDeparser(
 absl::StatusOr<std::string> SaiDeparser(const SaiFields& packet,
                                         const z3::model& model) {
   pdpi::BitString result;
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatibility.
+  if (packet.headers.packet_in.has_value()) {
+    RETURN_IF_ERROR(Deparse(packet.headers.packet_in.value(), model, result));
+  }
   RETURN_IF_ERROR(Deparse(packet.headers.erspan_ethernet, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.erspan_ipv4, model, result));
   RETURN_IF_ERROR(Deparse(packet.headers.erspan_gre, model, result));

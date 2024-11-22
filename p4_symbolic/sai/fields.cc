@@ -15,6 +15,7 @@
 #include "p4_symbolic/sai/fields.h"
 
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -79,6 +80,10 @@ absl::StatusOr<std::string> GetUserMetadataFieldName(
                << absl::StrJoin(mangled_candidates, "\n- ");
 }
 
+std::string GetHeaderValidityFieldRef(absl::string_view header) {
+  return absl::StrCat(header, ".$valid$");
+}
+
 namespace {
 
 // The p4c compiler mangles field names from the local_metadata struct.
@@ -110,6 +115,28 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
     return z3::expr(Z3Context());
   };
 
+  // TODO: Make unconditional when we no longer need
+  // backwards-compatability.
+  auto packet_in =
+      state.ContainsKey("packet_in_header.$valid$")
+          ? std::make_optional(SaiPacketIn{
+                .valid = get_field("packet_in_header.$valid$"),
+                .ingress_port = get_field("packet_in_header.ingress_port"),
+                .target_egress_port =
+                    get_field("packet_in_header.target_egress_port"),
+                .unused_pad = get_field("packet_in_header.unused_pad"),
+            })
+          : std::nullopt;
+  auto packet_out =
+      state.ContainsKey("packet_out_header.$valid$")
+          ? std::make_optional(SaiPacketOut{
+                .valid = get_field("packet_out_header.$valid$"),
+                .egress_port = get_field("packet_out_header.egress_port"),
+                .submit_to_ingress =
+                    get_field("packet_out_header.submit_to_ingress"),
+                .unused_pad = get_field("packet_out_header.unused_pad"),
+            })
+          : std::nullopt;
   auto erspan_ethernet = SaiEthernet{
       .valid = get_field("erspan_ethernet.$valid$"),
       .dst_addr = get_field("erspan_ethernet.dst_addr"),
@@ -256,6 +283,12 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
       .mirror_session_id_valid = get_metadata_field("mirror_session_id_valid"),
       .ingress_port = get_metadata_field("ingress_port"),
       .route_metadata = get_metadata_field("route_metadata"),
+      // TODO: Make unconditional when we no longer need
+      // backwards-compatability.
+      .bypass_ingress =
+          GetUserMetadata("bypass_ingress", state).ok()
+              ? std::make_optional(get_metadata_field("bypass_ingress"))
+              : std::nullopt,
   };
   auto standard_metadata = V1ModelStandardMetadata{
       .ingress_port = get_field("standard_metadata.ingress_port"),
@@ -272,6 +305,8 @@ absl::StatusOr<SaiFields> GetSaiFields(const SymbolicPerPacketState& state) {
   return SaiFields{
       .headers =
           SaiHeaders{
+              .packet_in = packet_in,
+              .packet_out = packet_out,
               .erspan_ethernet = erspan_ethernet,
               .erspan_ipv4 = erspan_ipv4,
               .erspan_gre = erspan_gre,
