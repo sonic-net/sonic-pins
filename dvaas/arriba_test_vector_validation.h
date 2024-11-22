@@ -19,6 +19,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
+#include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "thinkit/mirror_testbed.h"
@@ -27,19 +28,12 @@ namespace dvaas {
 
 // Parameters for validating a testbed against an ArribaTestVector.
 struct ArribaTestVectorValidationParams {
-  // Used to skip packet fields where model and switch are known to have
-  // different behavior, which we don't want to test. All FieldDescriptors
-  // should belong to packetlib::Packet.
-  std::vector<const google::protobuf::FieldDescriptor*>
-      ignored_fields_for_validation = {};
-
-  // Used to skip packet-in metadata where model and switch are known to have
-  // different behavior, which we don't want to test. If a packet-in metadata
-  // field name in the actual or expected packets is equal to one of the entries
-  // in `ignored_metadata_for_validation`, the field is ignored during
-  // comparison.
-  absl::flat_hash_set<std::string> ignored_metadata_for_validation = {
-      "target_egress_port",
+  // Parameters to control the comparison between the actual switch
+  // output and the expected switch output per each input packet.
+  SwitchOutputDiffParams switch_output_diff_params = {
+      // TODO: Remove when it is possible to reliably validate
+      // target egress port.
+      .ignored_packet_in_metadata = {"target_egress_port"},
   };
 
   // Max number of packets to send per second. If no rate is given, the test
