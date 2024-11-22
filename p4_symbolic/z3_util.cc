@@ -55,7 +55,8 @@ absl::StatusOr<int> EvalZ3Int(const z3::expr& int_expr,
   return model.eval(int_expr, true).get_numeral_int();
 }
 
-absl::StatusOr<z3::expr> HexStringToZ3Bitvector(const std::string& hex_string,
+absl::StatusOr<z3::expr> HexStringToZ3Bitvector(z3::context& context,
+                                                const std::string& hex_string,
                                                 absl::optional<int> bitwidth) {
   // TODO: Insert check to ensure this won't throw an exception.
   mpz_class integer = mpz_class(hex_string, /*base=*/0);
@@ -63,7 +64,7 @@ absl::StatusOr<z3::expr> HexStringToZ3Bitvector(const std::string& hex_string,
   if (!bitwidth.has_value()) {
     bitwidth = integer.get_str(/*base=*/2).size();
   }
-  return Z3Context().bv_val(decimal.c_str(), *bitwidth);
+  return context.bv_val(decimal.c_str(), *bitwidth);
 }
 
 uint64_t Z3ValueStringToInt(const std::string& value) {

@@ -45,6 +45,14 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
     SymbolicPerPacketState *state, values::P4RuntimeTranslator *translator,
     const z3::expr &guard);
 
+// Analyze a single match that is part of a table entry.
+// Constructs a symbolic expression that semantically corresponds to this
+// match.
+absl::StatusOr<z3::expr> EvaluateSingleMatch(
+    z3::context &context, p4::config::v1::MatchField match_definition,
+    const std::string &field_name, const z3::expr &field_expression,
+    const pdpi::IrMatch &match, values::P4RuntimeTranslator *translator);
+
 }  // namespace table
 }  // namespace symbolic
 }  // namespace p4_symbolic

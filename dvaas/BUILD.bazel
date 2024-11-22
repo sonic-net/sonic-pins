@@ -268,6 +268,7 @@ cc_test(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest_main",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -281,6 +282,31 @@ cmd_diff_test(
     ]),
     expected = "user_provided_packet_test_vector_test.expected",
     tools = [":user_provided_packet_test_vector_test"],
+)
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "test_vector_stats_test",
+    srcs = ["test_vector_stats_test.cc"],
+    linkstatic = True,
+    deps = [
+        ":test_vector_cc_proto",
+        ":test_vector_stats",
+        "//gutil:testing",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+ 
+cmd_diff_test(
+    name = "test_vector_stats_diff_test",
+    actual_cmd = " | ".join([
+        "$(execpath :test_vector_stats_test)",
+        # Strip unnecessary lines for golden testing.
+        "sed '1,/^\\[ RUN/d'",  # Strip everything up to a line beginning with '[ RUN'.
+        "sed '/^\\[/d'",  # Strip every line beginning with '['.
+    ]),
+    expected = "test_vector_stats_test.expected",
+    tools = [":test_vector_stats_test"],
 )
 
 cc_test(

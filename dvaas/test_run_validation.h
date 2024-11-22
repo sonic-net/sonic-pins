@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_DVAAS_test_run_validation_H_
-#define PINS_DVAAS_test_run_validation_H_
+#ifndef PINS_test_run_validation_H_
+#define PINS_test_run_validation_H_
 
 #include <string>
 #include <vector>
@@ -59,4 +59,4 @@ absl::Status ValidateTestRuns(const PacketTestRuns& test_runs,
 
 }  // namespace dvaas
 
-#endif  // PINS_DVAAS_test_run_validation_H_
+#endif  // PINS_test_run_validation_H_

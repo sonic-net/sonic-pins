@@ -30,6 +30,10 @@ absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
   std::vector<z3::expr> constraints;
 
   ASSIGN_OR_RETURN(SaiFields fields, GetSaiFields(state));
+  // TODO: Make non-optional when we no longer need
+  // backwards-compatibility.
+  std::optional<SaiPacketIn>& packet_in = fields.headers.packet_in;
+  std::optional<SaiPacketOut>& packet_out = fields.headers.packet_out;
   SaiEthernet& erspan_ethernet = fields.headers.erspan_ethernet;
   SaiIpv4& erspan_ipv4 = fields.headers.erspan_ipv4;
   SaiGre& erspan_gre = fields.headers.erspan_gre;
@@ -59,6 +63,25 @@ absl::StatusOr<std::vector<z3::expr>> EvaluateSaiParser(
   constraints.push_back(local_metadata.ingress_port ==
                         standard_metadata.ingress_port);
   constraints.push_back(local_metadata.route_metadata == 0);
+  if (local_metadata.bypass_ingress.has_value()) {
+    // TODO: Make unconditional when we no longer need
+    // backwards-compatibility.
+    constraints.push_back(*local_metadata.bypass_ingress == false);
+  }
+  if (packet_in.has_value()) {
+    // TODO: Make unconditional when we no longer need
+    // backwards-compatibility.
+    constraints.push_back(!packet_in->valid);
+  }
+
+  // `parse_packet_out` state.
+  if (packet_out.has_value()) {
+    // TODO: Make unconditional when we no longer need
+    // backwards-compatibility.
+    constraints.push_back(
+        packet_out->valid ==
+        (standard_metadata.ingress_port == symbolic::kCpuPort));
+  }
 
   // `parse_ethernet` state.
   constraints.push_back(ethernet.valid == Z3Context().bool_val(true));
