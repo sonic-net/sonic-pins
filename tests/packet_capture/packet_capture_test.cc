@@ -358,6 +358,7 @@ struct ControllerPacketCaptureParams {
   // Egress VLAN ID to be set on packets.
   int forwarded_packet_vlan_id;
   std::string mirror_session_id;
+  PacketCaptureTestPacketType packet_type;
 };
 
 std::string GetVlanIdHexStr(int val) {
@@ -495,8 +496,8 @@ CreateControllerPacketCaptureTestVectors(
     // Build headers.
     repo.RegisterSnippetOrDie<packetlib::Header>("@ethernet", R"pb(
           ethernet_header {
-            ethernet_destination: "08:00:20:86:35:4b"
-            ethernet_source: "00:1a:11:17:5f:80"
+            ethernet_destination: "aa:bb:cc:dd:ee:ff"
+            ethernet_source: "02:1a:c0:a8:02:04"
             ethertype: "0x8100"
           }
         )pb")
@@ -548,6 +549,32 @@ CreateControllerPacketCaptureTestVectors(
             # checksum: filled in automatically
           }
         )pb")
+        .RegisterSnippetOrDie<packetlib::Header>("@arp_request", R"pb(
+          arp_header {
+            hardware_type: "0x0001"
+            protocol_type: "0x0800"
+            hardware_length: "0x06"
+            protocol_length: "0x04"
+            operation: "0x0001"
+            sender_hardware_address: "02:1a:c0:a8:02:04"
+            sender_protocol_address: "192.168.2.4"
+            target_hardware_address: "00:00:00:00:00:00"
+            target_protocol_address: "192.168.2.5"
+          }
+        )pb")
+        .RegisterSnippetOrDie<packetlib::Header>("@arp_response", R"pb(
+          arp_header {
+            hardware_type: "0x0001"
+            protocol_type: "0x0800"
+            hardware_length: "0x06"
+            protocol_length: "0x04"
+            operation: "0x0002"
+            sender_hardware_address: "aa:bb:cc:dd:ee:ff"
+            sender_protocol_address: "192.168.2.5"
+            target_hardware_address: "02:1a:c0:a8:02:04"
+            target_protocol_address: "192.168.2.4"
+          }
+        )pb")
         .RegisterSnippetOrDie<packetlib::Header>("@ipfix", R"pb(
           ipfix_header {
             version: "0x000a"
@@ -570,59 +597,253 @@ CreateControllerPacketCaptureTestVectors(
             user_meta_field: "0x0000"
             dlb_id: "0x00"
           }
-        )pb")
-        .RegisterMessage("@input_packet",
-                         ParsePacketAndPadToMinimumSize(repo,
-                                                        R"pb(
-                                                          headers: @ethernet
-                                                          headers: @vlan
-                                                          headers: @ipv4
-                                                          headers: @icmp
-                                                          payload: @payload
-                                                        )pb"));
+        )pb");
+
+    switch (params.packet_type) {
+      case PacketCaptureTestPacketType::kIcmpv4:
+        repo.RegisterMessage("@input_packet",
+                             ParsePacketAndPadToMinimumSize(repo,
+                                                            R"pb(
+                                                              headers: @ethernet
+                                                              headers: @vlan
+                                                              headers: @ipv4
+                                                              headers: @icmp
+                                                              payload: @payload
+                                                            )pb"));
+        break;
+      case PacketCaptureTestPacketType::kIcmpv6:
+        repo.RegisterMessage(
+            "@input_packet",
+            ParsePacketAndPadToMinimumSize(
+                repo,
+                R"pb(
+                  headers: @ethernet
+                  headers: @vlan { vlan_header { ethertype: "0x86dd" } }
+                  headers: @ipv6 { ipv6_header { next_header: "0x3a" } }
+                  headers: @icmp
+                  payload: @payload
+                )pb"));
+        break;
+      case PacketCaptureTestPacketType::kArpRequest:
+        repo.RegisterMessage(
+            "@input_packet",
+            ParsePacketAndPadToMinimumSize(
+                repo,
+                R"pb(
+                  headers: @ethernet {
+                    ethernet_header {
+                      ethernet_destination: "ff:ff:ff:ff:ff:ff"
+                    }
+                  }
+                  headers: @vlan { vlan_header { ethertype: "0x0806" } }
+                  headers: @arp_request
+                  payload: @payload
+                )pb"));
+        break;
+      case PacketCaptureTestPacketType::kArpResponse:
+        repo.RegisterMessage(
+            "@input_packet",
+            ParsePacketAndPadToMinimumSize(
+                repo,
+                R"pb(
+                  headers: @ethernet {
+                    ethernet_header {
+                      ethernet_destination: "ff:ff:ff:ff:ff:ff"
+                    }
+                  }
+                  headers: @vlan { vlan_header { ethertype: "0x0806" } }
+                  headers: @arp_response
+                  payload: @payload
+                )pb"));
+        break;
+    }
 
     // Build up acceptable_outputs string, to account for each replica.
     dvaas::SwitchOutput expected_output;
-    *expected_output.add_packets() =
-        repo.RegisterValue("@egress_port", params.egress_port)
-            .RegisterMessage(
-                "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
-                  headers: @ethernet { ethernet_header { ethertype: "0x0800" } }
-                  headers: @ipv4
-                  headers: @icmp
-                  payload: @payload
-                )pb"))
-            .ParseTextOrDie<dvaas::Packet>(R"pb(
-              port: @egress_port
-              parsed: @output_packet
-            )pb");
-    *expected_output.add_packets() =
-        repo.RegisterValue("@egress_port", mirror_session_params.monitor_port)
-            .RegisterMessage(
-                "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
-                  headers: @ethernet {
-                    ethernet_header {
-                      ethernet_destination: @mirror_ethernet_destination
-                      ethernet_source: @mirror_ethernet_source
-                      ethertype: "0x8100"
-                    }
-                  }
-                  headers: @vlan {
-                    vlan_header {
-                      vlan_identifier: @mirror_vlan_id
-                      ethertype: "0x86dd"
-                    }
-                  }
-                  headers: @ipv6
-                  headers: @udp
-                  headers: @ipfix
-                  headers: @psamp_header
-                  payload: @payload
-                )pb"))
-            .ParseTextOrDie<dvaas::Packet>(R"pb(
-              port: @egress_port
-              parsed: @output_packet
-            )pb");
+    switch (params.packet_type) {
+      case PacketCaptureTestPacketType::kIcmpv4:
+        *expected_output.add_packets() =
+            repo.RegisterValue("@egress_port", params.egress_port)
+                .RegisterMessage(
+                    "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
+                      headers:
+                          @ethernet { ethernet_header { ethertype: "0x0800" } }
+                      headers: @ipv4
+                      headers: @icmp
+                      payload: @payload
+                    )pb"))
+                .ParseTextOrDie<dvaas::Packet>(R"pb(
+                  port: @egress_port
+                  parsed: @output_packet
+                )pb");
+        *expected_output.add_packets() =
+            repo.RegisterValue("@egress_port",
+                               mirror_session_params.monitor_port)
+                .RegisterMessage(
+                    "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
+                      headers: @ethernet {
+                        ethernet_header {
+                          ethernet_destination: @mirror_ethernet_destination
+                          ethernet_source: @mirror_ethernet_source
+                          ethertype: "0x8100"
+                        }
+                      }
+                      headers: @vlan {
+                        vlan_header {
+                          vlan_identifier: @mirror_vlan_id
+                          ethertype: "0x86dd"
+                        }
+                      }
+                      headers: @ipv6
+                      headers: @udp
+                      headers: @ipfix
+                      headers: @psamp_header
+                      payload: @payload
+                    )pb"))
+                .ParseTextOrDie<dvaas::Packet>(R"pb(
+                  port: @egress_port
+                  parsed: @output_packet
+                )pb");
+        break;
+      case PacketCaptureTestPacketType::kIcmpv6:
+        *expected_output.add_packets() =
+            repo.RegisterValue("@egress_port", params.egress_port)
+                .RegisterMessage(
+                    "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
+                      headers:
+                          @ethernet { ethernet_header { ethertype: "0x86dd" } }
+                      headers: @ipv6 { ipv6_header { next_header: "0x3a" } }
+                      headers: @icmp
+                      payload: @payload
+                    )pb"))
+                .ParseTextOrDie<dvaas::Packet>(R"pb(
+                  port: @egress_port
+                  parsed: @output_packet
+                )pb");
+        *expected_output.add_packets() =
+            repo.RegisterValue("@egress_port",
+                               mirror_session_params.monitor_port)
+                .RegisterMessage(
+                    "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
+                      headers: @ethernet {
+                        ethernet_header {
+                          ethernet_destination: @mirror_ethernet_destination
+                          ethernet_source: @mirror_ethernet_source
+                          ethertype: "0x8100"
+                        }
+                      }
+                      headers: @vlan {
+                        vlan_header {
+                          vlan_identifier: @mirror_vlan_id
+                          ethertype: "0x86dd"
+                        }
+                      }
+                      headers: @ipv6
+                      headers: @udp
+                      headers: @ipfix
+                      headers: @psamp_header
+                      payload: @payload
+                    )pb"))
+                .ParseTextOrDie<dvaas::Packet>(R"pb(
+                  port: @egress_port
+                  parsed: @output_packet
+                )pb");
+        break;
+      case PacketCaptureTestPacketType::kArpRequest:
+        *expected_output.add_packets() =
+            repo.RegisterValue("@egress_port", params.egress_port)
+                .RegisterMessage("@output_packet",
+                                 ParsePacketAndPadToMinimumSize(repo, R"pb(
+                                   headers: @ethernet {
+                                     ethernet_header {
+                                       ethernet_destination: "ff:ff:ff:ff:ff:ff"
+                                       ethertype: "0x0806"
+                                     }
+                                   }
+                                   headers: @arp_request
+                                   payload: @payload
+                                 )pb"))
+                .ParseTextOrDie<dvaas::Packet>(R"pb(
+                  port: @egress_port
+                  parsed: @output_packet
+                )pb");
+        *expected_output.add_packets() =
+            repo.RegisterValue("@egress_port",
+                               mirror_session_params.monitor_port)
+                .RegisterMessage(
+                    "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
+                      headers: @ethernet {
+                        ethernet_header {
+                          ethernet_destination: @mirror_ethernet_destination
+                          ethernet_source: @mirror_ethernet_source
+                          ethertype: "0x8100"
+                        }
+                      }
+                      headers: @vlan {
+                        vlan_header {
+                          vlan_identifier: @mirror_vlan_id
+                          ethertype: "0x86dd"
+                        }
+                      }
+                      headers: @ipv6
+                      headers: @udp
+                      headers: @ipfix
+                      headers: @psamp_header
+                      payload: @payload
+                    )pb"))
+                .ParseTextOrDie<dvaas::Packet>(R"pb(
+                  port: @egress_port
+                  parsed: @output_packet
+                )pb");
+        break;
+      case PacketCaptureTestPacketType::kArpResponse:
+        *expected_output.add_packets() =
+            repo.RegisterValue("@egress_port", params.egress_port)
+                .RegisterMessage("@output_packet",
+                                 ParsePacketAndPadToMinimumSize(repo, R"pb(
+                                   headers: @ethernet {
+                                     ethernet_header {
+                                       ethernet_destination: "ff:ff:ff:ff:ff:ff"
+                                       ethertype: "0x0806"
+                                     }
+                                   }
+                                   headers: @arp_response
+                                   payload: @payload
+                                 )pb"))
+                .ParseTextOrDie<dvaas::Packet>(R"pb(
+                  port: @egress_port
+                  parsed: @output_packet
+                )pb");
+        *expected_output.add_packets() =
+            repo.RegisterValue("@egress_port",
+                               mirror_session_params.monitor_port)
+                .RegisterMessage(
+                    "@output_packet", ParsePacketAndPadToMinimumSize(repo, R"pb(
+                      headers: @ethernet {
+                        ethernet_header {
+                          ethernet_destination: @mirror_ethernet_destination
+                          ethernet_source: @mirror_ethernet_source
+                          ethertype: "0x8100"
+                        }
+                      }
+                      headers: @vlan {
+                        vlan_header {
+                          vlan_identifier: @mirror_vlan_id
+                          ethertype: "0x86dd"
+                        }
+                      }
+                      headers: @ipv6
+                      headers: @udp
+                      headers: @ipfix
+                      headers: @psamp_header
+                      payload: @payload
+                    )pb"))
+                .ParseTextOrDie<dvaas::Packet>(R"pb(
+                  port: @egress_port
+                  parsed: @output_packet
+                )pb");
+        break;
+    }
 
     test_vector = repo.RegisterMessage("@expected_output", expected_output)
                       .ParseTextOrDie<dvaas::PacketTestVector>(R"pb(
@@ -639,8 +860,27 @@ CreateControllerPacketCaptureTestVectors(
   return test_vectors;
 }
 
-TEST_P(PacketCaptureTestWithoutIxia,
+TEST_P(ControllerPacketCaptureTestWithoutIxia,
        SwitchCapturesControlPacketWithVlanTagAndRedirectsToPort) {
+  switch (GetParam().packet_type) {
+    case PacketCaptureTestPacketType::kIcmpv4:
+      Testbed().Environment().SetTestCaseID(
+          "f9dc9f16-c02c-496e-91c1-6c0eb1e363c0");
+      break;
+    case PacketCaptureTestPacketType::kIcmpv6:
+      Testbed().Environment().SetTestCaseID(
+          "7a521bd8-211f-4ede-adb7-f46ea53e7f5c");
+      break;
+    case PacketCaptureTestPacketType::kArpRequest:
+      Testbed().Environment().SetTestCaseID(
+          "1b91d1c1-ac3c-48fb-bc50-377c6bffe7b8");
+      break;
+    case PacketCaptureTestPacketType::kArpResponse:
+      Testbed().Environment().SetTestCaseID(
+          "0a476b03-ce76-4dda-9f04-44824c093639");
+      break;
+  }
+
   const int kPortsToUseInTest = 3;
 
   dvaas::DataplaneValidationParams dvaas_params = GetParam().validation_params;
@@ -672,7 +912,7 @@ TEST_P(PacketCaptureTestWithoutIxia,
       .ingress_vlan_ids = GetParam().vlans_to_be_tested,
       .forwarded_packet_vlan_id = 4095,
       .mirror_session_id = kMirrorSessionId,
-  };
+      .packet_type = GetParam().packet_type};
 
   ASSERT_OK_AND_ASSIGN(
       std::vector<p4::v1::Entity> acl_entities,
