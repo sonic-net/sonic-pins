@@ -205,6 +205,13 @@ ir_parsing_test(
 )
 
 ir_parsing_test(
+    name = "sai_parser_test",
+    golden_file = "expected/sai_parser.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/sai_parser.p4",
+)
+
+ir_parsing_test(
     name = "hex_string_transition_test",
     golden_file = "expected/hex_string_transition.txt",
     p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
