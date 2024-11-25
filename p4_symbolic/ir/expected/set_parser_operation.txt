@@ -142,6 +142,43 @@ headers {
   key: "scalars"
   value {
     name: "scalars_0"
+    fields {
+      key: "local_metadata_t.dst_mac"
+      value {
+        name: "local_metadata_t.dst_mac"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "local_metadata_t.ether_type"
+      value {
+        name: "local_metadata_t.ether_type"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "local_metadata_t.signed_integer1"
+      value {
+        name: "local_metadata_t.signed_integer1"
+        bitwidth: 16
+        signed: true
+      }
+    }
+    fields {
+      key: "local_metadata_t.signed_integer2"
+      value {
+        name: "local_metadata_t.signed_integer2"
+        bitwidth: 16
+        signed: true
+      }
+    }
+    fields {
+      key: "local_metadata_t.src_mac"
+      value {
+        name: "local_metadata_t.src_mac"
+        bitwidth: 48
+      }
+    }
   }
 }
 headers {
@@ -282,6 +319,131 @@ pipeline {
   value {
     name: "ingress"
     initial_control: "__END_OF_PIPELINE__"
+  }
+}
+parsers {
+  key: "parser"
+  value {
+    name: "parser"
+    initial_state: "start"
+    parse_states {
+      key: "parse_ipv4"
+      value {
+        name: "parse_ipv4"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ipv4"
+            }
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "start"
+      value {
+        name: "start"
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t.ether_type"
+            }
+            lookahead_rvalue {
+              bitwidth: 16
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t.signed_integer1"
+            }
+            hexstr_rvalue {
+              value: "0x0001"
+              negative: true
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t.signed_integer2"
+            }
+            hexstr_rvalue {
+              value: "0x0002"
+            }
+          }
+        }
+        parser_ops {
+          extract {
+            header {
+              header_name: "ethernet"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t.dst_mac"
+            }
+            field_rvalue {
+              header_name: "ethernet"
+              field_name: "dst_addr"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t.src_mac"
+            }
+            expression_rvalue {
+              binary_expression {
+                operation: BIT_AND
+                left {
+                  field_value {
+                    header_name: "ethernet"
+                    field_name: "src_addr"
+                  }
+                }
+                right {
+                  hexstr_value {
+                    value: "0xffffffffff00"
+                  }
+                }
+              }
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "scalars"
+            field_name: "local_metadata_t.ether_type"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x0800"
+            next_state: "parse_ipv4"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
   }
 }
 
