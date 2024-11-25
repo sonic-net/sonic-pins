@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_DVAAS_test_run_validation_H_
-#define PINS_DVAAS_test_run_validation_H_
+#ifndef PINS_test_run_validation_H_
+#define PINS_test_run_validation_H_
 
 #include <string>
 #include <vector>
@@ -32,8 +32,10 @@ namespace dvaas {
 struct SwitchOutputDiffParams {
   // Used to skip packet fields where model and switch are known to have
   // different behavior, which we don't want to test. All FieldDescriptors
-  // should belong to packetlib::Packet.
-  std::vector<const google::protobuf::FieldDescriptor*> ignored_fields;
+  // should belong to packetlib::Packet. The ignored fields are ignored both in
+  // normal (i.e. front-panel) packets and in packet-ins.
+  std::vector<const google::protobuf::FieldDescriptor*>
+      ignored_packetlib_fields;
 
   // Used to skip packet-in metadata where model and switch are known to have
   // different behavior, which we don't want to test. If a packet-in metadata
@@ -57,4 +59,4 @@ absl::Status ValidateTestRuns(const PacketTestRuns& test_runs,
 
 }  // namespace dvaas
 
-#endif  // PINS_DVAAS_test_run_validation_H_
+#endif  // PINS_test_run_validation_H_
