@@ -322,3 +322,19 @@ cc_test(
         "@com_google_protobuf//:protobuf",
     ],
 )
+
+# go/golden-test-with-coverage
+cc_test(
+    name = "test_run_validation_test_runner",
+    srcs = ["test_run_validation_test_runner.cc"],
+    linkstatic = True,
+    deps = [
+        ":test_run_validation",
+        ":test_vector",
+        ":test_vector_cc_proto",
+        "//gutil:testing",
+        "//p4_pdpi/packetlib",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:optional",
+    ],
+)
