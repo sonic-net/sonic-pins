@@ -93,7 +93,7 @@ void TestFactoryResetSuccess(thinkit::Switch& sut,
   gnoi::factory_reset::StartRequest request;
   gnoi::factory_reset::StartResponse response;
   IssueGnoiFactoryResetAndValidateStatus(sut, request, &response);
-  // TODO: Check the response protobuf.
+  EXPECT_TRUE(response.has_reset_success());
   ValidateStackState(sut, interfaces);
 }
 
@@ -105,7 +105,9 @@ void TestDuplicateFactoryResetFailure(
   IssueGnoiFactoryResetAndValidateStatus(sut, request, &response);
   // Before the switch stack is down, send an immediate duplicate request.
   IssueGnoiFactoryResetAndValidateStatus(sut, request, &dup_response);
-  // TODO: Check the response and dup_response protobuf.
+  EXPECT_TRUE(response.has_reset_success());
+  EXPECT_TRUE(dup_response.reset_error().other());
+  EXPECT_EQ(dup_response.reset_error().detail(), "Previous reset is ongoing.");
   ValidateStackState(sut, interfaces);
 }
 
@@ -115,6 +117,7 @@ void TestGnoiFactoryResetGnoiServerUnreachableFail(
   gnoi::factory_reset::StartRequest request;
   gnoi::factory_reset::StartResponse response;
   IssueGnoiFactoryResetAndValidateStatus(sut, request, &response);
+  EXPECT_TRUE(response.has_reset_success());
 
   absl::SleepFor(kFactoryResetWaitForDownTime);
   ASSERT_TRUE(!pins_test::Pingable(sut).ok())
