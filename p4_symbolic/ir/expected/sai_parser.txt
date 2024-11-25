@@ -1117,4 +1117,3 @@ pipeline {
     initial_control: "__END_OF_PIPELINE__"
   }
 }
-
