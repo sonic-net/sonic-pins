@@ -90,6 +90,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+	 "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -202,3 +203,18 @@ ir_parsing_test(
     golden_file = "expected/table_hit_2.txt",
     p4_program = "//p4_symbolic/testdata:conditional/table_hit_2.p4",
 )
+
+ir_parsing_test(
+    name = "sai_parser_test",
+    golden_file = "expected/sai_parser.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/sai_parser.p4",
+)
+
+ir_parsing_test(
+    name = "hex_string_transition_test",
+    golden_file = "expected/hex_string_transition.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/hex_string_transition.p4",
+)
+
