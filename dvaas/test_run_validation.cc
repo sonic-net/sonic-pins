@@ -121,12 +121,20 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
     const Packet& actual_packet = actual_output.packets(i);
     const Packet& expected_packet = expected_output.packets(i);
     MessageDifferencer differ;
-    for (auto* field : params.ignored_fields) differ.IgnoreField(field);
+    for (auto* field : params.ignored_packetlib_fields)
+      differ.IgnoreField(field);
     std::string diff;
     differ.ReportDifferencesToString(&diff);
     if (!differ.Compare(expected_packet.parsed(), actual_packet.parsed())) {
       *listener << "has packet " << i << " with mismatched header fields:\n  "
                 << Indent(2, diff);
+      return false;
+    }
+    if (expected_packet.port() != actual_packet.port()) {
+      *listener << "has packet " << i << " with mismatched ports:\n"
+                << absl::Substitute("  \"$0\" -> \"$1\"",
+                                    expected_packet.port(),
+                                    actual_packet.port());
       return false;
     }
   }
@@ -136,7 +144,8 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
     const PacketIn& expected_packet_in = expected_output.packet_ins(i);
 
     MessageDifferencer differ;
-    for (auto* field : params.ignored_fields) differ.IgnoreField(field);
+    for (auto* field : params.ignored_packetlib_fields)
+      differ.IgnoreField(field);
     std::string diff;
     differ.ReportDifferencesToString(&diff);
     if (!differ.Compare(expected_packet_in.parsed(),
@@ -164,7 +173,7 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
                           actual_metadata->value())) {
         *listener << "has packet in " << i
                   << " with mismatched value for metadata field '"
-                  << expected_metadata.name() << "':\n " << Indent(2, diff);
+                  << expected_metadata.name() << "':\n  " << Indent(2, diff);
         return false;
       }
     }
@@ -351,10 +360,10 @@ PacketTestValidationResult ValidateTestRun(
 
   std::string expectation = DescribeExpectation(
       test_run.test_vector().input(), acceptable_output_characterizations);
-  if (!diff_params.ignored_fields.empty()) {
+  if (!diff_params.ignored_packetlib_fields.empty()) {
     absl::StrAppend(
         &expectation, "\n          (ignoring the field(s) ",
-        absl::StrJoin(diff_params.ignored_fields, ",",
+        absl::StrJoin(diff_params.ignored_packetlib_fields, ",",
                       [](std::string* out,
                          const google::protobuf::FieldDescriptor* field) {
                         absl::StrAppend(out, "'", field->name(), "'");
