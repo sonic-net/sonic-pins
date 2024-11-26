@@ -1,0 +1,1120 @@
+headers {
+  key: "arp"
+  value {
+    name: "arp_t"
+    id: 12
+    fields {
+      key: "hw_addr_len"
+      value {
+        name: "hw_addr_len"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "hw_type"
+      value {
+        name: "hw_type"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "opcode"
+      value {
+        name: "opcode"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "proto_addr_len"
+      value {
+        name: "proto_addr_len"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "proto_type"
+      value {
+        name: "proto_type"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "sender_hw_addr"
+      value {
+        name: "sender_hw_addr"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "sender_proto_addr"
+      value {
+        name: "sender_proto_addr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "target_hw_addr"
+      value {
+        name: "target_hw_addr"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "target_proto_addr"
+      value {
+        name: "target_proto_addr"
+        bitwidth: 32
+      }
+    }
+  }
+}
+headers {
+  key: "erspan_ethernet"
+  value {
+    name: "ethernet_t"
+    id: 4
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ether_type"
+      value {
+        name: "ether_type"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 48
+      }
+    }
+  }
+}
+headers {
+  key: "erspan_gre"
+  value {
+    name: "gre_t"
+    id: 6
+    fields {
+      key: "acknowledgement_present"
+      value {
+        name: "acknowledgement_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "checksum_present"
+      value {
+        name: "checksum_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "flags"
+      value {
+        name: "flags"
+        bitwidth: 4
+      }
+    }
+    fields {
+      key: "key_present"
+      value {
+        name: "key_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "protocol"
+      value {
+        name: "protocol"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "recursion_control"
+      value {
+        name: "recursion_control"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "routing_present"
+      value {
+        name: "routing_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "sequence_present"
+      value {
+        name: "sequence_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "strict_source_route"
+      value {
+        name: "strict_source_route"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "version"
+      value {
+        name: "version"
+        bitwidth: 3
+      }
+    }
+  }
+}
+headers {
+  key: "erspan_ipv4"
+  value {
+    name: "ipv4_t"
+    id: 5
+    fields {
+      key: "do_not_fragment"
+      value {
+        name: "do_not_fragment"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "dscp"
+      value {
+        name: "dscp"
+        bitwidth: 6
+      }
+    }
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ecn"
+      value {
+        name: "ecn"
+        bitwidth: 2
+      }
+    }
+    fields {
+      key: "frag_offset"
+      value {
+        name: "frag_offset"
+        bitwidth: 13
+      }
+    }
+    fields {
+      key: "header_checksum"
+      value {
+        name: "header_checksum"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "identification"
+      value {
+        name: "identification"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "ihl"
+      value {
+        name: "ihl"
+        bitwidth: 4
+      }
+    }
+    fields {
+      key: "more_fragments"
+      value {
+        name: "more_fragments"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "protocol"
+      value {
+        name: "protocol"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "reserved"
+      value {
+        name: "reserved"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "total_len"
+      value {
+        name: "total_len"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "ttl"
+      value {
+        name: "ttl"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "version"
+      value {
+        name: "version"
+        bitwidth: 4
+      }
+    }
+  }
+}
+headers {
+  key: "ethernet"
+  value {
+    name: "ethernet_t"
+    id: 4
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ether_type"
+      value {
+        name: "ether_type"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 48
+      }
+    }
+  }
+}
+headers {
+  key: "icmp"
+  value {
+    name: "icmp_t"
+    id: 9
+    fields {
+      key: "checksum"
+      value {
+        name: "checksum"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "code"
+      value {
+        name: "code"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "type"
+      value {
+        name: "type"
+        bitwidth: 8
+      }
+    }
+  }
+}
+headers {
+  key: "ipv4"
+  value {
+    name: "ipv4_t"
+    id: 5
+    fields {
+      key: "do_not_fragment"
+      value {
+        name: "do_not_fragment"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "dscp"
+      value {
+        name: "dscp"
+        bitwidth: 6
+      }
+    }
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ecn"
+      value {
+        name: "ecn"
+        bitwidth: 2
+      }
+    }
+    fields {
+      key: "frag_offset"
+      value {
+        name: "frag_offset"
+        bitwidth: 13
+      }
+    }
+    fields {
+      key: "header_checksum"
+      value {
+        name: "header_checksum"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "identification"
+      value {
+        name: "identification"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "ihl"
+      value {
+        name: "ihl"
+        bitwidth: 4
+      }
+    }
+    fields {
+      key: "more_fragments"
+      value {
+        name: "more_fragments"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "protocol"
+      value {
+        name: "protocol"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "reserved"
+      value {
+        name: "reserved"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "total_len"
+      value {
+        name: "total_len"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "ttl"
+      value {
+        name: "ttl"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "version"
+      value {
+        name: "version"
+        bitwidth: 4
+      }
+    }
+  }
+}
+headers {
+  key: "ipv6"
+  value {
+    name: "ipv6_t"
+    id: 8
+    fields {
+      key: "dscp"
+      value {
+        name: "dscp"
+        bitwidth: 6
+      }
+    }
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 128
+      }
+    }
+    fields {
+      key: "ecn"
+      value {
+        name: "ecn"
+        bitwidth: 2
+      }
+    }
+    fields {
+      key: "flow_label"
+      value {
+        name: "flow_label"
+        bitwidth: 20
+      }
+    }
+    fields {
+      key: "hop_limit"
+      value {
+        name: "hop_limit"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "next_header"
+      value {
+        name: "next_header"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "payload_length"
+      value {
+        name: "payload_length"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 128
+      }
+    }
+    fields {
+      key: "version"
+      value {
+        name: "version"
+        bitwidth: 4
+      }
+    }
+  }
+}
+headers {
+  key: "packet_in_header"
+  value {
+    name: "packet_in_header_t"
+    id: 2
+    fields {
+      key: "ingress_port"
+      value {
+        name: "ingress_port"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "target_egress_port"
+      value {
+        name: "target_egress_port"
+        bitwidth: 16
+      }
+    }
+  }
+}
+headers {
+  key: "packet_out_header"
+  value {
+    name: "packet_out_header_t"
+    id: 3
+    fields {
+      key: "egress_port"
+      value {
+        name: "egress_port"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "submit_to_ingress"
+      value {
+        name: "submit_to_ingress"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "unused_pad"
+      value {
+        name: "unused_pad"
+        bitwidth: 7
+      }
+    }
+  }
+}
+headers {
+  key: "scalars"
+  value {
+    name: "scalars_0"
+    fields {
+      key: "_padding_0"
+      value {
+        name: "_padding_0"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "local_metadata_t._admit_to_l32"
+      value {
+        name: "local_metadata_t._admit_to_l32"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "local_metadata_t._apply_tunnel_encap_at_egress9"
+      value {
+        name: "local_metadata_t._apply_tunnel_encap_at_egress9"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "local_metadata_t._l4_dst_port7"
+      value {
+        name: "local_metadata_t._l4_dst_port7"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "local_metadata_t._l4_src_port6"
+      value {
+        name: "local_metadata_t._l4_src_port6"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "local_metadata_t._packet_in_ingress_port12"
+      value {
+        name: "local_metadata_t._packet_in_ingress_port12"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "local_metadata_t._packet_in_target_egress_port13"
+      value {
+        name: "local_metadata_t._packet_in_target_egress_port13"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "local_metadata_t._packet_rewrites_dst_mac5"
+      value {
+        name: "local_metadata_t._packet_rewrites_dst_mac5"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "local_metadata_t._packet_rewrites_src_mac4"
+      value {
+        name: "local_metadata_t._packet_rewrites_src_mac4"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "local_metadata_t._tunnel_encap_dst_ipv611"
+      value {
+        name: "local_metadata_t._tunnel_encap_dst_ipv611"
+        bitwidth: 128
+      }
+    }
+    fields {
+      key: "local_metadata_t._tunnel_encap_src_ipv610"
+      value {
+        name: "local_metadata_t._tunnel_encap_src_ipv610"
+        bitwidth: 128
+      }
+    }
+    fields {
+      key: "local_metadata_t._vlan_id0"
+      value {
+        name: "local_metadata_t._vlan_id0"
+        bitwidth: 12
+      }
+    }
+    fields {
+      key: "local_metadata_t._vlan_id_valid1"
+      value {
+        name: "local_metadata_t._vlan_id_valid1"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "local_metadata_t._vrf_id3"
+      value {
+        name: "local_metadata_t._vrf_id3"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "local_metadata_t._wcmp_selector_input8"
+      value {
+        name: "local_metadata_t._wcmp_selector_input8"
+        bitwidth: 16
+      }
+    }
+  }
+}
+headers {
+  key: "standard_metadata"
+  value {
+    name: "standard_metadata"
+    id: 1
+    fields {
+      key: "_padding"
+      value {
+        name: "_padding"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "checksum_error"
+      value {
+        name: "checksum_error"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "deq_qdepth"
+      value {
+        name: "deq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "deq_timedelta"
+      value {
+        name: "deq_timedelta"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "egress_global_timestamp"
+      value {
+        name: "egress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "egress_port"
+      value {
+        name: "egress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "egress_rid"
+      value {
+        name: "egress_rid"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "egress_spec"
+      value {
+        name: "egress_spec"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "enq_qdepth"
+      value {
+        name: "enq_qdepth"
+        bitwidth: 19
+      }
+    }
+    fields {
+      key: "enq_timestamp"
+      value {
+        name: "enq_timestamp"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "ingress_global_timestamp"
+      value {
+        name: "ingress_global_timestamp"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ingress_port"
+      value {
+        name: "ingress_port"
+        bitwidth: 9
+      }
+    }
+    fields {
+      key: "instance_type"
+      value {
+        name: "instance_type"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "mcast_grp"
+      value {
+        name: "mcast_grp"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "packet_length"
+      value {
+        name: "packet_length"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "parser_error"
+      value {
+        name: "parser_error"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "priority"
+      value {
+        name: "priority"
+        bitwidth: 3
+      }
+    }
+  }
+}
+headers {
+  key: "tcp"
+  value {
+    name: "tcp_t"
+    id: 10
+    fields {
+      key: "ack_no"
+      value {
+        name: "ack_no"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "checksum"
+      value {
+        name: "checksum"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "data_offset"
+      value {
+        name: "data_offset"
+        bitwidth: 4
+      }
+    }
+    fields {
+      key: "dst_port"
+      value {
+        name: "dst_port"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "flags"
+      value {
+        name: "flags"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "res"
+      value {
+        name: "res"
+        bitwidth: 4
+      }
+    }
+    fields {
+      key: "seq_no"
+      value {
+        name: "seq_no"
+        bitwidth: 32
+      }
+    }
+    fields {
+      key: "src_port"
+      value {
+        name: "src_port"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "urgent_ptr"
+      value {
+        name: "urgent_ptr"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "window"
+      value {
+        name: "window"
+        bitwidth: 16
+      }
+    }
+  }
+}
+headers {
+  key: "tunnel_encap_gre"
+  value {
+    name: "gre_t"
+    id: 6
+    fields {
+      key: "acknowledgement_present"
+      value {
+        name: "acknowledgement_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "checksum_present"
+      value {
+        name: "checksum_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "flags"
+      value {
+        name: "flags"
+        bitwidth: 4
+      }
+    }
+    fields {
+      key: "key_present"
+      value {
+        name: "key_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "protocol"
+      value {
+        name: "protocol"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "recursion_control"
+      value {
+        name: "recursion_control"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "routing_present"
+      value {
+        name: "routing_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "sequence_present"
+      value {
+        name: "sequence_present"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "strict_source_route"
+      value {
+        name: "strict_source_route"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "version"
+      value {
+        name: "version"
+        bitwidth: 3
+      }
+    }
+  }
+}
+headers {
+  key: "tunnel_encap_ipv6"
+  value {
+    name: "ipv6_t"
+    id: 8
+    fields {
+      key: "dscp"
+      value {
+        name: "dscp"
+        bitwidth: 6
+      }
+    }
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 128
+      }
+    }
+    fields {
+      key: "ecn"
+      value {
+        name: "ecn"
+        bitwidth: 2
+      }
+    }
+    fields {
+      key: "flow_label"
+      value {
+        name: "flow_label"
+        bitwidth: 20
+      }
+    }
+    fields {
+      key: "hop_limit"
+      value {
+        name: "hop_limit"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "next_header"
+      value {
+        name: "next_header"
+        bitwidth: 8
+      }
+    }
+    fields {
+      key: "payload_length"
+      value {
+        name: "payload_length"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 128
+      }
+    }
+    fields {
+      key: "version"
+      value {
+        name: "version"
+        bitwidth: 4
+      }
+    }
+  }
+}
+headers {
+  key: "udp"
+  value {
+    name: "udp_t"
+    id: 11
+    fields {
+      key: "checksum"
+      value {
+        name: "checksum"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "dst_port"
+      value {
+        name: "dst_port"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "hdr_length"
+      value {
+        name: "hdr_length"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "src_port"
+      value {
+        name: "src_port"
+        bitwidth: 16
+      }
+    }
+  }
+}
+headers {
+  key: "vlan"
+  value {
+    name: "vlan_t"
+    id: 7
+    fields {
+      key: "drop_eligible_indicator"
+      value {
+        name: "drop_eligible_indicator"
+        bitwidth: 1
+      }
+    }
+    fields {
+      key: "ether_type"
+      value {
+        name: "ether_type"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "priority_code_point"
+      value {
+        name: "priority_code_point"
+        bitwidth: 3
+      }
+    }
+    fields {
+      key: "vlan_id"
+      value {
+        name: "vlan_id"
+        bitwidth: 12
+      }
+    }
+  }
+}
+pipeline {
+  key: "egress"
+  value {
+    name: "egress"
+    initial_control: "__END_OF_PIPELINE__"
+  }
+}
+pipeline {
+  key: "ingress"
+  value {
+    name: "ingress"
+    initial_control: "__END_OF_PIPELINE__"
+  }
+}
+
