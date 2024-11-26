@@ -338,3 +338,10 @@ cc_test(
         "@com_google_absl//absl/types:optional",
     ],
 )
+
+cmd_diff_test(
+    name = "test_run_validation_golden_test",
+    actual_cmd = "$(execpath :test_run_validation_test_runner)",
+    expected = ":test_run_validation_test.expected.output",
+    tools = [":test_run_validation_test_runner"],
+)
