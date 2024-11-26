@@ -350,3 +350,59 @@ pipelines {
     source_fragment: "UselessEgress"
   }
 }
+errors {
+  values {
+    string_value: "NoError"
+  }
+  values {
+    number_value: 0
+  }
+}
+errors {
+  values {
+    string_value: "PacketTooShort"
+  }
+  values {
+    number_value: 1
+  }
+}
+errors {
+  values {
+    string_value: "NoMatch"
+  }
+  values {
+    number_value: 2
+  }
+}
+errors {
+  values {
+    string_value: "StackOutOfBounds"
+  }
+  values {
+    number_value: 3
+  }
+}
+errors {
+  values {
+    string_value: "HeaderTooShort"
+  }
+  values {
+    number_value: 4
+  }
+}
+errors {
+  values {
+    string_value: "ParserTimeout"
+  }
+  values {
+    number_value: 5
+  }
+}
+errors {
+  values {
+    string_value: "ParserInvalidArgument"
+  }
+  values {
+    number_value: 6
+  }
+}
