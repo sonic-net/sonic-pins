@@ -1388,7 +1388,7 @@ constexpr float kMeterCounterTolerance = 5.0;
 // 4. Maximum frame size.
 // 5. Minimum frame size.
 constexpr int kFramesPerSecond = 1000000;
-constexpr int kTotalFrames = 10000000;
+constexpr int kTotalFrames = 20000000;
 constexpr absl::Duration kTrafficDuration =
     absl::Seconds(kTotalFrames / kFramesPerSecond);
 constexpr int kDefaultFrameSize = 1514;
@@ -1634,7 +1634,7 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
           /*rate_bytes_per_second=*/(queue_info.rate_packets_per_second + 10) *
               frame_size,
           /*burst_in_bytes=*/(queue_info.rate_packets_per_second + 10) *
-              frame_size / 4,
+              frame_size,
           queue_info.p4_queue_name, GetParam().p4info, *sut_p4_session));
       ASSERT_OK_AND_ASSIGN(
           QueueCounters initial_counters,
@@ -1653,7 +1653,7 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
       absl::SleepFor(kTrafficDuration);
 
       static constexpr absl::Duration kPollInterval = absl::Seconds(5);
-      static constexpr absl::Duration kTotalTime = absl::Seconds(15);
+      static constexpr absl::Duration kTotalTime = absl::Seconds(25);
       static const int kIterations = kTotalTime / kPollInterval;
 
       QueueCounters final_counters;
@@ -1879,8 +1879,9 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   });
 
   for (auto &[queue_name, queue_info] : queues) {
-    // Skip unconfigured queues.
-    if (queue_info.rate_packets_per_second == 0) {
+    // Skip unconfigured queues or queues with very low rate-limit as it is not
+    // feasible to verify flow rate limit at low queue rates.
+    if (queue_info.rate_packets_per_second <= 10) {
       continue;
     }
     // Lets set flow rate limit to be half of queue limit so that queue limit

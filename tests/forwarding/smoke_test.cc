@@ -89,8 +89,8 @@ TEST_P(SmokeTestFixture, AclTableAddModifyDeleteOk) {
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
 
-  ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
-                        pdpi::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   const sai::WriteRequest pd_insert = gutil::ParseProtoOrDie<sai::WriteRequest>(
       R"pb(
@@ -183,8 +183,8 @@ TEST_P(SmokeTestFixture, FixedTableAddModifyDeleteOk) {
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
 
-ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
-                      pdpi::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   p4::v1::WriteRequest pi_request;
   ASSERT_OK_AND_ASSIGN(
@@ -193,10 +193,9 @@ ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
 	      ir_p4info, p4::v1::Update::INSERT, "vrf-1"));
   ASSERT_OK_AND_ASSIGN(
       *pi_request.add_updates(),
-      pins::RouterInterfaceTableUpdate(ir_p4info, 
-	                                p4::v1::Update::INSERT,
-                                        "router-intf-1", /*port=*/"1",
-                                        /*src_mac=*/"00:01:02:03:04:05"));
+      pins::RouterInterfaceTableUpdate(ir_p4info, p4::v1::Update::INSERT,
+                                       "router-intf-1", /*port=*/"1",
+                                       /*src_mac=*/"00:01:02:03:04:05"));
   ASSERT_OK_AND_ASSIGN(*pi_request.add_updates(),
                        pins::NeighborTableUpdate(
                            ir_p4info, p4::v1::Update::INSERT, "router-intf-1",
@@ -250,7 +249,7 @@ ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
 
   ASSERT_OK(pdpi::SetMetadataAndSendPiWriteRequest(sut_p4rt_session.get(),
                                                    pi_request));
-  
+
   // This used to fail with a read error.
   ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session.get()));
 }
@@ -269,8 +268,8 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
 
-ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
-                      pdpi::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -302,8 +301,8 @@ TEST_P(SmokeTestFixture, InsertTableEntryFailsWithNonUtf8Character) {
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
 
-ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
-                      pdpi::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
@@ -337,8 +336,8 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
 
-ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
-                      pdpi::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   std::vector<sai::TableEntry> write_pd_entries =
       sai_pd::CreateUpTo255GenericTableEntries(3);
@@ -402,8 +401,8 @@ TEST_P(SmokeTestFixture, EnsureClearTables) {
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
 
-ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
-                      pdpi::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   // The table should be clear after setup.
   ASSERT_OK(pdpi::CheckNoTableEntries(sut_p4rt_session.get()));
@@ -459,8 +458,8 @@ TEST_P(SmokeTestFixture, DISABLED_PushGnmiConfigWithFlows) {
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
 
-ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
-                      pdpi::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   // All tables should be clear after setup.
   ASSERT_OK(pdpi::CheckNoTableEntries(sut_p4rt_session.get()));
@@ -507,8 +506,8 @@ TEST_P(SmokeTestFixture, DeleteReferencedNeighborNotOk) {
           testbed.Sut(), testbed.ControlSwitch(), GetParam().gnmi_config,
           GetParam().p4info));
 
-ASSERT_OK_AND_ASSIGN (pdpi:: IrP4Info ir_p4info,
-                      pdpi::GetIrP4Info(*sut_p4rt_session));
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   constexpr absl::string_view kRifId = "rif";
   constexpr absl::string_view kNeighborId = "::1";
@@ -567,6 +566,9 @@ TEST_P(SmokeTestFixture, DeleteReferencedMulticastRifNotOk) {
       std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
       pins_test::ConfigureSwitchAndReturnP4RuntimeSession(
           testbed.Sut(), GetParam().gnmi_config, GetParam().p4info));
+
+  ASSERT_OK_AND_ASSIGN(pdpi::IrP4Info ir_p4info,
+                       pdpi::GetIrP4Info(*sut_p4rt_session));
 
   constexpr absl::string_view kVrf = "vrf";
   constexpr int kMulticastGroupId = 1;

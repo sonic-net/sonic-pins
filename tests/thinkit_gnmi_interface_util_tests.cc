@@ -2062,6 +2062,15 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   const std::string port = "Ethernet1/1/1";
   const std::string breakout_mode = "1x400G";
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
   gnmi::GetRequest physical_channels_req;
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       R"pb(prefix { origin: "openconfig" target: "chassis" }
@@ -2154,6 +2163,15 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   const std::string port = "Ethernet1/1/1";
   const std::string breakout_mode = "";
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
   EXPECT_THAT(pins_test::GetBreakoutStateInfoForPort(mock_gnmi_stub_ptr.get(),
                                                      port, breakout_mode),
               StatusIs(absl::StatusCode::kInternal,
@@ -2161,101 +2179,43 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetBreakoutStateInfoForPortPhysicalChannelsGetFailure) {
+       TestGetBreakoutStateInfoForPortPhysicalChannelsGetNoPhysicalChannels) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  const std::string port = "Ethernet1/1/1";
-  const std::string breakout_mode = "1x400G";
-  gnmi::GetRequest physical_channels_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" target: "chassis" }
-           path {
-             elem { name: "interfaces" }
-             elem {
-               name: "interface"
-               key { key: "name" value: "Ethernet1/1/1" }
-             }
-             elem { name: "state" }
-             elem { name: "physical-channel" }
-           }
-           type: STATE
-           encoding: JSON_IETF)pb",
-      &physical_channels_req));
-  gnmi::GetRequest oper_status_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" target: "chassis" }
-           path {
-             elem { name: "interfaces" }
-             elem {
-               name: "interface"
-               key { key: "name" value: "Ethernet1/1/1" }
-             }
-             elem { name: "state" }
-             elem { name: "oper-status" }
-           }
-           type: STATE
-           encoding: JSON_IETF)pb",
-      &oper_status_req));
-  gnmi::GetResponse oper_status_resp;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(notification {
-             timestamp: 1632102697699213032
-             prefix { origin: "openconfig" target: "chassis" }
-             update {
-               path {
-                 elem { name: "interfaces" }
-                 elem {
-                   name: "interface"
-                   key { key: "name" value: "Ethernet1/1/1" }
-                 }
-                 elem { name: "state" }
-                 elem { name: "oper-status" }
-               }
-               val {
-                 json_ietf_val: "{\"openconfig-interfaces:oper-status\":\"UP\"}"
-               }
-             }
-           })pb",
-      &oper_status_resp));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(oper_status_req), _))
+  const std::string port = "Ethernet1/3/1";
+  const std::string breakout_mode = "1x200G+2x100G";
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
       .WillOnce(
-          DoAll(SetArgPointee<2>(oper_status_resp), Return(grpc::Status::OK)));
-  EXPECT_CALL(*mock_gnmi_stub_ptr,
-              Get(_, EqualsProto(physical_channels_req), _))
-      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
-  EXPECT_THAT(pins_test::GetBreakoutStateInfoForPort(mock_gnmi_stub_ptr.get(),
-                                                     port, breakout_mode),
-              StatusIs(absl::StatusCode::kDeadlineExceeded,
-                       HasSubstr("Failed to get GNMI state path value for "
-                                 "physical-channels for port Ethernet1/1/1")));
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto breakout_state_info,
+                       pins_test::GetBreakoutStateInfoForPort(
+                           mock_gnmi_stub_ptr.get(), port, breakout_mode));
+  EXPECT_EQ(breakout_state_info[port].physical_channels, "");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
-       TestGetBreakoutStateInfoForPortOperStatusGetFailure) {
+       TestGetBreakoutStateInfoForPortOperStatusGetNoOperStatus) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
-  const std::string port = "Ethernet1/1/1";
+  const std::string port = "Ethernet1/3/1";
   const std::string breakout_mode = "1x400G";
-  gnmi::GetRequest oper_status_req;
-  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
-      R"pb(prefix { origin: "openconfig" target: "chassis" }
-           path {
-             elem { name: "interfaces" }
-             elem {
-               name: "interface"
-               key { key: "name" value: "Ethernet1/1/1" }
-             }
-             elem { name: "state" }
-             elem { name: "oper-status" }
-           }
-           type: STATE
-           encoding: JSON_IETF)pb",
-      &oper_status_req));
-  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(oper_status_req), _))
-      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
-  EXPECT_THAT(pins_test::GetBreakoutStateInfoForPort(mock_gnmi_stub_ptr.get(),
-                                                     port, breakout_mode),
-              StatusIs(absl::StatusCode::kDeadlineExceeded,
-                       HasSubstr("Failed to get GNMI state path value for "
-                                 "oper-status for port Ethernet1/1/1")));
+  gnmi::GetRequest interfaces_req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_req,
+                                                            &interfaces_req));
+  gnmi::GetResponse interfaces_resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(all_interfaces_resp,
+                                                            &interfaces_resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(interfaces_req), _))
+      .WillOnce(
+          DoAll(SetArgPointee<2>(interfaces_resp), Return(grpc::Status::OK)));
+  ASSERT_OK_AND_ASSIGN(auto breakout_state_info,
+                       pins_test::GetBreakoutStateInfoForPort(
+                           mock_gnmi_stub_ptr.get(), port, breakout_mode));
+  EXPECT_EQ(breakout_state_info[port].oper_status, "");
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
