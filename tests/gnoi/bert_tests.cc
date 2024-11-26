@@ -90,7 +90,7 @@ const std::string BuildPerPortStartBertRequest(
                                 key { key: "name" value: '$0' }
                               }
                             }
-                            prbs_polynomial: PRBS_POLYNOMIAL_PRBS23
+                            prbs_polynomial: PRBS_POLYNOMIAL_PRBS31
                             test_duration_in_secs: $1
                           )pb",
                           interface_name, ToInt64Seconds(kTestDuration));
@@ -979,7 +979,7 @@ TEST_P(BertTest, StartBertSucceeds) {
     grpc::ClientContext result_context;
     EXPECT_OK(sut_diag_stub_->GetBERTResult(&result_context, result_request_sut,
                                             &result_response));
-    LOG(INFO) << "Result: " << result_response.ShortDebugString();
+    LOG(INFO) << "SUT BERT result: " << result_response.ShortDebugString();
     ASSERT_THAT(result_response.per_port_responses(),
                 SizeIs(bert_request_sut.per_port_requests_size()));
     for (int idx = 0; idx < result_response.per_port_responses_size(); ++idx) {
@@ -998,7 +998,8 @@ TEST_P(BertTest, StartBertSucceeds) {
     ASSERT_OK_AND_ASSIGN(
         gnoi::diag::GetBERTResultResponse result_response,
         control_device.GetBERTResult(result_request_control_switch));
-    LOG(INFO) << "Result: " << result_response.ShortDebugString();
+    LOG(INFO) << "Control switch BERT result: "
+              << result_response.ShortDebugString();
     ASSERT_THAT(result_response.per_port_responses(),
                 SizeIs(bert_request_control_switch.per_port_requests_size()));
     for (int idx = 0; idx < result_response.per_port_responses_size(); ++idx) {
