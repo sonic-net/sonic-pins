@@ -1168,7 +1168,8 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
   // Wait for some time before checking the port status.
   absl::SleepFor(kPortsUpWaitTime);
 
-  ASSERT_OK(pins_test::PortsUp(sut));
+  ASSERT_OK(
+      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
   ASSERT_OK(ValidateControlSwitchPortsUp(control_device, peer_interfaces_));
 }
 
@@ -1338,7 +1339,8 @@ TEST_P(BertTest, StopBertSucceeds) {
     EXPECT_TRUE(response.per_port_responses(0).peer_lock_lost());
   }
 
-  ASSERT_OK(pins_test::PortsUp(sut));
+  ASSERT_OK(
+      pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
   ASSERT_OK(ValidateControlSwitchPortsUp(control_device, peer_interfaces_));
 }
 
