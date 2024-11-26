@@ -199,6 +199,7 @@ TEST_P(
   thinkit::MirrorTestbed& testbed =
       GetParam().mirror_testbed->GetMirrorTestbed();
   thinkit::TestEnvironment& environment = testbed.Environment();
+  environment.SetTestCaseID("32794197-8591-49ff-8fb1-532a3616c750");
 
   // Get the start time to determine when to stop the test.
   const absl::Time deadline = absl::Now() + GetParam().target_test_time;
