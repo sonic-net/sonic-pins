@@ -29,27 +29,12 @@
 #include "p4_pdpi/string_encodings/hex_string.h"
 #include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/z3_util.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
 
 namespace {
-
-absl::StatusOr<bool> EvalBool(const z3::expr& bool_expr,
-                              const z3::model& model) {
-  auto value = model.eval(bool_expr, true).bool_value();
-  switch (value) {
-    case Z3_L_FALSE:
-      return false;
-    case Z3_L_TRUE:
-      return true;
-    default:
-      break;
-  }
-  return gutil::InternalErrorBuilder()
-         << "boolean expression '" << bool_expr
-         << "' evaluated to unexpected Boolean value " << value;
-}
 
 template <size_t num_bits>
 absl::StatusOr<std::bitset<num_bits>> EvalBitvector(const z3::expr& bv_expr,
@@ -76,14 +61,14 @@ template <size_t num_bits>
 absl::Status Deparse(const z3::expr& field, const z3::model& model,
                      pdpi::BitString& result) {
   ASSIGN_OR_RETURN(std::bitset<num_bits> bits,
-                   EvalBitvector<num_bits>(field, model));
+                   EvalZ3Bitvector<num_bits>(field, model));
   result.AppendBits(bits);
   return absl::OkStatus();
 }
 
 absl::Status Deparse(const SaiEthernet& header, const z3::model& model,
                      pdpi::BitString& result) {
-  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
   if (valid) {
     RETURN_IF_ERROR(Deparse<48>(header.dst_addr, model, result));
     RETURN_IF_ERROR(Deparse<48>(header.src_addr, model, result));
@@ -94,7 +79,7 @@ absl::Status Deparse(const SaiEthernet& header, const z3::model& model,
 
 absl::Status Deparse(const SaiIpv4& header, const z3::model& model,
                      pdpi::BitString& result) {
-  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
   if (valid) {
     RETURN_IF_ERROR(Deparse<4>(header.version, model, result));
     RETURN_IF_ERROR(Deparse<4>(header.ihl, model, result));
@@ -117,7 +102,7 @@ absl::Status Deparse(const SaiIpv4& header, const z3::model& model,
 
 absl::Status Deparse(const SaiIpv6& header, const z3::model& model,
                      pdpi::BitString& result) {
-  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
   if (valid) {
     RETURN_IF_ERROR(Deparse<4>(header.version, model, result));
     RETURN_IF_ERROR(Deparse<6>(header.dscp, model, result));
@@ -134,7 +119,7 @@ absl::Status Deparse(const SaiIpv6& header, const z3::model& model,
 
 absl::Status Deparse(const SaiUdp& header, const z3::model& model,
                      pdpi::BitString& result) {
-  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
   if (valid) {
     RETURN_IF_ERROR(Deparse<16>(header.src_port, model, result));
     RETURN_IF_ERROR(Deparse<16>(header.dst_port, model, result));
@@ -146,7 +131,7 @@ absl::Status Deparse(const SaiUdp& header, const z3::model& model,
 
 absl::Status Deparse(const SaiTcp& header, const z3::model& model,
                      pdpi::BitString& result) {
-  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
   if (valid) {
     RETURN_IF_ERROR(Deparse<16>(header.src_port, model, result));
     RETURN_IF_ERROR(Deparse<16>(header.dst_port, model, result));
@@ -164,7 +149,7 @@ absl::Status Deparse(const SaiTcp& header, const z3::model& model,
 
 absl::Status Deparse(const SaiIcmp& header, const z3::model& model,
                      pdpi::BitString& result) {
-  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
   if (valid) {
     RETURN_IF_ERROR(Deparse<8>(header.type, model, result));
     RETURN_IF_ERROR(Deparse<8>(header.code, model, result));
@@ -178,7 +163,7 @@ absl::Status Deparse(const SaiIcmp& header, const z3::model& model,
 
 absl::Status Deparse(const SaiArp& header, const z3::model& model,
                      pdpi::BitString& result) {
-  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
   if (valid) {
     RETURN_IF_ERROR(Deparse<16>(header.hw_type, model, result));
     RETURN_IF_ERROR(Deparse<16>(header.proto_type, model, result));
@@ -195,7 +180,7 @@ absl::Status Deparse(const SaiArp& header, const z3::model& model,
 
 absl::Status Deparse(const SaiGre& header, const z3::model& model,
                      pdpi::BitString& result) {
-  ASSIGN_OR_RETURN(bool valid, EvalBool(header.valid, model));
+  ASSIGN_OR_RETURN(bool valid, EvalZ3Bool(header.valid, model));
   if (valid) {
     RETURN_IF_ERROR(Deparse<1>(header.checksum_present, model, result));
     RETURN_IF_ERROR(Deparse<1>(header.routing_present, model, result));

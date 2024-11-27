@@ -16,6 +16,8 @@
 
 #include "gutil/io.h"
 #include "gutil/proto.h"
+#include "p4/v1/p4runtime.pb.h"
+#include "p4_pdpi/ir.h"
 #include "p4_symbolic/bmv2/bmv2.h"
 #include "p4_symbolic/ir/ir.h"
 #include "p4_symbolic/ir/pdpi_driver.h"
@@ -77,6 +79,14 @@ absl::StatusOr<symbolic::Dataplane> ParseToIr(
   ASSIGN_OR_RETURN(ir::TableEntries ir_table_entries,
                    ir::ParseTableEntries(p4info, table_entries));
   return p4_symbolic::symbolic::Dataplane{program, ir_table_entries};
+}
+
+absl::StatusOr<symbolic::Dataplane> ParseToIr(
+    const p4::v1::ForwardingPipelineConfig &config,
+    absl::Span<const p4::v1::TableEntry> table_entries) {
+  ASSIGN_OR_RETURN(const pdpi::IrP4Info ir_p4info,
+                   pdpi::CreateIrP4Info(config.p4info()));
+  return ParseToIr(config.p4_device_config(), ir_p4info, table_entries);
 }
 
 }  // namespace p4_symbolic
