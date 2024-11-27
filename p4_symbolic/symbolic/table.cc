@@ -484,15 +484,17 @@ absl::StatusOr<SymbolicTableMatches> EvaluateTable(
   for (const auto &[action, next_control] : sorted_action_to_next_control) {
     if (next_control != merge_point) {
       if (action == ir::TableHitAction() || action == ir::TableMissAction()) {
-        z3::expr branch_guard = action == ir::TableHitAction()
-                                    ? (match_index != kDefaultActionEntryIndex)
-                                    : (match_index == kDefaultActionEntryIndex);
+        z3::expr branch_condition =
+            action == ir::TableHitAction()
+                ? (match_index != kDefaultActionEntryIndex)
+                : (match_index == kDefaultActionEntryIndex);
         ASSIGN_OR_RETURN(
             SymbolicTableMatches branch_matches,
             control::EvaluateControl(data_plane, next_control, state,
-                                     translator, guard && branch_guard));
-        ASSIGN_OR_RETURN(merged_matches, util::MergeDisjointTableMatches(
-                                             merged_matches, branch_matches));
+                                     translator, guard && branch_condition));
+        ASSIGN_OR_RETURN(merged_matches,
+                         util::MergeMatchesOnCondition(
+                             branch_condition, branch_matches, merged_matches));
       } else {
         return absl::UnimplementedError(
             absl::Substitute("Conditional on executed table action is not "
