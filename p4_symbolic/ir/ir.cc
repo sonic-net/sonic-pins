@@ -29,10 +29,12 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
+#include "p4_symbolic/bmv2/bmv2.pb.h"
 #include "p4_symbolic/ir/cfg.h"
 #include "p4_symbolic/ir/ir.pb.h"
 
@@ -44,6 +46,11 @@ namespace {
 // Turns BMv2-style names of control nodes to P4-Symbolic's IR-style names.
 std::string Bmv2ToIrControlName(const std::string &control_name) {
   return control_name.empty() ? EndOfPipeline() : control_name;
+}
+
+// Turns BMv2-style names of parse states to P4-Symbolic's IR-style names.
+std::string Bmv2ToIrParseStateName(const std::string &state_name) {
+  return state_name.empty() ? EndOfParser() : state_name;
 }
 
 // Forward declaration to enable mutual recursion with (sub) expression parsing
@@ -309,15 +316,30 @@ absl::StatusOr<BuiltinExpression> ExtractBuiltinExpression(
 absl::StatusOr<RExpression> ExtractRExpression(
     const google::protobuf::Struct &bmv2_expression,
     const std::vector<std::string> &variables) {
-  RExpression output;
+  // An expression in the BMv2 format may have its value be a single other
+  // expression, whose value may also be another single expression, etc., until
+  // the actual value of the expression is reached. This is analogous to having
+  // an expression wrapped in multiple layers of parentheses. This conditional
+  // recursively navigates to the inner most expression.
+  if (!bmv2_expression.fields().contains("op") &&
+      bmv2_expression.fields().contains("type") &&
+      bmv2_expression.fields().at("type").has_string_value() &&
+      bmv2_expression.fields().at("type").string_value() == "expression" &&
+      bmv2_expression.fields().contains("value") &&
+      bmv2_expression.fields().at("value").has_struct_value()) {
+    return ExtractRExpression(
+        bmv2_expression.fields().at("value").struct_value(), variables);
+  }
+
   // Integrity check.
-  if (bmv2_expression.fields().count("op") != 1 ||
-      bmv2_expression.fields().count("right") != 1) {
+  if (!bmv2_expression.fields().contains("op") ||
+      !bmv2_expression.fields().contains("right")) {
     return absl::InvalidArgumentError(
         absl::StrCat("RExpression must contain 'op' and 'right', found ",
                      bmv2_expression.DebugString()));
   }
 
+  RExpression output;
   const std::string &operation =
       bmv2_expression.fields().at("op").string_value();
   ASSIGN_OR_RETURN(RExpression::ExpressionCase expression_case,
@@ -456,30 +478,10 @@ absl::StatusOr<RValue> ExtractRValue(
       return output;
     }
     case bmv2::ExpressionType::expression: {
-      const google::protobuf::Struct *expression =
-          &(struct_value.fields().at("value").struct_value());
-
-      // This loop is only needed because bmv2 format has this annoying thing
-      // where an expression may have its value be a single other expression
-      // which value may also be another single expression, etc, until
-      // finally the actual value of the expression is reached.
-      // This is the bmv2 format analogous case to having an expression
-      // wrapped in many useless paranthesis. An example of this can be found
-      // at //p4-samples/ipv4-routing/basic.json after `make build` is run in
-      // that directory.
-      while (expression->fields().count("op") != 1) {
-        if (expression->fields().count("type") != 1 ||
-            expression->fields().at("type").string_value() != "expression" ||
-            expression->fields().count("value") != 1) {
-          return absl::InvalidArgumentError(
-              absl::StrCat("Expression must contain 'op' at some level, found ",
-                           expression->DebugString()));
-        }
-        expression = &(expression->fields().at("value").struct_value());
-      }
-
+      const google::protobuf::Struct &expression =
+          struct_value.fields().at("value").struct_value();
       ASSIGN_OR_RETURN(*(output.mutable_expression_value()),
-                       ExtractRExpression(*expression, variables));
+                       ExtractRExpression(expression, variables));
       return output;
     }
     default:
@@ -729,6 +731,280 @@ absl::StatusOr<Table> ExtractTable(
   return output;
 }
 
+// Translates the "extract" parser operation from the BMv2 protobuf message.
+absl::StatusOr<ParserOperation::Extract> ExtractExtractParserOp(
+    const bmv2::ParserOperation &bmv2_op) {
+  ParserOperation::Extract result;
+
+  // The "extract" parser operation must have exactly 1 parameter.
+  if (bmv2_op.parameters_size() != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Parser extract op must have 1 parameter, found "
+           << bmv2_op.DebugString();
+  }
+
+  const ::google::protobuf::Struct &bmv2_param = bmv2_op.parameters(0);
+
+  // Make sure the parameter struct contains the correct fields.
+  if (!bmv2_param.fields().contains("type") ||
+      !bmv2_param.fields().at("type").has_string_value() ||
+      !bmv2_param.fields().contains("value") ||
+      !bmv2_param.fields().at("value").has_string_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Extract operation has an invalid parameter: "
+           << bmv2_param.DebugString();
+  }
+
+  const std::string &bmv2_type = bmv2_param.fields().at("type").string_value();
+  const std::string &bmv2_value =
+      bmv2_param.fields().at("value").string_value();
+
+  if (bmv2_type == "regular") {
+    // `bmv2_value` is the name of the header to be extracted.
+    result.mutable_header()->set_header_name(bmv2_value);
+  } else if (bmv2_type == "stack" || bmv2_type == "union_stack") {
+    // Stacks and union stacks are not supported at the moment.
+    return absl::UnimplementedError(
+        absl::StrFormat("Unsupported parameter type '%s'", bmv2_type));
+  } else {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Parameter type must be one of [regular, stack, "
+                        "union_stack]. Found '%s'",
+                        bmv2_type));
+  }
+
+  return result;
+}
+
+// Translates the "set" parser operation from the BMv2 protobuf message.
+absl::StatusOr<ParserOperation::Set> ExtractSetParserOp(
+    const bmv2::ParserOperation &bmv2_op) {
+  ParserOperation::Set result;
+
+  // The "set" parser operation must have exactly 2 parameters.
+  if (bmv2_op.parameters_size() != 2) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Parser set op must have 2 parameters, found ", bmv2_op.DebugString()));
+  }
+
+  const ::google::protobuf::Struct &bmv2_lparam = bmv2_op.parameters(0);
+  const ::google::protobuf::Struct &bmv2_rparam = bmv2_op.parameters(1);
+
+  // Make sure the L-parameter struct contains the correct fields.
+  if (!bmv2_lparam.fields().contains("type") ||
+      !bmv2_lparam.fields().at("type").has_string_value() ||
+      !bmv2_lparam.fields().contains("value") ||
+      !bmv2_lparam.fields().at("value").has_list_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Set operation has invalid parameters: "
+           << bmv2_lparam.DebugString();
+  }
+
+  // Translate the L-parameter of the "set" parser operation.
+  const std::string &bmv2_ltype =
+      bmv2_lparam.fields().at("type").string_value();
+  if (bmv2_ltype != "field") {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Parameter type must be 'field'. Found '%s'", bmv2_ltype));
+  }
+
+  FieldValue &lvalue = *result.mutable_lvalue();
+  const ::google::protobuf::ListValue &bmv2_lvalue =
+      bmv2_lparam.fields().at("value").list_value();
+  lvalue.set_header_name(bmv2_lvalue.values(0).string_value());
+  lvalue.set_field_name(bmv2_lvalue.values(1).string_value());
+
+  // Make sure the R-parameter struct contains the correct fields.
+  if (!bmv2_rparam.fields().contains("type") ||
+      !bmv2_rparam.fields().at("type").has_string_value() ||
+      !bmv2_rparam.fields().contains("value")) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Set operation has invalid parameters: "
+           << bmv2_rparam.DebugString();
+  }
+
+  // Translate the R-parameter of "set" parser operation.
+  const std::string &bmv2_rtype =
+      bmv2_rparam.fields().at("type").string_value();
+
+  if (bmv2_rtype == "field") {
+    FieldValue &rvalue = *result.mutable_field_rvalue();
+    const ::google::protobuf::ListValue &bmv2_field_value =
+        bmv2_rparam.fields().at("value").list_value();
+    rvalue.set_header_name(bmv2_field_value.values(0).string_value());
+    rvalue.set_field_name(bmv2_field_value.values(1).string_value());
+  } else if (bmv2_rtype == "hexstr") {
+    HexstrValue &rvalue = *result.mutable_hexstr_rvalue();
+    const std::string &bmv2_hexstr =
+        bmv2_rparam.fields().at("value").string_value();
+    if (absl::StartsWith(bmv2_hexstr, "-")) {
+      rvalue.set_value(std::string(absl::StripPrefix(bmv2_hexstr, "-")));
+      rvalue.set_negative(true);
+    } else {
+      rvalue.set_value(bmv2_hexstr);
+      rvalue.set_negative(false);
+    }
+  } else if (bmv2_rtype == "lookahead") {
+    LookaheadValue &rvalue = *result.mutable_lookahead_rvalue();
+    const ::google::protobuf::ListValue &bmv2_lookahead =
+        bmv2_rparam.fields().at("value").list_value();
+    rvalue.set_offset(bmv2_lookahead.values(0).number_value());
+    rvalue.set_bitwidth(bmv2_lookahead.values(1).number_value());
+  } else if (bmv2_rtype == "expression") {
+    RExpression &rvalue = *result.mutable_expression_rvalue();
+    const google::protobuf::Struct &bmv2_expression =
+        bmv2_rparam.fields().at("value").struct_value();
+    ASSIGN_OR_RETURN(rvalue, ExtractRExpression(bmv2_expression, {}));
+  } else {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("Invalid parameter type '%s'", bmv2_rtype));
+  }
+
+  return result;
+}
+
+// Translates parser operations.
+// Currently only "extract" and "set" parser operations are supported since
+// others are not required at the moment.
+absl::StatusOr<ParserOperation> ExtractParserOperation(
+    const bmv2::ParserOperation &bmv2_op) {
+  ParserOperation result;
+
+  switch (bmv2_op.op()) {
+    case bmv2::ParserOperation::extract: {
+      ASSIGN_OR_RETURN(*result.mutable_extract(),
+                       ExtractExtractParserOp(bmv2_op));
+      break;
+    }
+    case bmv2::ParserOperation::set: {
+      ASSIGN_OR_RETURN(*result.mutable_set(), ExtractSetParserOp(bmv2_op));
+      break;
+    }
+    default: {
+      return absl::UnimplementedError(
+          absl::StrCat("Unsupported parser op: ", bmv2_op.DebugString()));
+    }
+  }
+
+  return result;
+}
+
+// Translates parser transition key fields.
+absl::StatusOr<ParserTransitionKeyField> ExtractParserTransitionKeyField(
+    const bmv2::ParserTransitionKeyField &bmv2_key_field) {
+  ParserTransitionKeyField result;
+
+  switch (bmv2_key_field.type()) {
+    case bmv2::ParserTransitionKeyField::field: {
+      FieldValue &field = *result.mutable_field();
+      const ::google::protobuf::ListValue &bmv2_value = bmv2_key_field.value();
+      field.set_header_name(bmv2_value.values(0).string_value());
+      field.set_field_name(bmv2_value.values(1).string_value());
+      break;
+    }
+    case bmv2::ParserTransitionKeyField::lookahead:
+    case bmv2::ParserTransitionKeyField::stack_field:
+    case bmv2::ParserTransitionKeyField::union_stack_field: {
+      return absl::UnimplementedError(
+          absl::StrCat("Unsupported parser transition key field type: ",
+                       bmv2_key_field.type()));
+    }
+    default: {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Invalid parser transition key field: ",
+                       bmv2_key_field.DebugString()));
+    }
+  }
+
+  return result;
+}
+
+// Translates a parser's state transition from the BMv2 protobuf message.
+absl::StatusOr<ParserTransition> ExtractParserTransition(
+    const bmv2::ParserTransition &bmv2_transition) {
+  ParserTransition result;
+  const std::string &bmv2_value = bmv2_transition.value();
+  const std::string &bmv2_mask = bmv2_transition.mask();
+  const std::string &bmv2_next_state = bmv2_transition.next_state();
+
+  switch (bmv2_transition.type()) {
+    case bmv2::ParserTransitionType::default_: {
+      DefaultTransition &default_transition =
+          *result.mutable_default_transition();
+      default_transition.set_next_state(
+          Bmv2ToIrParseStateName(bmv2_next_state));
+      break;
+    }
+
+    case bmv2::ParserTransitionType::hexstr: {
+      HexStringTransition &hexstr_transition =
+          *result.mutable_hex_string_transition();
+
+      if (bmv2_value.empty()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "Empty hex string value: ", bmv2_transition.DebugString()));
+      }
+
+      hexstr_transition.set_value(bmv2_value);
+      hexstr_transition.set_mask(bmv2_mask);
+      hexstr_transition.set_next_state(Bmv2ToIrParseStateName(bmv2_next_state));
+      break;
+    }
+
+    case bmv2::ParserTransitionType::parse_vset: {
+      return absl::UnimplementedError(
+          absl::StrCat("Unsupported parser transition type: ",
+                       bmv2_transition.DebugString()));
+    }
+
+    default: {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Parser transition type must be one of [default, "
+                       "hexstr, parse_vset]. Found: ",
+                       bmv2_transition.DebugString()));
+    }
+  }
+
+  return result;
+}
+
+// Translates a parse state from the BMv2 protobuf message.
+absl::StatusOr<ParseState> ExtractParseState(
+    const bmv2::ParseState &bmv2_parse_state) {
+  ParseState state;
+  state.set_name(bmv2_parse_state.name());
+
+  for (const auto &op : bmv2_parse_state.parser_ops()) {
+    ASSIGN_OR_RETURN(*state.add_parser_ops(), ExtractParserOperation(op));
+  }
+
+  for (const auto &key_field : bmv2_parse_state.transition_key()) {
+    ASSIGN_OR_RETURN(*state.add_transition_key_fields(),
+                     ExtractParserTransitionKeyField(key_field));
+  }
+
+  for (const auto &transition : bmv2_parse_state.transitions()) {
+    ASSIGN_OR_RETURN(*state.add_transitions(),
+                     ExtractParserTransition(transition));
+  }
+
+  return state;
+}
+
+// Translates a parser from the BMv2 protobuf message.
+absl::StatusOr<Parser> ExtractParser(const bmv2::Parser &bmv2_parser) {
+  Parser parser;
+  parser.set_name(bmv2_parser.name());
+  parser.set_initial_state(bmv2_parser.init_state());
+
+  for (const auto &parse_state : bmv2_parser.parse_states()) {
+    ASSIGN_OR_RETURN((*parser.mutable_parse_states())[parse_state.name()],
+                     ExtractParseState(parse_state));
+  }
+
+  return parser;
+}
+
 }  // namespace
 
 // Main Translation function.
@@ -745,6 +1021,42 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
         break;
       }
     }
+  }
+
+  // Check the number of parsers. The current implementation of the P4 compiler
+  // compresses all the parsers in the P4 program into one big parser with name
+  // mangling, where the name of each parse state is prefixed with the name of
+  // its original parser.
+  // For instance, the compilation output of the following P4 program snippet
+  // may contain states named "main_parser_parse_ethernet" and
+  // "ipv4_parser_parse_ipv4". Some trivial states may also be merged together
+  // by the compiler.
+  //
+  //   ```p4
+  //   parser main_parser {
+  //     state start {
+  //       ...
+  //     }
+  //     state parse_ethernet {
+  //       ...
+  //       ipv4_parser.apply();
+  //       transition accept;
+  //     }
+  //   }
+  //
+  //   parser ipv4_parser {
+  //     ...
+  //   }
+  //   ```
+  if (bmv2.parsers_size() != 1) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Expected single parser. Found: ", bmv2.parsers_size()));
+  }
+
+  // Translate parsers from bmv2.
+  for (const bmv2::Parser &bmv2_parser : bmv2.parsers()) {
+    Parser &extracted_parser = (*output.mutable_parsers())[bmv2_parser.name()];
+    ASSIGN_OR_RETURN(extracted_parser, ExtractParser(bmv2_parser));
   }
 
   // In reality, pdpi.actions_by_name is keyed on aliases and

@@ -66,10 +66,10 @@ absl::StatusOr<SymbolicTableMatches> EvaluateConditional(
           data_plane, get_next_control_for_branch(conditional.else_branch()),
           state, translator, else_guard));
 
-  // Now we have two traces that need merging. The two traces are guaranteed to
-  // contain different table matches (see go/optimized-symbolic-execution).
-  ASSIGN_OR_RETURN(SymbolicTableMatches merged_matches,
-                   util::MergeDisjointTableMatches(if_matches, else_matches));
+  // Now we have two traces that need merging.
+  ASSIGN_OR_RETURN(
+      SymbolicTableMatches merged_matches,
+      util::MergeMatchesOnCondition(condition, if_matches, else_matches));
 
   if (!conditional.optimized_symbolic_execution_info()
            .continue_to_merge_point()) {

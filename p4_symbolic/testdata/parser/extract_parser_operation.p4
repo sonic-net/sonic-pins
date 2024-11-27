@@ -7,7 +7,6 @@ struct local_metadata_t {
 
 struct headers_t {
   ethernet_t ethernet;
-  ipv4_t     ipv4;
 }
 
 parser packet_parser(packet_in packet, out headers_t headers,
@@ -19,15 +18,6 @@ parser packet_parser(packet_in packet, out headers_t headers,
 
   state parse_ethernet {
     packet.extract(headers.ethernet);
-    transition select(headers.ethernet.ether_type) {
-      0 &&& 0xfe00: accept;
-      ETHERTYPE_IPV4:    parse_ipv4;
-      default:      accept;
-    }
-  }
-
-  state parse_ipv4 {
-    packet.extract(headers.ipv4);
     transition accept;
   }
 }
