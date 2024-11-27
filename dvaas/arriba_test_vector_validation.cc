@@ -19,9 +19,11 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "dvaas/packet_injection.h"
+#include "dvaas/port_id_map.h"
 #include "dvaas/test_run_validation.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
+#include "glog/logging.h"
 #include "gutil/status.h"
 #include "gutil/test_artifact_writer.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -37,7 +39,8 @@ absl::Status ValidateAgaistArribaTestVector(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const ArribaTestVector& arriba_test_vector,
     const ArribaTestVectorValidationParams& params) {
-  // Prepare control switch.
+  // Prepare the control switch.
+  LOG(INFO) << "Installing entires to punt all packets on the control switch";
   ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse config,
                    GetForwardingPipelineConfig(&control_switch));
   ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info,
@@ -50,7 +53,8 @@ absl::Status ValidateAgaistArribaTestVector(
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&control_switch));
   RETURN_IF_ERROR(pdpi::InstallPiEntities(control_switch, punt_entities));
 
-  // Prepare SUT.
+  // Prepare the SUT.
+  LOG(INFO) << "Installing entries from the given test vector on the SUT";
   RETURN_IF_ERROR(pdpi::ClearTableEntries(&sut));
   RETURN_IF_ERROR(
       pdpi::InstallIrTableEntries(sut, arriba_test_vector.ir_table_entries()));
@@ -66,11 +70,16 @@ absl::Status ValidateAgaistArribaTestVector(
   gutil::BazelTestArtifactWriter artifact_writer;
 
   // Send tests to switch and collect results.
-  ASSIGN_OR_RETURN(
-      PacketTestRuns test_runs,
-      SendTestPacketsAndCollectOutputs(sut, control_switch, test_vector_by_id,
-                                       packet_statistics,
-                                       params.max_packets_to_send_per_second));
+  ASSIGN_OR_RETURN(PacketTestRuns test_runs,
+                   SendTestPacketsAndCollectOutputs(
+                       sut, control_switch, test_vector_by_id,
+                       {
+                           .max_packets_to_send_per_second =
+                               params.max_packets_to_send_per_second,
+                           .mirror_testbed_port_map =
+                               MirrorTestbedP4rtPortIdMap::CreateIdentityMap(),
+                       },
+                       packet_statistics));
 
   // Compare the switch output with expected output for each test vector.
   return ValidateTestRuns(test_runs, params.switch_output_diff_params,

@@ -14,14 +14,20 @@
 
 #include "dvaas/packet_injection.h"
 
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/escaping.h"
+#include "absl/time/time.h"
+#include "dvaas/port_id_map.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "gutil/status.h"
+#include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -31,6 +37,8 @@
 
 namespace dvaas {
 namespace {
+
+using pins_test::P4rtPortId;
 
 // Utils.
 // Reads P4Info from the `device` and convert it to IrP4Info.
@@ -95,6 +103,20 @@ CollectStreamMessageResponsesAndReturnTaggedPacketIns(
   return tagged_packet_ins;
 }
 
+// Returns the SUT egress port corresponding to the punted packet on control
+// switch given the `mirror_testbed_port_map`.
+absl::StatusOr<P4rtPortId> GetSutEgressPortFromControlSwitchPacketIn(
+    const pdpi::IrPacketIn& packet_in,
+    const MirrorTestbedP4rtPortIdMap& mirror_testbed_port_map) {
+  ASSIGN_OR_RETURN(const std::string control_switch_ingress_port_p4rt_encoding,
+                   GetIngressPortFromIrPacketIn(packet_in));
+  ASSIGN_OR_RETURN(const P4rtPortId control_switch_ingress_port,
+                   P4rtPortId::MakeFromP4rtEncoding(
+                       control_switch_ingress_port_p4rt_encoding));
+  return mirror_testbed_port_map.GetSutPortConnectedToControlSwitchPort(
+      control_switch_ingress_port);
+}
+
 }  // namespace
 
 absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
@@ -109,10 +131,7 @@ absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const PacketTestVectorById& packet_test_vector_by_id,
-    PacketStatistics& statistics,
-    std::optional<int> max_packets_to_send_per_second,
-    const IsExpectedUnsolicitedPacketFunctionType&
-        is_expected_unsolicited_packet) {
+    const PacketInjectionParams& parameters, PacketStatistics& statistics) {
   LOG(INFO) << "Injecting test packets into the dataplane "
             << packet_test_vector_by_id.size();
   statistics.total_packets_injected += packet_test_vector_by_id.size();
@@ -124,8 +143,9 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
 
   // Compute per packet injection delay.
   std::optional<absl::Duration> injection_delay;
-  if (max_packets_to_send_per_second.has_value()) {
-    injection_delay = absl::Milliseconds(1e3 / *max_packets_to_send_per_second);
+  if (parameters.max_packets_to_send_per_second.has_value()) {
+    injection_delay =
+        absl::Milliseconds(1e3 / *parameters.max_packets_to_send_per_second);
   }
 
   // Send packets.
@@ -149,7 +169,8 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
   const absl::Duration kCollectionDuration = absl::Seconds(3);
   absl::StatusOr<std::vector<TaggedPacketIn>> control_packet_ins =
       CollectStreamMessageResponsesAndReturnTaggedPacketIns(
-          control_switch, kCollectionDuration, is_expected_unsolicited_packet);
+          control_switch, kCollectionDuration,
+          parameters.is_expected_unsolicited_packet);
   RETURN_IF_ERROR(control_packet_ins.status())
       << "while collecting the output of control_switch";
   LOG(INFO) << "Collected " << control_packet_ins->size()
@@ -158,7 +179,7 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
 
   absl::StatusOr<std::vector<TaggedPacketIn>> sut_packet_ins =
       CollectStreamMessageResponsesAndReturnTaggedPacketIns(
-          sut, kCollectionDuration, is_expected_unsolicited_packet);
+          sut, kCollectionDuration, parameters.is_expected_unsolicited_packet);
   RETURN_IF_ERROR(sut_packet_ins.status())
       << "while  collecting the output of SUT";
   LOG(INFO) << "Collected " << sut_packet_ins->size()
@@ -181,8 +202,10 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     ASSIGN_OR_RETURN(
         pdpi::IrPacketIn ir_packet_in,
         pdpi::PiPacketInToIr(control_ir_p4info, packet_in.packet_in));
-    ASSIGN_OR_RETURN(*forwarded_output.mutable_port(),
-                     GetIngressPortFromIrPacketIn(ir_packet_in));
+    ASSIGN_OR_RETURN(const P4rtPortId sut_egress_port,
+                     GetSutEgressPortFromControlSwitchPacketIn(
+                         ir_packet_in, parameters.mirror_testbed_port_map));
+    *forwarded_output.mutable_port() = sut_egress_port.GetP4rtEncoding();
   }
 
   // Processing the output of SUT.
