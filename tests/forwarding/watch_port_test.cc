@@ -104,37 +104,6 @@ constexpr int kNumTestPackets = 5000;
 // arrive.
 constexpr int kDefaultInputPortIndex = 0;
 
-// Helper function that sets up the  input port for packet recieve.
-// Creates the router interface for the input port. Without this input packets
-// get dropped (b/190736007).
-absl::Status SetUpInputPortForPacketReceive(pdpi::P4RuntimeSession& p4_session,
-                                            const pdpi::IrP4Info& ir_p4info,
-                                            int input_port) {
-  ASSIGN_OR_RETURN(
-      p4::v1::WriteRequest write_request,
-      pdpi::PdWriteRequestToPi(
-          ir_p4info, gutil::ParseProtoOrDie<sai::WriteRequest>(absl::Substitute(
-                         R"pb(
-                           updates {
-                             type: INSERT
-                             table_entry {
-                               router_interface_table_entry {
-                                 match { router_interface_id: "$0" }
-                                 action {
-                                   set_port_and_src_mac {
-                                     port: "$1"
-                                     src_mac: "00:02:03:04:05:06"
-                                   }
-                                 }
-                               }
-                             }
-                           }
-                         )pb",
-                         input_port, input_port))));
-
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
-}
-
 // Helper function that creates/deletes V4, V6 default route entries.
 absl::Status ProgramDefaultRoutes(pdpi::P4RuntimeSession& p4_session,
                                   const pdpi::IrP4Info& ir_p4info,
@@ -552,12 +521,8 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4_info));
-  ASSERT_OK(
-      SetUpInputPortForPacketReceive(*sut_p4_session_, ir_p4info, input_port));
 
   // Programs the required router interfaces, nexthops for wcmp group.
   ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
@@ -638,12 +603,8 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4_info));
-  ASSERT_OK(
-      SetUpInputPortForPacketReceive(*sut_p4_session_, ir_p4info, input_port));
 
   // Programs the required router interfaces, nexthops for wcmp group.
   ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
@@ -757,12 +718,8 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4_info));
-  ASSERT_OK(
-      SetUpInputPortForPacketReceive(*sut_p4_session_, ir_p4info, input_port));
 
   // Program the required router interfaces, nexthops for wcmp group.
   ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
@@ -870,12 +827,8 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
   const int group_size = 1;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4_info));
-  ASSERT_OK(
-      SetUpInputPortForPacketReceive(*sut_p4_session_, ir_p4info, input_port));
 
   // Programs the required router interfaces, nexthops for wcmp group.
   ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
@@ -988,12 +941,8 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(GetParam().p4_info));
-  ASSERT_OK(
-      SetUpInputPortForPacketReceive(*sut_p4_session_, ir_p4info, input_port));
 
   // Programs the required router interfaces, nexthops for wcmp group.
   ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
@@ -1101,11 +1050,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
       GetParam().testbed->GetMirrorTestbed().Environment();
   environment.SetTestCaseID("e54da480-d2cc-42c6-bced-0354b5ab3329");
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
-  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
-                       pdpi::CreateIrP4Info(GetParam().p4_info));
-  ASSERT_OK(
-      SetUpInputPortForPacketReceive(*sut_p4_session_, ir_p4info, input_port));
 
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
@@ -1125,6 +1069,8 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
                                    AdminState::kDown));
 
   // Programs the required router interfaces, nexthops for wcmp group.
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
   ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
                                    members));
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
