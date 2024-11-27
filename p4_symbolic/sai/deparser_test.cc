@@ -33,6 +33,7 @@
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/symbolic.h"
 #include "sai_p4/instantiations/google/instantiations.h"
+#include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "z3++.h"
 
 namespace p4_symbolic {
@@ -44,10 +45,10 @@ class SaiDeparserTest : public testing::TestWithParam<sai::Instantiation> {
  public:
   void SetUp() override {
     testing::TestWithParam<sai::Instantiation>::SetUp();
-    sai::Instantiation instantiation = GetParam();
-    std::vector<p4::v1::TableEntry> entries;
-    std::vector<int> ports;
-    ASSERT_OK_AND_ASSIGN(state_, EvaluateSaiPipeline(instantiation, entries, ports));
+    const auto config = sai::GetNonstandardForwardingPipelineConfig(
+        /*instantiation=*/GetParam(), sai::NonstandardPlatform::kP4Symbolic);
+    ASSERT_OK_AND_ASSIGN(
+        state_, EvaluateSaiPipeline(config, /*entries=*/{}, /*ports=*/{}));
   }
 
  protected:

@@ -38,7 +38,7 @@
 namespace factory_reset {
 
 constexpr absl::Duration kFactoryResetWaitForDownTime = absl::Seconds(60);
-constexpr absl::Duration kFactoryResetWaitForUpTime = absl::Minutes(18);
+constexpr absl::Duration kFactoryResetWaitForUpTime = absl::Minutes(25);
 constexpr absl::Duration kSshSessionTimeout = absl::Seconds(5);
 
 void IssueGnoiFactoryResetAndValidateStatus(

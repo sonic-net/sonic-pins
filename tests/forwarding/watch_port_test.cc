@@ -104,37 +104,6 @@ constexpr int kNumTestPackets = 5000;
 // arrive.
 constexpr int kDefaultInputPortIndex = 0;
 
-// Helper function that sets up the  input port for packet recieve.
-// Creates the router interface for the input port. Without this input packets
-// get dropped (b/190736007).
-absl::Status SetUpInputPortForPacketReceive(pdpi::P4RuntimeSession& p4_session,
-                                            const pdpi::IrP4Info& ir_p4info,
-                                            int input_port) {
-  ASSIGN_OR_RETURN(
-      p4::v1::WriteRequest write_request,
-      pdpi::PdWriteRequestToPi(
-          ir_p4info, gutil::ParseProtoOrDie<sai::WriteRequest>(absl::Substitute(
-                         R"pb(
-                           updates {
-                             type: INSERT
-                             table_entry {
-                               router_interface_table_entry {
-                                 match { router_interface_id: "$0" }
-                                 action {
-                                   set_port_and_src_mac {
-                                     port: "$1"
-                                     src_mac: "00:02:03:04:05:06"
-                                   }
-                                 }
-                               }
-                             }
-                           }
-                         )pb",
-                         input_port, input_port))));
-
-  return pdpi::SetMetadataAndSendPiWriteRequest(&p4_session, write_request);
-}
-
 // Helper function that creates/deletes V4, V6 default route entries.
 absl::Status ProgramDefaultRoutes(pdpi::P4RuntimeSession& p4_session,
                                   const pdpi::IrP4Info& ir_p4info,
@@ -441,19 +410,21 @@ void WatchPortTestFixture::SetUp() {
       testbed.ControlSwitch(), gnmi_config,
       /*timeout=*/absl::Minutes(3)));
 
-  ASSERT_OK(testbed.Environment().StoreTestArtifact("p4info.pb.txt",
-                                                    GetP4Info().DebugString()));
+  ASSERT_OK(testbed.Environment().StoreTestArtifact(
+      "p4info.pb.txt", GetParam().p4_info.DebugString()));
 
   // Setup SUT & control switch.
 
   ASSERT_OK_AND_ASSIGN(sut_p4_session_,
                        pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           testbed.Sut(), GetP4Info()));
+                           testbed.Sut(), GetParam().p4_info));
   ASSERT_OK_AND_ASSIGN(control_p4_session_,
                        pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           testbed.ControlSwitch(), GetP4Info()));
-  ASSERT_OK(SetUpSut(*sut_p4_session_, GetIrP4Info(), kVrfId));
-  ASSERT_OK(SetUpControlSwitch(*control_p4_session_, GetIrP4Info()));
+                           testbed.ControlSwitch(), GetParam().p4_info));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
+  ASSERT_OK(SetUpSut(*sut_p4_session_, ir_p4info, kVrfId));
+  ASSERT_OK(SetUpControlSwitch(*control_p4_session_, ir_p4info));
 
   // Create GNMI stub for admin operations.
   ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_, testbed.Sut().CreateGnmiStub());
@@ -462,12 +433,12 @@ void WatchPortTestFixture::SetUp() {
 
   // Start the receiver thread for control switch to listen for packets from
   // SUT, this thread is terminated in the TearDown.
-  receive_packet_thread_ = std::thread([&]() {
+  receive_packet_thread_ = std::thread([&, ir_p4info]() {
     p4::v1::StreamMessageResponse pi_response;
     while (control_p4_session_->StreamChannelRead(pi_response)) {
       absl::MutexLock lock(&test_data_.mutex);
       sai::StreamMessageResponse pd_response;
-      ASSERT_OK(pdpi::PiStreamMessageResponseToPd(GetIrP4Info(), pi_response,
+      ASSERT_OK(pdpi::PiStreamMessageResponseToPd(ir_p4info, pi_response,
                                                   &pd_response))
           << " PacketIn PI to PD failed: ";
       ASSERT_TRUE(pd_response.has_packet())
@@ -536,15 +507,6 @@ void WatchPortTestFixture::TearDown() {
   testbed.TearDown();
 }
 
-// TODO: Parameterize over the different instantiations like
-// MiddleBlock, FBR400.
-const p4::config::v1::P4Info& WatchPortTestFixture::GetP4Info() {
-  return sai::GetP4Info(sai::Instantiation::kMiddleblock);
-}
-const pdpi::IrP4Info& WatchPortTestFixture::GetIrP4Info() {
-  return sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
-}
-
 namespace {
 
 // Verifies basic WCMP behavior by programming a group with multiple members
@@ -559,21 +521,19 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
-  ASSERT_OK(SetUpInputPortForPacketReceive(*sut_p4_session_, GetIrP4Info(),
-                                           input_port));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
 
   // Programs the required router interfaces, nexthops for wcmp group.
-  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, GetIrP4Info(),
+  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
                                    members));
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
-                                           GetIrP4Info(), kGroupId, members,
+					   ir_p4info, kGroupId, members,
                                            p4::v1::Update::INSERT))
       << "Failed to program WCMP group: ";
 
   // Program default routing for all packets on SUT.
-  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, ir_p4info, kVrfId,
                                  p4::v1::Update::INSERT));
 
   // Generate test configuration, pick any field (IP_SRC) used by hashing to
@@ -598,7 +558,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
 
   // Send 5000 packets and check for packet distribution.
   ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
-                              controller_port_ids, GetIrP4Info(),
+                              controller_port_ids, ir_p4info,
                               *control_p4_session_, environment));
   test_data_.total_packets_sent = kNumTestPackets;
 
@@ -620,7 +580,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
     absl::flat_hash_set<int> expected_member_ports =
         CreateExpectedMemberPorts(members);
 
-    ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
+    ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, ir_p4info,
                                            kGroupId, members));
 
     // Verifies the actual members inferred from receive traffic matches the
@@ -643,19 +603,17 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
-  ASSERT_OK(SetUpInputPortForPacketReceive(*sut_p4_session_, GetIrP4Info(),
-                                           input_port));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
 
   // Programs the required router interfaces, nexthops for wcmp group.
-  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, GetIrP4Info(),
+  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
                                    members));
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
-                                           GetIrP4Info(), kGroupId, members,
+                                           ir_p4info, kGroupId, members,
                                            p4::v1::Update::INSERT));
   // Program default routing for all packets on SUT.
-  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, ir_p4info, kVrfId,
                                  p4::v1::Update::INSERT));
 
   // Generate test configuration, pick any field used by hashing to vary for
@@ -704,7 +662,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
 
     // Send 5000 packets and check for packet distribution.
     ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
-                                controller_port_ids, GetIrP4Info(),
+                                controller_port_ids, ir_p4info,
                                 *control_p4_session_, environment));
     test_data_.total_packets_sent = kNumTestPackets;
 
@@ -732,7 +690,7 @@ TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
         expected_member_ports.insert(selected_port_id);
       }
 
-      ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
+      ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, ir_p4info,
                                              kGroupId, members));
       // Verifies the actual members inferred from receive traffic matches the
       // expected members.
@@ -760,19 +718,17 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
-  ASSERT_OK(SetUpInputPortForPacketReceive(*sut_p4_session_, GetIrP4Info(),
-                                           input_port));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
 
   // Program the required router interfaces, nexthops for wcmp group.
-  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, GetIrP4Info(),
+  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
                                    members));
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
-                                           GetIrP4Info(), kGroupId, members,
+                                           ir_p4info, kGroupId, members,
                                            p4::v1::Update::INSERT));
   // Program default routing for all packets on SUT.
-  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, ir_p4info, kVrfId,
                                  p4::v1::Update::INSERT));
 
   // Generate test configuration, pick any field used by hashing to vary for
@@ -824,7 +780,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
 
   // Send 5000 packets and check for packet distribution.
   ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
-                              controller_port_ids, GetIrP4Info(),
+                              controller_port_ids, ir_p4info,
                               *control_p4_session_, environment));
   test_data_.total_packets_sent = kNumTestPackets;
 
@@ -840,7 +796,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
         << " and actual: " << test.output.size() << "packets received for "
         << DescribeTestConfig(test_config);
 
-    ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
+    ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, ir_p4info,
                                            kGroupId, members));
 
     // Count the received packets and create the expected_member_ports for admin
@@ -871,19 +827,17 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
   const int group_size = 1;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
-  ASSERT_OK(SetUpInputPortForPacketReceive(*sut_p4_session_, GetIrP4Info(),
-                                           input_port));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
 
   // Programs the required router interfaces, nexthops for wcmp group.
-  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, GetIrP4Info(),
+  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
                                    members));
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
-                                           GetIrP4Info(), kGroupId, members,
+                                           ir_p4info, kGroupId, members,
                                            p4::v1::Update::INSERT));
   // Program default routing for all packets on SUT.
-  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, ir_p4info, kVrfId,
                                  p4::v1::Update::INSERT));
 
   // Generate test configuration, pick any field used by hashing to vary for
@@ -933,7 +887,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
 
     // Send 5000 packets and check for packet distribution.
     ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
-                                controller_port_ids, GetIrP4Info(),
+                                controller_port_ids, ir_p4info,
                                 *control_p4_session_, environment));
     test_data_.total_packets_sent = kNumTestPackets;
 
@@ -963,7 +917,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
       ASSERT_OK_AND_ASSIGN(auto num_packets_per_port,
                            CountNumPacketsPerPort(test.output));
 
-      ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
+      ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, ir_p4info,
                                              kGroupId, members));
 
       // Verifies the actual members inferred from receive traffic matches the
@@ -987,19 +941,17 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
-
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
-  ASSERT_OK(SetUpInputPortForPacketReceive(*sut_p4_session_, GetIrP4Info(),
-                                           input_port));
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
 
   // Programs the required router interfaces, nexthops for wcmp group.
-  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, GetIrP4Info(),
+  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
                                    members));
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
-                                           GetIrP4Info(), kGroupId, members,
+                                           ir_p4info, kGroupId, members,
                                            p4::v1::Update::INSERT));
   // Program default routing for all packets on SUT.
-  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, ir_p4info, kVrfId,
                                  p4::v1::Update::INSERT));
 
   // Generate test configuration, pick any field used by hashing to vary for
@@ -1038,7 +990,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   // Send Modify request to remove the down member from the group.
   members.erase(members.begin() + random_member_index);
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
-                                           GetIrP4Info(), kGroupId, members,
+                                           ir_p4info, kGroupId, members,
                                            p4::v1::Update::MODIFY));
   // Bring the down member watch port up.
   ASSERT_OK(SetInterfaceAdminState(*control_gnmi_stub_, selected_port_name,
@@ -1050,7 +1002,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
 
   // Send 5000 packets and check for packet distribution.
   ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
-                              controller_port_ids, GetIrP4Info(),
+                              controller_port_ids, ir_p4info,
                               *control_p4_session_, environment));
   test_data_.total_packets_sent = kNumTestPackets;
 
@@ -1072,7 +1024,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
     absl::flat_hash_set<int> expected_member_ports =
         CreateExpectedMemberPorts(members);
 
-    ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
+    ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, ir_p4info,
                                            kGroupId, members));
 
     // Verifies the actual members inferred from receive traffic matches the
@@ -1084,11 +1036,11 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   }
 
   // Delete default routes to prepare for delete group.
-  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, ir_p4info, kVrfId,
                                  p4::v1::Update::DELETE));
 
   // Delete group and verify no errors.
-  ASSERT_OK(DeleteGroup(*sut_p4_session_, GetIrP4Info(), kGroupId));
+  ASSERT_OK(DeleteGroup(*sut_p4_session_, ir_p4info, kGroupId));
 };
 
 // Add ActionProfileGroup member whose watch port is down (during create) and
@@ -1098,9 +1050,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
       GetParam().testbed->GetMirrorTestbed().Environment();
   environment.SetTestCaseID("e54da480-d2cc-42c6-bced-0354b5ab3329");
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
-  const int input_port = controller_port_ids[kDefaultInputPortIndex];
-  ASSERT_OK(SetUpInputPortForPacketReceive(*sut_p4_session_, GetIrP4Info(),
-                                           input_port));
 
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
@@ -1120,13 +1069,15 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
                                    AdminState::kDown));
 
   // Programs the required router interfaces, nexthops for wcmp group.
-  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, GetIrP4Info(),
+  ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
+                       pdpi::CreateIrP4Info(GetParam().p4_info));
+  ASSERT_OK(pins::ProgramNextHops(environment, *sut_p4_session_, ir_p4info,
                                    members));
   ASSERT_OK(pins::ProgramGroupWithMembers(environment, *sut_p4_session_,
-                                           GetIrP4Info(), kGroupId, members,
+                                           ir_p4info, kGroupId, members,
                                            p4::v1::Update::INSERT));
   // Program default routing for all packets on SUT.
-  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, GetIrP4Info(), kVrfId,
+  ASSERT_OK(ProgramDefaultRoutes(*sut_p4_session_, ir_p4info, kVrfId,
                                  p4::v1::Update::INSERT));
 
   // Generate test configuration, pick any field used by hashing to vary for
@@ -1163,7 +1114,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
 
     // Send 5000 packets and check for packet distribution.
     ASSERT_OK(SendNPacketsToSut(kNumTestPackets, test_config, members,
-                                controller_port_ids, GetIrP4Info(),
+                                controller_port_ids, ir_p4info,
                                 *control_p4_session_, environment));
     test_data_.total_packets_sent = kNumTestPackets;
 
@@ -1190,7 +1141,7 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
       ASSERT_OK_AND_ASSIGN(auto num_packets_per_port,
                            CountNumPacketsPerPort(test.output));
 
-      ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, GetIrP4Info(),
+      ASSERT_OK(VerifyGroupMembersFromP4Read(*sut_p4_session_, ir_p4info,
                                              kGroupId, members));
       // Verifies the actual members inferred from receive traffic matches the
       // expected members.
