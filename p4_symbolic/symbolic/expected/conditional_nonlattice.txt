@@ -1,0 +1,18 @@
+Finding packet for table MyIngress.t_1 and row -1
+	Dropped = 0
+	standard_metadata.ingress_port = #b000001000
+	standard_metadata.egress_spec = #b000000001
+
+Finding packet for table MyIngress.t_2 and row -1
+	Dropped = 0
+	standard_metadata.ingress_port = #b000000000
+	standard_metadata.egress_spec = #b000000001
+
+Finding packet for table MyIngress.t_3 and row -1
+Cannot find solution!
+
+Finding packet for table MyIngress.t_3 and row 0
+	Dropped = 0
+	standard_metadata.ingress_port = #b000000000
+	standard_metadata.egress_spec = #b000000001
+
