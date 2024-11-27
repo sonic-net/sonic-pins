@@ -323,6 +323,24 @@ pipeline {
     initial_control: "MyIngress.ports_exact"
   }
 }
+parsers {
+  key: "parser"
+  value {
+    name: "parser"
+    initial_state: "start"
+    parse_states {
+      key: "start"
+      value {
+        name: "start"
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+  }
+}
 
 =====MyIngress.ports_exact Entries=====
 

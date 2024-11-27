@@ -68,4 +68,3 @@ V1Switch(
   empty_compute_checksum(),
   packet_deparser()
 ) main;
-
