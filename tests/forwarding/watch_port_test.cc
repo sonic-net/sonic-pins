@@ -1050,7 +1050,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
       GetParam().testbed->GetMirrorTestbed().Environment();
   environment.SetTestCaseID("e54da480-d2cc-42c6-bced-0354b5ab3329");
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
-
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,
                        CreateGroupMembers(group_size, controller_port_ids));
