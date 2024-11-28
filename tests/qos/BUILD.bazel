@@ -30,7 +30,9 @@ cc_library(
         "cpu_qos_test.h",
     ],
     deps = [
+        ":gnmi_parsers",
         "//gutil:collections",
+        "//gutil:overload",
         "//gutil:proto",
         "//gutil:proto_matchers",
         "//gutil:status",
@@ -74,6 +76,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:variant",
         "@com_google_googletest//:gtest",
         "@com_google_protobuf//:protobuf",
     ],

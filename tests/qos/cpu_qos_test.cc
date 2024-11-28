@@ -18,6 +18,7 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
@@ -35,11 +36,13 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
+#include "absl/types/variant.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/util/json_util.h"
 #include "gtest/gtest.h"
 #include "gutil/collections.h"
+#include "gutil/overload.h"
 #include "gutil/proto.h"
 #include "gutil/proto_matchers.h"
 #include "gutil/status.h"
@@ -66,6 +69,7 @@
 #include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/forwarding/util.h"
+#include "tests/qos/gnmi_parsers.h"
 #include "thinkit/control_device.h"
 #include "thinkit/generic_testbed.h"
 #include "thinkit/mirror_testbed.h"
@@ -78,6 +82,8 @@ namespace {
 using ::gutil::EqualsProto;
 using ::gutil::IsOkAndHolds;
 using ::p4::config::v1::P4Info;
+using ::testing::Contains;
+using ::testing::Not;
 
 // Size of the "frame check sequence" (FCS) that is part of Layer 2 Ethernet
 // frames.
@@ -88,6 +94,12 @@ constexpr int kFrameCheckSequenceSize = 4;
 // Empirically, for PINS, queue counters currently seem to get updated every
 // 10 seconds.
 constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(15);
+
+// After pushing gNMI config to a switch, the tests sleep for this duration
+// assuming that the gNMI config will have been fully applied afterwards.
+// TODO: Instead of hard-coding this time, tests should dynamically
+// poll the state of the switch to ensure config has been applied.
+constexpr absl::Duration kTimeToWaitForGnmiConfigToApply = absl::Seconds(15);
 
 struct QueueInfo {
   std::string gnmi_queue_name;      // Openconfig queue name.
@@ -133,7 +145,7 @@ absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
             src_ip { value: "$1" mask: "255.255.255.255" }
             dst_ip { value: "$2" mask: "255.255.255.255" }
           }
-          action { trap { qos_queue: "$3" } }
+          action { acl_trap { qos_queue: "$3" } }
           priority: 1
         }
       )pb",
@@ -327,20 +339,6 @@ ParseIpv6DscpToQueueMapping(absl::string_view gnmi_config) {
   return ParseIpv4DscpToQueueMapping(gnmi_config);
 }
 
-absl::StatusOr<std::optional<netaddr::Ipv4Address>> ParseLoopbackIpv4(
-    absl::string_view gnmi_config) {
-  // TODO: Actually parse IP -- hard-coded for now.
-  return absl::nullopt;
-}
-
-absl::StatusOr<std::optional<netaddr::Ipv6Address>> ParseLoopbackIpv6(
-    absl::string_view gnmi_config) {
-  // TODO: Actually parse IP -- hard-coded for now.
-  ASSIGN_OR_RETURN(auto ip,
-                   netaddr::Ipv6Address::OfString("2607:f8b0:8096:3125::"));
-  return ip;
-}
-
 // Represents a link connecting the switch under test (SUT) to a control device.
 struct SutToControlLink {
   std::string sut_port_gnmi_name;
@@ -362,10 +360,10 @@ absl::StatusOr<SutToControlLink> PickSutToControlDeviceLinkThatsUp(
     thinkit::MirrorTestbed &testbed) {
   // TODO: Pick dynamically instead of hard-coding.
   return SutToControlLink{
-      .sut_port_gnmi_name = "Ethernet28",
-      .sut_port_p4rt_name = "516",
-      .control_device_port_gnmi_name = "Ethernet28",
-      .control_device_port_p4rt_name = "516",
+      .sut_port_gnmi_name = "Ethernet0",
+      .sut_port_p4rt_name = "1",
+      .control_device_port_gnmi_name = "Ethernet0",
+      .control_device_port_p4rt_name = "1",
   };
 }
 
@@ -645,7 +643,6 @@ TestPacketsThatShouldNotGetPunted() {
   for (auto &packet : packets) {
     RETURN_IF_ERROR(packetlib::PadPacketToMinimumSize(packet).status());
     RETURN_IF_ERROR(packetlib::UpdateAllComputedFields(packet).status());
-    LOG(INFO) << packet.DebugString();  // TODO: remove.
   }
   return packets;
 }
@@ -700,9 +697,9 @@ TEST_P(CpuQosTestWithoutIxia,
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
 
   // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping 10 seconds to wait for config to be applied/links to "
-               "come up.";
-  absl::SleepFor(absl::Seconds(10));
+  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
+            << " to wait for config to be applied/links to come up.";
+  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -734,10 +731,10 @@ TEST_P(CpuQosTestWithoutIxia,
                                       router_interface_entry));
 
   // Extract loopback IPs from gNMI config, to avoid using them in test packets.
-  ASSERT_OK_AND_ASSIGN(std::optional<netaddr::Ipv4Address> loopback_ipv4,
-                       ParseLoopbackIpv4(GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(std::optional<netaddr::Ipv6Address> loopback_ipv6,
-                       ParseLoopbackIpv6(GetParam().gnmi_config));
+  using IpAddresses =
+      std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>;
+  ASSERT_OK_AND_ASSIGN(IpAddresses loopback_ips,
+                       ParseLoopbackIps(GetParam().gnmi_config));
 
   // Read CPU queue state prior to injecting test packets. The state should
   // remain unchanged when we inject test packets.
@@ -752,15 +749,19 @@ TEST_P(CpuQosTestWithoutIxia,
     // Ensure we are not hitting the loopback IP, as this would be a case in
     // which we *do* expect the packet to arrive at the CPU.
     for (const packetlib::Header &header : packet.headers()) {
-      if (header.has_ipv4_header() && loopback_ipv4.has_value()) {
-        ASSERT_NE(header.ipv4_header().ipv4_destination(),
-                  loopback_ipv4->ToString())
+      if (header.has_ipv4_header()) {
+        ASSERT_OK_AND_ASSIGN(auto ip_dst,
+                             netaddr::Ipv4Address::OfString(
+                                 header.ipv4_header().ipv4_destination()));
+        ASSERT_THAT(loopback_ips, Not(Contains(ip_dst)))
             << "TODO: Implement logic to pick non-loopback IP "
                "address.";
       }
-      if (header.has_ipv6_header() && loopback_ipv6.has_value()) {
-        ASSERT_NE(header.ipv6_header().ipv6_destination(),
-                  loopback_ipv6->ToString())
+      if (header.has_ipv6_header()) {
+        ASSERT_OK_AND_ASSIGN(auto ip_dst,
+                             netaddr::Ipv6Address::OfString(
+                                 header.ipv6_header().ipv6_destination()));
+        ASSERT_THAT(loopback_ips, Not(Contains(ip_dst)))
             << "TODO: Implement logic to pick non-loopback IP "
                "address.";
       }
@@ -806,9 +807,9 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   ASSERT_OK(pins_test::PushGnmiConfig(control_device, GetParam().gnmi_config));
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
   // TODO: Poll for config to be applied, links to come up instead.
-  LOG(INFO) << "Sleeping 10 seconds to wait for config to be applied/links to "
-               "come up.";
-  absl::SleepFor(absl::Seconds(10));
+  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
+            << " to wait for config to be applied/links to come up.";
+  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
 
   // Pick a link to be used for packet injection.
   ASSERT_OK_AND_ASSIGN(SutToControlLink link_used_for_test_packets,
@@ -851,11 +852,11 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   const std::string kDefaultQueueName = "BE1";
 
   // Extract loopback IPs from gNMI config.
-  ASSERT_OK_AND_ASSIGN(std::optional<netaddr::Ipv4Address> loopback_ipv4,
-                       ParseLoopbackIpv4(GetParam().gnmi_config));
-  ASSERT_OK_AND_ASSIGN(std::optional<netaddr::Ipv6Address> loopback_ipv6,
-                       ParseLoopbackIpv6(GetParam().gnmi_config));
-  ASSERT_TRUE(loopback_ipv4.has_value() || loopback_ipv6.has_value())
+  using IpAddresses =
+      std::vector<std::variant<netaddr::Ipv4Address, netaddr::Ipv6Address>>;
+  ASSERT_OK_AND_ASSIGN(IpAddresses loopback_ips,
+                       ParseLoopbackIps(GetParam().gnmi_config));
+  ASSERT_TRUE(!loopback_ips.empty())
       << "Expected a loopback IP to be configured via gNMI; nothing to "
          "test.";
 
@@ -863,11 +864,15 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   // destined to the loopback IP(s).
   constexpr int kMaxDscp = 63;
   for (int dscp = 0; dscp <= kMaxDscp; ++dscp) {
-    for (bool ipv4 : {true, false}) {
-      if (ipv4 && !loopback_ipv4.has_value()) continue;
-      if (!ipv4 && !loopback_ipv6.has_value()) continue;
+    for (auto &loopback_ip : loopback_ips) {
+      netaddr::Ipv4Address *loopback_ipv4 =
+          std::get_if<netaddr::Ipv4Address>(&loopback_ip);
+      netaddr::Ipv6Address *loopback_ipv6 =
+          std::get_if<netaddr::Ipv6Address>(&loopback_ip);
+      ASSERT_TRUE(loopback_ipv4 != nullptr || loopback_ipv6 != nullptr);
       LOG(INFO) << "Testing DSCP-to-queue mapping for "
-                << (ipv4 ? "IPv4" : "IPv6") << " packet with DSCP " << dscp;
+                << (loopback_ipv4 != nullptr ? "IPv4" : "IPv6")
+                << " packet with DSCP " << dscp;
 
       // Identify target queue for current DSCP.
       // The algorithm for picking a queue is somewhat adhoc and PINS
@@ -891,12 +896,13 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
       // Inject test packet.
       ASSERT_OK_AND_ASSIGN(
           packetlib::Packet packet,
-          ipv4 ? MakeIpv4PacketWithDscp(/*dst_mac=*/kSutMacAddress,
-                                        /*dst_ip=*/*loopback_ipv4,
-                                        /*dscp=*/dscp)
-               : MakeIpv6PacketWithDscp(/*dst_mac=*/kSutMacAddress,
-                                        /*dst_ip=*/*loopback_ipv6,
-                                        /*dscp=*/dscp));
+          loopback_ipv4 != nullptr
+              ? MakeIpv4PacketWithDscp(/*dst_mac=*/kSutMacAddress,
+                                       /*dst_ip=*/*loopback_ipv4,
+                                       /*dscp=*/dscp)
+              : MakeIpv6PacketWithDscp(/*dst_mac=*/kSutMacAddress,
+                                       /*dst_ip=*/*loopback_ipv6,
+                                       /*dscp=*/dscp));
       ASSERT_OK_AND_ASSIGN(std::string raw_packet,
                            packetlib::SerializePacket(packet));
       ASSERT_OK(pins::InjectEgressPacket(
@@ -920,8 +926,9 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
       EXPECT_EQ(
           CumulativeNumPacketsEnqueued(queue_counters_after_test_packet),
           CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) + 1)
-          << "expected counter to increment for queue '" << target_queue
-          << "' targeted by the following test packet:\n"
+          << "Counters for queue " << target_queue
+          << " did not increment within " << kMaxQueueCounterUpdateTime
+          << " after injecting the following test packet:\n"
           << packet.DebugString()
           << "\nBefore: " << queue_counters_before_test_packet
           << "\nAfter : " << queue_counters_after_test_packet;
