@@ -17,7 +17,6 @@
 
 #include <optional>
 
-#include "tests/forwarding/mirror_blackbox_test_fixture.h"
 #include "thinkit/mirror_testbed_fixture.h"
 
 namespace pins_test {
