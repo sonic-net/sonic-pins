@@ -1117,4 +1117,455 @@ pipeline {
     initial_control: "__END_OF_PIPELINE__"
   }
 }
+parsers {
+  key: "parser"
+  value {
+    name: "parser"
+    initial_state: "start"
+    parse_states {
+      key: "parse_8021q_vlan"
+      value {
+        name: "parse_8021q_vlan"
+        parser_ops {
+          extract {
+            header {
+              header_name: "vlan"
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "vlan"
+            field_name: "ether_type"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x0800"
+            next_state: "parse_ipv4"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x86dd"
+            next_state: "parse_ipv6"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x0806"
+            next_state: "parse_arp"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "parse_arp"
+      value {
+        name: "parse_arp"
+        parser_ops {
+          extract {
+            header {
+              header_name: "arp"
+            }
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "parse_ethernet"
+      value {
+        name: "parse_ethernet"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ethernet"
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "ethernet"
+            field_name: "ether_type"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x0800"
+            next_state: "parse_ipv4"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x86dd"
+            next_state: "parse_ipv6"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x0806"
+            next_state: "parse_arp"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x8100"
+            next_state: "parse_8021q_vlan"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "parse_icmp"
+      value {
+        name: "parse_icmp"
+        parser_ops {
+          extract {
+            header {
+              header_name: "icmp"
+            }
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "parse_ipv4"
+      value {
+        name: "parse_ipv4"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ipv4"
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "ipv4"
+            field_name: "protocol"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x01"
+            next_state: "parse_icmp"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x06"
+            next_state: "parse_tcp"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x11"
+            next_state: "parse_udp"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "parse_ipv6"
+      value {
+        name: "parse_ipv6"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ipv6"
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "ipv6"
+            field_name: "next_header"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x3a"
+            next_state: "parse_icmp"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x06"
+            next_state: "parse_tcp"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x11"
+            next_state: "parse_udp"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "parse_packet_out_header"
+      value {
+        name: "parse_packet_out_header"
+        parser_ops {
+          extract {
+            header {
+              header_name: "packet_out_header"
+            }
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "parse_ethernet"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "parse_tcp"
+      value {
+        name: "parse_tcp"
+        parser_ops {
+          extract {
+            header {
+              header_name: "tcp"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._l4_src_port6"
+            }
+            field_rvalue {
+              header_name: "tcp"
+              field_name: "src_port"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._l4_dst_port7"
+            }
+            field_rvalue {
+              header_name: "tcp"
+              field_name: "dst_port"
+            }
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "parse_udp"
+      value {
+        name: "parse_udp"
+        parser_ops {
+          extract {
+            header {
+              header_name: "udp"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._l4_src_port6"
+            }
+            field_rvalue {
+              header_name: "udp"
+              field_name: "src_port"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._l4_dst_port7"
+            }
+            field_rvalue {
+              header_name: "udp"
+              field_name: "dst_port"
+            }
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "__END_OF_PARSER__"
+          }
+        }
+      }
+    }
+    parse_states {
+      key: "start"
+      value {
+        name: "start"
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._vlan_id_valid1"
+            }
+            expression_rvalue {
+              builtin_expression {
+                arguments {
+                  bool_value {
+                  }
+                }
+              }
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._vlan_id0"
+            }
+            hexstr_rvalue {
+              value: "0x0000"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._admit_to_l32"
+            }
+            expression_rvalue {
+              builtin_expression {
+                arguments {
+                  bool_value {
+                  }
+                }
+              }
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._vrf_id3"
+            }
+            hexstr_rvalue {
+              value: "0x0000"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._packet_rewrites_src_mac4"
+            }
+            hexstr_rvalue {
+              value: "0x000000000000"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._packet_rewrites_dst_mac5"
+            }
+            hexstr_rvalue {
+              value: "0x000000000000"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._l4_src_port6"
+            }
+            hexstr_rvalue {
+              value: "0x0000"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._l4_dst_port7"
+            }
+            hexstr_rvalue {
+              value: "0x0000"
+            }
+          }
+        }
+        parser_ops {
+          set {
+            lvalue {
+              header_name: "scalars"
+              field_name: "local_metadata_t._wcmp_selector_input8"
+            }
+            hexstr_rvalue {
+              value: "0x0000"
+            }
+          }
+        }
+        transition_key_fields {
+          field {
+            header_name: "standard_metadata"
+            field_name: "ingress_port"
+          }
+        }
+        transitions {
+          hex_string_transition {
+            value: "0x01fe"
+            next_state: "parse_packet_out_header"
+          }
+        }
+        transitions {
+          default_transition {
+            next_state: "parse_ethernet"
+          }
+        }
+      }
+    }
+  }
+}
 
