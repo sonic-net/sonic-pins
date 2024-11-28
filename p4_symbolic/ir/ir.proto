@@ -20,8 +20,8 @@
 // The bmv2 proto is used to initially parse the JSON format, which is then
 // processed by our tool and transformed into the IR.
 // The IR does not cover all the features of P4 programs.
-// Specifically, we intentionally ignore parsers, de-parsers, stacks and unions,
-// checksum calculations, and extern definitions.
+// Specifically, we intentionally ignore de-parsers, stacks, unions, checksum
+// calculations, and extern definitions.
 // Additionally, some types of expressions and statements are unsupported, these
 // are described in the relevant sections of this file.
 // See the bmv2 JSON format reference for more information:
@@ -48,6 +48,8 @@ message P4Program {
   map<string, Conditional> conditionals = 4;
   // Pipelines, keyed by their name.
   map<string, Pipeline> pipeline = 5;
+  // Parsers, keyed by parser names.
+  map<string, Parser> parsers = 6;
 
   // TODO: If needed in the future, action calls can be added here, for
   // action calls that are not wrapped in other control constructs.
@@ -67,6 +69,111 @@ message HeaderField {
   string name = 1;
   int32 bitwidth = 2;
   bool signed = 3;
+}
+
+// A P4 parser definition.
+message Parser {
+  // The name of the parser.
+  string name = 1;
+  // The name of the initial state of the state machine, usually "start".
+  string initial_state = 2;
+  // Defines all parse states of the state machine.
+  map<string, ParseState> parse_states = 3;
+}
+
+// Defines a parse state.
+// A parse state defines a state and its outgoing transitions in the parser's
+// state machine.
+message ParseState {
+  string name = 1;
+  // Operations performed in the parse state in the order defined by the P4
+  // program.
+  repeated ParserOperation parser_ops = 2;
+  // Fields of the transition key for the parser state (usually just one field).
+  repeated ParserTransitionKeyField transition_key_fields = 3;
+  // All transitions from this state to the next states.
+  repeated ParserTransition transitions = 4;
+  // Control flow information for optimized symbolic execution.
+  OptimizedSymbolicExecutionInfo optimized_symbolic_execution_info = 5;
+}
+
+// Defines a parser operation, which corresponds to a single statement in a
+// parse state. For instance, a parser operation can be a "set" operation
+// (corresponding to an assignment statement), an "extract" operation
+// (corresponding to an "extract" method call), or other primitives supported by
+// the target implementation.
+//
+// Reference:
+// https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#parser-operations.
+//
+// Note that only "extract" and "set" operations are supported for now since
+// others are not required at the moment. To support more complicated parsers,
+// other operations may be supported in the future.
+message ParserOperation {
+  // Defines an "extract" parser operation, which performs extraction for a
+  // fixed-width header.
+  message Extract {
+    // The name of the header instance to be extracted.
+    HeaderValue header = 1;
+  }
+
+  // Defines a "set" parser operation, which sets a field with the given value.
+  message Set {
+    // The field whose value is to be updated with the rvalue.
+    FieldValue lvalue = 1;
+
+    // The value used to update the field specified by the lvalue.
+    oneof rvalue {
+      FieldValue field_rvalue = 2;
+      HexstrValue hexstr_rvalue = 3;
+      LookaheadValue lookahead_rvalue = 4;
+      RExpression expression_rvalue = 5;
+    }
+  }
+
+  oneof operation {
+    Extract extract = 1;
+    Set set = 3;
+  }
+}
+
+// A single field in a transition key used in a parse state.
+message ParserTransitionKeyField {
+  oneof key_field {
+    // Specifies a header field as part of the transition key.
+    FieldValue field = 1;
+    // Specifies the lookahead value as part of the transition key.
+    // It evalutes to a set of bits from the input packet without advancing the
+    // current read position.
+    LookaheadValue lookahead = 2;
+  }
+}
+
+// Defines a transition between two parse states.
+message ParserTransition {
+  oneof transition {
+    // A default transition, applied when no other transitions are matched.
+    DefaultTransition default_transition = 1;
+    // A hex string transition, applied when the given hex string matches the
+    // key.
+    HexStringTransition hex_string_transition = 2;
+  }
+}
+
+// Defines a default transition.
+message DefaultTransition {
+  // The name of the next state
+  string next_state = 1;
+}
+
+// Defines a hex string transition.
+message HexStringTransition {
+  // Hex string value to be matched against the key.
+  string value = 1;
+  // Hex string mask, to be ANDed with both the key and the value if not empty.
+  string mask = 2;
+  // The name of the next state.
+  string next_state = 3;
 }
 
 // Overall action structure, combining definition with implementation.
@@ -267,6 +374,14 @@ message BoolValue {
 // A string literal value.
 message StringValue {
   string value = 1;
+}
+
+// A lookahead value.
+message LookaheadValue {
+  // Bit offset of the lookahead operation.
+  int32 offset = 1;
+  // Bit width of the lookahead operation.
+  int32 bitwidth = 2;
 }
 
 // A variable used within an LValue or RValue.

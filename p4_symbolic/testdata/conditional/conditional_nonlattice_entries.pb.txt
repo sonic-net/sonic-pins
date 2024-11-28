@@ -1,0 +1,28 @@
+updates {
+  type: INSERT
+  entity {
+    table_entry {
+      table_id: 44506558  # hdr.ethernet.dst_addr
+      match {
+        field_id: 1  # dst_addr
+        exact {
+          value: "\x00\x00\x00\x00\x00\x01"
+        }
+      }
+      action {
+        action {
+          action_id: 29683729  # MyIngress.forward
+          params {
+            param_id: 1  # dst_addr
+            value: "\x00\x00\x00\x00\x00\x02"
+          }
+          params {
+            param_id: 2  # port
+            value: "\01"
+          }
+        }
+      }
+    }
+  }
+}
+
