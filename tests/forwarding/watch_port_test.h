@@ -39,6 +39,8 @@ namespace pins {
 struct WatchPortTestParams {
   thinkit::MirrorTestbedInterface* testbed;
   std::string gnmi_config;
+  // P4Info to be used based on a specific instantiation.
+  p4::config::v1::P4Info p4_info;
   // TODO: Remove port ids from here and derive from gNMI config.
   std::vector<int> port_ids;
   // Optional function that raises critical alarm in the system.
@@ -56,10 +58,6 @@ class WatchPortTestFixture
   void SetUp() override;
 
   void TearDown() override;
-
-  // Returns the P4Info used by the test, for now just Middleblock.
-  const p4::config::v1::P4Info& GetP4Info();
-  const pdpi::IrP4Info& GetIrP4Info();
 
   TestData test_data_;
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session_;

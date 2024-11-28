@@ -1,4 +1,32 @@
 headers {
+  key: "ethernet"
+  value {
+    name: "ethernet_t"
+    id: 2
+    fields {
+      key: "dst_addr"
+      value {
+        name: "dst_addr"
+        bitwidth: 48
+      }
+    }
+    fields {
+      key: "ether_type"
+      value {
+        name: "ether_type"
+        bitwidth: 16
+      }
+    }
+    fields {
+      key: "src_addr"
+      value {
+        name: "src_addr"
+        bitwidth: 48
+      }
+    }
+  }
+}
+headers {
   key: "scalars"
   value {
     name: "scalars_0"
@@ -130,60 +158,6 @@ headers {
     }
   }
 }
-actions {
-  key: "reflector54"
-  value {
-    action_definition {
-      preamble {
-        name: "reflector54"
-      }
-    }
-    action_implementation {
-      action_body {
-        source_info {
-          line: 54
-          column: 8
-          source_fragment: "standard_metadata.egress_spec = standard_metadata.ingress_port"
-        }
-        assignment {
-          left {
-            field_value {
-              header_name: "standard_metadata"
-              field_name: "egress_spec"
-            }
-          }
-          right {
-            field_value {
-              header_name: "standard_metadata"
-              field_name: "ingress_port"
-            }
-          }
-        }
-      }
-    }
-  }
-}
-tables {
-  key: "tbl_reflector54"
-  value {
-    table_definition {
-      preamble {
-        name: "tbl_reflector54"
-      }
-    }
-    table_implementation {
-      default_action: "reflector54"
-      action_to_next_control {
-        key: "reflector54"
-        value: "__END_OF_PIPELINE__"
-      }
-      optimized_symbolic_execution_info {
-        merge_point: "__END_OF_PIPELINE__"
-        continue_to_merge_point: true
-      }
-    }
-  }
-}
 pipeline {
   key: "egress"
   value {
@@ -195,7 +169,7 @@ pipeline {
   key: "ingress"
   value {
     name: "ingress"
-    initial_control: "tbl_reflector54"
+    initial_control: "__END_OF_PIPELINE__"
   }
 }
 parsers {
@@ -207,6 +181,13 @@ parsers {
       key: "start"
       value {
         name: "start"
+        parser_ops {
+          extract {
+            header {
+              header_name: "ethernet"
+            }
+          }
+        }
         transitions {
           default_transition {
             next_state: "__END_OF_PARSER__"
