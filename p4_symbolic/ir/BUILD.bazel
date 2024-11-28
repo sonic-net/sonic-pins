@@ -90,7 +90,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-	 "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -212,9 +212,29 @@ ir_parsing_test(
 )
 
 ir_parsing_test(
+    name = "extract_parser_operation_test",
+    golden_file = "expected/extract_parser_operation.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/extract_parser_operation.p4",
+)
+
+ir_parsing_test(
+    name = "set_parser_operation_test",
+    golden_file = "expected/set_parser_operation.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/set_parser_operation.p4",
+)
+
+ir_parsing_test(
+    name = "default_transition_test",
+    golden_file = "expected/default_transition.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/default_transition.p4",
+)
+
+ir_parsing_test(
     name = "hex_string_transition_test",
     golden_file = "expected/hex_string_transition.txt",
     p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
     p4_program = "//p4_symbolic/testdata:parser/hex_string_transition.p4",
 )
-

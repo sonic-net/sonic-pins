@@ -14,13 +14,24 @@
 
 #include "dvaas/port_id_map.h"
 
+#include <string>
+#include <vector>
+
+#include "absl/algorithm/container.h"
+#include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "gutil/status.h"
+#include "gutil/test_artifact_writer.h"
+#include "lib/gnmi/gnmi_helper.h"
 #include "lib/p4rt/p4rt_port.h"
+#include "proto/gnmi/gnmi.grpc.pb.h"
 
 namespace dvaas {
 
@@ -80,6 +91,70 @@ MirrorTestbedP4rtPortIdMap::GetSutPortConnectedToControlSwitchPort(
   } else {
     return it->second;
   }
+}
+
+absl::Status CheckAndStoreMappedAndUnmappedPortIds(
+    const MirrorTestbedP4rtPortIdMap& port_id_map,
+    gnmi::gNMI::StubInterface& sut, gnmi::gNMI::StubInterface& control_switch,
+    gutil::TestArtifactWriter& writer) {
+  // Get all sut ports and control switch ports.
+  auto match_all_predicate = [](auto) { return true; };
+  ASSIGN_OR_RETURN(std::vector<pins_test::P4rtPortId> all_sut_ports,
+                   pins_test::GetMatchingP4rtPortIds(sut, match_all_predicate));
+  ASSIGN_OR_RETURN(
+      std::vector<pins_test::P4rtPortId> all_control_ports,
+      pins_test::GetMatchingP4rtPortIds(control_switch, match_all_predicate));
+
+  absl::btree_set<pins_test::P4rtPortId> unmapped_sut_ports(
+      all_sut_ports.begin(), all_sut_ports.end());
+  absl::btree_set<pins_test::P4rtPortId> unmapped_control_ports(
+      all_control_ports.begin(), all_control_ports.end());
+
+  // Collect port mappings in the artifact string.
+  std::string artifact_string = "Control <-> SUT";
+  for (const pins_test::P4rtPortId& control_port : all_control_ports) {
+    auto sut_port =
+        port_id_map.GetSutPortConnectedToControlSwitchPort(control_port);
+    if (!sut_port.ok()) continue;
+    // The port is mapped.
+    // Ensure that it is mapped to an existing port.
+    if (!unmapped_sut_ports.contains(*sut_port)) {
+      if (absl::c_find(all_sut_ports, *sut_port) != all_sut_ports.end()) {
+        // Two control ports are mapped to the same SUT port. That should never
+        // happen based on an invariant of the class.
+        return gutil::InvalidArgumentErrorBuilder() << absl::Substitute(
+                   "Two control switch P4RT port IDs (including '$0') are "
+                   "mapped to the same SUT P4RT port ID '$1'",
+                   control_port, *sut_port);
+      } else {
+        // The mapped port doesn't exist at all.
+        return gutil::InvalidArgumentErrorBuilder() << absl::Substitute(
+                   "SUT P4RT port ID '$0' does not exist, but is mapped to by "
+                   "control switch P4RT port ID '$1'",
+                   *sut_port, control_port);
+      }
+    }
+
+    // Consider both ports mapped and add the mapping to the artifact string.
+    unmapped_sut_ports.erase(*sut_port);
+    unmapped_control_ports.erase(control_port);
+    absl::StrAppendFormat(&artifact_string, "\n% 7s <-> %s",
+                          control_port.GetP4rtEncoding(),
+                          sut_port->GetP4rtEncoding());
+  }
+
+  // Record unmapped ports.
+  if (!unmapped_sut_ports.empty()) {
+    absl::StrAppendFormat(&artifact_string, "\n\nUnmapped SUT ports: %s",
+                          absl::StrJoin(unmapped_sut_ports, ", "));
+  }
+  if (!unmapped_control_ports.empty()) {
+    absl::StrAppendFormat(&artifact_string, "\n\nUnmapped control ports: %s",
+                          absl::StrJoin(unmapped_control_ports, ", "));
+  }
+
+  return writer.AppendToTestArtifact("mirror_testbed_port_map.txt",
+                                     artifact_string);
 }
 
 }  // namespace dvaas
