@@ -1,0 +1,668 @@
+================================================================================
+ValidateTestRun Test: Packet is expected to be forwarded (out of one
+of several acceptable ports), but gets dropped.
+================================================================================
+Expected: DATAPLANE packet gets forwarded (1 copies)
+  Actual: DATAPLANE packet got dropped
+- acceptable output #1 has mismatched number of packets (actual: 0 expected: 1)
+- acceptable output #2 has mismatched number of packets (actual: 0 expected: 1)
+- acceptable output #3 has mismatched number of packets (actual: 0 expected: 1)
+- acceptable output #4 has mismatched number of packets (actual: 0 expected: 1)
+
+Details dumped below.
+
+== INPUT =======================================================================
+type: DATAPLANE
+packet {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:08:02:08:10:40"
+        ethernet_source: "40:04:10:04:04:20"
+        ethertype: "0x86dd"
+      }
+    }
+    headers {
+      ipv6_header {
+        version: "0x6"
+        dscp: "0x00"
+        ecn: "0x0"
+        flow_label: "0x00000"
+        payload_length: "0x00ee"
+        next_header: "0x3a"
+        hop_limit: "0x80"
+        ipv6_source: "fe80::"
+        ipv6_destination: "2002:a05:6860:4f00::"
+      }
+    }
+    headers {
+      icmp_header {
+        type: "0x00"
+        code: "0x00"
+        checksum: "0x1461"
+        rest_of_header: "0x00000000"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== EXPECTED OUTPUT =============================================================
+-- Acceptable output: Alternative #1 --
+packets {
+  port: "8"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:08:02:08:10:40"
+        ethernet_source: "40:04:10:04:04:20"
+        ethertype: "0x86dd"
+      }
+    }
+    headers {
+      ipv6_header {
+        version: "0x6"
+        dscp: "0x00"
+        ecn: "0x0"
+        flow_label: "0x00000"
+        payload_length: "0x00ee"
+        next_header: "0x3a"
+        hop_limit: "0x80"
+        ipv6_source: "fe80::"
+        ipv6_destination: "2002:a05:6860:4f00::"
+      }
+    }
+    headers {
+      icmp_header {
+        type: "0x00"
+        code: "0x00"
+        checksum: "0x1461"
+        rest_of_header: "0x00000000"
+      }
+    }
+    payload: "test packet"
+  }
+}
+-- Acceptable output: Alternative #2 --
+packets {
+  port: "12"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:08:02:08:10:40"
+        ethernet_source: "40:04:10:04:04:20"
+        ethertype: "0x86dd"
+      }
+    }
+    headers {
+      ipv6_header {
+        version: "0x6"
+        dscp: "0x00"
+        ecn: "0x0"
+        flow_label: "0x00000"
+        payload_length: "0x00ee"
+        next_header: "0x3a"
+        hop_limit: "0x80"
+        ipv6_source: "fe80::"
+        ipv6_destination: "2002:a05:6860:4f00::"
+      }
+    }
+    headers {
+      icmp_header {
+        type: "0x00"
+        code: "0x00"
+        checksum: "0x1461"
+        rest_of_header: "0x00000000"
+      }
+    }
+    payload: "test packet"
+  }
+}
+-- Acceptable output: Alternative #3 --
+packets {
+  port: "16"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:08:02:08:10:40"
+        ethernet_source: "40:04:10:04:04:20"
+        ethertype: "0x86dd"
+      }
+    }
+    headers {
+      ipv6_header {
+        version: "0x6"
+        dscp: "0x00"
+        ecn: "0x0"
+        flow_label: "0x00000"
+        payload_length: "0x00ee"
+        next_header: "0x3a"
+        hop_limit: "0x80"
+        ipv6_source: "fe80::"
+        ipv6_destination: "2002:a05:6860:4f00::"
+      }
+    }
+    headers {
+      icmp_header {
+        type: "0x00"
+        code: "0x00"
+        checksum: "0x1461"
+        rest_of_header: "0x00000000"
+      }
+    }
+    payload: "test packet"
+  }
+}
+-- Acceptable output: Alternative #4 --
+packets {
+  port: "20"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:08:02:08:10:40"
+        ethernet_source: "40:04:10:04:04:20"
+        ethertype: "0x86dd"
+      }
+    }
+    headers {
+      ipv6_header {
+        version: "0x6"
+        dscp: "0x00"
+        ecn: "0x0"
+        flow_label: "0x00000"
+        payload_length: "0x00ee"
+        next_header: "0x3a"
+        hop_limit: "0x80"
+        ipv6_source: "fe80::"
+        ipv6_destination: "2002:a05:6860:4f00::"
+      }
+    }
+    headers {
+      icmp_header {
+        type: "0x00"
+        code: "0x00"
+        checksum: "0x1461"
+        rest_of_header: "0x00000000"
+      }
+    }
+    payload: "test packet"
+  }
+}
+
+
+================================================================================
+ValidateTestRun Test: Submit-to-ingress packet is expected to be
+forwarded and mirrored and punted, but doesn't get punted.
+================================================================================
+Expected: SUBMIT_TO_INGRESS packet gets forwarded (2 copies) and punted (1 copies)
+  Actual: SUBMIT_TO_INGRESS packet got forwarded (2 copies)
+- acceptable output #1 has mismatched number of packet ins (actual: 0 expected: 1)
+
+Details dumped below.
+
+== INPUT =======================================================================
+type: SUBMIT_TO_INGRESS
+packet {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:08:02:08:10:40"
+        ethernet_source: "40:04:10:04:04:20"
+        ethertype: "0x86dd"
+      }
+    }
+    headers {
+      ipv6_header {
+        version: "0x6"
+        dscp: "0x00"
+        ecn: "0x0"
+        flow_label: "0x00000"
+        payload_length: "0x00ee"
+        next_header: "0x3a"
+        hop_limit: "0x80"
+        ipv6_source: "fe80::"
+        ipv6_destination: "2002:a05:6860:4f00::"
+      }
+    }
+    headers {
+      icmp_header {
+        type: "0x00"
+        code: "0x00"
+        checksum: "0x1461"
+        rest_of_header: "0x00000000"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== ACTUAL OUTPUT ===============================================================
+packets {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "00:1a:11:17:5f:80"
+        ethernet_source: "00:02:03:04:05:06"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x00"
+        ecn: "0x0"
+        total_length: "0x0116"
+        identification: "0x0000"
+        flags: "0x2"
+        fragment_offset: "0x0000"
+        ttl: "0x40"
+        protocol: "0x2f"
+        checksum: "0xbe0b"
+        ipv4_source: "10.206.196.0"
+        ipv4_destination: "172.20.0.203"
+      }
+    }
+    payload: "\000\000\210\276\002\n\000 \000\000\002*\020\200\000\005\010\000Ex\000\360\000\000\000\000\020\375\323\372\n\000\000\000\n5\300jtest packet"
+  }
+}
+packets {
+  port: "31"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "00:1a:11:17:5f:80"
+        ethernet_source: "02:2a:10:00:00:06"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1e"
+        ecn: "0x0"
+        total_length: "0x00f0"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x0f"
+        protocol: "0xfd"
+        checksum: "0xd4fa"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.53.192.106"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== EXPECTED OUTPUT =============================================================
+-- Acceptable output: Alternative #1 --
+packets {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "00:1a:11:17:5f:80"
+        ethernet_source: "00:02:03:04:05:06"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x00"
+        ecn: "0x0"
+        total_length: "0x0116"
+        identification: "0x0000"
+        flags: "0x2"
+        fragment_offset: "0x0000"
+        ttl: "0x40"
+        protocol: "0x2f"
+        checksum: "0xbe0b"
+        ipv4_source: "10.206.196.0"
+        ipv4_destination: "172.20.0.203"
+      }
+    }
+    payload: "\000\000\210\276\002\n\000 \000\000\002*\020\200\000\005\010\000Ex\000\360\000\000\000\000\020\375\323\372\n\000\000\000\n5\300jtest packet"
+  }
+}
+packets {
+  port: "31"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "00:1a:11:17:5f:80"
+        ethernet_source: "02:2a:10:00:00:06"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1e"
+        ecn: "0x0"
+        total_length: "0x00f0"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x0f"
+        protocol: "0xfd"
+        checksum: "0xd4fa"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.53.192.106"
+      }
+    }
+    payload: "test packet"
+  }
+}
+packet_ins {
+  metadata {
+    name: "ingress_port"
+    value {
+      str: "1"
+    }
+  }
+  metadata {
+    name: "target_egress_port"
+    value {
+      str: "1"
+    }
+  }
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:0a:00:20:00:00"
+        ethernet_source: "02:2a:10:80:00:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1e"
+        ecn: "0x0"
+        total_length: "0x00f0"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x10"
+        protocol: "0xfd"
+        checksum: "0xd3fa"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.53.192.106"
+      }
+    }
+    payload: "test packet"
+  }
+}
+
+
+================================================================================
+ValidateTestRun Test: Packet gets forwarded with an unexpected
+modification of two header fields.
+================================================================================
+Expected: DATAPLANE packet gets forwarded (1 copies)
+  Actual: DATAPLANE packet got forwarded (1 copies), but with unexpected modifications
+- acceptable output #1 has packet 0 with mismatched header fields:
+  modified: headers[1].ipv4_header.dscp: "0x1c" -> "0x00"
+  modified: headers[1].ipv4_header.checksum: "0x1b62" -> "0x0000"
+
+Details dumped below.
+
+== INPUT =======================================================================
+type: DATAPLANE
+packet {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1c"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x1b62"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== ACTUAL OUTPUT ===============================================================
+packets {
+  port: "12"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x00"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x0000"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== EXPECTED OUTPUT =============================================================
+-- Acceptable output: Alternative #1 --
+packets {
+  port: "12"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0800"
+      }
+    }
+    headers {
+      ipv4_header {
+        version: "0x4"
+        ihl: "0x5"
+        dscp: "0x1c"
+        ecn: "0x0"
+        total_length: "0x012e"
+        identification: "0x0000"
+        flags: "0x0"
+        fragment_offset: "0x0000"
+        ttl: "0x20"
+        protocol: "0x11"
+        checksum: "0x1b62"
+        ipv4_source: "10.0.0.0"
+        ipv4_destination: "10.206.105.32"
+      }
+    }
+    headers {
+      udp_header {
+        source_port: "0x0000"
+        destination_port: "0x0000"
+        length: "0x011a"
+        checksum: "0xad82"
+      }
+    }
+    payload: "test packet"
+  }
+}
+
+
+================================================================================
+ValidateTestRun Test: Packet gets forwarded with an unexpected port.
+================================================================================
+Expected: DATAPLANE packet gets forwarded (1 copies)
+  Actual: DATAPLANE packet got forwarded (1 copies), but with unexpected modifications
+- acceptable output #1 has packet 0 with mismatched ports:
+  "12" -> "15"
+Details dumped below.
+
+== INPUT =======================================================================
+type: DATAPLANE
+packet {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0888"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== ACTUAL OUTPUT ===============================================================
+packets {
+  port: "15"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0888"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== EXPECTED OUTPUT =============================================================
+-- Acceptable output: Alternative #1 --
+packets {
+  port: "12"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0888"
+      }
+    }
+    payload: "test packet"
+  }
+}
+
+
+================================================================================
+ValidateTestRun Test: Packet gets punted with wrong metadata.
+================================================================================
+Expected: DATAPLANE packet gets punted (1 copies)
+  Actual: DATAPLANE packet got punted (1 copies), but with unexpected modifications
+- acceptable output #1 has packet in 0 with mismatched value for metadata field 'target_egress_port':
+  modified: str: "2" -> "3"
+
+Details dumped below.
+
+== INPUT =======================================================================
+type: DATAPLANE
+packet {
+  port: "1"
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0888"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== ACTUAL OUTPUT ===============================================================
+packet_ins {
+  metadata {
+    name: "ingress_port"
+    value {
+      str: "1"
+    }
+  }
+  metadata {
+    name: "target_egress_port"
+    value {
+      str: "3"
+    }
+  }
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0888"
+      }
+    }
+    payload: "test packet"
+  }
+}
+== EXPECTED OUTPUT =============================================================
+-- Acceptable output: Alternative #1 --
+packet_ins {
+  metadata {
+    name: "ingress_port"
+    value {
+      str: "1"
+    }
+  }
+  metadata {
+    name: "target_egress_port"
+    value {
+      str: "2"
+    }
+  }
+  parsed {
+    headers {
+      ethernet_header {
+        ethernet_destination: "02:03:04:05:06:07"
+        ethernet_source: "00:01:02:03:04:05"
+        ethertype: "0x0888"
+      }
+    }
+    payload: "test packet"
+  }
+}

@@ -18,10 +18,9 @@
 #include <functional>
 #include <optional>
 #include <string>
-#include <vector>
 
-#include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
+#include "dvaas/port_id_map.h"
 #include "dvaas/test_vector.h"
 #include "dvaas/test_vector.pb.h"
 #include "p4_pdpi/ir.pb.h"
@@ -72,6 +71,20 @@ inline bool DefaultIsExpectedUnsolicitedPacket(
 absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
     const pdpi::IrPacketIn& packet_in);
 
+struct PacketInjectionParams {
+  // Max number of packets to be injected per second. If null, there will be no
+  // rate limit for packet injection.
+  std::optional<int> max_packets_to_send_per_second;
+  // For a packet in from SUT or control switch without a test tag (i.e. an
+  // "unsolicited packet"), if this function return false, packet injection
+  // fails immediately.
+  const IsExpectedUnsolicitedPacketFunctionType is_expected_unsolicited_packet =
+      DefaultIsExpectedUnsolicitedPacket;
+  // The mapping of P4RT port IDs for connected interfaces between SUT and the
+  // control switch.
+  MirrorTestbedP4rtPortIdMap mirror_testbed_port_map;
+};
+
 // Determines the switch's behavior when receiving test packets by:
 // - Injecting those packets to the control switch egress to send to the SUT.
 // - Determining the set of packets that were forwarded (punted from control
@@ -79,10 +92,7 @@ absl::StatusOr<std::string> GetIngressPortFromIrPacketIn(
 absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
     const PacketTestVectorById& packet_test_vector_by_id,
-    PacketStatistics& statistics,
-    std::optional<int> max_packets_to_send_per_second,
-    const IsExpectedUnsolicitedPacketFunctionType&
-        is_expected_unsolicited_packet = DefaultIsExpectedUnsolicitedPacket);
+    const PacketInjectionParams& parameters, PacketStatistics& statistics);
 
 }  // namespace dvaas
 

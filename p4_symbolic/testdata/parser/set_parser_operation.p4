@@ -2,12 +2,16 @@
 #include "../common/headers.p4"
 
 struct local_metadata_t {
-  /* empty */
+  ethernet_addr_t dst_mac;
+  ethernet_addr_t src_mac;
+  ether_type_t ether_type;
+  int<16> signed_integer1;
+  int<16> signed_integer2;
 }
 
 struct headers_t {
   ethernet_t ethernet;
-  ipv4_t     ipv4;
+  ipv4_t ipv4;
 }
 
 parser packet_parser(packet_in packet, out headers_t headers,
@@ -18,11 +22,15 @@ parser packet_parser(packet_in packet, out headers_t headers,
   }
 
   state parse_ethernet {
+    local_metadata.ether_type = packet.lookahead<ether_type_t>();
+    local_metadata.signed_integer1 = -0x01;
+    local_metadata.signed_integer2 = 0x02;
     packet.extract(headers.ethernet);
-    transition select(headers.ethernet.ether_type) {
-      0 &&& 0xfe00: accept;
-      ETHERTYPE_IPV4:    parse_ipv4;
-      default:      accept;
+    local_metadata.dst_mac = headers.ethernet.dst_addr;
+    local_metadata.src_mac = ((headers.ethernet.src_addr & 48w0xFFFFFFFFFF00));
+    transition select(local_metadata.ether_type) {
+      ETHERTYPE_IPV4: parse_ipv4;
+      default: accept;
     }
   }
 
