@@ -246,7 +246,7 @@ matches {
   }
 }
 action {
-  name: "set_nexthop"
+  name: "set_ip_nexthop"
   params {
     name: "router_interface_id"
     value {
@@ -726,4 +726,3 @@ modified: action_set.actions[3].watch_port: "14" -> "1"
 modified: action_set.actions[4].watch_port: "15" -> "a_port"
 modified: action_set.actions[5].watch_port: "16" -> "2"
 modified: action_set.actions[6].watch_port: "17" -> "1"
-
