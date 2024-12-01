@@ -417,6 +417,7 @@ absl::StatusOr<bool> IsCopperPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
 absl::StatusOr<std::string> GenerateInterfaceBreakoutConfig(
     absl::string_view port, const int id, absl::string_view breakout_speed,
     const bool is_copper_port) {
+
   auto interface_config = absl::Substitute(
       R"pb({
              "config": {
