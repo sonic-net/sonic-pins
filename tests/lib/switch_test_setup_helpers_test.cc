@@ -1,22 +1,38 @@
 #include "tests/lib/switch_test_setup_helpers.h"
 
+#include <cstdlib>
+#include <memory>
 #include <optional>
+#include <queue>
 #include <string>
+#include <vector>
 
+#include "absl/memory/memory.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/time/time.h"
+#include "absl/types/span.h"
 #include "gmock/gmock.h"
 #include "grpcpp/test/mock_stream.h"
 #include "gtest/gtest.h"
+#include "gutil/status.h"
+#include "gutil/testing.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4/v1/p4runtime_mock.grpc.pb.h"
+#include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/pd.h"
 #include "p4_pdpi/testing/test_p4info.h"
 #include "proto/gnmi/gnmi_mock.grpc.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
+#include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/mock_switch.h"
 
 namespace pins_test {
@@ -27,8 +43,12 @@ using ::testing::AnyNumber;
 using ::testing::ByMove;
 using ::testing::EqualsProto;
 using ::testing::InSequence;
+using ::testing::NiceMock;
+using ::testing::Not;
 using ::testing::Return;
 using ::testing::ReturnRef;
+using ::testing::StrictMock;
+using ::testing::status::IsOk;
 
 // One of the tables and actions from
 // http://google3/blaze-out/genfiles/third_party/pins_infra/p4_pdpi/testing/test_p4info_embed.cc?l=13
@@ -399,6 +419,59 @@ TEST(TestHelperLibTest, ConfigureSwitchPairAndReturnP4RuntimeSessionPair) {
       testing::Mock::VerifyAndClearExpectations(&mock_switch2);
     }
   }
+}
+
+/*** REWRITE PORT TESTS ******************************************************/
+
+TEST(RewritePortsForTableEntriesTest, NoPortsInConfigFails) {
+  const pdpi::IrP4Info fbr_info =
+      sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter);
+  const std::string gnmi_config = EmptyOpenConfig();
+  std::vector<pdpi::IrTableEntry> entries;
+  EXPECT_THAT(RewritePortsInTableEntries(fbr_info, gnmi_config, entries),
+              Not(IsOk()));
+}
+
+TEST(RewritePortsForTableEntriesTest, EmptyEntriesSucceeds) {
+  const pdpi::IrP4Info fbr_info =
+      sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter);
+  std::vector<pdpi::IrTableEntry> entries;
+  EXPECT_OK(RewritePortsInTableEntries(
+      fbr_info, /*ports=*/std::vector<std::string>{"1"}, entries));
+}
+
+TEST(RewritePortsForTableEntriesTest, GnmiConfigWorks) {
+  const pdpi::IrP4Info fbr_info =
+      sai::GetIrP4Info(sai::Instantiation::kFabricBorderRouter);
+  const std::string gnmi_config = OpenConfigWithInterfaces(
+      GnmiFieldType::kConfig, {OpenConfigInterfaceDescription{
+                                  .port_name = "Ethernet0",
+                                  .port_id = 1,
+                              }});
+  pdpi::IrTableEntry original_entry =
+      gutil::ParseProtoOrDie<pdpi::IrTableEntry>(R"pb(
+        table_name: "router_interface_table"
+        matches {
+          name: "router_interface_id"
+          exact { str: "router-interface-1" }
+        }
+        action {
+          name: "set_port_and_src_mac"
+          params {
+            name: "port"
+            value { str: "2" }
+          }
+          params {
+            name: "src_mac"
+            value { mac: "00:02:03:04:05:06" }
+          }
+        }
+      )pb");
+
+  std::vector<pdpi::IrTableEntry> entries = {original_entry};
+  ASSERT_OK(RewritePortsInTableEntries(fbr_info, gnmi_config, entries));
+
+  ASSERT_EQ(entries[0].action().params(0).value().str(), "1");
 }
 
 }  // namespace
