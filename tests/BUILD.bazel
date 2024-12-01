@@ -55,23 +55,48 @@ cc_library(
 )
 
 cc_library(
+    name = "thinkit_gnmi_interface_util",
+    testonly = 1,
+    srcs = ["thinkit_gnmi_interface_util.cc"],
+    hdrs = ["thinkit_gnmi_interface_util.h"],
+    deps = [
+        ":thinkit_gnmi_subscribe_tests",
+        "//gutil:status",
+        "//gutil:testing",
+        "//lib/gnmi:gnmi_helper",
+        "//p4_pdpi:pd",
+        "//sai_p4/instantiations/google:sai_pd_cc_proto",
+        "//thinkit:ssh_client",
+        "//thinkit:switch",
+        "@com_github_gnmi//proto/gnmi:gnmi_cc_grpc_proto",
+        "@com_github_nlohmann_json//:nlohmann_json",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_library(
     name = "thinkit_gnmi_tests",
     testonly = 1,
     srcs = [
         "thinkit_gnmi_interface_tests.cc",
-        "thinkit_gnmi_interface_util.cc",
     ],
     hdrs = [
         "thinkit_gnmi_interface_tests.h",
-        "thinkit_gnmi_interface_util.h",
         "thinkit_util.h",
     ],
     deps = [
-        "//gutil:status",
+        ":thinkit_gnmi_interface_util",
+        "//gutil:collections",
         "//gutil:status_matchers",
         "//gutil:testing",
         "//lib/gnmi:gnmi_helper",
         "//p4_pdpi:pd",
+        "//sai_p4/instantiations/google:instantiations",
+        "//sai_p4/instantiations/google:sai_p4info_cc",
         "//sai_p4/instantiations/google:sai_pd_cc_proto",
         "//thinkit:ssh_client",
         "//thinkit:switch",
@@ -121,6 +146,7 @@ cc_test(
     name = "thinkit_gnmi_interface_util_tests",
     srcs = ["thinkit_gnmi_interface_util_tests.cc"],
     deps = [
+        ":thinkit_gnmi_interface_util",
         ":thinkit_gnmi_tests",
         "//gutil:proto_matchers",
         "//gutil:status_matchers",
