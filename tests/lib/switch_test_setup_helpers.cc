@@ -120,6 +120,34 @@ absl::Status RewritePortsInTableEntries(
   return absl::OkStatus();
 }
 
+// Uses the `port_map` to remap any P4runtime ports in `entries`.
+absl::Status RewritePortsInTableEntries(
+    const pdpi::IrP4Info& info, std::vector<pdpi::IrTableEntry>& entries,
+    const absl::flat_hash_map<std::string, std::string>& port_map) {
+  p4::config::v1::P4NamedType port_type;
+  port_type.set_name(kPortNamedType);
+  RETURN_IF_ERROR(pdpi::TransformValuesOfType(
+      info, port_type, entries, [&](absl::string_view old_port) {
+        return gutil::FindOrStatus(port_map, std::string(old_port));
+      }));
+
+  // Watch ports do not have a named type, but we still consider them ports so
+  // we have to deal with them specifically rather than using the generic
+  // rewriting function above.
+  for (pdpi::IrTableEntry& entry : entries) {
+    if (entry.has_action_set()) {
+      for (auto& action : *entry.mutable_action_set()->mutable_actions()) {
+        if (!action.watch_port().empty()) {
+          ASSIGN_OR_RETURN(*action.mutable_watch_port(),
+                           gutil::FindOrStatus(port_map, action.watch_port()));
+        }
+      }
+    }
+  }
+
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
