@@ -1867,4 +1867,5 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
               StatusIs(absl::StatusCode::kInternal,
                        HasSubstr("Failed to convert string (XYZ) to float")));
 }
+
 }  // namespace pins_test

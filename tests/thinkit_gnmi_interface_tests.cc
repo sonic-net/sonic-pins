@@ -458,7 +458,6 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   ASSERT_OK(GetBreakoutModeConfigFromString(req, sut_gnmi_stub, port_index,
                                             port_info.port_name,
                                             port_info.curr_breakout_mode));
-
   LOG(INFO) << "Restoring original breakout mode "
             << port_info.curr_breakout_mode << " on port "
             << port_info.port_name << " on DUT";
