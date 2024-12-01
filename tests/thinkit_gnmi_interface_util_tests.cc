@@ -7,6 +7,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/substitute.h"
 #include "gmock/gmock.h"
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
@@ -139,14 +140,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}},{\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 2}}]}}"
                }
              }
            }
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   auto random_port_info = pins_test::GetRandomPortWithSupportedBreakoutModes(
       *mock_gnmi_stub_ptr, platform_json_contents);
   ASSERT_OK(random_port_info.status());
@@ -202,14 +203,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet16\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}},{\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet16\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 2}}]}}"
                }
              }
            }
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   auto random_port_info = pins_test::GetRandomPortWithSupportedBreakoutModes(
       *mock_gnmi_stub_ptr, platform_json_contents,
       pins_test::BreakoutType::kChannelized);
@@ -243,6 +244,39 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetRandomPortWithSupportedBreakoutModesIntfNameToPortIdGetFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  gnmi::GetRequest req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(prefix { origin: "openconfig" }
+           path { elem { name: "interfaces" } }
+           type: STATE)pb",
+      &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(notification {
+             timestamp: 1631864194292383538
+             prefix { origin: "openconfig" }
+             update {
+               path { elem { name: "interfaces" } }
+               val {
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}},{\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet16\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 2}}]}}"
+               }
+             }
+           }
+      )pb",
+      &resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)))
+      .WillOnce(Return(grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, "")));
+  EXPECT_THAT(
+      pins_test::GetRandomPortWithSupportedBreakoutModes(*mock_gnmi_stub_ptr,
+                                                         ""),
+      StatusIs(absl::StatusCode::kDeadlineExceeded,
+               HasSubstr("Failed to get interface name to p4rt id map")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
        TestGetRandomPortWithSupportedBreakoutModesIntConversionFailure) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   gnmi::GetRequest req;
@@ -271,7 +305,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   EXPECT_THAT(pins_test::GetRandomPortWithSupportedBreakoutModes(
                   *mock_gnmi_stub_ptr, ""),
               StatusIs(absl::StatusCode::kInternal,
@@ -310,19 +344,67 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"DOWN\"}}, {\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"DOWN\"}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"DOWN\",\"openconfig-p4rt:id\": 1}}, {\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"DOWN\",\"openconfig-p4rt:id\": 2}}]}}"
                }
              }
            }
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   EXPECT_THAT(
       pins_test::GetRandomPortWithSupportedBreakoutModes(
           *mock_gnmi_stub_ptr, platform_json_contents),
       StatusIs(absl::StatusCode::kInternal,
                HasSubstr("No operationally up parent ports found on switch")));
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestGetRandomPortWithSupportedBreakoutModesNoPortsWithP4rtIDFailure) {
+  auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
+  const std::string platform_json_contents =
+      R"pb({
+             "interfaces": {
+               "Ethernet0": {
+                 "default_brkout_mode": "1x400G",
+                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
+               },
+               "Ethernet8": {
+                 "default_brkout_mode": "2x200G",
+                 "breakout_modes": "1x400G, 2x200G[100G,40G]"
+               },
+               "Ethernet12": { "breakout_modes": "1x200G[100G,40G]" }
+             }
+           }
+      )pb";
+  gnmi::GetRequest req;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(prefix { origin: "openconfig" }
+           path { elem { name: "interfaces" } }
+           type: STATE)pb",
+      &req));
+  gnmi::GetResponse resp;
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(notification {
+             timestamp: 1631864194292383538
+             prefix { origin: "openconfig" }
+             update {
+               path { elem { name: "interfaces" } }
+               val {
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}}, {\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+               }
+             }
+           }
+      )pb",
+      &resp));
+  EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+  EXPECT_THAT(
+      pins_test::GetRandomPortWithSupportedBreakoutModes(
+          *mock_gnmi_stub_ptr, platform_json_contents),
+      StatusIs(absl::StatusCode::kInternal,
+               HasSubstr(
+                   "No random interface with supported breakout modes found")));
 }
 
 TEST_F(GNMIThinkitInterfaceUtilityTest,
@@ -352,7 +434,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   EXPECT_THAT(pins_test::GetRandomPortWithSupportedBreakoutModes(
                   *mock_gnmi_stub_ptr, platform_json_contents),
               StatusIs(absl::StatusCode::kInternal,
@@ -379,14 +461,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}}]}}"
                }
              }
            }
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   EXPECT_THAT(
       pins_test::GetRandomPortWithSupportedBreakoutModes(
           *mock_gnmi_stub_ptr, platform_json_contents),
@@ -418,14 +500,14 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}}]}}"
                }
              }
            }
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   EXPECT_THAT(pins_test::GetRandomPortWithSupportedBreakoutModes(
                   *mock_gnmi_stub_ptr, platform_json_contents),
               StatusIs(absl::StatusCode::kInternal,
@@ -435,7 +517,7 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
 
 TEST_F(
     GNMIThinkitInterfaceUtilityTest,
-    TestGetRandomPortWithSupportedBreakoutModesSupportedModesNotFoundnFailure) {
+    TestGetRandomPortWithSupportedBreakoutModesSupportedModesNotFoundFailure) {
   auto mock_gnmi_stub_ptr = absl::make_unique<gnmi::MockgNMIStub>();
   const std::string platform_json_contents =
       R"pb({
@@ -456,14 +538,14 @@ TEST_F(
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}}]}}"
                }
              }
            }
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   EXPECT_THAT(
       pins_test::GetRandomPortWithSupportedBreakoutModes(
           *mock_gnmi_stub_ptr, platform_json_contents),
@@ -504,14 +586,14 @@ TEST_F(
              update {
                path { elem { name: "interfaces" } }
                val {
-                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\"}},{\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"UP\"}}]}}"
+                 json_ietf_val: "{\"openconfig-interfaces:interfaces\":{\"interface\":[{\"name\":\"Ethernet0\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 1}},{\"name\":\"Ethernet8\",\"state\":{\"oper-status\":\"UP\",\"openconfig-p4rt:id\": 2}}]}}"
                }
              }
            }
       )pb",
       &resp));
   EXPECT_CALL(*mock_gnmi_stub_ptr, Get(_, EqualsProto(req), _))
-      .WillOnce(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
+      .WillRepeatedly(DoAll(SetArgPointee<2>(resp), Return(grpc::Status::OK)));
   EXPECT_THAT(
       pins_test::GetRandomPortWithSupportedBreakoutModes(
           *mock_gnmi_stub_ptr, platform_json_contents,
@@ -841,23 +923,15 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string port_index = "1";
   const std::string breakout_mode = "1x400G";
   gnmi::SetRequest req, expected_breakout_config;
-  const std::string expected_breakout_config_str = R"pb(
+  const std::string expected_breakout_config_str =
+      R"pb(
     prefix { origin: "openconfig" }
     replace {
-      path {
-        elem { name: "components" }
-        elem {
-          name: "component"
-          key { key: "name" value: "1/1" }
-        }
-        elem { name: "port" }
-        elem { name: "breakout-mode" }
-      }
+      path {}
       val {
-        json_ietf_val: "{ \"openconfig-platform-port:groups\": { \"group\": [ {\n               \"config\": {\n                 \"breakout-speed\": \"openconfig-if-ethernet:SPEED_400GB\",\n                 \"index\": 0,\n                 \"num-breakouts\": 1,\n                 \"num-physical-channels\": 8\n               },\n               \"index\": 0\n             } ] } }"
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet0\",\n               \"type\": \"iana-if-type:ethernetCsmacd\"\n             },\n             \"name\": \"Ethernet0\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_400GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_400GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 8\n             },\n             \"index\": 0\n           } ] } }\n                 }\n               }]\n             }\n           }"
       }
-    }
-  )pb";
+    })pb";
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
       expected_breakout_config_str, &expected_breakout_config));
   ASSERT_OK(pins_test::GetBreakoutModeConfigFromString(req, port_index,
@@ -873,17 +947,9 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string expected_breakout_config_str = R"pb(
     prefix { origin: "openconfig" }
     replace {
-      path {
-        elem { name: "components" }
-        elem {
-          name: "component"
-          key { key: "name" value: "1/1" }
-        }
-        elem { name: "port" }
-        elem { name: "breakout-mode" }
-      }
+      path {}
       val {
-        json_ietf_val: "{ \"openconfig-platform-port:groups\": { \"group\": [ {\n               \"config\": {\n                 \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n                 \"index\": 0,\n                 \"num-breakouts\": 2,\n                 \"num-physical-channels\": 4\n               },\n               \"index\": 0\n             } ] } }"
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet0\",\n               \"type\": \"iana-if-type:ethernetCsmacd\"\n             },\n             \"name\": \"Ethernet0\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet4\",\n               \"type\": \"iana-if-type:ethernetCsmacd\"\n             },\n             \"name\": \"Ethernet4\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           } ] } }\n                 }\n               }]\n             }\n           }"
       }
     }
   )pb";
@@ -902,17 +968,9 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
   const std::string expected_breakout_config_str = R"pb(
     prefix { origin: "openconfig" }
     replace {
-      path {
-        elem { name: "components" }
-        elem {
-          name: "component"
-          key { key: "name" value: "1/1" }
-        }
-        elem { name: "port" }
-        elem { name: "breakout-mode" }
-      }
+      path {}
       val {
-        json_ietf_val: "{ \"openconfig-platform-port:groups\": { \"group\": [ {\n               \"config\": {\n                 \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n                 \"index\": 0,\n                 \"num-breakouts\": 1,\n                 \"num-physical-channels\": 4\n               },\n               \"index\": 0\n             },{\n               \"config\": {\n                 \"breakout-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n                 \"index\": 1,\n                 \"num-breakouts\": 2,\n                 \"num-physical-channels\": 2\n               },\n               \"index\": 1\n             } ] } }"
+        json_ietf_val: "{\n             \"openconfig-interfaces:interfaces\": { \"interface\": [ {\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet0\",\n               \"type\": \"iana-if-type:ethernetCsmacd\"\n             },\n             \"name\": \"Ethernet0\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_200GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet4\",\n               \"type\": \"iana-if-type:ethernetCsmacd\"\n             },\n             \"name\": \"Ethernet4\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n      ,{\n             \"config\": {\n               \"enabled\": true,\n               \"loopback-mode\": false,\n               \"mtu\": 9216,\n               \"name\": \"Ethernet6\",\n               \"type\": \"iana-if-type:ethernetCsmacd\"\n             },\n             \"name\": \"Ethernet6\",\n             \"openconfig-if-ethernet:ethernet\": {\n               \"config\": { \"port-speed\": \"openconfig-if-ethernet:SPEED_100GB\" }\n             },\n             \"subinterfaces\": {\n               \"subinterface\":\n               [ {\n                 \"config\": { \"index\": 0 },\n                 \"index\": 0,\n                 \"openconfig-if-ip:ipv6\": {\n                   \"unnumbered\": { \"config\": { \"enabled\": true } }\n                 }\n               }]\n             }\n           }\n       ] },\n             \"openconfig-platform:components\": {\n               \"component\":\n               [ {\n                 \"name\": \"1/1\",\n                 \"config\": { \"name\": \"1/1\" },\n                 \"port\": {\n                   \"config\": { \"port-id\": 1 },\n                   \"breakout-mode\": { \"groups\": { \"group\": [ {\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_200GB\",\n               \"index\": 0,\n               \"num-breakouts\": 1,\n               \"num-physical-channels\": 4\n             },\n             \"index\": 0\n           },{\n             \"config\": {\n               \"breakout-speed\": \"openconfig-if-ethernet:SPEED_100GB\",\n               \"index\": 1,\n               \"num-breakouts\": 2,\n               \"num-physical-channels\": 2\n             },\n             \"index\": 1\n           } ] } }\n                 }\n               }]\n             }\n           }"
       }
     }
   )pb";
@@ -1416,4 +1474,27 @@ TEST_F(GNMIThinkitInterfaceUtilityTest,
       expected_breakout_mode);
 }
 
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestBreakoutResultsInSpeedChangeOnlySuccess) {
+  EXPECT_THAT(pins_test::BreakoutResultsInSpeedChangeOnly("Ethernet0", "1x400G",
+                                                          "1x100G"),
+              true);
+  EXPECT_THAT(pins_test::BreakoutResultsInSpeedChangeOnly(
+                  "Ethernet0", "1x200G(4)+2x100G(4)", "1x100G(4)+2x40G(4)"),
+              true);
+  EXPECT_THAT(pins_test::BreakoutResultsInSpeedChangeOnly("Ethernet0", "1x400G",
+                                                          "2x200G"),
+              false);
+  EXPECT_THAT(pins_test::BreakoutResultsInSpeedChangeOnly(
+                  "Ethernet0", "1x200G(4)+2x40G(4)", "1x200G(4)+1x40G(4)"),
+              false);
+}
+
+TEST_F(GNMIThinkitInterfaceUtilityTest,
+       TestBreakoutResultsInSpeedChangeOnlyInvalidPortFailure) {
+  EXPECT_THAT(pins_test::BreakoutResultsInSpeedChangeOnly("EthernetX", "1x400G",
+                                                          "1x100G"),
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to convert string (X) to integer")));
+}
 }  // namespace pins_test

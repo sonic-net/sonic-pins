@@ -34,6 +34,7 @@
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/collections.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
@@ -41,6 +42,8 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4_pdpi/pd.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
+#include "sai_p4/instantiations/google/instantiations.h"
+#include "sai_p4/instantiations/google/sai_p4info.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/thinkit_gnmi_interface_util.h"
 #include "tests/thinkit_util.h"
@@ -362,9 +365,15 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
     ASSERT_NE(in_use_port, port_info.port_name);
   }
 
+  // Get the p4rt port index of the port on which to install router interface.
+  ASSERT_OK_AND_ASSIGN(auto port_id_by_interface,
+                       GetAllInterfaceNameToPortId(*sut_gnmi_stub));
+  ASSERT_OK_AND_ASSIGN(std::string in_use_port_index_value,
+                       gutil::FindOrStatus(port_id_by_interface, in_use_port));
+  int in_use_port_index;
+  ASSERT_TRUE(absl::SimpleAtoi(in_use_port_index_value, &in_use_port_index));
+
   // Configure router interface on selected port to install port dependency.
-  ASSERT_OK_AND_ASSIGN(auto in_use_port_index,
-                       GetPortIndex(platform_json_contents, in_use_port));
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session;
   ASSERT_OK_AND_ASSIGN(sut_p4_session, pdpi::P4RuntimeSession::Create(sut));
   const sai::TableEntry pd_entry =
@@ -378,8 +387,21 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
             }
           )pb",
           in_use_port_index));
+  ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      sut_p4_session.get(),
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+      sai::GetP4Info(sai::Instantiation::kMiddleblock)))
+      << "SetForwardingPipelineConfig: Failed to push P4Info: ";
+  ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()));
+
+  p4::config::v1::P4Info p4info =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
+  ASSERT_OK_AND_ASSIGN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
   ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
                        pdpi::PartialPdTableEntryToPiTableEntry(pdpi::IrP4Info(), pd_entry));
+
+  LOG(INFO) << "Installing router interface on port " << in_use_port
+            << " on SUT";
   ASSERT_OK(pdpi::InstallPiTableEntry(sut_p4_session.get(), pi_entry));
 
   // Get breakout config for the new breakout mode.
@@ -391,10 +413,16 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   ASSERT_OK(GetBreakoutModeConfigFromString(req, port_index,
                                             port_info.supported_breakout_mode));
 
-  // Apply breakout config on port. Expect the set operation to fail since the
-  // port/its child is in use.
+  // Apply breakout config on port. Expect the set operation to fail
+  // since the port/its child is in use.
+  LOG(INFO) << "Configuring breakout mode " << port_info.supported_breakout_mode
+            << " on port " << port_info.port_name << " on DUT";
   auto status = sut_gnmi_stub->Set(&context, req, &resp);
   ASSERT_NE(status.ok(), true);
+  EXPECT_THAT(status.error_message(),
+              HasSubstr(absl::StrCat(
+                  "SET failed: YangToDb_port_breakout_subtree_xfmr: port ",
+                  port_info.port_name, " is in use")));
 
   // Get expected port information for new breakout mode.
   ASSERT_OK_AND_ASSIGN(
@@ -404,14 +432,20 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   auto non_existing_port_list = GetNonExistingPortsAfterBreakout(
       orig_breakout_info, new_breakout_info, false);
   // Verify breakout related state paths.
-  ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, new_breakout_info,
+  ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, orig_breakout_info,
                                   non_existing_port_list));
 
   // Delete the created router interface on the port using P4 interface.
+  LOG(INFO) << "Deleting router interface on SUT";
   ASSERT_OK(pdpi::ClearTableEntries(sut_p4_session.get()));
 
-  // Wait for port dependency to be deleted and breakout config to go through.
-  absl::SleepFor(absl::Seconds(10));
+  // Retry port breakout.
+  grpc::ClientContext context2;
+  status = sut_gnmi_stub->Set(&context2, req, &resp);
+  ASSERT_EQ(status.ok(), true);
+
+  // Wait for breakout config to go through.
+  absl::SleepFor(absl::Seconds(30));
 
   // Verify that the config is successfully applied now.
   non_existing_port_list = GetNonExistingPortsAfterBreakout(
@@ -422,13 +456,17 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   // Restore original port breakout config on port under test.
   ASSERT_OK(GetBreakoutModeConfigFromString(req, port_index,
                                             port_info.curr_breakout_mode));
-  ASSERT_OK(sut_gnmi_stub->Set(&context, req, &resp));
-  absl::SleepFor(absl::Seconds(5));
+  LOG(INFO) << "Restoring original breakout mode "
+            << port_info.curr_breakout_mode << " on port "
+            << port_info.port_name << " on DUT";
+  grpc::ClientContext context3;
+  ASSERT_OK(sut_gnmi_stub->Set(&context3, req, &resp));
+  absl::SleepFor(absl::Seconds(60));
 
   // Verify that the config is successfully applied.
   non_existing_port_list = GetNonExistingPortsAfterBreakout(
       orig_breakout_info, new_breakout_info, false);
-  ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, new_breakout_info,
+  ASSERT_OK(ValidateBreakoutState(sut_gnmi_stub, orig_breakout_info,
                                   non_existing_port_list));
 }
 
