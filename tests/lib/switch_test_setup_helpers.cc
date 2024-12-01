@@ -28,6 +28,7 @@
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir_tools.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "tests/thinkit_sanity_tests.h"
 
 namespace pins_test {
 namespace {
@@ -35,16 +36,14 @@ namespace {
 constexpr absl::Duration kGnmiTimeoutDefault = absl::Minutes(3);
 constexpr char kPortNamedType[] = "port_id_t";
 
-absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
-CreateP4RuntimeSessionAndClearExistingState(
+absl::Status ClearTableEntries(
     thinkit::Switch& thinkit_switch,
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
   ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
                    pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));
   RETURN_IF_ERROR(pdpi::ClearTableEntries(session.get()));
-  RETURN_IF_ERROR(pdpi::CheckNoTableEntries(session.get())).SetPrepend()
-      << "cleared all table entries: ";
-  return session;
+  RETURN_IF_ERROR(session->Finish());
+  return absl::OkStatus();
 }
 
 absl::Status PushGnmiAndWaitForConvergence(thinkit::Switch& thinkit_switch,
@@ -55,13 +54,69 @@ absl::Status PushGnmiAndWaitForConvergence(thinkit::Switch& thinkit_switch,
                                       gnmi_timeout);
 }
 
-absl::Status SetForwardingPipelineConfigAndAssureClearedTables(
-    pdpi::P4RuntimeSession* session, const p4::config::v1::P4Info& p4info) {
-  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
-      session, p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      p4info));
-  RETURN_IF_ERROR(pdpi::CheckNoTableEntries(session)).SetPrepend()
-      << "set a new forwarding pipeline config: ";
+absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>
+CreateP4RuntimeSessionAndOptionallyPushP4Info(
+    thinkit::Switch& thinkit_switch,
+    std::optional<p4::config::v1::P4Info> p4info,
+    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> session,
+                   pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));
+
+  if (p4info.has_value()) {
+    // Check if P4Info already exists, and if so reboot to workaround PINS
+    // limitations (b/200209778).
+    ASSIGN_OR_RETURN(p4::v1::GetForwardingPipelineConfigResponse response,
+                     pdpi::GetForwardingPipelineConfig(session.get()));
+    ASSIGN_OR_RETURN(std::string p4info_diff,
+                     gutil::ProtoDiff(*p4info, response.config().p4info()));
+    if (response.config().has_p4info() && !p4info_diff.empty()) {
+      LOG(WARNING)
+          << "Rebooting since P4Info reconfiguration is unsupported by PINS, "
+             "but I am asked to push a P4Info with the following diff:\n"
+          << p4info_diff;
+      RETURN_IF_ERROR(session->Finish());
+      TestGnoiSystemColdReboot(thinkit_switch);
+      // Reconnect after reboot.
+      ASSIGN_OR_RETURN(
+          session, pdpi::P4RuntimeSession::Create(thinkit_switch, metadata));
+    }
+
+    // Push P4Info.
+    RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+        session.get(),
+        p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
+        *p4info));
+  }
+
+  RETURN_IF_ERROR(pdpi::CheckNoTableEntries(session.get()));
+  return session;
+}
+
+// Uses the `port_map` to remap any P4runtime ports in `entries`.
+absl::Status RewritePortsInTableEntries(
+    const pdpi::IrP4Info& info, std::vector<pdpi::IrTableEntry>& entries,
+    const absl::flat_hash_map<std::string, std::string>& port_map) {
+  p4::config::v1::P4NamedType port_type;
+  port_type.set_name(kPortNamedType);
+  RETURN_IF_ERROR(pdpi::TransformValuesOfType(
+      info, port_type, entries, [&](absl::string_view old_port) {
+        return gutil::FindOrStatus(port_map, std::string(old_port));
+      }));
+
+  // Watch ports do not have a named type, but we still consider them ports so
+  // we have to deal with them specifically rather than using the generic
+  // rewriting function above.
+  for (pdpi::IrTableEntry& entry : entries) {
+    if (entry.has_action_set()) {
+      for (auto& action : *entry.mutable_action_set()->mutable_actions()) {
+        if (!action.watch_port().empty()) {
+          ASSIGN_OR_RETURN(*action.mutable_watch_port(),
+                           gutil::FindOrStatus(port_map, action.watch_port()));
+        }
+      }
+    }
+  }
+
   return absl::OkStatus();
 }
 
@@ -102,9 +157,7 @@ ConfigureSwitchAndReturnP4RuntimeSession(
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
   // Since the gNMI Config push relies on tables being cleared, we construct a
   // P4RuntimeSession and clear the tables first.
-  ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> session,
-      CreateP4RuntimeSessionAndClearExistingState(thinkit_switch, metadata));
+  RETURN_IF_ERROR(ClearTableEntries(thinkit_switch, metadata));
 
   if (gnmi_config.has_value()) {
     RETURN_IF_ERROR(
@@ -112,12 +165,8 @@ ConfigureSwitchAndReturnP4RuntimeSession(
                                       /*gnmi_timeout=*/kGnmiTimeoutDefault));
   }
 
-  if (p4info.has_value()) {
-    RETURN_IF_ERROR(SetForwardingPipelineConfigAndAssureClearedTables(
-        session.get(), *p4info));
-  }
-
-  return session;
+  return CreateP4RuntimeSessionAndOptionallyPushP4Info(thinkit_switch, p4info,
+                                                       metadata);
 }
 
 absl::StatusOr<std::pair<std::unique_ptr<pdpi::P4RuntimeSession>,
@@ -127,33 +176,29 @@ ConfigureSwitchPairAndReturnP4RuntimeSessionPair(
     std::optional<std::string> gnmi_config,
     std::optional<p4::config::v1::P4Info> p4info,
     const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
-  // Since the gNMI Config push relies on tables being cleared, we construct the
-  // P4RuntimeSessions and clear the tables first.
-  ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> session1,
-      CreateP4RuntimeSessionAndClearExistingState(thinkit_switch1, metadata));
-  ASSIGN_OR_RETURN(
-      std::unique_ptr<pdpi::P4RuntimeSession> session2,
-      CreateP4RuntimeSessionAndClearExistingState(thinkit_switch2, metadata));
-
-  if (gnmi_config.has_value()) {
-    // Push the gNMI configs to both switches before waiting for convergence.
-    RETURN_IF_ERROR(PushGnmiConfig(thinkit_switch1, *gnmi_config));
-    RETURN_IF_ERROR(PushGnmiConfig(thinkit_switch2, *gnmi_config));
-    RETURN_IF_ERROR(WaitForGnmiPortIdConvergence(thinkit_switch1, *gnmi_config,
-                                                 kGnmiTimeoutDefault));
-    RETURN_IF_ERROR(WaitForGnmiPortIdConvergence(thinkit_switch2, *gnmi_config,
-                                                 kGnmiTimeoutDefault));
+  // We configure both switches in parallel, since it may require rebooting the
+  // switch which is costly.
+  using T = absl::StatusOr<std::unique_ptr<pdpi::P4RuntimeSession>>;
+  T session1, session2;
+  {
+    std::future<T> future1 = std::async(std::launch::async, [&] {
+      return ConfigureSwitchAndReturnP4RuntimeSession(
+          thinkit_switch1, gnmi_config, p4info, metadata);
+    });
+    std::future<T> future2 = std::async(std::launch::async, [&] {
+      return ConfigureSwitchAndReturnP4RuntimeSession(
+          thinkit_switch2, gnmi_config, p4info, metadata);
+    });
+    session1 = future1.get();
+    session2 = future2.get();
   }
-
-  if (p4info.has_value()) {
-    RETURN_IF_ERROR(SetForwardingPipelineConfigAndAssureClearedTables(
-        session1.get(), *p4info));
-    RETURN_IF_ERROR(SetForwardingPipelineConfigAndAssureClearedTables(
-        session2.get(), *p4info));
-  }
-
-  return std::make_pair(std::move(session1), std::move(session2));
+  RETURN_IF_ERROR(session1.status()).SetPrepend()
+      << "failed to configure switch '" << thinkit_switch1.ChassisName()
+      << "': ";
+  RETURN_IF_ERROR(session2.status()).SetPrepend()
+      << "failed to configure switch '" << thinkit_switch2.ChassisName()
+      << "': ";
+  return std::make_pair(std::move(*session1), std::move(*session2));
 }
 
 absl::Status MirrorSutP4rtPortIdConfigToControlSwitch(

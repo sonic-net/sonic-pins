@@ -40,7 +40,6 @@ namespace {
 
 using ::testing::_;
 using ::testing::AnyNumber;
-using ::testing::ByMove;
 using ::testing::EqualsProto;
 using ::testing::InSequence;
 using ::testing::NiceMock;
@@ -116,8 +115,8 @@ void MockP4RuntimeSessionCreate(
   // be wrapped in is freed. The stream is wrapped in StreamChannel, which is
   // the method of the stub that calls StreamChannelRaw, but is not itself
   // mocked.
-  auto* stream = new grpc::testing::MockClientReaderWriter<
-      p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse>();
+  auto* stream = new NiceMock<grpc::testing::MockClientReaderWriter<
+      p4::v1::StreamMessageRequest, p4::v1::StreamMessageResponse>>();
   EXPECT_CALL(stub, StreamChannelRaw).WillOnce(Return(stream));
 
   // A valid MasterArbitrationUpdate sent as request and response.
@@ -166,14 +165,13 @@ p4::v1::WriteRequest ConstructDeleteRequest(
 // Mocks a `CheckNoEntries` call using the stub in a previously
 // mocked P4RuntimeSession.
 // Ensures that there are no table entries remaining.
-void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub,
-                        const p4::config::v1::P4Info& p4info) {
-  // We need to return a valid p4info to get to the stage where we read tables.
+void MockCheckNoEntries(p4::v1::MockP4RuntimeStub& stub) {
+  // We need to return a p4info to get to the stage where we read tables.
   EXPECT_CALL(stub, GetForwardingPipelineConfig)
       .WillOnce([=](auto, auto,
                     p4::v1::GetForwardingPipelineConfigResponse*
                         get_pipeline_response) {
-        *get_pipeline_response->mutable_config()->mutable_p4info() = p4info;
+        get_pipeline_response->mutable_config()->mutable_p4info();
         return grpc::Status::OK;
       });
 
@@ -212,8 +210,22 @@ void MockClearTableEntries(p4::v1::MockP4RuntimeStub& stub,
 
     // Mocks a `CheckNoEntries` call, ensuring that the tables are really
     // cleared.
-    MockCheckNoEntries(stub, p4info);
+    MockCheckNoEntries(stub);
   }
+}
+
+// Sets up expectation that `ClearTableEntries(mock_switch, metadata)` is
+// called.
+void ExpectCallToClearTableEntries(
+    thinkit::MockSwitch& mock_switch, const p4::config::v1::P4Info& p4info,
+    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+  EXPECT_CALL(mock_switch, CreateP4RuntimeStub()).WillOnce([=] {
+    InSequence s;
+    auto stub = std::make_unique<::p4::v1::MockP4RuntimeStub>();
+    MockP4RuntimeSessionCreate(*stub, metadata);
+    MockClearTableEntries(*stub, p4info, metadata);
+    return stub;
+  });
 }
 
 // Mocks a successful `PushGnmiConfig` call.
@@ -221,12 +233,21 @@ void MockGnmiPush(gnmi::MockgNMIStub& mock_gnmi_stub) {
   EXPECT_CALL(mock_gnmi_stub, Set).WillOnce(Return(grpc::Status::OK));
 }
 
+// Sets up expectation that `pins_test::PushGnmiConfig(mock_switch, _)` is
+// called.
+void ExpectCallToPushGnmiConfig(thinkit::MockSwitch& mock_switch) {
+  EXPECT_CALL(mock_switch, CreateGnmiStub).WillOnce([] {
+    auto mock_gnmi_stub = absl::make_unique<gnmi::MockgNMIStub>();
+    MockGnmiPush(*mock_gnmi_stub);
+    return mock_gnmi_stub;
+  });
+}
+
 // Mocks a successful `WaitForGnmiPortIdConvergence` call where the ports given
 // by `interfaces` have converged.
 void MockGnmiConvergence(
     gnmi::MockgNMIStub& mock_gnmi_stub,
-    const std::vector<OpenConfigInterfaceDescription>& interfaces,
-    const absl::Duration& gnmi_timeout) {
+    const std::vector<OpenConfigInterfaceDescription>& interfaces) {
   EXPECT_CALL(mock_gnmi_stub, Get)
       .WillOnce([=](auto, auto, gnmi::GetResponse* response) {
         *response->add_notification()
@@ -236,6 +257,30 @@ void MockGnmiConvergence(
             OpenConfigWithInterfaces(GnmiFieldType::kState, interfaces);
         return grpc::Status::OK;
       });
+}
+
+// Sets up expectation that
+// `pins_test::WaitForGnmiPortIdConvergence(mock_switch, _, _)` is
+// called, mocking response that the given`interfaces` have converged.
+void ExpectCallToWaitForGnmiPortIdConvergence(
+    thinkit::MockSwitch& mock_switch,
+    const std::vector<OpenConfigInterfaceDescription>& interfaces) {
+  EXPECT_CALL(mock_switch, CreateGnmiStub).WillOnce([=] {
+    auto mock_gnmi_stub = absl::make_unique<gnmi::MockgNMIStub>();
+    MockGnmiConvergence(*mock_gnmi_stub, interfaces);
+    return mock_gnmi_stub;
+  });
+}
+
+// Sets up expectation that
+// `pins_test::ExpectCallToPushGnmiAndWaitForConvergence(mock_switch, _, _)` is
+// called, mocking response that the given`interfaces` have converged.
+void ExpectCallToPushGnmiAndWaitForConvergence(
+    thinkit::MockSwitch& mock_switch,
+    const std::vector<OpenConfigInterfaceDescription>& interfaces) {
+  InSequence s;
+  ExpectCallToPushGnmiConfig(mock_switch);
+  ExpectCallToWaitForGnmiPortIdConvergence(mock_switch, interfaces);
 }
 
 // Constructs a valid forwarding pipeline config request with the given p4info
@@ -257,6 +302,26 @@ ConstructForwardingPipelineConfigRequest(
   return request;
 }
 
+void ExpectCallToCreateP4RuntimeSessionAndOptionallyPushP4Info(
+    thinkit::MockSwitch& mock_switch,
+    const std::optional<p4::config::v1::P4Info>& p4info,
+    const pdpi::P4RuntimeSessionOptionalArgs& metadata) {
+  EXPECT_CALL(mock_switch, CreateP4RuntimeStub).WillOnce([=] {
+    InSequence s;
+    auto stub = absl::make_unique<StrictMock<p4::v1::MockP4RuntimeStub>>();
+    MockP4RuntimeSessionCreate(*stub, metadata);
+    if (p4info.has_value()) {
+      // TODO: Test the path where `GetForwardingPipelineConfig`
+      // returns a non-empty P4Info.
+      EXPECT_CALL(*stub, GetForwardingPipelineConfig).Times(1);
+      EXPECT_CALL(*stub, SetForwardingPipelineConfig).Times(1);
+    }
+    MockCheckNoEntries(*stub);
+
+    return stub;
+  });
+}
+
 // Tests that ConfigureSwitchAndReturnP4RuntimeSession creates a
 // P4RuntimeSession, clears all table entries currently on the switch (mocked
 // to be one), pushes a gNMI config and converges (if config is given),
@@ -270,16 +335,6 @@ void MockConfigureSwitchAndReturnP4RuntimeSession(
     const std::optional<p4::config::v1::P4Info>& p4info,
     const pdpi::P4RuntimeSessionOptionalArgs& metadata,
     const std::vector<OpenConfigInterfaceDescription>& interfaces) {
-  // The stub that will be returned when CreateP4RuntimeStub is called on
-  // mock_switch.
-  auto stub = absl::make_unique<p4::v1::MockP4RuntimeStub>();
-  ASSERT_NE(stub, nullptr);
-
-  // The stubs that will be returned when CreateGnmiStub is called on
-  // mock_switch.
-  auto mock_gnmi_stub_push = absl::make_unique<gnmi::MockgNMIStub>();
-  auto mock_gnmi_stub_converge = absl::make_unique<gnmi::MockgNMIStub>();
-
   // DeviceId and ChassisName may get called multiple times. The only important
   // point is that they always return the same response.
   ON_CALL(mock_switch, DeviceId).WillByDefault(Return(kDeviceId));
@@ -292,61 +347,15 @@ void MockConfigureSwitchAndReturnP4RuntimeSession(
       .WillByDefault(ReturnRef(*kChassisNameString));
   EXPECT_CALL(mock_switch, ChassisName).Times(AnyNumber());
 
+  // Actual test.
   {
     InSequence s;
-    // Mocks a P4RuntimeSession `Create` call.
-    // Constructs a ReaderWriter mock stream and completes an arbitration
-    // handshake.
-    MockP4RuntimeSessionCreate(*stub, metadata);
-
-    // Mocks a `ClearTableEntries` call.
-    // Pulls the p4info from the switch, then reads a table entry, deletes it,
-    // and reads again ensuring that there are no table entries remaining.
-    MockClearTableEntries(*stub, pdpi::GetTestP4Info(), metadata);
-
-    // Mocks a `CheckNoEntries` call.
-    MockCheckNoEntries(*stub, pdpi::GetTestP4Info());
-
+    ExpectCallToClearTableEntries(mock_switch, pdpi::GetTestP4Info(), metadata);
     if (gnmi_config.has_value()) {
-      // Mocks a `PushGnmiConfig` call.
-      MockGnmiPush(*mock_gnmi_stub_push);
-      // Mocks a `WaitForGnmiPortIdConvergence` call.
-      MockGnmiConvergence(*mock_gnmi_stub_converge, interfaces,
-                          /*gnmi_timeout=*/absl::Minutes(3));
+      ExpectCallToPushGnmiAndWaitForConvergence(mock_switch, interfaces);
     }
-
-    // When there is a P4Info to set, we mock a `SetForwardingPipelineConfig`
-    // call and a `CheckNoEntries` call.
-    if (p4info.has_value()) {
-      // Mocks a `SetForwardingPipelineConfig` call.
-      EXPECT_CALL(*stub,
-                  SetForwardingPipelineConfig(
-                      _,
-                      EqualsProto(ConstructForwardingPipelineConfigRequest(
-                          metadata, *p4info)),
-                      _))
-          .Times(1);
-
-      // Mocks a `CheckNoEntries` call.
-      MockCheckNoEntries(*stub, *p4info);
-    }
-  }
-
-  {
-    InSequence s;
-    // Mocks the first part of a P4RuntimeSession `Create` call.
-    EXPECT_CALL(mock_switch, CreateP4RuntimeStub())
-        .WillOnce(Return(ByMove(std::move(stub))));
-
-    if (gnmi_config.has_value()) {
-      // Mocks the first part of a `PushGnmiConfig` call.
-      EXPECT_CALL(mock_switch, CreateGnmiStub)
-          .WillOnce(Return(ByMove(std::move(mock_gnmi_stub_push))));
-
-      // Mocks the first part of a `WaitForGnmiPortIdConvergence`
-      EXPECT_CALL(mock_switch, CreateGnmiStub)
-          .WillOnce(Return(ByMove(std::move(mock_gnmi_stub_converge))));
-    }
+    ExpectCallToCreateP4RuntimeSessionAndOptionallyPushP4Info(mock_switch,
+                                                              p4info, metadata);
   }
 }
 
@@ -366,7 +375,7 @@ TEST(TestHelperLibTest,
   for (bool push_gnmi_config : {true, false}) {
     for (bool push_p4info : {true, false}) {
       SCOPED_TRACE(absl::StrCat("push_gnmi_config: ", push_gnmi_config));
-      SCOPED_TRACE(absl::StrCat("push_p4info: ", push_gnmi_config));
+      SCOPED_TRACE(absl::StrCat("push_p4info: ", push_p4info));
       std::optional<std::string> optional_gnmi_config =
           push_gnmi_config ? std::make_optional(gnmi_config) : std::nullopt;
       std::optional<p4::config::v1::P4Info> optional_p4info =
