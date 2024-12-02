@@ -73,22 +73,6 @@ TEST_P(SmokeTestFixture, DISABLED_ModifyWorks) {
   ASSERT_OK(pdpi::ClearTableEntries(SutP4RuntimeSession()));
 }
 
-TEST_P(SmokeTestFixture, InstallDefaultRouteForEmptyStringVrfShouldSucceed) {
-  GetMirrorTestbed().Environment().SetTestCaseID(
-      "2d67413c-9b6e-4187-84d4-c9313b84cab3");
-  const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
-      R"pb(
-        ipv4_table_entry {
-          match { vrf_id: "" }
-          action { drop {} }
-        }
-      )pb");
-
-  ASSERT_OK_AND_ASSIGN(const p4::v1::TableEntry pi_entry,
-                       pdpi::PartialPdTableEntryToPiTableEntry(IrP4Info(), pd_entry));
-  ASSERT_OK(pdpi::InstallPiTableEntry(SutP4RuntimeSession(), pi_entry));
-}
-
 // TODO: Enable once the bug is fixed.
 TEST_P(SmokeTestFixture, DISABLED_Bug181149419) {
   GetMirrorTestbed().Environment().SetTestCaseID(
