@@ -24,24 +24,20 @@
 
 namespace pins_test {
 
-// Test port admin_status related GNMI config and state paths.
-void TestGnmiInterfaceConfigSetAdminStatus(thinkit::Switch& sut,
-                                           absl::string_view if_name);
+// Test port breakout during parent port in use.
+void TestGNMIParentPortInUseDuringBreakout(thinkit::Switch& sut,
+                                           std::string& platform_json_contents);
 
-// Test GNMI component config and state paths.
-void TestGnmiPortComponentPaths(
-    thinkit::SSHClient& ssh_client, thinkit::Switch& sut,
-    absl::flat_hash_map<std::string, std::string>& expected_port_index_map);
+// Test port breakout during child port in use.
+void TestGNMIChildPortInUseDuringBreakout(thinkit::Switch& sut,
+                                          std::string& platform_json_contents);
 
-// Test port-speed GNMI config and state paths.
-// The test expects that auto-negotiation has been disabled for the given port.
-void TestGnmiInterfaceConfigSetPortSpeed(
-    thinkit::Switch& sut, absl::string_view if_name,
-    const absl::flat_hash_set<int>& supported_speeds);
-
-// Test port Id GNMI config and state paths.
-void TestGnmiInterfaceConfigSetId(thinkit::Switch& sut,
-                                  absl::string_view if_name, const int id);
+// Helper function to test port in use.
+void BreakoutDuringPortInUse(thinkit::Switch& sut,
+                             gnmi::gNMI::StubInterface* sut_gnmi_stub,
+                             RandomPortBreakoutInfo port_info,
+                             const std::string& platform_json_contents,
+                             bool test_child_port_in_use);
 
 // Test port breakout during parent port in use.
 void TestGNMIParentPortInUseDuringBreakout(thinkit::Switch& sut,
