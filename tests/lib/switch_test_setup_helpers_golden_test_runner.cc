@@ -307,7 +307,7 @@ int main(int argc, char** argv) {
               exact { str: "nexthop-1" }
             }
             action {
-              name: "set_nexthop"
+              name: "set_ip_nexthop"
               params {
                 name: "router_interface_id"
                 value { str: "router-interface-1" }

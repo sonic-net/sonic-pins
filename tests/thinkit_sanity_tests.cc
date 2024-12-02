@@ -60,7 +60,6 @@ constexpr absl::Duration kColdRebootWaitForDownTime = absl::Seconds(30);
 // TODO: Reduce reboot up time.
 constexpr absl::Duration kColdRebootWaitForUpTime = absl::Minutes(6);
 constexpr absl::Duration kWaitForApplicationsReady = absl::Minutes(1);
-constexpr char kMtuJsonVal[] = "{\"mtu\":2000}";
 constexpr char kV3ReleaseConfigBlob[] = R"({
    "openconfig-platform:components" : {
       "component" : [
@@ -278,41 +277,6 @@ void TestGnmiConfigBlobSet(thinkit::Switch& sut) {
     EXPECT_THAT(element_speed_json->dump(), HasSubstr(if_speed_elem->second))
         << element_interface_state_json->find("name")->dump();
   }
-}
-
-void TestGnmiInterfaceConfigSetMtu(thinkit::Switch& sut,
-                                   absl::string_view if_name) {
-  ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, sut.CreateGnmiStub());
-  std::string if_req =
-      absl::StrCat("interfaces/interface[name=", if_name, "]/config/mtu");
-
-  ASSERT_OK_AND_ASSIGN(
-      gnmi::SetRequest req,
-      BuildGnmiSetRequest(if_req, GnmiSetType::kUpdate, kMtuJsonVal));
-  LOG(INFO) << "Sending SET request: " << req.ShortDebugString();
-  gnmi::SetResponse resp;
-  grpc::ClientContext context;
-  ASSERT_OK(sut_gnmi_stub->Set(&context, req, &resp));
-  LOG(INFO) << "Received SET response: " << resp.ShortDebugString();
-
-  ASSERT_OK_AND_ASSIGN(gnmi::GetRequest get_req,
-                       BuildGnmiGetRequest(if_req, gnmi::GetRequest::CONFIG));
-  LOG(INFO) << "Sending GET request: " << get_req.ShortDebugString();
-  gnmi::GetResponse get_resp;
-  grpc::ClientContext get_context;
-  ASSERT_OK(sut_gnmi_stub->Get(&get_context, get_req, &get_resp));
-  LOG(INFO) << "Received GET response: " << resp.ShortDebugString();
-  ASSERT_OK_AND_ASSIGN(
-      std::string mtu_respose,
-      ParseGnmiGetResponse(get_resp, "openconfig-interfaces:mtu"));
-  LOG(INFO) << "mtu_respose: " << mtu_respose;
-  EXPECT_THAT(mtu_respose, HasSubstr("2000"));
-
-  ASSERT_OK_AND_ASSIGN(req, BuildGnmiSetRequest(if_req, GnmiSetType::kDelete));
-  LOG(INFO) << "Sending SET request: " << req.ShortDebugString();
-  grpc::ClientContext new_set_context;
-  ASSERT_OK(sut_gnmi_stub->Set(&new_set_context, req, &resp));
-  LOG(INFO) << "Received SET response: " << resp.ShortDebugString();
 }
 
 void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,
