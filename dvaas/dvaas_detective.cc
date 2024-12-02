@@ -15,28 +15,56 @@
 #include "dvaas/dvaas_detective.h"
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/types/variant.h"
 #include "dvaas/dvaas_detective.pb.h"
 #include "dvaas/test_vector.pb.h"
 #include "gutil/overload.h"
+#include "gutil/proto.h"
+#include "gutil/status.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
+#include "yggdrasil_decision_forests/model/decision_tree/decision_tree.h"
+#include "yggdrasil_decision_forests/model/decision_tree/decision_tree.pb.h"
+#include "yggdrasil_decision_forests/model/random_forest/random_forest.h"
+#include "yggdrasil_decision_forests/utils/distribution.pb.h"
 
 namespace dvaas {
 namespace dvaas_internal {
 
+// In order to train our model, we must specify a label. For the most part, a
+// label is just another categorical feature, except the model classifies data
+// based on that feature (e.g. if categorical feature F can be X,Y or Z and F is
+// the label, then a data example will be classified as either X, Y, or Z).
+//
+// Our code mostly treats the label (i.e. test result: pass/fail) like any
+// other feature, but with a fixed feature name and possible values defined by
+// the constants below.
+constexpr absl::string_view kTestResultFeatureName = "test result";
+constexpr absl::string_view kPassTestResultFeatureValue = "pass";
+constexpr absl::string_view kFailTestResultFeatureValue = "fail";
+
+namespace ydf = ::yggdrasil_decision_forests;
+using ydf::model::random_forest::RandomForestModel;
+
 namespace {
+
+using ydf::dataset::proto::DataSpecification;
 
 std::string DetectiveClusterToString(const DetectiveCluster& cluster,
                                      float total_predicted_outcomes) {
-  bool passed = cluster.predicted_outcome();
+  bool passed = cluster.predicted_outcome_is_pass();
   return absl::Substitute(
       "* $0 -> $1\n"
       "  * accuracy: $2%, with $3 exceptions that $4 instead\n"
@@ -47,6 +75,126 @@ std::string DetectiveClusterToString(const DetectiveCluster& cluster,
       passed ? "fail" : "pass", cluster.coverage_for_predicted_outcome() * 100,
       passed ? cluster.passing_tests() : cluster.failing_tests(),
       total_predicted_outcomes, passed ? "passing" : "failing");
+}
+
+// Return a `DetectiveCluster` created from leaf `node`:
+//  - `criteria` is list of branching decisions made at internal nodes (e.g.
+//    {"var X >= 12", "var Y < 2"}) corresponding to the path from root to
+//    `node`.
+//  - `data_spec` contains information for interpreting `node`.
+absl::StatusOr<DetectiveCluster> MakeCluster(
+    const std::vector<std::string>& criteria,
+    const ydf::model::decision_tree::proto::Node& node,
+    const DataSpecification& data_spec) {
+  DetectiveCluster cluster;
+  cluster.set_defining_property(absl::StrJoin(criteria, " && "));
+
+  // `node` contains a distribution over the possible outcomes (i.e. pass or
+  // fail). We need to know the index of the pass and fail outcomes in the
+  // distribution in order to interpret the outcome of `node`. It's possible
+  // that the distribution does not contain a pass or fail outcome, in which
+  // case we set the corresponding index to nullopt.
+  std::optional<int> pass_index;
+  std::optional<int> fail_index;
+  for (const ydf::dataset::proto::Column& column : data_spec.columns()) {
+    if (column.name() != kTestResultFeatureName) continue;
+
+    for (const auto& [name, info] : column.categorical().items()) {
+      if (name == kPassTestResultFeatureValue) {
+        pass_index = info.index();
+      }
+      if (name == kFailTestResultFeatureValue) {
+        fail_index = info.index();
+      }
+    }
+  }
+  if (!pass_index.has_value() && !fail_index.has_value()) {
+    return absl::InternalError(
+        absl::StrCat("Node has neither passing nor failing tests: ",
+                     gutil::PrintTextProto(node)));
+  }
+
+  // Outcome is the output of the model (i.e. for data X, we predict outcome Y).
+  // For a `node`, the outcome is the top value in the `node`'s distribution.
+  // We expect the outcome to be either pass or fail.
+  int outcome_value_index = node.classifier().top_value();
+  if (pass_index.has_value() && outcome_value_index == *pass_index) {
+    cluster.set_predicted_outcome_is_pass(true);
+  } else if (fail_index.has_value() && outcome_value_index == *fail_index) {
+    cluster.set_predicted_outcome_is_pass(false);
+  } else {
+    return absl::InternalError(absl::StrCat("Node has unexpected outcome: ",
+                                            gutil::PrintTextProto(node)));
+  }
+  cluster.set_passing_tests(
+      pass_index.has_value()
+          ? node.classifier().distribution().counts(*pass_index)
+          : 0);
+  cluster.set_failing_tests(
+      fail_index.has_value()
+          ? node.classifier().distribution().counts(*fail_index)
+          : 0);
+  cluster.set_accuracy_of_predicted_outcome(
+      node.classifier().distribution().counts(outcome_value_index) /
+      node.classifier().distribution().sum());
+  return cluster;
+}
+
+// Recursively extract `DetectiveCluster`s from `node`.
+//  - `data_spec` contains information about the features used in the model.
+//  - `criteria` is used to keep track of the path from the root to `node`.
+//  - `clusters` are appended when leaf nodes are reached.
+absl::Status ExtractClustersRecursivey(
+    const ydf::model::decision_tree::NodeWithChildren& node,
+    const DataSpecification& data_spec, std::vector<std::string> criteria,
+    std::vector<DetectiveCluster>& clusters) {
+  using ydf::model::decision_tree::proto::Condition;
+  using ydf::model::decision_tree::proto::NodeCondition;
+
+  if (node.IsLeaf()) {
+    ASSIGN_OR_RETURN(clusters.emplace_back(),
+                     MakeCluster(criteria, node.node(), data_spec));
+    return absl::OkStatus();
+  }
+
+  // Create criteria for branches of this node.
+  NodeCondition condition = node.node().condition();
+  const absl::string_view attribute_name =
+      data_spec.columns(node.node().condition().attribute()).name();
+  std::string pos_criteria;
+  std::string neg_criteria;
+  switch (condition.condition().type_case()) {
+    // Condition for numerical features.
+    case Condition::kHigherCondition: {
+      float threshold = condition.condition().higher_condition().threshold();
+      pos_criteria = absl::StrCat(attribute_name, " >= ", threshold);
+      neg_criteria = absl::StrCat(attribute_name, " < ", threshold);
+      break;
+    }
+    // Condition for categorical features.
+    case Condition::kContainsCondition:
+    // Condition for boolean features.
+    case Condition::kTrueValueCondition:
+    // Other conditions we are not currently interested in.
+    case Condition::kNaCondition:
+    case Condition::kContainsBitmapCondition:
+    case Condition::kDiscretizedHigherCondition:
+    case Condition::kObliqueCondition:
+    default:
+      return absl::InternalError(absl::StrCat(
+          "Unsupported condition type: ", gutil::PrintTextProto(condition)));
+  };
+
+  // Positive branch.
+  criteria.push_back(pos_criteria);
+  RETURN_IF_ERROR(ExtractClustersRecursivey(*node.pos_child(), data_spec,
+                                            criteria, clusters));
+  criteria.pop_back();
+
+  // Negative branch.
+  criteria.push_back(neg_criteria);
+  return ExtractClustersRecursivey(*node.neg_child(), data_spec, criteria,
+                                   clusters);
 }
 
 }  // namespace
@@ -85,10 +233,54 @@ absl::flat_hash_map<std::string, FeatureValue> TestOutcomeToFeatureMap(
   result["# acceptable behaviors according to P4 simulation"] =
       static_cast<float>(
           test_outcome.test_run().test_vector().acceptable_outputs_size());
-  result["test result"] =
-      test_outcome.test_result().has_failure() ? "fail" : "pass";
+  result[kTestResultFeatureName] =
+      test_outcome.test_result().has_failure()
+          ? std::string(kFailTestResultFeatureValue)
+          : std::string(kPassTestResultFeatureValue);
 
   return result;
+}
+
+absl::StatusOr<DetectiveExplanation> ExtractExplanationFromModel(
+    const RandomForestModel& rf_model) {
+  if (rf_model.NumTrees() != 1) {
+    return absl::UnimplementedError(
+        absl::StrCat("We only support explanation extraction for models with "
+                     "exactly one tree. Model has ",
+                     rf_model.NumTrees(), " trees."));
+  }
+
+  // Extract clusters from the decision tree.
+  std::vector<DetectiveCluster> clusters;
+  RETURN_IF_ERROR(ExtractClustersRecursivey(
+      rf_model.decision_trees().at(0)->root(), rf_model.data_spec(),
+      /*criteria=*/{}, clusters));
+
+  // Initialize explanation and add coverage information.
+  DetectiveExplanation explanation;
+  *explanation.mutable_clusters() = {clusters.begin(), clusters.end()};
+  float total_passing = 0;
+  float total_failing = 0;
+  for (const auto& [name, info] :
+       rf_model.LabelColumnSpec().categorical().items()) {
+    if (name == kPassTestResultFeatureValue) {
+      total_passing = info.count();
+    }
+    if (name == kFailTestResultFeatureValue) {
+      total_failing = info.count();
+    }
+  }
+  for (DetectiveCluster& cluster : *explanation.mutable_clusters()) {
+    if (cluster.predicted_outcome_is_pass() && total_passing != 0) {
+      cluster.set_coverage_for_predicted_outcome(cluster.passing_tests() /
+                                                 total_passing);
+    }
+    if (!cluster.predicted_outcome_is_pass() && total_failing != 0) {
+      cluster.set_coverage_for_predicted_outcome(cluster.failing_tests() /
+                                                 total_failing);
+    }
+  }
+  return explanation;
 }
 
 std::string DetectiveExplanationToString(
@@ -99,7 +291,7 @@ std::string DetectiveExplanationToString(
   float total_failing_outcomes = 0;
   for (int i = 0; i < explanation.clusters_size(); ++i) {
     const DetectiveCluster& cluster = explanation.clusters(i);
-    if (explanation.clusters(i).predicted_outcome()) {
+    if (explanation.clusters(i).predicted_outcome_is_pass()) {
       passing_indices.push_back(i);
     } else {
       failing_indices.push_back(i);
