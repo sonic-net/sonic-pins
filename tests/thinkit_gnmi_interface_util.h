@@ -108,7 +108,8 @@ absl::Status GetBreakoutModeConfigFromString(
 // the port, ports in original breakout config that were not in new breakout
 // config should no longer exist as new breakout is now applied.
 std::vector<std::string> GetNonExistingPortsAfterBreakout(
-    const absl::flat_hash_map<std::string, PortBreakoutInfo>& orig_port_info,
+    const absl::flat_hash_map<std::string, PortBreakoutInfo>&
+        original_port_info,
     const absl::flat_hash_map<std::string, PortBreakoutInfo>& new_port_info,
     bool expected_success);
 

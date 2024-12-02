@@ -122,20 +122,20 @@ absl::StatusOr<std::vector<std::string>> GetSupportedBreakoutModesForPort(
 }
 
 absl::StatusOr<bool> BreakoutResultsInSpeedChangeOnly(
-    const std::string& port, const std::string& curr_breakout_mode,
+    const std::string& port, const std::string& current_breakout_mode,
     const std::string& new_breakout_mode) {
   // Get list of interfaces for current and new breakout modes.
-  ASSIGN_OR_RETURN(auto curr_port_info, GetExpectedPortInfoForBreakoutMode(
-                                            port, curr_breakout_mode));
+  ASSIGN_OR_RETURN(auto current_port_info, GetExpectedPortInfoForBreakoutMode(
+                                               port, current_breakout_mode));
   ASSIGN_OR_RETURN(auto new_port_info,
                    GetExpectedPortInfoForBreakoutMode(port, new_breakout_mode));
-  for (auto& key : curr_port_info) {
-    if (!new_port_info.count(key.first)) {
+  for (const auto& [key, unused_val] : current_port_info) {
+    if (!new_port_info.count(key)) {
       return false;
     }
   }
-  for (auto& key : new_port_info) {
-    if (!curr_port_info.count(key.first)) {
+  for (const auto& [key, unused_val] : new_port_info) {
+    if (!current_port_info.count(key)) {
       return false;
     }
   }
@@ -271,17 +271,17 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
   // lanes per physical port/number of groups in a breakout mode.
   auto max_channels_in_group = kMaxPortLanes / modes.size();
   auto port_number_str = port.substr(kEthernetLen);
-  int curr_port_number;
-  if (!absl::SimpleAtoi(port_number_str, &curr_port_number)) {
+  int current_port_number;
+  if (!absl::SimpleAtoi(port_number_str, &current_port_number)) {
     return gutil::InternalErrorBuilder().LogError()
            << "Failed to convert string (" << port_number_str << ") to integer";
   }
-  if (curr_port_number % kMaxPortLanes != 0) {
+  if (current_port_number % kMaxPortLanes != 0) {
     return gutil::InternalErrorBuilder().LogError()
            << "Requested port (" << port << ") is not a parent port";
   }
 
-  auto curr_physical_channel = 0;
+  auto current_physical_channel = 0;
   absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>
       expected_breakout_info;
   for (auto& mode : modes) {
@@ -302,7 +302,7 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
     // leading to interfaces Ethernet0, Ethernet2 for mode 2x100G and
     // Ethernet4 for mode 1x200G.
     for (int i = 0; i < num_breakouts; i++) {
-      auto port = absl::StrCat(kEthernet, std::to_string(curr_port_number));
+      auto port = absl::StrCat(kEthernet, std::to_string(current_port_number));
       // Populate expected physical channels for each port.
       // Physical channels are between 0 to 7.
       int offset = max_channels_in_group / num_breakouts;
@@ -311,15 +311,15 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
                << "Invalid breakout mode (" << breakout_mode << ") found";
       }
       std::string physical_channels = "[";
-      for (int j = curr_physical_channel; j < offset + curr_physical_channel;
-           j++) {
+      for (int j = current_physical_channel;
+           j < offset + current_physical_channel; j++) {
         physical_channels += std::to_string(j);
         // Add comma after each but last entry.
-        if (j < offset + curr_physical_channel - 1) physical_channels += ",";
+        if (j < offset + current_physical_channel - 1) physical_channels += ",";
       }
       physical_channels += "]";
-      curr_physical_channel += offset;
-      curr_port_number += offset;
+      current_physical_channel += offset;
+      current_port_number += offset;
       expected_breakout_info[port] = PortBreakoutInfo{physical_channels};
     }
   }
@@ -330,11 +330,11 @@ absl::StatusOr<absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>>
 GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                             const std::string& port,
                             absl::string_view breakout_mode) {
-  absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo> port_info;
-  ASSIGN_OR_RETURN(port_info,
+  absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo> port_infos;
+  ASSIGN_OR_RETURN(port_infos,
                    GetExpectedPortInfoForBreakoutMode(port, breakout_mode));
-  for (auto& p : port_info) {
-    auto if_state_path = absl::StrCat("interfaces/interface[name=", p.first,
+  for (auto& [port_name, breakout_info] : port_infos) {
+    auto if_state_path = absl::StrCat("interfaces/interface[name=", port_name,
                                       "]/state/oper-status");
     auto resp_parse_str = "openconfig-interfaces:oper-status";
     ASSIGN_OR_RETURN(
@@ -342,11 +342,11 @@ GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
         GetGnmiStatePathInfo(sut_gnmi_stub, if_state_path, resp_parse_str),
         _ << "Failed to get GNMI state path value for oper-status for "
              "port "
-          << p.first);
-    p.second.oper_status = state_path_response;
+          << port_name);
+    breakout_info.oper_status = state_path_response;
 
     auto if_physical_channels_path = absl::StrCat(
-        "interfaces/interface[name=", p.first, "]/state/physical-channel");
+        "interfaces/interface[name=", port_name, "]/state/physical-channel");
     resp_parse_str = "openconfig-platform-transceiver:physical-channel";
     ASSIGN_OR_RETURN(
         state_path_response,
@@ -354,10 +354,10 @@ GetBreakoutStateInfoForPort(gnmi::gNMI::StubInterface* sut_gnmi_stub,
                              resp_parse_str),
         _ << "Failed to get GNMI state path value for physical-channels for "
              "port "
-          << p.first);
-    p.second.physical_channels = state_path_response;
+          << port_name);
+    breakout_info.physical_channels = state_path_response;
   }
-  return port_info;
+  return port_infos;
 }
 
 absl::StatusOr<std::string> GenerateComponentBreakoutConfig(
@@ -495,12 +495,12 @@ absl::Status GetBreakoutModeConfigFromString(
   auto index = 0;
 
   // Get current port number.
-  int curr_port_number;
-  if (!absl::SimpleAtoi(port_index, &curr_port_number)) {
+  int current_port_number;
+  if (!absl::SimpleAtoi(port_index, &current_port_number)) {
     return gutil::InternalErrorBuilder().LogError()
            << "Failed to convert string (" << port_index << ") to integer";
   }
-  curr_port_number = (curr_port_number - 1) * kMaxPortLanes;
+  current_port_number = (current_port_number - 1) * kMaxPortLanes;
 
   ASSIGN_OR_RETURN(bool is_copper_port, IsCopperPort(sut_gnmi_stub, intf_name));
 
@@ -524,14 +524,14 @@ absl::Status GetBreakoutModeConfigFromString(
     // Get the interface config for all ports corresponding to current breakout
     // group.
     for (int i = 0; i < num_breakouts; i++) {
-      auto port = absl::StrCat(kEthernet, std::to_string(curr_port_number));
+      auto port = absl::StrCat(kEthernet, std::to_string(current_port_number));
       ASSIGN_OR_RETURN(
           auto interface_config,
-          GenerateInterfaceBreakoutConfig(port, curr_port_number,
+          GenerateInterfaceBreakoutConfig(port, current_port_number,
                                           breakout_speed, is_copper_port));
       interface_configs.push_back(interface_config);
       int offset = max_channels_in_group / num_breakouts;
-      curr_port_number += offset;
+      current_port_number += offset;
     }
     index += 1;
   }
@@ -563,21 +563,24 @@ absl::Status GetBreakoutModeConfigFromString(
 }
 
 std::vector<std::string> GetNonExistingPortsAfterBreakout(
-    const absl::flat_hash_map<std::string, PortBreakoutInfo>& orig_port_info,
+    const absl::flat_hash_map<std::string, PortBreakoutInfo>&
+        original_port_info,
     const absl::flat_hash_map<std::string, PortBreakoutInfo>& new_port_info,
     bool expected_success) {
-  std::vector<std::string> nonExistingPortList;
-  const auto *orig_map = &orig_port_info, *new_map = &new_port_info;
+  std::vector<std::string> non_existing_ports;
+  const auto* original_map = &original_port_info;
+  const auto* new_map = &new_port_info;
+
   if (!expected_success) {
-    orig_map = &new_port_info;
-    new_map = &orig_port_info;
+    original_map = &new_port_info;
+    new_map = &original_port_info;
   }
-  for (const auto& port : *orig_map) {
-    if (new_map->find(port.first) == new_map->end()) {
-      nonExistingPortList.push_back(port.first);
+  for (const auto& [port_name, unused] : *original_map) {
+    if (new_map->find(port_name) == new_map->end()) {
+      non_existing_ports.push_back(port_name);
     }
   }
-  return nonExistingPortList;
+  return non_existing_ports;
 }
 
 absl::Status ValidateBreakoutState(
@@ -590,39 +593,41 @@ absl::Status ValidateBreakoutState(
            << "Expected port info map is empty";
   }
 
-  for (const auto& port : expected_port_info) {
+  for (const auto& [port_name, breakout_info] : expected_port_info) {
     // Verify that the oper-status state path value is as expected.
-    auto if_state_path = absl::StrCat("interfaces/interface[name=", port.first,
-                                      "]/state/oper-status");
-    auto resp_parse_str = "openconfig-interfaces:oper-status";
+    auto interface_state_path = absl::StrCat(
+        "interfaces/interface[name=", port_name, "]/state/oper-status");
+    auto response_parse_str = "openconfig-interfaces:oper-status";
     ASSIGN_OR_RETURN(
         auto state_path_response,
-        GetGnmiStatePathInfo(sut_gnmi_stub, if_state_path, resp_parse_str),
+        GetGnmiStatePathInfo(sut_gnmi_stub, interface_state_path,
+                             response_parse_str),
         _ << "Failed to get GNMI state path value for oper-status for "
              "port "
-          << port.first);
-    if (!absl::StrContains(state_path_response, port.second.oper_status)) {
+          << port_name);
+    if (!absl::StrContains(state_path_response, breakout_info.oper_status)) {
       return gutil::InternalErrorBuilder().LogError()
              << absl::StrCat("Port oper-status match failed for port ",
-                             port.first, ". got: ", state_path_response,
-                             ", want:", port.second.oper_status);
+                             port_name, ". got: ", state_path_response,
+                             ", want:", breakout_info.oper_status);
     }
     // Verify that the physical-channels state path value is as expected.
-    if_state_path = absl::StrCat("interfaces/interface[name=", port.first,
-                                 "]/state/physical-channel");
-    resp_parse_str = "openconfig-platform-transceiver:physical-channel";
+    interface_state_path = absl::StrCat("interfaces/interface[name=", port_name,
+                                        "]/state/physical-channel");
+    response_parse_str = "openconfig-platform-transceiver:physical-channel";
     ASSIGN_OR_RETURN(
         state_path_response,
-        GetGnmiStatePathInfo(sut_gnmi_stub, if_state_path, resp_parse_str),
+        GetGnmiStatePathInfo(sut_gnmi_stub, interface_state_path,
+                             response_parse_str),
         _ << "Failed to get GNMI state path value for physical-channels for "
              "port "
-          << port.first);
+          << port_name);
     if (!absl::StrContains(state_path_response,
-                           port.second.physical_channels)) {
+                           breakout_info.physical_channels)) {
       return gutil::InternalErrorBuilder().LogError()
              << absl::StrCat("Physical channel match failed for port ",
-                             port.first, ". got: ", state_path_response,
-                             ", want: ", port.second.physical_channels);
+                             port_name, ". got: ", state_path_response,
+                             ", want: ", breakout_info.physical_channels);
     }
   }
 
