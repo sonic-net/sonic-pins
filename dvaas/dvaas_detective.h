@@ -22,8 +22,10 @@
 #include <variant>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "dvaas/dvaas_detective.pb.h"
 #include "dvaas/test_vector.pb.h"
+#include "yggdrasil_decision_forests/model/random_forest/random_forest.h"
 
 namespace dvaas {
 namespace dvaas_internal {
@@ -31,6 +33,13 @@ namespace dvaas_internal {
 // Pretty printer for `DetectiveExplanation`.
 std::string DetectiveExplanationToString(
     const DetectiveExplanation& explanation);
+
+// Creates an `Explanation` from `rf_model`.
+//  - `model` must have exactly one tree.
+//  - `model` must have been created using the ydf library.
+absl::StatusOr<DetectiveExplanation> ExtractExplanationFromModel(
+    const yggdrasil_decision_forests::model::random_forest::RandomForestModel&
+        model);
 
 // Semantics for numerical features:
 // https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticnumerical
