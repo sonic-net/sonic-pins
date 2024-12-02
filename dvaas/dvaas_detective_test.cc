@@ -22,21 +22,166 @@
 #include "dvaas/dvaas_detective.h"
 
 #include <iostream>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "dvaas/dvaas_detective.pb.h"
 #include "dvaas/test_vector.pb.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "gutil/proto.h"
+#include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/internal/ordered_map.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
+#include "yggdrasil_decision_forests/model/decision_tree/decision_tree.h"
+#include "yggdrasil_decision_forests/model/random_forest/random_forest.h"
 
 namespace dvaas {
 namespace dvaas_internal {
 namespace {
+
+namespace ydf = ::yggdrasil_decision_forests;
+
+// Returns a random forest model with the following single decision tree:
+//  ? expected(output packets) >= 1.5 # root non-leaf
+//  |
+//  +- T -> [fail : 0 passes, 5 fails] # multicast leaf
+//  |
+//  +- F -> ? [expected(packet-ins) >= 0.5] # unicast non-leaf
+//          |
+//          +- T -> [fail : 0 passes, 5 fails] # unicast w/ punt leaf
+//          |
+//          +- F -> [pass : 5 passes, 0 fails] # unicast w/o punt leaf
+std::unique_ptr<ydf::model::random_forest::RandomForestModel>
+CreateSkeletonRandomForestModel() {
+  using ydf::model::decision_tree::NodeWithChildren;
+
+  std::unique_ptr<ydf::model::random_forest::RandomForestModel> rf_model =
+      std::make_unique<ydf::model::random_forest::RandomForestModel>();
+  rf_model->set_data_spec(
+      gutil::ParseProtoOrDie<ydf::dataset::proto::DataSpecification>(R"pb(
+        columns { type: NUMERICAL name: "expected(output packets)" }
+        columns { type: NUMERICAL name: "expected(packet-ins)" }
+        columns {
+          type: CATEGORICAL
+          name: "test result"
+          categorical {
+            items {
+              key: "<OOD>"
+              value { index: 0 }
+            }
+            items {
+              key: "pass"
+              value { index: 1 count: 5 }
+            }
+            items {
+              key: "fail"
+              value { index: 2 count: 10 }
+            }
+          }
+        }
+      )pb"));
+  rf_model->set_label_col_idx(2);
+
+  std::unique_ptr<ydf::model::decision_tree::DecisionTree> tree =
+      std::make_unique<ydf::model::decision_tree::DecisionTree>();
+  {
+    tree->CreateRoot();
+    NodeWithChildren* root = tree->mutable_root();
+    *root->mutable_node() =
+        gutil::ParseProtoOrDie<ydf::model::decision_tree::proto::Node>(R"pb(
+          condition {
+            attribute: 0  # expected(output packets)
+            condition { higher_condition { threshold: 1.5 } }
+          }
+        )pb");
+    root->CreateChildren();
+    NodeWithChildren* multicast_leaf_node = root->mutable_pos_child();
+    *multicast_leaf_node->mutable_node() =
+        gutil::ParseProtoOrDie<ydf::model::decision_tree::proto::Node>(R"pb(
+          classifier {
+            top_value: 2  # fail
+            distribution {
+              counts: 0  # <OOD>
+              counts: 0  # passes
+              counts: 5  # fails
+              sum: 5
+            }
+          }
+        )pb");
+    NodeWithChildren* unicast_internal_node = root->mutable_neg_child();
+    *unicast_internal_node->mutable_node() =
+        gutil::ParseProtoOrDie<ydf::model::decision_tree::proto::Node>(R"pb(
+          condition {
+            attribute: 1  # expected(packet-ins)
+            condition { higher_condition { threshold: 0.5 } }
+          }
+        )pb");
+    unicast_internal_node->CreateChildren();
+    NodeWithChildren* unicast_without_punt_leaf_node =
+        unicast_internal_node->mutable_neg_child();
+    *unicast_without_punt_leaf_node->mutable_node() =
+        gutil::ParseProtoOrDie<ydf::model::decision_tree::proto::Node>(R"pb(
+          classifier {
+            top_value: 1  # pass
+            distribution {
+              counts: 0  # <OOD>
+              counts: 5  # passes
+              counts: 0  # fails
+              sum: 5
+            }
+          }
+        )pb");
+    NodeWithChildren* unicast_with_punt_leaf_node =
+        unicast_internal_node->mutable_pos_child();
+    *unicast_with_punt_leaf_node->mutable_node() =
+        gutil::ParseProtoOrDie<ydf::model::decision_tree::proto::Node>(R"pb(
+          classifier {
+            top_value: 2  # fail
+            distribution {
+              counts: 0  # <OOD>
+              counts: 0  # passes
+              counts: 5  # fails
+              sum: 5
+            }
+          }
+        )pb");
+  }
+  rf_model->AddTree(std::move(tree));
+  return rf_model;
+}
+
+void ExtractExplanationFromModelTest() {
+  // Print header.
+  std::cout << std::string(80, '=') << "\n"
+            << "ExtractExplanationFromModel Test\n"
+            << std::string(80, '=') << "\n";
+  // Print input.
+  std::cout
+      << "-- Input: RandomForestWithSingleTree  ----------------------------\n"
+         "? [expected(output packets) >= 1.5] # root non-leaf\n"
+         "|\n"
+         "+- T -> [fail : 0 passes, 5 fails] # multicast leaf\n"
+         "|\n"
+         "+- F -> ? [expected(packet-ins) >= 0.5] # unicast non-leaf\n"
+         "        |\n"
+         "        +- T -> [fail : 0 passes, 5 fails] # unicast w/ punt leaf\n"
+         "        |\n"
+         "        +- F -> [pass : 5 passes, 0 fails] # unicast w/o punt leaf\n";
+
+  std::unique_ptr<ydf::model::random_forest::RandomForestModel> rf_model =
+      CreateSkeletonRandomForestModel();
+  ASSERT_OK_AND_ASSIGN(DetectiveExplanation explanation,
+                       ExtractExplanationFromModel(*rf_model));
+  std::cout << "-- Output: DetectiveExplanation proto ----------------------\n";
+  std::cout << gutil::PrintTextProto(explanation);
+}
 
 void DetectiveExplanationToStringTest() {
   std::vector<DetectiveExplanation> explanations = {
@@ -44,7 +189,7 @@ void DetectiveExplanationToStringTest() {
           R"pb(
             clusters {
               defining_property: "input ttl < 2"
-              predicted_outcome: true
+              predicted_outcome_is_pass: true
               passing_tests: 50
               failing_tests: 50
               accuracy_of_predicted_outcome: .5
@@ -55,7 +200,7 @@ void DetectiveExplanationToStringTest() {
           R"pb(
             clusters {
               defining_property: "input ttl < 2"
-              predicted_outcome: false
+              predicted_outcome_is_pass: false
               passing_tests: 50
               failing_tests: 50
               accuracy_of_predicted_outcome: .5
@@ -66,7 +211,7 @@ void DetectiveExplanationToStringTest() {
           R"pb(
             clusters {
               defining_property: "input ttl < 2"
-              predicted_outcome: true
+              predicted_outcome_is_pass: true
               passing_tests: 25
               failing_tests: 25
               accuracy_of_predicted_outcome: .5
@@ -74,7 +219,7 @@ void DetectiveExplanationToStringTest() {
             }
             clusters {
               defining_property: "input ttl >= 2"
-              predicted_outcome: false
+              predicted_outcome_is_pass: false
               passing_tests: 25
               failing_tests: 25
               accuracy_of_predicted_outcome: .5
@@ -85,7 +230,7 @@ void DetectiveExplanationToStringTest() {
           R"pb(
             clusters {
               defining_property: "expected(output packets) < 2"
-              predicted_outcome: true
+              predicted_outcome_is_pass: true
               passing_tests: 1220
               failing_tests: 0
               accuracy_of_predicted_outcome: 1
@@ -93,7 +238,7 @@ void DetectiveExplanationToStringTest() {
             }
             clusters {
               defining_property: "expected(packet-ins) < 1"
-              predicted_outcome: true
+              predicted_outcome_is_pass: true
               passing_tests: 256
               failing_tests: 0
               accuracy_of_predicted_outcome: 1
@@ -101,7 +246,7 @@ void DetectiveExplanationToStringTest() {
             }
             clusters {
               defining_property: "expected(output packets) >= 2 && expected(packet-ins) >= 1"
-              predicted_outcome: false
+              predicted_outcome_is_pass: false
               passing_tests: 12
               failing_tests: 30
               accuracy_of_predicted_outcome: .6
@@ -231,7 +376,19 @@ TEST(DvaasDetectiveTest, GoldenTest) {
     TestOutcomeToFeatureMapTest(test_outcome);
   }
 
+  ExtractExplanationFromModelTest();
+
   DetectiveExplanationToStringTest();
+}
+
+// Support for multiple trees is not implemented.
+TEST(DvaasDetectiveTest, DoesNotSupportModelsWithMultipleTrees) {
+  std::unique_ptr<ydf::model::random_forest::RandomForestModel>
+      rf_model_with_multiple_trees = CreateSkeletonRandomForestModel();
+  rf_model_with_multiple_trees->AddTree(
+      std::make_unique<ydf::model::decision_tree::DecisionTree>());
+  EXPECT_THAT(ExtractExplanationFromModel(*rf_model_with_multiple_trees),
+              gutil::StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 }  // namespace
