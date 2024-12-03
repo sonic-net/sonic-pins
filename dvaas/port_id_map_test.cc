@@ -43,9 +43,16 @@ TEST(MirrorTestbedP4rtPortIdMap,
       MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap(
           {{port_1, port_2}}));
 
+  // Control -> SUT.
   ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_2),
               StatusIs(absl::StatusCode::kNotFound));
   ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_3),
+              StatusIs(absl::StatusCode::kNotFound));
+
+  // SUT -> Control.
+  ASSERT_THAT(port_id_map.GetControlSwitchPortConnectedToSutPort(port_1),
+              StatusIs(absl::StatusCode::kNotFound));
+  ASSERT_THAT(port_id_map.GetControlSwitchPortConnectedToSutPort(port_3),
               StatusIs(absl::StatusCode::kNotFound));
 }
 
@@ -79,9 +86,16 @@ TEST(MirrorTestbedP4rtPortIdMap,
       MirrorTestbedP4rtPortIdMap::CreateFromSutToControlSwitchPortMap(
           {{port_1, port_2}}));
 
+  // Control -> SUT.
   ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_1),
               StatusIs(absl::StatusCode::kNotFound));
   ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_3),
+              StatusIs(absl::StatusCode::kNotFound));
+
+  // SUT -> Control.
+  ASSERT_THAT(port_id_map.GetControlSwitchPortConnectedToSutPort(port_2),
+              StatusIs(absl::StatusCode::kNotFound));
+  ASSERT_THAT(port_id_map.GetControlSwitchPortConnectedToSutPort(port_3),
               StatusIs(absl::StatusCode::kNotFound));
 }
 
@@ -101,32 +115,7 @@ TEST(MirrorTestbedP4rtPortIdMap,
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
-TEST(MirrorTestbedP4rtPortIdMap,
-     RetrunsCorrectSutPortGivenControlPortGivenControlToSutMapping) {
-  ASSERT_OK_AND_ASSIGN(const auto port_1,
-                       P4rtPortId::MakeFromP4rtEncoding("1"));
-  ASSERT_OK_AND_ASSIGN(const auto port_2,
-                       P4rtPortId::MakeFromP4rtEncoding("2"));
-  ASSERT_OK_AND_ASSIGN(const auto port_3,
-                       P4rtPortId::MakeFromP4rtEncoding("3"));
-  ASSERT_OK_AND_ASSIGN(const auto port_4,
-                       P4rtPortId::MakeFromP4rtEncoding("4"));
-
-  ASSERT_OK_AND_ASSIGN(
-      const auto port_id_map,
-      MirrorTestbedP4rtPortIdMap::CreateFromControlSwitchToSutPortMap({
-          {port_1, port_2},
-          {port_3, port_4},
-      }));
-
-  ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_1),
-              IsOkAndHolds(Eq(port_2)));
-  ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_3),
-              IsOkAndHolds(Eq(port_4)));
-}
-
-TEST(MirrorTestbedP4rtPortIdMap,
-     RetrunsCorrectSutPortGivenControlPortGivenSutToControlMapping) {
+TEST(MirrorTestbedP4rtPortIdMap, ReturnsCorrectPortGivenSutToControlMapping) {
   ASSERT_OK_AND_ASSIGN(const auto port_1,
                        P4rtPortId::MakeFromP4rtEncoding("1"));
   ASSERT_OK_AND_ASSIGN(const auto port_2,
@@ -143,22 +132,36 @@ TEST(MirrorTestbedP4rtPortIdMap,
           {port_3, port_4},
       }));
 
+  // Control -> SUT.
   ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_2),
               IsOkAndHolds(Eq(port_1)));
   ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_4),
               IsOkAndHolds(Eq(port_3)));
+
+  // SUT -> Control.
+  ASSERT_THAT(port_id_map.GetControlSwitchPortConnectedToSutPort(port_1),
+              IsOkAndHolds(Eq(port_2)));
+  ASSERT_THAT(port_id_map.GetControlSwitchPortConnectedToSutPort(port_3),
+              IsOkAndHolds(Eq(port_4)));
 }
 
-TEST(MirrorTestbedP4rtPortIdMap, RetrunsCorrectSutPortWithImplicitIdentityMap) {
+TEST(MirrorTestbedP4rtPortIdMap, ReturnsCorrectPortWithImplicitIdentityMap) {
   const auto port_id_map = MirrorTestbedP4rtPortIdMap::CreateIdentityMap();
   ASSERT_OK_AND_ASSIGN(const auto port_1,
                        P4rtPortId::MakeFromP4rtEncoding("1"));
   ASSERT_OK_AND_ASSIGN(const auto port_2,
                        P4rtPortId::MakeFromP4rtEncoding("2"));
 
+  // Control -> SUT.
   ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_1),
               IsOkAndHolds(Eq(port_1)));
   ASSERT_THAT(port_id_map.GetSutPortConnectedToControlSwitchPort(port_2),
+              IsOkAndHolds(Eq(port_2)));
+
+  // SUT -> Control.
+  ASSERT_THAT(port_id_map.GetControlSwitchPortConnectedToSutPort(port_1),
+              IsOkAndHolds(Eq(port_1)));
+  ASSERT_THAT(port_id_map.GetControlSwitchPortConnectedToSutPort(port_2),
               IsOkAndHolds(Eq(port_2)));
 }
 
