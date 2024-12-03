@@ -19,6 +19,7 @@
 #include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/pd.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
@@ -50,25 +51,14 @@ class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
     ASSERT_OK(pins_test::PushGnmiConfig(GetMirrorTestbed().ControlSwitch(),
                                         sut_gnmi_config));
 
-    // Initialize the connection.
-    ASSERT_OK_AND_ASSIGN(sut_p4rt_session_, pdpi::P4RuntimeSession::Create(
-                                                GetMirrorTestbed().Sut()));
-
-    ASSERT_OK(pdpi::SetMetadataAndSetForwardingPipelineConfig(sut_p4rt_session_.get(),
-                                                p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-                                                sai::GetP4Info(sai::Instantiation::kMiddleblock)));
-
-    // Clear entries here in case the previous test did not (e.g. because it
-    // crashed).
-    ASSERT_OK(pdpi::ClearTableEntries(sut_p4rt_session_.get()));
-    // Check that switch is in a clean state.
-    ASSERT_OK_AND_ASSIGN(auto read_back_entries,
-                         pdpi::ReadPiTableEntries(sut_p4rt_session_.get()));
-    ASSERT_EQ(read_back_entries.size(), 0);
+    // Initialize the connection and clear table entries.
+    ASSERT_OK_AND_ASSIGN(sut_p4rt_session_,
+                         pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
+                             GetMirrorTestbed().Sut(), p4info_));  
   }
 
   void TearDown() override {
-    if (SutP4RuntimeSession() != nullptr && clear_table_entries_on_teardown_) {
+    if (SutP4RuntimeSession() != nullptr) {
       // Clear all table entries to leave the switch in a clean state.
       EXPECT_OK(pdpi::ClearTableEntries(SutP4RuntimeSession()));
     }
@@ -81,17 +71,14 @@ class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
   }
 
   const pdpi::IrP4Info& IrP4Info() const { return ir_p4info_; }
-
- protected:
-  void DisableClearingTableEntriesOnTearDown() {
-    clear_table_entries_on_teardown_ = false;
-  }
+  const p4::config::v1::P4Info& P4Info() const { return p4info_; }
 
  private:
-  bool clear_table_entries_on_teardown_ = true;
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
   pdpi::IrP4Info ir_p4info_ = 
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
+  p4::config::v1::P4Info p4info_ =
+      sai::GetP4Info(sai::Instantiation::kMiddleblock);
 };
 
 }  // namespace pins
