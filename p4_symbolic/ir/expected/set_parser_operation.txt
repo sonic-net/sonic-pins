@@ -342,6 +342,9 @@ parsers {
             next_state: "__END_OF_PARSER__"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+        }
       }
     }
     parse_states {
@@ -433,7 +436,11 @@ parsers {
         }
         transitions {
           hex_string_transition {
-            value: "0x0800"
+            value {
+              value: "0x0800"
+            }
+            mask {
+            }
             next_state: "parse_ipv4"
           }
         }
@@ -441,6 +448,10 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+          continue_to_merge_point: true
         }
       }
     }
