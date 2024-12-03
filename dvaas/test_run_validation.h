@@ -43,6 +43,14 @@ struct SwitchOutputDiffParams {
   // in `ignored_metadata_for_validation`, the field is ignored during
   // comparison.
   absl::flat_hash_set<std::string> ignored_packet_in_metadata;
+
+  // If true, packet-ins (punted packets) are ignored while comparing expected
+  // and actual output. Note that packet-ins are completely ignored on both
+  // sides. Effectively the expected and actual outputs are compared assuming
+  // neither has any packet-ins.
+  // TODO: Remove and replace with
+  // `ignore_missing_packet_ins_in_actual_output`.
+  bool treat_expected_and_actual_outputs_as_having_no_packet_ins = false;
 };
 
 // Validates the given `test_vector` using the parameters in `params` and
