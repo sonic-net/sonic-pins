@@ -20,12 +20,10 @@
 
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "gutil/status.h"
 #include "p4_pdpi/ir.pb.h"
-#include "p4_symbolic/ir/ir.pb.h"
 
 namespace p4_symbolic {
 namespace ir {

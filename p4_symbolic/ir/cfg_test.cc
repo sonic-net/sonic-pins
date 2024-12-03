@@ -42,7 +42,10 @@ absl::StatusOr<P4Program> ReplaceEopAndParseProgramTextProto(
     absl::string_view ir_program_text_proto) {
   return gutil::ParseTextProto<P4Program>(absl::StrReplaceAll(
       ir_program_text_proto,
-      {{"$eop", absl::Substitute("\"$0\"", EndOfPipeline())}}));
+      {
+          {"$eoparser", absl::Substitute("\"$0\"", EndOfParser())},
+          {"$eop", absl::Substitute("\"$0\"", EndOfPipeline())},
+      }));
 }
 
 using CfgTest = ::testing::TestWithParam<CfgTestParam>;
@@ -63,6 +66,10 @@ std::vector<CfgTestParam> GetCfgTestInstances() {
             pipeline {
               key: "ingress"
               value { name: "ingress" initial_control: "t1" }
+            }
+            parsers {
+              key: "parser"
+              value { name: "parser" initial_state: $eoparser }
             }
             tables {
               key: "t1"
@@ -97,6 +104,10 @@ std::vector<CfgTestParam> GetCfgTestInstances() {
             pipeline {
               key: "ingress"
               value { name: "ingress" initial_control: "c1" }
+            }
+            parsers {
+              key: "parser"
+              value { name: "parser" initial_state: $eoparser }
             }
             conditionals {
               key: "c1"
@@ -141,6 +152,10 @@ std::vector<CfgTestParam> GetCfgTestInstances() {
               key: "ingress"
               value { name: "ingress" initial_control: "c1" }
             }
+            parsers {
+              key: "parser"
+              value { name: "parser" initial_state: $eoparser }
+            }
             conditionals {
               key: "c1"
               value { name: "c1" if_branch: "t1" else_branch: "t2" }
@@ -184,6 +199,10 @@ std::vector<CfgTestParam> GetCfgTestInstances() {
             pipeline {
               key: "ingress"
               value { name: "ingress" initial_control: "t1" }
+            }
+            parsers {
+              key: "parser"
+              value { name: "parser" initial_state: $eoparser }
             }
             tables {
               key: "t1"
@@ -247,6 +266,10 @@ std::vector<CfgTestParam> GetCfgTestInstances() {
             pipeline {
               key: "ingress"
               value { name: "ingress" initial_control: "c1" }
+            }
+            parsers {
+              key: "parser"
+              value { name: "parser" initial_state: $eoparser }
             }
             conditionals {
               key: "c1"
@@ -312,6 +335,10 @@ std::vector<CfgTestParam> GetCfgTestInstances() {
               key: "ingress"
               value { name: "ingress" initial_control: "c1" }
             }
+            parsers {
+              key: "parser"
+              value { name: "parser" initial_state: $eoparser }
+            }
             conditionals {
               key: "c1"
               value { name: "c1" if_branch: "c2" else_branch: "t3" }
@@ -373,6 +400,10 @@ std::vector<CfgTestParam> GetCfgTestInstances() {
               key: "ingress"
               value { name: "ingress" initial_control: "c1" }
             }
+            parsers {
+              key: "parser"
+              value { name: "parser" initial_state: $eoparser }
+            }
             conditionals {
               key: "c1"
               value { name: "c1" if_branch: "t1" else_branch: "t2" }
@@ -413,6 +444,187 @@ std::vector<CfgTestParam> GetCfgTestInstances() {
             }
           )pb",
       },
+      {
+          /*  eop - ingress
+           *
+           *  start - parser
+           *   |
+           *  eoparser
+           */
+          .test_name = "ParserWithDefaultTransition",
+          .control_to_expected_info =
+              {
+                  {"start", {EndOfParser(), true}},
+              },
+          .ir_program_text_proto = R"pb(
+            pipeline {
+              key: "ingress"
+              value { name: "ingress" initial_control: $eop }
+            }
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    parser_ops {
+                      extract { header { header_name: "ethernet" } }
+                    }
+                    transitions { default_transition { next_state: $eoparser } }
+                  }
+                }
+              }
+            }
+          )pb",
+      },
+      {
+          /*  eop - ingress
+           *
+           *  start - parser
+           *   |  \
+           *   |  parse_ipv4
+           *   |  /
+           *  eoparser
+           */
+          .test_name = "ParserWithHexStringTransition",
+          .control_to_expected_info =
+              {
+                  {"start", {EndOfParser(), true}},
+                  {"parse_ipv4", {EndOfParser(), false}},
+              },
+          .ir_program_text_proto = R"pb(
+            pipeline {
+              key: "ingress"
+              value { name: "ingress" initial_control: $eop }
+            }
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "parse_ipv4"
+                  value {
+                    name: "parse_ipv4"
+                    parser_ops { extract { header { header_name: "ipv4" } } }
+                    transitions { default_transition { next_state: $eoparser } }
+                  }
+                }
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    parser_ops {
+                      extract { header { header_name: "ethernet" } }
+                    }
+                    transition_key_fields {
+                      field { header_name: "ethernet" field_name: "ether_type" }
+                    }
+                    transitions {
+                      hex_string_transition {
+                        value { value: "0x0800" }
+                        mask {}
+                        next_state: "parse_ipv4"
+                      }
+                    }
+                    transitions { default_transition { next_state: $eoparser } }
+                  }
+                }
+              }
+            }
+          )pb",
+      },
+      {
+          /*
+           *  start - parser
+           *   |  \
+           *   |  parse_ipv4
+           *   |  /
+           *  eoparser
+           *
+           *    c1 - ingress
+           *   /  \
+           *  t1  t2
+           *   \  /
+           *    t3 - eop
+           */
+          .test_name = "ProrgamWithBothParserAndIngressControl",
+          .control_to_expected_info =
+              {
+                  {"start", {EndOfParser(), true}},
+                  {"parse_ipv4", {EndOfParser(), false}},
+                  {"c1", {"t3", true}},
+                  {"t1", {"t3", false}},
+                  {"t2", {"t3", false}},
+                  {"t3", {EndOfPipeline(), true}},
+              },
+          .ir_program_text_proto = R"pb(
+            pipeline {
+              key: "ingress"
+              value { name: "ingress" initial_control: "c1" }
+            }
+            parsers {
+              key: "parser"
+              value {
+                name: "parser"
+                initial_state: "start"
+                parse_states {
+                  key: "start"
+                  value {
+                    name: "start"
+                    parser_ops {
+                      extract { header { header_name: "ethernet" } }
+                    }
+                    transition_key_fields {
+                      field { header_name: "ethernet" field_name: "ether_type" }
+                    }
+                    transitions {
+                      hex_string_transition {
+                        value { value: "0x0800" }
+                        mask {}
+                        next_state: "parse_ipv4"
+                      }
+                    }
+                    transitions { default_transition { next_state: $eoparser } }
+                  }
+                }
+                parse_states {
+                  key: "parse_ipv4"
+                  value {
+                    name: "parse_ipv4"
+                    parser_ops { extract { header { header_name: "ipv4" } } }
+                    transitions { default_transition { next_state: $eoparser } }
+                  }
+                }
+              }
+            }
+            conditionals {
+              key: "c1"
+              value { name: "c1" if_branch: "t1" else_branch: "t2" }
+            }
+            tables {
+              key: "t1"
+              value {
+                table_implementation { action_to_next_control { value: "t3" } }
+              }
+            }
+            tables {
+              key: "t2"
+              value {
+                table_implementation { action_to_next_control { value: "t3" } }
+              }
+            }
+            tables {
+              key: "t3"
+              value {
+                table_implementation { action_to_next_control { value: $eop } }
+              }
+            }
+          )pb",
+      },
   };
 }
 
@@ -420,6 +632,20 @@ constexpr absl::string_view kMinimalProgram = R"pb(
   pipeline {
     key: "ingress"
     value { name: "ingress" initial_control: "c1" }
+  }
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          transitions { default_transition { next_state: $eoparser } }
+        }
+      }
+    }
   }
   conditionals {
     key: "c1"
@@ -431,6 +657,54 @@ constexpr absl::string_view kMinimalProgram = R"pb(
   }
 )pb";
 
+constexpr absl::string_view kUnknownParseStateProgram = R"pb(
+  pipeline {
+    key: "ingress"
+    value { name: "ingress" initial_control: $eop }
+  }
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          parser_ops { extract { header { header_name: "ethernet" } } }
+          transitions { default_transition { next_state: "unknown" } }
+        }
+      }
+    }
+  }
+)pb";
+
+constexpr absl::string_view kNodeConflictProgram = R"pb(
+  pipeline {
+    key: "ingress"
+    value { name: "ingress" initial_control: "start" }
+  }
+  parsers {
+    key: "parser"
+    value {
+      name: "parser"
+      initial_state: "start"
+      parse_states {
+        key: "start"
+        value {
+          name: "start"
+          parser_ops { extract { header { header_name: "ethernet" } } }
+          transitions { default_transition { next_state: $eoparser } }
+        }
+      }
+    }
+  }
+  tables {
+    key: "start"
+    value { table_implementation { action_to_next_control { value: $eop } } }
+  }
+)pb";
+
 TEST(GetOptimizedSymbolicExecutionInfoTest, ReturnsErrorForEndOfPipeline) {
   ASSERT_OK_AND_ASSIGN(const P4Program program,
                        ReplaceEopAndParseProgramTextProto(kMinimalProgram));
@@ -438,6 +712,16 @@ TEST(GetOptimizedSymbolicExecutionInfoTest, ReturnsErrorForEndOfPipeline) {
                        ControlFlowGraph::Create(program));
 
   ASSERT_THAT(cfg->GetOptimizedSymbolicExecutionInfo(EndOfPipeline()),
+              StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+TEST(GetOptimizedSymbolicExecutionInfoTest, ReturnsErrorForEndOfParser) {
+  ASSERT_OK_AND_ASSIGN(const P4Program program,
+                       ReplaceEopAndParseProgramTextProto(kMinimalProgram));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<ControlFlowGraph> cfg,
+                       ControlFlowGraph::Create(program));
+
+  ASSERT_THAT(cfg->GetOptimizedSymbolicExecutionInfo(EndOfParser()),
               StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
@@ -469,6 +753,36 @@ TEST(GetOptimizedSymbolicExecutionInfoTest, SucceedsForExistingTableNode) {
 
   ASSERT_THAT(cfg->GetOptimizedSymbolicExecutionInfo("t1"),
               StatusIs(absl::StatusCode::kOk));
+}
+
+TEST(GetOptimizedSymbolicExecutionInfoTest, SucceedsForExistingParseState) {
+  ASSERT_OK_AND_ASSIGN(const P4Program program,
+                       ReplaceEopAndParseProgramTextProto(kMinimalProgram));
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<ControlFlowGraph> cfg,
+                       ControlFlowGraph::Create(program));
+
+  ASSERT_THAT(cfg->GetOptimizedSymbolicExecutionInfo("start"),
+              StatusIs(absl::StatusCode::kOk));
+}
+
+TEST(CfgTest, ReturnsErrorForUnknownParseState) {
+  ASSERT_OK_AND_ASSIGN(
+      const P4Program program,
+      ReplaceEopAndParseProgramTextProto(kUnknownParseStateProgram));
+
+  ASSERT_THAT(ControlFlowGraph::Create(program),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       "Unknown parse state: 'unknown'"));
+}
+
+TEST(CfgTest, ReturnsErrorForNodeConflict) {
+  ASSERT_OK_AND_ASSIGN(
+      const P4Program program,
+      ReplaceEopAndParseProgramTextProto(kNodeConflictProgram));
+
+  ASSERT_THAT(ControlFlowGraph::Create(program),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       "Nodes of different types have the same name: start"));
 }
 
 TEST_P(CfgTest, GetOptimizedSymbolicExecutionInfoReturnsExpectedInfo) {

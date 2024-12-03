@@ -153,10 +153,19 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     if (packet_test_vector.input().type() == SwitchInput::DATAPLANE) {
       const Packet& packet = packet_test_vector.input().packet();
 
+      // Get corresponding control switch port for the packet's ingress port.
+      ASSIGN_OR_RETURN(const P4rtPortId sut_ingress_port,
+                       P4rtPortId::MakeFromP4rtEncoding(packet.port()));
+      ASSIGN_OR_RETURN(
+          const P4rtPortId control_switch_port,
+          parameters.mirror_testbed_port_map
+              .GetControlSwitchPortConnectedToSutPort(sut_ingress_port));
+
       // Inject to egress of control switch.
       RETURN_IF_ERROR(pins::InjectEgressPacket(
-          packet.port(), absl::HexStringToBytes(packet.hex()),
-          control_ir_p4info, &control_switch, injection_delay));
+          control_switch_port.GetP4rtEncoding(),
+          absl::HexStringToBytes(packet.hex()), control_ir_p4info,
+          &control_switch, injection_delay));
     } else {
       return absl::UnimplementedError(
           absl::StrCat("Test vector input type not supported\n",

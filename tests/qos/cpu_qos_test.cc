@@ -388,7 +388,6 @@ absl::StatusOr<p4::v1::TableEntry> MakeRouterInterface(
 // Purpose: Verify that P4Runtime per-entry ACL counters increment.
 TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   LOG(INFO) << "-- START OF TEST ---------------------------------------------";
-  Testbed().Environment().SetTestCaseID("cfd7e8aa-6521-4683-9c07-038ea146934d");
 
   // Setup: the testbed consists of a SUT connected to a control device
   // that allows us to send and receive packets to/from the SUT.
@@ -684,7 +683,6 @@ absl::StatusOr<openconfig::QueuesByName> GetCpuQueueStateViaGnmi(
 TEST_P(CpuQosTestWithoutIxia,
        NoUnexpectedPacketsReachCpuInPristineSwitchState) {
   LOG(INFO) << "-- START OF TEST ---------------------------------------------";
-  Testbed().Environment().SetTestCaseID("ea20865e-e15a-4d21-947c-6f638937fbec");
 
   // Setup: the testbed consists of a SUT connected to a control device
   // that allows us to send and receive packets to/from the SUT.
@@ -790,7 +788,6 @@ TEST_P(CpuQosTestWithoutIxia,
 // Purpose: Verify DSCP-to-queue mapping for traffic to switch loopback IP.
 TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   LOG(INFO) << "-- START OF TEST ---------------------------------------------";
-  Testbed().Environment().SetTestCaseID("61bb0173-0c49-4067-b15a-5c3dd7823126");
 
   // Setup: the testbed consists of a SUT connected to a control device
   // that allows us to send and receive packets to/from the SUT.

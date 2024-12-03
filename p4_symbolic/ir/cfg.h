@@ -24,7 +24,6 @@
 #include <vector>
 
 #include "absl/container/btree_set.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/container/node_hash_map.h"
 #include "absl/status/statusor.h"
 #include "p4_symbolic/ir/ir.pb.h"
@@ -35,18 +34,33 @@ namespace p4_symbolic::ir {
 // name along the path.
 using ControlPath = std::vector<std::string>;
 
+// Individual CFG node types that need to be separated and require different
+// processing.
+enum class CfgNodeType {
+  kPipelineControl,  // A pipeline control (e.g., table, conditional).
+  kParseState,       // A parse state of a parser.
+};
+
 // A single node in the control flow graph along with various computed metadata.
-// We make the following assuptions in the descriptions and definitions below.
+// We make the following assumptions in the descriptions and definitions below.
 // 1. The collection of CfgNodes form a non-empty DAG.
 // 2. The DAG has an implicit and unique root/source node implicitly connected
-// to all nodes with (explicit) in-degree 0.
+// to all nodes with (explicit) in-degree 0 (i.e., the initial parse states of
+// parsers and the initial controls of pipelines).
 // 3. The DAG has an implicit and unique leaf/sink node that all nodes with
-// (explicit) out-degree 0 are implicitly connected to.
+// (explicit) out-degree 0 (i.e., EndOfPipeline and EndOfParser) are implicitly
+// connected to.
 // 4. We do not explicitly refer to these two implicit nodes in the code. E.g.
 // do not include them in paths that start from or end in them.
 struct CfgNode {
-  // Same as a the name of the control node in the IR.
-  std::string control_name;
+  // The name of the CFG node. May be the name of a pipeline control node in the
+  // IR or the name of a parse state in a parser.
+  std::string node_name;
+
+  // The type of the CFG node. This is to ensure that nodes of different types
+  // will never have name conflicts, so that no node will ever be linked to
+  // another of a different type.
+  CfgNodeType node_type;
 
   // The children of the current node.
   // Using btree_set (here and below) for deterministic order, though not a
@@ -106,7 +120,7 @@ struct CfgNode {
   bool continue_to_merge_point;
 };
 
-// Returns a string represting the information stored in the given `cfg_node`.
+// Returns a string representing the information stored in the given `cfg_node`.
 // Useful for debugging purposes.
 std::string ToString(const CfgNode &cfg_node);
 
@@ -130,14 +144,13 @@ class ControlFlowGraph {
       const P4Program &program);
 
   // Returns information used in optimized symbolic execution for the node
-  // correspnding to the given `control_name` in the graph, or error if no such
-  // node exists. Expects input to correspond to a node with an (explicit)
-  // merge point (i.e. a node with non-zero out-degree), otherwise returns
-  // error.
+  // corresponding to the given `node_name` in the graph, or error if no such
+  // node exists. Expects input to correspond to a node with an (explicit) merge
+  // point (i.e. a node with non-zero out-degree), otherwise returns error.
   absl::StatusOr<OptimizedSymbolicExecutionInfo>
-  GetOptimizedSymbolicExecutionInfo(absl::string_view control_name);
+  GetOptimizedSymbolicExecutionInfo(absl::string_view node_name);
 
-  // Returns a string represting the constructred CFG. Useful for debugging
+  // Returns a string representing the constructed CFG. Useful for debugging
   // purposes.
   std::string ToString();
 
@@ -149,9 +162,9 @@ class ControlFlowGraph {
   ControlFlowGraph &operator=(ControlFlowGraph &&) = delete;
 
  private:
-  // Map of each control name to its correspodning CfgNode.
+  // Map of each control or parse state name to its corresponding CfgNode.
   // Must use node_hash_map for pointer stability.
-  // Note: Pointer stability is a necessariy condition in this case, otherwise
+  // Note: Pointer stability is a necessary condition in this case, otherwise
   // ConstructSubgraph as well as any code depending on pointers/references to
   // CfgNodes in node_by_name_ would break.
   absl::node_hash_map<std::string, CfgNode> node_by_name_;
@@ -159,24 +172,30 @@ class ControlFlowGraph {
   // Can only be constructed through a call to Create.
   ControlFlowGraph() = default;
 
-  // Returns a non-null immutable pointer to the node correspnding to the given
-  // `control_name` in the graph, or error if no such node exists.
-  absl::StatusOr<const CfgNode *> GetNode(absl::string_view control_name);
+  // Returns a non-null immutable pointer to the node corresponding to the given
+  // `node_name` in the graph, or error if no such node exists.
+  absl::StatusOr<const CfgNode *> GetNode(absl::string_view node_name);
 
-  // Returns a reference to the node correspnding to the given `control_name` in
-  // the graph. If such a node does not exist, creates and returns a new node
-  // with the given name.
-  CfgNode &GetOrAddNode(absl::string_view control_name);
+  // Returns a non-null mutable pointer to the node corresponding to the given
+  // `node_name` in the graph with the given `node_type`. If such a node does
+  // not exist, creates and returns a new node with the given name and type. If
+  // a node with the same name but of a different type exists, returns an error.
+  absl::StatusOr<CfgNode *> GetOrAddNode(absl::string_view node_name,
+                                         CfgNodeType node_type);
 
-  // Returns a non-null mutable pointer to the node correspnding to the given
-  // `control_name` in the graph, or error if no such node exists.
-  absl::StatusOr<CfgNode *> GetMutableNode(absl::string_view control_name);
+  // Returns a non-null mutable pointer to the node corresponding to the given
+  // `node_name` in the graph, or error if no such node exists.
+  absl::StatusOr<CfgNode *> GetMutableNode(absl::string_view node_name);
 
   // Recursively constructs the subgraph corresponding to the given
-  // `control_name`. Updates the children and parents of the involved
-  // nodes.
+  // `control_name`. Updates the children and parents of the involved nodes.
   absl::Status ConstructSubgraph(const P4Program &program,
                                  const std::string &control_name);
+
+  // Recursively constructs the subgraph for a parse state corresponding to the
+  // given `state_name`. Updates the children and parents of the involved nodes.
+  absl::Status ConstructSubgraph(const Parser &parser,
+                                 const std::string &state_name);
 
   // Recursively computes the contracted reverse path from the (implicit) leaf
   // to the given `cfg_node`. Sets the `contracted_reverse_path_from_leaf` field
