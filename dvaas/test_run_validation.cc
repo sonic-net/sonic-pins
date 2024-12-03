@@ -99,11 +99,13 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
     return false;
   }
 
-  if (actual_output.packet_ins_size() != expected_output.packet_ins_size()) {
-    *listener << "has mismatched number of packet ins (actual: "
-              << actual_output.packet_ins_size()
-              << " expected: " << expected_output.packet_ins_size() << ")\n";
-    return false;
+  if (!params.treat_expected_and_actual_outputs_as_having_no_packet_ins) {
+    if (actual_output.packet_ins_size() != expected_output.packet_ins_size()) {
+      *listener << "has mismatched number of packet ins (actual: "
+                << actual_output.packet_ins_size()
+                << " expected: " << expected_output.packet_ins_size() << ")\n";
+      return false;
+    }
   }
 
   std::sort(actual_output.mutable_packets()->pointer_begin(),
@@ -139,58 +141,63 @@ bool CompareSwitchOutputs(SwitchOutput actual_output,
     }
   }
 
-  for (int i = 0; i < expected_output.packet_ins_size(); ++i) {
-    const PacketIn& actual_packet_in = actual_output.packet_ins(i);
-    const PacketIn& expected_packet_in = expected_output.packet_ins(i);
+  if (!params.treat_expected_and_actual_outputs_as_having_no_packet_ins) {
+    for (int i = 0; i < expected_output.packet_ins_size(); ++i) {
+      const PacketIn& actual_packet_in = actual_output.packet_ins(i);
+      const PacketIn& expected_packet_in = expected_output.packet_ins(i);
 
-    MessageDifferencer differ;
-    for (auto* field : params.ignored_packetlib_fields)
-      differ.IgnoreField(field);
-    std::string diff;
-    differ.ReportDifferencesToString(&diff);
-    if (!differ.Compare(expected_packet_in.parsed(),
-                        actual_packet_in.parsed())) {
-      *listener << "has packet in " << i
-                << " with mismatched header fields:\n  " << Indent(2, diff);
-      return false;
-    }
-
-    // Check that received packet in has desired metadata (except for ignored
-    // metadata).
-    for (const auto& expected_metadata : expected_packet_in.metadata()) {
-      if (params.ignored_packet_in_metadata.contains(expected_metadata.name()))
-        continue;
-
-      std::optional<pdpi::IrPacketMetadata> actual_metadata =
-          GetPacketInMetadataByName(actual_packet_in, expected_metadata.name());
-      if (!actual_metadata.has_value()) {
-        *listener << "has packet in " << i << " with missing metadata field '"
-                  << expected_metadata.name() << "':\n  " << Indent(2, diff);
+      MessageDifferencer differ;
+      for (auto* field : params.ignored_packetlib_fields)
+        differ.IgnoreField(field);
+      std::string diff;
+      differ.ReportDifferencesToString(&diff);
+      if (!differ.Compare(expected_packet_in.parsed(),
+                          actual_packet_in.parsed())) {
+        *listener << "has packet in " << i
+                  << " with mismatched header fields:\n  " << Indent(2, diff);
         return false;
       }
 
-      if (!differ.Compare(expected_metadata.value(),
-                          actual_metadata->value())) {
-        *listener << "has packet in " << i
-                  << " with mismatched value for metadata field '"
-                  << expected_metadata.name() << "':\n  " << Indent(2, diff);
-        return false;
+      // Check that received packet in has desired metadata (except for ignored
+      // metadata).
+      for (const auto& expected_metadata : expected_packet_in.metadata()) {
+        if (params.ignored_packet_in_metadata.contains(
+                expected_metadata.name()))
+          continue;
+
+        std::optional<pdpi::IrPacketMetadata> actual_metadata =
+            GetPacketInMetadataByName(actual_packet_in,
+                                      expected_metadata.name());
+        if (!actual_metadata.has_value()) {
+          *listener << "has packet in " << i << " with missing metadata field '"
+                    << expected_metadata.name() << "':\n  " << Indent(2, diff);
+          return false;
+        }
+
+        if (!differ.Compare(expected_metadata.value(),
+                            actual_metadata->value())) {
+          *listener << "has packet in " << i
+                    << " with mismatched value for metadata field '"
+                    << expected_metadata.name() << "':\n  " << Indent(2, diff);
+          return false;
+        }
       }
-    }
 
-    // Check that received packet in does not have additional metadata (except
-    // for ignored metadata).
-    for (const auto& actual_metadata : actual_packet_in.metadata()) {
-      if (params.ignored_packet_in_metadata.contains(actual_metadata.name()))
-        continue;
+      // Check that received packet in does not have additional metadata (except
+      // for ignored metadata).
+      for (const auto& actual_metadata : actual_packet_in.metadata()) {
+        if (params.ignored_packet_in_metadata.contains(actual_metadata.name()))
+          continue;
 
-      std::optional<pdpi::IrPacketMetadata> expected_metadata =
-          GetPacketInMetadataByName(expected_packet_in, actual_metadata.name());
-      if (!expected_metadata.has_value()) {
-        *listener << "has packet in " << i
-                  << " with additional metadata field '"
-                  << actual_metadata.name() << "':\n  " << Indent(2, diff);
-        return false;
+        std::optional<pdpi::IrPacketMetadata> expected_metadata =
+            GetPacketInMetadataByName(expected_packet_in,
+                                      actual_metadata.name());
+        if (!expected_metadata.has_value()) {
+          *listener << "has packet in " << i
+                    << " with additional metadata field '"
+                    << actual_metadata.name() << "':\n  " << Indent(2, diff);
+          return false;
+        }
       }
     }
   }
@@ -369,6 +376,9 @@ PacketTestValidationResult ValidateTestRun(
                         absl::StrAppend(out, "'", field->name(), "'");
                       }),
         ")");
+  }
+  if (diff_params.treat_expected_and_actual_outputs_as_having_no_packet_ins) {
+    absl::StrAppend(&expectation, "\n          (ignoring packet-ins)");
   }
   std::string actual = DescribeActual(test_run.test_vector().input(),
                                       actual_output_characterization);
