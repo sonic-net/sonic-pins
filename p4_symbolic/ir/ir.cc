@@ -373,6 +373,55 @@ absl::StatusOr<RExpression> ExtractRExpression(
   }
 }
 
+// Extracts field value from BMv2 protobuf fields.
+absl::StatusOr<FieldValue> ExtractFieldValue(
+    const google::protobuf::ListValue &bmv2_field_value) {
+  FieldValue output;
+
+  if (bmv2_field_value.values_size() != 2 ||
+      !bmv2_field_value.values(0).has_string_value() ||
+      !bmv2_field_value.values(1).has_string_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Field value must contain 2 strings. Found: "
+           << bmv2_field_value.DebugString();
+  }
+
+  output.set_header_name(bmv2_field_value.values(0).string_value());
+  output.set_field_name(bmv2_field_value.values(1).string_value());
+  return output;
+}
+
+// Extracts hex string value from BMv2 protobuf fields.
+HexstrValue ExtractHexstrValue(const std::string &bmv2_hexstr) {
+  HexstrValue output;
+  if (absl::StartsWith(bmv2_hexstr, "-")) {
+    output.set_value(std::string(absl::StripPrefix(bmv2_hexstr, "-")));
+    output.set_negative(true);
+  } else {
+    output.set_value(bmv2_hexstr);
+    output.set_negative(false);
+  }
+  return output;
+}
+
+// Extracts lookahead value from BMv2 protobuf fields.
+absl::StatusOr<LookaheadValue> ExtractLookaheadValue(
+    const google::protobuf::ListValue &bmv2_lookahead) {
+  LookaheadValue output;
+
+  if (bmv2_lookahead.values_size() != 2 ||
+      !bmv2_lookahead.values(0).has_number_value() ||
+      !bmv2_lookahead.values(1).has_number_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Lookahead value must contain 2 numbers. Found: "
+           << bmv2_lookahead.DebugString();
+  }
+
+  output.set_offset(bmv2_lookahead.values(0).number_value());
+  output.set_bitwidth(bmv2_lookahead.values(1).number_value());
+  return output;
+}
+
 // Functions for translating values.
 absl::StatusOr<LValue> ExtractLValue(
     const google::protobuf::Value &bmv2_value,
@@ -389,21 +438,17 @@ absl::StatusOr<LValue> ExtractLValue(
 
   const google::protobuf::Struct &struct_value = bmv2_value.struct_value();
   const std::string &type = struct_value.fields().at("type").string_value();
+  const google::protobuf::Value &value = struct_value.fields().at("value");
 
   ASSIGN_OR_RETURN(bmv2::ExpressionType type_case, ExpressionTypeToEnum(type));
   switch (type_case) {
     case bmv2::ExpressionType::field: {
-      const google::protobuf::ListValue &names =
-          struct_value.fields().at("value").list_value();
-
-      FieldValue *field_value = output.mutable_field_value();
-      field_value->set_header_name(names.values(0).string_value());
-      field_value->set_field_name(names.values(1).string_value());
+      ASSIGN_OR_RETURN(*output.mutable_field_value(),
+                       ExtractFieldValue(value.list_value()));
       return output;
     }
     case bmv2::ExpressionType::runtime_data: {
-      int variable_index = struct_value.fields().at("value").number_value();
-
+      int variable_index = value.number_value();
       Variable *variable = output.mutable_variable_value();
       variable->set_name(variables[variable_index]);
       return output;
@@ -428,58 +473,42 @@ absl::StatusOr<RValue> ExtractRValue(
 
   const google::protobuf::Struct &struct_value = bmv2_value.struct_value();
   const std::string &type = struct_value.fields().at("type").string_value();
+  const google::protobuf::Value &value = struct_value.fields().at("value");
 
   ASSIGN_OR_RETURN(bmv2::ExpressionType type_case, ExpressionTypeToEnum(type));
   switch (type_case) {
     case bmv2::ExpressionType::header: {
-      const std::string &header_name =
-          struct_value.fields().at("value").string_value();
-
+      const std::string &header_name = value.string_value();
       HeaderValue *header_value = output.mutable_header_value();
       header_value->set_header_name(header_name);
       return output;
     }
     case bmv2::ExpressionType::field: {
-      const google::protobuf::ListValue &names =
-          struct_value.fields().at("value").list_value();
-
-      FieldValue *field_value = output.mutable_field_value();
-      field_value->set_header_name(names.values(0).string_value());
-      field_value->set_field_name(names.values(1).string_value());
+      ASSIGN_OR_RETURN(*output.mutable_field_value(),
+                       ExtractFieldValue(value.list_value()));
       return output;
     }
     case bmv2::ExpressionType::runtime_data: {
-      int variable_index = struct_value.fields().at("value").number_value();
+      int variable_index = value.number_value();
 
       Variable *variable = output.mutable_variable_value();
       variable->set_name(variables[variable_index]);
       return output;
     }
     case bmv2::ExpressionType::hexstr_: {
-      HexstrValue *hexstr_value = output.mutable_hexstr_value();
-      std::string hexstr = struct_value.fields().at("value").string_value();
-      if (absl::StartsWith(hexstr, "-")) {
-        hexstr_value->set_value(std::string(absl::StripPrefix(hexstr, "-")));
-        hexstr_value->set_negative(true);
-      } else {
-        hexstr_value->set_value(hexstr);
-        hexstr_value->set_negative(false);
-      }
+      *output.mutable_hexstr_value() = ExtractHexstrValue(value.string_value());
       return output;
     }
     case bmv2::ExpressionType::bool_: {
-      output.mutable_bool_value()->set_value(
-          struct_value.fields().at("value").bool_value());
+      output.mutable_bool_value()->set_value(value.bool_value());
       return output;
     }
     case bmv2::ExpressionType::string_: {
-      output.mutable_string_value()->set_value(
-          struct_value.fields().at("value").string_value());
+      output.mutable_string_value()->set_value(value.string_value());
       return output;
     }
     case bmv2::ExpressionType::expression: {
-      const google::protobuf::Struct &expression =
-          struct_value.fields().at("value").struct_value();
+      const google::protobuf::Struct &expression = value.struct_value();
       ASSIGN_OR_RETURN(*(output.mutable_expression_value()),
                        ExtractRExpression(expression, variables));
       return output;
@@ -808,11 +837,9 @@ absl::StatusOr<ParserOperation::Set> ExtractSetParserOp(
         "Parameter type must be 'field'. Found '%s'", bmv2_ltype));
   }
 
-  FieldValue &lvalue = *result.mutable_lvalue();
-  const ::google::protobuf::ListValue &bmv2_lvalue =
+  const google::protobuf::ListValue &bmv2_lvalue =
       bmv2_lparam.fields().at("value").list_value();
-  lvalue.set_header_name(bmv2_lvalue.values(0).string_value());
-  lvalue.set_field_name(bmv2_lvalue.values(1).string_value());
+  ASSIGN_OR_RETURN(*result.mutable_lvalue(), ExtractFieldValue(bmv2_lvalue));
 
   // Make sure the R-parameter struct contains the correct fields.
   if (!bmv2_rparam.fields().contains("type") ||
@@ -826,30 +853,20 @@ absl::StatusOr<ParserOperation::Set> ExtractSetParserOp(
   // Translate the R-parameter of "set" parser operation.
   const std::string &bmv2_rtype =
       bmv2_rparam.fields().at("type").string_value();
+  const google::protobuf::Value &bmv2_rvalue = bmv2_rparam.fields().at("value");
 
   if (bmv2_rtype == "field") {
-    FieldValue &rvalue = *result.mutable_field_rvalue();
-    const ::google::protobuf::ListValue &bmv2_field_value =
-        bmv2_rparam.fields().at("value").list_value();
-    rvalue.set_header_name(bmv2_field_value.values(0).string_value());
-    rvalue.set_field_name(bmv2_field_value.values(1).string_value());
+    ASSIGN_OR_RETURN(*result.mutable_field_rvalue(),
+                     ExtractFieldValue(bmv2_rvalue.list_value()));
   } else if (bmv2_rtype == "hexstr") {
-    HexstrValue &rvalue = *result.mutable_hexstr_rvalue();
     const std::string &bmv2_hexstr =
         bmv2_rparam.fields().at("value").string_value();
-    if (absl::StartsWith(bmv2_hexstr, "-")) {
-      rvalue.set_value(std::string(absl::StripPrefix(bmv2_hexstr, "-")));
-      rvalue.set_negative(true);
-    } else {
-      rvalue.set_value(bmv2_hexstr);
-      rvalue.set_negative(false);
-    }
+    *result.mutable_hexstr_rvalue() = ExtractHexstrValue(bmv2_hexstr);
   } else if (bmv2_rtype == "lookahead") {
-    LookaheadValue &rvalue = *result.mutable_lookahead_rvalue();
     const ::google::protobuf::ListValue &bmv2_lookahead =
         bmv2_rparam.fields().at("value").list_value();
-    rvalue.set_offset(bmv2_lookahead.values(0).number_value());
-    rvalue.set_bitwidth(bmv2_lookahead.values(1).number_value());
+    ASSIGN_OR_RETURN(*result.mutable_lookahead_rvalue(),
+                     ExtractLookaheadValue(bmv2_lookahead));
   } else if (bmv2_rtype == "expression") {
     RExpression &rvalue = *result.mutable_expression_rvalue();
     const google::protobuf::Struct &bmv2_expression =
@@ -896,10 +913,8 @@ absl::StatusOr<ParserTransitionKeyField> ExtractParserTransitionKeyField(
 
   switch (bmv2_key_field.type()) {
     case bmv2::ParserTransitionKeyField::field: {
-      FieldValue &field = *result.mutable_field();
-      const ::google::protobuf::ListValue &bmv2_value = bmv2_key_field.value();
-      field.set_header_name(bmv2_value.values(0).string_value());
-      field.set_field_name(bmv2_value.values(1).string_value());
+      ASSIGN_OR_RETURN(*result.mutable_field(),
+                       ExtractFieldValue(bmv2_key_field.value()));
       break;
     }
     case bmv2::ParserTransitionKeyField::lookahead:
@@ -945,8 +960,8 @@ absl::StatusOr<ParserTransition> ExtractParserTransition(
             "Empty hex string value: ", bmv2_transition.DebugString()));
       }
 
-      hexstr_transition.set_value(bmv2_value);
-      hexstr_transition.set_mask(bmv2_mask);
+      *hexstr_transition.mutable_value() = ExtractHexstrValue(bmv2_value);
+      *hexstr_transition.mutable_mask() = ExtractHexstrValue(bmv2_mask);
       hexstr_transition.set_next_state(Bmv2ToIrParseStateName(bmv2_next_state));
       break;
     }
