@@ -132,5 +132,106 @@ TEST(TestRunValidationTest,
               HasSubstr("mismatched ports:"));
 }
 
+TEST(TestRunValidationTest,
+     MissingPacketInsAreIgnoredIfAndOnlyIfIgnorePacketInsIsSet) {
+  const PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packets { port: "1" }
+        packet_ins {
+          metadata {
+            name: "target_egress_port"
+            value { str: "1" }
+          }
+        }
+      }
+    }
+    actual_output { packets { port: "1" } }
+  )pb");
+
+  // Without ignoring packet-ins, validation must fail.
+  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
+              HasSubstr("packet in"));
+
+  // Ignoring packet-ins, validation must succeed.
+  ASSERT_THAT(
+      ValidateTestRun(
+          test_run,
+          {
+              .treat_expected_and_actual_outputs_as_having_no_packet_ins = true,
+          }),
+      EqualsProto(R"pb()pb"));
+}
+
+TEST(TestRunValidationTest,
+     PacketInDifferencesAreIgnoredIfAndOnlyIfIgnorePacketInsIsSet) {
+  const PacketTestRun test_run = gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+    test_vector {
+      acceptable_outputs {
+        packets { port: "1" }
+        packet_ins {
+          metadata {
+            name: "target_egress_port"
+            value { str: "1" }
+          }
+        }
+      }
+    }
+    actual_output {
+      packets { port: "1" }
+      packet_ins {
+        metadata {
+          name: "target_egress_port"
+          value { str: "2" }
+        }
+      }
+    }
+  )pb");
+
+  // Without ignoring packet-ins, validation must fail.
+  ASSERT_THAT(ValidateTestRun(test_run).failure().description(),
+              HasSubstr("target_egress_port"));
+
+  // Ignoring packet-ins, validation must succeed.
+  ASSERT_THAT(
+      ValidateTestRun(
+          test_run,
+          {
+              .treat_expected_and_actual_outputs_as_having_no_packet_ins = true,
+          }),
+      EqualsProto(R"pb()pb"));
+}
+
+TEST(TestRunValidationTest, IgnorePacketInsHasNoEffectWhenPacketInsMatch) {
+  ASSERT_THAT(
+      ValidateTestRun(
+          gutil::ParseProtoOrDie<PacketTestRun>(R"pb(
+            test_vector {
+              acceptable_outputs {
+                packets { port: "1" }
+                packet_ins {
+                  metadata {
+                    name: "target_egress_port"
+                    value { str: "1" }
+                  }
+                }
+              }
+            }
+            actual_output {
+              packets { port: "1" }
+              packet_ins {
+                metadata {
+                  name: "target_egress_port"
+                  value { str: "1" }
+                }
+              }
+            }
+          )pb"),
+          {
+              .treat_expected_and_actual_outputs_as_having_no_packet_ins = true,
+          }),
+      EqualsProto(R"pb()pb"));
+}
+
 }  // namespace
 }  // namespace dvaas
