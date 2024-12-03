@@ -1219,6 +1219,12 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
                    ControlFlowGraph::Create(output));
   // Set the optimized symbolic execution information in the IR program using
   // the result of CFG analysis.
+  for (auto &[_, parser] : *output.mutable_parsers()) {
+    for (auto &[name, parse_state] : *parser.mutable_parse_states()) {
+      ASSIGN_OR_RETURN(*parse_state.mutable_optimized_symbolic_execution_info(),
+                       cfg->GetOptimizedSymbolicExecutionInfo(name));
+    }
+  }
   for (auto &[name, conditional] : *output.mutable_conditionals()) {
     ASSIGN_OR_RETURN(*conditional.mutable_optimized_symbolic_execution_info(),
                      cfg->GetOptimizedSymbolicExecutionInfo(name));
