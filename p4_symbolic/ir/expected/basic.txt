@@ -685,7 +685,11 @@ parsers {
         }
         transitions {
           hex_string_transition {
-            value: "0x0800"
+            value {
+              value: "0x0800"
+            }
+            mask {
+            }
             next_state: "parse_ipv4"
           }
         }
