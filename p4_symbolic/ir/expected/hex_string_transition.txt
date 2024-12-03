@@ -326,14 +326,22 @@ parsers {
         }
         transitions {
           hex_string_transition {
-            value: "0x0000"
-            mask: "0xfe00"
+            value {
+              value: "0x0000"
+            }
+            mask {
+              value: "0xfe00"
+            }
             next_state: "__END_OF_PARSER__"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x0800"
+            value {
+              value: "0x0800"
+            }
+            mask {
+            }
             next_state: "parse_ipv4"
           }
         }
