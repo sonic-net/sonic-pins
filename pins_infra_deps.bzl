@@ -240,8 +240,7 @@ def pins_infra_deps():
         http_archive(
             name = "com_google_ydf",
             urls = [
-                "https://github.com/google/yggdrasil-decision-forests/archive/refs/tags/v1.10.0.zip",
+                "https://github.com/google/yggdrasil-decision-forests/archive/50e3ef7d8e106f0021cab5fb94b230214f17ff94.zip",
             ],
-            strip_prefix = "yggdrasil-decision-forests-1.10.0",
-            sha256 = "99b0272caffb325df0240548af4a1718c2185ad5221b1a06e5008ec9bfebb192",
+            strip_prefix = "yggdrasil-decision-forests-50e3ef7d8e106f0021cab5fb94b230214f17ff94",
         )
