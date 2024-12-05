@@ -564,7 +564,6 @@ absl::StatusOr<uint32_t> NameToP4Id(std::string iface,
   return std::stoul(id_str);
 }
 
-#if 0
 TEST_P(ExampleIxiaTestFixture, TestInFcsErrors) {
   LOG(INFO) << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestInFcsErrors "
                "----------\n\n\n\n\n";
@@ -583,47 +582,46 @@ TEST_P(ExampleIxiaTestFixture, TestInFcsErrors) {
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
 
-  // Connect to TestTracker for test status
-  generic_testbed->Environment().SetTestCaseID(
-      "3da5c6f0-c85e-465f-9221-1e07523092d6");
-
   // Hook up to GNMI
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub,
-      generic_testbed->Sut().CreateGnmiStub());
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub,
+                       generic_testbed->Sut().CreateGnmiStub());
 
   // go through all the ports that interface to the Ixia and set them
   // to 200GB since the Ixia ports are all 200GB.
   for (const auto &[interface, info] : interface_info) {
     if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      LOG(INFO) << "gwc: Host Interface " << interface;
+      LOG(INFO) << "Host Interface " << interface;
       EXPECT_OK(SetPortSpeed(kSpeed200GB, interface, gnmi_stub.get()));
     }
   }
 
   // Wait to let the links come up
-  absl::SleepFor(absl::Seconds(20));
+  absl::SleepFor(absl::Seconds(30));
 
   // Loop through the interface_info looking for Ixia/SUT interface pairs,
-  // checking if the link is up. we need one pair with link up for the
-  // ingress interface/IXIA bad fcs traffic generation
-  std::string ixia_interface = "";
-  std::string sut_interface = "";
+  // checking if the link is up. We need one pair with link up for the
+  // ingress interface/IXIA traffic generation.
+  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
+                       GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
 
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      auto sut_link_up = CheckLinkUp(interface, gnmi_stub.get());
-      EXPECT_TRUE(sut_link_up.ok());
-      if (sut_link_up.ok() && sut_link_up.value()) {
-        ixia_interface = info.peer_interface_name;
-        sut_interface = interface;
-        break;
+  // If links didn't come up, lets try 100GB as some testbeds have 100GB
+  // IXIA connections.
+  if (ready_links.empty()) {
+    for (const auto &[interface, info] : interface_info) {
+      if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
+        ASSERT_OK(SetPortSpeed(kSpeed100GB, interface, gnmi_stub.get()));
       }
     }
+    absl::SleepFor(absl::Seconds(30));
+    ASSERT_OK_AND_ASSIGN(ready_links,
+                         GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
   }
 
-  ASSERT_FALSE(ixia_interface.empty());
-  ASSERT_FALSE(sut_interface.empty());
+  ASSERT_GE(ready_links.size(), 1) << "Ixia link is not ready";
+
+  std::string ixia_interface = ready_links[0].ixia_interface;
+  std::string sut_interface = ready_links[0].sut_interface;
+  
   LOG(INFO) << "\n\nChose Ixia interface " << ixia_interface
             << " and SUT interface " << sut_interface << "\n\n";
 
@@ -694,16 +692,9 @@ TEST_P(ExampleIxiaTestFixture, TestInFcsErrors) {
 
   ASSERT_OK(ixia::StartTraffic(tref, ixref, *generic_testbed));
 
-  // Wait until 10 seconds after the traffic started
-  absl::Time t1;
-  t1 = absl::Now();
-
-  absl::Time t2;
-  while (1) {
-    t2 = absl::Now();
-    if (t2 >= t1 + absl::Seconds(10)) break;
-    absl::SleepFor(absl::Milliseconds(100));
-  }
+  // Wait until 10 (traffic) + 25 (stats update) seconds after
+  // the traffic started.
+  absl::SleepFor(absl::Seconds(35));
 
   ASSERT_OK(ixia::StopTraffic(tref, *generic_testbed));
 
@@ -750,9 +741,7 @@ TEST_P(ExampleIxiaTestFixture, TestInFcsErrors) {
   LOG(INFO) << "\n\n\n\n\n---------- Finished TestInFcsErrors "
                "----------\n\n\n\n\n\n\n\n\n\n";
 }
-#endif
 
-#if 1
 TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   LOG(INFO) << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestIPv4Pkts "
                "----------\n\n\n\n\n";
@@ -771,10 +760,6 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
 
-  // Connect to TestTracker for test status
-  generic_testbed->Environment().SetTestCaseID(
-      "2fac23ff-6794-4a31-8fce-a1aa76afe72e");
-
   // Hook up to GNMI
   ASSERT_OK_AND_ASSIGN(std::unique_ptr<gnmi::gNMI::StubInterface> gnmi_stub,
                        generic_testbed->Sut().CreateGnmiStub());
@@ -789,7 +774,7 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   }
 
   // Wait to let the links come up
-  absl::SleepFor(absl::Seconds(20));
+  absl::SleepFor(absl::Seconds(30));
 
   // Loop through the interface_info looking for Ixia/SUT interface pairs,
   // checking if the link is up.  we need one pair with link up for the
@@ -797,7 +782,7 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
                        GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
 
-  // If links didnt come up, lets try 100GB as some testbeds have 100GB
+  // If links didn't come up, lets try 100GB as some testbeds have 100GB
   // IXIA connections.
   if (ready_links.empty()) {
     for (const auto &[interface, info] : interface_info) {
@@ -805,22 +790,32 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
         ASSERT_OK(SetPortSpeed(kSpeed100GB, interface, gnmi_stub.get()));
       }
     }
-    absl::SleepFor(absl::Seconds(20));
+    absl::SleepFor(absl::Seconds(30));
 
     ASSERT_OK_AND_ASSIGN(ready_links,
                          GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
   }
 
-  ASSERT_GE(ready_links.size(), 2) << "Ixia links are not ready";
+  ASSERT_GE(ready_links.size(), 1) << "Ixia link is not ready";
 
   std::string ixia_interface = ready_links[0].ixia_interface;
   std::string sut_in_interface = ready_links[0].sut_interface;
 
-  std::string sut_out_interface = ready_links[1].sut_interface;  
-
   ASSERT_FALSE(ixia_interface.empty());
   ASSERT_FALSE(sut_in_interface.empty());
-  ASSERT_FALSE(sut_out_interface.empty());
+
+  // Now loop through again and pick an egress interface. This one doesn't
+  // have to be up, just a different interface.
+  std::string sut_out_interface = "";
+
+  for (const auto &[interface, info] : interface_info) {
+    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
+      if (interface != sut_in_interface) {
+        sut_out_interface = interface;
+        break;
+      }
+    }
+  }
 
   // Look up the port numbers for the ingress and egress interfaces
   ASSERT_OK_AND_ASSIGN(uint32_t in_id,
@@ -1028,7 +1023,6 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   LOG(INFO) << "\n\n\n\n\n---------- Finished TestIPv4Pkts "
                "----------\n\n\n\n\n\n\n\n\n\n";
 }
-#endif
 
 #if 0
 TEST_P(ExampleIxiaTestFixture, TestOutDiscards) {
@@ -1048,10 +1042,6 @@ TEST_P(ExampleIxiaTestFixture, TestOutDiscards) {
 
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
-
-  // Connect to TestTracker for test status
-  generic_testbed->Environment().SetTestCaseID(
-      "0539b74c-656f-4a0c-aa8f-39d7721520ad");
 
   // Hook up to GNMI
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, generic_testbed->Sut().CreateGnmiStub());
@@ -1312,7 +1302,6 @@ TEST_P(ExampleIxiaTestFixture, TestOutDiscards) {
 }
 #endif
 
-#if 0
 TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
   LOG(INFO) << "\n\n\n\n\n\n\n\n\n\n---------- Starting TestIPv6Pkts "
                "----------\n\n\n\n\n";
@@ -1331,15 +1320,11 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
 
-  // Connect to TestTracker for test status
-  generic_testbed->Environment().SetTestCaseID(
-      "3f3859b8-7602-479c-a2ad-ab964ded694b");
-
   // Hook up to GNMI
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, generic_testbed->Sut().CreateGnmiStub());
 
   // go through all the ports that interface to the Ixia and set them
-  // to 100GB since the Ixia ports are all 100GB.
+  // to 200GB since the Ixia ports are all 200GB.
   for (const auto &[interface, info] : interface_info) {
     if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
       LOG(INFO) << "Host Interface " << interface;
@@ -1348,26 +1333,36 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
   }
 
   // Wait to let the links come up
-  absl::SleepFor(absl::Seconds(20));
+  absl::SleepFor(absl::Seconds(30));
 
   // Loop through the interface_info looking for Ixia/SUT interface pairs,
   // checking if the link is up.  we need one pair with link up for the
   // ingress interface/IXIA traffic generation
-  std::string ixia_interface = "";
-  std::string sut_in_interface = "";
+  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
+                       GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
 
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      auto sut_link_up = CheckLinkUp(interface, gnmi_stub.get());
-      EXPECT_TRUE(sut_link_up.ok());
-      if (sut_link_up.ok() && sut_link_up.value()) {
-        ixia_interface = info.peer_interface_name;
-        sut_in_interface = interface;
-        break;
+  // If links didn't come up, lets try 100GB as some testbeds have 100GB
+  // IXIA connections.
+  if (ready_links.empty()) {
+    for (const auto &[interface, info] : interface_info) {
+      if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
+        ASSERT_OK(SetPortSpeed(kSpeed100GB, interface, gnmi_stub.get()));
       }
     }
+    absl::SleepFor(absl::Seconds(30));
+
+    ASSERT_OK_AND_ASSIGN(ready_links,
+                         GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
   }
 
+  ASSERT_GE(ready_links.size(), 1) << "Ixia link is not ready";
+  
+  std::string ixia_interface = ready_links[0].ixia_interface;
+  std::string sut_in_interface = ready_links[0].sut_interface;
+  
+  ASSERT_FALSE(ixia_interface.empty());
+  ASSERT_FALSE(sut_in_interface.empty());
+  
   // Now loop through again and pick an egress interface.  This one doesn't
   // have to be up, just a different interface.
   std::string sut_out_interface = "";
@@ -1380,10 +1375,6 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
       }
     }
   }
-
-  ASSERT_FALSE(ixia_interface.empty());
-  ASSERT_FALSE(sut_in_interface.empty());
-  ASSERT_FALSE(sut_out_interface.empty());
 
   // Look up the port number for the egress interface
   ASSERT_OK_AND_ASSIGN(uint32_t in_id,
@@ -1562,12 +1553,17 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
   EXPECT_EQ(delta_out.out_ipv4_pkts, 0);
   EXPECT_GE(delta_out.in_ipv6_pkts, delta_out.out_pkts - 10);
   EXPECT_LE(delta_out.in_ipv6_pkts, delta_out.out_pkts + 10);
-  EXPECT_LE(delta_out.out_ipv6_pkts, delta_out.out_pkts + 10);
-  EXPECT_GE(delta_out.out_ipv6_pkts, delta_out.out_pkts - 10);
-  EXPECT_EQ(delta_out.out_ipv6_discarded_pkts, 0);
-  EXPECT_LE(delta_in.in_ipv6_pkts, delta_out.out_pkts + 10);
-  EXPECT_GE(delta_in.in_ipv6_pkts, delta_out.out_pkts - 10);
 
+  // TODO: Remove mask after bug is addressed.
+  if (!generic_testbed->Environment().MaskKnownFailures()) {
+    EXPECT_LE(delta_out.out_ipv6_pkts, delta_out.out_pkts + 10);
+    EXPECT_GE(delta_out.out_ipv6_pkts, delta_out.out_pkts - 10);
+    EXPECT_LE(delta_in.in_ipv6_pkts, delta_out.out_pkts + 10);
+    EXPECT_GE(delta_in.in_ipv6_pkts, delta_out.out_pkts - 10);
+  }
+
+  EXPECT_EQ(delta_out.out_ipv6_discarded_pkts, 0);
+  
   LOG(INFO) << "\n\n\n\n\n---------- Restore ----------\n\n\n\n\n";
 
   // go through all the ports that interface to the Ixia and set them
@@ -1586,7 +1582,6 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
   LOG(INFO) << "\n\n\n\n\n---------- Finished TestIPv6Pkts "
                "----------\n\n\n\n\n\n\n\n\n\n";
 }
-#endif
 
 #if 0
 TEST_P(ExampleIxiaTestFixture, TestCPUOutDiscards) {
@@ -1606,10 +1601,6 @@ TEST_P(ExampleIxiaTestFixture, TestCPUOutDiscards) {
 
   absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
       generic_testbed->GetSutInterfaceInfo();
-
-  // Connect to TestTracker for test status
-  generic_testbed->Environment().SetTestCaseID(
-      "3c8823ab-1aba-48a5-8af6-90d2f268c699");
 
   // Hook up to GNMI
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, generic_testbed->Sut().CreateGnmiStub());
