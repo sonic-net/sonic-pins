@@ -26,6 +26,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
@@ -54,12 +55,12 @@ using ydf::dataset::proto::DataSpecification;
 
 // In order to train our model, we must specify a label. For the most part, a
 // label is just another categorical feature, except the model classifies data
-// based on that feature (e.g. if categorical feature F can be X,Y or Z and F is
-// the label, then a data example will be classified as either X, Y, or Z).
-//
-// Our code mostly treats the label (i.e. test result: pass/fail) like any
-// other feature, but with a fixed feature name and possible values defined by
-// the constants below.
+// based on that feature. For example:
+//  - Categorical feature F can have value X, Y, or Z
+//  - Feature F is designated as the label
+//  - Therefore, the model classifies data as either X, Y, or Z
+// Our code mostly treats the label like any other feature, but with a fixed
+// feature name and values defined by the constants below.
 constexpr absl::string_view kTestResultFeatureName = "test result";
 constexpr absl::string_view kPassTestResultFeatureValue = "pass";
 constexpr absl::string_view kFailTestResultFeatureValue = "fail";
@@ -75,12 +76,17 @@ constexpr absl::string_view kAcceptableBehaviorsFeatureName =
 std::string DetectiveClusterToString(const DetectiveCluster& cluster,
                                      float total_predicted_outcomes) {
   bool passed = cluster.predicted_outcome_is_pass();
-  return absl::Substitute(
-      "* $0 -> $1\n"
-      "  * accuracy: $2%, with $3 exceptions that $4 instead\n"
-      "  * coverage: $5%, accounting for $6/$7 $8 test vectors\n",
-      cluster.defining_property(), passed ? "pass" : "fail",
-      cluster.accuracy_of_predicted_outcome() * 100,
+  return absl::StrFormat(
+      "* %s -> %s\n"
+      "  * accuracy: %.0f%%, %.0f out of %.0f test vectors that match the "
+      "conditions %s (remaining %.0f %s instead)\n"
+      "  * coverage: %.0f%%, accounting for %.0f out of %.0f %s test vectors\n",
+      cluster.defining_property().empty() ? "<no conditions>"
+                                          : cluster.defining_property(),
+      passed ? "pass" : "fail", cluster.accuracy_of_predicted_outcome() * 100,
+      passed ? cluster.passing_tests() : cluster.failing_tests(),
+      cluster.passing_tests() + cluster.failing_tests(),
+      passed ? "pass" : "fail",
       passed ? cluster.failing_tests() : cluster.passing_tests(),
       passed ? "fail" : "pass", cluster.coverage_for_predicted_outcome() * 100,
       passed ? cluster.passing_tests() : cluster.failing_tests(),

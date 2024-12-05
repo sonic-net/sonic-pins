@@ -370,6 +370,7 @@ void TestOutcomeToFeatureMapTest(const PacketTestOutcome& test_outcome) {
     std::cout << feature_name << ": "
               << FeatureValueToString(feature_map.at(feature_name)) << "\n";
   }
+  std::cout << "\n";
 }
 
 void WriteCsvFileFromPacketTestOutcomesTest() {
