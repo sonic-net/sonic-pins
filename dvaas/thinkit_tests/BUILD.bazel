@@ -51,6 +51,7 @@ proto_library(
         "//dvaas:test_vector_proto",
         "//p4_pdpi:ir_proto",
         "@com_github_p4lang_p4runtime//:p4info_proto",
+        "@com_google_protobuf//:any_proto",
     ],
 )
 
