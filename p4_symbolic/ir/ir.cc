@@ -32,6 +32,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
@@ -1020,6 +1021,29 @@ absl::StatusOr<Parser> ExtractParser(const bmv2::Parser &bmv2_parser) {
   return parser;
 }
 
+// Translate an error code definition from the BMv2 protobuf message.
+absl::StatusOr<Error> ExtractError(
+    const google::protobuf::ListValue &bmv2_error) {
+  // A BMv2 error must have 2 elements.
+  if (bmv2_error.values_size() != 2) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Error field must contain 2 elements. Found: "
+           << bmv2_error.DebugString();
+  }
+
+  if (!bmv2_error.values(0).has_string_value() ||
+      !bmv2_error.values(1).has_number_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Error field must be [string, int]. Found: "
+           << bmv2_error.DebugString();
+  }
+
+  Error output;
+  output.set_name(bmv2_error.values(0).string_value());
+  output.set_value(bmv2_error.values(1).number_value());
+  return output;
+}
+
 }  // namespace
 
 // Main Translation function.
@@ -1211,6 +1235,12 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
 
       (*output.mutable_conditionals())[conditional.name()] = conditional;
     }
+  }
+
+  // Translate errors from BMv2.
+  for (const google::protobuf::ListValue &bmv2_error : bmv2.errors()) {
+    ASSIGN_OR_RETURN(Error error, ExtractError(bmv2_error));
+    (*output.mutable_errors())[error.name()] = std::move(error);
   }
 
   // Create the Control Flow Graph (CFG) of the program and perform analysis for
