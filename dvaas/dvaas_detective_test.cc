@@ -21,6 +21,7 @@
 
 #include "dvaas/dvaas_detective.h"
 
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -360,9 +361,43 @@ void TestOutcomeToFeatureMapTest(const PacketTestOutcome& test_outcome) {
   // Sort map for determinism.
   absl::flat_hash_map<std::string, FeatureValue> feature_map =
       TestOutcomeToFeatureMap(test_outcome);
-  for (const auto& [key, value] : Ordered(feature_map)) {
-    std::cout << key << ": " << FeatureValueToString(value) << "\n";
+  // Check that GetListOfFeatureNames() is consistent with
+  // TestOutcomeToFeatureMap() and use GetListOfFeatureNames() to print in a
+  // deterministic order.
+  ASSERT_EQ(feature_map.size(), GetListOfFeatureNames().size());
+  for (const auto& feature_name : GetListOfFeatureNames()) {
+    ASSERT_TRUE(feature_map.contains(feature_name));
+    std::cout << feature_name << ": "
+              << FeatureValueToString(feature_map.at(feature_name)) << "\n";
   }
+}
+
+void WriteCsvFileFromPacketTestOutcomesTest() {
+  PacketTestOutcomes test_outcomes = TestOutcomeToFeatureMapTestCases();
+  // Create and write to temporary file
+  ASSERT_OK_AND_ASSIGN(std::string csv_file_path,
+                       WriteTempCsvFileFromPacketTestOutcomes(test_outcomes));
+
+  // Print header.
+  std::cout << std::string(80, '=') << "\n"
+            << "WriteCsvFileFromPacketTestOutcomes Test\n"
+            << std::string(80, '=') << "\n";
+
+  // Print input.
+  std::cout
+      << "-- Input: PacketTestOutcomes proto -------------------------------\n";
+  std::cout << gutil::PrintTextProto(test_outcomes);
+
+  // Print output.
+  std::cout
+      << "-- Output: Contents of CSV file ----------------------------------\n";
+  std::ifstream csv_ifstream(csv_file_path);
+  ASSERT_TRUE(csv_ifstream.is_open());
+  std::string csv_row;
+  while (std::getline(csv_ifstream, csv_row)) {
+    std::cout << csv_row << "\n";
+  }
+  csv_ifstream.close();
 }
 
 // This test is a golden test and not a typical unit test. The TEST unit serves
@@ -375,6 +410,8 @@ TEST(DvaasDetectiveTest, GoldenTest) {
   for (const auto& test_outcome : test_outcomes.outcomes()) {
     TestOutcomeToFeatureMapTest(test_outcome);
   }
+
+  WriteCsvFileFromPacketTestOutcomesTest();
 
   ExtractExplanationFromModelTest();
 
