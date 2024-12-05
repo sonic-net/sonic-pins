@@ -20,9 +20,11 @@
 
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "dvaas/dvaas_detective.pb.h"
 #include "dvaas/test_vector.pb.h"
 #include "yggdrasil_decision_forests/model/random_forest/random_forest.h"
@@ -41,6 +43,13 @@ absl::StatusOr<DetectiveExplanation> ExtractExplanationFromModel(
     const yggdrasil_decision_forests::model::random_forest::RandomForestModel&
         model);
 
+// Converts `test_outcomes` to CSV data and writes it to a temporary file.
+// Returns path of temporary file on success. Returns error if temporary file
+// cannot be created.
+// - CSV data is created using `TestOutcomeToFeatureMap`.
+absl::StatusOr<std::string> WriteTempCsvFileFromPacketTestOutcomes(
+    const PacketTestOutcomes& test_outcomes);
+
 // Semantics for numerical features:
 // https://ydf.readthedocs.io/en/latest/guide_feature_semantics/#ydfsemanticnumerical
 using NumericalValue = float;
@@ -56,8 +65,12 @@ using FeatureValue = std::variant<NumericalValue, CategoricalValue>;
 // Returns `value` as a printable string.
 std::string FeatureValueToString(const FeatureValue& value);
 
+// Returns list of feature names used by DVaaS Detective.
+std::vector<absl::string_view> GetListOfFeatureNames();
+
 // Returns map from feature names to feature values extracted from
-// `test_outcome`.
+// `test_outcome`. List of feature names can be obtained using
+// `GetListOfFeatureNames`.
 absl::flat_hash_map<std::string, FeatureValue> TestOutcomeToFeatureMap(
     const PacketTestOutcome& test_outcome);
 

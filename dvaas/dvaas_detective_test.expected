@@ -19,9 +19,9 @@ test_run {
 test_result {
 }
 -- Output: Feature Map -------------------------------------------
-# acceptable behaviors according to P4 simulation: 1
 # expected output packets: 1
 # expected punted packets: 1
+# acceptable switch behaviors according to P4 simulation: 1
 test result: pass
 ================================================================================
 TestOutcomeToFeatureMap Test
@@ -50,9 +50,9 @@ test_result {
   }
 }
 -- Output: Feature Map -------------------------------------------
-# acceptable behaviors according to P4 simulation: 1
 # expected output packets: 4
 # expected punted packets: 0
+# acceptable switch behaviors according to P4 simulation: 1
 test result: fail
 ================================================================================
 TestOutcomeToFeatureMap Test
@@ -79,9 +79,9 @@ test_run {
 test_result {
 }
 -- Output: Feature Map -------------------------------------------
-# acceptable behaviors according to P4 simulation: 5
 # expected output packets: 0
 # expected punted packets: 0
+# acceptable switch behaviors according to P4 simulation: 5
 test result: pass
 ================================================================================
 TestOutcomeToFeatureMap Test
@@ -116,10 +116,114 @@ test_run {
 test_result {
 }
 -- Output: Feature Map -------------------------------------------
-# acceptable behaviors according to P4 simulation: 2
 # expected output packets: 3
 # expected punted packets: 2
+# acceptable switch behaviors according to P4 simulation: 2
 test result: pass
+================================================================================
+WriteCsvFileFromPacketTestOutcomes Test
+================================================================================
+-- Input: PacketTestOutcomes proto -------------------------------
+outcomes {
+  test_run {
+    test_vector {
+      input {
+      }
+      acceptable_outputs {
+        packets {
+        }
+        packet_ins {
+        }
+      }
+    }
+    actual_output {
+    }
+  }
+  test_result {
+  }
+}
+outcomes {
+  test_run {
+    test_vector {
+      input {
+      }
+      acceptable_outputs {
+        packets {
+        }
+        packets {
+        }
+        packets {
+        }
+        packets {
+        }
+      }
+    }
+    actual_output {
+    }
+  }
+  test_result {
+    failure {
+    }
+  }
+}
+outcomes {
+  test_run {
+    test_vector {
+      input {
+      }
+      acceptable_outputs {
+      }
+      acceptable_outputs {
+      }
+      acceptable_outputs {
+      }
+      acceptable_outputs {
+      }
+      acceptable_outputs {
+      }
+    }
+    actual_output {
+    }
+  }
+  test_result {
+  }
+}
+outcomes {
+  test_run {
+    test_vector {
+      input {
+      }
+      acceptable_outputs {
+        packets {
+        }
+        packet_ins {
+        }
+        packet_ins {
+        }
+      }
+      acceptable_outputs {
+        packets {
+        }
+        packets {
+        }
+        packets {
+        }
+        packet_ins {
+        }
+      }
+    }
+    actual_output {
+    }
+  }
+  test_result {
+  }
+}
+-- Output: Contents of CSV file ----------------------------------
+# expected output packets,# expected punted packets,# acceptable switch behaviors according to P4 simulation,test result
+1,1,1,pass
+4,0,1,fail
+0,0,5,pass
+3,2,2,pass
 ================================================================================
 ExtractExplanationFromModel Test
 ================================================================================
