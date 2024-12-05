@@ -134,11 +134,11 @@ absl::Status TrapToCPU(thinkit::Switch &sut,
 // use IPv4.
 //
 absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
+		             const absl::string_view dest_mac,
 	                     thinkit::Switch &sut,
                              const p4::config::v1::P4Info &p4info) {
   constexpr absl::string_view kVrfId = "vrf-80";
   constexpr absl::string_view kRifOutId = "router-interface-1";
-  constexpr absl::string_view kRifInId = "router-interface-2";
   constexpr absl::string_view kNhopId = "nexthop-1";
   constexpr absl::string_view kNborIdv4 = "1.1.1.2";
   constexpr absl::string_view kNborIdv6 = "fe80::002:02ff:fe02:0202";
@@ -164,17 +164,6 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
         }
       )pb",
       kRifOutId, out_port));
-
-  auto rif_in_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
-      R"pb(
-        router_interface_table_entry {
-          match { router_interface_id: "$0" }
-          action {
-            set_port_and_src_mac { port: "$1" src_mac: "88:55:44:33:22:11" }
-          }
-        }
-      )pb",
-      kRifInId, in_port));
 
   auto nbor_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
@@ -224,6 +213,17 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
       )pb",
       kVrfId));
 
+  auto l3_admit_entry =
+      gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+          R"pb(
+            l3_admit_table_entry {
+              match { dst_mac { value: "$0" mask: "FF:FF:FF:FF:FF:FF" } }
+              action { admit_to_l3 {} }
+              priority: 1
+            }
+          )pb",
+          dest_mac));
+
   LOG(INFO) << "p4_stub";
   ASSIGN_OR_RETURN(std::unique_ptr<p4::v1::P4Runtime::StubInterface> p4_stub,
                    sut.CreateP4RuntimeStub());
@@ -252,8 +252,8 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
   LOG(INFO) << "for loop";
   std::vector<p4::v1::TableEntry> pi_entries;
   for (const auto &pd_entry :
-       {vrf_entry, rif_out_entry, rif_in_entry, nbor_entry, nhop_entry,
-        is_ipv6 ? ipv6_entry : ipv4_entry, acl_entry}) {
+       {vrf_entry, rif_out_entry, nbor_entry, nhop_entry,
+        is_ipv6 ? ipv6_entry : ipv4_entry, acl_entry, l3_admit_entry}) {
     LOG(INFO) << "loop";
     ASSIGN_OR_RETURN(
         p4::v1::TableEntry pi_entry,
@@ -852,8 +852,9 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
 
   // Set up the switch to forward inbound IPv4 packets to the egress port
   LOG(INFO) << "\n\n----- TestIPv4Pkts: ForwardToEgress -----\n";
-  EXPECT_OK(
-      ForwardToEgress(in_id, out_id, false, generic_testbed->Sut(), GetParam().p4_info));
+  constexpr absl::string_view kDestMac = "02:02:02:02:02:02";
+  EXPECT_OK(ForwardToEgress(in_id, out_id, false, kDestMac,
+                            generic_testbed->Sut(), GetParam().p4_info));
   LOG(INFO) << "\n\n----- ForwardToEgress Done -----\n";
 
   // Read some initial counters via GNMI from the SUT
@@ -901,7 +902,7 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   ASSERT_OK(ixia::SetFrameCount(tref, 90000000, *generic_testbed));
 
   // Set the destination MAC address
-  ASSERT_OK(ixia::SetDestMac(tref, "02:02:02:02:02:02", *generic_testbed));
+   ASSERT_OK(ixia::SetDestMac(tref, kDestMac, *generic_testbed));
 
   // Set the source MAC address
   ASSERT_OK(ixia::SetSrcMac(tref, "00:01:02:03:04:05", *generic_testbed));
@@ -1410,8 +1411,9 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
       /*timeout=*/absl::Minutes(3)));
 
   // Set up the switch to forward inbound packets to the egress port
-  EXPECT_OK(
-      ForwardToEgress(in_id, out_id, true, generic_testbed->Sut(), GetParam().p4_info));
+  constexpr absl::string_view kDestMac = "02:02:02:02:02:02";
+  EXPECT_OK(ForwardToEgress(in_id, out_id, true, kDestMac,
+                            generic_testbed->Sut(), GetParam().p4_info));
 
   // Read some initial counters via GNMI from the SUT
   ASSERT_OK_AND_ASSIGN(auto initial_in_counters,
@@ -1457,7 +1459,7 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
 
   // Set the source and destination MAC addresses
   ASSERT_OK(ixia::SetSrcMac(tref, "00:01:02:03:04:05", *generic_testbed));
-  ASSERT_OK(ixia::SetDestMac(tref, "02:02:02:02:02:02", *generic_testbed));
+  ASSERT_OK(ixia::SetDestMac(tref, kDestMac, *generic_testbed));
 
   // Add an IPv6 header
   ASSERT_OK(ixia::AppendIPv6(tref, *generic_testbed));
