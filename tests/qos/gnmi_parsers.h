@@ -8,9 +8,9 @@
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "lib/gnmi/openconfig.pb.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/ipv6_address.h"
-#include "tests/qos/openconfig.pb.h"
 
 namespace pins_test {
 
