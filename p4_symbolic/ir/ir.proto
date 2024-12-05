@@ -50,6 +50,8 @@ message P4Program {
   map<string, Pipeline> pipeline = 5;
   // Parsers, keyed by parser names.
   map<string, Parser> parsers = 6;
+  // Errors, keyed by error names.
+  map<string, Error> errors = 7;
 
   // TODO: If needed in the future, action calls can be added here, for
   // action calls that are not wrapped in other control constructs.
@@ -270,6 +272,14 @@ message Pipeline {
   string name = 1;
   // The name of the initial control construct.
   string initial_control = 2;
+}
+
+// Defines an error code that may be used in the program.
+message Error {
+  // The name of the error.
+  string name = 1;
+  // The value of the error code.
+  uint32 value = 2;
 }
 
 // An abstract p4 statement corresponding to a top level operation within
