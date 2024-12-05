@@ -212,6 +212,46 @@ absl::Status SetUpPuntToCPU(const netaddr::MacAddress &dmac,
   return pdpi::InstallPiTableEntries(&p4_session, ir_p4info, pi_entries);
 }
 
+// Set up the switch to punt packets to CPU with meter.
+absl::StatusOr<p4::v1::TableEntry> SetUpPuntToCPUWithRateLimit(
+    const netaddr::MacAddress &dmac, const netaddr::Ipv4Address &src_ip,
+    const netaddr::Ipv4Address &dst_ip, absl::string_view p4_queue,
+    int rate_bytes_per_second, int burst_in_bytes,
+    const p4::config::v1::P4Info &p4info, pdpi::P4RuntimeSession &p4_session) {
+  ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
+
+  RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
+      &p4_session,
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
+      << "SetForwardingPipelineConfig: Failed to push P4Info: ";
+
+  // TODO (b/204954722): Remove after bug is fixed.
+  RETURN_IF_ERROR(pdpi::ClearTableEntries(&p4_session));
+
+  auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+      R"pb(
+        acl_ingress_table_entry {
+          match {
+            dst_mac { value: "$0" mask: "ff:ff:ff:ff:ff:ff" }
+            is_ipv4 { value: "0x1" }
+            src_ip { value: "$1" mask: "255.255.255.255" }
+            dst_ip { value: "$2" mask: "255.255.255.255" }
+          }
+          action { acl_trap { qos_queue: "$3" } }
+          priority: 1
+          meter_config { bytes_per_second: $4 burst_bytes: $5 }
+        }
+      )pb",
+      dmac.ToString(), src_ip.ToString(), dst_ip.ToString(), p4_queue,
+      rate_bytes_per_second, burst_in_bytes));
+
+  LOG(INFO) << "InstallPiTableEntry";
+  ASSIGN_OR_RETURN(const p4::v1::TableEntry pi_acl_entry,
+                   pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, acl_entry));
+  RETURN_IF_ERROR(pdpi::InstallPiTableEntry(&p4_session, pi_acl_entry));
+  return pi_acl_entry;
+}
+
 // These are the counters we track in these tests.
 struct QueueCounters {
   int64_t num_packets_transmitted = 0;
@@ -989,13 +1029,41 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   LOG(INFO) << "-- END OF TEST -----------------------------------------------";
 }
 
-TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndRateLimit) {
+// Buffering and software bottlenecks can cause
+// some amount of variance in rate measured end to end.
+// Level of tolerance for packet rate verification.
+// This could be parameterized in future if this is platform
+// dependent.
+constexpr float kTolerancePercent = 3.0;
+
+// Ixia configurations:
+// 1. Frames sent per second by Ixia.
+// 2. Total frames sent by Ixia.
+// 3. Default framesize.
+// 4. Maximum framesize.
+// 5. Minimum framesize.
+constexpr int kFramesPerSecond = 1000000;
+constexpr int kTotalFrames = 10000000;
+constexpr absl::Duration kTrafficDuration =
+    absl::Seconds(kTotalFrames / kFramesPerSecond);
+constexpr int kDefaultFrameSize = 1514;
+constexpr int kMaxFrameSize = 9000;
+constexpr int kMinFrameSize = 64;
+
+struct PacketReceiveInfo {
+  absl::Mutex mutex;
+  int num_packets_punted ABSL_GUARDED_BY(mutex) = 0;
+  absl::Time time_first_packet_punted ABSL_GUARDED_BY(mutex);
+  absl::Time time_last_packet_punted ABSL_GUARDED_BY(mutex);
+};
+
+TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   // Pick a testbed with an Ixia Traffic Generator.
   auto requirements =
       gutil::ParseProtoOrDie<thinkit::TestRequirements>(
           R"pb(interface_requirements {
                  count: 1
-                 interface_mode: TRAFFIC_GENERATOR
+                 interface_modes: TRAFFIC_GENERATOR
                })pb");
 
   ASSERT_OK_AND_ASSIGN(
@@ -1005,7 +1073,9 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndRateLimit) {
   ASSERT_OK(generic_testbed->Environment().StoreTestArtifact(
       "gnmi_config.txt", GetParam().gnmi_config));
 
-  thinkit::Switch& sut = generic_testbed->Sut();
+  ASSERT_GT(GetParam().control_plane_bandwidth_bps, 0);
+
+  thinkit::Switch &sut = generic_testbed->Sut();
 
   // Push GNMI config.
   ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
@@ -1031,6 +1101,240 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndRateLimit) {
     absl::SleepFor(kPollInterval);
 
   }
+}
+
+TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
+  // Pick a testbed with an Ixia Traffic Generator.
+  auto requirements =
+      gutil::ParseProtoOrDie<thinkit::TestRequirements>(
+          R"pb(interface_requirements {
+                 count: 1
+                 interface_modes: TRAFFIC_GENERATOR
+               })pb");
+
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
+      GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
+
+  ASSERT_OK(generic_testbed->Environment().StoreTestArtifact(
+      "gnmi_config.txt", GetParam().gnmi_config));
+
+  ASSERT_GT(GetParam().control_plane_bandwidth_bps, 0);
+
+  thinkit::Switch &sut = generic_testbed->Sut();
+
+  // Push GNMI config.
+  ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
+
+  // Hook up to GNMI.
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, sut.CreateGnmiStub());
+
+  // Flow details.
+  const auto dest_mac = netaddr::MacAddress(02, 02, 02, 02, 02, 02);
+  const auto source_mac = netaddr::MacAddress(00, 01, 02, 03, 04, 05);
+  const auto source_ip = netaddr::Ipv4Address(192, 168, 10, 1);
+  const auto dest_ip = netaddr::Ipv4Address(172, 0, 0, 1);
+
+  // Go through all the ports that interface to the Ixia and set them
+  // to 100GB since the Ixia ports are all 100GB.
+  const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
+      interface_info = generic_testbed->GetSutInterfaceInfo();
+  for (const auto &[interface, info] : interface_info) {
+    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR))
+    { 
+      ASSERT_OK(SetPortSpeed("\"openconfig-if-ethernet:SPEED_100GB\"",
+                             interface, *gnmi_stub));
+    }
+  }
+
+  // Wait to let the links come up. Switch guarantees state paths to reflect
+  // in 10s. Lets wait for a bit more.
+  absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+
+  // TODO: Move this to helper function.
+  // Loop through the interface_info looking for Ixia/SUT interface pairs,
+  // checking if the link is up.  we need one pair with link up for the
+  // ingress interface/IXIA traffic generation.
+  std::string ixia_interface;
+  std::string sut_interface;
+  bool sut_link_up = false;
+  for (const auto &[interface, info] : interface_info) {
+    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
+      ASSERT_OK_AND_ASSIGN(sut_link_up, CheckLinkUp(interface, *gnmi_stub));
+      if (sut_link_up) {
+        ixia_interface = info.peer_interface_name;
+        sut_interface = interface;
+        break;
+      }
+    }
+  }
+
+  ASSERT_TRUE(sut_link_up);
+
+  // We will perform the following steps with Ixia:
+  // Set up Ixia traffic.
+  // Send Ixia traffic.
+  // Stop Ixia traffic.
+
+  ASSERT_OK_AND_ASSIGN(ixia::IxiaPortInfo ixia_port,
+                       ixia::ExtractPortInfo(ixia_interface));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string topology_ref,
+      pins_test::ixia::IxiaConnect(ixia_port.hostname, *generic_testbed));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string vport_ref,
+      pins_test::ixia::IxiaVport(topology_ref, ixia_port.card, ixia_port.port,
+                                 *generic_testbed));
+
+  ASSERT_OK_AND_ASSIGN(
+      std::string traffic_ref,
+      pins_test::ixia::IxiaSession(vport_ref, *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetFrameRate(traffic_ref, kFramesPerSecond,
+                                          *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetFrameCount(traffic_ref, kTotalFrames,
+                                           *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetFrameSize(traffic_ref, kMaxFrameSize,
+                                          *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetSrcMac(traffic_ref, source_mac.ToString(),
+                                       *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetDestMac(traffic_ref, dest_mac.ToString(),
+                                        *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::AppendIPv4(traffic_ref, *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetSrcIPv4(traffic_ref, source_ip.ToString(),
+                                        *generic_testbed));
+
+  ASSERT_OK(pins_test::ixia::SetDestIPv4(traffic_ref, dest_ip.ToString(),
+                                         *generic_testbed));
+
+  // Set up P4Runtime session.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
+                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
+                           generic_testbed->Sut(), GetParam().p4info));
+
+  // Listen for punted packets from the SUT.
+  PacketReceiveInfo packet_receive_info;
+  {
+    absl::MutexLock lock(&packet_receive_info.mutex);
+    packet_receive_info.num_packets_punted = 0;
+  }
+
+  // Get Queues.
+  ASSERT_OK_AND_ASSIGN(auto queues,
+                       ExtractQueueInfoViaGnmiConfig(GetParam().gnmi_config));
+
+  for (auto &[queue_name, queue_info] : queues) {
+    // Lets set flow rate limit to be half of queue limit so that queue limit
+    // doesnt take effect.
+    int flow_rate_limit_in_bytes_per_second =
+        (kMaxFrameSize * queue_info.rate_packets_per_second) / 2;
+
+    if (flow_rate_limit_in_bytes_per_second >
+        GetParam().control_plane_bandwidth_bps) {
+      flow_rate_limit_in_bytes_per_second =
+          GetParam().control_plane_bandwidth_bps / 2;
+    }
+
+    // TODO : Need to fix supported CPU queues. Currently, punting
+    // to queue 0 is not supported by OA in SONiC.
+    if (generic_testbed->Environment().MaskKnownFailures() &&
+        queue_info.p4_queue_name == "0x0") {
+      continue;
+    }
+
+    LOG(INFO) << "\n\n\nTesting Queue : " << queue_info.gnmi_queue_name
+              << "\n===================\n\n\n";
+
+    ASSERT_OK_AND_ASSIGN(
+        p4::v1::TableEntry pi_acl_entry,
+        SetUpPuntToCPUWithRateLimit(dest_mac, source_ip, dest_ip,
+                                    queue_info.p4_queue_name,
+                                    flow_rate_limit_in_bytes_per_second,
+                                    /*burst_in_bytes=*/kMaxFrameSize,
+                                    GetParam().p4info, *sut_p4_session));
+
+    // Reset received packet count at tester for each iteration.
+    {
+      absl::MutexLock lock(&packet_receive_info.mutex);
+      packet_receive_info.num_packets_punted = 0;
+    }
+
+    // Check that the counters are initially zero.
+    ASSERT_THAT(
+        pdpi::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry),
+        IsOkAndHolds(EqualsProto(R"pb(byte_count: 0 packet_count: 0)pb")));
+
+    ASSERT_OK(pins_test::ixia::StartTraffic(traffic_ref, topology_ref,
+                                            *generic_testbed));
+
+    // Wait for Traffic to be sent.
+    absl::SleepFor(kTrafficDuration);
+
+    ASSERT_OK(pins_test::ixia::StopTraffic(traffic_ref, *generic_testbed));
+
+    // Check for counters every 5 seconds upto 30 seconds till the fetched gNMI
+    // queue counter stats match packets and bytes sent by Ixia.
+    // Check that the counters increment within kMaxQueueCounterUpdateTime.
+    absl::Time time_packet_sent = absl::Now();
+    p4::v1::CounterData counter_data;
+    do {
+      ASSERT_OK_AND_ASSIGN(
+          counter_data,
+          pdpi::ReadPiCounterData(sut_p4_session.get(), pi_acl_entry));
+    } while (counter_data.packet_count() != kTotalFrames &&
+             absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
+    p4::v1::CounterData expected_counter_data;
+    expected_counter_data.set_packet_count(kTotalFrames);
+    expected_counter_data.set_byte_count(static_cast<int64_t>(kMaxFrameSize) *
+                                         static_cast<int64_t>(kTotalFrames));
+    EXPECT_THAT(counter_data, EqualsProto(expected_counter_data))
+        << "Counter for the table entry given below did not match expectation "
+           "within "
+        << kMaxQueueCounterUpdateTime
+        << " after injecting the Ixia test packets via CPU queue "
+        << queue_name;
+
+    // TODO: Remove masking this failure once bug is fixed.
+    if (!generic_testbed->Environment().MaskKnownFailures()) {
+      absl::MutexLock lock(&packet_receive_info.mutex);
+
+      LOG(INFO) << "Packets received at Controller: "
+                << packet_receive_info.num_packets_punted;
+      LOG(INFO) << "Timestamp of first received packet: "
+                << packet_receive_info.time_first_packet_punted;
+      LOG(INFO) << "Timestamp of last received packet: "
+                << packet_receive_info.time_last_packet_punted;
+
+      absl::Duration duration = packet_receive_info.time_last_packet_punted -
+                                packet_receive_info.time_first_packet_punted;
+      LOG(INFO) << "Duration of packets received: " << duration;
+      LOG(INFO) << "Frame size: " << kMaxFrameSize;
+      int64_t rate_received_in_bytes_per_second = 0;
+      int64_t useconds = absl::ToInt64Microseconds(duration);
+      ASSERT_NE(useconds, 0);
+      int64_t num_bytes =
+          packet_receive_info.num_packets_punted * kMaxFrameSize;
+      LOG(INFO) << "Num bytes received: " << num_bytes;
+      rate_received_in_bytes_per_second = num_bytes * 1000000 / useconds;
+      LOG(INFO) << "Rate of packets received (bps): "
+                << rate_received_in_bytes_per_second;
+      EXPECT_LE(
+          rate_received_in_bytes_per_second,
+          flow_rate_limit_in_bytes_per_second * (1 + kTolerancePercent / 100));
+      EXPECT_GE(
+          rate_received_in_bytes_per_second,
+          flow_rate_limit_in_bytes_per_second * (1 - kTolerancePercent / 100));
+    }
+  }  // for each queue.
+
 }
 
 }  // namespace
