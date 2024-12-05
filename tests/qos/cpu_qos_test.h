@@ -80,6 +80,10 @@ struct ParamsForTestsWithIxia {
   std::string gnmi_config;
   p4::config::v1::P4Info p4info;
   absl::optional<std::string> test_case_id;
+  // This is be the minimum guaranteed bandwidth for control path to Tester in
+  // the testbed. This is required to ensure the per queue rate limits to be
+  // tested are within this guaranteed end to end bandwidth.
+  int control_plane_bandwidth_bps;
 };
 
 class CpuQosTestWithIxia
