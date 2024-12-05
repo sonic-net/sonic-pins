@@ -73,7 +73,8 @@ constexpr uint32_t kMtu = 1514;
 //
 // The rules will punt all matching packets to the CPU.
 //
-absl::Status TrapToCPU(thinkit::Switch &sut) {
+absl::Status TrapToCPU(thinkit::Switch &sut,
+                       const p4::config::v1::P4Info &p4info) {
   auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
         acl_ingress_table_entry {
@@ -94,18 +95,13 @@ absl::Status TrapToCPU(thinkit::Switch &sut) {
       std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
       pdpi::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
 
-  LOG(INFO) << "GetP4Info";
-  p4::config::v1::P4Info p4info =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-
   LOG(INFO) << "CreateIrP4Info";
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
   LOG(INFO) << "SetForwardingPipelineConfig";
   RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      sai::GetP4Info(sai::Instantiation::kMiddleblock)))
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
   LOG(INFO) << "ClearTableEntries";
@@ -138,7 +134,8 @@ absl::Status TrapToCPU(thinkit::Switch &sut) {
 // use IPv4.
 //
 absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
-                             thinkit::Switch &sut) {
+	                     thinkit::Switch &sut,
+                             const p4::config::v1::P4Info &p4info) {
   constexpr absl::string_view kVrfId = "vrf-80";
   constexpr absl::string_view kRifOutId = "router-interface-1";
   constexpr absl::string_view kRifInId = "router-interface-2";
@@ -236,18 +233,13 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
       std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
       pdpi::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
 
-  LOG(INFO) << "GetP4Info";
-  p4::config::v1::P4Info p4info =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-
   LOG(INFO) << "CreateIrP4Info";
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
   LOG(INFO) << "SetForwardingPipelineConfig";
   RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      sai::GetP4Info(sai::Instantiation::kMiddleblock)))
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
   LOG(INFO) << "ClearTableEntries";
@@ -854,9 +846,14 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   // Set the egress port to loopback mode
   EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
 
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      generic_testbed->Sut(), GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+
   // Set up the switch to forward inbound IPv4 packets to the egress port
   LOG(INFO) << "\n\n----- TestIPv4Pkts: ForwardToEgress -----\n";
-  EXPECT_OK(ForwardToEgress(in_id, out_id, false, generic_testbed->Sut()));
+  EXPECT_OK(
+      ForwardToEgress(in_id, out_id, false, generic_testbed->Sut(), GetParam().p4_info));
   LOG(INFO) << "\n\n----- ForwardToEgress Done -----\n";
 
   // Read some initial counters via GNMI from the SUT
@@ -1128,6 +1125,10 @@ TEST_P(ExampleIxiaTestFixture, TestOutDiscards) {
   auto out_status_speed = CheckPortSpeed(sut_out_interface, gnmi_stub.get());
   EXPECT_THAT(out_status_speed, IsOkAndHolds(kSpeed40GB));
 
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      generic_testbed->Sut(), GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+  
   // Set up the switch to forward inbound packets to the egress port
   LOG(INFO) << "\n\n----- ForwardToEgress: TestOutDiscards -----\n";
   EXPECT_OK(ForwardToEgress(in_id, out_id, false, generic_testbed->Sut()));
@@ -1404,8 +1405,13 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
   // Set the egress port to loopback mode
   EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
 
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      generic_testbed->Sut(), GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+
   // Set up the switch to forward inbound packets to the egress port
-  EXPECT_OK(ForwardToEgress(in_id, out_id, true, generic_testbed->Sut()));
+  EXPECT_OK(
+      ForwardToEgress(in_id, out_id, true, generic_testbed->Sut(), GetParam().p4_info));
 
   // Read some initial counters via GNMI from the SUT
   ASSERT_OK_AND_ASSIGN(auto initial_in_counters,
@@ -1638,7 +1644,7 @@ TEST_P(ExampleIxiaTestFixture, TestCPUOutDiscards) {
   // We're doing this to overwhelm the egress port so at least some of the
   // packets we'll send from the CPU get discarded
   LOG(INFO) << "\n\n----- TestCPUOutDiscards: TrapToCPU -----\n";
-  EXPECT_OK(TrapToCPU(generic_testbed->Sut()));
+  EXPECT_OK(TrapToCPU(generic_testbed->Sut(), GetParam().p4_info));
   LOG(INFO) << "\n\n----- TrapToCPU Done -----\n";
 
   // Read some initial counters via GNMI from the SUT
