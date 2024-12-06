@@ -22,9 +22,6 @@ TEST_P(FrontpanelQosTest, PacketsGetMappedToCorrectQueuesBasedOnDscp) {
       std::unique_ptr<thinkit::GenericTestbed> testbed,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
-  // Set test case ID.
-  testbed->Environment().SetTestCaseID("TODO: insert proper ID");
-
   // Switch set up.
   ASSERT_OK_AND_ASSIGN(
       std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
