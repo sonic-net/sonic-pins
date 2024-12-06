@@ -41,7 +41,6 @@
 #include "lib/gnmi/openconfig.pb.h"
 #include "lib/p4rt/p4rt_port.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/ir.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/p4_runtime_session_extras.h"
@@ -254,8 +253,10 @@ absl::StatusOr<ValidationResult> DataplaneValidator::ValidateDataplane(
                      GenerateTestVectors(params, sut, *backend_, *writer));
   } else {
     LOG(INFO) << "Checking user-provided test vectors for well-formedness";
-    ASSIGN_OR_RETURN(test_vectors, LegitimizeUserProvidedTestVectors(
-                                       params.packet_test_vector_override));
+    ASSIGN_OR_RETURN(pdpi::IrP4Info ir_info, pdpi::GetIrP4Info(*sut.p4rt));
+    ASSIGN_OR_RETURN(test_vectors,
+                     LegitimizeUserProvidedTestVectors(
+                         params.packet_test_vector_override, ir_info));
   }
   RETURN_IF_ERROR(
       writer->AppendToTestArtifact("test_vectors.txt", ToString(test_vectors)));

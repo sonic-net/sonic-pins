@@ -163,6 +163,62 @@ added: input.packet.hex: "050505050505050505050505000e74657374207061636b65742023
 
 
 ================================================================================
+InternalizeUserProvidedTestVectors Test: packet_in with matching tag
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+  packet_ins {
+    metadata {
+      name: "ingress_port"
+      value {
+        hex_str: "0x00f"
+      }
+    }
+    metadata {
+      name: "target_egress_port"
+      value {
+        str: "1"
+      }
+    }
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+
+-- Output --------------------------------------------------
+-- Internalized Packet Test Vector #1 --
+test packet ID extracted from payload: 42
+diff of internalized vector vs input vector:
+added: input.packet.hex: "ffeeddccbbaa554433221100000f74657374207061636b657420233432"
+added: acceptable_outputs[0].packet_ins[0].hex: "050505050505050505050505000f74657374207061636b657420233432"
+
+
+================================================================================
 InternalizeUserProvidedTestVectors Test: input type != DATAPLANE
 ================================================================================
 -- Input ---------------------------------------------------
@@ -530,4 +586,206 @@ input {
   }
 }
 acceptable_outputs {
+}
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: packet_in with mismatching tag
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+  packet_ins {
+    metadata {
+      name: "ingress_port"
+      value {
+        hex_str: "0x00f"
+      }
+    }
+    metadata {
+      name: "target_egress_port"
+      value {
+        str: "1"
+      }
+    }
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #24"
+    }
+  }
+}
+
+-- Output --------------------------------------------------
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: mismatch of input packet in tag vs output packet in tag for output packet in #1: 42 vs 24
+Dumping offending test vector:
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+  packet_ins {
+    metadata {
+      name: "ingress_port"
+      value {
+        hex_str: "0x00f"
+      }
+    }
+    metadata {
+      name: "target_egress_port"
+      value {
+        str: "1"
+      }
+    }
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #24"
+    }
+  }
+}
+
+
+================================================================================
+InternalizeUserProvidedTestVectors Test: packet_in with malformed metadata
+================================================================================
+-- Input ---------------------------------------------------
+-- Input Packet Test Vector #1 --
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+  packet_ins {
+    metadata {
+      name: "foobar"
+      value {
+        str: "foobar"
+      }
+    }
+    metadata {
+      name: "ingress_port"
+      value {
+        hex_str: "0x00f"
+      }
+    }
+    metadata {
+      name: "target_egress_port"
+      value {
+        str: "1"
+      }
+    }
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #24"
+    }
+  }
+}
+
+-- Output --------------------------------------------------
+ERROR: INVALID_ARGUMENT: problem in user-provided packet test vector: output packet in #1 invalid: 'packet-in' message is invalid: Metadata with name foobar not defined.
+Dumping offending test vector:
+input {
+  type: DATAPLANE
+  packet {
+    port: "1"
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+          ethernet_source: "55:44:33:22:11:00"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #42"
+    }
+  }
+}
+acceptable_outputs {
+  packet_ins {
+    metadata {
+      name: "foobar"
+      value {
+        str: "foobar"
+      }
+    }
+    metadata {
+      name: "ingress_port"
+      value {
+        hex_str: "0x00f"
+      }
+    }
+    metadata {
+      name: "target_egress_port"
+      value {
+        str: "1"
+      }
+    }
+    parsed {
+      headers {
+        ethernet_header {
+          ethernet_destination: "5:5:5:5:5:5"
+          ethernet_source: "5:5:5:5:5:5"
+          ethertype: "0x000f"
+        }
+      }
+      payload: "test packet #24"
+    }
+  }
 }
