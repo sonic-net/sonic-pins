@@ -15,10 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef PINS_DVAAS_USER_PROVIDED_PACKET_TEST_VECTOR_H_
-#define PINS_DVAAS_USER_PROVIDED_PACKET_TEST_VECTOR_H_
-
-#include <vector>
+#ifndef PINS_USER_PROVIDED_PACKET_TEST_VECTOR_H_
+#define PINS_USER_PROVIDED_PACKET_TEST_VECTOR_H_
 
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
@@ -51,9 +49,12 @@ namespace dvaas {
 //     * Unique among all test vectors.
 // * The input must be of type `DATAPLANE` (other types may be supported in the
 //   future).
+// * Switch output packet ins must have valid metadata conforming to P4Runtime
+//   "Section 16.1: Packet I/O".
 absl::StatusOr<PacketTestVectorById> LegitimizeUserProvidedTestVectors(
-    absl::Span<const PacketTestVector> user_provided_test_vectors);
+    absl::Span<const PacketTestVector> user_provided_test_vectors,
+    const pdpi::IrP4Info& ir_info);
 
 }  // namespace dvaas
 
-#endif  // PINS_DVAAS_USER_PROVIDED_PACKET_TEST_VECTOR_H_
+#endif  // PINS_USER_PROVIDED_PACKET_TEST_VECTOR_H_

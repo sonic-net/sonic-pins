@@ -66,6 +66,12 @@ class MirrorTestbedP4rtPortIdMap {
   absl::StatusOr<pins_test::P4rtPortId> GetSutPortConnectedToControlSwitchPort(
       const pins_test::P4rtPortId& control_port) const;
 
+  // Returns the P4RT port ID of the control switch interface connected to the
+  // interface on the SUT with the given P4RT port ID according to the port
+  // mapping.
+  absl::StatusOr<pins_test::P4rtPortId> GetControlSwitchPortConnectedToSutPort(
+      const pins_test::P4rtPortId& sut_port) const;
+
  private:
   MirrorTestbedP4rtPortIdMap(
       absl::flat_hash_map<pins_test::P4rtPortId, pins_test::P4rtPortId>

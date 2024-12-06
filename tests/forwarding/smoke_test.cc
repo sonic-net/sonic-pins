@@ -21,6 +21,7 @@
 #include "gutil/proto_matchers.h"
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
+#include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/pd.h"
@@ -74,8 +75,6 @@ TEST_P(SmokeTestFixture, DISABLED_ModifyWorks) {
 
 // TODO: Enable once the bug is fixed.
 TEST_P(SmokeTestFixture, DISABLED_Bug181149419) {
-  GetMirrorTestbed().Environment().SetTestCaseID(
-      "e6ba12b7-18e0-4681-9562-87e2fc01d429");
   // Adding 8 mirror sessions should succeed.
   for (int i = 0; i < 8; i++) {
     sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
@@ -158,8 +157,6 @@ TEST_P(SmokeTestFixture, DISABLED_Bug181149419) {
 }
 
 TEST_P(SmokeTestFixture, InsertTableEntry) {
-  GetMirrorTestbed().Environment().SetTestCaseID(
-      "da103fbb-8fd4-4385-b997-34e12a41004b");
   const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
         router_interface_table_entry {
@@ -176,8 +173,6 @@ TEST_P(SmokeTestFixture, InsertTableEntry) {
 }
 
 TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
-  GetMirrorTestbed().Environment().SetTestCaseID(
-      "bd22f5fe-4103-4729-91d0-cb2bc8258940");
   sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
       R"pb(
         router_interface_table_entry {
@@ -198,8 +193,6 @@ TEST_P(SmokeTestFixture, InsertTableEntryWithRandomCharacterId) {
 }
 
 TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
-  GetMirrorTestbed().Environment().SetTestCaseID(
-      "8bdacde4-b261-4242-b65d-462c828a427d");
   pdpi::P4RuntimeSession* session = SutP4RuntimeSession();
   const pdpi::IrP4Info& ir_p4info = IrP4Info();
   std::vector<sai::TableEntry> write_pd_entries =
@@ -245,6 +238,40 @@ TEST_P(SmokeTestFixture, InsertAndReadTableEntries) {
   EXPECT_TRUE(diff.Compare(read_response, expected_read_response))
       << "Expected: " << expected_read_response.DebugString()
       << "\nActual: " << read_response.DebugString();
+}
+
+// Ensures that both CreateWithP4InfoAndClearTables and ClearTableEntries
+// properly clear the table entries of a table.
+TEST_P(SmokeTestFixture, EnsureClearTables) {
+  // Sets up initial session.
+  ASSERT_OK_AND_ASSIGN(auto session,
+                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
+                           GetMirrorTestbed().Sut(), P4Info()));
+  // The table should be clear after setup.
+  ASSERT_OK(pdpi::CheckNoTableEntries(session.get()));
+  // Sets up an example table entry.
+  const sai::TableEntry pd_entry = gutil::ParseProtoOrDie<sai::TableEntry>(
+      R"pb(
+        router_interface_table_entry {
+          match { router_interface_id: "router-interface-1" }
+          action {
+            set_port_and_src_mac { port: "1" src_mac: "02:2a:10:00:00:03" }
+          }
+        }
+      )pb");
+  ASSERT_OK_AND_ASSIGN(p4::v1::TableEntry pi_entry,
+                       pdpi::PartialPdTableEntryToPiTableEntry(IrP4Info(), pd_entry));
+  ASSERT_OK(pdpi::InstallPiTableEntries(session.get(), IrP4Info(), {pi_entry}));
+  ASSERT_OK(pdpi::ClearTableEntries(session.get()));
+  // The table should be clear after clearing.
+  ASSERT_OK(pdpi::CheckNoTableEntries(session.get()));
+  ASSERT_OK(pdpi::InstallPiTableEntries(session.get(), IrP4Info(), {pi_entry}));
+  ASSERT_OK_AND_ASSIGN(auto session2,
+                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
+                           GetMirrorTestbed().Sut(), P4Info()));
+  // The table should be clear for both sessions after setting up a new session.
+  ASSERT_OK(pdpi::CheckNoTableEntries(session.get()));
+  ASSERT_OK(pdpi::CheckNoTableEntries(session2.get()));
 }
 
 }  // namespace
