@@ -32,6 +32,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
@@ -373,6 +374,55 @@ absl::StatusOr<RExpression> ExtractRExpression(
   }
 }
 
+// Extracts field value from BMv2 protobuf fields.
+absl::StatusOr<FieldValue> ExtractFieldValue(
+    const google::protobuf::ListValue &bmv2_field_value) {
+  FieldValue output;
+
+  if (bmv2_field_value.values_size() != 2 ||
+      !bmv2_field_value.values(0).has_string_value() ||
+      !bmv2_field_value.values(1).has_string_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Field value must contain 2 strings. Found: "
+           << bmv2_field_value.DebugString();
+  }
+
+  output.set_header_name(bmv2_field_value.values(0).string_value());
+  output.set_field_name(bmv2_field_value.values(1).string_value());
+  return output;
+}
+
+// Extracts hex string value from BMv2 protobuf fields.
+HexstrValue ExtractHexstrValue(const std::string &bmv2_hexstr) {
+  HexstrValue output;
+  if (absl::StartsWith(bmv2_hexstr, "-")) {
+    output.set_value(std::string(absl::StripPrefix(bmv2_hexstr, "-")));
+    output.set_negative(true);
+  } else {
+    output.set_value(bmv2_hexstr);
+    output.set_negative(false);
+  }
+  return output;
+}
+
+// Extracts lookahead value from BMv2 protobuf fields.
+absl::StatusOr<LookaheadValue> ExtractLookaheadValue(
+    const google::protobuf::ListValue &bmv2_lookahead) {
+  LookaheadValue output;
+
+  if (bmv2_lookahead.values_size() != 2 ||
+      !bmv2_lookahead.values(0).has_number_value() ||
+      !bmv2_lookahead.values(1).has_number_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Lookahead value must contain 2 numbers. Found: "
+           << bmv2_lookahead.DebugString();
+  }
+
+  output.set_offset(bmv2_lookahead.values(0).number_value());
+  output.set_bitwidth(bmv2_lookahead.values(1).number_value());
+  return output;
+}
+
 // Functions for translating values.
 absl::StatusOr<LValue> ExtractLValue(
     const google::protobuf::Value &bmv2_value,
@@ -389,21 +439,17 @@ absl::StatusOr<LValue> ExtractLValue(
 
   const google::protobuf::Struct &struct_value = bmv2_value.struct_value();
   const std::string &type = struct_value.fields().at("type").string_value();
+  const google::protobuf::Value &value = struct_value.fields().at("value");
 
   ASSIGN_OR_RETURN(bmv2::ExpressionType type_case, ExpressionTypeToEnum(type));
   switch (type_case) {
     case bmv2::ExpressionType::field: {
-      const google::protobuf::ListValue &names =
-          struct_value.fields().at("value").list_value();
-
-      FieldValue *field_value = output.mutable_field_value();
-      field_value->set_header_name(names.values(0).string_value());
-      field_value->set_field_name(names.values(1).string_value());
+      ASSIGN_OR_RETURN(*output.mutable_field_value(),
+                       ExtractFieldValue(value.list_value()));
       return output;
     }
     case bmv2::ExpressionType::runtime_data: {
-      int variable_index = struct_value.fields().at("value").number_value();
-
+      int variable_index = value.number_value();
       Variable *variable = output.mutable_variable_value();
       variable->set_name(variables[variable_index]);
       return output;
@@ -428,58 +474,42 @@ absl::StatusOr<RValue> ExtractRValue(
 
   const google::protobuf::Struct &struct_value = bmv2_value.struct_value();
   const std::string &type = struct_value.fields().at("type").string_value();
+  const google::protobuf::Value &value = struct_value.fields().at("value");
 
   ASSIGN_OR_RETURN(bmv2::ExpressionType type_case, ExpressionTypeToEnum(type));
   switch (type_case) {
     case bmv2::ExpressionType::header: {
-      const std::string &header_name =
-          struct_value.fields().at("value").string_value();
-
+      const std::string &header_name = value.string_value();
       HeaderValue *header_value = output.mutable_header_value();
       header_value->set_header_name(header_name);
       return output;
     }
     case bmv2::ExpressionType::field: {
-      const google::protobuf::ListValue &names =
-          struct_value.fields().at("value").list_value();
-
-      FieldValue *field_value = output.mutable_field_value();
-      field_value->set_header_name(names.values(0).string_value());
-      field_value->set_field_name(names.values(1).string_value());
+      ASSIGN_OR_RETURN(*output.mutable_field_value(),
+                       ExtractFieldValue(value.list_value()));
       return output;
     }
     case bmv2::ExpressionType::runtime_data: {
-      int variable_index = struct_value.fields().at("value").number_value();
+      int variable_index = value.number_value();
 
       Variable *variable = output.mutable_variable_value();
       variable->set_name(variables[variable_index]);
       return output;
     }
     case bmv2::ExpressionType::hexstr_: {
-      HexstrValue *hexstr_value = output.mutable_hexstr_value();
-      std::string hexstr = struct_value.fields().at("value").string_value();
-      if (absl::StartsWith(hexstr, "-")) {
-        hexstr_value->set_value(std::string(absl::StripPrefix(hexstr, "-")));
-        hexstr_value->set_negative(true);
-      } else {
-        hexstr_value->set_value(hexstr);
-        hexstr_value->set_negative(false);
-      }
+      *output.mutable_hexstr_value() = ExtractHexstrValue(value.string_value());
       return output;
     }
     case bmv2::ExpressionType::bool_: {
-      output.mutable_bool_value()->set_value(
-          struct_value.fields().at("value").bool_value());
+      output.mutable_bool_value()->set_value(value.bool_value());
       return output;
     }
     case bmv2::ExpressionType::string_: {
-      output.mutable_string_value()->set_value(
-          struct_value.fields().at("value").string_value());
+      output.mutable_string_value()->set_value(value.string_value());
       return output;
     }
     case bmv2::ExpressionType::expression: {
-      const google::protobuf::Struct &expression =
-          struct_value.fields().at("value").struct_value();
+      const google::protobuf::Struct &expression = value.struct_value();
       ASSIGN_OR_RETURN(*(output.mutable_expression_value()),
                        ExtractRExpression(expression, variables));
       return output;
@@ -808,11 +838,9 @@ absl::StatusOr<ParserOperation::Set> ExtractSetParserOp(
         "Parameter type must be 'field'. Found '%s'", bmv2_ltype));
   }
 
-  FieldValue &lvalue = *result.mutable_lvalue();
-  const ::google::protobuf::ListValue &bmv2_lvalue =
+  const google::protobuf::ListValue &bmv2_lvalue =
       bmv2_lparam.fields().at("value").list_value();
-  lvalue.set_header_name(bmv2_lvalue.values(0).string_value());
-  lvalue.set_field_name(bmv2_lvalue.values(1).string_value());
+  ASSIGN_OR_RETURN(*result.mutable_lvalue(), ExtractFieldValue(bmv2_lvalue));
 
   // Make sure the R-parameter struct contains the correct fields.
   if (!bmv2_rparam.fields().contains("type") ||
@@ -826,30 +854,20 @@ absl::StatusOr<ParserOperation::Set> ExtractSetParserOp(
   // Translate the R-parameter of "set" parser operation.
   const std::string &bmv2_rtype =
       bmv2_rparam.fields().at("type").string_value();
+  const google::protobuf::Value &bmv2_rvalue = bmv2_rparam.fields().at("value");
 
   if (bmv2_rtype == "field") {
-    FieldValue &rvalue = *result.mutable_field_rvalue();
-    const ::google::protobuf::ListValue &bmv2_field_value =
-        bmv2_rparam.fields().at("value").list_value();
-    rvalue.set_header_name(bmv2_field_value.values(0).string_value());
-    rvalue.set_field_name(bmv2_field_value.values(1).string_value());
+    ASSIGN_OR_RETURN(*result.mutable_field_rvalue(),
+                     ExtractFieldValue(bmv2_rvalue.list_value()));
   } else if (bmv2_rtype == "hexstr") {
-    HexstrValue &rvalue = *result.mutable_hexstr_rvalue();
     const std::string &bmv2_hexstr =
         bmv2_rparam.fields().at("value").string_value();
-    if (absl::StartsWith(bmv2_hexstr, "-")) {
-      rvalue.set_value(std::string(absl::StripPrefix(bmv2_hexstr, "-")));
-      rvalue.set_negative(true);
-    } else {
-      rvalue.set_value(bmv2_hexstr);
-      rvalue.set_negative(false);
-    }
+    *result.mutable_hexstr_rvalue() = ExtractHexstrValue(bmv2_hexstr);
   } else if (bmv2_rtype == "lookahead") {
-    LookaheadValue &rvalue = *result.mutable_lookahead_rvalue();
     const ::google::protobuf::ListValue &bmv2_lookahead =
         bmv2_rparam.fields().at("value").list_value();
-    rvalue.set_offset(bmv2_lookahead.values(0).number_value());
-    rvalue.set_bitwidth(bmv2_lookahead.values(1).number_value());
+    ASSIGN_OR_RETURN(*result.mutable_lookahead_rvalue(),
+                     ExtractLookaheadValue(bmv2_lookahead));
   } else if (bmv2_rtype == "expression") {
     RExpression &rvalue = *result.mutable_expression_rvalue();
     const google::protobuf::Struct &bmv2_expression =
@@ -863,9 +881,88 @@ absl::StatusOr<ParserOperation::Set> ExtractSetParserOp(
   return result;
 }
 
+// Translates the "primitive" parser operation from the BMv2 protobuf message.
+// Currently only "add_header" and "remove_header" primitives are supported,
+// which correspond to "setValid" and "setInvalid" methods respectively.
+absl::StatusOr<ParserOperation::Primitive> ExtractPrimitiveParserOp(
+    const bmv2::ParserOperation &bmv2_op) {
+  ParserOperation::Primitive result;
+
+  // The "primitive" parser operation must have exactly 1 parameter.
+  if (bmv2_op.parameters_size() != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Parser primitive op must have 1 parameter, found "
+           << bmv2_op.DebugString();
+  }
+
+  const ::google::protobuf::Struct &bmv2_param = bmv2_op.parameters(0);
+
+  // Make sure the parameter struct contains the correct fields.
+  if (!bmv2_param.fields().contains("op") ||
+      !bmv2_param.fields().at("op").has_string_value() ||
+      !bmv2_param.fields().contains("parameters") ||
+      !bmv2_param.fields().at("parameters").has_list_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Primitive operation has an invalid parameter: "
+           << bmv2_param.DebugString();
+  }
+
+  const std::string &bmv2_primitive_op =
+      bmv2_param.fields().at("op").string_value();
+  const ::google::protobuf::ListValue &bmv2_primitive_parameters =
+      bmv2_param.fields().at("parameters").list_value();
+  ASSIGN_OR_RETURN(bmv2::StatementOp op_case,
+                   StatementOpToEnum(bmv2_primitive_op));
+
+  switch (op_case) {
+    case bmv2::StatementOp::add_header:
+    case bmv2::StatementOp::remove_header: {
+      // "add_header" or "remove_header" primitives must have exactly 1
+      // parameter.
+      if (bmv2_primitive_parameters.values_size() != 1) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "setValid/setInvalid statements must contain 1 parameter, "
+                  "found: "
+               << bmv2_primitive_parameters.DebugString();
+      }
+
+      ASSIGN_OR_RETURN(RValue header,
+                       ExtractRValue(bmv2_primitive_parameters.values(0), {}));
+
+      // "add_header" or "remove_header" primitives must have a header name as
+      // the parameter.
+      if (header.rvalue_case() != RValue::kHeaderValue) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "setValid/setInvalid statements must have header as the "
+                  "parameter, found: "
+               << bmv2_primitive_parameters.DebugString();
+      }
+
+      const std::string &header_name = header.header_value().header_name();
+
+      // Set the field `<header>.$valid$` to true or false based on whether the
+      // primitive is `add_header` or `remove_header` respectively.
+      AssignmentStatement &assignment = *result.mutable_assignment();
+      FieldValue &valid_field =
+          *assignment.mutable_left()->mutable_field_value();
+      valid_field.set_header_name(header_name);
+      valid_field.set_field_name("$valid$");
+      assignment.mutable_right()->mutable_bool_value()->set_value(
+          op_case == bmv2::StatementOp::add_header);
+      break;
+    }
+    default: {
+      return gutil::UnimplementedErrorBuilder()
+             << "Unsupported primitive op: " << bmv2_param.DebugString();
+    }
+  }
+
+  return result;
+}
+
 // Translates parser operations.
-// Currently only "extract" and "set" parser operations are supported since
-// others are not required at the moment.
+// Currently only "extract", "set", and "primitive" parser operations are
+// supported since others are not required at the moment.
 absl::StatusOr<ParserOperation> ExtractParserOperation(
     const bmv2::ParserOperation &bmv2_op) {
   ParserOperation result;
@@ -878,6 +975,11 @@ absl::StatusOr<ParserOperation> ExtractParserOperation(
     }
     case bmv2::ParserOperation::set: {
       ASSIGN_OR_RETURN(*result.mutable_set(), ExtractSetParserOp(bmv2_op));
+      break;
+    }
+    case bmv2::ParserOperation::primitive: {
+      ASSIGN_OR_RETURN(*result.mutable_primitive(),
+                       ExtractPrimitiveParserOp(bmv2_op));
       break;
     }
     default: {
@@ -896,10 +998,8 @@ absl::StatusOr<ParserTransitionKeyField> ExtractParserTransitionKeyField(
 
   switch (bmv2_key_field.type()) {
     case bmv2::ParserTransitionKeyField::field: {
-      FieldValue &field = *result.mutable_field();
-      const ::google::protobuf::ListValue &bmv2_value = bmv2_key_field.value();
-      field.set_header_name(bmv2_value.values(0).string_value());
-      field.set_field_name(bmv2_value.values(1).string_value());
+      ASSIGN_OR_RETURN(*result.mutable_field(),
+                       ExtractFieldValue(bmv2_key_field.value()));
       break;
     }
     case bmv2::ParserTransitionKeyField::lookahead:
@@ -945,8 +1045,8 @@ absl::StatusOr<ParserTransition> ExtractParserTransition(
             "Empty hex string value: ", bmv2_transition.DebugString()));
       }
 
-      hexstr_transition.set_value(bmv2_value);
-      hexstr_transition.set_mask(bmv2_mask);
+      *hexstr_transition.mutable_value() = ExtractHexstrValue(bmv2_value);
+      *hexstr_transition.mutable_mask() = ExtractHexstrValue(bmv2_mask);
       hexstr_transition.set_next_state(Bmv2ToIrParseStateName(bmv2_next_state));
       break;
     }
@@ -1003,6 +1103,29 @@ absl::StatusOr<Parser> ExtractParser(const bmv2::Parser &bmv2_parser) {
   }
 
   return parser;
+}
+
+// Translate an error code definition from the BMv2 protobuf message.
+absl::StatusOr<Error> ExtractError(
+    const google::protobuf::ListValue &bmv2_error) {
+  // A BMv2 error must have 2 elements.
+  if (bmv2_error.values_size() != 2) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Error field must contain 2 elements. Found: "
+           << bmv2_error.DebugString();
+  }
+
+  if (!bmv2_error.values(0).has_string_value() ||
+      !bmv2_error.values(1).has_number_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Error field must be [string, int]. Found: "
+           << bmv2_error.DebugString();
+  }
+
+  Error output;
+  output.set_name(bmv2_error.values(0).string_value());
+  output.set_value(bmv2_error.values(1).number_value());
+  return output;
 }
 
 }  // namespace
@@ -1198,12 +1321,24 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
     }
   }
 
+  // Translate errors from BMv2.
+  for (const google::protobuf::ListValue &bmv2_error : bmv2.errors()) {
+    ASSIGN_OR_RETURN(Error error, ExtractError(bmv2_error));
+    (*output.mutable_errors())[error.name()] = std::move(error);
+  }
+
   // Create the Control Flow Graph (CFG) of the program and perform analysis for
   // optimized symbolic execution.
   ASSIGN_OR_RETURN(std::unique_ptr<ControlFlowGraph> cfg,
                    ControlFlowGraph::Create(output));
   // Set the optimized symbolic execution information in the IR program using
   // the result of CFG analysis.
+  for (auto &[_, parser] : *output.mutable_parsers()) {
+    for (auto &[name, parse_state] : *parser.mutable_parse_states()) {
+      ASSIGN_OR_RETURN(*parse_state.mutable_optimized_symbolic_execution_info(),
+                       cfg->GetOptimizedSymbolicExecutionInfo(name));
+    }
+  }
   for (auto &[name, conditional] : *output.mutable_conditionals()) {
     ASSIGN_OR_RETURN(*conditional.mutable_optimized_symbolic_execution_info(),
                      cfg->GetOptimizedSymbolicExecutionInfo(name));

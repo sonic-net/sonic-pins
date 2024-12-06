@@ -105,31 +105,26 @@ WriteRequest GetWriteRequest(int num, absl::uint128 election_id,
 testing::Matcher<absl::Status> NotPrimary() { return Not(gutil::IsOk()); }
 
 TEST_P(ArbitrationTestFixture, BecomePrimary) {
-  TestEnvironment().SetTestCaseID("c6506d76-5041-4f69-b398-a808ab473186");
   ASSERT_OK_AND_ASSIGN(auto connection, BecomePrimary(0));
 }
 
 TEST_P(ArbitrationTestFixture, FailToBecomePrimary) {
-  TestEnvironment().SetTestCaseID("60c56f72-96ca-4aea-8cdc-16e1b928d53a");
   ASSERT_OK_AND_ASSIGN(auto connection, BecomePrimary(1));
   ASSERT_THAT(BecomePrimary(0).status(), NotPrimary());
 }
 
 TEST_P(ArbitrationTestFixture, ReplacePrimary) {
-  TestEnvironment().SetTestCaseID("03da98ad-c4c7-443f-bcc0-53f97103d0c3");
   ASSERT_OK_AND_ASSIGN(auto connection1, BecomePrimary(1));
   ASSERT_OK_AND_ASSIGN(auto connection2, BecomePrimary(2));
 }
 
 TEST_P(ArbitrationTestFixture, ReplacePrimaryAfterFailure) {
-  TestEnvironment().SetTestCaseID("d5ffe4cc-ff0e-4d93-8334-a23f06c6232a");
   ASSERT_OK_AND_ASSIGN(auto connection1, BecomePrimary(1));
   ASSERT_THAT(BecomePrimary(0).status(), NotPrimary());
   ASSERT_OK_AND_ASSIGN(auto connection2, BecomePrimary(2));
 }
 
 TEST_P(ArbitrationTestFixture, FailToBecomePrimaryAfterPrimaryDisconnect) {
-  TestEnvironment().SetTestCaseID("53b4b886-c218-4c85-b212-13d32105c795");
   {
     ASSERT_OK_AND_ASSIGN(auto connection, BecomePrimary(1));
     ASSERT_OK(connection->Finish());
@@ -138,7 +133,6 @@ TEST_P(ArbitrationTestFixture, FailToBecomePrimaryAfterPrimaryDisconnect) {
 }
 
 TEST_P(ArbitrationTestFixture, ReconnectPrimary) {
-  TestEnvironment().SetTestCaseID("d95a4da4-139d-4bd6-a43c-dbdefb123fcf");
   {
     ASSERT_OK_AND_ASSIGN(auto connection, BecomePrimary(0));
     ASSERT_OK(connection->Finish());
@@ -147,13 +141,11 @@ TEST_P(ArbitrationTestFixture, ReconnectPrimary) {
 }
 
 TEST_P(ArbitrationTestFixture, DoublePrimary) {
-  TestEnvironment().SetTestCaseID("19614b15-ce8f-4832-9164-342c5585283a");
   ASSERT_OK_AND_ASSIGN(auto connection, BecomePrimary(0));
   ASSERT_THAT(BecomePrimary(0).status(), NotPrimary());
 }
 
 TEST_P(ArbitrationTestFixture, LongEvolution) {
-  TestEnvironment().SetTestCaseID("a65deb93-e350-4322-a932-af699c4b583c");
   {
     ASSERT_OK_AND_ASSIGN(auto connection1, BecomePrimary(1));
     ASSERT_THAT(BecomePrimary(0).status(), NotPrimary());
@@ -182,7 +174,6 @@ TEST_P(ArbitrationTestFixture, LongEvolution) {
 }
 
 TEST_P(ArbitrationTestFixture, BackupCannotWrite) {
-  TestEnvironment().SetTestCaseID("64c714d8-73c6-48b1-ada6-8ac2e5267714");
 
   ASSERT_OK_AND_ASSIGN(auto connection, BecomePrimary(2));
   ASSERT_OK_AND_ASSIGN(auto stub, Stub());
@@ -200,7 +191,6 @@ TEST_P(ArbitrationTestFixture, BackupCannotWrite) {
 }
 
 TEST_P(ArbitrationTestFixture, BackupCanRead) {
-  TestEnvironment().SetTestCaseID("fb678921-d150-4535-b7b8-fc8cecb79a78");
 
   ASSERT_OK_AND_ASSIGN(auto connection, BecomePrimary(1));
 
@@ -231,7 +221,6 @@ TEST_P(ArbitrationTestFixture, BackupCanRead) {
 }
 
 TEST_P(ArbitrationTestFixture, GetNotifiedOfActualPrimary) {
-  TestEnvironment().SetTestCaseID("46b83014-759b-4393-bb58-220c0ca38711");
   ASSERT_OK_AND_ASSIGN(auto connection, BecomePrimary(1));
 
   // Assemble arbitration request.
@@ -265,7 +254,6 @@ TEST_P(ArbitrationTestFixture, GetNotifiedOfActualPrimary) {
 }
 
 TEST_P(ArbitrationTestFixture, NoIdControllerCannotBecomePrimary) {
-  TestEnvironment().SetTestCaseID("3699fc43-5ff8-44ee-8965-68f42c71c1ed");
 
   // Assemble arbitration request.
   p4::v1::StreamMessageRequest request;
@@ -295,7 +283,6 @@ TEST_P(ArbitrationTestFixture, NoIdControllerCannotBecomePrimary) {
 }
 
 TEST_P(ArbitrationTestFixture, OldPrimaryCannotWriteAfterNewPrimaryCameUp) {
-  TestEnvironment().SetTestCaseID("e4bc86a2-84f0-450a-888a-8a6f5f26fa8c");
 
   int id1 = 1, id2 = 2;
   // Connects controller C1 with id=1 to become primary.
@@ -321,7 +308,6 @@ TEST_P(ArbitrationTestFixture, OldPrimaryCannotWriteAfterNewPrimaryCameUp) {
 }
 
 TEST_P(ArbitrationTestFixture, PrimaryDowngradesItself) {
-  TestEnvironment().SetTestCaseID("3cb62c0f-4a1a-430c-978c-a3a2a11078cd");
   int id1 = 1, id2 = 2;
 
   // Connects controller with id=2 to become primary.

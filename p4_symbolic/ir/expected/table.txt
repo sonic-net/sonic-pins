@@ -337,8 +337,60 @@ parsers {
             next_state: "__END_OF_PARSER__"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+          continue_to_merge_point: true
+        }
       }
     }
+  }
+}
+errors {
+  key: "HeaderTooShort"
+  value {
+    name: "HeaderTooShort"
+    value: 4
+  }
+}
+errors {
+  key: "NoError"
+  value {
+    name: "NoError"
+  }
+}
+errors {
+  key: "NoMatch"
+  value {
+    name: "NoMatch"
+    value: 2
+  }
+}
+errors {
+  key: "PacketTooShort"
+  value {
+    name: "PacketTooShort"
+    value: 1
+  }
+}
+errors {
+  key: "ParserInvalidArgument"
+  value {
+    name: "ParserInvalidArgument"
+    value: 6
+  }
+}
+errors {
+  key: "ParserTimeout"
+  value {
+    name: "ParserTimeout"
+    value: 5
+  }
+}
+errors {
+  key: "StackOutOfBounds"
+  value {
+    name: "StackOutOfBounds"
+    value: 3
   }
 }
 

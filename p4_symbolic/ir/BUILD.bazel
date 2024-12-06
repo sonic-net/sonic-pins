@@ -58,8 +58,6 @@ cc_library(
         "table_entries.h",
     ],
     deps = [
-        ":ir_cc_proto",
-        "//gutil:io",
         "//gutil:status",
         "//p4_pdpi:ir",
         "//p4_pdpi:ir_cc_proto",
@@ -91,6 +89,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -106,7 +105,6 @@ cc_library(
         "//gutil:status",
         "//p4_symbolic/bmv2:bmv2_cc_proto",
         "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -223,6 +221,13 @@ ir_parsing_test(
     golden_file = "expected/set_parser_operation.txt",
     p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
     p4_program = "//p4_symbolic/testdata:parser/set_parser_operation.p4",
+)
+
+ir_parsing_test(
+    name = "primitive_parser_operation_test",
+    golden_file = "expected/primitive_parser_operation.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/primitive_parser_operation.p4",
 )
 
 ir_parsing_test(

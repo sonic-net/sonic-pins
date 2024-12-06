@@ -1141,19 +1141,31 @@ parsers {
         }
         transitions {
           hex_string_transition {
-            value: "0x0800"
+            value {
+              value: "0x0800"
+            }
+            mask {
+            }
             next_state: "parse_ipv4"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x86dd"
+            value {
+              value: "0x86dd"
+            }
+            mask {
+            }
             next_state: "parse_ipv6"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x0806"
+            value {
+              value: "0x0806"
+            }
+            mask {
+            }
             next_state: "parse_arp"
           }
         }
@@ -1161,6 +1173,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1179,6 +1194,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1201,25 +1219,41 @@ parsers {
         }
         transitions {
           hex_string_transition {
-            value: "0x0800"
+            value {
+              value: "0x0800"
+            }
+            mask {
+            }
             next_state: "parse_ipv4"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x86dd"
+            value {
+              value: "0x86dd"
+            }
+            mask {
+            }
             next_state: "parse_ipv6"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x0806"
+            value {
+              value: "0x0806"
+            }
+            mask {
+            }
             next_state: "parse_arp"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x8100"
+            value {
+              value: "0x8100"
+            }
+            mask {
+            }
             next_state: "parse_8021q_vlan"
           }
         }
@@ -1227,6 +1261,10 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+          continue_to_merge_point: true
         }
       }
     }
@@ -1245,6 +1283,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1267,19 +1308,31 @@ parsers {
         }
         transitions {
           hex_string_transition {
-            value: "0x01"
+            value {
+              value: "0x01"
+            }
+            mask {
+            }
             next_state: "parse_icmp"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x06"
+            value {
+              value: "0x06"
+            }
+            mask {
+            }
             next_state: "parse_tcp"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x11"
+            value {
+              value: "0x11"
+            }
+            mask {
+            }
             next_state: "parse_udp"
           }
         }
@@ -1287,6 +1340,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1309,19 +1365,31 @@ parsers {
         }
         transitions {
           hex_string_transition {
-            value: "0x3a"
+            value {
+              value: "0x3a"
+            }
+            mask {
+            }
             next_state: "parse_icmp"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x06"
+            value {
+              value: "0x06"
+            }
+            mask {
+            }
             next_state: "parse_tcp"
           }
         }
         transitions {
           hex_string_transition {
-            value: "0x11"
+            value {
+              value: "0x11"
+            }
+            mask {
+            }
             next_state: "parse_udp"
           }
         }
@@ -1329,6 +1397,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1347,6 +1418,9 @@ parsers {
           default_transition {
             next_state: "parse_ethernet"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "parse_ethernet"
         }
       }
     }
@@ -1390,6 +1464,9 @@ parsers {
             next_state: "__END_OF_PARSER__"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
+        }
       }
     }
     parse_states {
@@ -1431,6 +1508,9 @@ parsers {
           default_transition {
             next_state: "__END_OF_PARSER__"
           }
+        }
+        optimized_symbolic_execution_info {
+          merge_point: "__END_OF_PARSER__"
         }
       }
     }
@@ -1555,7 +1635,11 @@ parsers {
         }
         transitions {
           hex_string_transition {
-            value: "0x01fe"
+            value {
+              value: "0x01fe"
+            }
+            mask {
+            }
             next_state: "parse_packet_out_header"
           }
         }
@@ -1564,8 +1648,60 @@ parsers {
             next_state: "parse_ethernet"
           }
         }
+        optimized_symbolic_execution_info {
+          merge_point: "parse_ethernet"
+          continue_to_merge_point: true
+        }
       }
     }
+  }
+}
+errors {
+  key: "HeaderTooShort"
+  value {
+    name: "HeaderTooShort"
+    value: 4
+  }
+}
+errors {
+  key: "NoError"
+  value {
+    name: "NoError"
+  }
+}
+errors {
+  key: "NoMatch"
+  value {
+    name: "NoMatch"
+    value: 2
+  }
+}
+errors {
+  key: "PacketTooShort"
+  value {
+    name: "PacketTooShort"
+    value: 1
+  }
+}
+errors {
+  key: "ParserInvalidArgument"
+  value {
+    name: "ParserInvalidArgument"
+    value: 6
+  }
+}
+errors {
+  key: "ParserTimeout"
+  value {
+    name: "ParserTimeout"
+    value: 5
+  }
+}
+errors {
+  key: "StackOutOfBounds"
+  value {
+    name: "StackOutOfBounds"
+    value: 3
   }
 }
 
