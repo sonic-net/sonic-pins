@@ -19,19 +19,24 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "glog/logging.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "gutil/proto_matchers.h"
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/packetlib/packetlib.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "p4_pdpi/string_encodings/bit_string.h"
+#include "p4_pdpi/string_encodings/hex_string.h"
+#include "p4_symbolic/parser.h"
 #include "p4_symbolic/sai/fields.h"
 #include "p4_symbolic/sai/parser.h"
 #include "p4_symbolic/sai/sai.h"
 #include "p4_symbolic/symbolic/symbolic.h"
+#include "p4_symbolic/z3_util.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_nonstandard_platforms.h"
 #include "z3++.h"
@@ -204,45 +209,64 @@ TEST_P(SaiDeparserTest, PacketInHeaderIsNeverParsedIntegrationTest) {
   {
     ASSERT_OK_AND_ASSIGN(SaiFields fields,
                          GetSaiFields(state_->context.ingress_headers));
-    // TODO: Execute the test unconditionally one we add the
-    // packet-in header to SAI P4.
-    if (!fields.headers.packet_in.has_value()) {
-      GTEST_SKIP() << "test does not apply, as program has no packet-in header";
-    }
-    state_->solver->add(fields.headers.packet_in.value().valid);
+    EXPECT_TRUE(fields.headers.packet_in.has_value());
+    state_->solver->add(fields.headers.packet_in->valid);
   }
 
   // Should be unsatisifiable, because we never parse a packet-in header.
   ASSERT_EQ(state_->solver->check(), z3::check_result::unsat);
 }
 
-TEST_P(SaiDeparserTest, DISABLED_PacketInPacketParserIntegrationTest) {
-  // Add packet_in constraint.
-  {
-    ASSERT_OK_AND_ASSIGN(SaiFields fields,
-                         GetSaiFields(state_->context.ingress_headers));
-    // TODO: Execute the test unconditionally one we add the
-    // packet-in header to SAI P4.
-    if (!fields.headers.packet_in.has_value()) {
-      GTEST_SKIP() << "test does not apply, as program has no packet-in header";
-    }
-    state_->solver->add(fields.headers.packet_in.value().valid);
-  }
+using SimpleSaiDeparserTest = testing::TestWithParam<sai::Instantiation>;
+
+TEST_P(SimpleSaiDeparserTest, PacketInHeaderDeparsingIsCorrect) {
+  // Set up.
+  z3::solver solver = z3::solver(Z3Context());
+  const auto config = sai::GetNonstandardForwardingPipelineConfig(
+      /*instantiation=*/GetParam(), sai::NonstandardPlatform::kP4Symbolic);
+  ASSERT_OK_AND_ASSIGN(symbolic::Dataplane dataplane,
+                       ParseToIr(config, /*entries=*/{}));
+  ASSERT_OK_AND_ASSIGN(auto headers,
+                       symbolic::SymbolicGuardedMap::CreateSymbolicGuardedMap(
+                           dataplane.program.headers()));
+  ASSERT_OK_AND_ASSIGN(SaiFields fields, GetSaiFields(headers));
+
+  // Add packet_in constraints.
+  EXPECT_TRUE(fields.headers.packet_in.has_value());
+  solver.add(fields.headers.packet_in->valid);
+  constexpr int kIngressPort = 42;
+  constexpr int kTargetEgpressPort = 17;
+  constexpr int kUnusedPad = 0;
+  solver.add(fields.headers.packet_in->ingress_port == kIngressPort);
+  solver.add(fields.headers.packet_in->target_egress_port ==
+             kTargetEgpressPort);
+  solver.add(fields.headers.packet_in->unused_pad == kUnusedPad);
+  packetlib::Header expected_header;
+  packetlib::SaiP4BMv2PacketInHeader& packet_in_header =
+      *expected_header.mutable_sai_p4_bmv2_packet_in_header();
+  packet_in_header.set_ingress_port(pdpi::BitsetToHexString<9>(kIngressPort));
+  packet_in_header.set_target_egress_port(
+      pdpi::BitsetToHexString<9>(kTargetEgpressPort));
+  packet_in_header.set_unused_pad(pdpi::BitsetToHexString<6>(kUnusedPad));
 
   // Solve and deparse.
-  ASSERT_EQ(state_->solver->check(), z3::check_result::sat);
-  auto model = state_->solver->get_model();
-  ASSERT_OK_AND_ASSIGN(std::string raw_packet,
-                       SaiDeparser(state_->context.ingress_headers, model));
+  ASSERT_EQ(solver.check(), z3::check_result::sat);
+  auto model = solver.get_model();
+  ASSERT_OK_AND_ASSIGN(std::string raw_packet, SaiDeparser(headers, model));
 
-  // Check we indeed got a packet_in packet.
-  packetlib::Packet packet = packetlib::ParsePacket(raw_packet);
+  // Check we indeed got a packet_in packet with the correct fields.
+  packetlib::Packet packet = packetlib::ParsePacket(
+      raw_packet,
+      /*first_header=*/packetlib::Header::kSaiP4Bmv2PacketInHeader);
   LOG(INFO) << "Z3-generated packet = " << packet.DebugString();
-  ASSERT_GE(packet.headers_size(), 0);
-  ASSERT_TRUE(packet.headers(0).has_sai_p4_bmv2_packet_in_header());
+  ASSERT_GT(packet.headers_size(), 0);
+  ASSERT_THAT(packet.headers(0), gutil::EqualsProto(expected_header));
 }
 
-INSTANTIATE_TEST_SUITE_P(Instantiation, SaiDeparserTest,
+INSTANTIATE_TEST_SUITE_P(SaiDeparserTest, SaiDeparserTest,
+                         testing::ValuesIn(sai::AllSaiInstantiations()));
+
+INSTANTIATE_TEST_SUITE_P(SimpleSaiDeparserTest, SimpleSaiDeparserTest,
                          testing::ValuesIn(sai::AllSaiInstantiations()));
 
 }  // namespace
