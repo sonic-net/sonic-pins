@@ -14,6 +14,7 @@
 #include "tests/integration/system/nsf/nsf_concurrent_config_push_flow_programming_test.h"
 
 #include <memory>
+
 #include <string>
 #include <thread>
 #include <vector>
@@ -31,6 +32,7 @@
 #include "gutil/status.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
+#include "p4_pdpi/ir.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "tests/integration/system/nsf/compare_p4flows.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
@@ -43,14 +45,17 @@ namespace pins_test {
 using ::p4::v1::ReadResponse;
 
 constexpr int kIsolatedLacpSystemPriority = 512;
+
 // Here is the criteria for the NSF delay duration window:
-// 1. ACL flows used in the test takes ~1s to get programmed. Hence the minimum
-//    delay is set to 1s.
+// 1. The flows used in the test takes ~5s to get programmed. Hence the minimum
+//    delay is set to 5s.
 // 2. Config push takes ~10s to complete. Hence the maximum delay is set to 15s.
 // In future, if the config or the flows are modified, consider calculating the
 // time needed for both and set the NSF delay duration window accordingly.
+
 constexpr int kMinNsfDelayDuration = 10;
 constexpr int kMaxNsfDelayDuration = 20;
+constexpr int kFlowProgrammingDuration = 4;
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
 constexpr char kInterfaceToRemove[] = "Ethernet1/10/1";
 constexpr int kMaxGnmiGetClients = 15;
@@ -152,13 +157,15 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   absl::Status flow_programming_status =
       absl::UnknownError("Yet to program flows");
   auto flow_programming_func = [&sut, &image_config_param]() -> absl::Status {
-    // ACL flows used in the test takes ~1s to get programmed.
-    if (kMinNsfDelayDuration > 1) {
-      absl::SleepFor(absl::Seconds(kMinNsfDelayDuration - 1));
+    // Flows used in test takes `kFlowProgrammingDuration` to get programmed.
+    if (kMinNsfDelayDuration > kFlowProgrammingDuration) {
+      absl::SleepFor(
+          absl::Seconds(kMinNsfDelayDuration - kFlowProgrammingDuration));
     }
-    LOG(INFO) << "Programming ACL flows";
-    RETURN_IF_ERROR(ProgramAclFlows(sut, image_config_param.p4_info));
-    LOG(INFO) << "Successfully programmed ACL flows on " << sut.ChassisName();
+    LOG(INFO) << "Programming flows";
+    RETURN_IF_ERROR(ProgramFlowsBasedOnTable(sut, image_config_param.p4_info,
+                                             "ipv6_table"));
+    LOG(INFO) << "Successfully programmed flows on " << sut.ChassisName();
     return absl::OkStatus();
   };
   std::thread flow_programming_thread(
@@ -315,4 +322,5 @@ TEST_P(NsfConcurrentConfigPushFlowProgrammingTestFixture,
   LOG(INFO) << "Comparing P4 snapshots - Before Vs. After NSF Reboot";
   ASSERT_OK(CompareP4FlowSnapshots(p4flow_snapshot2, p4flow_snapshot3));
 }
+
 }  // namespace pins_test

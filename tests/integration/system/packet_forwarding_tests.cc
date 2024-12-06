@@ -125,6 +125,7 @@ TEST_P(PacketForwardingTestFixture, PacketForwardingTest) {
                })pb");
 
   ASSERT_OK_AND_ASSIGN(auto testbed, GetTestbedWithRequirements(requirements));
+
   std::vector<InterfaceLink> control_links =
       FromTestbed(GetAllControlLinks, *testbed);
 
@@ -223,8 +224,8 @@ TEST_P(PacketForwardingTestFixture, AllPortsPacketForwardingTest) {
                })pb");
 
   ASSERT_OK_AND_ASSIGN(auto testbed, GetTestbedWithRequirements(requirements));
-  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
 
+  ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
   std::vector<std::string> sut_interfaces =
       GetSutInterfaces(FromTestbed(GetAllControlLinks, *testbed));
 
@@ -291,6 +292,7 @@ TEST_P(PacketForwardingTestFixture, MtuPacketForwardingTest) {
                })pb");
 
   ASSERT_OK_AND_ASSIGN(auto testbed, GetTestbedWithRequirements(requirements));
+
   ASSERT_OK_AND_ASSIGN(auto gnmi_stub, testbed->Sut().CreateGnmiStub());
   std::vector<std::string> sut_interfaces =
       GetSutInterfaces(FromTestbed(GetAllControlLinks, *testbed));

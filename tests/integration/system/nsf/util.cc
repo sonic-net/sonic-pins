@@ -44,11 +44,15 @@
 #include "lib/gnmi/gnmi_helper.h"
 #include "lib/utils/generic_testbed_utils.h"
 #include "lib/validator/validator_lib.h"
+#include "p4/v1/p4runtime.pb.h"
 #include "p4_pdpi/ir.h"
 #include "p4_pdpi/p4_runtime_session.h"
+#include "p4_pdpi/p4_runtime_session_extras.h"
 #include "p4_pdpi/pd.h"
+#include "p4_pdpi/sequencing.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
+#include "sai_p4/instantiations/google/test_tools/table_entry_generator.h"
 #include "system/system.pb.h"
 #include "tests/integration/system/nsf/interfaces/component_validator.h"
 #include "tests/integration/system/nsf/interfaces/image_config_params.h"
@@ -76,6 +80,7 @@ using ::p4::config::v1::P4Info;
 using ::p4::v1::Entity;
 using ::p4::v1::ReadRequest;
 using ::p4::v1::ReadResponse;
+using ::p4::v1::Update;
 
 constexpr absl::Duration kPollingInterval = absl::Seconds(10);
 constexpr absl::Duration kTurnUpTimeout = absl::Minutes(6);
@@ -836,6 +841,67 @@ absl::Status ProgramAclFlows(thinkit::Switch& thinkit_switch,
   LOG(INFO) << "Installing PI table entries on "
             << thinkit_switch.ChassisName();
   return pdpi::InstallPiEntities(sut_p4rt.get(), ir_p4info, pi_entities);
+}
+
+// Program flows based on table_name to the capacity.
+absl::Status ProgramFlowsBasedOnTable(thinkit::Switch& thinkit_switch,
+                                      const P4Info& p4_info,
+                                      absl::string_view table_name) {
+  ASSIGN_OR_RETURN(pdpi::IrP4Info ir_p4info, pdpi::CreateIrP4Info(p4_info));
+  const pdpi::IrTableDefinition& table =
+      ir_p4info.tables_by_name().at(table_name);
+  ASSIGN_OR_RETURN(auto generator, sai::GetGenerator(table),
+                   _ << "Failed to get table entry generator for table "
+                     << table.preamble().alias());
+  ASSIGN_OR_RETURN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt,
+                   pdpi::P4RuntimeSession::Create(thinkit_switch));
+
+  if (!generator.prerequisites.empty()) {
+    LOG(INFO) << "Installing prerequisite table entries";
+    for (const auto& prerequisite : generator.prerequisites) {
+      RETURN_IF_ERROR(pdpi::InstallIrTableEntry(*sut_p4rt, prerequisite))
+          << "Failed to install prerequisite table entry "
+          << absl::StrCat(prerequisite);
+    }
+  }
+
+  // Fetch the capacity of the table.
+  int capacity = static_cast<int>(table.size());
+  LOG(INFO) << "Table '" << table_name << "' has advertised capacity "
+            << capacity;
+
+  // Generate entries.
+  pdpi::IrTableEntries pre_capacity_entries;
+  for (int i = 0; i < capacity; ++i) {
+    SCOPED_TRACE(absl::StrCat("Failed to generate table entry #", i + 1));
+    *pre_capacity_entries.add_entries() = generator.generator(i);
+  }
+  ASSIGN_OR_RETURN(pdpi::IrP4Info info, GetIrP4Info(*sut_p4rt),
+                   _.SetPrepend() << "cannot install entries on switch: failed "
+                                     "to pull P4Info from switch: ");
+  ASSIGN_OR_RETURN(std::vector<p4::v1::TableEntry> pi_entries,
+                   IrTableEntriesToPi(info, pre_capacity_entries));
+  std::vector<Entity> pi_entities;
+  pi_entities.reserve(pi_entries.size());
+  for (const auto& pi_entry : pi_entries) {
+    *pi_entities.emplace_back().mutable_table_entry() = pi_entry;
+  }
+  std::vector<Entity> sorted_pi_entities{pi_entities.begin(),
+                                         pi_entities.end()};
+  RETURN_IF_ERROR(pdpi::StableSortEntities(ir_p4info, sorted_pi_entities));
+
+  // Install entries.
+  LOG(INFO) << "Installing entries to capacity on "
+            << thinkit_switch.ChassisName();
+  absl::Time start = absl::Now();
+  RETURN_IF_ERROR(pdpi::SendPiUpdates(
+      sut_p4rt.get(), pdpi::CreatePiUpdates(sorted_pi_entities, Update::INSERT),
+      pre_capacity_entries.entries_size() + 1))
+      << "Failed to install entries to capacity";
+
+  LOG(INFO) << "Took " << absl::Now() - start << " to install " << capacity
+            << " entries into " << table_name << ".";
+  return absl::OkStatus();
 }
 
 absl::StatusOr<ReadResponse> TakeP4FlowSnapshot(thinkit::Switch& sut) {

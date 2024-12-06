@@ -254,12 +254,14 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
     SCOPED_TRACE(absl::StrCat("IP version: ", is_ipv4 ? "IPv4" : "IPv6"));
 
     // Log counters for all queues on the egress port before starting.
-    for (const std::string queue :
-         {"BE1", "AF1", "AF2", "AF3", "LLQ1", "LLQ2", "AF4", "NC1"}) {
-      ASSERT_OK_AND_ASSIGN(
-          QueueCounters counters,
-          GetGnmiQueueCounters(kSutEgressPort, queue, *gnmi_stub));
-      LOG(INFO) << "Initial Counters for " << queue << ": " << counters;
+    if (GetParam().log_counters) {
+      for (const std::string queue :
+           {"BE1", "AF1", "AF2", "AF3", "LLQ1", "LLQ2", "AF4", "NC1"}) {
+        ASSERT_OK_AND_ASSIGN(
+            QueueCounters counters,
+            GetGnmiQueueCounters(kSutEgressPort, queue, *gnmi_stub));
+        LOG(INFO) << "Initial Counters for " << queue << ": " << counters;
+      }
     }
 
     //  Configure & start test packet flow.
@@ -386,12 +388,14 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
                                          &get_metrics_res));
 
     // Log counters for all queues on the egress port after.
-    for (const std::string queue :
-         {"BE1", "AF1", "AF2", "AF3", "LLQ1", "LLQ2", "AF4", "NC1"}) {
-      ASSERT_OK_AND_ASSIGN(
-          QueueCounters counters,
-          GetGnmiQueueCounters(kSutEgressPort, queue, *gnmi_stub));
-      LOG(INFO) << "Counters for " << queue << ": " << counters;
+    if (GetParam().log_counters) {
+      for (const std::string queue :
+           {"BE1", "AF1", "AF2", "AF3", "LLQ1", "LLQ2", "AF4", "NC1"}) {
+        ASSERT_OK_AND_ASSIGN(
+            QueueCounters counters,
+            GetGnmiQueueCounters(kSutEgressPort, queue, *gnmi_stub));
+        LOG(INFO) << "Counters for " << queue << ": " << counters;
+      }
     }
 
     ASSERT_EQ(get_metrics_res.metrics_response().flow_metrics_size(), 1);
@@ -403,6 +407,7 @@ TEST_P(LineRateTrafficTest, PortToPortLineRateTrafficTest) {
         << "Tx and Rx frames are not the same. Packets lost: "
         << traffic_stats.frames_tx() - traffic_stats.frames_rx();
 
+    // Check switch is ready at the end of the test.
     ASSERT_OK(SwitchReady(testbed->Sut()))
         << "Switch ready checks failed after traffic test";
   }
