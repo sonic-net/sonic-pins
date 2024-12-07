@@ -91,7 +91,7 @@ absl::StatusOr<PacketSynthesisStats> SimpleTrafficGenerator::Init(
   // Generate test vectors.
   gutil::BazelTestArtifactWriter writer;
   ASSIGN_OR_RETURN(
-      test_vector_by_id_,
+      generate_test_vectors_result_,
       GenerateTestVectors(params.validation_params,
                           testbed_configurator_->SutApi(), *backend_, writer));
 
@@ -152,7 +152,8 @@ void SimpleTrafficGenerator::InjectTraffic() {
     PacketStatistics statistics;
     absl::StatusOr<PacketTestRuns> test_runs = SendTestPacketsAndCollectOutputs(
         *testbed_configurator_->SutApi().p4rt,
-        *testbed_configurator_->ControlSwitchApi().p4rt, test_vector_by_id_,
+        *testbed_configurator_->ControlSwitchApi().p4rt,
+        generate_test_vectors_result_.packet_test_vector_by_id,
         {
             .max_packets_to_send_per_second =
                 params_.validation_params.max_packets_to_send_per_second,
@@ -176,10 +177,9 @@ absl::StatusOr<ValidationResult> SimpleTrafficGenerator::GetValidationResult() {
   test_runs_mutex_.Lock();
   PacketTestRuns test_runs = test_runs_;
   test_runs_mutex_.Unlock();
-
   return ValidationResult(
-      test_runs, params_.validation_params.ignored_fields_for_validation,
-      params_.validation_params.ignored_metadata_for_validation);
+      test_runs, params_.validation_params.switch_output_diff_params,
+      generate_test_vectors_result_.packet_synthesis_result);
 }
 
 absl::StatusOr<ValidationResult>
@@ -190,8 +190,8 @@ SimpleTrafficGenerator::GetAndClearValidationResult() {
   test_runs_mutex_.Unlock();
 
   return ValidationResult(
-      test_runs, params_.validation_params.ignored_fields_for_validation,
-      params_.validation_params.ignored_metadata_for_validation);
+      test_runs, params_.validation_params.switch_output_diff_params,
+      generate_test_vectors_result_.packet_synthesis_result);
 }
 
 }  // namespace dvaas
