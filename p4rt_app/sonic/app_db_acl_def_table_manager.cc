@@ -662,7 +662,12 @@ absl::Status VerifyActionParamAgainstSchema(
   swss::acl::ActionSchema schema;
   const auto& param_name = ir_param.param().name();
   try {
-    schema = swss::acl::ActionSchemaByName(sai_param.action);
+    if (sai_param.object_type.empty()) {
+      schema = swss::acl::ActionSchemaByName(sai_param.action);
+    } else {
+      schema = swss::acl::ActionSchemaByNameAndObjectType(
+          sai_param.action, sai_param.object_type);
+    }
   } catch (...) {
     return InvalidArgumentErrorBuilder() << absl::Substitute(
                "Action '$0' Param '$1' references unknown SAI field '$2'.",

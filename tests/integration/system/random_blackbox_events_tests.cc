@@ -97,7 +97,6 @@ TEST_P(RandomBlackboxEventsTest, ControlPlaneWithTrafficWithoutValidation) {
                                       count: 2
                                       interface_mode: CONTROL_INTERFACE
                                     })pb")));
-  testbed->Environment().SetTestCaseID("491b3f60-1369-4099-9385-da5dd44a087d");
 
   // Initial sanity check.
   ASSERT_OK(SwitchReady(testbed->Sut()));
