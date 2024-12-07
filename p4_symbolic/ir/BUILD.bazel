@@ -224,6 +224,13 @@ ir_parsing_test(
 )
 
 ir_parsing_test(
+    name = "primitive_parser_operation_test",
+    golden_file = "expected/primitive_parser_operation.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/primitive_parser_operation.p4",
+)
+
+ir_parsing_test(
     name = "default_transition_test",
     golden_file = "expected/default_transition.txt",
     p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],

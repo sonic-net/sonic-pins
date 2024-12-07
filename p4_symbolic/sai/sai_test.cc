@@ -111,7 +111,7 @@ TEST(EvaluateSaiPipeline, IngressPortIsAmongPassedValues) {
   std::vector<p4::v1::TableEntry> pi_entries;
   for (auto& pd_entry : pd_entries.entries()) {
     ASSERT_OK_AND_ASSIGN(pi_entries.emplace_back(),
-                         pdpi::PdTableEntryToPi(ir_p4info, pd_entry));
+                         pdpi::PartialPdTableEntryToPiTableEntry(ir_p4info, pd_entry));
   }
 
   // Evaluate the SAI pipeline.
