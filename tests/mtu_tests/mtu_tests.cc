@@ -208,7 +208,6 @@ void SetPortMtu(gnmi::gNMI::StubInterface* stub, absl::string_view intf,
 }
 
 TEST_P(MtuRoutingTestFixture, MtuTest) {
-  testbed_->Environment().SetTestCaseID("cfb97855-fe79-494a-aef2-92821aef3b1f");
   // Get original mtu on port under test on SUT.
   std::string if_state_path = absl::StrCat(
       "interfaces/interface[name=", destination_link_.sut_interface,

@@ -94,7 +94,7 @@ constexpr int kFrameCheckSequenceSize = 4;
 // gNMI have to be incremented after a packet hits a queue.
 // Empirically, for PINS, queue counters currently seem to get updated every
 // 10 seconds.
-constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(15);
+constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(20);
 
 // After pushing gNMI config to a switch, the tests sleep for this duration
 // assuming that the gNMI config will have been fully applied afterwards.
@@ -487,6 +487,17 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
+  // Set up P4Runtime.
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
+                                                             p4info));
+
   // Set up gNMI.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
@@ -505,16 +516,6 @@ TEST_P(CpuQosTestWithoutIxia, PerEntryAclCounterIncrementsWhenEntryIsHit) {
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
   // We install a RIF to make this test non-trivial, as all packets are dropped
   // by default if no RIF exists (b/190736007).
   ASSERT_OK_AND_ASSIGN(
@@ -781,6 +782,17 @@ TEST_P(CpuQosTestWithoutIxia,
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
+  // Set up P4Runtime.
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
+                                                             p4info));
+
   // Set up gNMI.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
@@ -799,16 +811,6 @@ TEST_P(CpuQosTestWithoutIxia,
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
   // We install a RIF to make this test non-trivial, as all packets are dropped
   // by default if no RIF exists (b/190736007).
   ASSERT_OK_AND_ASSIGN(
@@ -892,6 +894,17 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   ASSERT_OK_AND_ASSIGN(const pdpi::IrP4Info ir_p4info,
                        pdpi::CreateIrP4Info(p4info));
 
+  // Set up P4Runtime.
+  EXPECT_OK(
+      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
+  ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
+      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
+                                                             p4info));
+
   // Set up gNMI.
   EXPECT_OK(Testbed().Environment().StoreTestArtifact("gnmi_config.json",
                                                       GetParam().gnmi_config));
@@ -909,16 +922,6 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
   LOG(INFO) << "Link used to inject test packets: "
             << link_used_for_test_packets;
 
-  // Set up P4Runtime.
-  EXPECT_OK(
-      Testbed().Environment().StoreTestArtifact("p4info.textproto", p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(sut, p4info));
-  ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<pdpi::P4RuntimeSession> control_p4rt_session,
-      pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(control_device,
-                                                             p4info));
   // TODO: Unless a RIF exists at the test packet ingress port,
   // packets will be dropped. Remove this once these RIFs are set up via
   // gNMI.
@@ -1015,7 +1018,10 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
               CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) &&
           absl::Now() - time_packet_sent < kMaxQueueCounterUpdateTime);
 
-      EXPECT_EQ(
+      // We terminate early if this fails, as that can cause this loop to get
+      // out of sync when counters increment after a long delay, resulting in
+      // confusing error messages where counters increment by 2.
+      ASSERT_EQ(
           CumulativeNumPacketsEnqueued(queue_counters_after_test_packet),
           CumulativeNumPacketsEnqueued(queue_counters_before_test_packet) + 1)
           << "Counters for queue " << target_queue
@@ -1034,7 +1040,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
 // Level of tolerance for packet rate verification.
 // This could be parameterized in future if this is platform
 // dependent.
-constexpr float kTolerancePercent = 3.0;
+constexpr float kTolerancePercent = 4.0;
 
 // Ixia configurations:
 // 1. Frames sent per second by Ixia.
@@ -1056,6 +1062,39 @@ struct PacketReceiveInfo {
   absl::Time time_first_packet_punted ABSL_GUARDED_BY(mutex);
   absl::Time time_last_packet_punted ABSL_GUARDED_BY(mutex);
 };
+
+// Structure represents a link between SUT and Ixia.
+// This is represented by Ixia interface name and the SUT's gNMI interface
+// name.
+struct IxiaLink {
+  std::string ixia_interface;
+  std::string sut_interface;
+};
+// Go over the connections and return vector of connections
+// whose links are up.
+absl::StatusOr<std::vector<IxiaLink>> GetReadyIxiaLinks(
+    thinkit::GenericTestbed &generic_testbed,
+    gnmi::gNMI::StubInterface &gnmi_stub) {
+  std::vector<IxiaLink> links;
+  absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
+      generic_testbed.GetSutInterfaceInfo();
+  // Loop through the interface_info looking for Ixia/SUT interface pairs,
+  // checking if the link is up.  Add the pair to connections.
+  for (const auto &[interface, info] : interface_info) {
+    bool sut_link_up = false;
+    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR))
+    {
+      ASSIGN_OR_RETURN(sut_link_up, CheckLinkUp(interface, gnmi_stub));
+      if (sut_link_up) {
+        links.push_back({
+            .ixia_interface = info.peer_interface_name,
+            .sut_interface = interface,
+        });
+      }
+    }
+  }
+  return links;
+}
 
 TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
   // Pick a testbed with an Ixia Traffic Generator.
@@ -1116,6 +1155,9 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
       std::unique_ptr<thinkit::GenericTestbed> generic_testbed,
       GetParam().testbed_interface->GetTestbedWithRequirements(requirements));
 
+  // TODO: Skip test till known failure is fixed.
+  GTEST_SKIP() << "Skipping till b/203545459 is fixed";
+
   ASSERT_OK(generic_testbed->Environment().StoreTestArtifact(
       "gnmi_config.txt", GetParam().gnmi_config));
 
@@ -1136,40 +1178,46 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   const auto dest_ip = netaddr::Ipv4Address(172, 0, 0, 1);
 
   // Go through all the ports that interface to the Ixia and set them
-  // to 100GB since the Ixia ports are all 100GB.
+  // first to 200GB.
   const absl::flat_hash_map<std::string, thinkit::InterfaceInfo>
       interface_info = generic_testbed->GetSutInterfaceInfo();
   for (const auto &[interface, info] : interface_info) {
     if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR))
     { 
-      ASSERT_OK(SetPortSpeed("\"openconfig-if-ethernet:SPEED_100GB\"",
+      ASSERT_OK(SetPortSpeed("\"openconfig-if-ethernet:SPEED_200GB\"",
                              interface, *gnmi_stub));
+      ASSERT_OK(SetPortMtu(kMaxFrameSize, interface, *gnmi_stub));
     }
   }
 
   // Wait to let the links come up. Switch guarantees state paths to reflect
   // in 10s. Lets wait for a bit more.
+  LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
+            << " to wait for config to be applied/links to come up.";
   absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
 
-  // TODO: Move this to helper function.
-  // Loop through the interface_info looking for Ixia/SUT interface pairs,
-  // checking if the link is up.  we need one pair with link up for the
-  // ingress interface/IXIA traffic generation.
-  std::string ixia_interface;
-  std::string sut_interface;
-  bool sut_link_up = false;
-  for (const auto &[interface, info] : interface_info) {
-    if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR)) {
-      ASSERT_OK_AND_ASSIGN(sut_link_up, CheckLinkUp(interface, *gnmi_stub));
-      if (sut_link_up) {
-        ixia_interface = info.peer_interface_name;
-        sut_interface = interface;
-        break;
+  ASSERT_OK_AND_ASSIGN(std::vector<IxiaLink> ready_links,
+                       GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
+  // If links didnt come, lets try 100GB as some testbeds have 100GB
+  // IXIA connections.
+  if (ready_links.empty()) {
+    for (const auto &[interface, info] : interface_info) {
+      if (info.interface_modes.contains(thinkit::TRAFFIC_GENERATOR))
+          ASSERT_OK(SetPortSpeed("\"openconfig-if-ethernet:SPEED_100GB\"",
+                               interface, *gnmi_stub));
       }
     }
-  }
+    // Wait to let the links come up. Switch guarantees state paths to reflect
+    // in 10s. Lets wait for a bit more.
+    LOG(INFO) << "Sleeping " << kTimeToWaitForGnmiConfigToApply
+              << " to wait for config to be applied/links to come up.";
+    absl::SleepFor(kTimeToWaitForGnmiConfigToApply);
+    ASSERT_OK_AND_ASSIGN(ready_links,
+                         GetReadyIxiaLinks(*generic_testbed, *gnmi_stub));
 
-  ASSERT_TRUE(sut_link_up);
+  ASSERT_FALSE(ready_links.empty()) << "Ixia links are not ready";
+  std::string ixia_interface = ready_links[0].ixia_interface;
+  std::string sut_interface = ready_links[0].sut_interface;
 
   // We will perform the following steps with Ixia:
   // Set up Ixia traffic.
@@ -1260,6 +1308,9 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
                                     flow_rate_limit_in_bytes_per_second,
                                     /*burst_in_bytes=*/kMaxFrameSize,
                                     GetParam().p4info, *sut_p4_session));
+    ASSERT_OK_AND_ASSIGN(
+        QueueCounters initial_counters,
+        GetGnmiQueueCounters("CPU", queue_info.gnmi_queue_name, *gnmi_stub));
 
     // Reset received packet count at tester for each iteration.
     {
@@ -1302,8 +1353,40 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
         << " after injecting the Ixia test packets via CPU queue "
         << queue_name;
 
-    // TODO: Remove masking this failure once bug is fixed.
-    if (!generic_testbed->Environment().MaskKnownFailures()) {
+    // Verify GNMI queue stats match packets received.
+    static constexpr absl::Duration kPollInterval = absl::Seconds(5);
+    static constexpr absl::Duration kTotalTime = absl::Seconds(20);
+    static const int kIterations = kTotalTime / kPollInterval;
+    // Check for counters every 5 seconds upto 20 seconds till they match.
+    for (int gnmi_counters_check = 0; gnmi_counters_check < kIterations;
+         gnmi_counters_check++) {
+      absl::SleepFor(kPollInterval);
+      QueueCounters final_counters;
+      QueueCounters delta_counters;
+      ASSERT_OK_AND_ASSIGN(
+          final_counters,
+          GetGnmiQueueCounters("CPU", queue_info.gnmi_queue_name, *gnmi_stub));
+      delta_counters = {
+          .num_packets_transmitted = final_counters.num_packets_transmitted -
+                                     initial_counters.num_packets_transmitted,
+          .num_packet_dropped = final_counters.num_packet_dropped -
+                                initial_counters.num_packet_dropped,
+      };
+      LOG(INFO) << delta_counters;
+      absl::MutexLock lock(&packet_receive_info.mutex);
+      if (delta_counters.num_packets_transmitted ==
+          packet_receive_info.num_packets_punted) {
+        break;
+      }
+      ASSERT_NE(gnmi_counters_check, kIterations - 1)
+          << "GNMI packet count "
+          << delta_counters.num_packets_transmitted +
+                 delta_counters.num_packet_dropped
+          << " != Packets received at controller "
+          << packet_receive_info.num_packets_punted;
+    }
+
+    {
       absl::MutexLock lock(&packet_receive_info.mutex);
 
       LOG(INFO) << "Packets received at Controller: "

@@ -108,9 +108,9 @@ message ParseState {
 // Reference:
 // https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#parser-operations.
 //
-// Note that only "extract" and "set" operations are supported for now since
-// others are not required at the moment. To support more complicated parsers,
-// other operations may be supported in the future.
+// Note that only "extract", "set", and "primitive" operations are supported for
+// now since others are not required at the moment. To support more complicated
+// parsers, other operations may be supported in the future.
 message ParserOperation {
   // Defines an "extract" parser operation, which performs extraction for a
   // fixed-width header.
@@ -133,9 +133,23 @@ message ParserOperation {
     }
   }
 
+  // Defines a "primitive" parser operation. The exact list of primitives
+  // supported depends on the individual targets. The format is similar to
+  // actions. Reference:
+  // https://github.com/p4lang/behavioral-model/blob/main/docs/JSON_format.md#parser-operations
+  // https://github.com/p4lang/behavioral-model/blob/main/src/bm_sim/core/primitives.cpp
+  // https://github.com/p4lang/behavioral-model/blob/main/targets/simple_switch/primitives.cpp
+  message Primitive {
+    // The statement interpreted from the primitive.
+    oneof statement {
+      AssignmentStatement assignment = 1;
+    }
+  }
+
   oneof operation {
     Extract extract = 1;
     Set set = 3;
+    Primitive primitive = 7;
   }
 }
 
