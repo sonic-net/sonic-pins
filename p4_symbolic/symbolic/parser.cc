@@ -330,4 +330,175 @@ z3::expr ConstructFallThroughGuard(
   return fall_through_guard;
 }
 
+// Obtains the next state name of the given `transition`.
+absl::StatusOr<std::string> GetNextState(
+    const ir::ParserTransition &transition) {
+  switch (transition.transition_case()) {
+    case ir::ParserTransition::TransitionCase::kDefaultTransition: {
+      return transition.default_transition().next_state();
+    }
+    case ir::ParserTransition::TransitionCase::kHexStringTransition: {
+      return transition.hex_string_transition().next_state();
+    }
+    default: {
+      return gutil::InvalidArgumentErrorBuilder()
+             << "Transition type must default or hex string. Found: "
+             << transition.DebugString();
+    }
+  }
+}
+
+absl::Status SetParserError(const ir::P4Program &program,
+                            SymbolicPerPacketState &state,
+                            const std::string &error_name,
+                            const z3::expr &guard) {
+  ASSIGN_OR_RETURN(z3::expr error_code,
+                   GetErrorCodeExpression(program, error_name));
+  return state.Set(kParserErrorField, std::move(error_code), guard);
+}
+
+// Evaluates the parse state with the given `state_name` in the given parser.
+absl::Status EvaluateParseState(const ir::P4Program &program,
+                                const ir::Parser &parser,
+                                const std::string &state_name,
+                                SymbolicPerPacketState &state,
+                                const z3::expr &guard) {
+  // Base case. We got to the end of the parser execution path.
+  if (state_name == ir::EndOfParser()) {
+    return absl::OkStatus();
+  }
+
+  // Get the parse state with the given state name.
+  auto it = parser.parse_states().find(state_name);
+  if (it == parser.parse_states().end()) {
+    return gutil::NotFoundErrorBuilder()
+           << "Parse state not found: " << state_name;
+  }
+
+  const ir::ParseState &parse_state = it->second;
+
+  // We evaluate a parse state by first evaluating all the parser operations
+  // defined in this state, and then evaluating each transition conditionally,
+  // where it transitions into the next parse state recursively. For optimized
+  // symbolic execution (go/optimized-symbolic-execution), we evaluate each
+  // transition conditionally only when the next state of the transition is not
+  // the merge point. Once all such transitions are evaluated, the execution
+  // continues at the merge point. The condition of each transition is
+  // constructed according to the P4 semantics. The match conditions of
+  // different transitions may overlap, meaning that more than one transition
+  // may be valid for the same transition key, in which case, the priority of
+  // the transitions is defined by the order in which they are specified in the
+  // original P4 program.
+  // See go/p4-symbolic-parser-support.
+  // b/285404691: Note that in the current implementation, a parse state may
+  // still be evaluated more than once.
+
+  // Evaluate the parser operations in this parse state.
+  action::ActionContext fake_context = {state_name, {}};
+  for (const ir::ParserOperation &op : parse_state.parser_ops()) {
+    RETURN_IF_ERROR(
+        EvaluateParserOperation(program, op, state, fake_context, guard));
+  }
+
+  // Construct the match condition of each transition.
+  ASSIGN_OR_RETURN(std::vector<z3::expr> match_conditions,
+                   ConstructMatchConditions(parse_state, state, guard));
+  // Construct the transition guard of each transition.
+  std::vector<z3::expr> transition_guards =
+      ConstructTransitionGuards(match_conditions, guard);
+
+  const std::string &merge_point =
+      parse_state.optimized_symbolic_execution_info().merge_point();
+
+  // Evaluate each next state that is not the merge point.
+  for (size_t i = 0; i < transition_guards.size(); ++i) {
+    ASSIGN_OR_RETURN(std::string next_state,
+                     GetNextState(parse_state.transitions(i)));
+    if (next_state != merge_point) {
+      RETURN_IF_ERROR(EvaluateParseState(program, parser, next_state, state,
+                                         transition_guards[i]));
+    }
+  }
+
+  z3::expr merge_point_guard = guard;
+
+  // If the last transition is not a default transition, i.e., the last match
+  // condition is not TRUE, it is possible that a packet does not match any
+  // valid transition of the parse state. In that case, the P4 program will mark
+  // the `standard_metadata.parser_error` as `error.NoMatch`, skip the rest of
+  // the parser, and then continue to the ingress pipeline directly.
+  // Reference: https://p4.org/p4-spec/docs/P4-16-v-1.2.3.html#sec-select.
+  //
+  // We construct the fall-through guard and then evaluate the fall-through
+  // scenario. Technically we can always evaluate the fall-through scenario and
+  // encode it in the symbolic state, but if there is a default transition, the
+  // fall-through guard will always be evaluated to FALSE, so we evaluate this
+  // conditionally to save Z3 some effort.
+  if (!match_conditions.empty() &&
+      match_conditions.back() != Z3Context().bool_val(true)) {
+    z3::expr fall_through_guard =
+        ConstructFallThroughGuard(match_conditions, guard);
+
+    // Here we apply the side effect for the fall-through scenario. The "next
+    // state" in this case will be the end of parser, so there is no need to do
+    // anything else. The fall-through guard should be sufficient to ensure that
+    // if the fall-through guard is true, no other transitions will happen.
+    RETURN_IF_ERROR(
+        SetParserError(program, state, "NoMatch", fall_through_guard));
+
+    // If a fall-through is possible, the `merge_point_guard` should be the
+    // negation of the `fall_through_guard` under the current `guard`.
+    merge_point_guard = guard && !fall_through_guard;
+  }
+
+  // Continue the evaluation at the merge point or terminate this execution
+  // path, where the merge point is guaranteed to be evaluated through a
+  // different path.
+  if (parse_state.optimized_symbolic_execution_info()
+          .continue_to_merge_point()) {
+    return EvaluateParseState(program, parser, merge_point, state,
+                              merge_point_guard);
+  } else {
+    return absl::OkStatus();
+  }
+}
+
+}  // namespace
+
+absl::StatusOr<z3::expr> GetErrorCodeExpression(const ir::P4Program &program,
+                                                const std::string &error_name) {
+  // Obtain the error code from the given `error_name`.
+  auto err_it = program.errors().find(error_name);
+  if (err_it == program.errors().end()) {
+    return gutil::NotFoundErrorBuilder() << "Error not found: " << error_name;
+  }
+  unsigned int error_code = err_it->second.value();
+
+  // Obtain the bitwidth of the `parser_error` field
+  ASSIGN_OR_RETURN(unsigned int bitwidth,
+                   util::GetFieldBitwidth(kParserErrorField, program));
+
+  return Z3Context().bv_val(error_code, bitwidth);
+}
+
+absl::StatusOr<SymbolicPerPacketState> EvaluateParsers(
+    const ir::P4Program &program,
+    const SymbolicPerPacketState &ingress_headers) {
+  // Make sure there is exactly one parser in the P4-Symbolic IR.
+  if (program.parsers_size() != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Invalid number of parsers: " << program.parsers_size();
+  }
+
+  // Duplicate the symbolic headers for evaluating the parsers. This is to
+  // preserve the symbolic state of the ingress packet before entering the
+  // parsers.
+  SymbolicPerPacketState parsed_headers = ingress_headers;
+  const ir::Parser &parser = program.parsers().begin()->second;
+  RETURN_IF_ERROR(EvaluateParseState(program, parser, parser.initial_state(),
+                                     parsed_headers,
+                                     Z3Context().bool_val(true)));
+  return parsed_headers;
+}
+
 }  // namespace p4_symbolic::symbolic::parser
