@@ -17,12 +17,14 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -38,9 +40,16 @@
 #include "gutil/gutil/status.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
 #include "yggdrasil_decision_forests/dataset/data_spec.pb.h"
+#include "yggdrasil_decision_forests/dataset/data_spec_inference.h"
+#include "yggdrasil_decision_forests/learner/abstract_learner.h"
+#include "yggdrasil_decision_forests/learner/cart/cart.h"  // IWYU pragma: keep
+#include "yggdrasil_decision_forests/learner/cart/cart.pb.h"
+#include "yggdrasil_decision_forests/learner/learner_library.h"
+#include "yggdrasil_decision_forests/model/abstract_model.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.h"
 #include "yggdrasil_decision_forests/model/decision_tree/decision_tree.pb.h"
 #include "yggdrasil_decision_forests/model/random_forest/random_forest.h"
+#include "yggdrasil_decision_forests/utils/cast.h"
 #include "yggdrasil_decision_forests/utils/distribution.pb.h"
 
 namespace dvaas {
@@ -213,6 +222,72 @@ absl::Status ExtractClustersRecursivey(
                                    clusters);
 }
 
+// Returns a `RandomForestModel` trained on various features extracted
+// from`test_outcomes` to predict the validation result of test outcome
+// (pass/fail).
+absl::StatusOr<std::unique_ptr<RandomForestModel>> BuildModel(
+    const PacketTestOutcomes& test_outcomes) {
+  using ydf::model::AbstractLearner;
+  using yggdrasil_decision_forests::utils::down_cast;
+
+  // Create temporary CSV file from `test_outcomes`.
+  ASSIGN_OR_RETURN(std::string temp_csv_path,
+                   WriteTempCsvFileFromPacketTestOutcomes(test_outcomes));
+  // TODO: b/383131744 - Write the file to test artifacts, look at bmv2 wrapper
+  // for reference.
+
+  // Create data specification from the CSV file.
+  ydf::dataset::proto::DataSpecificationGuide guide;
+  // Don't require categorical features to have a minimum frequency. A single
+  // error is still valuable information.
+  guide.mutable_default_column_guide()
+      ->mutable_categorial()
+      ->set_min_vocab_frequency(0);
+  // Currently, we have numerical features whose value set may be {0, 1}. By
+  // default, ydf treats features with this set as BOOLEAN, but since we only
+  // support NUMERICAL features, we override this behavior.
+  // TODO: Update once we support BOOLEAN features.
+  guide.set_detect_boolean_as_numerical(true);
+  std::string dataset_path = absl::StrCat("csv:", temp_csv_path);
+  ASSIGN_OR_RETURN(DataSpecification data_spec,
+                   ydf::dataset::CreateDataSpec(dataset_path, guide));
+
+  // Configure and create ydf learner.
+  constexpr int kMaxTreeDepth = 4;
+  constexpr int kMinNumberOfDataExamplesPerNode = 1;
+  ydf::model::proto::TrainingConfig training_config;
+  // We use a CART learner because it produces a single tree and considers all
+  // features when splitting nodes.
+  // https://ydf.readthedocs.io/en/stable/py_api/CartLearner/
+  training_config.set_learner("CART");
+  training_config.set_task(ydf::model::proto::Task::CLASSIFICATION);
+  // We want to group similar test outcomes together as passing or failing.
+  training_config.set_label(kTestResultFeatureName);
+  ydf::model::cart::proto::CartTrainingConfig& cart_config =
+      *training_config.MutableExtension(ydf::model::cart::proto::cart_config);
+  cart_config.mutable_decision_tree()->set_max_depth(kMaxTreeDepth);
+  cart_config.mutable_decision_tree()->set_min_examples(
+      kMinNumberOfDataExamplesPerNode);
+  // Ensures no data is excluded from training.
+  cart_config.set_validation_ratio(0);
+  ASSIGN_OR_RETURN(std::unique_ptr<AbstractLearner> learner,
+                   ydf::model::GetLearner(training_config));
+
+  // Train model
+  // NOTE: All data is used for both training and validation/pruning. This is
+  // typically not recommended due to overfitting and loss of generality.
+  // However, in our case, overfitting is exactly what we want.
+  ASSIGN_OR_RETURN(
+      std::unique_ptr<ydf::model::AbstractModel> model,
+      learner->TrainWithStatus(/*train_dataset=*/dataset_path, data_spec,
+                               /*validation_dataset=*/dataset_path));
+
+  // Downcast is safe because we use a CART learner which produces a
+  // `RandomForestModel`.
+  return absl::WrapUnique<RandomForestModel>(
+      down_cast<RandomForestModel*>(model.release()));
+};
+
 }  // namespace
 
 std::string FeatureValueToString(const FeatureValue& value) {
@@ -336,6 +411,16 @@ absl::StatusOr<DetectiveExplanation> ExtractExplanationFromModel(
   return explanation;
 }
 
+absl::StatusOr<DetectiveExplanation> CreateDetectiveExplanation(
+    const PacketTestOutcomes& test_outcomes) {
+  if (test_outcomes.outcomes().empty()) {
+    return absl::InvalidArgumentError("No PacketTestOutcomes provided.");
+  }
+  ASSIGN_OR_RETURN(std::unique_ptr<dvaas_internal::RandomForestModel> model,
+                   dvaas_internal::BuildModel(test_outcomes));
+  return dvaas_internal::ExtractExplanationFromModel(*model);
+}
+
 std::string DetectiveExplanationToString(
     const DetectiveExplanation& explanation) {
   std::vector<int> passing_indices;
@@ -400,4 +485,12 @@ std::string DetectiveExplanationToString(
 }
 
 }  // namespace dvaas_internal
+
+absl::StatusOr<std::string> ExplainTestOutcomes(
+    const PacketTestOutcomes& test_outcomes) {
+  ASSIGN_OR_RETURN(DetectiveExplanation explanation,
+                   dvaas_internal::CreateDetectiveExplanation(test_outcomes));
+  return dvaas_internal::DetectiveExplanationToString(explanation);
+}
+
 }  // namespace dvaas
