@@ -30,7 +30,27 @@
 #include "yggdrasil_decision_forests/model/random_forest/random_forest.h"
 
 namespace dvaas {
+
+// Provides a  human-readable explanation of the broken and working forwarding
+// functionality based on the given 'test_outcomes.' This is achieved by
+// identifying high-level patterns/clusters among failing and passing test
+// vectors that explain the data.
+//
+// The explanation is tailored towards network engineers who may not be familiar
+// with the specifics of DVaaS.
+//
+// See go/dvaas-detective for more details.
+absl::StatusOr<std::string> ExplainTestOutcomes(
+    const PacketTestOutcomes& test_outcomes);
+
+// == END OF PUBLIC API - implementation details below =========================
+// == EXPOSED FOR TESTING ONLY =================================================
+
 namespace dvaas_internal {
+
+// Creates an `Explanation` for `test_outcomes`.
+absl::StatusOr<DetectiveExplanation> CreateDetectiveExplanation(
+    const PacketTestOutcomes& test_outcomes);
 
 // Pretty printer for `DetectiveExplanation`.
 std::string DetectiveExplanationToString(
