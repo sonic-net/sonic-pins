@@ -73,7 +73,8 @@ constexpr uint32_t kMtu = 1514;
 //
 // The rules will punt all matching packets to the CPU.
 //
-absl::Status TrapToCPU(thinkit::Switch &sut) {
+absl::Status TrapToCPU(thinkit::Switch &sut,
+                       const p4::config::v1::P4Info &p4info) {
   auto acl_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
         acl_ingress_table_entry {
@@ -94,18 +95,13 @@ absl::Status TrapToCPU(thinkit::Switch &sut) {
       std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
       pdpi::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
 
-  LOG(INFO) << "GetP4Info";
-  p4::config::v1::P4Info p4info =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-
   LOG(INFO) << "CreateIrP4Info";
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
   LOG(INFO) << "SetForwardingPipelineConfig";
   RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      sai::GetP4Info(sai::Instantiation::kMiddleblock)))
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
   LOG(INFO) << "ClearTableEntries";
@@ -138,10 +134,11 @@ absl::Status TrapToCPU(thinkit::Switch &sut) {
 // use IPv4.
 //
 absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
-                             thinkit::Switch &sut) {
+		             const absl::string_view dest_mac,
+	                     thinkit::Switch &sut,
+                             const p4::config::v1::P4Info &p4info) {
   constexpr absl::string_view kVrfId = "vrf-80";
   constexpr absl::string_view kRifOutId = "router-interface-1";
-  constexpr absl::string_view kRifInId = "router-interface-2";
   constexpr absl::string_view kNhopId = "nexthop-1";
   constexpr absl::string_view kNborIdv4 = "1.1.1.2";
   constexpr absl::string_view kNborIdv6 = "fe80::002:02ff:fe02:0202";
@@ -167,17 +164,6 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
         }
       )pb",
       kRifOutId, out_port));
-
-  auto rif_in_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
-      R"pb(
-        router_interface_table_entry {
-          match { router_interface_id: "$0" }
-          action {
-            set_port_and_src_mac { port: "$1" src_mac: "88:55:44:33:22:11" }
-          }
-        }
-      )pb",
-      kRifInId, in_port));
 
   auto nbor_entry = gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
       R"pb(
@@ -227,6 +213,17 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
       )pb",
       kVrfId));
 
+  auto l3_admit_entry =
+      gutil::ParseProtoOrDie<sai::TableEntry>(absl::Substitute(
+          R"pb(
+            l3_admit_table_entry {
+              match { dst_mac { value: "$0" mask: "FF:FF:FF:FF:FF:FF" } }
+              action { admit_to_l3 {} }
+              priority: 1
+            }
+          )pb",
+          dest_mac));
+
   LOG(INFO) << "p4_stub";
   ASSIGN_OR_RETURN(std::unique_ptr<p4::v1::P4Runtime::StubInterface> p4_stub,
                    sut.CreateP4RuntimeStub());
@@ -236,18 +233,13 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
       std::unique_ptr<pdpi::P4RuntimeSession> p4_session,
       pdpi::P4RuntimeSession::Create(std::move(p4_stub), sut.DeviceId()));
 
-  LOG(INFO) << "GetP4Info";
-  p4::config::v1::P4Info p4info =
-      sai::GetP4Info(sai::Instantiation::kMiddleblock);
-
   LOG(INFO) << "CreateIrP4Info";
   ASSIGN_OR_RETURN(auto ir_p4info, pdpi::CreateIrP4Info(p4info));
 
   LOG(INFO) << "SetForwardingPipelineConfig";
   RETURN_IF_ERROR(pdpi::SetMetadataAndSetForwardingPipelineConfig(
       p4_session.get(),
-      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT,
-      sai::GetP4Info(sai::Instantiation::kMiddleblock)))
+      p4::v1::SetForwardingPipelineConfigRequest::RECONCILE_AND_COMMIT, p4info))
       << "SetForwardingPipelineConfig: Failed to push P4Info: ";
 
   LOG(INFO) << "ClearTableEntries";
@@ -260,8 +252,8 @@ absl::Status ForwardToEgress(uint32_t in_port, uint32_t out_port, bool is_ipv6,
   LOG(INFO) << "for loop";
   std::vector<p4::v1::TableEntry> pi_entries;
   for (const auto &pd_entry :
-       {vrf_entry, rif_out_entry, rif_in_entry, nbor_entry, nhop_entry,
-        is_ipv6 ? ipv6_entry : ipv4_entry, acl_entry}) {
+       {vrf_entry, rif_out_entry, nbor_entry, nhop_entry,
+        is_ipv6 ? ipv6_entry : ipv4_entry, acl_entry, l3_admit_entry}) {
     LOG(INFO) << "loop";
     ASSIGN_OR_RETURN(
         p4::v1::TableEntry pi_entry,
@@ -854,9 +846,15 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   // Set the egress port to loopback mode
   EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
 
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      generic_testbed->Sut(), GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+
   // Set up the switch to forward inbound IPv4 packets to the egress port
   LOG(INFO) << "\n\n----- TestIPv4Pkts: ForwardToEgress -----\n";
-  EXPECT_OK(ForwardToEgress(in_id, out_id, false, generic_testbed->Sut()));
+  constexpr absl::string_view kDestMac = "02:02:02:02:02:02";
+  EXPECT_OK(ForwardToEgress(in_id, out_id, false, kDestMac,
+                            generic_testbed->Sut(), GetParam().p4_info));
   LOG(INFO) << "\n\n----- ForwardToEgress Done -----\n";
 
   // Read some initial counters via GNMI from the SUT
@@ -904,7 +902,7 @@ TEST_P(ExampleIxiaTestFixture, TestIPv4Pkts) {
   ASSERT_OK(ixia::SetFrameCount(tref, 90000000, *generic_testbed));
 
   // Set the destination MAC address
-  ASSERT_OK(ixia::SetDestMac(tref, "02:02:02:02:02:02", *generic_testbed));
+   ASSERT_OK(ixia::SetDestMac(tref, kDestMac, *generic_testbed));
 
   // Set the source MAC address
   ASSERT_OK(ixia::SetSrcMac(tref, "00:01:02:03:04:05", *generic_testbed));
@@ -1128,6 +1126,10 @@ TEST_P(ExampleIxiaTestFixture, TestOutDiscards) {
   auto out_status_speed = CheckPortSpeed(sut_out_interface, gnmi_stub.get());
   EXPECT_THAT(out_status_speed, IsOkAndHolds(kSpeed40GB));
 
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      generic_testbed->Sut(), GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+  
   // Set up the switch to forward inbound packets to the egress port
   LOG(INFO) << "\n\n----- ForwardToEgress: TestOutDiscards -----\n";
   EXPECT_OK(ForwardToEgress(in_id, out_id, false, generic_testbed->Sut()));
@@ -1404,8 +1406,14 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
   // Set the egress port to loopback mode
   EXPECT_OK(SetLoopback(true, sut_out_interface, gnmi_stub.get()));
 
+  ASSERT_OK(pins_test::WaitForGnmiPortIdConvergence(
+      generic_testbed->Sut(), GetParam().gnmi_config,
+      /*timeout=*/absl::Minutes(3)));
+
   // Set up the switch to forward inbound packets to the egress port
-  EXPECT_OK(ForwardToEgress(in_id, out_id, true, generic_testbed->Sut()));
+  constexpr absl::string_view kDestMac = "02:02:02:02:02:02";
+  EXPECT_OK(ForwardToEgress(in_id, out_id, true, kDestMac,
+                            generic_testbed->Sut(), GetParam().p4_info));
 
   // Read some initial counters via GNMI from the SUT
   ASSERT_OK_AND_ASSIGN(auto initial_in_counters,
@@ -1451,7 +1459,7 @@ TEST_P(ExampleIxiaTestFixture, TestIPv6Pkts) {
 
   // Set the source and destination MAC addresses
   ASSERT_OK(ixia::SetSrcMac(tref, "00:01:02:03:04:05", *generic_testbed));
-  ASSERT_OK(ixia::SetDestMac(tref, "02:02:02:02:02:02", *generic_testbed));
+  ASSERT_OK(ixia::SetDestMac(tref, kDestMac, *generic_testbed));
 
   // Add an IPv6 header
   ASSERT_OK(ixia::AppendIPv6(tref, *generic_testbed));
@@ -1638,7 +1646,7 @@ TEST_P(ExampleIxiaTestFixture, TestCPUOutDiscards) {
   // We're doing this to overwhelm the egress port so at least some of the
   // packets we'll send from the CPU get discarded
   LOG(INFO) << "\n\n----- TestCPUOutDiscards: TrapToCPU -----\n";
-  EXPECT_OK(TrapToCPU(generic_testbed->Sut()));
+  EXPECT_OK(TrapToCPU(generic_testbed->Sut(), GetParam().p4_info));
   LOG(INFO) << "\n\n----- TrapToCPU Done -----\n";
 
   // Read some initial counters via GNMI from the SUT
