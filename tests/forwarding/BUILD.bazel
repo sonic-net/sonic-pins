@@ -159,6 +159,7 @@ cc_library(
     srcs = ["l3_admit_test.cc"],
     hdrs = ["l3_admit_test.h"],
     deps = [
+	":mirror_blackbox_test_fixture",
         ":util",
         "//gutil:proto",
         "//gutil:status_matchers",
