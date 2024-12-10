@@ -33,6 +33,7 @@
 #include "gutil/status_matchers.h"
 #include "gutil/testing.h"
 #include "p4_pdpi/packetlib/packetlib.pb.h"
+#include "p4_pdpi/testing/test_p4info.h"
 
 namespace dvaas {
 namespace {
@@ -63,8 +64,9 @@ void RunTestCase(const TestCase& test_case) {
 
   // Print output.
   std::cout << "-- Output --------------------------------------------------\n";
+  pdpi::IrP4Info ir_p4info = pdpi::GetTestIrP4Info();
   absl::StatusOr<PacketTestVectorById> output =
-      LegitimizeUserProvidedTestVectors(test_case.vectors);
+      LegitimizeUserProvidedTestVectors(test_case.vectors, ir_p4info);
   if (!output.ok()) {
     // Print error without stack trace, for golden testing.
     std::cout << "ERROR: "
@@ -236,6 +238,52 @@ std::vector<TestCase> GetPositiveTestCases() {
           },
   };
 
+  test_cases.emplace_back() = TestCase{
+      .description = "packet_in with matching tag",
+      .vectors =
+          {
+              gutil::ParseProtoOrDie<PacketTestVector>(R"pb(
+                input {
+                  type: DATAPLANE
+                  packet {
+                    port: "1"
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+                          ethernet_source: "55:44:33:22:11:00"
+                          ethertype: "0x000f"
+                        }
+                      }
+                      payload: "test packet #42"
+                    }
+                  }
+                }
+                acceptable_outputs {
+                  packet_ins {
+                    metadata {
+                      name: "ingress_port"
+                      value: { hex_str: "0x00f" }
+                    }
+                    metadata {
+                      name: "target_egress_port"
+                      value: { str: "1" }
+                    }
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "5:5:5:5:5:5"
+                          ethernet_source: "5:5:5:5:5:5"
+                          ethertype: "0x000f"
+                        }
+                      }
+                      payload: "test packet #42"
+                    }
+                  }
+                }
+              )pb"),
+          },
+  };
   return test_cases;
 }  // namespace
 
@@ -430,19 +478,119 @@ std::vector<TestCase> GetNegativeTestCases() {
           },
   };
 
+  test_cases.emplace_back() = TestCase{
+      .description = "packet_in with mismatching tag",
+      .vectors =
+          {
+              gutil::ParseProtoOrDie<PacketTestVector>(R"pb(
+                input {
+                  type: DATAPLANE
+                  packet {
+                    port: "1"
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+                          ethernet_source: "55:44:33:22:11:00"
+                          ethertype: "0x000f"
+                        }
+                      }
+                      payload: "test packet #42"
+                    }
+                  }
+                }
+                acceptable_outputs {
+                  packet_ins {
+                    metadata {
+                      name: "ingress_port"
+                      value: { hex_str: "0x00f" }
+                    }
+                    metadata {
+                      name: "target_egress_port"
+                      value: { str: "1" }
+                    }
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "5:5:5:5:5:5"
+                          ethernet_source: "5:5:5:5:5:5"
+                          ethertype: "0x000f"
+                        }
+                      }
+                      payload: "test packet #24"
+                    }
+                  }
+                }
+              )pb"),
+          },
+  };
+
+  test_cases.emplace_back() = TestCase{
+      .description = "packet_in with malformed metadata",
+      .vectors =
+          {
+              gutil::ParseProtoOrDie<PacketTestVector>(R"pb(
+                input {
+                  type: DATAPLANE
+                  packet {
+                    port: "1"
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "ff:ee:dd:cc:bb:aa"
+                          ethernet_source: "55:44:33:22:11:00"
+                          ethertype: "0x000f"
+                        }
+                      }
+                      payload: "test packet #42"
+                    }
+                  }
+                }
+                acceptable_outputs {
+                  packet_ins {
+                    metadata {
+                      name: "foobar"
+                      value: { str: "foobar" }
+                    }
+                    metadata {
+                      name: "ingress_port"
+                      value: { hex_str: "0x00f" }
+                    }
+                    metadata {
+                      name: "target_egress_port"
+                      value: { str: "1" }
+                    }
+                    parsed {
+                      headers {
+                        ethernet_header {
+                          ethernet_destination: "5:5:5:5:5:5"
+                          ethernet_source: "5:5:5:5:5:5"
+                          ethertype: "0x000f"
+                        }
+                      }
+                      payload: "test packet #24"
+                    }
+                  }
+                }
+              )pb"),
+          },
+  };
   return test_cases;
 }
 
 TEST(InternalizeUserProvidedTestVectorsTest, PositiveTestCases) {
+  pdpi::IrP4Info ir_p4info = pdpi::GetTestIrP4Info();
   for (TestCase test_case : GetPositiveTestCases()) {
-    EXPECT_THAT(LegitimizeUserProvidedTestVectors(test_case.vectors), IsOk());
+    EXPECT_THAT(LegitimizeUserProvidedTestVectors(test_case.vectors, ir_p4info),
+                IsOk());
     RunTestCase(test_case);
   }
 }
 
 TEST(InternalizeUserProvidedTestVectorsTest, NegativeTestCases) {
+  pdpi::IrP4Info ir_p4info = pdpi::GetTestIrP4Info();
   for (TestCase test_case : GetNegativeTestCases()) {
-    EXPECT_THAT(LegitimizeUserProvidedTestVectors(test_case.vectors),
+    EXPECT_THAT(LegitimizeUserProvidedTestVectors(test_case.vectors, ir_p4info),
                 Not(IsOk()));
     RunTestCase(test_case);
   }

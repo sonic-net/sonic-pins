@@ -515,7 +515,6 @@ namespace {
 TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
-  environment.SetTestCaseID("9a4c3dac-44bd-489e-9237-d396b66c85f5");
 
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = kNumWcmpMembersForTest;
@@ -597,7 +596,6 @@ TEST_P(WatchPortTestFixture, VerifyBasicWcmpPacketDistribution) {
 TEST_P(WatchPortTestFixture, VerifyBasicWatchPortAction) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
-  environment.SetTestCaseID("992725de-2051-49bb-928f-7b089643a9bd");
 
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = kNumWcmpMembersForTest;
@@ -712,7 +710,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
   }
   thinkit::MirrorTestbed& testbed = GetParam().testbed->GetMirrorTestbed();
   thinkit::TestEnvironment& environment = testbed.Environment();
-  environment.SetTestCaseID("964c7a38-b073-4296-85be-2bba1e33c6f9");
 
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = kNumWcmpMembersForTest;
@@ -821,7 +818,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionInCriticalState) {
 TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
-  environment.SetTestCaseID("60da7a07-1217-4d63-9716-1219d62065ff");
 
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = 1;
@@ -935,7 +931,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForSingleMember) {
 TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
-  environment.SetTestCaseID("e93160fb-be64-495b-bb4d-f06a92c51e76");
 
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = kNumWcmpMembersForTest;
@@ -1048,7 +1043,6 @@ TEST_P(WatchPortTestFixture, VerifyWatchPortActionForMemberModify) {
 TEST_P(WatchPortTestFixture, VerifyWatchPortActionForDownPortMemberInsert) {
   thinkit::TestEnvironment& environment =
       GetParam().testbed->GetMirrorTestbed().Environment();
-  environment.SetTestCaseID("e54da480-d2cc-42c6-bced-0354b5ab3329");
   absl::Span<const int> controller_port_ids = GetParam().port_ids;
   const int group_size = kNumWcmpMembersForTest;
   ASSERT_OK_AND_ASSIGN(std::vector<GroupMember> members,

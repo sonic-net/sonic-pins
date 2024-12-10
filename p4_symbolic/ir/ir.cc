@@ -32,6 +32,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
+#include "google/protobuf/struct.pb.h"
 #include "gutil/status.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_symbolic/bmv2/bmv2.pb.h"
@@ -880,9 +881,88 @@ absl::StatusOr<ParserOperation::Set> ExtractSetParserOp(
   return result;
 }
 
+// Translates the "primitive" parser operation from the BMv2 protobuf message.
+// Currently only "add_header" and "remove_header" primitives are supported,
+// which correspond to "setValid" and "setInvalid" methods respectively.
+absl::StatusOr<ParserOperation::Primitive> ExtractPrimitiveParserOp(
+    const bmv2::ParserOperation &bmv2_op) {
+  ParserOperation::Primitive result;
+
+  // The "primitive" parser operation must have exactly 1 parameter.
+  if (bmv2_op.parameters_size() != 1) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Parser primitive op must have 1 parameter, found "
+           << bmv2_op.DebugString();
+  }
+
+  const ::google::protobuf::Struct &bmv2_param = bmv2_op.parameters(0);
+
+  // Make sure the parameter struct contains the correct fields.
+  if (!bmv2_param.fields().contains("op") ||
+      !bmv2_param.fields().at("op").has_string_value() ||
+      !bmv2_param.fields().contains("parameters") ||
+      !bmv2_param.fields().at("parameters").has_list_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Primitive operation has an invalid parameter: "
+           << bmv2_param.DebugString();
+  }
+
+  const std::string &bmv2_primitive_op =
+      bmv2_param.fields().at("op").string_value();
+  const ::google::protobuf::ListValue &bmv2_primitive_parameters =
+      bmv2_param.fields().at("parameters").list_value();
+  ASSIGN_OR_RETURN(bmv2::StatementOp op_case,
+                   StatementOpToEnum(bmv2_primitive_op));
+
+  switch (op_case) {
+    case bmv2::StatementOp::add_header:
+    case bmv2::StatementOp::remove_header: {
+      // "add_header" or "remove_header" primitives must have exactly 1
+      // parameter.
+      if (bmv2_primitive_parameters.values_size() != 1) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "setValid/setInvalid statements must contain 1 parameter, "
+                  "found: "
+               << bmv2_primitive_parameters.DebugString();
+      }
+
+      ASSIGN_OR_RETURN(RValue header,
+                       ExtractRValue(bmv2_primitive_parameters.values(0), {}));
+
+      // "add_header" or "remove_header" primitives must have a header name as
+      // the parameter.
+      if (header.rvalue_case() != RValue::kHeaderValue) {
+        return gutil::InvalidArgumentErrorBuilder()
+               << "setValid/setInvalid statements must have header as the "
+                  "parameter, found: "
+               << bmv2_primitive_parameters.DebugString();
+      }
+
+      const std::string &header_name = header.header_value().header_name();
+
+      // Set the field `<header>.$valid$` to true or false based on whether the
+      // primitive is `add_header` or `remove_header` respectively.
+      AssignmentStatement &assignment = *result.mutable_assignment();
+      FieldValue &valid_field =
+          *assignment.mutable_left()->mutable_field_value();
+      valid_field.set_header_name(header_name);
+      valid_field.set_field_name("$valid$");
+      assignment.mutable_right()->mutable_bool_value()->set_value(
+          op_case == bmv2::StatementOp::add_header);
+      break;
+    }
+    default: {
+      return gutil::UnimplementedErrorBuilder()
+             << "Unsupported primitive op: " << bmv2_param.DebugString();
+    }
+  }
+
+  return result;
+}
+
 // Translates parser operations.
-// Currently only "extract" and "set" parser operations are supported since
-// others are not required at the moment.
+// Currently only "extract", "set", and "primitive" parser operations are
+// supported since others are not required at the moment.
 absl::StatusOr<ParserOperation> ExtractParserOperation(
     const bmv2::ParserOperation &bmv2_op) {
   ParserOperation result;
@@ -895,6 +975,11 @@ absl::StatusOr<ParserOperation> ExtractParserOperation(
     }
     case bmv2::ParserOperation::set: {
       ASSIGN_OR_RETURN(*result.mutable_set(), ExtractSetParserOp(bmv2_op));
+      break;
+    }
+    case bmv2::ParserOperation::primitive: {
+      ASSIGN_OR_RETURN(*result.mutable_primitive(),
+                       ExtractPrimitiveParserOp(bmv2_op));
       break;
     }
     default: {
@@ -1018,6 +1103,29 @@ absl::StatusOr<Parser> ExtractParser(const bmv2::Parser &bmv2_parser) {
   }
 
   return parser;
+}
+
+// Translate an error code definition from the BMv2 protobuf message.
+absl::StatusOr<Error> ExtractError(
+    const google::protobuf::ListValue &bmv2_error) {
+  // A BMv2 error must have 2 elements.
+  if (bmv2_error.values_size() != 2) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Error field must contain 2 elements. Found: "
+           << bmv2_error.DebugString();
+  }
+
+  if (!bmv2_error.values(0).has_string_value() ||
+      !bmv2_error.values(1).has_number_value()) {
+    return gutil::InvalidArgumentErrorBuilder()
+           << "Error field must be [string, int]. Found: "
+           << bmv2_error.DebugString();
+  }
+
+  Error output;
+  output.set_name(bmv2_error.values(0).string_value());
+  output.set_value(bmv2_error.values(1).number_value());
+  return output;
 }
 
 }  // namespace
@@ -1211,6 +1319,12 @@ absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
 
       (*output.mutable_conditionals())[conditional.name()] = conditional;
     }
+  }
+
+  // Translate errors from BMv2.
+  for (const google::protobuf::ListValue &bmv2_error : bmv2.errors()) {
+    ASSIGN_OR_RETURN(Error error, ExtractError(bmv2_error));
+    (*output.mutable_errors())[error.name()] = std::move(error);
   }
 
   // Create the Control Flow Graph (CFG) of the program and perform analysis for
