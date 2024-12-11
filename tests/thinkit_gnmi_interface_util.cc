@@ -163,14 +163,15 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
   std::vector<std::string> up_parent_port_list;
   for (auto& intf : interface_to_oper_status_map) {
     if (absl::StartsWith(intf.first, kEthernet)) {
-      auto port_number_str = intf.first.substr(kEthernetLen);
-      int port_number;
-      if (!absl::SimpleAtoi(port_number_str, &port_number)) {
+      ASSIGN_OR_RETURN(std::vector<std::string> slot_port_lane,
+                       GetSlotPortLaneForPort(intf.first));
+      int curr_lane_number;
+      if (!absl::SimpleAtoi(slot_port_lane[kLaneIndex], &curr_lane_number)) {
         return gutil::InternalErrorBuilder().LogError()
-               << "Failed to convert string (" << port_number_str
+               << "Failed to convert string (" << slot_port_lane[kLaneIndex]
                << ") to integer";
       }
-      if (((port_number % kMaxPortLanes) == 0) && intf.second == kStateUp) {
+      if ((curr_lane_number == 1) && intf.second == kStateUp) {
         up_parent_port_list.push_back(intf.first);
       }
     }
@@ -255,6 +256,22 @@ absl::StatusOr<RandomPortBreakoutInfo> GetRandomPortWithSupportedBreakoutModes(
   return port_info;
 }
 
+absl::StatusOr<std::vector<std::string>> GetSlotPortLaneForPort(
+    const absl::string_view port) {
+  if (!absl::StartsWith(port, kEthernet)) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Requested port (", port, ") is not a front panel port"));
+  }
+  auto slot_port_lane = port.substr(kEthernetLen);
+  std::vector<std::string> values = absl::StrSplit(slot_port_lane, '/');
+  if (values.size() != 3) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Requested port (", port,
+                     ") does not have a valid format (EthernetX/Y/Z)"));
+  }
+  return values;
+}
+
 absl::StatusOr<absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>>
 GetExpectedPortInfoForBreakoutMode(const std::string& port,
                                    absl::string_view breakout_mode) {
@@ -270,17 +287,19 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
   // Get maximum physical channels in a breakout group which is max
   // lanes per physical port/number of groups in a breakout mode.
   auto max_channels_in_group = kMaxPortLanes / modes.size();
-  auto port_number_str = port.substr(kEthernetLen);
-  int current_port_number;
-  if (!absl::SimpleAtoi(port_number_str, &current_port_number)) {
+  ASSIGN_OR_RETURN(std::vector<std::string> slot_port_lane,
+                   GetSlotPortLaneForPort(port));
+  int curr_lane_number;
+  if (!absl::SimpleAtoi(slot_port_lane[kLaneIndex], &curr_lane_number)) {
     return gutil::InternalErrorBuilder().LogError()
-           << "Failed to convert string (" << port_number_str << ") to integer";
+           << "Failed to convert string (" << slot_port_lane[kLaneIndex]
+           << ") to integer";
   }
-  if (current_port_number % kMaxPortLanes != 0) {
-    return gutil::InternalErrorBuilder().LogError()
-           << "Requested port (" << port << ") is not a parent port";
+  // Lane number for a master port is always 1.
+  if (curr_lane_number != 1) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Requested port (", port, ") is not a parent port"));
   }
-
   auto current_physical_channel = 0;
   absl::flat_hash_map<std::string, pins_test::PortBreakoutInfo>
       expected_breakout_info;
@@ -295,14 +314,16 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
     }
 
     // For each resulting interface, construct the front panel interface name
-    // using offset from the parent port. For a breakout mode of Ethernet0 =>
-    // 2x100(4)G+1x200G(4), the max channels per group would be 4 (8 max lanes
-    // per port/2 groups). Hence, breakout mode 2x100G (numBreakouts=2) would
-    // have an offset of 2 and 1x200G(numBreakouts=1) would have an offset of 1
-    // leading to interfaces Ethernet0, Ethernet2 for mode 2x100G and
-    // Ethernet4 for mode 1x200G.
+    // using offset from the parent port. For a breakout mode of Ethernet1/1/1
+    // => 2x100(4)G+1x200G(4), the max channels per group would be 4 (8 max
+    // lanes per port/2 groups). Hence, breakout mode 2x100G (numBreakouts=2)
+    // would have an offset of 2 and 1x200G(numBreakouts=1) would have an offset
+    // of 1 leading to interfaces Ethernet1/1/1, Ethernet1/1/3 for mode 2x100G
+    // and Ethernet1/1/5 for mode 1x200G.
     for (int i = 0; i < num_breakouts; i++) {
-      auto port = absl::StrCat(kEthernet, std::to_string(current_port_number));
+      auto port = absl::StrCat(kEthernet, slot_port_lane[kSlotIndex], "/",
+                               slot_port_lane[kPortIndex], "/",
+                               std::to_string(curr_lane_number));
       // Populate expected physical channels for each port.
       // Physical channels are between 0 to 7.
       int offset = max_channels_in_group / num_breakouts;
@@ -319,7 +340,7 @@ GetExpectedPortInfoForBreakoutMode(const std::string& port,
       }
       physical_channels += "]";
       current_physical_channel += offset;
-      current_port_number += offset;
+      curr_lane_number += offset;
       expected_breakout_info[port] = PortBreakoutInfo{physical_channels};
     }
   }
@@ -495,13 +516,14 @@ absl::Status GetBreakoutModeConfigFromString(
   auto index = 0;
 
   // Get current port number.
-  int current_port_number;
-  if (!absl::SimpleAtoi(port_index, &current_port_number)) {
+  ASSIGN_OR_RETURN(std::vector<std::string> slot_port_lane,
+                   GetSlotPortLaneForPort(intf_name));
+  int curr_lane_number;
+  if (!absl::SimpleAtoi(slot_port_lane[kLaneIndex], &curr_lane_number)) {
     return gutil::InternalErrorBuilder().LogError()
-           << "Failed to convert string (" << port_index << ") to integer";
+           << "Failed to convert string (" << slot_port_lane[kLaneIndex]
+           << ") to integer";
   }
-  current_port_number = (current_port_number - 1) * kMaxPortLanes;
-
   ASSIGN_OR_RETURN(bool is_copper_port, IsCopperPort(sut_gnmi_stub, intf_name));
 
   for (const auto& mode : modes) {
@@ -524,14 +546,16 @@ absl::Status GetBreakoutModeConfigFromString(
     // Get the interface config for all ports corresponding to current breakout
     // group.
     for (int i = 0; i < num_breakouts; i++) {
-      auto port = absl::StrCat(kEthernet, std::to_string(current_port_number));
+      auto port = absl::StrCat(kEthernet, slot_port_lane[kSlotIndex], "/",
+                               slot_port_lane[kPortIndex], "/",
+                               std::to_string(curr_lane_number));
       ASSIGN_OR_RETURN(
           auto interface_config,
-          GenerateInterfaceBreakoutConfig(port, current_port_number,
+          GenerateInterfaceBreakoutConfig(port, curr_lane_number,
                                           breakout_speed, is_copper_port));
       interface_configs.push_back(interface_config);
       int offset = max_channels_in_group / num_breakouts;
-      current_port_number += offset;
+      curr_lane_number += offset;
     }
     index += 1;
   }
