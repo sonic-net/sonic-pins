@@ -243,3 +243,10 @@ ir_parsing_test(
     p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
     p4_program = "//p4_symbolic/testdata:parser/hex_string_transition.p4",
 )
+
+ir_parsing_test(
+    name = "fall_through_transition_test",
+    golden_file = "expected/fall_through_transition.txt",
+    p4_deps = ["//p4_symbolic/testdata:common/headers.p4"],
+    p4_program = "//p4_symbolic/testdata:parser/fall_through_transition.p4",
+)
