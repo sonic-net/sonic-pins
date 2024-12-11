@@ -83,6 +83,12 @@ struct PacketInjectionParams {
   // The mapping of P4RT port IDs for connected interfaces between SUT and the
   // control switch.
   MirrorTestbedP4rtPortIdMap mirror_testbed_port_map;
+  // If false, does not collect packet-ins from SUT. Useful for scenarios where
+  // the connection to SUT is expected to go down such as in NSF and we don't
+  // want the injection/collection function to fail because of that.
+  // TODO: Replace with parameter to tolerate SUT disconnections
+  // rather than ignoring all packet-ins.
+  bool enable_sut_packet_in_collection = true;
 };
 
 // Determines the switch's behavior when receiving test packets by:
