@@ -157,7 +157,7 @@ class SimpleTrafficGenerator : public TrafficGenerator {
   std::unique_ptr<MirrorTestbedConfigurator> testbed_configurator_;
   // Test vectors created as a result of (latest) call to `Init`. Calls to
   // `StartTraffic` use these test vectors.
-  PacketTestVectorById test_vector_by_id_;
+  GenerateTestVectorsResult generate_test_vectors_result_;
 
   enum State {
     // The object has been created but `Init` has not been called.
@@ -185,10 +185,10 @@ class SimpleTrafficGenerator : public TrafficGenerator {
   std::thread traffic_injection_thread_;
   // Runs in a separate thread, as a loop that injects and collects packets
   // until traffic is stopped.
-  // In each iteration of the loop, injects packets in `test_vector_by_id_` at
-  // the rate specified by `params_`. At the end of each iteration, WAITS UP TO
-  // 3 SECONDS to collect any in-flight packets, before moving on to next
-  // iteration.
+  // In each iteration of the loop, injects packets in
+  // `generate_test_vectors_result_.packet_test_vector_by_id` at the rate
+  // specified by `params_`. At the end of each iteration, WAITS UP TO 3 SECONDS
+  // to collect any in-flight packets, before moving on to next iteration.
   void InjectTraffic() ABSL_LOCKS_EXCLUDED(test_runs_mutex_);
 
   // Result of packet injection and collection (i.e. test vector + switch

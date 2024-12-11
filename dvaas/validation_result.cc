@@ -29,8 +29,9 @@
 
 namespace dvaas {
 
-ValidationResult::ValidationResult(const PacketTestRuns& test_runs,
-                                   const SwitchOutputDiffParams& diff_params) {
+ValidationResult::ValidationResult(
+    const PacketTestRuns& test_runs, const SwitchOutputDiffParams& diff_params,
+    const PacketSynthesisResult& packet_synthesis_result) {
   test_outcomes_.mutable_outcomes()->Reserve(test_runs.test_runs_size());
   for (const auto& test_run : test_runs.test_runs()) {
     PacketTestOutcome& outcome = *test_outcomes_.add_outcomes();
@@ -39,6 +40,7 @@ ValidationResult::ValidationResult(const PacketTestRuns& test_runs,
   }
 
   test_vector_stats_ = ComputeTestVectorStats(test_outcomes_);
+  packet_synthesis_result_ = packet_synthesis_result;
 }
 
 absl::Status ValidationResult::HasSuccessRateOfAtLeast(
@@ -83,6 +85,10 @@ std::vector<std::string> ValidationResult::GetAllFailures() const {
     }
   }
   return failures;
+}
+
+bool ValidationResult::PacketSynthesizerTimedOut() const {
+  return packet_synthesis_result_.packet_synthesis_timed_out;
 }
 
 }  // namespace dvaas
