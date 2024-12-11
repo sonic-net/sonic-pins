@@ -46,6 +46,11 @@ class BertTest : public thinkit::GenericTestbedFixture<> {
     absl::flat_hash_map<std::string, thinkit::InterfaceInfo> interface_info =
         generic_testbed_->GetSutInterfaceInfo();
 
+    ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_,
+                         generic_testbed_->Sut().CreateGnmiStub());
+    ASSERT_OK_AND_ASSIGN(sut_diag_stub_,
+                         generic_testbed_->Sut().CreateGnoiDiagStub());
+    
     for (const auto &[interface, info] : interface_info) {
       if ((info.interface_modes.contains(thinkit::CONTROL_INTERFACE)) == thinkit::CONTROL_INTERFACE) {
         sut_interfaces_.push_back(interface);
@@ -53,11 +58,6 @@ class BertTest : public thinkit::GenericTestbedFixture<> {
         sut_to_peer_interface_mapping_[interface] = info.peer_interface_name;
       }
     }
-
-    ASSERT_OK_AND_ASSIGN(sut_gnmi_stub_,
-                         generic_testbed_->Sut().CreateGnmiStub());
-    ASSERT_OK_AND_ASSIGN(sut_diag_stub_,
-                         generic_testbed_->Sut().CreateGnoiDiagStub());
   }
 
   absl::StatusOr<std::vector<std::string>> GetPeerInterfacesForSutInterfaces(
