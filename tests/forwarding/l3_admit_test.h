@@ -28,6 +28,7 @@ namespace pins {
 
 class L3AdmitTestFixture : public thinkit::MirrorTestbedFixture {
  protected:
+  void SetUp() override;
 
   // This test runs on a mirror testbed setup so we open a P4RT connection to
   // both switches.
