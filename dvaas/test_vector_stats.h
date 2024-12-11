@@ -25,12 +25,23 @@ namespace dvaas {
 struct TestVectorStats {
   int num_vectors = 0;
   int num_vectors_passed = 0;
+
   // Can be higher than `num_vectors_passed`, e.g. because the outputs
   // could have incorrect header field values.
   int num_vectors_where_sut_produced_correct_number_of_outputs = 0;
+
   int num_vectors_where_sut_forwarded_at_least_one_packet = 0;
   int num_vectors_where_sut_punted_at_least_one_packet = 0;
   int num_vectors_where_sut_produced_no_output = 0;
+
+  // Due to non-determinism (e.g. WCMP), the number of vectors where we expect
+  // the SUT to forward/punt/drop can be a range.
+  int max_vectors_with_forwarding_expected = 0;
+  int min_vectors_with_forwarding_expected = 0;
+  int max_vectors_with_punting_expected = 0;
+  int min_vectors_with_punting_expected = 0;
+  int max_vectors_with_no_output_expected = 0;
+  int min_vectors_with_no_output_expected = 0;
 
   int num_packets_forwarded = 0;
   int num_packets_punted = 0;

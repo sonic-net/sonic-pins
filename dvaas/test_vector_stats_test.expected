@@ -1,20 +1,8 @@
-4 (57.14%) of 7 test vectors passed
-For 7 (100.00%) of 7 test vectors SUT produced correct number & type of outputs
-For 4 test vectors SUT produced at least one forwarded packet
-For 3 test vectors SUT produced at least one punted packet
-For 1 test vectors SUT produced no output packets
-Overall, SUT produced 6 forwarded packets and 3 punted packets
-None of 2 test vectors attempted had deterministically reproducible failures
-4 (57.14%) of 7 test vectors passed
-For 7 (100.00%) of 7 test vectors SUT produced correct number & type of outputs
-For 4 test vectors SUT produced at least one forwarded packet
-For 3 test vectors SUT produced at least one punted packet
-For 1 test vectors SUT produced no output packets
-Overall, SUT produced 6 forwarded packets and 3 punted packets
-All of 2 test vectors attempted had deterministically reproducible failures
-4 (57.14%) of 7 test vectors passed
-For 7 (100.00%) of 7 test vectors SUT produced correct number & type of outputs
-For 4 test vectors SUT produced at least one forwarded packet
-For 3 test vectors SUT produced at least one punted packet
-For 1 test vectors SUT produced no output packets
-Overall, SUT produced 6 forwarded packets and 3 punted packets
+-- ExplainTestVectorStats test ------------------------------
+5 (55.56%) of 9 test vectors passed
+The System Under Test (SUT):
+- forwarded:                          for 4 test vectors (expected: 5)
+- punted:                             for 3 test vectors (expected: 3 - 4)
+- dropped:                            for 3 test vectors (expected: 1 - 2)
+- came close* to expected behavior:   for 3 failing test vectors
+  (*produced expected number of forwarded/punted packets, but with unexpected header/payload values)

@@ -188,6 +188,7 @@ cc_library(
     srcs = ["validation_result.cc"],
     hdrs = ["validation_result.h"],
     deps = [
+        ":dvaas_detective",
         ":test_run_validation",
         ":test_vector_cc_proto",
         ":test_vector_stats",
@@ -197,6 +198,7 @@ cc_library(
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
     ],
 )
