@@ -46,6 +46,17 @@ constexpr int kDropPort = 511;  // 2^9 - 1.
 constexpr int kCpuPort = 510;  // 2^9 - 2.
 constexpr int kPortBitwidth = 9;
 
+// Boolean pseudo header field that is initialized to false, set to true when
+// the header is extracted, and set to true/false when `setValid`/`setInvalid`
+// is called, respectively.
+constexpr absl::string_view kValidPseudoField = "$valid$";
+// Boolean pseudo header field denoting that the header has been extracted by
+// the parser. It is initialized to false and set to true when the header is
+// extracted. This is necessary to distinguish between headers extracted and
+// headers set to valid in the parsers via the `setValid` primitives. For
+// example, a `packet_in` header may be set to valid but should never be
+// extracted from the input packet.
+constexpr absl::string_view kExtractedPseudoField = "$extracted$";
 // Boolean pseudo header field that is set to true by p4-symbolic if the packet
 // gets cloned. Not an actual header field, but convenient for analysis.
 constexpr absl::string_view kGotClonedPseudoField = "$got_cloned$";
