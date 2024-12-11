@@ -152,7 +152,7 @@ void BreakoutDuringPortInUse(thinkit::Switch& sut,
   EXPECT_THAT(status.error_message(),
               HasSubstr(absl::StrCat(
                   "SET failed: YangToDb_port_breakout_subtree_xfmr: port ",
-                  port_info.port_name, " is in use")));
+                  in_use_port, " is in use")));
 
   // Get expected port information for new breakout mode.
   ASSERT_OK_AND_ASSIGN(
