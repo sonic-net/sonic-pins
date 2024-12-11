@@ -181,13 +181,9 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
       .egress_headers = std::move(egress_headers),
       .trace = std::move(trace),
   };
-  return std::make_unique<SolverState>(SolverState{
-      .program = data_plane.program,
-      .entries = data_plane.entries,
-      .context = std::move(context),
-      .solver = std::move(z3_solver),
-      .translator = std::move(translator),
-  });
+  return std::make_unique<SolverState>(
+      SolverState(data_plane.program, data_plane.entries, std::move(context),
+                  std::move(z3_solver), std::move(translator)));
 }
 
 absl::StatusOr<std::optional<ConcreteContext>> Solve(

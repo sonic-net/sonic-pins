@@ -204,7 +204,27 @@ struct Dataplane {
 // Only one instance of this struct will be constructed per P4 program
 // evaluation, which can be then used to solve for particular assertions
 // many times.
-struct SolverState {
+class SolverState {
+ public:
+  SolverState(ir::P4Program program, ir::TableEntries entries,
+              SymbolicContext context, std::unique_ptr<z3::solver> solver,
+              values::P4RuntimeTranslator translator)
+      : program(std::move(program)),
+        entries(std::move(entries)),
+        context(std::move(context)),
+        solver(std::move(solver)),
+        translator(std::move(translator)) {}
+  SolverState(const SolverState &) = delete;
+  SolverState(SolverState &&) = default;
+  ~SolverState() {
+    // During the destruction of a z3::solver object, previously added
+    // assertions (through z3::solver::add) sometimes lead to memory leaks. The
+    // exact details of the root cause is not yet clear. Here we explicitly
+    // clear the assertions upon releasing a solver.
+    // See b/285990074 for more details.
+    if (solver) solver->reset();
+  }
+
   // The IR represnetation of the p4 program being analyzed.
   ir::P4Program program;
   // Maps the name of a table to a list of its entries.
