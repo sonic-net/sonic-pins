@@ -22,8 +22,8 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/substitute.h"
 #include "glog/logging.h"
-#include "p4_pdpi/utils/ir.h"
 #include "p4_symbolic/symbolic/operators.h"
+#include "p4_symbolic/symbolic/symbolic.h"
 #include "p4_symbolic/z3_util.h"
 
 namespace p4_symbolic {
@@ -50,11 +50,14 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
   // variable for every field in every header instance.
   absl::btree_map<std::string, z3::expr> symbolic_headers;
   for (const auto &[header_name, header_type] : headers) {
-    // Special validity field.
-    std::string valid_field_name = absl::StrFormat("%s.$valid$", header_name);
-    z3::expr valid_expression =
-        Z3Context().bool_const(valid_field_name.c_str());
-    symbolic_headers.insert({valid_field_name, valid_expression});
+    // Pseudo fields used in P4-Symbolic indicating the state of the header.
+    for (const auto &pseudo_field_name :
+         {kValidPseudoField, kExtractedPseudoField}) {
+      std::string field_name =
+          absl::StrFormat("%s.%s", header_name, pseudo_field_name);
+      z3::expr free_expr = Z3Context().bool_const(field_name.c_str());
+      symbolic_headers.insert({field_name, free_expr});
+    }
 
     // Regular fields defined in the p4 program or v1model.
     for (const auto &[field_name, field] : header_type.fields()) {
@@ -76,6 +79,7 @@ absl::StatusOr<absl::btree_map<std::string, z3::expr>> FreeSymbolicHeaders(
       std::string(kGotClonedPseudoField),
       Z3Context().bool_val(false),
   });
+
   return symbolic_headers;
 }
 
