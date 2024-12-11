@@ -174,6 +174,50 @@ PacketTestOutcomes GetPacketTestOutcomes() {
           # No reproducibility rate is given.
       }
     }
+
+    # Unexpected drop instead of forward.
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          # Deterministic forward.
+          acceptable_outputs {
+            packets {}
+            packet_ins: []
+          }
+        }
+        actual_output {
+          packets: []
+          packet_ins: []
+        }
+      }
+      # Failed.
+      test_result { failure {} }
+    }
+
+    # Non-deterministic number of expected punts.
+    outcomes {
+      test_run {
+        test_vector {
+          input {}
+          # Non-deterministic punt.
+          acceptable_outputs {
+            packets: []
+            packet_ins: []
+          }
+          acceptable_outputs {
+            packets: []
+            packet_ins: {}
+          }
+        }
+        actual_output {
+          packets: []
+          packet_ins: []
+        }
+      }
+      # Passed.
+      test_result {}
+    }
   )pb");
 }
 
@@ -181,31 +225,8 @@ TEST(TestVectorStatsGoldenTest,
      ComputeTestVectorStatsAndExplainTestVectorStats) {
   PacketTestOutcomes outcomes = GetPacketTestOutcomes();
   TestVectorStats stats = ComputeTestVectorStats(outcomes);
-  std::cout << ExplainTestVectorStats(stats);
-}
-
-TEST(TestVectorStatsGoldenTest, ReproducibilityRateScenarios) {
-  PacketTestOutcomes outcomes = GetPacketTestOutcomes();
-  outcomes.mutable_outcomes(1)
-      ->mutable_test_result()
-      ->mutable_failure()
-      ->mutable_minimization_analysis()
-      ->set_reproducibility_rate(1.0);
-  outcomes.mutable_outcomes(4)
-      ->mutable_test_result()
-      ->mutable_failure()
-      ->mutable_minimization_analysis()
-      ->set_reproducibility_rate(1.0);
-  TestVectorStats stats = ComputeTestVectorStats(outcomes);
-  std::cout << ExplainTestVectorStats(stats);
-
-  outcomes.mutable_outcomes(4)
-      ->mutable_test_result()
-      ->mutable_failure()
-      ->mutable_minimization_analysis()
-      ->set_reproducibility_rate(0.0);
-  stats = ComputeTestVectorStats(outcomes);
-  std::cout << ExplainTestVectorStats(stats);
+  std::cout << "-- ExplainTestVectorStats test ------------------------------\n"
+            << ExplainTestVectorStats(stats) << "\n\n";
 }
 
 }  // namespace
