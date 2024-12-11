@@ -141,3 +141,40 @@ cc_library(
         "@com_google_absl//absl/synchronization",
     ],
 )
+
+cc_library(
+    name = "packet_generator",
+    testonly = True,
+    srcs = ["packet_generator.cc"],
+    hdrs = ["packet_generator.h"],
+    deps = [
+        "//gutil:proto",
+        "//gutil:status",
+        "//p4_pdpi/netaddr:ipv4_address",
+        "//p4_pdpi/netaddr:mac_address",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:bit_widths",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/numeric:int128",
+        "@com_google_absl//absl/random:distributions",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "packet_generator_test",
+    srcs = ["packet_generator_test.cc"],
+    deps = [
+        ":packet_generator",
+        "//gutil:proto_matchers",
+        "//gutil:status_matchers",
+        "//p4_pdpi/packetlib",
+        "//p4_pdpi/packetlib:packetlib_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
