@@ -537,8 +537,9 @@ bool IsListPartOfInterfaceList(const std::vector<std::string>& list,
 
 // Test StartBERT with invalid request parameters.
 TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
-  ASSERT_NO_FATAL_FAILURE(
-      InitializeTestEnvironment("c1dcb1cc-4806-45cc-8f8a-676beafde103"));
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "No SUT interfaces to test";
+  }
   thinkit::Switch& sut = generic_testbed_->Sut();
   ASSERT_OK(
       pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
@@ -638,8 +639,9 @@ TEST_P(BertTest, StartBertFailsIfRequestParametersInvalid) {
 // 2) If StopBERT RPC is requested on a port that is not running BERT, RPC
 // should fail.
 TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
-  ASSERT_NO_FATAL_FAILURE(
-      InitializeTestEnvironment("224db9cf-c709-486d-a0d3-6ab64c1a1e1f"));
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "No SUT interfaces to test";
+  }
   thinkit::Switch& sut = generic_testbed_->Sut();
   ASSERT_OK(
       pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
@@ -708,8 +710,9 @@ TEST_P(BertTest, StopBertfailsIfRequestParametersInvalid) {
 // 2) If GetBERTResult RPC is requested on a port that never ran BERT before,
 // RPC should fail.
 TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
-  ASSERT_NO_FATAL_FAILURE(
-      InitializeTestEnvironment("4f837d7a-ab44-4694-9ca9-399d576757f4"));
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "No SUT interfaces to test";
+  }
   thinkit::Switch& sut = generic_testbed_->Sut();
   ASSERT_OK(
       pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
@@ -776,8 +779,9 @@ TEST_P(BertTest, GetBertResultFailsIfRequestParametersInvalid) {
 
 // Test StartBERT fails if peer port is not running BERT.
 TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
-  ASSERT_NO_FATAL_FAILURE(
-      InitializeTestEnvironment("37e48922-0616-4d16-8fd3-975897491956"));
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "No SUT interfaces to test";
+  }
   thinkit::Switch& sut = generic_testbed_->Sut();
   ASSERT_OK(
       pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
@@ -858,8 +862,9 @@ TEST_P(BertTest, StartBertfailsIfPeerPortNotRunningBert) {
 // 3) Operation id that was used earlier to start the BERT test will fail to
 // start BERT if used again.
 TEST_P(BertTest, StartBertSucceeds) {
-  ASSERT_NO_FATAL_FAILURE(
-      InitializeTestEnvironment("b31a796a-d078-4d45-b785-f09ec598e05a"));
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "No SUT interfaces to test";
+  }
   thinkit::Switch& sut = generic_testbed_->Sut();
   ASSERT_OK(
       pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
@@ -1040,8 +1045,9 @@ TEST_P(BertTest, StartBertSucceeds) {
 // This helps us verify a mix of operation during BERT - unexpected software or
 // hardware errors.
 TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
-  ASSERT_NO_FATAL_FAILURE(
-      InitializeTestEnvironment("ce526e97-2a62-4044-9dce-8fc74b232e4b"));
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "No SUT interfaces to test";
+  }
   thinkit::Switch& sut = generic_testbed_->Sut();
   ASSERT_OK(
       pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
@@ -1184,8 +1190,9 @@ TEST_P(BertTest, RunBertOnMaximumAllowedPorts) {
 // stop on SUT and this will cause BERT failure on control switch as control
 // switch side port will lose lock with its peer port on SUT side.
 TEST_P(BertTest, StopBertSucceeds) {
-  ASSERT_NO_FATAL_FAILURE(
-      InitializeTestEnvironment("be7b6653-51b9-4231-a438-d9589bbcb677"));
+  if (sut_interfaces_.empty()) {
+    GTEST_SKIP() << "No SUT interfaces to test";
+  }
   thinkit::Switch& sut = generic_testbed_->Sut();
   ASSERT_OK(
       pins_test::PortsUp(sut, absl::Span<const std::string>(sut_interfaces_)));
