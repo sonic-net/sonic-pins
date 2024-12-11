@@ -278,6 +278,7 @@ deparsers {
     column: 8
     source_fragment: "MyDeparser"
   }
+  order: "ethernet"
 }
 actions {
   name: "MyIngress.drop"

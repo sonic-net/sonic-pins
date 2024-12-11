@@ -32,6 +32,11 @@
 namespace p4_symbolic {
 namespace symbolic {
 
+std::string SolverState::GetSolverSMT() const {
+  if (!solver) return "";
+  return solver->to_smt2();
+}
+
 z3::expr EgressSpecDroppedValue() {
   return Z3Context().bv_val(kDropPort, kPortBitwidth);
 }
@@ -181,13 +186,9 @@ absl::StatusOr<std::unique_ptr<SolverState>> EvaluateP4Pipeline(
       .egress_headers = std::move(egress_headers),
       .trace = std::move(trace),
   };
-  return std::make_unique<SolverState>(SolverState{
-      .program = data_plane.program,
-      .entries = data_plane.entries,
-      .context = std::move(context),
-      .solver = std::move(z3_solver),
-      .translator = std::move(translator),
-  });
+  return std::make_unique<SolverState>(
+      SolverState(data_plane.program, data_plane.entries, std::move(context),
+                  std::move(z3_solver), std::move(translator)));
 }
 
 absl::StatusOr<std::optional<ConcreteContext>> Solve(
@@ -230,7 +231,7 @@ std::string DebugSMT(const std::unique_ptr<SolverState> &solver_state,
                      const Assertion &assertion) {
   solver_state->solver->push();
   solver_state->solver->add(assertion(solver_state->context));
-  std::string smt = solver_state->solver->to_smt2();
+  std::string smt = solver_state->GetSolverSMT();
   solver_state->solver->pop();
   return smt;
 }

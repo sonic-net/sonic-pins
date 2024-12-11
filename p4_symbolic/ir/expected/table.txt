@@ -393,6 +393,12 @@ errors {
     value: 3
   }
 }
+deparsers {
+  key: "deparser"
+  value {
+    name: "deparser"
+  }
+}
 
 =====MyIngress.ports_exact Entries=====
 
