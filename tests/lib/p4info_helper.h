@@ -26,13 +26,13 @@ namespace pins {
 // Searches the IrP4Info for a table matching 'table_name' with a match field
 // matching 'field_name'. If either entry cannot be found it will return false.
 // Otherwise, it returns true.
-bool TableHasMatchField(const pdpi::IrP4Info& ir_p4info,
-                        const std::string& table_name,
-                        const std::string& field_name);
+bool TableHasMatchField(const pdpi::IrP4Info &ir_p4info,
+                        const std::string &table_name,
+                        const std::string &field_name);
 
 // Fetches the P4Info in SUT.
-absl::StatusOr<p4::config::v1::P4Info> GetP4InfoFromSUT(thinkit::Switch& sut);
+absl::StatusOr<p4::config::v1::P4Info> GetP4InfoFromSUT(thinkit::Switch &sut);
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_LIB_P4INFO_HELPER_H_
+#endif // PINS_TESTS_LIB_P4INFO_HELPER_H_

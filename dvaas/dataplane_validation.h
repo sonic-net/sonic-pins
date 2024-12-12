@@ -111,7 +111,7 @@ class DataplaneValidationBackend;
 // more details.
 // WARNING: This class is NOT thread-safe.
 class DataplaneValidator {
- public:
+public:
   DataplaneValidator() = delete;
   explicit DataplaneValidator(
       std::unique_ptr<DataplaneValidationBackend> backend)
@@ -149,9 +149,9 @@ class DataplaneValidator {
   //
   // Returns an Ok status if dataplane validation succeeds, or an error status
   // detailing invalid dataplane behaviors otherwise.
-  absl::StatusOr<ValidationResult> ValidateDataplane(
-      thinkit::MirrorTestbed& testbed,
-      const DataplaneValidationParams& params = {});
+  absl::StatusOr<ValidationResult>
+  ValidateDataplane(thinkit::MirrorTestbed &testbed,
+                    const DataplaneValidationParams &params = {});
 
   // Same as above `ValidateDataplane`, but has these differences:
   // Preconditions:
@@ -164,9 +164,9 @@ class DataplaneValidator {
   // Post-conditions:
   // 1. Pre-existing connections are left as they are.
   // 2. gNMI configs will be unchanged.
-  absl::StatusOr<ValidationResult> ValidateDataplane(
-      SwitchApi& sut, SwitchApi& control_switch,
-      const DataplaneValidationParams& params = {});
+  absl::StatusOr<ValidationResult>
+  ValidateDataplane(SwitchApi &sut, SwitchApi &control_switch,
+                    const DataplaneValidationParams &params = {});
 
   // Returns statistics about all packets sent during the lifetime of the
   // DataplaneValidator. If dataplane validation has failed, the returned
@@ -176,7 +176,7 @@ class DataplaneValidator {
     return packet_statistics_;
   }
 
- private:
+private:
   std::unique_ptr<DataplaneValidationBackend> backend_;
   // Used to write artifacts.
   gutil::BazelTestArtifactWriter artifact_writer_;
@@ -208,18 +208,18 @@ class DataplaneValidator {
 //
 // NOTE: Users are not expected to implement this class!
 class DataplaneValidationBackend {
- public:
+public:
   // Synthesizes packets to send to the switch. We don't want to be tied to a
   // specific packet synthesis implementation (our current implementation is not
   // even open-source yet), so DVaaS takes the synthesis function as an input
   // parameter.
   virtual absl::StatusOr<
       std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>>
-  SynthesizePackets(const pdpi::IrP4Info& ir_p4info,
-                    const pdpi::IrTableEntries& ir_entries,
-                    const p4::v1::ForwardingPipelineConfig& p4_symbolic_config,
+  SynthesizePackets(const pdpi::IrP4Info &ir_p4info,
+                    const pdpi::IrTableEntries &ir_entries,
+                    const p4::v1::ForwardingPipelineConfig &p4_symbolic_config,
                     absl::Span<const pins_test::P4rtPortId> ports,
-                    const OutputWriterFunctionType& write_stats) const = 0;
+                    const OutputWriterFunctionType &write_stats) const = 0;
 
   // Generates a map of test ID to PacketTestVector with output prediction
   // given a list of `synthesized_packets` for the given input (program,
@@ -237,32 +237,32 @@ class DataplaneValidationBackend {
   //  3. The packet will be padded to minimum size and the computed fields
   //     recomputed.
   virtual absl::StatusOr<PacketTestVectorById> GeneratePacketTestVectors(
-      const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntries& ir_entries,
-      const p4::v1::ForwardingPipelineConfig& bmv2_config,
+      const pdpi::IrP4Info &ir_p4info, const pdpi::IrTableEntries &ir_entries,
+      const p4::v1::ForwardingPipelineConfig &bmv2_config,
       absl::Span<const pins_test::P4rtPortId> ports,
-      std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>&
-          synthesized_packets,
-      const pins_test::P4rtPortId& default_ingress_port) const = 0;
+      std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>
+          &synthesized_packets,
+      const pins_test::P4rtPortId &default_ingress_port) const = 0;
 
   // Checks whether an unsolicited (i.e. without a tagged payload) packet
   // received from SUT or control switch is expected. The logic that determines
   // this is application dependent, so DVaaS takes this as an input.
-  virtual bool IsExpectedUnsolicitedPacket(
-      const packetlib::Packet& packet) const = 0;
+  virtual bool
+  IsExpectedUnsolicitedPacket(const packetlib::Packet &packet) const = 0;
 
   // Returns a set of entities that cause all received packets to be punted,
   // given the `switch_p4info` installed on the switch. The test *will* install
   // these entities on the control switch and the user *must* ensure that the
   // entities cause *all* packets to be punted. Otherwise, test behavior is
   // undefined.
-  virtual absl::StatusOr<pdpi::IrEntities> GetEntitiesToPuntAllPackets(
-      const pdpi::IrP4Info& switch_p4info) const = 0;
+  virtual absl::StatusOr<pdpi::IrEntities>
+  GetEntitiesToPuntAllPackets(const pdpi::IrP4Info &switch_p4info) const = 0;
 
   // Returns the P4Specification that models the given `sut`. Used only if the
   // `specification_override` parameter is unset.
   // May query the SUT, but should not change it.
-  virtual absl::StatusOr<P4Specification> InferP4Specification(
-      SwitchApi& sut) const = 0;
+  virtual absl::StatusOr<P4Specification>
+  InferP4Specification(SwitchApi &sut) const = 0;
 
   virtual ~DataplaneValidationBackend() = default;
 };
@@ -270,10 +270,11 @@ class DataplaneValidationBackend {
 // Generates and returns test vectors using the backend functions
 // `SynthesizePackets` and `GeneratePacketTestVectors`. Reads the table entries,
 // P4Info, and relevant P4RT port IDs from the switch.
-absl::StatusOr<PacketTestVectorById> GenerateTestVectors(
-    const DataplaneValidationParams& params, SwitchApi& sut,
-    DataplaneValidationBackend& backend, gutil::TestArtifactWriter& writer);
+absl::StatusOr<PacketTestVectorById>
+GenerateTestVectors(const DataplaneValidationParams &params, SwitchApi &sut,
+                    DataplaneValidationBackend &backend,
+                    gutil::TestArtifactWriter &writer);
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_DATAPLANE_VALIDATION_H_
+#endif // PINS_DVAAS_DATAPLANE_VALIDATION_H_

@@ -35,10 +35,10 @@ struct TestVectorStats {
   int num_packets_punted = 0;
 };
 
-TestVectorStats ComputeTestVectorStats(const PacketTestOutcomes& test_outcomes);
+TestVectorStats ComputeTestVectorStats(const PacketTestOutcomes &test_outcomes);
 
-std::string ExplainTestVectorStats(const TestVectorStats& stats);
+std::string ExplainTestVectorStats(const TestVectorStats &stats);
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_TEST_VECTOR_STATS_H_
+#endif // PINS_DVAAS_TEST_VECTOR_STATS_H_

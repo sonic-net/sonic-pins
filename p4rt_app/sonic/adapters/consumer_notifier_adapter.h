@@ -28,25 +28,26 @@ namespace p4rt_app {
 namespace sonic {
 
 class ConsumerNotifierAdapter {
- public:
+public:
   ConsumerNotifierAdapter(const std::string &notifier_channel_name,
                           swss::DBConnector *db_connector);
   virtual ~ConsumerNotifierAdapter() = default;
 
-  virtual bool WaitForNotificationAndPop(
-      std::string &op, std::string &data,
-      std::vector<swss::FieldValueTuple> &values, int64_t timeout_ms = 60000LL);
+  virtual bool
+  WaitForNotificationAndPop(std::string &op, std::string &data,
+                            std::vector<swss::FieldValueTuple> &values,
+                            int64_t timeout_ms = 60000LL);
 
- protected:
+protected:
   // Test only constructor for Mock and Fake classes.
   ConsumerNotifierAdapter() = default;
 
- private:
+private:
   std::unique_ptr<swss::NotificationConsumer> notification_consumer_;
   std::string notifier_channel_name_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_CONSUMER_NOTIFIER_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_CONSUMER_NOTIFIER_ADAPTER_H_

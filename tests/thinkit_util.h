@@ -27,6 +27,6 @@ constexpr char kComponents[] = "components";
 constexpr char kPortSpeed[] = "openconfig-if-ethernet:port-speed";
 constexpr char kPlatformJson[] = "platform.json";
 constexpr char kGB[] = "GB";
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // GOOGLE_TESTS_THINKIT_UTIL_H_
+#endif // GOOGLE_TESTS_THINKIT_UTIL_H_

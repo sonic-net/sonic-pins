@@ -18,13 +18,11 @@ namespace gutil {
 
 // Useful in conjunction with {std,absl}::visit.
 // See https://en.cppreference.com/w/cpp/utility/variant/visit.
-template <class... Ts>
-struct Overload : Ts... {
+template <class... Ts> struct Overload : Ts... {
   using Ts::operator()...;
 };
-template <class... Ts>
-Overload(Ts...) -> Overload<Ts...>;
+template <class... Ts> Overload(Ts...) -> Overload<Ts...>;
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // PINS_GUTIL_OVERLOADED_H_
+#endif // PINS_GUTIL_OVERLOADED_H_

@@ -77,17 +77,17 @@ enum class IpVersion {
 };
 
 template <typename Sink>
-void AbslStringify(Sink& sink, const IpVersion& ip_version) {
+void AbslStringify(Sink &sink, const IpVersion &ip_version) {
   switch (ip_version) {
-    case IpVersion::kIpv4:
-      absl::Format(&sink, "IPv4");
-      break;
-    case IpVersion::kIpv6:
-      absl::Format(&sink, "IPv6");
-      break;
-    case IpVersion::kIpv4And6:
-      absl::Format(&sink, "IPv4And6");
-      break;
+  case IpVersion::kIpv4:
+    absl::Format(&sink, "IPv4");
+    break;
+  case IpVersion::kIpv6:
+    absl::Format(&sink, "IPv6");
+    break;
+  case IpVersion::kIpv4And6:
+    absl::Format(&sink, "IPv4And6");
+    break;
   }
 }
 
@@ -144,19 +144,21 @@ struct MirrorAndRedirectMatchFields {
 //       .GetDedupedIrEntities());
 // ```
 class EntryBuilder {
- public:
+public:
   EntryBuilder() = default;
   explicit EntryBuilder(sai::TableEntries entries)
       : entries_(std::move(entries)) {}
 
   // Logs the current PD entries in the EntryBuilder to LOG(INFO).
-  const EntryBuilder& LogPdEntries() const;
-  EntryBuilder& LogPdEntries();
+  const EntryBuilder &LogPdEntries() const;
+  EntryBuilder &LogPdEntries();
 
-  absl::StatusOr<std::vector<p4::v1::Entity>> GetDedupedPiEntities(
-      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
-  absl::StatusOr<pdpi::IrEntities> GetDedupedIrEntities(
-      const pdpi::IrP4Info& ir_p4info, bool allow_unsupported = false) const;
+  absl::StatusOr<std::vector<p4::v1::Entity>>
+  GetDedupedPiEntities(const pdpi::IrP4Info &ir_p4info,
+                       bool allow_unsupported = false) const;
+  absl::StatusOr<pdpi::IrEntities>
+  GetDedupedIrEntities(const pdpi::IrP4Info &ir_p4info,
+                       bool allow_unsupported = false) const;
 
   // Convenience struct corresponding to the proto
   // `MulticastRouterInterfaceTableEntry`
@@ -169,16 +171,16 @@ class EntryBuilder {
 
   // Adds an entry that matches all packets and punts them according to
   // `action`.
-  EntryBuilder& AddEntryPuntingAllPackets(PuntAction action);
+  EntryBuilder &AddEntryPuntingAllPackets(PuntAction action);
 
   // Constructs all entries required to forward all `ip_version` packets to
   // `egress_port` and modify them using `rewrite_options`.
   // Note: Cannot be combined with other entries that forward *all* IP packets
   // in a specific way.
-  EntryBuilder& AddEntriesForwardingIpPacketsToGivenPort(
+  EntryBuilder &AddEntriesForwardingIpPacketsToGivenPort(
       absl::string_view egress_port,
       IpVersion ip_version = IpVersion::kIpv4And6,
-      const NexthopRewriteOptions& rewrite_options = {});
+      const NexthopRewriteOptions &rewrite_options = {});
 
   // Constructs a default IP route matching packets of `ip_version` with `vrf`
   // and sending them to `egress_port`. Matching packets will be modified using
@@ -187,65 +189,68 @@ class EntryBuilder {
   // minimum an L3 admit entry and entries that assign the given `vrf`.
   // Note: Cannot be combined with other entries that forward *all* IP packets
   // in a specific way unless they specify a different `vrf`.
-  EntryBuilder& AddDefaultRouteForwardingAllPacketsToGivenPort(
+  EntryBuilder &AddDefaultRouteForwardingAllPacketsToGivenPort(
       absl::string_view egress_port, IpVersion ip_version,
-      absl::string_view vrf, const NexthopRewriteOptions& rewrite_options = {});
+      absl::string_view vrf, const NexthopRewriteOptions &rewrite_options = {});
 
   // Constructs an IpNexthop entry with `nexthop_id` pointing to a neighbor
   // entry and RIF entry all characterized by `nexthop_rewrite_options`. The RIF
   // will output packets on `egress_port`.
-  EntryBuilder& AddNexthopRifNeighborEntries(
+  EntryBuilder &AddNexthopRifNeighborEntries(
       absl::string_view nexthop_id, absl::string_view egress_port,
-      const NexthopRewriteOptions& rewrite_options = {});
+      const NexthopRewriteOptions &rewrite_options = {});
 
   // Warning: If you try to install the result of multiple calls to this
   // function (with different `multicast_group_id`s), you will get a runtime
   // error.
   // Note: Cannot be combined with other entries that forward *all* IP packets
   // in a specific way.
-  EntryBuilder& AddEntriesForwardingIpPacketsToGivenMulticastGroup(
-      int multicast_group_id);
-  EntryBuilder& AddVrfEntry(absl::string_view vrf);
-  EntryBuilder& AddEntryAdmittingAllPacketsToL3();
-  EntryBuilder& AddMulticastRoute(absl::string_view vrf,
-                                  const netaddr::Ipv4Address& dst_ip,
+  EntryBuilder &
+  AddEntriesForwardingIpPacketsToGivenMulticastGroup(int multicast_group_id);
+  EntryBuilder &AddVrfEntry(absl::string_view vrf);
+  EntryBuilder &AddEntryAdmittingAllPacketsToL3();
+  EntryBuilder &AddMulticastRoute(absl::string_view vrf,
+                                  const netaddr::Ipv4Address &dst_ip,
                                   int multicast_group_id);
-  EntryBuilder& AddMulticastRoute(absl::string_view vrf,
-                                  const netaddr::Ipv6Address& dst_ip,
+  EntryBuilder &AddMulticastRoute(absl::string_view vrf,
+                                  const netaddr::Ipv6Address &dst_ip,
                                   int multicast_group_id);
-  EntryBuilder& AddPreIngressAclEntryAssigningVrfForGivenIpType(
-      absl::string_view vrf, IpVersion ip_version);
-  EntryBuilder& AddEntryDecappingAllIpInIpv6Packets();
-  EntryBuilder& AddEntryPuntingPacketsWithTtlZeroAndOne();
-  EntryBuilder& AddMulticastGroupEntry(int multicast_group_id,
-                                         absl::Span<const Replica> replicas);
-  EntryBuilder& AddMulticastGroupEntry(
-      int multicast_group_id, absl::Span<const std::string> egress_ports);
-  EntryBuilder& AddMulticastRouterInterfaceEntry(
-      const MulticastRouterInterfaceTableEntry& entry);
-  EntryBuilder& AddIngressAclDroppingAllPackets();
-  EntryBuilder& AddDisableVlanChecksEntry();
-  EntryBuilder& AddEntrySettingVrfBasedOnVlanId(
-      absl::string_view vlan_id_hexstr, absl::string_view vrf);
-  EntryBuilder& AddEntrySettingVrfForAllPackets(absl::string_view vrf);
-  EntryBuilder& AddEntrySettingVlanIdInPreIngress(
+  EntryBuilder &
+  AddPreIngressAclEntryAssigningVrfForGivenIpType(absl::string_view vrf,
+                                                  IpVersion ip_version);
+  EntryBuilder &AddEntryDecappingAllIpInIpv6Packets();
+  EntryBuilder &AddEntryPuntingPacketsWithTtlZeroAndOne();
+  EntryBuilder &AddMulticastGroupEntry(int multicast_group_id,
+                                       absl::Span<const Replica> replicas);
+  EntryBuilder &
+  AddMulticastGroupEntry(int multicast_group_id,
+                         absl::Span<const std::string> egress_ports);
+  EntryBuilder &AddMulticastRouterInterfaceEntry(
+      const MulticastRouterInterfaceTableEntry &entry);
+  EntryBuilder &AddIngressAclDroppingAllPackets();
+  EntryBuilder &AddDisableVlanChecksEntry();
+  EntryBuilder &
+  AddEntrySettingVrfBasedOnVlanId(absl::string_view vlan_id_hexstr,
+                                  absl::string_view vrf);
+  EntryBuilder &AddEntrySettingVrfForAllPackets(absl::string_view vrf);
+  EntryBuilder &AddEntrySettingVlanIdInPreIngress(
       absl::string_view set_vlan_id_hexstr,
       std::optional<absl::string_view> match_vlan_id_hexstr = std::nullopt);
-  EntryBuilder& AddIngressAclEntryRedirectingToNexthop(
+  EntryBuilder &AddIngressAclEntryRedirectingToNexthop(
       absl::string_view nexthop_id,
       std::optional<absl::string_view> in_port_match = std::nullopt);
-  EntryBuilder& AddIngressAclEntryRedirectingToMulticastGroup(
+  EntryBuilder &AddIngressAclEntryRedirectingToMulticastGroup(
       int multicast_group_id,
-      const MirrorAndRedirectMatchFields& match_fields = {});
-  EntryBuilder& AddIpv6TunnelTerminationEntry(
-      const Ipv6TunnelTerminationParams& params);
-  EntryBuilder& AddMirrorSessionTableEntry(const MirrorSessionParams& params);
-  EntryBuilder& AddMarkToMirrorAclEntry(const MarkToMirrorParams& params);
+      const MirrorAndRedirectMatchFields &match_fields = {});
+  EntryBuilder &
+  AddIpv6TunnelTerminationEntry(const Ipv6TunnelTerminationParams &params);
+  EntryBuilder &AddMirrorSessionTableEntry(const MirrorSessionParams &params);
+  EntryBuilder &AddMarkToMirrorAclEntry(const MarkToMirrorParams &params);
 
- private:
+private:
   sai::TableEntries entries_;
 };
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_
+#endif // PINS_SAI_P4_INSTANTIATIONS_GOOGLE_TEST_TOOLS_TEST_ENTRIES_H_

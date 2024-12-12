@@ -28,18 +28,18 @@ namespace sonic {
 // Takes a list of AppDb updates (i.e. inserts, modifies, or deletes) and
 // translates them so that they are consumable by the AppDb. It will also
 // create, or remove, any VRF IDs as needed.
-absl::Status UpdateAppDbVrfTable(VrfTable& vrf_table,
+absl::Status UpdateAppDbVrfTable(VrfTable &vrf_table,
                                  p4::v1::Update::Type update_type,
-                                 int rpc_index, const pdpi::IrTableEntry& entry,
-                                 pdpi::IrWriteResponse& response);
+                                 int rpc_index, const pdpi::IrTableEntry &entry,
+                                 pdpi::IrWriteResponse &response);
 
 // Returns all the VRF_TABLE entries currently installed in the AppDb. This does
 // not include any entries that are currently being handled by the lower layers
 // (i.e. keys starting with _).
-absl::StatusOr<std::vector<pdpi::IrTableEntry>> GetAllAppDbVrfTableEntries(
-    VrfTable& vrf_table);
+absl::StatusOr<std::vector<pdpi::IrTableEntry>>
+GetAllAppDbVrfTableEntries(VrfTable &vrf_table);
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_VRF_ENTRY_TRANSLATION_H_
+#endif // PINS_P4RT_APP_SONIC_VRF_ENTRY_TRANSLATION_H_

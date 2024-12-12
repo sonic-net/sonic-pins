@@ -25,8 +25,8 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "p4/v1/p4runtime.pb.h"
-#include "p4_pdpi/p4_runtime_session.h"
 #include "p4_pdpi/ir.pb.h"
+#include "p4_pdpi/p4_runtime_session.h"
 #include "thinkit/test_environment.h"
 
 // Set of helper functions to program and verify group operations.
@@ -45,31 +45,31 @@ struct GroupMember {
 // router interfaces and neighbor entries.
 // members.nexthop is an output here with the updated nexthop object that was
 // created.
-absl::Status ProgramNextHops(thinkit::TestEnvironment& test_environment,
-                             pdpi::P4RuntimeSession& p4_session,
-                             const pdpi::IrP4Info& ir_p4info,
-                             std::vector<pins::GroupMember>& members);
+absl::Status ProgramNextHops(thinkit::TestEnvironment &test_environment,
+                             pdpi::P4RuntimeSession &p4_session,
+                             const pdpi::IrP4Info &ir_p4info,
+                             std::vector<pins::GroupMember> &members);
 
 // Programs (insert/modify) a nexthop group on the switch with the given
 // set of nexthops and weights. It is expected that the dependant nexthops are
 // already created for an insert/modify operation.
-absl::Status ProgramGroupWithMembers(thinkit::TestEnvironment& test_environment,
-                                     pdpi::P4RuntimeSession& p4_session,
-                                     const pdpi::IrP4Info& ir_p4info,
+absl::Status ProgramGroupWithMembers(thinkit::TestEnvironment &test_environment,
+                                     pdpi::P4RuntimeSession &p4_session,
+                                     const pdpi::IrP4Info &ir_p4info,
                                      absl::string_view group_id,
                                      absl::Span<const GroupMember> members,
-                                     const p4::v1::Update_Type& type);
+                                     const p4::v1::Update_Type &type);
 
 // Deletes the group with the given group_id. It is expected that the caller
 // takes care of cleaning up the dependant nexthops.
-absl::Status DeleteGroup(pdpi::P4RuntimeSession& p4_session,
-                         const pdpi::IrP4Info& ir_p4info,
+absl::Status DeleteGroup(pdpi::P4RuntimeSession &p4_session,
+                         const pdpi::IrP4Info &ir_p4info,
                          absl::string_view group_id);
 
 // Verifies the actual members received from P4 read response matches the
 // expected members.
 absl::Status VerifyGroupMembersFromP4Read(
-    pdpi::P4RuntimeSession& p4_session, const pdpi::IrP4Info& ir_p4info,
+    pdpi::P4RuntimeSession &p4_session, const pdpi::IrP4Info &ir_p4info,
     absl::string_view group_id, absl::Span<const GroupMember> expected_members);
 
 // Generates N random weights that add up to total_weight, with at least 1 in
@@ -81,12 +81,12 @@ absl::StatusOr<std::vector<int>> GenerateNRandomWeights(int n,
 // distribution of packets on the group member ports.
 // expect_single_port specifies whether all packets are expected on a single
 // output port(since no hashing applies) or multiple ports(with hashing).
-std::string DescribeDistribution(
-    int expected_total_test_packets,
-    absl::Span<const pins::GroupMember> members,
-    const absl::flat_hash_map<int, int>& num_packets_per_port,
-    bool expect_single_port);
+std::string
+DescribeDistribution(int expected_total_test_packets,
+                     absl::Span<const pins::GroupMember> members,
+                     const absl::flat_hash_map<int, int> &num_packets_per_port,
+                     bool expect_single_port);
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_GROUP_PROGRAMMING_H_
+#endif // PINS_TESTS_FORWARDING_GROUP_PROGRAMMING_H_

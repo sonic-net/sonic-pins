@@ -26,25 +26,25 @@ namespace p4rt_app {
 namespace sonic {
 
 class NotificationProducerAdapter {
- public:
-  explicit NotificationProducerAdapter(swss::DBConnector* db,
-                                       const std::string& channel);
+public:
+  explicit NotificationProducerAdapter(swss::DBConnector *db,
+                                       const std::string &channel);
   virtual ~NotificationProducerAdapter() = default;
 
-  virtual void send(const std::vector<swss::KeyOpFieldsValuesTuple>& kofv);
+  virtual void send(const std::vector<swss::KeyOpFieldsValuesTuple> &kofv);
 
-  virtual void send_with_op_key(const std::string& op, const std::string& key,
-                                std::vector<swss::FieldValueTuple>& fv);
+  virtual void send_with_op_key(const std::string &op, const std::string &key,
+                                std::vector<swss::FieldValueTuple> &fv);
 
- protected:
+protected:
   // Test only constructor used to construct Mock & Fake classes.
   NotificationProducerAdapter() = default;
 
- private:
+private:
   std::unique_ptr<swss::NotificationProducer> notification_producer_;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_NOTIFICATION_PRODUCER_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_NOTIFICATION_PRODUCER_ADAPTER_H_

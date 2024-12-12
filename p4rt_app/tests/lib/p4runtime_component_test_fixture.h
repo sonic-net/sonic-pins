@@ -16,7 +16,6 @@
 
 #include "absl/strings/str_cat.h"
 #include "grpcpp/security/credentials.h"
-#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4/v1/p4runtime.pb.h"
@@ -26,6 +25,7 @@
 #include "p4rt_app/tests/lib/p4runtime_grpc_service.h"
 #include "sai_p4/instantiations/google/instantiations.h"
 #include "sai_p4/instantiations/google/sai_p4info.h"
+#include "gtest/gtest.h"
 
 namespace p4rt_app {
 namespace test_lib {
@@ -34,11 +34,11 @@ namespace test_lib {
 // service, and P4RT client session. This fixture can also be used to fake any
 // gNMI configurations.
 class P4RuntimeComponentTestFixture : public testing::Test {
- protected:
+protected:
   P4RuntimeComponentTestFixture(sai::Instantiation sai_instantiation);
   P4RuntimeComponentTestFixture(p4::config::v1::P4Info p4info);
   P4RuntimeComponentTestFixture(sai::Instantiation sai_instantiation,
-                                const P4RuntimeImplOptions& options);
+                                const P4RuntimeImplOptions &options);
   void SetUp() override;
 
   // Component test configurations that should never change for the lifetime of
@@ -55,7 +55,7 @@ class P4RuntimeComponentTestFixture : public testing::Test {
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_session_;
 };
 
-}  // namespace test_lib
-}  // namespace p4rt_app
+} // namespace test_lib
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_TESTS_LIB_P4RUNTIME_COMPONENT_TEST_FIXTURE_H_
+#endif // PINS_P4RT_APP_TESTS_LIB_P4RUNTIME_COMPONENT_TEST_FIXTURE_H_

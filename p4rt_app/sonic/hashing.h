@@ -44,17 +44,17 @@ struct HashPacketFieldConfig {
 
   // String conversion for debug.
   // E.g. compute_ecmp_hash_ipv4 { "src_ip","dst_ip" }
-  static void AbslFormatter(std::string* out,
-                            const HashPacketFieldConfig& config) {
+  static void AbslFormatter(std::string *out,
+                            const HashPacketFieldConfig &config) {
     absl::StrAppendFormat(out, "%s { %s }", config.key,
                           absl::StrJoin(config.fields, ", "));
   }
 };
 
-bool operator==(const HashPacketFieldConfig& lhs,
-                const HashPacketFieldConfig& rhs);
-bool operator!=(const HashPacketFieldConfig& lhs,
-                const HashPacketFieldConfig& rhs);
+bool operator==(const HashPacketFieldConfig &lhs,
+                const HashPacketFieldConfig &rhs);
+bool operator!=(const HashPacketFieldConfig &lhs,
+                const HashPacketFieldConfig &rhs);
 
 // Returns true for Ipv4 hash key.
 bool IsIpv4HashKey(absl::string_view key);
@@ -69,7 +69,7 @@ bool IsIpv6HashKey(absl::string_view key);
 //    "ecmp_hash_offset": "10"
 // }
 absl::StatusOr<std::vector<swss::FieldValueTuple>>
-GenerateAppDbHashValueEntries(const pdpi::IrP4Info& ir_p4info);
+GenerateAppDbHashValueEntries(const pdpi::IrP4Info &ir_p4info);
 
 // Generates a list of hash field configs from the IrP4Info. These configs can
 // be written to APP_DB to set up the hash fields via ProgramHashFieldTable().
@@ -91,7 +91,7 @@ GenerateAppDbHashValueEntries(const pdpi::IrP4Info& ir_p4info);
 //    .switch_table_key: "ecmp_hash_ipv4"
 //  }
 absl::StatusOr<std::vector<HashPacketFieldConfig>>
-ExtractHashPacketFieldConfigs(const pdpi::IrP4Info& ir_p4info);
+ExtractHashPacketFieldConfigs(const pdpi::IrP4Info &ir_p4info);
 
 // Generates a list of hash value configs from the IrP4Info. These configs can
 // be written to the APP_DB to set up the hash fields via ProgramSwitchTable().
@@ -112,8 +112,8 @@ ExtractHashPacketFieldConfigs(const pdpi::IrP4Info& ir_p4info);
 //   {"lag_hash_algorithm",  "crc_32"},
 //   {"lag_hash_seed",  "10"},
 //   {"lag_hash_offset", "20"},
-absl::StatusOr<HashParamConfigs> ExtractHashParamConfigs(
-    const pdpi::IrP4Info& ir_p4info);
+absl::StatusOr<HashParamConfigs>
+ExtractHashParamConfigs(const pdpi::IrP4Info &ir_p4info);
 
 // Programs the APP_DB entries (HASH_TABLE) that specifies which fields are
 // used for ECMP hashing (IPv4, IPv6), this creates the hash objects to
@@ -124,17 +124,17 @@ absl::StatusOr<HashParamConfigs> ExtractHashParamConfigs(
 //   “hash_ipv4_config” = {
 //      “hash_field_list”: [“src_ip”, “dst_ip”, “l4_src_port”, “l4_dst_port”,
 //                          “ip_protocol”],
-absl::Status ProgramHashFieldTable(HashTable& hash_table,
+absl::Status ProgramHashFieldTable(HashTable &hash_table,
                                    std::vector<HashPacketFieldConfig> configs);
 
 // Programs the APP_DB enries (SWITCH_TABLE) with all ecmp hashing related
 // fields in the switch table, like algorithm, seed, offset and the hash field
 // object.
 absl::Status ProgramSwitchTable(
-    SwitchTable& switch_table, const HashParamConfigs& hash_params,
-    const std::vector<HashPacketFieldConfig>& hash_packet_fields);
+    SwitchTable &switch_table, const HashParamConfigs &hash_params,
+    const std::vector<HashPacketFieldConfig> &hash_packet_fields);
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_HASHING_H_
+#endif // PINS_P4RT_APP_SONIC_HASHING_H_

@@ -24,7 +24,7 @@
 namespace netaddr {
 
 class Ipv4Address : public NetworkAddress<32, Ipv4Address> {
- public:
+public:
   // The default constructor returns the address with all bits set to zero.
   constexpr Ipv4Address() = default;
 
@@ -48,6 +48,6 @@ class Ipv4Address : public NetworkAddress<32, Ipv4Address> {
   std::string ToString() const;
 };
 
-}  // namespace netaddr
+} // namespace netaddr
 
-#endif  // PINS_P4_PDPI_NETADDR_IPV4_ADDRESS_H_
+#endif // PINS_P4_PDPI_NETADDR_IPV4_ADDRESS_H_

@@ -19,11 +19,10 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <thread>  // NOLINT: Need threads (instead of fiber) for upstream code.
+#include <thread> // NOLINT: Need threads (instead of fiber) for upstream code.
 #include <vector>
 
 #include "absl/status/status.h"
-#include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "p4_pdpi/ir.pb.h"
 #include "p4_pdpi/p4_runtime_session.h"
@@ -32,12 +31,13 @@
 #include "tests/forwarding/packet_test_util.h"
 #include "thinkit/mirror_testbed_fixture.h"
 #include "thinkit/switch.h"
+#include "gtest/gtest.h"
 
 namespace pins {
 
 // Holds the common params needed for watch port test.
 struct WatchPortTestParams {
-  thinkit::MirrorTestbedInterface* testbed;
+  thinkit::MirrorTestbedInterface *testbed;
   std::string gnmi_config;
   // P4Info to be used based on a specific instantiation.
   p4::config::v1::P4Info p4_info;
@@ -47,14 +47,14 @@ struct WatchPortTestParams {
   // Sets the system in critical state so that watch port down action can be
   // verified to work as expected. If this function is not provided, the
   // critical state related tests will be skipped.
-  absl::optional<std::function<absl::Status(thinkit::Switch& test_switch)>>
+  absl::optional<std::function<absl::Status(thinkit::Switch &test_switch)>>
       set_critical_alarm;
 };
 
 // WatchPortTestFixture for testing watch port action.
 class WatchPortTestFixture
     : public testing::TestWithParam<WatchPortTestParams> {
- protected:
+protected:
   void SetUp() override;
 
   void TearDown() override;
@@ -70,6 +70,6 @@ class WatchPortTestFixture
   std::thread receive_packet_thread_;
 };
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_WATCH_PORT_TEST_H_
+#endif // PINS_TESTS_FORWARDING_WATCH_PORT_TEST_H_

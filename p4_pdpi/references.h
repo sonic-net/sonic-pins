@@ -69,8 +69,8 @@ struct ConcreteTableReference {
 // considered valid. Ideally `reference_info` should come from an IR p4 info
 // created using `CreateIrP4Info` which respects these assumptions.
 absl::StatusOr<absl::flat_hash_set<ConcreteTableReference>>
-OutgoingConcreteTableReferences(const IrTableReference& reference_info,
-                                const ::p4::v1::Entity& entity);
+OutgoingConcreteTableReferences(const IrTableReference &reference_info,
+                                const ::p4::v1::Entity &entity);
 
 // Returns all possible concrete table references from some entry in
 // `source_table` in `reference_info` to `entity`. Returns error if:
@@ -88,29 +88,29 @@ OutgoingConcreteTableReferences(const IrTableReference& reference_info,
 // valid. Ideally `reference_info` should come from an ir p4 info created using
 // `CreateIrP4Info` which respects these assumptions.
 absl::StatusOr<absl::flat_hash_set<ConcreteTableReference>>
-PossibleIncomingConcreteTableReferences(const IrTableReference& reference_info,
-                                        const ::p4::v1::Entity& entity);
+PossibleIncomingConcreteTableReferences(const IrTableReference &reference_info,
+                                        const ::p4::v1::Entity &entity);
 
 // Reference Field operators.
-bool operator==(const ConcreteFieldReference& lhs,
-                const ConcreteFieldReference& rhs);
-bool operator!=(const ConcreteFieldReference& lhs,
-                const ConcreteFieldReference& rhs);
-bool operator<(const ConcreteFieldReference& lhs,
-               const ConcreteFieldReference& rhs);
+bool operator==(const ConcreteFieldReference &lhs,
+                const ConcreteFieldReference &rhs);
+bool operator!=(const ConcreteFieldReference &lhs,
+                const ConcreteFieldReference &rhs);
+bool operator<(const ConcreteFieldReference &lhs,
+               const ConcreteFieldReference &rhs);
 
 // Reference Entry operators.
-bool operator==(const ConcreteTableReference& lhs,
-                const ConcreteTableReference& rhs);
-bool operator!=(const ConcreteTableReference& lhs,
-                const ConcreteTableReference& rhs);
-bool operator<(const ConcreteTableReference& lhs,
-               const ConcreteTableReference& rhs);
+bool operator==(const ConcreteTableReference &lhs,
+                const ConcreteTableReference &rhs);
+bool operator!=(const ConcreteTableReference &lhs,
+                const ConcreteTableReference &rhs);
+bool operator<(const ConcreteTableReference &lhs,
+               const ConcreteTableReference &rhs);
 
 // -- END OF PUBLIC INTERFACE -- implementation details follow -----------------
 
 template <typename Sink>
-void AbslStringify(Sink& sink, const ConcreteFieldReference& field) {
+void AbslStringify(Sink &sink, const ConcreteFieldReference &field) {
   absl::Format(
       &sink,
       "ConcreteFieldReference{ source field: '%v', destination field: '%v', "
@@ -118,19 +118,19 @@ void AbslStringify(Sink& sink, const ConcreteFieldReference& field) {
       field.source_field, field.destination_field, field.value);
 }
 template <typename H>
-H AbslHashValue(H h, const ConcreteFieldReference& field) {
+H AbslHashValue(H h, const ConcreteFieldReference &field) {
   return H::combine(std::move(h), field.source_field, field.destination_field,
                     field.value);
 }
 template <typename Sink>
-void AbslStringify(Sink& sink, const ConcreteTableReference& entry) {
+void AbslStringify(Sink &sink, const ConcreteTableReference &entry) {
   std::string string_entry = "ConcreteTableReference{\n";
   absl::StrAppend(&string_entry, std::string(2, ' '), "source table: '",
                   entry.source_table, "'\n");
   absl::StrAppend(&string_entry, std::string(2, ' '), "destination table: '",
                   entry.destination_table, "'\n");
   absl::StrAppend(&string_entry, std::string(2, ' '), "fields: {\n");
-  for (const ConcreteFieldReference& field : entry.fields) {
+  for (const ConcreteFieldReference &field : entry.fields) {
     absl::StrAppend(&string_entry, std::string(4, ' '), field, ",\n");
   }
   absl::StrAppend(&string_entry, std::string(2, ' '), "}\n");
@@ -138,15 +138,15 @@ void AbslStringify(Sink& sink, const ConcreteTableReference& entry) {
   absl::Format(&sink, "%v", string_entry);
 }
 template <typename H>
-H AbslHashValue(H h, const ConcreteTableReference& entry) {
+H AbslHashValue(H h, const ConcreteTableReference &entry) {
   h = H::combine(std::move(h), entry.source_table, entry.destination_table);
-  for (const ConcreteFieldReference& field : entry.fields) {
+  for (const ConcreteFieldReference &field : entry.fields) {
     h = H::combine(std::move(h), field.source_field, field.destination_field,
                    field.value);
   }
   return h;
 }
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_REFERENCE_UTIL_H_
+#endif // PINS_P4_PDPI_REFERENCE_UTIL_H_

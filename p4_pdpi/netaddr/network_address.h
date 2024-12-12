@@ -48,9 +48,8 @@ namespace netaddr {
 //      using NetworkAddress::NetworkAddress;
 //   };
 // ```
-template <std::size_t num_bits, typename T>
-class NetworkAddress {
- public:
+template <std::size_t num_bits, typename T> class NetworkAddress {
+public:
   // -- Constructors --
   // Returns the address with all bits set to zero.
   static constexpr T AllZeros() { return T(std::bitset<num_bits>()); }
@@ -102,41 +101,40 @@ class NetworkAddress {
   absl::StatusOr<int> ToLpmPrefixLength() const;
 
   // -- Bit operations --
-  void operator&=(const T& other) { bits_ &= other.bits_; }
-  void operator|=(const T& other) { bits_ |= other.bits_; }
-  void operator^=(const T& other) { bits_ ^= other.bits_; }
+  void operator&=(const T &other) { bits_ &= other.bits_; }
+  void operator|=(const T &other) { bits_ |= other.bits_; }
+  void operator^=(const T &other) { bits_ ^= other.bits_; }
   void operator<<=(std::size_t pos) { bits_ <<= pos; }
   void operator>>=(std::size_t pos) { bits_ >>= pos; }
-  T operator&(const T& other) { return T(bits_ & other.bits_); }
-  T operator|(const T& other) { return T(bits_ | other.bits_); }
-  T operator^(const T& other) { return T(bits_ ^ other.bits_); }
+  T operator&(const T &other) { return T(bits_ & other.bits_); }
+  T operator|(const T &other) { return T(bits_ | other.bits_); }
+  T operator^(const T &other) { return T(bits_ ^ other.bits_); }
   T operator<<(std::size_t pos) { return T(bits_ << pos); }
   T operator>>(std::size_t pos) { return T(bits_ >> pos); }
   T operator~() const { return T(~bits_); }
 
   // -- Comparisons --
-  bool operator==(const T& other) const { return bits_ == other.bits_; }
-  bool operator!=(const T& other) const { return bits_ != other.bits_; }
-  bool operator<(const T& other) const {
+  bool operator==(const T &other) const { return bits_ == other.bits_; }
+  bool operator!=(const T &other) const { return bits_ != other.bits_; }
+  bool operator<(const T &other) const {
     return ToPaddedByteString() < other.ToPaddedByteString();
   }
-  bool operator<=(const T& other) const {
+  bool operator<=(const T &other) const {
     return ToPaddedByteString() <= other.ToPaddedByteString();
   }
-  bool operator>(const T& other) const {
+  bool operator>(const T &other) const {
     return ToPaddedByteString() > other.ToPaddedByteString();
   }
-  bool operator>=(const T& other) const {
+  bool operator>=(const T &other) const {
     return ToPaddedByteString() >= other.ToPaddedByteString();
   }
 
   // Hashing (https://abseil.io/docs/cpp/guides/hash).
-  template <typename H>
-  friend H AbslHashValue(H h, const T& address) {
+  template <typename H> friend H AbslHashValue(H h, const T &address) {
     return H::combine(std::move(h), address.bits_);
   }
 
- protected:
+protected:
   std::bitset<num_bits> bits_;
 
   // -- Note --
@@ -151,11 +149,11 @@ class NetworkAddress {
 
 // Pretty printing.
 template <std::size_t num_bits, typename T>
-std::ostream& operator<<(std::ostream& os,
-                         const NetworkAddress<num_bits, T>& address) {
+std::ostream &operator<<(std::ostream &os,
+                         const NetworkAddress<num_bits, T> &address) {
   // As per the contract of the NetworkAddress class, any NetworkAddress<N,T>
   // object is castable to T and T has a ToString function.
-  return os << static_cast<const T&>(address).ToString();
+  return os << static_cast<const T &>(address).ToString();
 }
 
 // == END OF PUBLIC INTERFACE ==================================================
@@ -177,8 +175,8 @@ absl::StatusOr<T> NetworkAddress<N, T>::OfHexString(absl::string_view hex_str) {
 }
 
 template <std::size_t N, typename T>
-absl::StatusOr<T> NetworkAddress<N, T>::OfByteString(
-    absl::string_view byte_str) {
+absl::StatusOr<T>
+NetworkAddress<N, T>::OfByteString(absl::string_view byte_str) {
   ASSIGN_OR_RETURN(auto bits, pdpi::ByteStringToBitset<N>(byte_str));
   return T(bits);
 }
@@ -196,11 +194,12 @@ std::string NetworkAddress<N, T>::ToP4RuntimeByteString() const {
 template <std::size_t N, typename T>
 absl::StatusOr<int> NetworkAddress<N, T>::ToLpmPrefixLength() const {
   for (int i = 0; i <= N; ++i) {
-    if (*this == AllOnes() << (N - i)) return i;
+    if (*this == AllOnes() << (N - i))
+      return i;
   }
   return gutil::InvalidArgumentErrorBuilder() << "not an LPM mask: " << *this;
 }
 
-}  // namespace netaddr
+} // namespace netaddr
 
-#endif  // PINS_P4_PDPI_NETADDR_NETWORK_ADDRESS_H_
+#endif // PINS_P4_PDPI_NETADDR_NETWORK_ADDRESS_H_

@@ -25,23 +25,24 @@ namespace sai {
 // The SAI P4 packet out metadata as a struct.
 struct PacketOutMetadata {
   bool submit_to_ingress;
-  const std::string& payload;
-  const std::string& egress_port;
+  const std::string &payload;
+  const std::string &egress_port;
 };
 
 // Creates a PI PacketOut message in a backwards-compatible manner. Done by
 // enumerating all metadata seen in current and previous SAI P4 programs and
 // only including the metadata present in `p4info`.
-absl::StatusOr<p4::v1::PacketOut> MakePiPacketOutMessage(
-    const p4::config::v1::P4Info& p4info,
-    const PacketOutMetadata& packet_out_metadata);
+absl::StatusOr<p4::v1::PacketOut>
+MakePiPacketOutMessage(const p4::config::v1::P4Info &p4info,
+                       const PacketOutMetadata &packet_out_metadata);
 
 // TODO: Remove overload that takes in IR p4info to avoid PDPI
 // dependency. Issue is that callers only have access to Ir P4Info. Once this is
 // no longer an issue, move implementation from this overload to PI version.
-absl::StatusOr<p4::v1::PacketOut> MakePiPacketOutMessage(
-    const pdpi::IrP4Info& p4info, const PacketOutMetadata& packet_out_metadata);
+absl::StatusOr<p4::v1::PacketOut>
+MakePiPacketOutMessage(const pdpi::IrP4Info &p4info,
+                       const PacketOutMetadata &packet_out_metadata);
 
-}  // namespace sai
+} // namespace sai
 
-#endif  // PINS_SAI_P4_TOOLS_PACKETIO_H_
+#endif // PINS_SAI_P4_TOOLS_PACKETIO_H_

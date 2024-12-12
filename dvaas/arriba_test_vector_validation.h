@@ -60,10 +60,10 @@ struct ArribaTestVectorValidationParams {
 //   - Control switch contains entries to punt all packets.
 //   - SUT constains the entries in arriba_test_vector.ir_entries.
 absl::Status ValidateAgaistArribaTestVector(
-    pdpi::P4RuntimeSession& sut, pdpi::P4RuntimeSession& control_switch,
-    const ArribaTestVector& arriba_test_vector,
-    const ArribaTestVectorValidationParams& params = {});
+    pdpi::P4RuntimeSession &sut, pdpi::P4RuntimeSession &control_switch,
+    const ArribaTestVector &arriba_test_vector,
+    const ArribaTestVectorValidationParams &params = {});
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_
+#endif // PINS_DVAAS_ARRIBA_TEST_VECTOR_VALIDATION_H_

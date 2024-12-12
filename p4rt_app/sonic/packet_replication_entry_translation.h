@@ -29,33 +29,33 @@ namespace sonic {
 // modify, or delete) and forms the key and KeyOpFieldsValuesTuple that are
 // consumable by App DB.
 absl::StatusOr<std::string> CreatePacketReplicationTableUpdateForAppDb(
-    P4rtTable& p4rt_table, p4::v1::Update::Type update_type,
-    const pdpi::IrPacketReplicationEngineEntry& entry,
-    std::vector<swss::KeyOpFieldsValuesTuple>& kfv_updates);
+    P4rtTable &p4rt_table, p4::v1::Update::Type update_type,
+    const pdpi::IrPacketReplicationEngineEntry &entry,
+    std::vector<swss::KeyOpFieldsValuesTuple> &kfv_updates);
 
 // Returns all REPLICATION_IP_MULTICAST_TABLE keys currently installed in AppDb.
-std::vector<std::string> GetAllPacketReplicationTableEntryKeys(
-    P4rtTable& p4rt_table);
+std::vector<std::string>
+GetAllPacketReplicationTableEntryKeys(P4rtTable &p4rt_table);
 
 // Returns all packet replication entry keys currently installed in AppDb.
 // Currently, this is only for table REPLICATION_IP_MULTICAST_TABLE.
-std::vector<std::string> GetAllPacketReplicationTableEntryKeys(
-    P4rtTable& p4rt_table);
+std::vector<std::string>
+GetAllPacketReplicationTableEntryKeys(P4rtTable &p4rt_table);
 
 // Returns all the packet replication entries currently installed in
 // the AppDb.
 // Currently, this is only for table REPLICATION_IP_MULTICAST_TABLE.
 absl::StatusOr<std::vector<pdpi::IrPacketReplicationEngineEntry>>
-GetAllAppDbPacketReplicationTableEntries(P4rtTable& p4rt_table);
+GetAllAppDbPacketReplicationTableEntries(P4rtTable &p4rt_table);
 
 // Determines if the packet replication entries on both lists are equivalent.
 // Returns a list of comparison failure messages, if any.
 // There is no assumption that matching entries are found in the same index.
 std::vector<std::string> ComparePacketReplicationTableEntries(
-    const std::vector<pdpi::IrEntity>& entries_app_db,
-    const std::vector<pdpi::IrEntity>& entries_cache);
+    const std::vector<pdpi::IrEntity> &entries_app_db,
+    const std::vector<pdpi::IrEntity> &entries_cache);
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_PACKET_REPLICATION_ENTRY_TRANSLATION_H_
+#endif // PINS_P4RT_APP_SONIC_PACKET_REPLICATION_ENTRY_TRANSLATION_H_

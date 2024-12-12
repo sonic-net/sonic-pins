@@ -20,20 +20,20 @@ namespace p4rt_app {
 namespace sonic {
 
 class FakeWarmBootStateAdapter final : public WarmBootStateAdapter {
- public:
+public:
   explicit FakeWarmBootStateAdapter();
   swss::WarmStart::WarmStartState GetWarmBootState() override;
   void SetWarmBootState(swss::WarmStart::WarmStartState state) override;
   bool IsWarmStart(void) override;
   void SetWarmStart(bool is_warm_start);
 
- private:
+private:
   swss::WarmStart::WarmStartState state_ =
       swss::WarmStart::WarmStartState::WSUNKNOWN;
   bool is_warm_start_ = false;
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_WARM_BOOT_STATE_ADAPTER_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_WARM_BOOT_STATE_ADAPTER_H_

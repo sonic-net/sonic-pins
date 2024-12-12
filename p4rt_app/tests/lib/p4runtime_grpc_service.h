@@ -21,16 +21,16 @@
 #include "p4rt_app/sonic/adapters/fake_sonic_db_table.h"
 #include "p4rt_app/sonic/adapters/fake_warm_boot_state_adapter.h"
 #include "p4rt_app/sonic/fake_packetio_interface.h"
-//TODO(PINS):
-// #include "swss/fakes/fake_component_state_helper.h"
-// #include "swss/fakes/fake_system_state_helper.h"
+// TODO(PINS):
+//  #include "swss/fakes/fake_component_state_helper.h"
+//  #include "swss/fakes/fake_system_state_helper.h"
 
 namespace p4rt_app {
 namespace test_lib {
 
 class P4RuntimeGrpcService {
- public:
-  explicit P4RuntimeGrpcService(const P4RuntimeImplOptions& options);
+public:
+  explicit P4RuntimeGrpcService(const P4RuntimeImplOptions &options);
   ~P4RuntimeGrpcService();
 
   absl::Status VerifyState();
@@ -38,40 +38,40 @@ class P4RuntimeGrpcService {
   int GrpcPort() const;
 
   // Accessors for AppDb tables.
-  sonic::FakeSonicDbTable& GetP4rtAppDbTable();
-  sonic::FakeSonicDbTable& GetVrfAppDbTable();
-  sonic::FakeSonicDbTable& GetHashAppDbTable();
-  sonic::FakeSonicDbTable& GetSwitchAppDbTable();
-  sonic::FakeSonicDbTable& GetPortAppDbTable();
+  sonic::FakeSonicDbTable &GetP4rtAppDbTable();
+  sonic::FakeSonicDbTable &GetVrfAppDbTable();
+  sonic::FakeSonicDbTable &GetHashAppDbTable();
+  sonic::FakeSonicDbTable &GetSwitchAppDbTable();
+  sonic::FakeSonicDbTable &GetPortAppDbTable();
 
   // Accessors for AppStateDb tables.
-  sonic::FakeSonicDbTable& GetVrfAppStateDbTable();
-  sonic::FakeSonicDbTable& GetHashAppStateDbTable();
-  sonic::FakeSonicDbTable& GetSwitchAppStateDbTable();
-  sonic::FakeSonicDbTable& GetPortAppStateDbTable();
+  sonic::FakeSonicDbTable &GetVrfAppStateDbTable();
+  sonic::FakeSonicDbTable &GetHashAppStateDbTable();
+  sonic::FakeSonicDbTable &GetSwitchAppStateDbTable();
+  sonic::FakeSonicDbTable &GetPortAppStateDbTable();
 
   // Accessors for CounterDb tables.
-  sonic::FakeSonicDbTable& GetP4rtCountersDbTable();
+  sonic::FakeSonicDbTable &GetP4rtCountersDbTable();
 
   // Accessors for StateDb tables.
-  sonic::FakeSonicDbTable& GetP4rtStateDbTable();
-  sonic::FakeSonicDbTable& GetHostStatsStateDbTable();
+  sonic::FakeSonicDbTable &GetP4rtStateDbTable();
+  sonic::FakeSonicDbTable &GetHostStatsStateDbTable();
 
   // Accessor for WarmBootStateAdapter.
-  sonic::FakeWarmBootStateAdapter* GetWarmBootStateAdapter();
+  sonic::FakeWarmBootStateAdapter *GetWarmBootStateAdapter();
 
   // Accessor for PacketIO interface.
-  sonic::FakePacketIoInterface& GetFakePacketIoInterface();
+  sonic::FakePacketIoInterface &GetFakePacketIoInterface();
 
-  //TODO(PINS): To handle Fake Component State and Fake System State later.
-  // Accessors for application state management.
+  // TODO(PINS): To handle Fake Component State and Fake System State later.
+  //  Accessors for application state management.
   /*swss::FakeComponentStateHelper& GetComponentStateHelper();
   swss::FakeSystemStateHelper& GetSystemStateHelper();*/
 
   // Accessor for the P4RT server.
-  P4RuntimeImpl& GetP4rtServer();
+  P4RuntimeImpl &GetP4rtServer();
 
- private:
+private:
   // The TCP port used to  open the P4RT App service. It is chosen randomly in
   // the ctor, and shouldn't be modified otherwise.
   int grpc_port_;
@@ -97,25 +97,25 @@ class P4RuntimeGrpcService {
   sonic::FakeSonicDbTable fake_host_stats_table_;
 
   // Faked warm-boot state.
-  sonic::FakeWarmBootStateAdapter* fake_warm_boot_state_adapter_;
+  sonic::FakeWarmBootStateAdapter *fake_warm_boot_state_adapter_;
 
   // Faked PacketIO interface.
-  sonic::FakePacketIoInterface* fake_packetio_interface_;  // No ownership.
+  sonic::FakePacketIoInterface *fake_packetio_interface_; // No ownership.
 
-// TODO(PINS):
-// Faked state state management.
-// swss::FakeComponentStateHelper fake_component_state_helper_;
-// swss::FakeSystemStateHelper fake_system_state_helper_;
+  // TODO(PINS):
+  // Faked state state management.
+  // swss::FakeComponentStateHelper fake_component_state_helper_;
+  // swss::FakeSystemStateHelper fake_system_state_helper_;
 
-// Faked netdev port translation.
-// sonic::FakeIntfTranslator fake_netdev_translator_{/*enabled=*/true};
+  // Faked netdev port translation.
+  // sonic::FakeIntfTranslator fake_netdev_translator_{/*enabled=*/true};
 
   // gRPC server faking the P4RT App for testing.
   std::unique_ptr<grpc::Server> server_;
   std::unique_ptr<P4RuntimeImpl> p4runtime_server_;
 };
 
-}  // namespace test_lib
-}  // namespace p4rt_app
+} // namespace test_lib
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_TESTS_LIB_P4RUNTIME_GRPC_SERVICE_H_
+#endif // PINS_P4RT_APP_TESTS_LIB_P4RUNTIME_GRPC_SERVICE_H_

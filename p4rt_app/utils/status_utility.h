@@ -24,7 +24,7 @@ namespace p4rt_app {
 // Status payload url for tracking the library stack.
 static constexpr absl::string_view kLibraryUrl = "p4rt_app_sublibrary";
 
-inline std::string LibraryPrefix(const absl::Status& status) {
+inline std::string LibraryPrefix(const absl::Status &status) {
   auto payload = status.GetPayload(kLibraryUrl);
   if (payload.has_value()) {
     return absl::StrCat("[P4RT/", payload->Flatten(), "] ");
@@ -34,9 +34,9 @@ inline std::string LibraryPrefix(const absl::Status& status) {
 
 // Translates absl::Status to pdpi::IrUpdateStatus
 pdpi::IrUpdateStatus GetIrUpdateStatus(absl::StatusCode code,
-                                       const std::string& message);
-pdpi::IrUpdateStatus GetIrUpdateStatus(const absl::Status& status);
+                                       const std::string &message);
+pdpi::IrUpdateStatus GetIrUpdateStatus(const absl::Status &status);
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_UTILS_STATUS_UTILITY_H_
+#endif // PINS_P4RT_APP_UTILS_STATUS_UTILITY_H_

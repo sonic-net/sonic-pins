@@ -46,10 +46,10 @@ inline std::string TableHitAction() { return "__HIT__"; }
 inline std::string TableMissAction() { return "__MISS__"; }
 
 // Transforms bmv2 protobuf and pdpi protobuf into our IR protobuf.
-absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program& bmv2,
-                                            const pdpi::IrP4Info& pdpi);
+absl::StatusOr<P4Program> Bmv2AndP4infoToIr(const bmv2::P4Program &bmv2,
+                                            const pdpi::IrP4Info &pdpi);
 
-}  // namespace ir
-}  // namespace p4_symbolic
+} // namespace ir
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_IR_IR_H_
+#endif // P4_SYMBOLIC_IR_IR_H_

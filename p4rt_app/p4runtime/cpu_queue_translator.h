@@ -28,10 +28,10 @@ namespace p4rt_app {
 // CpuQueueTranslator is an immutable bidirectional map that translates between
 // CPU queue name (string) and ID (int).
 class CpuQueueTranslator {
- public:
+public:
   // Create a translator for the provided name and ID pairs.
-  static absl::StatusOr<std::unique_ptr<CpuQueueTranslator>> Create(
-      const std::vector<std::pair<std::string, std::string>>& name_id_pairs);
+  static absl::StatusOr<std::unique_ptr<CpuQueueTranslator>>
+  Create(const std::vector<std::pair<std::string, std::string>> &name_id_pairs);
 
   // Create an empty translator. All translations will fail.
   static std::unique_ptr<CpuQueueTranslator> Empty() {
@@ -44,14 +44,14 @@ class CpuQueueTranslator {
   absl::StatusOr<std::string> IdToName(int queue_id) const;
   absl::StatusOr<int> NameToId(absl::string_view queue_name) const;
 
- protected:
+protected:
   CpuQueueTranslator() = default;
 
- private:
+private:
   absl::flat_hash_map<int, std::string> id_to_name_;
   absl::flat_hash_map<std::string, int> name_to_id_;
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_P4RUNTIME_CPU_QUEUE_TRANSLATOR_H_
+#endif // PINS_P4RT_APP_P4RUNTIME_CPU_QUEUE_TRANSLATOR_H_

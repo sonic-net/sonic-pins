@@ -29,20 +29,20 @@ namespace p4rt_app {
 //  * Insert or Remove port IDs from the P4Runtime application, AppDb and
 //    AppStateDb.
 class ConfigDbPortTableEventHandler : public sonic::StateEventHandler {
- public:
+public:
   // p4runtime must be a non-null pointer to a P4RuntimeImpl object that is
   // valid as long as this event handler.
-  explicit ConfigDbPortTableEventHandler(P4RuntimeImpl* p4runtime)
+  explicit ConfigDbPortTableEventHandler(P4RuntimeImpl *p4runtime)
       : p4runtime_(*p4runtime) {}
 
   absl::Status HandleEvent(
-      const std::string& operation, const std::string& key,
-      const std::vector<std::pair<std::string, std::string>>& values) override;
+      const std::string &operation, const std::string &key,
+      const std::vector<std::pair<std::string, std::string>> &values) override;
 
- private:
-  P4RuntimeImpl& p4runtime_;
+private:
+  P4RuntimeImpl &p4runtime_;
 };
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_PORT_TABLE_EVENT_H_
+#endif // PINS_P4RT_APP_EVENT_MONITORING_CONFIG_DB_PORT_TABLE_EVENT_H_

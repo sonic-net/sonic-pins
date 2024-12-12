@@ -32,8 +32,8 @@ namespace gutil {
 //
 // CAUTION: This function is very inefficient and must only be used in
 // performance-insensitive settings.
-bool InefficientProtoLessThan(const google::protobuf::Message& message1,
-                              const google::protobuf::Message& message2);
+bool InefficientProtoLessThan(const google::protobuf::Message &message1,
+                              const google::protobuf::Message &message2);
 
 // Sorts the given sequence of `messages` with respect to an arbitrary, but
 // deterministic order.
@@ -41,7 +41,7 @@ bool InefficientProtoLessThan(const google::protobuf::Message& message1,
 // CAUTION: This function is very inefficient and must only be used in
 // performance-insensitive settings.
 template <typename ProtoSequence>
-void InefficientProtoSort(ProtoSequence& messages);
+void InefficientProtoSort(ProtoSequence &messages);
 
 // Sorts the given sequence of `messages` with respect to an arbitrary, but
 // deterministic order, and removes all duplicate messages.
@@ -49,29 +49,27 @@ void InefficientProtoSort(ProtoSequence& messages);
 // CAUTION: This function is very inefficient and must only be used in
 // performance-insensitive settings.
 template <class ProtoSequence>
-void InefficientProtoSortAndDedup(ProtoSequence& messages);
+void InefficientProtoSortAndDedup(ProtoSequence &messages);
 
 // == END OF PUBLIC INTERFACE ==================================================
 
 template <typename ProtoSequence>
-void InefficientProtoSort(ProtoSequence& messages) {
+void InefficientProtoSort(ProtoSequence &messages) {
   absl::c_stable_sort(messages, InefficientProtoLessThan);
 }
 
 // Helper to obtain back inserter of a given `Container`. Essentially a drop-in
 // replacement for `std::back_inserter` that also works for repeated protobuf
 // fields.
-template <class Container>
-auto BackInserter(Container& c) {
+template <class Container> auto BackInserter(Container &c) {
   return std::back_inserter(c);
 }
-template <class T>
-auto BackInserter(google::protobuf::RepeatedPtrField<T>& c) {
+template <class T> auto BackInserter(google::protobuf::RepeatedPtrField<T> &c) {
   return google::protobuf::RepeatedPtrFieldBackInserter(&c);
 }
 
 template <class ProtoSequence>
-void InefficientProtoSortAndDedup(ProtoSequence& messages) {
+void InefficientProtoSortAndDedup(ProtoSequence &messages) {
   InefficientProtoSort(messages);
   ProtoSequence tmp;
   std::swap(messages, tmp);
@@ -79,6 +77,6 @@ void InefficientProtoSortAndDedup(ProtoSequence& messages) {
                       google::protobuf::util::MessageDifferencer::Equals);
 }
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // PINS_GUTIL_PROTO_ORDERING_H_
+#endif // PINS_GUTIL_PROTO_ORDERING_H_

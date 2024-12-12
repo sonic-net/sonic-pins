@@ -37,8 +37,8 @@ using ControlPath = std::vector<std::string>;
 // Individual CFG node types that need to be separated and require different
 // processing.
 enum class CfgNodeType {
-  kPipelineControl,  // A pipeline control (e.g., table, conditional).
-  kParseState,       // A parse state of a parser.
+  kPipelineControl, // A pipeline control (e.g., table, conditional).
+  kParseState,      // A parse state of a parser.
 };
 
 // A single node in the control flow graph along with various computed metadata.
@@ -131,7 +131,7 @@ std::string ToString(const CfgNode &cfg_node);
 // in BMv2). Also there is at least one node in the DAG (this is guaranteed by
 // `EndOfPipeline` node in IR).
 class ControlFlowGraph {
- public:
+public:
   // Creates a ControlFlowGraph from an input P4 program and perform analysis
   // for optimized symbolic execution.
   // Runtime complexity: O(N*E) where N is the number of CFG
@@ -140,8 +140,8 @@ class ControlFlowGraph {
   // current complexity is good enough for our purposes (i.e. CFG
   // analysis is not a bottleneck). We can revisit the algorithm if this becomes
   // a bottleneck.
-  static absl::StatusOr<std::unique_ptr<ControlFlowGraph>> Create(
-      const P4Program &program);
+  static absl::StatusOr<std::unique_ptr<ControlFlowGraph>>
+  Create(const P4Program &program);
 
   // Returns information used in optimized symbolic execution for the node
   // corresponding to the given `node_name` in the graph, or error if no such
@@ -161,7 +161,7 @@ class ControlFlowGraph {
   ControlFlowGraph &operator=(const ControlFlowGraph &) = delete;
   ControlFlowGraph &operator=(ControlFlowGraph &&) = delete;
 
- private:
+private:
   // Map of each control or parse state name to its corresponding CfgNode.
   // Must use node_hash_map for pointer stability.
   // Note: Pointer stability is a necessary condition in this case, otherwise
@@ -208,6 +208,6 @@ class ControlFlowGraph {
   absl::Status SetContractedPathFromRoot(CfgNode &cfg_node);
 };
 
-}  // namespace p4_symbolic::ir
+} // namespace p4_symbolic::ir
 
-#endif  // PINS_P4_SYMBOLIC_IR_CFG_H_
+#endif // PINS_P4_SYMBOLIC_IR_CFG_H_

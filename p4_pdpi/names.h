@@ -10,12 +10,12 @@
 namespace pdpi {
 
 // Returns the table name (alias) associated with the given entity.
-absl::StatusOr<std::string> EntityToTableName(const IrP4Info& info,
-                                              const p4::v1::Entity& entity);
+absl::StatusOr<std::string> EntityToTableName(const IrP4Info &info,
+                                              const p4::v1::Entity &entity);
 
 // Returns the table name (alias) associated with the given entity.
-absl::StatusOr<std::string> EntityToTableName(const IrEntity& entity);
+absl::StatusOr<std::string> EntityToTableName(const IrEntity &entity);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_NAMES_H_
+#endif // PINS_P4_PDPI_NAMES_H_

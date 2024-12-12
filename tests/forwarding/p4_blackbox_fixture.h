@@ -15,8 +15,6 @@
 #ifndef PINS_TESTS_FORWARDING_P4_BLACKBOX_FIXTURE_H_
 #define PINS_TESTS_FORWARDING_P4_BLACKBOX_FIXTURE_H_
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "gutil/status_matchers.h"
 #include "lib/gnmi/gnmi_helper.h"
 #include "p4/config/v1/p4info.pb.h"
@@ -26,6 +24,8 @@
 #include "sai_p4/instantiations/google/sai_pd.pb.h"
 #include "thinkit/mirror_testbed.h"
 #include "thinkit/mirror_testbed_fixture.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace pins {
 
@@ -34,17 +34,17 @@ namespace pins {
 // accept programming operations. Clears the switch of all table entries before
 // every test.
 class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
- public:
+public:
   void SetUp() override {
     MirrorTestbedFixture::SetUp();
-    
-    thinkit::MirrorTestbed& testbed =
-      GetParam().mirror_testbed->GetMirrorTestbed();
-    
+
+    thinkit::MirrorTestbed &testbed =
+        GetParam().mirror_testbed->GetMirrorTestbed();
+
     // Get a gNMI config from the switch to use for testing.
     ASSERT_OK_AND_ASSIGN(auto sut_gnmi_stub, testbed.Sut().CreateGnmiStub());
     ASSERT_OK_AND_ASSIGN(std::string sut_gnmi_config,
-                       pins_test::GetGnmiConfig(*sut_gnmi_stub));
+                         pins_test::GetGnmiConfig(*sut_gnmi_stub));
     // Push the gnmi configuration.
     ASSERT_OK(
         pins_test::PushGnmiConfig(GetMirrorTestbed().Sut(), sut_gnmi_config));
@@ -54,7 +54,7 @@ class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
     // Initialize the connection and clear table entries.
     ASSERT_OK_AND_ASSIGN(sut_p4rt_session_,
                          pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                             GetMirrorTestbed().Sut(), p4info_));  
+                             GetMirrorTestbed().Sut(), p4info_));
   }
 
   void TearDown() override {
@@ -66,21 +66,21 @@ class P4BlackboxFixture : public thinkit::MirrorTestbedFixture {
     MirrorTestbedFixture::TearDown();
   }
 
-  pdpi::P4RuntimeSession* SutP4RuntimeSession() const {
+  pdpi::P4RuntimeSession *SutP4RuntimeSession() const {
     return sut_p4rt_session_.get();
   }
 
-  const pdpi::IrP4Info& IrP4Info() const { return ir_p4info_; }
-  const p4::config::v1::P4Info& P4Info() const { return p4info_; }
+  const pdpi::IrP4Info &IrP4Info() const { return ir_p4info_; }
+  const p4::config::v1::P4Info &P4Info() const { return p4info_; }
 
- private:
+private:
   std::unique_ptr<pdpi::P4RuntimeSession> sut_p4rt_session_;
-  pdpi::IrP4Info ir_p4info_ = 
+  pdpi::IrP4Info ir_p4info_ =
       sai::GetIrP4Info(sai::Instantiation::kMiddleblock);
   p4::config::v1::P4Info p4info_ =
       sai::GetP4Info(sai::Instantiation::kMiddleblock);
 };
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_P4_BLACKBOX_FIXTURE_H_
+#endif // PINS_TESTS_FORWARDING_P4_BLACKBOX_FIXTURE_H_

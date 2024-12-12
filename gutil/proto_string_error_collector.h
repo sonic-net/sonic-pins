@@ -24,16 +24,16 @@ namespace gutil {
 
 // Collects errors by appending them to a given string.
 class StringErrorCollector : public google::protobuf::io::ErrorCollector {
- public:
+public:
   // String error_text is unowned and must remain valid during the use of
   // StringErrorCollector.
-  explicit StringErrorCollector(std::string* error_text)
+  explicit StringErrorCollector(std::string *error_text)
       : error_text_{error_text} {};
-  StringErrorCollector(const StringErrorCollector&) = delete;
-  StringErrorCollector& operator=(const StringErrorCollector&) = delete;
+  StringErrorCollector(const StringErrorCollector &) = delete;
+  StringErrorCollector &operator=(const StringErrorCollector &) = delete;
 
   // Implementation of protobuf::io::ErrorCollector::AddError.
-  void AddError(int line, int column, const std::string& message) override {
+  void AddError(int line, int column, const std::string &message) override {
     if (error_text_ != nullptr) {
       absl::SubstituteAndAppend(error_text_, "$0($1): $2\n", line, column,
                                 message);
@@ -41,14 +41,14 @@ class StringErrorCollector : public google::protobuf::io::ErrorCollector {
   }
 
   // Implementation of protobuf::io::ErrorCollector::AddWarning.
-  void AddWarning(int line, int column, const std::string& message) override {
+  void AddWarning(int line, int column, const std::string &message) override {
     AddError(line, column, message);
   }
 
- private:
-  std::string* const error_text_;
+private:
+  std::string *const error_text_;
 };
 
-}  // namespace gutil
+} // namespace gutil
 
-#endif  // PINS_PROTO_STRING_ERROR_COLLECTOR_H_
+#endif // PINS_PROTO_STRING_ERROR_COLLECTOR_H_

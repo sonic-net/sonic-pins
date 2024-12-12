@@ -30,15 +30,17 @@ namespace p4rt_app {
 // by that entry. A NOT_FOUND error can be returned if either the table
 // definition cannot be found, or if an action profile definition is used and
 // cannot be found.
-absl::StatusOr<sonic::TableResources> GetResourceUsageForIrTableEntry(
-    const pdpi::IrP4Info& ir_p4info, const pdpi::IrTableEntry& table_entry);
+absl::StatusOr<sonic::TableResources>
+GetResourceUsageForIrTableEntry(const pdpi::IrP4Info &ir_p4info,
+                                const pdpi::IrTableEntry &table_entry);
 
 // Given an PI table entry this method will return the number of resources used
 // by that entry. A NOT_FOUND error can be returned if either the table
 // definition cannot be found, or if an action profile definition is used and
 // cannot be found.
-absl::StatusOr<sonic::TableResources> GetResourceUsageForPiTableEntry(
-    const pdpi::IrP4Info& ir_p4info, const p4::v1::TableEntry& table_entry);
+absl::StatusOr<sonic::TableResources>
+GetResourceUsageForPiTableEntry(const pdpi::IrP4Info &ir_p4info,
+                                const p4::v1::TableEntry &table_entry);
 
 // Action profiles in P4 allow us to group multiple actions together, and for
 // any given packet only one action is applied. The applied action is chosen
@@ -55,7 +57,7 @@ struct ActionProfileResourceCapacity {
 
 // Parses an IrActionProfileDefinition for resource capacity information.
 ActionProfileResourceCapacity GetActionProfileResourceCapacity(
-    const pdpi::IrActionProfileDefinition& action_profile_def);
+    const pdpi::IrActionProfileDefinition &action_profile_def);
 
 // Computes the number of resources used by a given table entry. For inserts the
 // resource usage will depend on the entry being inserted (i.e. always
@@ -71,12 +73,12 @@ ActionProfileResourceCapacity GetActionProfileResourceCapacity(
 // Note that this method assumes SumOfWeights today and does not consider
 // SumOfActions selectors.
 absl::StatusOr<sonic::TableResources> VerifyCapacityAndGetTableResourceChange(
-    const pdpi::IrP4Info& ir_p4info, const sonic::AppDbEntry& app_db_entry,
-    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity>& entity_cache,
-    const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>&
-        capacity_by_action_profile_name,
-    absl::flat_hash_map<std::string, int64_t>& current_batch_resources);
+    const pdpi::IrP4Info &ir_p4info, const sonic::AppDbEntry &app_db_entry,
+    const absl::flat_hash_map<pdpi::EntityKey, p4::v1::Entity> &entity_cache,
+    const absl::flat_hash_map<std::string, ActionProfileResourceCapacity>
+        &capacity_by_action_profile_name,
+    absl::flat_hash_map<std::string, int64_t> &current_batch_resources);
 
-}  // namespace p4rt_app
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_P4RUNTIME_RESOURCE_UTILIZATION_H_
+#endif // PINS_P4RT_APP_P4RUNTIME_RESOURCE_UTILIZATION_H_

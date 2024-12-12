@@ -27,13 +27,13 @@ namespace p4_symbolic::packet_synthesizer {
 // the switch deams invalid and drops, such as "martian" packets.
 // Ideally this switch behavior would be fully modeled in P4 instead, and this
 // function would disappear.
-absl::Status AddSanePacketConstraints(
-    p4_symbolic::symbolic::SolverState& state);
+absl::Status
+AddSanePacketConstraints(p4_symbolic::symbolic::SolverState &state);
 
 // A simple timer implementation.
 // TODO: Move this to third_party/pins_infra/gutil/timer
 class Timer {
- public:
+public:
   // Returns the duration between the current time and the last reset (or
   // initialization).
   absl::Duration GetDuration() { return absl::Now() - start_time_; }
@@ -47,24 +47,24 @@ class Timer {
   // call to Reset and those calls.
   void Reset() { start_time_ = absl::Now(); }
 
- private:
+private:
   absl::Time start_time_ = absl::Now();
 };
 
 // Turns a given IrValue into equivalent Z3 bitvector with length `bitwidth`.
-absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue& value,
+absl::StatusOr<z3::expr> IrValueToZ3Bitvector(const pdpi::IrValue &value,
                                               int bitwidth);
 
 // Return Z3 constraints corresponding to `field` matching the given
 // pdpi::IrMatch value assuming the field's size is `bitwidth`.
 absl::StatusOr<z3::expr> GetFieldMatchConstraints(z3::expr field, int bitwidth,
-                                                  const pdpi::IrMatch& match);
+                                                  const pdpi::IrMatch &match);
 
 // Extracts the bitwidth of the field with name `field_name` in the given
 // `program`.
 absl::StatusOr<int> GetFieldBitwidth(absl::string_view field_name,
-                                     const p4_symbolic::ir::P4Program& program);
+                                     const p4_symbolic::ir::P4Program &program);
 
-}  // namespace p4_symbolic::packet_synthesizer
+} // namespace p4_symbolic::packet_synthesizer
 
-#endif  // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_UTIL_H_
+#endif // PINS_P4_SYMBOLIC_PACKET_SYNTHESIZER_UTIL_H_

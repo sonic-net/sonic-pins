@@ -21,6 +21,6 @@ namespace pins_test {
 
 class RandomBlackboxEventsTest : public thinkit::GenericTestbedFixture<> {};
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_TESTS_INTEGRATION_SYSTEM_RANDOM_BLACKBOX_EVENTS_TESTS_H_
+#endif // PINS_TESTS_INTEGRATION_SYSTEM_RANDOM_BLACKBOX_EVENTS_TESTS_H_

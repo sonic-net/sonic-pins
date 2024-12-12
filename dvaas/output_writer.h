@@ -28,6 +28,6 @@ namespace dvaas {
 using OutputWriterFunctionType =
     std::function<absl::Status(absl::string_view message)>;
 
-}  // namespace dvaas
+} // namespace dvaas
 
-#endif  // PINS_DVAAS_OUTPUT_WRITER_H_
+#endif // PINS_DVAAS_OUTPUT_WRITER_H_
