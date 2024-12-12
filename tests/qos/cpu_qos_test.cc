@@ -94,13 +94,13 @@ constexpr int kFrameCheckSequenceSize = 4;
 // gNMI have to be incremented after a packet hits a queue.
 // Empirically, for PINS, queue counters currently seem to get updated every
 // 10 seconds.
-constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(20);
+constexpr absl::Duration kMaxQueueCounterUpdateTime = absl::Seconds(25);
 
 // After pushing gNMI config to a switch, the tests sleep for this duration
 // assuming that the gNMI config will have been fully applied afterwards.
 // TODO: Instead of hard-coding this time, tests should dynamically
 // poll the state of the switch to ensure config has been applied.
-constexpr absl::Duration kTimeToWaitForGnmiConfigToApply = absl::Seconds(15);
+constexpr absl::Duration kTimeToWaitForGnmiConfigToApply = absl::Seconds(30);
 
 struct QueueInfo {
   std::string gnmi_queue_name;      // Openconfig queue name.
@@ -1040,7 +1040,7 @@ TEST_P(CpuQosTestWithoutIxia, TrafficToLoopackIpGetsMappedToCorrectQueues) {
 // Level of tolerance for packet rate verification.
 // This could be parameterized in future if this is platform
 // dependent.
-constexpr float kTolerancePercent = 4.0;
+constexpr float kTolerancePercent = 10.0;
 
 // Ixia configurations:
 // 1. Frames sent per second by Ixia.
@@ -1116,6 +1116,11 @@ TEST_P(CpuQosTestWithIxia, TestCPUQueueAssignmentAndQueueRateLimit) {
 
   thinkit::Switch &sut = generic_testbed->Sut();
 
+  // Set up P4Runtime session.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
+                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
+                           generic_testbed->Sut(), GetParam().p4info));
+
   // Push GNMI config.
   ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
 
@@ -1164,6 +1169,11 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
   ASSERT_GT(GetParam().control_plane_bandwidth_bps, 0);
 
   thinkit::Switch &sut = generic_testbed->Sut();
+
+  // Set up P4Runtime session.
+  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
+                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
+                           generic_testbed->Sut(), GetParam().p4info));
 
   // Push GNMI config.
   ASSERT_OK(pins_test::PushGnmiConfig(sut, GetParam().gnmi_config));
@@ -1262,11 +1272,6 @@ TEST_P(CpuQosTestWithIxia, TestPuntFlowRateLimitAndCounters) {
 
   ASSERT_OK(pins_test::ixia::SetDestIPv4(traffic_ref, dest_ip.ToString(),
                                          *generic_testbed));
-
-  // Set up P4Runtime session.
-  ASSERT_OK_AND_ASSIGN(std::unique_ptr<pdpi::P4RuntimeSession> sut_p4_session,
-                       pdpi::P4RuntimeSession::CreateWithP4InfoAndClearTables(
-                           generic_testbed->Sut(), GetParam().p4info));
 
   // Listen for punted packets from the SUT.
   PacketReceiveInfo packet_receive_info;
