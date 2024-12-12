@@ -36,9 +36,9 @@ namespace pdpi {
 //
 // Supports comments (using #), annotations of what a group of bits represents
 // (string before the colon), hex strings, base-2 strings, and ASCII strings.
-absl::StatusOr<std::string> ReadableByteStringToByteString(
-    absl::string_view readable_byte_string);
+absl::StatusOr<std::string>
+ReadableByteStringToByteString(absl::string_view readable_byte_string);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_PACKETLIB_READABLE_BIT_STRING_H_
+#endif // PINS_P4_PDPI_PACKETLIB_READABLE_BIT_STRING_H_

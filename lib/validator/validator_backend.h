@@ -36,7 +36,7 @@ namespace pins_test {
 // validation functions and add them with `AddCallbacksToValidation` in the
 // overriden `SetupValidations` function.
 class ValidatorBackend {
- public:
+public:
   virtual ~ValidatorBackend() {}
 
   // Runs the various `validations` on the specified reachable `device` address,
@@ -51,7 +51,7 @@ class ValidatorBackend {
   // `Validator` upon receiving backends in constructor.
   virtual void SetupValidations() = 0;
 
- protected:
+protected:
   // Initializes set of supported `devices` for this backend. These `devices`
   // are provided by the subclass.
   ValidatorBackend(absl::flat_hash_set<std::string> devices)
@@ -74,11 +74,11 @@ class ValidatorBackend {
   // will be ignored by this backend.
   absl::flat_hash_set<std::string> devices_;
 
- private:
+private:
   // The map of validation tag and callbacks.
   absl::flat_hash_map<std::string, std::vector<Callback>> validation_map_;
 };
 
-}  // namespace pins_test
+} // namespace pins_test
 
-#endif  // PINS_LIB_VALIDATOR_VALIDATOR_BACKEND_H_
+#endif // PINS_LIB_VALIDATOR_VALIDATOR_BACKEND_H_

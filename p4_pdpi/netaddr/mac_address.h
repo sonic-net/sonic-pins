@@ -25,7 +25,7 @@
 namespace netaddr {
 
 class MacAddress : public NetworkAddress<48, MacAddress> {
- public:
+public:
   // The default constructor returns the address with all bits set to zero.
   constexpr MacAddress() = default;
 
@@ -54,8 +54,8 @@ class MacAddress : public NetworkAddress<48, MacAddress> {
   // If the given IPv6 address is a link-local address derived from a MAC
   // address following RFC 4862, Section 5.3, returns the MAC address.
   // Otherwise, returns an invalid argument error status.
-  static absl::StatusOr<MacAddress> OfLinkLocalIpv6Address(
-      const Ipv6Address& ipv6);
+  static absl::StatusOr<MacAddress>
+  OfLinkLocalIpv6Address(const Ipv6Address &ipv6);
 
   // Returns link-local IPv6 address for this MAC address, following
   // RFC 4862, Section 5.3, and RFC4291, Section 2.5.1 & Appendix A.
@@ -64,14 +64,14 @@ class MacAddress : public NetworkAddress<48, MacAddress> {
   // If the given interface identifier is derived from a MAC address following
   // RFC4291, Section 2.5.1 & Appendix A, returns the MAC address.
   // Otherwise, return an invalid argument error status.
-  static absl::StatusOr<MacAddress> OfInterfaceId(
-      const std::bitset<64>& interface_id);
+  static absl::StatusOr<MacAddress>
+  OfInterfaceId(const std::bitset<64> &interface_id);
 
   // Returns 64-bit interface identifier for this MAC address,
   // following RFC4291, Section 2.5.1 & Appendix A.
   std::bitset<64> ToInterfaceId() const;
 };
 
-}  // namespace netaddr
+} // namespace netaddr
 
-#endif  // PINS_P4_PDPI_NETADDR_MAC_ADDRESS_H_
+#endif // PINS_P4_PDPI_NETADDR_MAC_ADDRESS_H_

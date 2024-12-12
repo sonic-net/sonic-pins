@@ -24,19 +24,20 @@ namespace sonic {
 
 // Verify an ACL table definition can be inserted into the AppDB ACL Table
 // Definition Table.
-absl::Status VerifyAclTableDefinition(const pdpi::IrTableDefinition& ir_table);
+absl::Status VerifyAclTableDefinition(const pdpi::IrTableDefinition &ir_table);
 
 // Insert an ACL table definition entry into the AppDB ACL Table Definition
 // Table, returns the key that was used.
-absl::StatusOr<std::string> InsertAclTableDefinition(
-    P4rtTable& p4rt_table, const pdpi::IrTableDefinition& ir_table);
+absl::StatusOr<std::string>
+InsertAclTableDefinition(P4rtTable &p4rt_table,
+                         const pdpi::IrTableDefinition &ir_table);
 
 // Remove an ACL table definition entry from the AppDB ACL Table Definition
 // Table.
-absl::Status RemoveAclTableDefinition(P4rtTable& p4rt_table,
-                                      const pdpi::IrTableDefinition& ir_table);
+absl::Status RemoveAclTableDefinition(P4rtTable &p4rt_table,
+                                      const pdpi::IrTableDefinition &ir_table);
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_
+#endif // PINS_P4RT_APP_SONIC_APP_DB_ACL_DEF_TABLE_MANAGER_H_

@@ -44,7 +44,7 @@ using SonicDbEntryMap = std::unordered_map<std::string, std::string>;
 // Fakes how the OrchAgent updates AppDb tables. When an entry is inserted the
 // Orchagent will respond with a notification of success or failure.
 class FakeSonicDbTable {
- public:
+public:
   FakeSonicDbTable(const std::string &table_name = "SonicDb:TABLE")
       : debug_table_name_(table_name), state_db_(nullptr) {}
 
@@ -79,7 +79,7 @@ class FakeSonicDbTable {
   // Method should only be used for debug purposes.
   void DebugState() const;
 
- private:
+private:
   struct ResponseInfo {
     std::string code;
     std::string message;
@@ -98,8 +98,8 @@ class FakeSonicDbTable {
   const std::string debug_table_name_;
 
   // Current list of DB entries stored in the table.
-  absl::flat_hash_map<std::string, SonicDbEntryMap> entries_
-      ABSL_GUARDED_BY(entries_mutex_);
+  absl::flat_hash_map<std::string, SonicDbEntryMap>
+      entries_ ABSL_GUARDED_BY(entries_mutex_);
 
   // List of notifications the OrchAgent would have generated. One notification
   // is created per insert, and one is removed per notification check.
@@ -111,10 +111,10 @@ class FakeSonicDbTable {
 
   // If a StateDb is set then entries will automatically be added on
   // successful inserts, and removed on successful deletes.
-  FakeSonicDbTable *state_db_;  // Not owned
+  FakeSonicDbTable *state_db_; // Not owned
 };
 
-}  // namespace sonic
-}  // namespace p4rt_app
+} // namespace sonic
+} // namespace p4rt_app
 
-#endif  // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_SONIC_DB_TABLE_H_
+#endif // PINS_P4RT_APP_SONIC_ADAPTERS_FAKE_SONIC_DB_TABLE_H_

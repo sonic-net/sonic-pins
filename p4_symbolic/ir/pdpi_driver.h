@@ -29,7 +29,7 @@ namespace ir {
 // in case of a badly formatted input file, or if the file does not exist.
 absl::StatusOr<pdpi::IrP4Info> ParseP4InfoFile(const std::string &p4info_path);
 
-}  // namespace ir
-}  // namespace p4_symbolic
+} // namespace ir
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_IR_PDPI_DRIVER_H_
+#endif // P4_SYMBOLIC_IR_PDPI_DRIVER_H_

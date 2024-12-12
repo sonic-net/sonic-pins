@@ -21,9 +21,9 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "gtest/gtest.h"
 #include "p4/config/v1/p4info.pb.h"
 #include "thinkit/mirror_testbed.h"
+#include "gtest/gtest.h"
 
 namespace thinkit {
 
@@ -31,13 +31,13 @@ namespace thinkit {
 // should implement. The expectations are such that the MirrorTestbed should
 // only be accessed after SetUp() is called and before TearDown() is called.
 class MirrorTestbedInterface {
- public:
+public:
   virtual ~MirrorTestbedInterface() = default;
 
   virtual void SetUp() = 0;
   virtual void TearDown() = 0;
 
-  virtual MirrorTestbed& GetMirrorTestbed() = 0;
+  virtual MirrorTestbed &GetMirrorTestbed() = 0;
 
   // TODO: Move to TestEnvironment.
   virtual absl::Status SaveSwitchLogs(absl::string_view save_prefix) = 0;
@@ -52,7 +52,7 @@ class MirrorTestbedInterface {
 struct MirrorTestbedFixtureParams {
   // Ownership of the MirrorTestbedInterface will be transferred to the
   // MirrorTestbedFixture class.
-  MirrorTestbedInterface* mirror_testbed;
+  MirrorTestbedInterface *mirror_testbed;
 
   // To enable testing of different platforms we pass the gNMI config and P4Info
   // as arguments to the MirrorTestbedFixture.
@@ -85,7 +85,7 @@ struct MirrorTestbedFixtureParams {
 //    TEST_P(MyPinsTest, MyTestName) {}
 class MirrorTestbedFixture
     : public testing::TestWithParam<MirrorTestbedFixtureParams> {
- protected:
+protected:
   // A derived class that needs/wants to do its own setup can override this
   // method. However, it should take care to call this base setup first. That
   // will ensure the platform is ready, and in a healthy state.
@@ -99,7 +99,7 @@ class MirrorTestbedFixture
 
   // Accessor for the mirror testbed. This is only safe to be called after the
   // SetUp has completed.
-  MirrorTestbed& GetMirrorTestbed() {
+  MirrorTestbed &GetMirrorTestbed() {
     return mirror_testbed_interface_->GetMirrorTestbed();
   }
 
@@ -108,16 +108,16 @@ class MirrorTestbedFixture
     return mirror_testbed_interface_->SaveSwitchLogs(save_prefix);
   }
 
-  const std::string& gnmi_config() const { return GetParam().gnmi_config; }
+  const std::string &gnmi_config() const { return GetParam().gnmi_config; }
 
-  const p4::config::v1::P4Info& p4_info() const { return GetParam().p4_info; }
+  const p4::config::v1::P4Info &p4_info() const { return GetParam().p4_info; }
 
- private:
+private:
   // Takes ownership of the MirrorTestbedInterface parameter.
   std::unique_ptr<MirrorTestbedInterface> mirror_testbed_interface_ =
       absl::WrapUnique<MirrorTestbedInterface>(GetParam().mirror_testbed);
 };
 
-}  // namespace thinkit
+} // namespace thinkit
 
-#endif  // PINS_THINKIT_MIRROR_TESTBED_TEST_FIXTURE_H_
+#endif // PINS_THINKIT_MIRROR_TESTBED_TEST_FIXTURE_H_

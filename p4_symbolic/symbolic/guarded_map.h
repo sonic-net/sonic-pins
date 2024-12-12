@@ -49,7 +49,7 @@ namespace symbolic {
 // 3. A value can only be assigned to a key given a guard.
 //
 class SymbolicGuardedMap {
- public:
+public:
   // Constructor requires passing the headers definition and will fill the map
   // with a free symbolic variable per header field.
   static absl::StatusOr<SymbolicGuardedMap> CreateSymbolicGuardedMap(
@@ -78,7 +78,7 @@ class SymbolicGuardedMap {
   const_iterator begin() const noexcept { return this->map_.cbegin(); }
   const_iterator end() const noexcept { return this->map_.cend(); }
 
- private:
+private:
   // The underlying map storing the keys and their values.
   absl::btree_map<std::string, z3::expr> map_;
 
@@ -87,7 +87,7 @@ class SymbolicGuardedMap {
       : map_(map) {}
 };
 
-}  // namespace symbolic
-}  // namespace p4_symbolic
+} // namespace symbolic
+} // namespace p4_symbolic
 
-#endif  // P4_SYMBOLIC_SYMBOLIC_GUARDED_MAP_H_
+#endif // P4_SYMBOLIC_SYMBOLIC_GUARDED_MAP_H_

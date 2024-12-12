@@ -22,6 +22,6 @@ namespace pins {
 
 class SmokeTestFixture : public P4BlackboxFixture {};
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_SMOKE_TEST_H_
+#endif // PINS_TESTS_FORWARDING_SMOKE_TEST_H_

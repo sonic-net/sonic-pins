@@ -23,9 +23,9 @@
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
-#include "dvaas/test_vector.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
+#include "dvaas/test_vector.h"
 #include "p4_pdpi/netaddr/ipv4_address.h"
 #include "p4_pdpi/netaddr/mac_address.h"
 #include "p4_pdpi/packetlib/packetlib.h"
@@ -83,8 +83,8 @@ struct TestData {
   int total_packets_sent = 0;
   int total_packets_received = 0;
   int total_invalid_packets_received = 0;
-  absl::flat_hash_map<std::string, TestInputOutput> input_output_per_packet
-      ABSL_GUARDED_BY(mutex);
+  absl::flat_hash_map<std::string, TestInputOutput>
+      input_output_per_packet ABSL_GUARDED_BY(mutex);
   // Clears the received packets in the output vector and the send/receive
   // counters.
   void ClearReceivedPackets() ABSL_LOCKS_EXCLUDED(mutex);
@@ -93,23 +93,23 @@ struct TestData {
 // Checks wehether this a valid test configuration. Not all configurations are
 // valid, e.g. you can't modify the flow label in an IPv4 packet (because there
 // is no flow label there).
-bool IsValidTestConfiguration(const TestConfiguration& config);
+bool IsValidTestConfiguration(const TestConfiguration &config);
 
 // Returns the ith destination MAC that is used when varying that field.
 netaddr::MacAddress GetIthDstMac(int i);
 
 // Returns a human-readable description of a test config.
-std::string DescribeTestConfig(const TestConfiguration& config);
+std::string DescribeTestConfig(const TestConfiguration &config);
 
 // Returns the first 64 characters of test config, padded with '.' if needed.
-std::string TestConfigurationToPayload(const TestConfiguration& config);
+std::string TestConfigurationToPayload(const TestConfiguration &config);
 
 // Returns the i-th packet for the given test configuration.  The packets all
 // follow the requirements of the config (e.g., is this a IPv4 or IPv6 packet),
 // and vary in exactly one field (the one specified in the config).
-absl::StatusOr<packetlib::Packet> GenerateIthPacket(
-    const TestConfiguration& config, int index);
+absl::StatusOr<packetlib::Packet>
+GenerateIthPacket(const TestConfiguration &config, int index);
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_PACKET_UTIL_H_
+#endif // PINS_TESTS_FORWARDING_PACKET_UTIL_H_

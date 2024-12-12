@@ -45,7 +45,7 @@ namespace pdpi {
 // metadata". P4RuntimeSession uses a 1MB limit and 5000 updates falls safely
 // within those limits and is simultaneously more than we ever tend to send.
 absl::StatusOr<std::vector<p4::v1::WriteRequest>>
-SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
+SequencePiUpdatesIntoWriteRequests(const IrP4Info &info,
                                    absl::Span<const p4::v1::Update> updates,
                                    std::optional<int> max_batch_size = 5000);
 
@@ -53,35 +53,36 @@ SequencePiUpdatesIntoWriteRequests(const IrP4Info& info,
 // ceil(write_request.update_size() / max_write_request_size) number of
 // p4::WriteRequest(s). The order of updates across the resulting WriteRequests
 // remains the same as the order of updates in `write_request`.
-absl::StatusOr<std::vector<p4::v1::WriteRequest>> ExtractWriteRequests(
-    p4::v1::WriteRequest&& write_request,
-    std::optional<int> max_write_request_size = 5000);
+absl::StatusOr<std::vector<p4::v1::WriteRequest>>
+ExtractWriteRequests(p4::v1::WriteRequest &&write_request,
+                     std::optional<int> max_write_request_size = 5000);
 
 // Returns a vector of batches, where each batch is given by a vector of indices
 // into the input vector, such that updates are sequenced correctly when sent
 // batched in the order indicated. Order within a write request is stable, i.e.
 // the same as in the input.
-absl::StatusOr<std::vector<std::vector<int>>> SequencePiUpdatesInPlace(
-    const IrP4Info& info, absl::Span<const p4::v1::Update> updates);
+absl::StatusOr<std::vector<std::vector<int>>>
+SequencePiUpdatesInPlace(const IrP4Info &info,
+                         absl::Span<const p4::v1::Update> updates);
 
 // Sorts the table entries such that entries that are depended on come first.
 // That is, two entries x and y where x refers to y will be sorted as [y, x].
 ABSL_DEPRECATED("Prefer StableSortEntities")
-absl::Status SortTableEntries(const IrP4Info& info,
-                              std::vector<p4::v1::TableEntry>& entries);
+absl::Status SortTableEntries(const IrP4Info &info,
+                              std::vector<p4::v1::TableEntry> &entries);
 
 // Stably sorts the entities such that entities that may be depended on come
 // first. That is, two entities x and y where x could refer to y will be sorted
 // as [y, x]. This is done based on the dependency ranks given in the IrP4Info.
 // Any entities with the same dependency rank remain in the same relative order.
-absl::Status StableSortEntities(const IrP4Info& info,
-                                std::vector<p4::v1::Entity>& entities);
+absl::Status StableSortEntities(const IrP4Info &info,
+                                std::vector<p4::v1::Entity> &entities);
 
 // Same as StableSortEntities but sorts the repeated `Update` message.
-absl::Status StableSortUpdates(
-    const IrP4Info& info,
-    google::protobuf::RepeatedPtrField<p4::v1::Update>& updates,
-    bool reverse_ordering = false);
+absl::Status
+StableSortUpdates(const IrP4Info &info,
+                  google::protobuf::RepeatedPtrField<p4::v1::Update> &updates,
+                  bool reverse_ordering = false);
 
 // Returns the subset of Entities in `entities` that is not reachable from any
 // root entity in `entities`, where a root entity is determined by the
@@ -92,9 +93,9 @@ absl::Status StableSortUpdates(
 // not a `table_entry`.
 absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
     absl::Span<const p4::v1::Entity> entities,
-    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
+    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity &)>
         is_root_entity,
-    const IrP4Info& ir_p4info);
+    const IrP4Info &ir_p4info);
 
 // Deprecated version of GetEntitiesUnreachableFromRoots.
 // This function only works for TableEntry entity type. Any non TableEntry type
@@ -102,10 +103,10 @@ absl::StatusOr<std::vector<p4::v1::Entity>> GetEntitiesUnreachableFromRoots(
 ABSL_DEPRECATED("Prefer GetEntitiesUnreachableFromRoots")
 absl::StatusOr<std::vector<p4::v1::Entity>> OldGetEntitiesUnreachableFromRoots(
     absl::Span<const p4::v1::Entity> entities,
-    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity&)>
+    absl::FunctionRef<absl::StatusOr<bool>(const p4::v1::Entity &)>
         is_root_entity,
-    const IrP4Info& ir_p4info);
+    const IrP4Info &ir_p4info);
 
-}  // namespace pdpi
+} // namespace pdpi
 
-#endif  // PINS_P4_PDPI_SEQUENCING_H_
+#endif // PINS_P4_PDPI_SEQUENCING_H_

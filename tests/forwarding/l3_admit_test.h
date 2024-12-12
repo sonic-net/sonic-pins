@@ -27,14 +27,13 @@
 namespace pins {
 
 class L3AdmitTestFixture : public thinkit::MirrorTestbedFixture {
- protected:
-
+protected:
   // This test runs on a mirror testbed setup so we open a P4RT connection to
   // both switches.
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_sut_switch_session_;
   std::unique_ptr<pdpi::P4RuntimeSession> p4rt_control_switch_session_;
 };
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_L3_ADMIT_TEST_H_
+#endif // PINS_TESTS_FORWARDING_L3_ADMIT_TEST_H_

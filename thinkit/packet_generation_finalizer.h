@@ -15,7 +15,6 @@
 #ifndef PINS_THINKIT_PACKET_GENERATION_FINALIZER_H_
 #define PINS_THINKIT_PACKET_GENERATION_FINALIZER_H_
 
-
 #include "absl/status/status.h"
 #include "absl/time/time.h"
 
@@ -30,11 +29,11 @@ using PacketCallback =
 // PacketGenerationFinalizer will stop listening for packets when it goes out of
 // scope.
 class PacketGenerationFinalizer {
- public:
+public:
   virtual absl::Status HandlePacketsFor(absl::Duration duration,
                                         PacketCallback handler) = 0;
   virtual ~PacketGenerationFinalizer() = default;
 };
 
-}  // namespace thinkit
-#endif  // PINS_THINKIT_PACKET_GENERATION_FINALIZER_H_
+} // namespace thinkit
+#endif // PINS_THINKIT_PACKET_GENERATION_FINALIZER_H_

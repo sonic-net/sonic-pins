@@ -23,35 +23,35 @@
 namespace pins_test {
 
 // Tests that commands can be run on the switch through SSH.
-void TestSSHCommand(thinkit::SSHClient& ssh_client, thinkit::Switch& sut);
+void TestSSHCommand(thinkit::SSHClient &ssh_client, thinkit::Switch &sut);
 
 // Tests that P4 Sessions can be established with the switch.
-void TestP4Session(thinkit::Switch& sut);
+void TestP4Session(thinkit::Switch &sut);
 
 // Tests that gNMI get interface works fine with SUT.
-void TestGnmiGetInterfaceOperation(thinkit::Switch& sut);
+void TestGnmiGetInterfaceOperation(thinkit::Switch &sut);
 
 // Tests that gNMI get all works fine with SUT.
-void TestGnmiGetAllOperation(thinkit::Switch& sut);
+void TestGnmiGetAllOperation(thinkit::Switch &sut);
 
 // Tests that all ports state are UP. Uses the interfaces if provided to
 // check the port states.
 void TestGnmiCheckInterfaceStateOperation(
-    thinkit::MirrorTestbed& testbed,
+    thinkit::MirrorTestbed &testbed,
     absl::Span<const std::string> interfaces = {});
 
 // Tests that no gNMI alarms are set.
-void TestGnmiCheckAlarms(thinkit::MirrorTestbed& testbed);
+void TestGnmiCheckAlarms(thinkit::MirrorTestbed &testbed);
 
 // Tests that SUT specific port state is UP.
-void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch& sut,
+void TestGnmiCheckSpecificInterfaceStateOperation(thinkit::Switch &sut,
                                                   absl::string_view if_name);
 
 // Tests that SUT is updated with a config Blob.
-void TestGnmiConfigBlobSet(thinkit::Switch& sut);
+void TestGnmiConfigBlobSet(thinkit::Switch &sut);
 
 // Tests gNOI Cold Reboot on SUT.
-void TestGnoiSystemColdReboot(thinkit::Switch& sut);
-}  // namespace pins_test
+void TestGnoiSystemColdReboot(thinkit::Switch &sut);
+} // namespace pins_test
 
-#endif  // GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_
+#endif // GOOGLE_TESTS_THINKIT_SANITY_TESTS_H_

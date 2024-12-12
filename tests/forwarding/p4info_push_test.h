@@ -27,26 +27,26 @@ namespace pins {
 struct P4InfoPushTestParams {
   std::string description;
   // TODO: use GenericTestbed instead.
-  thinkit::MirrorTestbedInterface* testbed_interface;
+  thinkit::MirrorTestbedInterface *testbed_interface;
   std::string gnmi_config;
   p4::config::v1::P4Info p4info;
 };
 
 class P4InfoPushTestFixture
     : public testing::TestWithParam<P4InfoPushTestParams> {
- protected:
+protected:
   void SetUp() override { testbed_interface_->SetUp(); }
   void TearDown() override { testbed_interface_->TearDown(); }
 
-  thinkit::MirrorTestbed& GetTestbed() {
+  thinkit::MirrorTestbed &GetTestbed() {
     return testbed_interface_->GetMirrorTestbed();
   }
 
- private:
+private:
   std::unique_ptr<thinkit::MirrorTestbedInterface> testbed_interface_ =
       absl::WrapUnique(GetParam().testbed_interface);
 };
 
-}  // namespace pins
+} // namespace pins
 
-#endif  // PINS_TESTS_FORWARDING_P4INFO_PUSH_TEST_H_
+#endif // PINS_TESTS_FORWARDING_P4INFO_PUSH_TEST_H_
