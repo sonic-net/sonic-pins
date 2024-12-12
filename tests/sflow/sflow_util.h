@@ -18,6 +18,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "proto/gnmi/gnmi.grpc.pb.h"
 
@@ -47,6 +48,17 @@ absl::Status SetSflowConfigEnabled(gnmi::gNMI::StubInterface* gnmi_stub,
 absl::Status SetSflowIngressSamplingRate(
     gnmi::gNMI::StubInterface* gnmi_stub, absl::string_view interface,
     int sampling_rate, absl::Duration timeout = absl::Seconds(5));
+
+// Appends sFlow config to `gnmi_config` and returns modified config if success.
+// The modified config would sort collector IPs and interface names by string
+// order. This function would return original `gnmi_config` if sFlow config is
+// already present in `gnmi_config`. Returns an FailedPreconditionError if
+// `agent_addr_ipv6` or `sflow_enabled_interfaces` is empty.
+absl::StatusOr<std::string> AppendSflowConfigIfNotPresent(
+    absl::string_view gnmi_config, absl::string_view agent_addr_ipv6,
+    const std::vector<std::pair<std::string, int>>& collector_address_and_port,
+    const absl::flat_hash_set<std::string>& sflow_enabled_interfaces,
+    const int sampling_rate, const int sampling_header_size);
 
 }  // namespace pins
 #endif  // PINS_TESTS_SFLOW_SFLOW_UTIL_H_
