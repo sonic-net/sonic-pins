@@ -243,6 +243,10 @@ message Deparser {
   int32 id = 2;
   // Information on the source code location of the deparser definition.
   SourceLocation source_info = 3;
+  // Ordered list of header instance names from the outer-most header to the
+  // inner-most header. When the target switch invokes a deparser, the headers
+  // will be serialized in this order, and invalid headers will be skipped.
+  repeated string order = 4;
 }
 
 // A pipeline is a sequence of actions and table applications
