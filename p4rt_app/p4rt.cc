@@ -342,6 +342,13 @@ sonic::SwitchCapabilityTable CreateSwitchCapabilityTable(
           state_db, "SWITCH_CAPABILITY")};
 }
 
+sonic::P4rtTelemetryTable CreateP4rtTelemetryTable(
+    swss::DBConnector* state_db) {
+  return sonic::P4rtTelemetryTable{
+      .state_db = absl::make_unique<p4rt_app::sonic::TableAdapter>(
+          state_db, "P4RT_TELEMETRY")};
+}
+
 void LogStatsEveryMinute(absl::Notification* stop,
                          p4rt_app::P4RuntimeImpl* p4runtime) {
   while (!stop->HasBeenNotified()) {
@@ -497,6 +504,8 @@ int main(int argc, char** argv) {
       p4rt_app::CreateHostStatsTable(&state_db);
   p4rt_app::sonic::SwitchCapabilityTable switch_capability_table =
       p4rt_app::CreateSwitchCapabilityTable(&state_db);
+  p4rt_app::sonic::P4rtTelemetryTable p4rt_telemetry_table =
+      p4rt_app::CreateP4rtTelemetryTable(&state_db);
 
   // Create PacketIoImpl for Packet I/O.
   auto packetio_impl = std::make_unique<p4rt_app::sonic::PacketIoImpl>(
@@ -532,6 +541,7 @@ int main(int argc, char** argv) {
       std::move(vlan_member_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
       std::move(host_stats_table), std::move(switch_capability_table),
+      std::move(p4rt_telemetry_table),
       std::make_unique<p4rt_app::sonic::WarmBootStateAdapter>(),
       std::move(packetio_impl),
       // TODO(PINS): To add component_state_singleton, system_state_singleton,

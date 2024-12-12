@@ -59,6 +59,7 @@ P4RuntimeGrpcService::P4RuntimeGrpcService(const P4RuntimeImplOptions& options)
       fake_port_table_("AppDb:PORT_TABLE", &fake_port_state_table_),
       fake_host_stats_table_("StateDb:HOST"),
       fake_switch_capability_table_("StateDb:SWITCH_CAPABILITY"),
+      fake_p4rt_telemetry_table_("StateDb:P4RT_TELEMETRY"),
       fake_config_db_port_table_("ConfigDb:PORT"),
       fake_config_db_cpu_port_table_("ConfigDb:CPU_PORT"),
       fake_config_db_port_channel_table_("ConfigDb:PORTCHANNEL"),
@@ -134,6 +135,7 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
   const std::string kSwitchTableName = "SWITCH_TABLE";
   const std::string kHostStatsTableName = "HOST_STATS_TABLE";
   const std::string kSwitchCapabilityTableName = "SWITCH_CAPABILITY";
+  const std::string kP4rtTelemetryTableName = "P4RT_TELEMETRY";
 
   // Create interfaces to access P4RT_TABLE entries.
   sonic::P4rtTable p4rt_table{
@@ -227,6 +229,11 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
           &fake_switch_capability_table_, kSwitchCapabilityTableName),
   };
 
+  sonic::P4rtTelemetryTable p4rt_telemetry_table{
+      .state_db = absl::make_unique<sonic::FakeTableAdapter>(
+          &fake_p4rt_telemetry_table_, kP4rtTelemetryTableName),
+  };
+
   // Create FakeWarmBootStateAdapter and save the pointer.
   auto fake_warm_boot_state_adapter =
       std::make_unique<p4rt_app::sonic::FakeWarmBootStateAdapter>();
@@ -248,7 +255,7 @@ std::unique_ptr<P4RuntimeImpl> P4RuntimeGrpcService::BuildP4rtServer(
       std::move(vlan_member_table), std::move(hash_table),
       std::move(switch_table), std::move(port_table),
       std::move(host_stats_table), std::move(switch_capability_table),
-      std::move(fake_warm_boot_state_adapter),
+      std::move(p4rt_telemetry_table), std::move(fake_warm_boot_state_adapter),
       std::move(fake_packetio_interface),
       // TODO(PINS): To add fake component_state_helper, system_state_helper and
       // netdev_translator. fake_component_state_helper_,
@@ -347,6 +354,10 @@ sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetHostStatsStateDbTable() {
 sonic::FakeSonicDbTable&
 P4RuntimeGrpcService::GetSwitchCapabilityStateDbTable() {
   return fake_switch_capability_table_;
+}
+
+sonic::FakeSonicDbTable& P4RuntimeGrpcService::GetP4rtTelemetryStateDbTable() {
+  return fake_p4rt_telemetry_table_;
 }
 
 sonic::FakeWarmBootStateAdapter*
