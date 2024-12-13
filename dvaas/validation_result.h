@@ -28,8 +28,19 @@
 #include "dvaas/test_vector.pb.h"
 #include "dvaas/test_vector_stats.h"
 #include "google/protobuf/descriptor.h"
+#include "p4_symbolic/packet_synthesizer/packet_synthesizer.pb.h"
 
 namespace dvaas {
+
+// Result of automated test packet synthesis (using P4-Symbolic)
+struct PacketSynthesisResult {
+  std::vector<p4_symbolic::packet_synthesizer::SynthesizedPacket>
+      synthesized_packets;
+  // True if and only if packet synthesis runs with a time limit and does not
+  // finish within that time limit. If true, `synthesized_packets` may not
+  // fully cover the target coverage goals.
+  bool packet_synthesis_timed_out;
+};
 
 // The result of dataplane validation, as returned to DVaaS users.
 class [[nodiscard]] ValidationResult {
@@ -62,11 +73,13 @@ class [[nodiscard]] ValidationResult {
   // `ignored_fields` and `ignored_metadata` during validation, see
   // `test_run_validation.h` for details.
   ValidationResult(const PacketTestRuns& test_runs,
-                   const SwitchOutputDiffParams& diff_params);
+                   const SwitchOutputDiffParams& diff_params,
+                   const PacketSynthesisResult& packet_synthesis_result);
 
  private:
   PacketTestOutcomes test_outcomes_;
   TestVectorStats test_vector_stats_;
+  PacketSynthesisResult packet_synthesis_result_;
 };
 
 }  // namespace dvaas
