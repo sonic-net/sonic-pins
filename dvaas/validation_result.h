@@ -39,7 +39,7 @@ struct PacketSynthesisResult {
   // True if and only if packet synthesis runs with a time limit and does not
   // finish within that time limit. If true, `synthesized_packets` may not
   // fully cover the target coverage goals.
-  bool packet_synthesis_timed_out;
+  bool packet_synthesis_timed_out = false;
 };
 
 // The result of dataplane validation, as returned to DVaaS users.
@@ -75,6 +75,14 @@ class [[nodiscard]] ValidationResult {
   ValidationResult(const PacketTestRuns& test_runs,
                    const SwitchOutputDiffParams& diff_params,
                    const PacketSynthesisResult& packet_synthesis_result);
+
+  // Returns true if and only if packet synthesis runs with a time limit and
+  // does not finish within that time limit.
+  // NOTE: If true, dataplane validation did not fully cover the target coverage
+  // goals (in the worst case, it may have not tested dataplane at all). This
+  // should be taken into account when interpreting the results of other
+  // functions like `HasSuccessRateOfAtLeast` and `GetAllFailures`.
+  bool PacketSynthesizerTimedOut() const;
 
  private:
   PacketTestOutcomes test_outcomes_;
