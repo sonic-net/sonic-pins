@@ -86,7 +86,7 @@ std::string DetectiveClusterToString(const DetectiveCluster& cluster,
                                      float total_predicted_outcomes) {
   bool passed = cluster.predicted_outcome_is_pass();
   return absl::StrFormat(
-      "* %s -> %s\n"
+      "- %s -> %s\n"
       "  * accuracy: %.0f%%, %.0f out of %.0f test vectors that match the "
       "conditions %s (remaining %.0f %s instead)\n"
       "  * coverage: %.0f%%, accounting for %.0f out of %.0f %s test vectors\n",
@@ -456,9 +456,9 @@ std::string DetectiveExplanationToString(
     unaccounted_passing_coverage -= cluster.coverage_for_predicted_outcome();
   }
   result.append(unaccounted_passing_coverage == 0
-                    ? "* All passing test vectors accounted for\n"
+                    ? "- All passing test vectors accounted for\n"
                     : absl::Substitute(
-                          "* $0 passing test vectors unaccounted for ($1%)\n",
+                          "- $0 passing test vectors unaccounted for ($1%)\n",
                           unaccounted_passing_outcomes,
                           unaccounted_passing_coverage * 100));
 
@@ -475,9 +475,9 @@ std::string DetectiveExplanationToString(
     unaccounted_failing_coverage -= cluster.coverage_for_predicted_outcome();
   }
   result.append(unaccounted_failing_coverage == 0
-                    ? "* All failing test vectors accounted for\n"
+                    ? "- All failing test vectors accounted for\n"
                     : absl::Substitute(
-                          "* $0 failing test vectors unaccounted for ($1%)\n",
+                          "- $0 failing test vectors unaccounted for ($1%)\n",
                           unaccounted_failing_outcomes,
                           unaccounted_failing_coverage * 100));
 
