@@ -136,11 +136,6 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
             << packet_test_vector_by_id.size();
   statistics.total_packets_injected += packet_test_vector_by_id.size();
 
-  // Get IrP4Infos.
-  ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
-  ASSIGN_OR_RETURN(const pdpi::IrP4Info control_ir_p4info,
-                   GetIrP4Info(control_switch));
-
   // Compute per packet injection delay.
   std::optional<absl::Duration> injection_delay;
   if (parameters.max_packets_to_send_per_second.has_value()) {
@@ -149,6 +144,8 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
   }
 
   // Send packets.
+  ASSIGN_OR_RETURN(const pdpi::IrP4Info control_ir_p4info,
+                   GetIrP4Info(control_switch));
   for (const auto& [test_id, packet_test_vector] : packet_test_vector_by_id) {
     if (packet_test_vector.input().type() == SwitchInput::DATAPLANE) {
       const Packet& packet = packet_test_vector.input().packet();
@@ -174,7 +171,7 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
   }
   LOG(INFO) << "Finished injecting test packets";
 
-  // Check the output of the switches.
+  // Check the output of the control switch.
   const absl::Duration kCollectionDuration = absl::Seconds(3);
   absl::StatusOr<std::vector<TaggedPacketIn>> control_packet_ins =
       CollectStreamMessageResponsesAndReturnTaggedPacketIns(
@@ -185,15 +182,6 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
   LOG(INFO) << "Collected " << control_packet_ins->size()
             << " forwarded packets (from control switch)";
   statistics.total_packets_forwarded += control_packet_ins->size();
-
-  absl::StatusOr<std::vector<TaggedPacketIn>> sut_packet_ins =
-      CollectStreamMessageResponsesAndReturnTaggedPacketIns(
-          sut, kCollectionDuration, parameters.is_expected_unsolicited_packet);
-  RETURN_IF_ERROR(sut_packet_ins.status())
-      << "while  collecting the output of SUT";
-  LOG(INFO) << "Collected " << sut_packet_ins->size()
-            << " punted packets (from SUT)";
-  statistics.total_packets_punted += sut_packet_ins->size();
 
   absl::btree_map<int, SwitchOutput> switch_output_by_id;
   // Processing the output of the control switch.
@@ -217,21 +205,36 @@ absl::StatusOr<PacketTestRuns> SendTestPacketsAndCollectOutputs(
     *forwarded_output.mutable_port() = sut_egress_port.GetP4rtEncoding();
   }
 
-  // Processing the output of SUT.
-  for (const TaggedPacketIn& packet_in : *sut_packet_ins) {
-    // Add to (punted) switch output for ID.
-    PacketIn& punted_output =
-        *switch_output_by_id[packet_in.tag].add_packet_ins();
+  if (parameters.enable_sut_packet_in_collection) {
+    // Check the output of SUT.
+    absl::StatusOr<std::vector<TaggedPacketIn>> sut_packet_ins =
+        CollectStreamMessageResponsesAndReturnTaggedPacketIns(
+            sut, kCollectionDuration,
+            parameters.is_expected_unsolicited_packet);
+    RETURN_IF_ERROR(sut_packet_ins.status())
+        << "while  collecting the output of SUT";
+    LOG(INFO) << "Collected " << sut_packet_ins->size()
+              << " punted packets (from SUT)";
+    statistics.total_packets_punted += sut_packet_ins->size();
 
-    // Set hex and parsed packet.
-    punted_output.set_hex(
-        absl::BytesToHexString(packet_in.packet_in.payload()));
-    *punted_output.mutable_parsed() = packet_in.parsed_inner_packet;
+    // Processing the output of SUT.
+    ASSIGN_OR_RETURN(const pdpi::IrP4Info sut_ir_p4info, GetIrP4Info(sut));
+    for (const TaggedPacketIn& packet_in : *sut_packet_ins) {
+      // Add to (punted) switch output for ID.
+      PacketIn& punted_output =
+          *switch_output_by_id[packet_in.tag].add_packet_ins();
 
-    // Set metadata.
-    ASSIGN_OR_RETURN(pdpi::IrPacketIn ir_packet_in,
-                     pdpi::PiPacketInToIr(sut_ir_p4info, packet_in.packet_in));
-    *punted_output.mutable_metadata() = ir_packet_in.metadata();
+      // Set hex and parsed packet.
+      punted_output.set_hex(
+          absl::BytesToHexString(packet_in.packet_in.payload()));
+      *punted_output.mutable_parsed() = packet_in.parsed_inner_packet;
+
+      // Set metadata.
+      ASSIGN_OR_RETURN(
+          pdpi::IrPacketIn ir_packet_in,
+          pdpi::PiPacketInToIr(sut_ir_p4info, packet_in.packet_in));
+      *punted_output.mutable_metadata() = ir_packet_in.metadata();
+    }
   }
 
   // Create PacketTestRuns.
